@@ -394,6 +394,13 @@ exports.getPermissionModules = async (req, res) => {
                 hasScope: true
             },
             {
+                key: 'forms',
+                label: 'Forms',
+                description: 'Manage forms and form responses',
+                actions: ['create', 'read', 'update', 'delete', 'export'],
+                hasScope: true
+            },
+            {
                 key: 'reports',
                 label: 'Reports',
                 description: 'View and create reports',

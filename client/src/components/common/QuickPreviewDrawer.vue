@@ -671,7 +671,7 @@ const getFieldsWithDefinitions = computed(() => {
         enrichedField = {
           ...enrichedField,
           lookupSettings: {
-            ...(enrichedField.lookupSettings || {}),
+            ...enrichedField.lookupSettings,
             targetModule
           }
         };

@@ -41,41 +41,21 @@
       ></textarea>
     </div>
 
-    <!-- Form Type and Linked Module -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          Form Type <span class="text-red-500">*</span>
-        </label>
-        <select
-          v-model="localForm.formType"
-          class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-        >
-          <option value="Audit">Audit</option>
-          <option value="Survey">Survey</option>
-          <option value="Feedback">Feedback</option>
-          <option value="Inspection">Inspection</option>
-          <option value="Custom">Custom</option>
-        </select>
-      </div>
-
-      <div>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          Linked Module
-        </label>
-        <select
-          v-model="localForm.linkedModule"
-          class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-        >
-          <option :value="null">None</option>
-          <option value="Organization">Organization</option>
-          <option value="Deal">Deal</option>
-          <option value="Task">Task</option>
-          <option value="Event">Event</option>
-          <option value="Lead">Lead</option>
-          <option value="Contact">Contact</option>
-        </select>
-      </div>
+    <!-- Form Type -->
+    <div>
+      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        Form Type <span class="text-red-500">*</span>
+      </label>
+      <select
+        v-model="localForm.formType"
+        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+      >
+        <option value="Audit">Audit</option>
+        <option value="Survey">Survey</option>
+        <option value="Feedback">Feedback</option>
+        <option value="Inspection">Inspection</option>
+        <option value="Custom">Custom</option>
+      </select>
     </div>
 
     <!-- Visibility and Status -->
@@ -103,8 +83,9 @@
           class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
         >
           <option value="Draft">Draft</option>
+          <option value="Ready">Ready</option>
           <option value="Active">Active</option>
-          <option value="Closed">Closed</option>
+          <option value="Archived">Archived</option>
         </select>
       </div>
     </div>
@@ -199,7 +180,6 @@ const initializeLocalForm = () => {
     name: formData.name || '',
     description: formData.description || '',
     formType: formData.formType || 'Audit',
-    linkedModule: formData.linkedModule || null,
     visibility: formData.visibility || 'Internal',
     status: formData.status || 'Draft',
     expiryDate: formData.expiryDate || null,

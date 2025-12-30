@@ -80,7 +80,7 @@
                   <div class="flex shrink-0 justify-end gap-3 px-4 py-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
                     <button 
                       type="button" 
-                      class="rounded-md bg-white dark:bg-gray-800 px-3 py-2 text-sm font-semibold text-gray-900 dark:text-white shadow-xs ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700" 
+                      class="rounded-md bg-white dark:bg-gray-800 px-3 py-2 text-sm font-semibold text-gray-900 dark:text-white shadow-xs ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer" 
                       @click="closeDrawer"
                     >
                       Cancel
@@ -88,7 +88,7 @@
                     <button 
                       type="submit" 
                       :disabled="saving" 
-                      class="inline-flex justify-center rounded-md bg-indigo-600 dark:bg-indigo-500 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 dark:hover:bg-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      class="inline-flex justify-center rounded-md bg-indigo-600 dark:bg-indigo-500 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 dark:hover:bg-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     >
                       {{ saving ? 'Saving...' : (isEditing ? 'Update' : 'Save') }}
                     </button>
@@ -374,6 +374,63 @@ const handleSubmit = async () => {
     
     // Clean up form data - remove system fields that shouldn't be sent
     const submitData = { ...formData.value };
+    
+    // Debug: Log formData for events before cleaning
+    if (props.moduleKey === 'events') {
+      console.log('[CreateRecordDrawer] formData.value before cleaning:', {
+        linkedFormId: formData.value.linkedFormId,
+        relatedToId: formData.value.relatedToId,
+        eventType: formData.value.eventType,
+        allKeys: Object.keys(formData.value)
+      });
+    }
+    
+    // Convert kebab-case field keys to camelCase for events module
+    // Backend expects camelCase (linkedFormId, relatedToId) but form might use kebab-case (linked-form-id, related-to-id)
+    if (props.moduleKey === 'events') {
+      // Map of kebab-case to camelCase for event fields
+      const keyMappings = {
+        'linked-form-id': 'linkedFormId',
+        'related-to-id': 'relatedToId',
+        'event-owner-id': 'eventOwnerId',
+        'start-date-time': 'startDateTime',
+        'end-date-time': 'endDateTime'
+      };
+      
+      // Convert kebab-case keys to camelCase
+      for (const [kebabKey, camelKey] of Object.entries(keyMappings)) {
+        if (submitData[kebabKey] !== undefined) {
+          // If camelCase version doesn't exist or is empty, use kebab-case value
+          if (!submitData[camelKey] || submitData[camelKey] === '') {
+            submitData[camelKey] = submitData[kebabKey];
+          }
+          // Remove kebab-case version
+          delete submitData[kebabKey];
+        }
+      }
+      
+      // For audit event types, ensure linkedFormId and relatedToId are included even if null
+      const auditEventTypes = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
+      const isAuditType = auditEventTypes.includes(submitData.eventType);
+      
+      if (isAuditType) {
+        // Ensure these fields exist in submitData (set to null if missing)
+        if (submitData.linkedFormId === undefined) {
+          submitData.linkedFormId = null;
+        }
+        if (submitData.relatedToId === undefined) {
+          submitData.relatedToId = null;
+        }
+        
+        console.log('[CreateRecordDrawer] After ensuring audit fields:', {
+          linkedFormId: submitData.linkedFormId,
+          relatedToId: submitData.relatedToId,
+          eventType: submitData.eventType,
+          allKeys: Object.keys(submitData)
+        });
+      }
+    }
+    
     delete submitData.createdBy;
     delete submitData.organizationId;
     delete submitData.organizationid;
@@ -408,16 +465,31 @@ const handleSubmit = async () => {
       submitData.organization = submitData.organization._id || submitData.organization;
     }
     
-    // Convert empty strings to null for optional fields (but preserve organization if it's explicitly set)
+    // Convert empty strings to null for optional fields
+    // Preserve organization, linkedFormId, and relatedToId if they're explicitly set (even if empty string)
+    // These fields should be sent as null rather than being deleted
+    const preservedFields = ['organization', 'linkedFormId', 'relatedToId'];
     for (const key in submitData) {
-      if (submitData[key] === '' && key !== 'organization') {
+      if (submitData[key] === '' && !preservedFields.includes(key)) {
         submitData[key] = null;
       }
     }
     
-    // If organization is empty string, convert to null
-    if (submitData.organization === '') {
-      submitData.organization = null;
+    // For preserved fields, convert empty strings to null but keep them in the payload
+    for (const field of preservedFields) {
+      if (submitData[field] === '') {
+        submitData[field] = null;
+      }
+    }
+    
+    // Log the submit data for events to debug linkedFormId/relatedToId
+    if (props.moduleKey === 'events') {
+      console.log('[CreateRecordDrawer] Submitting event data:', {
+        linkedFormId: submitData.linkedFormId,
+        relatedToId: submitData.relatedToId,
+        eventType: submitData.eventType,
+        allKeys: Object.keys(submitData)
+      });
     }
     
     // Remove slug field for CRM organizations (not needed - only tenants use slugs)

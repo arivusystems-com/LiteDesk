@@ -140,6 +140,29 @@ function getFieldDataType(key, fieldName, path) {
         'modifiedTime': 'Date-Time'
     };
     
+    const formFieldMappings = {
+        'organizationId': 'Lookup (Relationship)',
+        'formId': 'Auto-Number',
+        'name': 'Text',
+        'description': 'Text-Area',
+        'formType': 'Picklist',
+        'visibility': 'Picklist',
+        'status': 'Picklist',
+        'assignedTo': 'Lookup (Relationship)',
+        'expiryDate': 'Date',
+        'tags': 'Multi-Picklist',
+        'approvalRequired': 'Checkbox',
+        'scoringFormula': 'Text',
+        'formVersion': 'Integer',
+        'totalResponses': 'Integer',
+        'avgRating': 'Decimal',
+        'avgCompliance': 'Decimal',
+        'responseRate': 'Decimal',
+        'lastSubmission': 'Date-Time',
+        'createdBy': 'Lookup (Relationship)',
+        'modifiedBy': 'Lookup (Relationship)'
+    };
+    
     // Check if this is a People module field with specific mapping
     if (key === 'people' && peopleFieldMappings[fieldName]) {
         return peopleFieldMappings[fieldName];
@@ -158,6 +181,10 @@ function getFieldDataType(key, fieldName, path) {
         return eventFieldMappings[fieldName];
     }
     
+    if (key === 'forms' && formFieldMappings[fieldName]) {
+        return formFieldMappings[fieldName];
+    }
+    
     // Fall back to inference based on schema type
     return inferDataType(path);
 }
@@ -171,6 +198,7 @@ function getBaseFieldsForKey(key) {
             tasks: require('../models/Task'),
             events: require('../models/Event'),
             imports: require('../models/ImportHistory'),
+            forms: require('../models/Form'),
         };
         const model = modelByKey[key];
         if (!model) return [];
@@ -181,17 +209,44 @@ function getBaseFieldsForKey(key) {
             'createdAt', 
             'updatedAt',
             'eventId',        // Auto-generated UUID
-            'organizationId', // Auto-filled from user context
-            'createdBy',      // Auto-filled from current user
+            'organizationId', // Auto-filled from user context (but keep for forms module)
+            'createdBy',      // Keep for forms module (it's a valid field)
             'createdTime',    // Auto-filled timestamp
-            'modifiedBy',      // Auto-filled on update
+            'modifiedBy',      // Keep for forms module (it's a valid field)
             'modifiedTime',   // Auto-filled on update
-            'auditHistory'    // System-managed audit trail
+            'auditHistory',   // System-managed audit trail
+            // Form-specific nested objects that shouldn't be fields
+            'sections',       // Nested structure
+            'kpiMetrics',    // Nested object
+            'thresholds',    // Nested object
+            'autoAssignment', // Nested object
+            'workflowOnSubmit', // Nested object
+            'approvalWorkflow', // Nested object
+            'publicLink',    // Nested object
+            'outcomesAndRules', // Nested object
+            'responseTemplate' // Nested object
         ]);
+        
+        // For forms module, don't exclude organizationId, createdBy, modifiedBy
+        if (key === 'forms') {
+            excluded.delete('organizationId');
+            excluded.delete('createdBy');
+            excluded.delete('modifiedBy');
+        }
         // Access both paths and tree to get enum values reliably
         const schemaTree = model.schema.tree || {};
         return Object.entries(model.schema.paths)
-            .filter(([name]) => !excluded.has(name))
+            .filter(([name]) => {
+                // Exclude if the field name is in the excluded set
+                if (excluded.has(name)) return false;
+                // Exclude nested paths (e.g., "kpiMetrics.compliancePercentage" should be excluded if "kpiMetrics" is excluded)
+                for (const excludedField of excluded) {
+                    if (name.startsWith(excludedField + '.')) {
+                        return false;
+                    }
+                }
+                return true;
+            })
             .map(([name, path]) => {
                 // Extract enum values from Mongoose path and schema tree FIRST
                 let options = [];
@@ -210,7 +265,8 @@ function getBaseFieldsForKey(key) {
                 // Get data type - if options exist and no explicit mapping, infer Picklist
                 let dataType = getFieldDataType(key, name, path);
                 // Auto-detect Picklist if enum options exist and dataType is still Text
-                if (options.length > 0 && dataType === 'Text' && !eventFieldMappings[name] && !peopleFieldMappings[name] && !organizationFieldMappings[name] && !dealFieldMappings[name]) {
+                // Note: getFieldDataType already handles field-specific mappings, so we just check if it's still Text
+                if (options.length > 0 && dataType === 'Text') {
                     dataType = 'Picklist';
                 }
                 
@@ -255,7 +311,9 @@ function getBaseFieldsForKey(key) {
                             'Organization': 'organizations',
                             'Deal': 'deals',
                             'Task': 'tasks',
-                            'Event': 'events'
+                            'Event': 'events',
+                            'Form': 'forms',
+                            'Report': 'reports'
                         };
                         if (moduleMap[ref]) {
                             lookupSettings = {
@@ -263,6 +321,19 @@ function getBaseFieldsForKey(key) {
                             };
                         }
                     }
+                }
+                
+                // Special handling for linkedFormId in events module - add visibility dependency
+                let dependencies = [];
+                if (key === 'events' && name === 'linkedFormId') {
+                    dependencies = [{
+                        name: 'Show for audit event types',
+                        type: 'visibility',
+                        fieldKey: 'eventType',
+                        operator: 'in',
+                        value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                        logic: 'AND'
+                    }];
                 }
                 
                 return {
@@ -276,7 +347,7 @@ function getBaseFieldsForKey(key) {
                     visibility: { list: true, detail: true },
                     order: 0,
                     validations: [],
-                    dependencies: [],
+                    dependencies: dependencies,
                     lookupSettings: lookupSettings
                 };
             });
@@ -747,6 +818,7 @@ exports.listModules = async (req, res) => {
             { key: 'deals', name: 'Deals' },
             { key: 'tasks', name: 'Tasks' },
             { key: 'events', name: 'Events' },
+            { key: 'forms', name: 'Forms' },
             { key: 'imports', name: 'Imports' },
             { key: 'reports', name: 'Reports' },
             { key: 'users', name: 'Users' } // For lookup targets (assignedTo, lead_owner, createdBy)
@@ -761,7 +833,24 @@ exports.listModules = async (req, res) => {
             fieldCount: 0,
             createdAt: null,
             updatedAt: null,
-            pipelineSettings: m.key === 'deals' ? getDefaultPipelineSettings() : []
+            pipelineSettings: m.key === 'deals' ? getDefaultPipelineSettings() : [],
+            relationships: m.key === 'events' ? [
+                {
+                    name: 'Linked Forms',
+                    type: 'lookup',
+                    targetModuleKey: 'forms',
+                    localField: 'linkedFormId',
+                    foreignField: '_id',
+                    inverseName: 'Linked Events',
+                    inverseField: '',
+                    required: false,
+                    unique: false,
+                    index: true,
+                    cascadeDelete: false,
+                    label: 'Linked Form',
+                    description: 'Link audit forms to events for audit event types'
+                }
+            ] : []
         }));
 
         // Exclude 'groups' from modules list (it's a settings feature, not a module)
@@ -828,6 +917,23 @@ exports.listModules = async (req, res) => {
                         if (baseField.lookupSettings) {
                             savedField.lookupSettings = baseField.lookupSettings;
                         }
+                        // For linkedFormId in events module, ensure visibility dependency exists
+                        if (sys.key === 'events' && savedField.key === 'linkedFormId') {
+                            const hasVisibilityDep = savedField.dependencies && savedField.dependencies.some(
+                                dep => dep.type === 'visibility' && dep.fieldKey === 'eventType'
+                            );
+                            if (!hasVisibilityDep) {
+                                if (!savedField.dependencies) savedField.dependencies = [];
+                                savedField.dependencies.push({
+                                    name: 'Show for audit event types',
+                                    type: 'visibility',
+                                    fieldKey: 'eventType',
+                                    operator: 'in',
+                                    value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                                    logic: 'AND'
+                                });
+                            }
+                        }
                     }
                 }
                 
@@ -836,7 +942,19 @@ exports.listModules = async (req, res) => {
                     const baseKeyLower = baseField.key?.toLowerCase();
                     const alreadyExists = saved.some(f => f.key && f.key.toLowerCase() === baseKeyLower);
                     if (!alreadyExists) {
-                        saved.push({ ...baseField, order: saved.length });
+                        // Ensure linkedFormId in events module has visibility dependency
+                        let fieldToAdd = { ...baseField, order: saved.length };
+                        if (sys.key === 'events' && baseField.key === 'linkedFormId' && (!fieldToAdd.dependencies || fieldToAdd.dependencies.length === 0)) {
+                            fieldToAdd.dependencies = [{
+                                name: 'Show for audit event types',
+                                type: 'visibility',
+                                fieldKey: 'eventType',
+                                operator: 'in',
+                                value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                                logic: 'AND'
+                            }];
+                        }
+                        saved.push(fieldToAdd);
                     }
                 }
                 // Include quickCreate and quickCreateLayout from override if present
@@ -851,34 +969,16 @@ exports.listModules = async (req, res) => {
                 }
                 // Use override quickCreate if it exists and has sufficient fields, otherwise use default
                 // For Events module, ensure quickCreate has at least the essential fields
-                let finalQuickCreate = override.quickCreate || [];
-                if (sys.key === 'events') {
-                    // Default quickCreate fields for Events module
-                    const defaultEventsQuickCreate = [
-                        'eventName',
-                        'eventType',
-                        'status',
-                        'eventOwnerId',
-                        'startDateTime',
-                        'endDateTime',
-                        'location',
-                        'agendaNotes'
-                    ];
-                    // If quickCreate is empty or incomplete (less than 5 fields), use default
-                    if (!finalQuickCreate || finalQuickCreate.length < 5) {
-                        finalQuickCreate = defaultEventsQuickCreate;
-                    }
-                } else {
-                    // For other modules, use override or empty array
-                    finalQuickCreate = override.quickCreate || sys.quickCreate || [];
-                }
+                // Use override quickCreate if present, otherwise use saved quickCreate, otherwise empty array
+                // NO hardcoding - all configuration comes from the module definition saved in database
+                let finalQuickCreate = override.quickCreate || sys.quickCreate || [];
                 
                 merged.push({ 
                     ...sys, 
                     fields: saved,
                     quickCreate: finalQuickCreate,
                     quickCreateLayout: override.quickCreateLayout || { version: 1, rows: [] },
-                    relationships: override.relationships || [],
+                    relationships: override.relationships !== undefined ? override.relationships : (sys.relationships || []),
                     name: override.name || sys.name,
                     enabled: override.enabled !== undefined ? override.enabled : sys.enabled,
                     pipelineSettings
@@ -892,7 +992,7 @@ exports.listModules = async (req, res) => {
                     fields: withOrder,
                     quickCreate: [],
                     quickCreateLayout: { version: 1, rows: [] },
-                    relationships: [],
+                    relationships: sys.relationships || [],
                     pipelineSettings: sys.key === 'deals'
                         ? normalizePipelineSettings(JSON.parse(JSON.stringify(sys.pipelineSettings || [])))
                         : JSON.parse(JSON.stringify(sys.pipelineSettings || []))
@@ -920,6 +1020,7 @@ exports.listModules = async (req, res) => {
             const Deal = require('../models/Deal');
             const Task = require('../models/Task');
             const Event = require('../models/Event');
+            const Form = require('../models/Form');
             const ImportHistory = require('../models/ImportHistory');
             const modelByKey = {
                 people: People,
@@ -927,6 +1028,7 @@ exports.listModules = async (req, res) => {
                 deals: Deal,
                 tasks: Task,
                 events: Event,
+                forms: Form,
                 imports: ImportHistory,
                 reports: null, // no direct model
                 users: null // Users module is for lookup targets only, no fields needed
@@ -1165,7 +1267,7 @@ exports.updateModule = async (req, res) => {
 exports.updateSystemModule = async (req, res) => {
     try {
         const { key } = req.params;
-        const systemKeys = new Set(['people','organizations','deals','tasks','events','imports','reports']);
+        const systemKeys = new Set(['people','organizations','deals','tasks','events','forms','imports','reports']);
         if (!systemKeys.has(key)) return res.status(400).json({ success: false, message: 'Invalid system module key' });
         const { fields, enabled, name, relationships, quickCreate, quickCreateLayout, pipelineSettings } = req.body;
         

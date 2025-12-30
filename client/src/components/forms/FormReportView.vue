@@ -3,14 +3,39 @@
     <div class="p-6 border-b border-gray-200 dark:border-gray-700">
       <div class="flex items-center justify-between">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Form Report</h2>
-        <div class="flex items-center gap-2">
-          <button
-            @click="generateReport"
-            :disabled="generating"
-            class="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-colors disabled:opacity-50"
-          >
-            {{ generating ? 'Generating...' : 'Generate Report' }}
-          </button>
+        <div class="flex items-center gap-2 flex-wrap">
+          <div class="flex flex-col gap-1">
+            <button
+              @click="generateReport"
+              :disabled="generating || !canGenerateReport"
+              class="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {{ generating ? 'Generating...' : 'Generate Report' }}
+            </button>
+            <p v-if="isStatusBlocked" class="text-xs text-gray-500 dark:text-gray-400">
+              Report can be generated after the response is approved.
+            </p>
+          </div>
+          <div class="flex flex-col gap-1">
+            <button
+              @click="generateComprehensiveReport"
+              :disabled="generatingComprehensive || !canGenerateReport"
+              class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              title="Generate world-class comprehensive PDF report with charts, tables, and detailed analysis"
+            >
+              <svg v-if="generatingComprehensive" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              {{ generatingComprehensive ? 'Generating...' : 'Generate Comprehensive Report' }}
+            </button>
+            <p v-if="isStatusBlocked" class="text-xs text-gray-500 dark:text-gray-400">
+              Report can be generated after the response is approved.
+            </p>
+          </div>
           <button
             v-if="reportUrl"
             @click="downloadReport"
@@ -19,10 +44,20 @@
             Download PDF
           </button>
           <button
+            v-if="comprehensiveReportUrl"
+            @click="downloadComprehensiveReport"
+            class="px-4 py-2 bg-orange-200 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded-lg hover:bg-orange-300 dark:hover:bg-orange-900/50 font-medium transition-colors flex items-center gap-2"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Download Comprehensive PDF
+          </button>
+          <button
             v-if="reportData"
             @click="exportToExcel"
-            :disabled="exportingExcel"
-            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+            :disabled="exportingExcel || !canGenerateReport"
+            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             <svg v-if="exportingExcel" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -147,7 +182,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import apiClient from '@/utils/apiClient';
 import BadgeCell from '@/components/common/table/BadgeCell.vue';
 
@@ -163,10 +198,25 @@ const props = defineProps({
 });
 
 const generating = ref(false);
+const generatingComprehensive = ref(false);
 const exportingExcel = ref(false);
 const reportData = ref(null);
 const reportUrl = ref(null);
+const comprehensiveReportUrl = ref(null);
 const excelUrl = ref(null);
+
+// Check if report generation is allowed based on status
+const canGenerateReport = computed(() => {
+  const status = props.response?.reviewStatus || props.response?.status;
+  // Only allow when status is 'Approved' or 'Closed'
+  return status === 'Approved' || status === 'Closed';
+});
+
+// Check if status prevents report generation
+const isStatusBlocked = computed(() => {
+  const status = props.response?.reviewStatus || props.response?.status;
+  return status === 'Pending Corrective Action' || status === 'Needs Auditor Review';
+});
 
 const calculateOverallScore = (sectionScores) => {
   if (!sectionScores || typeof sectionScores !== 'object') return 0;
@@ -218,6 +268,47 @@ const generateReport = async () => {
 const downloadReport = () => {
   if (reportUrl.value) {
     window.open(reportUrl.value, '_blank');
+  }
+};
+
+const generateComprehensiveReport = async () => {
+  generatingComprehensive.value = true;
+  try {
+    const result = await apiClient(`/forms/${props.form._id}/responses/${props.response._id}/generate-comprehensive-report`, {
+      method: 'POST',
+      body: JSON.stringify({
+        // You can customize the template here if needed
+        // templateConfig: {
+        //   companyName: "Your Company Name",
+        //   hotelName: "Hotel Name",
+        //   benchmarkScore: 80
+        // },
+        // includeComparison: true,
+        // previousResponseId: "previous-response-id"
+      })
+    });
+
+    if (result.success) {
+      comprehensiveReportUrl.value = result.data.reportUrl || null;
+      // Automatically open the PDF in a new tab
+      if (comprehensiveReportUrl.value) {
+        window.open(comprehensiveReportUrl.value, '_blank');
+      }
+      alert('Comprehensive report generated successfully!');
+    } else {
+      alert(result.message || 'Failed to generate comprehensive report. Please try again.');
+    }
+  } catch (error) {
+    console.error('Error generating comprehensive report:', error);
+    alert('Failed to generate comprehensive report. Please try again.');
+  } finally {
+    generatingComprehensive.value = false;
+  }
+};
+
+const downloadComprehensiveReport = () => {
+  if (comprehensiveReportUrl.value) {
+    window.open(comprehensiveReportUrl.value, '_blank');
   }
 };
 

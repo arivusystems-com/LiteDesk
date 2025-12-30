@@ -1,0 +1,958 @@
+<template>
+  <div class="mx-auto">
+    <!-- Info Banner -->
+    <div class="mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+      <div class="flex items-start gap-3">
+        <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <div class="flex-1">
+          <p class="text-sm font-medium text-blue-900 dark:text-blue-300">
+            <strong>Note:</strong> Response execution must always start from an Event check-in.
+          </p>
+          <p class="text-xs text-blue-700 dark:text-blue-400 mt-1">
+            To start a new response, check in to an Event that has an assigned form. This module is for viewing and managing existing responses only.
+          </p>
+        </div>
+      </div>
+    </div>
+    
+    <ListView
+      title="Responses"
+      description="View and manage all form responses across all forms"
+      module-key="forms"
+      search-placeholder="Search responses..."
+      :data="responses"
+      :columns="columns"
+      :loading="loading"
+      :statistics="statistics"
+      :stats-config="[
+        { name: 'Total', key: 'total', formatter: 'number' },
+        { name: 'Pending', key: 'pending', formatter: 'number' },
+        { name: 'Needs Review', key: 'needsReview', formatter: 'number' },
+        { name: 'Approved', key: 'approved', formatter: 'number' },
+        { name: 'Rejected', key: 'rejected', formatter: 'number' },
+        { name: 'Closed', key: 'closed', formatter: 'number' }
+      ]"
+      :pagination="{ currentPage: pagination.currentPage, totalPages: pagination.totalPages, totalRecords: pagination.totalResponses, limit: pagination.responsesPerPage }"
+      :sort-field="sortField"
+      :sort-order="sortOrder"
+      :filter-config="filterConfig"
+      table-id="responses-table"
+      row-key="_id"
+      empty-title="No responses yet"
+      empty-message="No form responses have been submitted yet. Responses are created automatically when you check in to an Event with an assigned form."
+      :show-create="false"
+      :show-import="false"
+      :show-export="true"
+      @update:searchQuery="handleSearchQueryUpdate"
+      @update:filters="(newFilters) => { Object.assign(filters, newFilters); fetchResponses(); }"
+      @update:sort="({ sortField: key, sortOrder: order }) => { handleSort({ key, order }); }"
+      @update:pagination="(p) => { pagination.currentPage = p.currentPage; pagination.responsesPerPage = p.limit || pagination.responsesPerPage; fetchResponses(); }"
+      @fetch="fetchResponses"
+      @row-click="viewResponseDetail"
+      @edit="viewResponseDetail"
+      @delete="handleDelete"
+      @export="exportResponses"
+      :hide-delete="false"
+    >
+      <!-- Custom Form Name Cell - Name + Type Badge -->
+      <template #cell-formName="{ row }">
+        <div v-if="row.formId && typeof row.formId === 'object'" class="flex flex-col gap-1.5">
+          <span class="text-sm font-semibold text-gray-900 dark:text-white leading-tight">
+            {{ row.formId.name || row.formId.formId || 'Unknown Form' }}
+          </span>
+          <div class="flex items-center gap-1.5">
+            <BadgeCell 
+              v-if="row.formId.formType"
+              :value="row.formId.formType" 
+              :variant-map="{
+                'Audit': 'warning',
+                'Survey': 'info',
+                'Feedback': 'success',
+                'Inspection': 'danger',
+                'Custom': 'default'
+              }"
+            />
+          </div>
+        </div>
+        <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
+      </template>
+
+      <!-- Custom Response ID Cell -->
+      <template #cell-responseId="{ value }">
+        <span class="font-mono text-sm text-gray-600 dark:text-gray-400">{{ value }}</span>
+      </template>
+
+      <!-- Custom Submitted At Cell -->
+      <template #cell-submittedAt="{ value }">
+        <div v-if="value" class="flex flex-col gap-0.5">
+          <DateCell :value="value" format="short" />
+          <span class="text-xs text-gray-500 dark:text-gray-400">
+            {{ getRelativeTime(value) }}
+          </span>
+        </div>
+        <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
+      </template>
+
+      <!-- Custom Submitted By Cell -->
+      <template #cell-submittedBy="{ row }">
+        <div v-if="row.submittedBy" class="flex items-center gap-2">
+          <Avatar
+            :user="{
+              firstName: row.submittedBy.firstName,
+              lastName: row.submittedBy.lastName,
+              email: row.submittedBy.email,
+              avatar: row.submittedBy.avatar
+            }"
+            size="sm"
+          />
+          <span class="text-sm text-gray-900 dark:text-white">
+            {{ row.submittedBy.firstName }} {{ row.submittedBy.lastName }}
+          </span>
+        </div>
+        <span v-else class="text-sm text-gray-500 dark:text-gray-400">Anonymous</span>
+      </template>
+
+      <!-- Custom Execution Status Cell - Clearly separated and visually distinct -->
+      <template #cell-executionStatus="{ row }">
+        <div class="flex flex-col gap-1">
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Execution</span>
+          <BadgeCell 
+            :value="row.executionStatus || 'Not Started'" 
+            :variant-map="{
+              'Not Started': 'default',
+              'In Progress': 'info',
+              'Submitted': 'success',
+              'Abandoned': 'danger'
+            }"
+          />
+        </div>
+      </template>
+
+      <!-- Custom Review Status Cell - Clearly separated and visually distinct -->
+      <template #cell-reviewStatus="{ row }">
+        <div class="flex flex-col gap-1">
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Review</span>
+          <div v-if="row.executionStatus === 'Submitted' && row.reviewStatus" class="flex items-center">
+            <BadgeCell 
+              :value="row.reviewStatus" 
+              :variant-map="{
+                'Pending Corrective Action': 'warning',
+                'Needs Auditor Review': 'info',
+                'Approved': 'success',
+                'Rejected': 'danger',
+                'Closed': 'default'
+              }"
+            />
+          </div>
+          <span v-else class="text-xs text-gray-400 dark:text-gray-500 italic">Not applicable</span>
+        </div>
+      </template>
+
+      <!-- Custom Final Score Cell - Decision-focused display -->
+      <template #cell-finalScore="{ row }">
+        <div v-if="row.kpis && row.kpis.finalScore !== undefined" class="flex flex-col gap-1">
+          <div class="flex items-baseline gap-1.5">
+            <span class="text-lg font-bold text-gray-900 dark:text-white">
+              {{ Math.round(row.kpis.finalScore) }}%
+            </span>
+            <span class="text-xs text-gray-500 dark:text-gray-400">score</span>
+          </div>
+          <div v-if="row.kpis.compliancePercentage !== undefined" class="text-xs font-medium" :class="[
+            row.kpis.compliancePercentage >= 80 ? 'text-green-600 dark:text-green-400' :
+            row.kpis.compliancePercentage >= 60 ? 'text-yellow-600 dark:text-yellow-400' :
+            'text-red-600 dark:text-red-400'
+          ]">
+            {{ Math.round(row.kpis.compliancePercentage) }}% compliant
+          </div>
+        </div>
+        <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
+      </template>
+
+      <!-- Custom Linked To Cell - Event / Entity -->
+      <template #cell-linkedTo="{ row }">
+        <div v-if="row.linkedTo && row.linkedTo.type" class="flex items-center gap-2">
+          <BadgeCell 
+            :value="row.linkedTo.type" 
+            :variant-map="{
+              'Organization': 'info',
+              'Deal': 'success',
+              'Task': 'warning',
+              'Event': 'primary',
+              'Lead': 'default',
+              'Contact': 'default'
+            }"
+          />
+          <span v-if="row.linkedTo.id && typeof row.linkedTo.id === 'object' && row.linkedTo.id.eventName" class="text-xs text-gray-600 dark:text-gray-400 truncate max-w-[100px]">
+            {{ row.linkedTo.id.eventName }}
+          </span>
+        </div>
+        <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
+      </template>
+
+      <!-- Archive/Invalidate Status -->
+      <template #cell-archiveStatus="{ row }">
+        <div v-if="row.archived" class="flex items-center gap-2">
+          <BadgeCell value="Archived" variant-map="{ 'Archived': 'default' }" />
+          <span class="text-xs text-gray-500 dark:text-gray-400">{{ formatDate(row.archivedAt) }}</span>
+        </div>
+        <div v-else-if="row.invalidated" class="flex items-center gap-2">
+          <BadgeCell value="Invalidated" variant-map="{ 'Invalidated': 'danger' }" />
+          <span class="text-xs text-gray-500 dark:text-gray-400">{{ formatDate(row.invalidatedAt) }}</span>
+        </div>
+        <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
+      </template>
+
+      <!-- Custom Actions -->
+      <template #row-actions="{ row }">
+        <div class="flex items-center gap-2">
+          <button
+            @click.stop="viewResponseDetail(row)"
+            class="p-1.5 text-gray-600 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+            title="View Details"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+          </button>
+          <button
+            v-if="row.executionStatus === 'Submitted' && row.reviewStatus === 'Needs Auditor Review'"
+            @click.stop="approveResponse(row)"
+            class="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
+            title="Approve"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </button>
+          <button
+            v-if="row.executionStatus === 'Submitted' && row.reviewStatus === 'Needs Auditor Review'"
+            @click.stop="rejectResponse(row)"
+            class="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+            title="Reject"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <!-- Archive/Invalidate for Audit responses -->
+          <button
+            v-if="isAuditResponse(row) && !row.archived && !row.invalidated"
+            @click.stop="showArchiveInvalidateModalFn(row)"
+            class="p-1.5 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded transition-colors"
+            title="Archive / Invalidate"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+            </svg>
+          </button>
+          <!-- Restore for archived/invalidated responses -->
+          <button
+            v-if="(row.archived || row.invalidated) && canRestore(row)"
+            @click.stop="restoreResponse(row)"
+            class="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+            title="Restore"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+          <!-- Delete button for non-audit, non-submitted responses -->
+          <button
+            v-if="!isAuditResponse(row) && row.executionStatus !== 'Submitted' && !row.archived && !row.invalidated"
+            @click.stop="handleDelete(row)"
+            class="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+            title="Delete"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </div>
+      </template>
+    </ListView>
+
+    <!-- Archive/Invalidate Modal -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition duration-200 ease-out"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition duration-150 ease-in"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="showArchiveInvalidateModal"
+          class="fixed inset-0 z-[1200] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+          @click.self="showArchiveInvalidateModal = false; selectedResponse = null; archiveInvalidateReason = ''; archiveInvalidateAction = null"
+        >
+          <div class="bg-white dark:bg-gray-900 w-full max-w-md rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Archive / Invalidate Response</h3>
+              <button
+                @click="showArchiveInvalidateModal = false; selectedResponse = null; archiveInvalidateReason = ''; archiveInvalidateAction = null"
+                class="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div class="p-6 space-y-4">
+              <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                <p class="text-sm text-yellow-800 dark:text-yellow-300">
+                  <strong>Audit Integrity:</strong> Audit responses cannot be deleted. Use Archive to hide from active lists, or Invalidate to mark as invalid with a reason. All data is preserved for audit trail.
+                </p>
+              </div>
+
+              <div class="space-y-3">
+                <button
+                  @click="archiveInvalidateAction = 'archive'"
+                  :class="[
+                    'w-full px-4 py-3 rounded-lg border-2 transition-colors text-left',
+                    archiveInvalidateAction === 'archive'
+                      ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                  ]"
+                >
+                  <div class="font-medium text-gray-900 dark:text-white">Archive</div>
+                  <div class="text-xs text-gray-600 dark:text-gray-400 mt-1">Hide from active lists while preserving data</div>
+                </button>
+
+                <button
+                  @click="archiveInvalidateAction = 'invalidate'"
+                  :class="[
+                    'w-full px-4 py-3 rounded-lg border-2 transition-colors text-left',
+                    archiveInvalidateAction === 'invalidate'
+                      ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                  ]"
+                >
+                  <div class="font-medium text-gray-900 dark:text-white">Invalidate</div>
+                  <div class="text-xs text-gray-600 dark:text-gray-400 mt-1">Mark as invalid with reason (for audit trail)</div>
+                </button>
+              </div>
+
+              <div v-if="archiveInvalidateAction" class="space-y-2">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Reason <span class="text-red-500">*</span>
+                </label>
+                <textarea
+                  v-model="archiveInvalidateReason"
+                  rows="3"
+                  placeholder="Enter reason for archiving/invalidating this response..."
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  required
+                ></textarea>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+              <button
+                @click="showArchiveInvalidateModal = false; selectedResponse = null; archiveInvalidateReason = ''; archiveInvalidateAction = null"
+                class="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                @click="handleArchiveInvalidate"
+                :disabled="!archiveInvalidateAction || !archiveInvalidateReason.trim()"
+                class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {{ archiveInvalidateAction === 'archive' ? 'Archive' : 'Invalidate' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted, onActivated, onBeforeMount } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useTabs } from '@/composables/useTabs';
+import apiClient from '@/utils/apiClient';
+import ListView from '@/components/common/ListView.vue';
+import BadgeCell from '@/components/common/table/BadgeCell.vue';
+import Avatar from '@/components/common/Avatar.vue';
+import DateCell from '@/components/common/table/DateCell.vue';
+
+const route = useRoute();
+const router = useRouter();
+const { openTab } = useTabs();
+
+// State
+const responses = ref([]);
+const loading = ref(false);
+const searchQuery = ref('');
+const sortField = ref('submittedAt');
+const sortOrder = ref('desc');
+const filters = ref({
+  executionStatus: '',
+  reviewStatus: '',
+  formId: '',
+  fromDate: '',
+  toDate: '',
+  linkedToType: ''
+});
+
+const pagination = ref({
+  currentPage: 1,
+  responsesPerPage: 25,
+  totalResponses: 0,
+  totalPages: 1
+});
+
+const statistics = ref({
+  total: 0,
+  pending: 0,
+  needsReview: 0,
+  approved: 0,
+  rejected: 0,
+  closed: 0
+});
+
+// Archive/Invalidate modal state
+const showArchiveInvalidateModal = ref(false);
+const selectedResponse = ref(null);
+const archiveInvalidateReason = ref('');
+const archiveInvalidateAction = ref(null); // 'archive' or 'invalidate'
+
+// Columns configuration - Decision-focused, world-class design
+// All columns are visible by default (visible: true ensures they show even if backend config says otherwise)
+// Note: visibility.list: true ensures backend module config doesn't hide these
+const columns = [
+  { key: 'responseId', label: 'Response ID', sortable: true, minWidth: '120px', visible: true, showInTable: true, visibility: { list: true } },
+  { key: 'formName', label: 'Form', sortable: false, minWidth: '200px', visible: true, showInTable: true, visibility: { list: true } },
+  { key: 'linkedTo', label: 'Linked To', sortable: false, minWidth: '120px', visible: true, showInTable: true, visibility: { list: true } },
+  { key: 'executionStatus', label: 'Execution Status', sortable: true, minWidth: '140px', visible: true, showInTable: true, visibility: { list: true } },
+  { key: 'reviewStatus', label: 'Review Status', sortable: true, minWidth: '160px', visible: true, showInTable: true, visibility: { list: true } },
+  { key: 'finalScore', label: 'Final Score', sortable: false, minWidth: '120px', visible: true, showInTable: true, visibility: { list: true } },
+  { key: 'submittedBy', label: 'Submitted By', sortable: true, minWidth: '150px', visible: true, showInTable: true, visibility: { list: true } },
+  { key: 'submittedAt', label: 'Submitted At', sortable: true, minWidth: '140px', visible: true, showInTable: true, visibility: { list: true } }
+];
+
+// Filter configuration
+const filterConfig = computed(() => [
+  {
+    key: 'executionStatus',
+    label: 'Execution Status',
+    options: [
+      { value: 'Not Started', label: 'Not Started' },
+      { value: 'In Progress', label: 'In Progress' },
+      { value: 'Submitted', label: 'Submitted' }
+    ]
+  },
+  {
+    key: 'reviewStatus',
+    label: 'Review Status',
+    options: [
+      { value: 'Pending Corrective Action', label: 'Pending Corrective Action' },
+      { value: 'Needs Auditor Review', label: 'Needs Auditor Review' },
+      { value: 'Approved', label: 'Approved' },
+      { value: 'Rejected', label: 'Rejected' },
+      { value: 'Closed', label: 'Closed' }
+    ]
+  },
+  {
+    key: 'linkedToType',
+    label: 'Linked To',
+    options: [
+      { value: 'Organization', label: 'Organization' },
+      { value: 'Deal', label: 'Deal' },
+      { value: 'Task', label: 'Task' },
+      { value: 'Event', label: 'Event' },
+      { value: 'Lead', label: 'Lead' },
+      { value: 'Contact', label: 'Contact' }
+    ]
+  },
+  {
+    key: 'fromDate',
+    label: 'From Date',
+    type: 'date'
+  },
+  {
+    key: 'toDate',
+    label: 'To Date',
+    type: 'date'
+  }
+]);
+
+// Methods
+const fetchResponses = async () => {
+  loading.value = true;
+  try {
+    const params = {
+      page: pagination.value.currentPage,
+      limit: pagination.value.responsesPerPage,
+      sortBy: sortField.value,
+      sortOrder: sortOrder.value,
+      search: searchQuery.value,
+      ...filters.value
+    };
+
+    // Remove empty filters
+    Object.keys(params).forEach(key => {
+      if (params[key] === '' || params[key] === null || params[key] === undefined) {
+        delete params[key];
+      }
+    });
+
+    const response = await apiClient('/forms/responses/all', {
+      method: 'GET',
+      params
+    });
+
+    if (response.success) {
+      responses.value = Array.isArray(response.data) ? response.data : [];
+      
+      // Handle pagination
+      if (response.pagination) {
+        pagination.value.totalResponses = response.pagination.totalResponses || 0;
+        pagination.value.totalPages = response.pagination.totalPages || 1;
+      }
+      
+      // Handle statistics
+      if (response.statistics) {
+        statistics.value = {
+          total: response.statistics.total || 0,
+          pending: response.statistics.pending || 0,
+          needsReview: response.statistics.needsReview || 0,
+          approved: response.statistics.approved || 0,
+          rejected: response.statistics.rejected || 0,
+          closed: response.statistics.closed || 0
+        };
+      }
+    } else {
+      console.error('Failed to fetch responses:', response.message || 'Unknown error');
+      responses.value = [];
+    }
+  } catch (error) {
+    console.error('Error fetching responses:', error);
+    responses.value = [];
+  } finally {
+    loading.value = false;
+  }
+};
+
+const handleSearchQueryUpdate = (query) => {
+  searchQuery.value = query;
+  pagination.value.currentPage = 1;
+  fetchResponses();
+};
+
+const handleSort = ({ key, order }) => {
+  sortField.value = key;
+  sortOrder.value = order;
+  fetchResponses();
+};
+
+// Helper function to extract formId from response object
+const getFormId = (response) => {
+  if (!response) {
+    console.error('getFormId: response is null/undefined');
+    return null;
+  }
+  
+  // Check if formId key exists (even if value might be null/undefined)
+  const hasFormIdKey = 'formId' in response;
+  
+  if (!hasFormIdKey) {
+    console.error('getFormId: formId key does not exist in response object');
+    console.error('Response keys:', Object.keys(response || {}));
+    return null;
+  }
+  
+  // Try to get formId value - handle Vue Proxy objects
+  let formIdValue;
+  try {
+    formIdValue = response.formId;
+  } catch (e) {
+    // If direct access fails (e.g., Proxy issue), try via JSON
+    try {
+      const json = JSON.parse(JSON.stringify(response));
+      formIdValue = json.formId;
+    } catch (e2) {
+      console.error('getFormId: Could not access formId value:', e2);
+      return null;
+    }
+  }
+  
+  // Debug: Log the actual value to understand what we're dealing with
+  console.log('getFormId: formIdValue type:', typeof formIdValue, 'value:', formIdValue);
+  console.log('getFormId: formIdValue constructor:', formIdValue?.constructor?.name);
+  
+  // Handle different formId value types
+  if (formIdValue === null || formIdValue === undefined) {
+    console.error('getFormId: formId exists but is null/undefined');
+    return null;
+  }
+  
+  // Method 1: Populated object with _id
+  if (typeof formIdValue === 'object' && formIdValue !== null) {
+    // Check for _id property
+    if (formIdValue._id !== undefined && formIdValue._id !== null) {
+      return String(formIdValue._id);
+    }
+    // Check for $oid (MongoDB format)
+    if (formIdValue.$oid !== undefined && formIdValue.$oid !== null) {
+      return String(formIdValue.$oid);
+    }
+    // Check if the object itself is an ObjectId-like object
+    if (formIdValue.toString && typeof formIdValue.toString === 'function') {
+      const str = formIdValue.toString();
+      if (str && str !== '[object Object]') {
+        return str;
+      }
+    }
+    // If it's an object but no _id, log and return null
+    console.error('getFormId: formId is object but missing _id or toString:', formIdValue);
+    console.error('getFormId: Object keys:', Object.keys(formIdValue));
+    return null;
+  }
+  
+  // Method 2: String/ObjectId
+  if (typeof formIdValue === 'string') {
+    const trimmed = formIdValue.trim();
+    if (trimmed !== '') {
+      return trimmed;
+    }
+    console.error('getFormId: formId is empty string');
+    return null;
+  }
+  
+  // Method 3: Number (unlikely but possible)
+  if (typeof formIdValue === 'number') {
+    return String(formIdValue);
+  }
+  
+  // If we get here, formId exists but is in an unexpected format
+  console.error('getFormId: formId exists but in unexpected format:', typeof formIdValue, formIdValue);
+  return null;
+};
+
+const viewResponseDetail = (response) => {
+  const formId = getFormId(response);
+  if (!formId) {
+    console.error('Form ID not found in response:', response);
+    return;
+  }
+  
+  openTab(`/forms/${formId}/responses/${response._id}`, {
+    name: `form-response-${response._id}`,
+    title: `Response - ${response.responseId || new Date(response.submittedAt).toLocaleDateString()}`,
+    component: 'FormResponseDetail',
+    params: { formId, responseId: response._id }
+  });
+  router.push(`/forms/${formId}/responses/${response._id}`);
+};
+
+const approveResponse = async (response) => {
+  if (!confirm('Are you sure you want to approve this response?')) {
+    return;
+  }
+
+  const formId = getFormId(response);
+  if (!formId) {
+    alert('Form ID not found. Please refresh the page and try again.');
+    return;
+  }
+
+  try {
+    const result = await apiClient(`/forms/${formId}/responses/${response._id}/approve`, {
+      method: 'POST'
+    });
+
+    if (result.success) {
+      await fetchResponses();
+    }
+  } catch (error) {
+    console.error('Error approving response:', error);
+    alert('Failed to approve response. Please try again.');
+  }
+};
+
+const rejectResponse = async (response) => {
+  if (!confirm('Are you sure you want to reject this response?')) {
+    return;
+  }
+
+  const formId = getFormId(response);
+  if (!formId) {
+    alert('Form ID not found. Please refresh the page and try again.');
+    return;
+  }
+
+  try {
+    const result = await apiClient(`/forms/${formId}/responses/${response._id}/reject`, {
+      method: 'POST'
+    });
+
+    if (result.success) {
+      await fetchResponses();
+    }
+  } catch (error) {
+    console.error('Error rejecting response:', error);
+    alert('Failed to reject response. Please try again.');
+  }
+};
+
+// Check if response is from an audit form
+const isAuditResponse = (response) => {
+  const formType = response.formId?.formType || (response.formId && typeof response.formId === 'object' ? response.formId.formType : null);
+  return formType === 'Audit';
+};
+
+// Check if response can be restored
+const canRestore = (response) => {
+  return response.archived || response.invalidated;
+};
+
+// Show archive/invalidate modal
+const showArchiveInvalidateModalFn = (response) => {
+  selectedResponse.value = response;
+  archiveInvalidateReason.value = '';
+  archiveInvalidateAction.value = null;
+  showArchiveInvalidateModal.value = true;
+};
+
+// Handle archive/invalidate
+const handleArchiveInvalidate = async () => {
+  if (!selectedResponse.value || !archiveInvalidateAction.value || !archiveInvalidateReason.value.trim()) {
+    return;
+  }
+
+  const formId = getFormId(selectedResponse.value);
+  if (!formId) {
+    alert('Form ID not found. Please refresh the page and try again.');
+    return;
+  }
+
+  try {
+    const endpoint = archiveInvalidateAction.value === 'archive' ? 'archive' : 'invalidate';
+    const result = await apiClient(`/forms/${formId}/responses/${selectedResponse.value._id}/${endpoint}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        reason: archiveInvalidateReason.value.trim()
+      })
+    });
+
+    if (result.success) {
+      await fetchResponses();
+      showArchiveInvalidateModal.value = false;
+      selectedResponse.value = null;
+      archiveInvalidateReason.value = '';
+      archiveInvalidateAction.value = null;
+    }
+  } catch (error) {
+    console.error(`Error ${archiveInvalidateAction.value}ing response:`, error);
+    alert(`Failed to ${archiveInvalidateAction.value} response. Please try again.`);
+  }
+};
+
+// Restore archived/invalidated response
+const restoreResponse = async (response) => {
+  if (!confirm(`Are you sure you want to restore this response?`)) {
+    return;
+  }
+
+  const formId = getFormId(response);
+  if (!formId) {
+    alert('Form ID not found. Please refresh the page and try again.');
+    return;
+  }
+
+  try {
+    const result = await apiClient(`/forms/${formId}/responses/${response._id}/restore`, {
+      method: 'POST'
+    });
+
+    if (result.success) {
+      await fetchResponses();
+    }
+  } catch (error) {
+    console.error('Error restoring response:', error);
+    alert('Failed to restore response. Please try again.');
+  }
+};
+
+const handleDelete = async (response) => {
+  // Check if it's an audit response
+  if (isAuditResponse(response)) {
+    // Show archive/invalidate modal instead
+    showArchiveInvalidateModalFn(response);
+    return;
+  }
+
+  // For non-audit responses, check if submitted
+  if (response.executionStatus === 'Submitted') {
+    alert('Submitted responses cannot be deleted. Use archive or invalidate instead.');
+    return;
+  }
+
+  if (!confirm(`Are you sure you want to delete this response?`)) {
+    return;
+  }
+
+  const formId = getFormId(response);
+  if (!formId) {
+    console.error('Form ID not found in response:', response);
+    alert('Form ID not found. Please refresh the page and try again.');
+    return;
+  }
+
+  try {
+    const result = await apiClient(`/forms/${formId}/responses/${response._id}`, {
+      method: 'DELETE'
+    });
+
+    if (result.success) {
+      await fetchResponses();
+    } else if (result.code === 'AUDIT_DELETE_FORBIDDEN' || result.code === 'SUBMITTED_DELETE_FORBIDDEN') {
+      // Show archive/invalidate modal if delete is forbidden
+      showArchiveInvalidateModalFn(response);
+    }
+  } catch (error) {
+    console.error('Error deleting response:', error);
+    // Check if error is about audit or submitted response
+    if (error.response?.data?.code === 'AUDIT_DELETE_FORBIDDEN' || error.response?.data?.code === 'SUBMITTED_DELETE_FORBIDDEN') {
+      showArchiveInvalidateModalFn(response);
+    } else {
+      alert('Failed to delete response. Please try again.');
+    }
+  }
+};
+
+const exportResponses = async () => {
+  try {
+    const params = new URLSearchParams({
+      ...filters.value,
+      search: searchQuery.value
+    });
+    
+    // Note: This would need a new export endpoint for all responses
+    alert('Export functionality for all responses is coming soon!');
+  } catch (error) {
+    console.error('Error exporting responses:', error);
+    alert('An error occurred during export.');
+  }
+};
+
+// Format date helper
+const formatDate = (date) => {
+  if (!date) return '';
+  return new Date(date).toLocaleDateString();
+};
+
+// Get relative time helper
+const getRelativeTime = (date) => {
+  if (!date) return '';
+  const now = new Date();
+  const then = new Date(date);
+  const diffMs = now - then;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return new Date(date).toLocaleDateString();
+};
+
+// Lifecycle - Clear old column settings BEFORE ListView initializes
+onBeforeMount(() => {
+  // Force clear old column settings and save our 8 decision-focused columns
+  // This must run BEFORE ListView's onMounted which loads the settings
+  if (typeof window !== 'undefined') {
+    const expectedKeys = new Set([
+      'responseId',
+      'formName', 
+      'linkedTo',
+      'executionStatus',
+      'reviewStatus',
+      'finalScore',
+      'submittedBy',
+      'submittedAt'
+    ]);
+    
+    // Clear ListView column settings (uses module-key "forms")
+    const listViewKey = 'litedesk-listview-forms-columns';
+    const savedListView = localStorage.getItem(listViewKey);
+    let shouldReset = false;
+    
+    // Check if saved columns match our expected columns
+    if (savedListView) {
+      try {
+        const parsed = JSON.parse(savedListView);
+        if (Array.isArray(parsed)) {
+          const savedKeys = new Set(parsed.map(c => c.key || c));
+          
+          // Check if saved columns match expected columns (bidirectional check)
+          const hasAllExpected = [...expectedKeys].every(key => savedKeys.has(key));
+          const hasOnlyExpected = [...savedKeys].every(key => expectedKeys.has(key));
+          const sizeMatches = savedKeys.size === expectedKeys.size;
+          
+          if (!hasAllExpected || !hasOnlyExpected || !sizeMatches) {
+            console.log('Columns mismatch - resetting. Expected:', [...expectedKeys].sort(), 'Saved:', [...savedKeys].sort());
+            shouldReset = true;
+          } else {
+            // Even if keys match, check if visibility is correct
+            const allVisible = parsed.every(c => {
+              const key = c.key || c;
+              return expectedKeys.has(key) && (c.visible !== false);
+            });
+            if (!allVisible) {
+              console.log('Some columns are hidden - resetting visibility');
+              shouldReset = true;
+            }
+          }
+        } else {
+          shouldReset = true;
+        }
+      } catch (e) {
+        console.log('Error parsing saved columns - resetting:', e);
+        shouldReset = true;
+      }
+    } else {
+      shouldReset = true; // No saved settings, need to set our columns
+    }
+    
+    if (shouldReset) {
+      // Save our 8 decision-focused columns to localStorage
+      // This ensures ListView uses ONLY these columns, not the 32 from backend
+      const columnsToSave = columns.map(col => ({
+        key: col.key,
+        label: col.label,
+        visible: true,
+        sortable: col.sortable !== false,
+        dataType: col.dataType || 'Text',
+        showInTable: true
+      }));
+      
+      localStorage.setItem(listViewKey, JSON.stringify(columnsToSave));
+      console.log('Saved decision-focused columns to localStorage:', columnsToSave.map(c => c.key));
+    }
+    
+    // Always clear DataTable settings (they're not used by ListView)
+    ['datatable-responses-table-hidden', 'datatable-responses-table-order', 'datatable-responses-table-frozen']
+      .forEach(key => localStorage.removeItem(key));
+  }
+});
+
+onMounted(() => {
+  fetchResponses();
+});
+
+onActivated(() => {
+  fetchResponses();
+});
+</script>
+

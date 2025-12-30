@@ -132,7 +132,7 @@
               v-for="(f, idx) in filteredFields"
               :key="f.key || idx"
               class="group"
-              :draggable="!isSystemField(f)"
+              :draggable="!isSystemField(f) && !isFixedPositionField(f, selectedModule?.key)"
               @dragstart="onDragStart(idx)"
               @dragover.prevent="onDragOver(idx)"
               @drop.prevent="onDrop(idx)"
@@ -143,8 +143,8 @@
                     dragOverIdx === idx ? 'ring-2 ring-brand-500 dark:ring-brand-400' : '',
                     isSystemField(f) ? 'opacity-75' : ''
                   ]">
-                <div v-if="!isSystemField(f)" class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
-                <div v-else class="mr-2 text-xs text-purple-600 dark:text-purple-400" title="System field">🔒</div>
+                <div v-if="!isSystemField(f) && !isFixedPositionField(f, selectedModule?.key)" class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
+                <div v-else class="mr-2 text-xs text-purple-600 dark:text-purple-400" :title="isSystemField(f) ? 'System field' : 'Fixed position field'">🔒</div>
                 <button class="flex-1 text-left truncate" @click="selectField(idx)">{{ f.label || f.key || 'Untitled field' }}</button>
                 <span class="text-xs text-gray-500 dark:text-gray-400">{{ f.dataType }}</span>
               </div>
@@ -160,15 +160,17 @@
             <div class="flex items-center gap-2">
               <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ currentFieldTitle }}</h3>
               <span v-if="isSystemField(currentField)" class="px-2 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">System</span>
+              <span v-else-if="isFixedPositionField(currentField, selectedModule?.key)" class="px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Fixed Position</span>
               <span v-else-if="isCoreField(currentField, selectedModule?.key)" class="px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
             </div>
             <p class="text-xs text-gray-500 dark:text-gray-400">Module: {{ selectedModule?.name }} • Key: {{ selectedModule?.key }}</p>
             <p v-if="isSystemField(currentField)" class="mt-1 text-xs text-amber-600 dark:text-amber-400">This is a system field and cannot be modified</p>
+            <p v-else-if="isFixedPositionField(currentField, selectedModule?.key)" class="mt-1 text-xs text-amber-600 dark:text-amber-400">This field must always be at the top and visible in table and detail views</p>
             <p v-else-if="isCoreField(currentField, selectedModule?.key)" class="mt-1 text-xs text-amber-600 dark:text-amber-400">This is a core field and cannot be deleted</p>
           </div>
           <div class="flex items-center gap-2">
-            <button v-if="selectedModule && isDirty" @click="saveModule" class="px-3 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium">Save changes</button>
-            <button v-if="currentField && canDeleteField" @click="removeField(selectedFieldIdx)" class="px-3 py-2 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg text-sm font-medium">Delete Field</button>
+            <button v-if="selectedModule && isDirty" @click="saveModule" :disabled="isSaving" class="px-3 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors shadow-md">Save changes</button>
+            <button v-if="currentField && canDeleteField" @click="removeField(selectedFieldIdx)" class="px-3 py-2 bg-red-500 hover:bg-red-600 text-white dark:bg-red-600 dark:hover:bg-red-700 rounded-lg text-sm font-medium transition-colors shadow-sm">Delete Field</button>
           </div>
         </div>
 
@@ -223,10 +225,11 @@
                     <span v-if="keyFieldCount > 0" class="text-xs text-gray-500 dark:text-gray-400">({{ keyFieldCount }}/10)</span>
                   </label>
                   <label class="inline-flex items-center gap-2 text-sm" title="Controls whether this field is visible in the table/list view. Users can still customize visibility in column settings.">
-                    <input type="checkbox" v-model="currentField.visibility.list" :disabled="isSystemField(currentField)" />
+                    <input type="checkbox" v-model="currentField.visibility.list" :disabled="isSystemField(currentField) || isFixedPositionField(currentField, selectedModule?.key)" />
                     Show in Table
                   </label>
-                  <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" v-model="currentField.visibility.detail" :disabled="isSystemField(currentField)" /> Show in Detail</label>
+                  <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" v-model="currentField.visibility.detail" :disabled="isSystemField(currentField) || isFixedPositionField(currentField, selectedModule?.key)" /> Show in Detail</label>
+                  <p v-if="isFixedPositionField(currentField, selectedModule?.key)" class="mt-1 text-xs text-gray-500 dark:text-gray-400">This field must always be visible in table and detail views</p>
                 </div>
                 <div>
                   <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Default Value</label>
@@ -453,7 +456,7 @@
                       <!-- Delete button in top right corner -->
                       <button 
                         @click="removeValidation(vi)" 
-                        class="absolute -top-2 -right-2 p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all hover:scale-110 bg-white dark:bg-gray-800 border border-gray-200 dark:border-white/10 shadow-sm"
+                        class="absolute -top-2 -right-2 p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all hover:scale-110 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-white/10 shadow-sm"
                         title="Remove validation"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
@@ -537,32 +540,41 @@
               </div>
             </div>
             <div v-if="activeSubTab === 'dependencies'">
-              <div>
-                <!-- Empty State -->
-                <div v-if="!currentField.dependencies || currentField.dependencies.length === 0" class="flex flex-col items-center justify-center py-12 px-4 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-16 h-16 text-gray-300 dark:text-gray-600 mb-4">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                  </svg>
-                  <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Dependencies</h3>
-                  <p class="text-sm text-gray-600 dark:text-gray-400 text-center max-w-md mb-6">
-                    Add field dependencies to control visibility, read-only state, required state, or filter picklist options based on other field values.
-                  </p>
-                  <button @click="addDependency" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                    </svg>
-                    Add Dependency
-                  </button>
-                </div>
+              <div class="space-y-6">
+                <!-- Section 1: Field Rules (Existing Field Dependencies) -->
+                <div>
+                  <div class="mb-4">
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-1">Field Rules</h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                      Control visibility, read-only state, required state, or filter picklist options based on other field values.
+                    </p>
+                  </div>
 
-                <!-- Dependencies List -->
-                <div v-else>
-                  <div class="space-y-3">
-                    <div v-for="(d, di) in currentField.dependencies" :key="di" class="relative border border-gray-200 dark:border-white/10 rounded-lg p-3 space-y-3">
+                  <!-- Empty State -->
+                  <div v-if="getFieldRules().length === 0" class="flex flex-col items-center justify-center py-12 px-4 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-16 h-16 text-gray-300 dark:text-gray-600 mb-4">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Field Rules</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 text-center max-w-md mb-6">
+                      Add field dependencies to control visibility, read-only state, required state, or filter picklist options based on other field values.
+                    </p>
+                    <button @click="addDependency" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-md">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                      </svg>
+                      Add Field Rule
+                    </button>
+                  </div>
+
+                  <!-- Dependencies List -->
+                  <div v-else>
+                    <div class="space-y-3">
+                      <div v-for="(d, di) in getFieldRules()" :key="di" class="relative border border-gray-200 dark:border-white/10 rounded-lg p-3 space-y-3">
                       <!-- Delete button in top right corner -->
                       <button 
                         @click="removeDependency(di)" 
-                        class="absolute -top-2 -right-2 p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all hover:scale-110 bg-white dark:bg-gray-800 border border-gray-200 dark:border-white/10 shadow-sm"
+                        class="absolute -top-2 -right-2 p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all hover:scale-110 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-white/10 shadow-sm"
                         title="Remove dependency"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
@@ -615,62 +627,154 @@
                         </div>
                         
                         <!-- Conditions -->
-                        <div v-for="(c, ci) in getDependencyConditions(d)" :key="ci" class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end border border-gray-200 dark:border-white/10 rounded-lg p-3 bg-gray-50/50 dark:bg-white/5">
-                          <div class="md:col-span-5">
-                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Field</label>
-                            <select v-model="c.fieldKey" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm">
-                              <option value="">Select field</option>
-                              <option v-for="f in otherFields" :key="f.key" :value="f.key">{{ f.label || f.key }}</option>
-                            </select>
+                        <div v-for="(c, ci) in getDependencyConditions(d)" :key="ci" class="border border-gray-200 dark:border-white/10 rounded-lg p-3 bg-gray-50/50 dark:bg-white/5">
+                          <!-- Field, Operator, Value in same row -->
+                          <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                            <div class="md:col-span-5">
+                              <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Field</label>
+                              <select v-model="c.fieldKey" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm">
+                                <option value="">Select field</option>
+                                <option v-for="f in otherFields" :key="f.key" :value="f.key">{{ f.label || f.key }}</option>
+                              </select>
+                            </div>
+                            <div class="md:col-span-3">
+                              <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Operator</label>
+                              <select v-model="c.operator" @change="onDependencyOperatorChange(di, ci)" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm">
+                                <option value="equals">equals</option>
+                                <option value="not_equals">not equals</option>
+                                <option value="in">in</option>
+                                <option value="not_in">not in</option>
+                                <option value="exists">exists</option>
+                                <option value="gt">&gt;</option>
+                                <option value="lt">&lt;</option>
+                                <option value="gte">&ge;</option>
+                                <option value="lte">&le;</option>
+                                <option value="contains">contains</option>
+                              </select>
+                            </div>
+                            <div class="md:col-span-3">
+                              <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Value</label>
+                              <!-- Multi-select for Picklist with 'in' or 'not_in' operators -->
+                              <div v-if="(getDependencyFieldType(c.fieldKey) === 'Picklist' || getDependencyFieldType(c.fieldKey) === 'Multi-Picklist') && (c.operator === 'in' || c.operator === 'not_in')" class="relative dependency-dropdown-container">
+                                <input
+                                  type="text"
+                                  :value="getDependencySearchTerm(di, ci)"
+                                  @input="setDependencySearchTerm(di, ci, $event.target.value)"
+                                  @focus="setDependencyDropdownOpen(di, ci, true)"
+                                  @keydown.escape="setDependencyDropdownOpen(di, ci, false)"
+                                  placeholder="Search and select values..."
+                                  class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                                />
+                                
+                                <!-- Dropdown -->
+                                <div
+                                  v-if="isDependencyDropdownOpen(di, ci)"
+                                  class="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-white/10 rounded-lg shadow-lg max-h-64 overflow-hidden flex flex-col"
+                                  @click.stop
+                                >
+                                  <!-- Search results header -->
+                                  <div class="p-2 border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
+                                    <span class="text-xs text-gray-600 dark:text-gray-400">
+                                      {{ getFilteredDependencyOptions(di, ci).length }} option(s)
+                                    </span>
+                                    <div class="flex items-center gap-2">
+                                      <button
+                                        @click="selectAllDependencyValues(di, ci)"
+                                        class="text-xs text-brand-600 dark:text-brand-400 hover:underline"
+                                        type="button"
+                                      >
+                                        Select All
+                                      </button>
+                                      <button
+                                        @click="deselectAllDependencyValues(di, ci)"
+                                        class="text-xs text-gray-600 dark:text-gray-400 hover:underline"
+                                        type="button"
+                                      >
+                                        Clear
+                                      </button>
+                                    </div>
+                                  </div>
+                                  
+                                  <!-- Options list -->
+                                  <div class="overflow-y-auto max-h-56">
+                                    <div
+                                      v-for="opt in getFilteredDependencyOptions(di, ci)"
+                                      :key="opt"
+                                      @click="toggleDependencyValue(di, ci, opt)"
+                                      class="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        :checked="isDependencyValueSelected(di, ci, opt)"
+                                        @change.stop="toggleDependencyValue(di, ci, opt)"
+                                        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500 pointer-events-none"
+                                      />
+                                      <span class="text-sm text-gray-700 dark:text-gray-300 flex-1">{{ opt }}</span>
+                                    </div>
+                                    <div v-if="getFilteredDependencyOptions(di, ci).length === 0" class="px-3 py-4 text-sm text-gray-500 dark:text-gray-400 text-center">
+                                      No options found
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              <!-- Single-select Picklist dropdown (for non-in/not_in operators) -->
+                              <select v-else-if="getDependencyFieldType(c.fieldKey) === 'Picklist' || getDependencyFieldType(c.fieldKey) === 'Multi-Picklist'" v-model="c.value" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm">
+                                <option value="">Select option</option>
+                                <option v-for="opt in getDependencyFieldOptions(c.fieldKey)" :key="opt" :value="opt">{{ opt }}</option>
+                              </select>
+                              <!-- Checkbox -->
+                              <select v-else-if="getDependencyFieldType(c.fieldKey) === 'Checkbox'" v-model="c.value" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm">
+                                <option value="">Select value</option>
+                                <option value="true">true</option>
+                                <option value="false">false</option>
+                              </select>
+                              <!-- Date -->
+                              <input v-else-if="getDependencyFieldType(c.fieldKey) === 'Date'" type="date" v-model="c.value" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm" />
+                              <!-- Date-Time -->
+                              <input v-else-if="getDependencyFieldType(c.fieldKey) === 'Date-Time'" type="datetime-local" v-model="c.value" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm" />
+                              <!-- Number fields -->
+                              <input v-else-if="['Integer', 'Decimal', 'Currency'].includes(getDependencyFieldType(c.fieldKey))" type="number" v-model.number="c.value" placeholder="Number" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm" />
+                              <!-- Text input for 'in' or 'not_in' operators (for non-picklist fields) -->
+                              <input v-else-if="c.operator === 'in' || c.operator === 'not_in'" v-model="dependencyConditionBuffers[di + '-' + ci]" placeholder="a, b, c" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm" @change="applyDependencyConditionValue(di, ci)" />
+                              <!-- Comparison operators need numbers -->
+                              <input v-else-if="['gt', 'lt', 'gte', 'lte'].includes(c.operator)" type="number" v-model.number="c.value" placeholder="Number" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm" />
+                              <!-- Exists operator -->
+                              <input v-else-if="c.operator === 'exists'" type="text" disabled value="(exists check)" class="w-full px-3 py-2 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-sm cursor-not-allowed" />
+                              <!-- Default text input -->
+                              <input v-else v-model="c.value" placeholder="Value" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm" />
+                            </div>
+                            <button @click="removeDependencyCondition(di, ci)" class="md:col-span-1 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm transition-colors flex items-center justify-center" title="Remove condition">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
                           </div>
-                          <div class="md:col-span-3">
-                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Operator</label>
-                            <select v-model="c.operator" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm">
-                              <option value="equals">equals</option>
-                              <option value="not_equals">not equals</option>
-                              <option value="in">in</option>
-                              <option value="not_in">not in</option>
-                              <option value="exists">exists</option>
-                              <option value="gt">&gt;</option>
-                              <option value="lt">&lt;</option>
-                              <option value="gte">&ge;</option>
-                              <option value="lte">&le;</option>
-                              <option value="contains">contains</option>
-                            </select>
+                          
+                          <!-- Selected values display (below the row for multi-select) -->
+                          <div v-if="(getDependencyFieldType(c.fieldKey) === 'Picklist' || getDependencyFieldType(c.fieldKey) === 'Multi-Picklist') && (c.operator === 'in' || c.operator === 'not_in') && getSelectedDependencyValues(di, ci).length > 0" class="mt-3 pt-3 border-t border-gray-200 dark:border-white/10 flex items-center gap-3 flex-wrap">
+                            <div class="flex flex-wrap gap-1.5">
+                              <span
+                                v-for="(val, idx) in getSelectedDependencyValues(di, ci)"
+                                :key="idx"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-gray-700 dark:text-gray-300 rounded-full text-xs font-medium"
+                              >
+                                <span>{{ val }}</span>
+                                <button
+                                  @click="toggleDependencyValue(di, ci, val)"
+                                  class="hover:bg-blue-200 dark:hover:bg-blue-900/50 rounded-full p-0.5 transition-colors"
+                                  type="button"
+                                  title="Remove"
+                                >
+                                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </span>
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                              {{ getSelectedDependencyValues(di, ci).length }} of {{ getDependencyFieldOptions(c.fieldKey).length }} selected
+                            </p>
                           </div>
-                          <div class="md:col-span-3">
-                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Value</label>
-                            <!-- Picklist dropdown -->
-                            <select v-if="getDependencyFieldType(c.fieldKey) === 'Picklist' || getDependencyFieldType(c.fieldKey) === 'Multi-Picklist'" v-model="c.value" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm">
-                              <option value="">Select option</option>
-                              <option v-for="opt in getDependencyFieldOptions(c.fieldKey)" :key="opt" :value="opt">{{ opt }}</option>
-                            </select>
-                            <!-- Checkbox -->
-                            <select v-else-if="getDependencyFieldType(c.fieldKey) === 'Checkbox'" v-model="c.value" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm">
-                              <option value="">Select value</option>
-                              <option value="true">true</option>
-                              <option value="false">false</option>
-                            </select>
-                            <!-- Date -->
-                            <input v-else-if="getDependencyFieldType(c.fieldKey) === 'Date'" type="date" v-model="c.value" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm" />
-                            <!-- Date-Time -->
-                            <input v-else-if="getDependencyFieldType(c.fieldKey) === 'Date-Time'" type="datetime-local" v-model="c.value" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm" />
-                            <!-- Number fields -->
-                            <input v-else-if="['Integer', 'Decimal', 'Currency'].includes(getDependencyFieldType(c.fieldKey))" type="number" v-model.number="c.value" placeholder="Number" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm" />
-                            <!-- Text input for 'in' or 'not_in' operators -->
-                            <input v-else-if="c.operator === 'in' || c.operator === 'not_in'" v-model="dependencyConditionBuffers[di + '-' + ci]" placeholder="a, b, c" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm" @change="applyDependencyConditionValue(di, ci)" />
-                            <!-- Comparison operators need numbers -->
-                            <input v-else-if="['gt', 'lt', 'gte', 'lte'].includes(c.operator)" type="number" v-model.number="c.value" placeholder="Number" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm" />
-                            <!-- Exists operator -->
-                            <input v-else-if="c.operator === 'exists'" type="text" disabled value="(exists check)" class="w-full px-3 py-2 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-sm cursor-not-allowed" />
-                            <!-- Default text input -->
-                            <input v-else v-model="c.value" placeholder="Value" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm" />
-                          </div>
-                          <button @click="removeDependencyCondition(di, ci)" class="md:col-span-1 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm transition-colors flex items-center justify-center" title="Remove condition">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
                         </div>
                       </div>
 
@@ -733,11 +837,175 @@
                     </div>
                   </div>
                   <div class="flex items-center gap-2 flex-wrap mt-4">
-                    <button @click="addDependency" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm hover:shadow-md">
+                    <button @click="addDependency" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-md">
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                       </svg>
-                      Add dependency
+                      Add Field Rule
+                    </button>
+                  </div>
+                </div>
+                </div>
+
+                <!-- Section 2: Picklist Value Rules (Only for Picklist/Multi-Picklist fields) -->
+                <div v-if="currentField.dataType === 'Picklist' || currentField.dataType === 'Multi-Picklist'" class="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+                  <div class="mb-4">
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-1">Picklist Value Rules</h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                      Filter available options in this picklist based on values selected in another picklist field.
+                    </p>
+                  </div>
+
+                  <!-- Empty State for Picklist Value Rules -->
+                  <div v-if="getPicklistValueRules().length === 0" class="flex flex-col items-center justify-center py-12 px-4 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-16 h-16 text-gray-300 dark:text-gray-600 mb-4">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Picklist Value Rules</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 text-center max-w-md mb-6">
+                      Configure which options are available in this picklist based on values in another picklist field.
+                    </p>
+                    <button @click="addPicklistValueRule" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-md">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                      </svg>
+                      Add Picklist Value Rule
+                    </button>
+                  </div>
+                  <div v-else class="space-y-4">
+                    <div v-for="(rule, ruleIdx) in getPicklistValueRules()" :key="ruleIdx" class="relative border border-gray-200 dark:border-white/10 rounded-lg p-4 space-y-4">
+                      <!-- Delete button -->
+                      <button 
+                        @click="removePicklistValueRule(ruleIdx)" 
+                        class="absolute -top-2 -right-2 p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all hover:scale-110 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-white/10 shadow-sm"
+                        title="Remove rule"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+
+                      <!-- Parent Field Selection -->
+                      <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Parent Field <span class="text-red-500">*</span>
+                        </label>
+                        <select 
+                          v-model="rule.parentFieldKey"
+                          class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        >
+                          <option value="">Select picklist field...</option>
+                          <option 
+                            v-for="field in editFields.filter(f => (f.dataType === 'Picklist' || f.dataType === 'Multi-Picklist') && f.key !== currentField.key)" 
+                            :key="field.key" 
+                            :value="field.key"
+                          >
+                            {{ field.label || field.key }}
+                          </option>
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          The picklist field whose value determines which options are available in this field
+                        </p>
+                      </div>
+
+                      <!-- Value Mapping Table -->
+                      <div v-if="rule.parentFieldKey">
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Value Mapping
+                        </label>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                          Map parent field values to allowed options in this picklist
+                        </p>
+                        
+                        <div class="space-y-3">
+                          <div 
+                            v-for="(mapping, mapIdx) in rule.mappings || []" 
+                            :key="mapIdx"
+                            class="grid grid-cols-1 md:grid-cols-12 gap-3 items-start border border-gray-200 dark:border-white/10 rounded-lg p-3 bg-gray-50/50 dark:bg-white/5"
+                          >
+                            <!-- Parent Value -->
+                            <div class="md:col-span-4">
+                              <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Parent Value</label>
+                              <select 
+                                v-model="mapping.parentValue"
+                                class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm"
+                              >
+                                <option value="">Select value...</option>
+                                <option 
+                                  v-for="opt in getPicklistFieldOptions(rule.parentFieldKey)" 
+                                  :key="opt" 
+                                  :value="opt"
+                                >
+                                  {{ opt }}
+                                </option>
+                              </select>
+                            </div>
+                            
+                            <!-- Arrow -->
+                            <div class="md:col-span-1 flex items-center justify-center pt-6">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5 text-gray-400">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                              </svg>
+                            </div>
+                            
+                            <!-- Allowed Child Values -->
+                            <div class="md:col-span-6">
+                              <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Allowed Options</label>
+                              <div class="space-y-2 max-h-40 overflow-y-auto border border-gray-200 dark:border-white/10 rounded-lg p-2 bg-white dark:bg-gray-800">
+                                <div v-if="!currentField.options || currentField.options.length === 0" class="text-xs text-gray-500 dark:text-gray-400 py-2 text-center">
+                                  No options available
+                                </div>
+                                <label 
+                                  v-for="(option, optIdx) in getPicklistOptions(currentField)" 
+                                  :key="optIdx"
+                                  class="flex items-center gap-2 p-1.5 hover:bg-gray-50 dark:hover:bg-white/5 rounded cursor-pointer"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    :checked="isMappingOptionSelected(mapping, option)"
+                                    @change="toggleMappingOption(mapping, option)"
+                                    class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500"
+                                  />
+                                  <span class="text-xs text-gray-700 dark:text-gray-300">{{ normalizePicklistOption(option) }}</span>
+                                </label>
+                              </div>
+                            </div>
+                            
+                            <!-- Remove Mapping Button -->
+                            <div class="md:col-span-1 flex items-center justify-center pt-6">
+                              <button 
+                                @click="removePicklistValueMapping(ruleIdx, mapIdx)"
+                                class="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+                                title="Remove mapping"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                          <button 
+                            @click="addPicklistValueMapping(ruleIdx)"
+                            class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:border-brand-500 dark:hover:border-brand-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-4 h-4">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Add Value Mapping
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <!-- Add Rule Button -->
+                    <button 
+                      @click="addPicklistValueRule"
+                      class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:border-brand-500 dark:hover:border-brand-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-4 h-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                      </svg>
+                      Add Another Picklist Value Rule
                     </button>
                   </div>
                 </div>
@@ -763,7 +1031,7 @@
               v-if="activeTopTab === 'quick' && quickDirty"
               @click="saveQuickCreate" 
               :disabled="isSavingQuickCreate"
-              class="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm hover:shadow-md"
+              class="px-4 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-md"
             >
               <svg v-if="!isSavingQuickCreate" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-4 h-4">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -775,10 +1043,10 @@
               {{ isSavingQuickCreate ? 'Saving...' : 'Save Changes' }}
             </button>
             <button 
-              v-if="(['details', 'relationships', 'pipeline'].includes(activeTopTab) && isDirty)"
+              v-if="['details', 'relationships', 'pipeline'].includes(activeTopTab) && isDirty"
               @click="saveModule" 
               :disabled="isSaving"
-              class="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm hover:shadow-md"
+              class="px-4 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-md"
             >
               <svg v-if="!isSaving" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-4 h-4">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -1126,11 +1394,12 @@
                   </p>
                 </div>
                 <button
+                  v-if="isDirty"
                   @click="saveModule"
-                  :disabled="isSaving || !isDirty"
+                  :disabled="isSaving"
                   class="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg transition-colors"
                   :class="[
-                    isSaving || !isDirty
+                    isSaving
                       ? 'bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed'
                       : 'bg-brand-600 hover:bg-brand-700 text-white shadow-sm hover:shadow'
                   ]"
@@ -1611,8 +1880,21 @@
                 </div>
                 <div class="p-4 space-y-2">
                   <div v-if="orderedQuickCreate.length === 0" class="text-sm text-gray-600 dark:text-gray-400">No fields selected.</div>
-                  <div v-for="f in orderedQuickCreate" :key="f.key" class="rounded border border-gray-200 dark:border-white/10 px-3 py-2 text-sm text-gray-800 dark:text-gray-200">
-                    {{ f.label || f.key }}
+                  <div 
+                    v-for="(f, idx) in orderedQuickCreate" 
+                    :key="f.key" 
+                    :draggable="true"
+                    @dragstart="onQuickCreateDragStart(idx)"
+                    @dragover.prevent="onQuickCreateDragOver(idx)"
+                    @drop.prevent="onQuickCreateDrop(idx)"
+                    class="rounded border border-gray-200 dark:border-white/10 px-3 py-2 text-sm text-gray-800 dark:text-gray-200 flex items-center gap-2 cursor-move transition-colors"
+                    :class="{
+                      'opacity-50': quickCreateDragStartIdx === idx,
+                      'ring-2 ring-brand-500/50': quickCreateDragOverIdx === idx
+                    }"
+                  >
+                    <ArrowsUpDownIcon class="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                    <span class="flex-1">{{ f.label || f.key }}</span>
                   </div>
                 </div>
               </div>
@@ -1622,7 +1904,7 @@
                 <div class="p-3 border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
                   <div class="text-sm font-semibold text-gray-800 dark:text-gray-200">Visual Builder (Rows / Columns)</div>
                   <div class="flex items-center gap-2">
-                    <button @click="addRow" class="px-3 py-1.5 bg-gray-100 dark:bg-white/10 rounded text-xs">Add Row</button>
+                    <button @click="addRow" class="px-3 py-1.5 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/20 rounded text-xs transition-colors">Add Row</button>
                     <button @click="openPreview()" class="px-3 py-1.5 bg-brand-600 text-white rounded text-xs">Preview</button>
                   </div>
                 </div>
@@ -1638,7 +1920,7 @@
                     <div class="flex items-center justify-between">
                       <div class="text-xs font-medium text-gray-700 dark:text-gray-300">Row {{ ri + 1 }}</div>
                       <div class="flex items-center gap-2">
-                        <button @click="addCol(ri)" class="px-2 py-1 bg-gray-100 dark:bg-white/10 rounded text-xs">Add Column</button>
+                        <button @click="addCol(ri)" class="px-2 py-1 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/20 rounded text-xs transition-colors">Add Column</button>
                         <button @click="removeRow(ri)" class="px-2 py-1 text-red-600 dark:text-red-400 text-xs">Remove Row</button>
                       </div>
                     </div>
@@ -1693,7 +1975,7 @@
       <div class="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-white/10 w-[90vw] max-w-4xl max-h-[85vh] overflow-auto">
         <div class="p-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
           <div class="text-sm font-semibold text-gray-800 dark:text-gray-200">Quick Create Preview</div>
-          <button @click="closePreview" class="px-3 py-1.5 bg-gray-100 dark:bg-white/10 rounded text-xs">Close</button>
+          <button @click="closePreview" class="px-3 py-1.5 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/20 rounded text-xs transition-colors">Close</button>
         </div>
         <div class="p-6 space-y-3">
           <div v-for="(row, ri) in quickLayout.rows" :key="`pv-${ri}`" class="grid grid-cols-12 gap-3">
@@ -2085,6 +2367,7 @@
       @close="closeFormModal"
       @saved="handleModuleSaved"
     />
+
   </div>
 </template>
 
@@ -2093,6 +2376,7 @@
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import ModuleFormModal from './ModuleFormModal.vue';
+import { ArrowsUpDownIcon } from '@heroicons/vue/24/outline';
 
 const authStore = useAuthStore();
 const route = useRoute();
@@ -2156,6 +2440,10 @@ const baseTopTabs = [
 ];
 const TOP_TAB_IDS_BASE = ['details', 'fields', 'relationships', 'quick'];
 function getAllowedTopTabs(moduleKey) {
+  if (moduleKey === 'forms') {
+    // Forms module doesn't have Quick Create tab
+    return TOP_TAB_IDS_BASE.filter(id => id !== 'quick');
+  }
   if (moduleKey === 'deals') {
     return [...TOP_TAB_IDS_BASE, 'pipeline', 'playbooks'];
   }
@@ -2164,6 +2452,10 @@ function getAllowedTopTabs(moduleKey) {
 const topTabs = computed(() => {
   const moduleKey = selectedModule.value?.key;
   const tabs = [...baseTopTabs];
+  // Remove Quick Create tab for forms module
+  if (moduleKey === 'forms') {
+    return tabs.filter(tab => tab.id !== 'quick');
+  }
   if (moduleKey === 'deals') {
     tabs.push({ id: 'pipeline', name: 'Pipeline Settings' });
     tabs.push({ id: 'playbooks', name: 'Playbook Configuration' });
@@ -2204,6 +2496,9 @@ const dragColSrc = ref({ ri: null, ci: null });
 const dragColOver = ref({ ri: null, ci: null });
 const dragRowSrc = ref(null);
 const dragRowOver = ref(null);
+const quickCreateDragStartIdx = ref(null);
+const quickCreateDragOverIdx = ref(null);
+const quickCreateFieldOrder = ref([]); // Custom order for quick create fields
 // Tailwind safelist for col-span classes
 const colSpanClasses = [
   'col-span-1','col-span-2','col-span-3','col-span-4','col-span-5','col-span-6',
@@ -3155,6 +3450,20 @@ const filteredFields = computed(() => {
     return keyLower !== 'activitylogs';
   });
   
+  // For forms module, ensure 'name' field is always at the top
+  if (selectedModule.value?.key === 'forms') {
+    fields = fields.sort((a, b) => {
+      const aKey = (a.key || '').toLowerCase();
+      const bKey = (b.key || '').toLowerCase();
+      if (aKey === 'name') return -1;
+      if (bKey === 'name') return 1;
+      return (a.order ?? 0) - (b.order ?? 0);
+    });
+  } else {
+    // Normal sorting by order
+    fields = fields.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }
+  
   // Filter out tenant fields by default (unless showTenantFields is checked)
   // Only apply this filter for organizations module
   if (selectedModule.value?.key === 'organizations' && !showTenantFields.value) {
@@ -3223,11 +3532,47 @@ function isCoreField(field, moduleKey) {
     // Add other modules here if needed
     'organizations': ['name', 'organizationid', 'createdby'],
     'deals': ['name', 'organizationid', 'createdby', 'assignedto'],
-    'tasks': ['title', 'organizationid', 'createdby', 'assignedto']
+    'tasks': ['title', 'organizationid', 'createdby', 'assignedto'],
+    'forms': ['name'] // Name field is required and cannot be deleted or reordered
   };
   
   const coreFields = coreFieldsByModule[moduleKey.toLowerCase()] || [];
   return coreFields.includes((field.key || '').toLowerCase());
+}
+
+// Check if a field cannot be reordered (must stay at top)
+function isFixedPositionField(field, moduleKey) {
+  if (!field || !field.key || !moduleKey) return false;
+  // For forms module, name field must always be at the top
+  if (moduleKey.toLowerCase() === 'forms' && field.key.toLowerCase() === 'name') {
+    return true;
+  }
+  return false;
+}
+
+// Normalize fields for forms module - ensure name field is at top and always visible
+function normalizeFormsFields(fields, moduleKey) {
+  if (moduleKey?.toLowerCase() !== 'forms') return fields;
+  
+  const nameField = fields.find(f => f.key?.toLowerCase() === 'name');
+  if (nameField) {
+    // Ensure visibility is always enabled
+    nameField.visibility = { list: true, detail: true };
+    // Ensure it's at position 0
+    const nameFieldIdx = fields.indexOf(nameField);
+    if (nameFieldIdx > 0) {
+      fields.splice(nameFieldIdx, 1);
+      fields.unshift(nameField);
+    }
+    nameField.order = 0;
+    // Update order for other fields
+    fields.forEach((f, i) => {
+      if (f.key?.toLowerCase() !== 'name') {
+        f.order = i;
+      }
+    });
+  }
+  return fields;
 }
 
 // Check if a field can be deleted
@@ -3381,7 +3726,9 @@ const fetchModules = async () => {
         selectedModuleId.value = initialMod._id;
         const initial = JSON.parse(JSON.stringify(initialMod.fields || []));
         const sorted = initial.sort((a,b) => (a.order ?? 0) - (b.order ?? 0));
-        editFields.value = filterSystemFields(uniqueFieldsByKey(sorted));
+        let normalizedFields = filterSystemFields(uniqueFieldsByKey(sorted));
+        normalizedFields = normalizeFormsFields(normalizedFields, initialMod.key);
+        editFields.value = normalizedFields;
         // Select field by key if provided
         const idx = fieldKey ? editFields.value.findIndex(f => f.key === fieldKey) : 0;
         selectedFieldIdx.value = Math.max(0, idx);
@@ -3419,27 +3766,8 @@ const fetchModules = async () => {
         router.replace({ query: { ...route.query, quickMode: quickMode.value } });
         // Choose selection source based on mode: advanced -> layout, simple -> quickCreate
         const layoutKeysInit = extractLayoutKeys(quickLayout.value);
+        // Use quickCreate from module definition - NO hardcoding, all config comes from Settings UI
         let quickKeysInit = initialMod.quickCreate || [];
-        
-        // For Events module, use default fields if quickCreate is empty or incomplete
-        // Match field keys to actual field keys in editFields (they might be lowercase)
-        if (initialMod.key === 'events' && (!quickKeysInit || quickKeysInit.length < 5)) {
-          const defaultFieldNames = [
-            'eventName',
-            'eventType',
-            'status',
-            'eventOwnerId',
-            'startDateTime',
-            'endDateTime',
-            'location',
-            'agendaNotes'
-          ];
-          // Find actual field keys from editFields (case-insensitive match)
-          quickKeysInit = defaultFieldNames.map(name => {
-            const field = editFields.value.find(f => f.key && f.key.toLowerCase() === name.toLowerCase());
-            return field ? field.key : name;
-          }).filter(key => key); // Remove any that weren't found
-        }
         
         // fallback to locally stored quick selection if server returns empty (for other modules)
         if (!layoutKeysInit.length && !quickKeysInit.length) {
@@ -3451,23 +3779,53 @@ const fetchModules = async () => {
         const useLayout = false; // Advanced mode hidden for now // (quickMode.value === 'advanced' && layoutKeysInit.length > 0);
         const baseKeys = useLayout ? layoutKeysInit : quickKeysInit;
         // Normalize baseKeys to match actual field keys in editFields (case-insensitive match)
+        // This ensures keys like "event-type" or "eventType" both match the actual field key
         const normalizedBaseKeys = baseKeys.map(key => {
-          const field = editFields.value.find(f => f.key && f.key.toLowerCase() === key.toLowerCase());
-          return field ? field.key : key;
-        }).filter(key => key);
+          if (!key) return null;
+          // Try exact match first
+          let field = editFields.value.find(f => f.key === key);
+          if (field) return field.key;
+          // Try case-insensitive match
+          field = editFields.value.find(f => f.key && f.key.toLowerCase() === String(key).toLowerCase());
+          if (field) return field.key;
+          // Try kebab-case to camelCase conversion (event-type -> eventType)
+          const camelCaseKey = key.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
+          field = editFields.value.find(f => f.key && f.key.toLowerCase() === camelCaseKey.toLowerCase());
+          if (field) return field.key;
+          // If no match found, log warning and return null (will be filtered out)
+          console.warn(`⚠️  Field key "${key}" from quickCreate not found in module fields. Available keys:`, editFields.value.map(f => f.key).slice(0, 10));
+          return null;
+        }).filter(key => key !== null);
         // Always include required fields in Simple mode
         const requiredKeys = editFields.value.filter(f => !!f.required && !!f.key).map(f => f.key);
         const combined = quickMode.value === 'simple' ? Array.from(new Set([...normalizedBaseKeys, ...requiredKeys])) : normalizedBaseKeys;
         quickCreateSelected.value = new Set(combined);
-        // capture snapshot after initializing state
-        originalSnapshot.value = getSnapshot();
-        quickOriginalSnapshot.value = getQuickSnapshot();
         
-        // If we used default fields for Events and database doesn't have them, save them
-        // But wait until initialization is complete
-        if (initialMod.key === 'events' && (!initialMod.quickCreate || initialMod.quickCreate.length < 5) && combined.length > 0) {
-          // Default fields are now set, user can save manually
+        // Initialize field order from saved quickCreate array (preserves order)
+        // If quickCreate has order, use it; otherwise use editFields order
+        if (normalizedBaseKeys.length > 0) {
+          quickCreateFieldOrder.value = normalizedBaseKeys;
+          // Add any required fields that aren't in the order yet
+          requiredKeys.forEach(key => {
+            if (!quickCreateFieldOrder.value.includes(key)) {
+              quickCreateFieldOrder.value.push(key);
+            }
+          });
+        } else {
+          // No saved order, initialize with editFields order
+          quickCreateFieldOrder.value = editFields.value
+            .filter(f => combined.includes(f.key))
+            .map(f => f.key);
         }
+        // capture snapshot after initializing state and all reactive updates settle
+        // Use double nextTick to ensure all watchers and computed properties have updated
+        nextTick(() => {
+          nextTick(() => {
+            originalSnapshot.value = getSnapshot();
+            quickOriginalSnapshot.value = getQuickSnapshot();
+          });
+        });
+        
         
         // Check if we should open add field dialog
         const action = typeof route.query.action === 'string' ? route.query.action : null;
@@ -3489,7 +3847,9 @@ const fetchModules = async () => {
             selectedModuleId.value = storedMod._id;
             const initial = JSON.parse(JSON.stringify(storedMod.fields || []));
             const sorted = initial.sort((a,b) => (a.order ?? 0) - (b.order ?? 0));
-            editFields.value = filterSystemFields(uniqueFieldsByKey(sorted));
+            let normalizedFields = filterSystemFields(uniqueFieldsByKey(sorted));
+            normalizedFields = normalizeFormsFields(normalizedFields, storedMod.key);
+            editFields.value = normalizedFields;
             // try stored field
             const storedFieldKey = localStorage.getItem('litedesk-modfields-field') || '';
             const sidx = storedFieldKey ? editFields.value.findIndex(f => f.key === storedFieldKey) : 0;
@@ -3511,27 +3871,8 @@ const fetchModules = async () => {
             router.replace({ query: { ...route.query, quickMode: quickMode.value } });
             // now derive selection based on mode
             const layoutKeysInit = extractLayoutKeys(quickLayout.value);
+            // Use quickCreate from module definition - NO hardcoding, all config comes from Settings UI
             let quickKeysInit = storedMod.quickCreate || [];
-            
-            // For Events module, use default fields if quickCreate is empty or incomplete
-            // Match field keys to actual field keys in editFields (they might be lowercase)
-            if (storedMod.key === 'events' && (!quickKeysInit || quickKeysInit.length < 5)) {
-              const defaultFieldNames = [
-                'eventName',
-                'eventType',
-                'status',
-                'eventOwnerId',
-                'startDateTime',
-                'endDateTime',
-                'location',
-                'agendaNotes'
-              ];
-              // Find actual field keys from editFields (case-insensitive match)
-              quickKeysInit = defaultFieldNames.map(name => {
-                const field = editFields.value.find(f => f.key && f.key.toLowerCase() === name.toLowerCase());
-                return field ? field.key : name;
-              }).filter(key => key); // Remove any that weren't found
-            }
             
             const useLayout = false; // Advanced mode hidden for now // (quickMode.value === 'advanced' && layoutKeysInit.length > 0);
             const baseKeys = useLayout ? layoutKeysInit : quickKeysInit;
@@ -3543,8 +3884,32 @@ const fetchModules = async () => {
             const requiredKeys = editFields.value.filter(f => !!f.required && !!f.key).map(f => f.key);
             const combined = quickMode.value === 'simple' ? Array.from(new Set([...normalizedBaseKeys, ...requiredKeys])) : normalizedBaseKeys;
             quickCreateSelected.value = new Set(combined);
-            originalSnapshot.value = getSnapshot();
-            quickOriginalSnapshot.value = getQuickSnapshot();
+            
+            // Initialize field order from saved quickCreate array (preserves order)
+            // If quickCreate has order, use it; otherwise use editFields order
+            if (normalizedBaseKeys.length > 0) {
+              quickCreateFieldOrder.value = normalizedBaseKeys;
+              // Add any required fields that aren't in the order yet
+              requiredKeys.forEach(key => {
+                if (!quickCreateFieldOrder.value.includes(key)) {
+                  quickCreateFieldOrder.value.push(key);
+                }
+              });
+            } else {
+              // No saved order, initialize with editFields order
+              quickCreateFieldOrder.value = editFields.value
+                .filter(f => combined.includes(f.key))
+                .map(f => f.key);
+            }
+            
+            // capture snapshot after all reactive updates settle
+            // Use double nextTick to ensure all watchers and computed properties have updated
+            nextTick(() => {
+              nextTick(() => {
+                originalSnapshot.value = getSnapshot();
+                quickOriginalSnapshot.value = getQuickSnapshot();
+              });
+            });
             
             // If we used default fields for Events and database doesn't have them, save them
             // But wait until initialization is complete
@@ -3567,7 +3932,9 @@ const selectModule = (mod, preferFieldKey = null) => {
   selectedModuleId.value = mod._id;
   const initial = JSON.parse(JSON.stringify(mod.fields || []));
   const sorted = initial.sort((a,b) => (a.order ?? 0) - (b.order ?? 0));
-  editFields.value = filterSystemFields(uniqueFieldsByKey(sorted));
+  let normalizedFields = filterSystemFields(uniqueFieldsByKey(sorted));
+  normalizedFields = normalizeFormsFields(normalizedFields, mod.key);
+  editFields.value = normalizedFields;
   if (preferFieldKey) {
     const idx = editFields.value.findIndex(f => f.key === preferFieldKey);
     selectedFieldIdx.value = idx >= 0 ? idx : 0;
@@ -3600,27 +3967,8 @@ const selectModule = (mod, preferFieldKey = null) => {
   hydratePipelineSettingsFromModule(mod);
   // Choose selection source based on mode: advanced -> layout, simple -> quickCreate
   const layoutKeys = extractLayoutKeys(quickLayout.value);
+  // Use quickCreate from module definition - NO hardcoding, all config comes from Settings UI
   let quickKeys = mod.quickCreate || [];
-  
-  // For Events module, use default fields if quickCreate is empty or incomplete
-  // Match field keys to actual field keys in editFields (they might be lowercase)
-  if (mod.key === 'events' && (!quickKeys || quickKeys.length < 5)) {
-    const defaultFieldNames = [
-      'eventName',
-      'eventType',
-      'status',
-      'eventOwnerId',
-      'startDateTime',
-      'endDateTime',
-      'location',
-      'agendaNotes'
-    ];
-    // Find actual field keys from editFields (case-insensitive match)
-    quickKeys = defaultFieldNames.map(name => {
-      const field = editFields.value.find(f => f.key && f.key.toLowerCase() === name.toLowerCase());
-      return field ? field.key : name;
-    }).filter(key => key); // Remove any that weren't found
-  }
   
   // fallback to locally stored quick selection if server returns empty (for other modules)
   if (!layoutKeys.length && !quickKeys.length) {
@@ -3632,23 +3980,53 @@ const selectModule = (mod, preferFieldKey = null) => {
   const useLayout = false; // Advanced mode hidden for now // (quickMode.value === 'advanced' && layoutKeys.length > 0);
   const baseKeys = useLayout ? layoutKeys : quickKeys;
   // Normalize baseKeys to match actual field keys in editFields (case-insensitive match)
+  // This ensures keys like "event-type" or "eventType" both match the actual field key
   const normalizedBaseKeys = baseKeys.map(key => {
-    const field = editFields.value.find(f => f.key && f.key.toLowerCase() === key.toLowerCase());
-    return field ? field.key : key;
-  }).filter(key => key);
+    if (!key) return null;
+    // Try exact match first
+    let field = editFields.value.find(f => f.key === key);
+    if (field) return field.key;
+    // Try case-insensitive match
+    field = editFields.value.find(f => f.key && f.key.toLowerCase() === String(key).toLowerCase());
+    if (field) return field.key;
+    // Try kebab-case to camelCase conversion (event-type -> eventType)
+    const camelCaseKey = key.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
+    field = editFields.value.find(f => f.key && f.key.toLowerCase() === camelCaseKey.toLowerCase());
+    if (field) return field.key;
+    // If no match found, log warning and return null (will be filtered out)
+    console.warn(`⚠️  Field key "${key}" from quickCreate not found in module fields. Available keys:`, editFields.value.map(f => f.key).slice(0, 10));
+    return null;
+  }).filter(key => key !== null);
   const requiredKeys = editFields.value.filter(f => !!f.required && !!f.key).map(f => f.key);
   const combined = quickMode.value === 'simple' ? Array.from(new Set([...normalizedBaseKeys, ...requiredKeys])) : normalizedBaseKeys;
   quickCreateSelected.value = new Set(combined);
-  // capture snapshot for selected module
-  originalSnapshot.value = getSnapshot();
-  quickOriginalSnapshot.value = getQuickSnapshot();
   
-  // If we used default fields for Events and database doesn't have them, save them
-  // But wait until initialization is complete
-  if (mod.key === 'events' && (!mod.quickCreate || mod.quickCreate.length < 5) && combined.length > 0) {
-    // Save default fields to database after initialization completes
-    // Default fields are now set, user can save manually
+  // Initialize field order from saved quickCreate array (preserves order)
+  // If quickCreate has order, use it; otherwise use editFields order
+  if (normalizedBaseKeys.length > 0) {
+    quickCreateFieldOrder.value = normalizedBaseKeys;
+    // Add any required fields that aren't in the order yet
+    requiredKeys.forEach(key => {
+      if (!quickCreateFieldOrder.value.includes(key)) {
+        quickCreateFieldOrder.value.push(key);
+      }
+    });
+  } else {
+    // No saved order, initialize with editFields order
+    quickCreateFieldOrder.value = editFields.value
+      .filter(f => combined.includes(f.key))
+      .map(f => f.key);
   }
+  
+  // capture snapshot for selected module after all reactive updates settle
+  // Use double nextTick to ensure all watchers and computed properties have updated
+  nextTick(() => {
+    nextTick(() => {
+      originalSnapshot.value = getSnapshot();
+      quickOriginalSnapshot.value = getQuickSnapshot();
+    });
+  });
+  
   
 };
 
@@ -3709,6 +4087,22 @@ const moveField = (idx, delta) => {
   const newIdx = idx + delta;
   if (newIdx < 0 || newIdx >= editFields.value.length) return;
   const arr = editFields.value;
+  const field = arr[idx];
+  
+  // Prevent moving fixed position fields (e.g., 'name' for forms)
+  if (isFixedPositionField(field, selectedModule.value?.key)) {
+    return;
+  }
+  
+  // Prevent moving fields to position 0 if there's a fixed position field at the top
+  if (newIdx === 0 && selectedModule.value?.key === 'forms') {
+    const nameFieldIdx = arr.findIndex(f => f.key?.toLowerCase() === 'name');
+    if (nameFieldIdx >= 0 && nameFieldIdx !== idx) {
+      // Can't move to position 0 if name field exists
+      return;
+    }
+  }
+  
   const [item] = arr.splice(idx, 1);
   arr.splice(newIdx, 0, item);
   arr.forEach((f, i) => f.order = i);
@@ -3750,14 +4144,54 @@ const saveModule = async () => {
     const deduplicatedFields = uniqueFieldsByKey(editFields.value);
     // Update order after deduplication
     deduplicatedFields.forEach((f, i) => { f.order = i; });
+    
+    // For forms module, ensure 'name' field is always at top and always visible
+    if (mod.key === 'forms') {
+      const nameField = deduplicatedFields.find(f => f.key?.toLowerCase() === 'name');
+      if (nameField) {
+        // Ensure name field is always at position 0
+        const nameFieldIdx = deduplicatedFields.indexOf(nameField);
+        if (nameFieldIdx > 0) {
+          deduplicatedFields.splice(nameFieldIdx, 1);
+          deduplicatedFields.unshift(nameField);
+        }
+        // Ensure visibility is always enabled
+        nameField.visibility = { list: true, detail: true };
+        nameField.order = 0;
+        // Update order for other fields
+        deduplicatedFields.forEach((f, i) => {
+          if (f.key?.toLowerCase() !== 'name') {
+            f.order = i;
+          }
+        });
+      }
+    }
+    
     // Update editFields to reflect deduplicated version (filter system fields)
     editFields.value = filterSystemFields(deduplicatedFields);
     const url = mod.type === 'system' ? `/api/modules/system/${mod.key}` : `/api/modules/${mod._id}`;
-    const orderedKeys = orderedQuickCreate.value.map(f => f.key);
+    // Get ordered keys from selected fields - these are the actual field keys from editFields
+    const orderedKeys = orderedQuickCreate.value.map(f => f.key).filter(key => key);
+    // Ensure all keys in quickCreate match actual field keys (normalize any mismatches)
+    const normalizedQuickCreate = (quickMode.value === 'simple' ? orderedKeys : Array.from(quickCreateSelected.value))
+      .map(key => {
+        // Find the actual field to get the correct key
+        const field = deduplicatedFields.find(f => f.key === key || (f.key && f.key.toLowerCase() === String(key).toLowerCase()));
+        return field ? field.key : key;
+      })
+      .filter(key => {
+        // Only include keys that actually exist in fields
+        const exists = deduplicatedFields.some(f => f.key === key);
+        if (!exists) {
+          console.warn(`⚠️  Removing invalid key "${key}" from quickCreate - field not found`);
+        }
+        return exists;
+      });
+    
     const payload = {
       fields: deduplicatedFields,
       relationships: relationships.value,
-      quickCreate: quickMode.value === 'simple' ? orderedKeys : Array.from(quickCreateSelected.value),
+      quickCreate: normalizedQuickCreate,
       quickCreateLayout: quickLayout.value,
       name: moduleNameEdit.value,
       enabled: moduleEnabled.value
@@ -3963,6 +4397,8 @@ watch([numberSettings, textSettings, dateSettings, formulaSettings, lookupSettin
 }, { deep: true });
 const dependencyValuesBuffer = ref({});
 const dependencyConditionBuffers = ref({});
+const dependencySearchTerms = ref({}); // Store search terms for dependency condition values
+const dependencyDropdownOpen = ref({}); // Track which dropdowns are open
 const dependencyMappingBuffers = ref({});
 const dependencyOptionsBuffer = ref({});
 const picklistOptionsBuffers = ref({});
@@ -4023,6 +4459,98 @@ function removeRelationship(idx) {
   }
 }
 
+// Helper function to get field rules (excluding picklistValue rules)
+function getFieldRules() {
+  if (!currentField.value || !currentField.value.dependencies) return [];
+  return currentField.value.dependencies.filter(d => d.type !== 'picklistValue');
+}
+
+// Picklist Value Rules Functions (for field-level dependencies)
+function addPicklistValueRule() {
+  if (!currentField.value.dependencies) {
+    currentField.value.dependencies = [];
+  }
+  currentField.value.dependencies.push({
+    type: 'picklistValue',
+    name: 'Picklist Value Rule',
+    parentFieldKey: '',
+    mappings: []
+  });
+}
+
+// Helper to get picklist value rules
+function getPicklistValueRules() {
+  if (!currentField.value || !currentField.value.dependencies) return [];
+  return currentField.value.dependencies.filter(d => d.type === 'picklistValue');
+}
+
+// Helper to get actual index of a rule in the full dependencies array
+function getActualRuleIndex(filteredIdx) {
+  const picklistValueRules = getPicklistValueRules();
+  if (filteredIdx >= picklistValueRules.length) return -1;
+  const rule = picklistValueRules[filteredIdx];
+  return currentField.value.dependencies.indexOf(rule);
+}
+
+function removePicklistValueRule(ruleIdx) {
+  const actualIdx = getActualRuleIndex(ruleIdx);
+  if (actualIdx >= 0) {
+    currentField.value.dependencies.splice(actualIdx, 1);
+    if (currentField.value.dependencies.length === 0) {
+      delete currentField.value.dependencies;
+    }
+  }
+}
+
+function addPicklistValueMapping(ruleIdx) {
+  const picklistValueRules = getPicklistValueRules();
+  if (ruleIdx >= picklistValueRules.length) return;
+  
+  const rule = picklistValueRules[ruleIdx];
+  if (!rule.mappings) {
+    rule.mappings = [];
+  }
+  rule.mappings.push({
+    parentValue: '',
+    allowedOptions: []
+  });
+}
+
+function removePicklistValueMapping(ruleIdx, mapIdx) {
+  const picklistValueRules = getPicklistValueRules();
+  if (ruleIdx >= picklistValueRules.length) return;
+  
+  const rule = picklistValueRules[ruleIdx];
+  if (rule.mappings && mapIdx < rule.mappings.length) {
+    rule.mappings.splice(mapIdx, 1);
+  }
+}
+
+function getPicklistFieldOptions(fieldKey) {
+  const field = editFields.value.find(f => f.key === fieldKey);
+  if (!field || !field.options) return [];
+  return field.options.map(opt => typeof opt === 'object' ? (opt.value || opt.label || opt) : opt);
+}
+
+function isMappingOptionSelected(mapping, option) {
+  if (!mapping.allowedOptions) return false;
+  const optValue = normalizePicklistOption(option);
+  return mapping.allowedOptions.includes(optValue);
+}
+
+function toggleMappingOption(mapping, option) {
+  if (!mapping.allowedOptions) {
+    mapping.allowedOptions = [];
+  }
+  const optValue = normalizePicklistOption(option);
+  const idx = mapping.allowedOptions.indexOf(optValue);
+  if (idx >= 0) {
+    mapping.allowedOptions.splice(idx, 1);
+  } else {
+    mapping.allowedOptions.push(optValue);
+  }
+}
+
 // Helper functions for Relationships tab
 function getRelationshipTypeLabel(type) {
   const labels = {
@@ -4050,7 +4578,17 @@ function toggleQuickCreate(key, checked) {
     s.add(key);
     return;
   }
-  if (checked) s.add(key); else s.delete(key);
+  if (checked) {
+    s.add(key);
+    // Add to order if not already present
+    if (!quickCreateFieldOrder.value.includes(key)) {
+      quickCreateFieldOrder.value.push(key);
+    }
+  } else {
+    s.delete(key);
+    // Remove from order
+    quickCreateFieldOrder.value = quickCreateFieldOrder.value.filter(k => k !== key);
+  }
 }
 
 function toggleQuickRow(field) {
@@ -4060,8 +4598,72 @@ function toggleQuickRow(field) {
 }
 function selectAllQuickCreate() {
   quickCreateSelected.value = new Set(editFields.value.map(f => f.key));
+  // Initialize order with all field keys
+  quickCreateFieldOrder.value = editFields.value.map(f => f.key).filter(Boolean);
+}
+
+// Quick Create drag-and-drop handlers
+function onQuickCreateDragStart(idx) {
+  quickCreateDragStartIdx.value = idx;
+}
+
+function onQuickCreateDragOver(idx) {
+  quickCreateDragOverIdx.value = idx;
+}
+
+function onQuickCreateDrop(idx) {
+  const from = quickCreateDragStartIdx.value;
+  const to = idx;
+  quickCreateDragStartIdx.value = null;
+  quickCreateDragOverIdx.value = null;
+  
+  if (from === null || to === null || from === to) return;
+  
+  // Get the current ordered keys
+  const currentOrder = orderedQuickCreate.value.map(f => f.key);
+  
+  // Move the item
+  const [moved] = currentOrder.splice(from, 1);
+  currentOrder.splice(to, 0, moved);
+  
+  // Update the custom order
+  quickCreateFieldOrder.value = currentOrder;
 }
 const orderedQuickCreate = computed(() => {
+  // If we have a custom order, use it; otherwise fall back to editFields order
+  if (quickCreateFieldOrder.value.length > 0) {
+    const orderMap = new Map();
+    quickCreateFieldOrder.value.forEach((key, idx) => {
+      orderMap.set(key, idx);
+    });
+    const ordered = [];
+    const seen = new Set();
+    
+    // First, add fields in custom order
+    for (const key of quickCreateFieldOrder.value) {
+      if (!quickCreateSelected.value.has(key)) continue;
+      if (seen.has(key)) continue;
+      const f = editFields.value.find(x => x.key === key);
+      if (f) {
+        ordered.push(f);
+        seen.add(key);
+      }
+    }
+    
+    // Then add any newly selected fields that aren't in the order yet
+    for (const f of editFields.value) {
+      const k = f.key;
+      if (!k) continue;
+      if (!quickCreateSelected.value.has(k)) continue;
+      if (seen.has(k)) continue;
+      ordered.push(f);
+      seen.add(k);
+    }
+    
+    return ordered;
+  }
+  
+  // Fallback to original behavior: order by editFields
   const seen = new Set();
   const out = [];
   for (const f of editFields.value) {
@@ -4229,9 +4831,21 @@ function getPicklistOptions(field) {
 
 // removed addSelectedPreset (preset picker removed)
 function addDependency() {
-  if (!currentField.value.dependencies) currentField.value.dependencies = [];
+  const fieldIdx = selectedFieldIdx.value;
+  if (fieldIdx < 0 || fieldIdx >= editFields.value.length) return;
+  
+  const field = editFields.value[fieldIdx];
+  if (!field) return;
+  
+  // Ensure dependencies array exists on the actual field object
+  // Directly modify the field in editFields to ensure reactivity
+  if (!field.dependencies) {
+    // Vue 3 reactivity: directly assign to the reactive object
+    field.dependencies = [];
+  }
+  
   // Create unified dependency structure with type, supporting backward compatibility
-  currentField.value.dependencies.push({ 
+  const newDependency = { 
     name: '',  // Dependency name
     type: 'visibility',  // default type
     fieldKey: '', 
@@ -4241,7 +4855,10 @@ function addDependency() {
     conditions: [],
     mappings: [],
     allowedOptions: []  // For picklist filter - stores which options to show
-  });
+  };
+  
+  // Add the dependency to the array - Vue 3 reactivity will track this
+  field.dependencies.push(newDependency);
 }
 function removeDependency(idx) {
   currentField.value.dependencies.splice(idx, 1);
@@ -4332,6 +4949,8 @@ function removeDependencyCondition(di, ci) {
   if (!dep || !dep.conditions) return;
   dep.conditions.splice(ci, 1);
   delete dependencyConditionBuffers.value[di + '-' + ci];
+  delete dependencySearchTerms.value[`${di}-${ci}`];
+  delete dependencyDropdownOpen.value[`${di}-${ci}`];
 }
 // Apply condition value from buffer
 function applyDependencyConditionValue(di, ci) {
@@ -4342,6 +4961,152 @@ function applyDependencyConditionValue(di, ci) {
     const raw = val || '';
     const arr = raw.split(',').map(s => s.trim()).filter(Boolean);
     dep.conditions[ci].value = arr;
+  }
+}
+
+// Check if a value is selected in a dependency condition (for multi-select)
+function isDependencyValueSelected(di, ci, value) {
+  const dep = currentField.value.dependencies?.[di];
+  if (!dep || !dep.conditions?.[ci]) return false;
+  const condition = dep.conditions[ci];
+  if (!condition.value) return false;
+  // Handle both array and string values
+  if (Array.isArray(condition.value)) {
+    return condition.value.includes(value);
+  }
+  return condition.value === value;
+}
+
+// Handle operator change - initialize value as array for 'in' and 'not_in' operators
+function onDependencyOperatorChange(di, ci) {
+  const dep = currentField.value.dependencies?.[di];
+  if (!dep || !dep.conditions?.[ci]) return;
+  const condition = dep.conditions[ci];
+  
+  // If operator is 'in' or 'not_in', ensure value is an array
+  if (condition.operator === 'in' || condition.operator === 'not_in') {
+    if (!Array.isArray(condition.value)) {
+      // Convert existing value to array if it's not already
+      condition.value = condition.value ? [condition.value] : [];
+    }
+  } else {
+    // For other operators, convert array to single value if needed
+    if (Array.isArray(condition.value)) {
+      condition.value = condition.value.length > 0 ? condition.value[0] : '';
+    }
+  }
+}
+
+// Toggle a value in a dependency condition (for multi-select with 'in' or 'not_in' operators)
+function toggleDependencyValue(di, ci, value) {
+  const dep = currentField.value.dependencies?.[di];
+  if (!dep || !dep.conditions?.[ci]) return;
+  const condition = dep.conditions[ci];
+  
+  // Ensure value is an array for 'in' and 'not_in' operators
+  if (condition.operator === 'in' || condition.operator === 'not_in') {
+    if (!Array.isArray(condition.value)) {
+      // Convert existing value to array if it's not already
+      condition.value = condition.value ? [condition.value] : [];
+    }
+    
+    // Toggle the value
+    const index = condition.value.indexOf(value);
+    if (index > -1) {
+      condition.value.splice(index, 1);
+    } else {
+      condition.value.push(value);
+    }
+  } else {
+    // For other operators, just set the single value
+    condition.value = value;
+  }
+}
+
+// Get selected values for a dependency condition
+function getSelectedDependencyValues(di, ci) {
+  const dep = currentField.value.dependencies?.[di];
+  if (!dep || !dep.conditions?.[ci]) return [];
+  const condition = dep.conditions[ci];
+  if (Array.isArray(condition.value)) {
+    return condition.value;
+  }
+  return condition.value ? [condition.value] : [];
+}
+
+// Get search term for a dependency condition
+function getDependencySearchTerm(di, ci) {
+  const key = `${di}-${ci}`;
+  return dependencySearchTerms.value[key] || '';
+}
+
+// Set search term for a dependency condition
+function setDependencySearchTerm(di, ci, term) {
+  const key = `${di}-${ci}`;
+  dependencySearchTerms.value[key] = term;
+}
+
+// Check if dropdown is open for a dependency condition
+function isDependencyDropdownOpen(di, ci) {
+  const key = `${di}-${ci}`;
+  return dependencyDropdownOpen.value[key] || false;
+}
+
+// Set dropdown open state for a dependency condition
+function setDependencyDropdownOpen(di, ci, open) {
+  const key = `${di}-${ci}`;
+  if (open) {
+    dependencyDropdownOpen.value[key] = true;
+  } else {
+    delete dependencyDropdownOpen.value[key];
+  }
+}
+
+// Get filtered options based on search term
+function getFilteredDependencyOptions(di, ci) {
+  const dep = currentField.value.dependencies?.[di];
+  if (!dep || !dep.conditions?.[ci]) return [];
+  const condition = dep.conditions[ci];
+  const fieldKey = condition.fieldKey;
+  const options = getDependencyFieldOptions(fieldKey);
+  const searchTerm = getDependencySearchTerm(di, ci).toLowerCase();
+  
+  if (!searchTerm) return options;
+  
+  return options.filter(opt => 
+    String(opt).toLowerCase().includes(searchTerm)
+  );
+}
+
+// Select all filtered options
+function selectAllDependencyValues(di, ci) {
+  const filteredOptions = getFilteredDependencyOptions(di, ci);
+  const dep = currentField.value.dependencies?.[di];
+  if (!dep || !dep.conditions?.[ci]) return;
+  const condition = dep.conditions[ci];
+  
+  if (condition.operator === 'in' || condition.operator === 'not_in') {
+    if (!Array.isArray(condition.value)) {
+      condition.value = [];
+    }
+    filteredOptions.forEach(opt => {
+      if (!condition.value.includes(opt)) {
+        condition.value.push(opt);
+      }
+    });
+  }
+}
+
+// Deselect all values
+function deselectAllDependencyValues(di, ci) {
+  const dep = currentField.value.dependencies?.[di];
+  if (!dep || !dep.conditions?.[ci]) return;
+  const condition = dep.conditions[ci];
+  
+  if (condition.operator === 'in' || condition.operator === 'not_in') {
+    condition.value = [];
+  } else {
+    condition.value = '';
   }
 }
 // Add mapping to picklist dependency
@@ -4602,7 +5367,11 @@ function getSnapshot() {
   };
   return JSON.stringify(payload);
 }
-const isDirty = computed(() => getSnapshot() !== originalSnapshot.value);
+const isDirty = computed(() => {
+  // If snapshot hasn't been initialized yet, we're not dirty
+  if (!originalSnapshot.value) return false;
+  return getSnapshot() !== originalSnapshot.value;
+});
 function getQuickSnapshot() {
   const orderedKeys = orderedQuickCreate.value.map(f => f.key);
   const payload = {
@@ -4611,7 +5380,11 @@ function getQuickSnapshot() {
   };
   return JSON.stringify(payload);
 }
-const quickDirty = computed(() => getQuickSnapshot() !== quickOriginalSnapshot.value);
+const quickDirty = computed(() => {
+  // If snapshot hasn't been initialized yet, we're not dirty
+  if (!quickOriginalSnapshot.value) return false;
+  return getQuickSnapshot() !== quickOriginalSnapshot.value;
+});
 
 async function saveQuickCreate() {
   const mod = selectedModule.value;
@@ -4667,7 +5440,22 @@ async function saveQuickCreate() {
   }
 }
 
-onMounted(fetchModules);
+onMounted(() => {
+  fetchModules();
+  
+  // Close dependency dropdowns when clicking outside
+  document.addEventListener('click', (e) => {
+    // Check if click is outside any dependency dropdown
+    const target = e.target;
+    const isInsideDropdown = target.closest('.dependency-dropdown-container');
+    if (!isInsideDropdown) {
+      // Close all open dropdowns
+      Object.keys(dependencyDropdownOpen.value).forEach(key => {
+        delete dependencyDropdownOpen.value[key];
+      });
+    }
+  });
+});
 
 // Persist top/sub tab selection to URL
 watch(activeTopTab, (v, oldValue) => {

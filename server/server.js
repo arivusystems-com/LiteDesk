@@ -38,9 +38,17 @@ console.log(`🌐 Allowed Origins: ${allowedOrigins.join(', ')}`);
 // SECURITY MIDDLEWARE (Applied First)
 // ============================================
 
-// Security Headers - Apply to all responses
-const securityHeaders = require('./middleware/securityHeadersMiddleware');
-app.use(securityHeaders);
+// 🔓 SECURITY DISABLED FOR DEVELOPMENT
+// Set DISABLE_SECURITY=true in .env to bypass all security checks
+const SECURITY_DISABLED = process.env.DISABLE_SECURITY === 'true' || process.env.NODE_ENV !== 'production';
+
+// Security Headers - Apply to all responses (skip if security disabled)
+if (!SECURITY_DISABLED) {
+    const securityHeaders = require('./middleware/securityHeadersMiddleware');
+    app.use(securityHeaders);
+} else {
+    console.warn('⚠️  [DEV] Security headers middleware disabled');
+}
 
 // CORS Configuration
 app.use(cors({
@@ -62,9 +70,13 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' })); // Limit request size
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// General API Rate Limiting
-const { apiLimiter } = require('./middleware/rateLimitMiddleware');
-app.use('/api', apiLimiter);
+// General API Rate Limiting (skip if security disabled)
+if (!SECURITY_DISABLED) {
+    const { apiLimiter } = require('./middleware/rateLimitMiddleware');
+    app.use('/api', apiLimiter);
+} else {
+    console.warn('⚠️  [DEV] API rate limiting disabled');
+}
 
 // CSRF Protection (for state-changing operations)
 // DISABLED in development for API testing
@@ -93,6 +105,7 @@ const organizationV2Routes = require('./routes/organizationV2Routes');
 const moduleRoutes = require('./routes/moduleRoutes');
 const groupRoutes = require('./routes/groupRoutes');
 const formRoutes = require('./routes/formRoutes');
+const reportRoutes = require('./routes/reportRoutes');
 
 // Route Linking
 app.use('/api/auth', authRoutes);
@@ -117,6 +130,7 @@ app.use('/api/modules', moduleRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/public/forms', formRoutes); // Public form routes
 app.use('/api/forms', formRoutes.protected); // Protected form routes
+app.use('/api/reports', reportRoutes);
 
 // Serve uploaded files (including reports)
 app.use('/api/uploads', express.static(path.join(__dirname, 'uploads'), {

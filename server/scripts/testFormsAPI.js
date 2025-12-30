@@ -153,7 +153,6 @@ async function testCreateForm() {
         name: 'Test Audit Form',
         description: 'A test audit form for API testing',
         formType: 'Audit',
-        linkedModule: 'Organization',
         visibility: 'Internal',
         status: 'Draft',
         sections: [

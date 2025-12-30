@@ -203,8 +203,8 @@
                 </Transition>
               </Menu>
 
-              <!-- Add Relation Dropdown (Desktop only) -->
-              <Menu as="div" class="relative hidden lg:block">
+              <!-- Add Relation Dropdown (Desktop only) - Hidden for forms -->
+              <Menu v-if="props.recordType !== 'forms'" as="div" class="relative hidden lg:block">
                 <MenuButton class="inline-flex items-center px-3 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium text-sm transition-colors border border-gray-200 dark:border-gray-600">
                     <PlusIcon class="w-4 h-4 mr-2" />
                     Add Relation
@@ -252,13 +252,24 @@
                 </Transition>
               </Menu>
 
-              <!-- Record Edit Button (Desktop only) -->
+              <!-- Record Edit Button (Desktop only) - For forms: only show for Draft/Ready status -->
               <button
+                v-if="props.recordType !== 'forms' || (props.record?.status === 'Draft' || props.record?.status === 'Ready')"
                 @click="openEditDrawer"
                 class="hidden lg:inline-flex px-3 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-colors items-center border border-gray-200 dark:border-gray-600"
               >
                 <PencilSquareIcon class="w-4 h-4 mr-2" />
                 Edit
+              </button>
+
+              <!-- View Responses Button (Forms only, Active status only, Desktop only) -->
+              <button
+                v-if="props.recordType === 'forms' && props.record?.status === 'Active'"
+                @click="viewFormResponses"
+                class="hidden lg:inline-flex px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors items-center border border-indigo-700 dark:border-indigo-600"
+              >
+                <DocumentTextIcon class="w-4 h-4 mr-2" />
+                View Responses
               </button>
 
               <!-- More Dropdown -->
@@ -276,8 +287,8 @@
                   leave-to-class="transform opacity-0 scale-95"
                 >
                   <MenuItems class="absolute right-0 mt-2 w-48 rounded-lg shadow-xl py-1 bg-white dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/10">
-                    <!-- Edit (Mobile/Tablet only) -->
-                    <MenuItem v-slot="{ active }" class="lg:hidden">
+                    <!-- Edit (Mobile/Tablet only) - For forms: only show for Draft/Ready status -->
+                    <MenuItem v-if="props.recordType !== 'forms' || (props.record?.status === 'Draft' || props.record?.status === 'Ready')" v-slot="{ active }" class="lg:hidden">
                       <button
                         @click="openEditDrawer"
                         :class="[
@@ -290,9 +301,24 @@
                         Edit
                       </button>
                     </MenuItem>
+
+                    <!-- View Responses (Forms only, Active status only, Mobile/Tablet only) -->
+                    <MenuItem v-if="props.recordType === 'forms' && props.record?.status === 'Active'" v-slot="{ active }" class="lg:hidden">
+                      <button
+                        @click="viewFormResponses"
+                        :class="[
+                          'w-full text-left px-4 py-2 text-sm transition-colors duration-150 flex items-center gap-2',
+                          active ? 'bg-gray-100 dark:bg-gray-700' : '',
+                          'text-gray-700 dark:text-gray-300'
+                        ]"
+                      >
+                        <DocumentTextIcon class="w-4 h-4" />
+                        View Responses
+                      </button>
+                    </MenuItem>
                     
-                    <!-- Add Relation Submenu (Mobile/Tablet only) -->
-                    <template v-if="availableRelationships.length > 0">
+                    <!-- Add Relation Submenu (Mobile/Tablet only) - Hidden for forms -->
+                    <template v-if="availableRelationships.length > 0 && props.recordType !== 'forms'">
                       <div class="lg:hidden border-t border-gray-200 dark:border-gray-700 my-1"></div>
                       <template v-for="relationship in availableRelationships" :key="relationship.moduleKey">
                         <div class="lg:hidden">
@@ -325,11 +351,44 @@
                         </div>
                         <div v-if="relationship !== availableRelationships[availableRelationships.length - 1]" class="lg:hidden border-t border-gray-200 dark:border-gray-700 my-1"></div>
                       </template>
-                    <div class="lg:hidden border-t border-gray-200 dark:border-gray-700 my-1"></div>
+                      <div class="lg:hidden border-t border-gray-200 dark:border-gray-700 my-1"></div>
                     </template>
 
-                    <!-- Delete Record -->
-                    <MenuItem v-slot="{ active }">
+                    <!-- Separator before form-specific actions -->
+                    <div v-if="props.recordType === 'forms'" class="border-t border-gray-200 dark:border-gray-700 my-1"></div>
+
+                    <!-- Duplicate (Forms only, always visible) -->
+                    <MenuItem v-if="props.recordType === 'forms'" v-slot="{ active }">
+                      <button
+                        @click="$emit('duplicate')"
+                        :class="[
+                          'w-full text-left px-4 py-2 text-sm transition-colors duration-150 flex items-center gap-2',
+                          active ? 'bg-gray-100 dark:bg-gray-700' : '',
+                          'text-gray-700 dark:text-gray-300'
+                        ]"
+                      >
+                        <Square2StackIcon class="w-4 h-4" />
+                        Duplicate
+                      </button>
+                    </MenuItem>
+
+                    <!-- Archive (Forms only, Draft status only) -->
+                    <MenuItem v-if="props.recordType === 'forms' && props.record?.status === 'Draft'" v-slot="{ active }">
+                      <button
+                        @click="archiveForm"
+                        :class="[
+                          'w-full text-left px-4 py-2 text-sm transition-colors duration-150 flex items-center gap-2',
+                          active ? 'bg-gray-100 dark:bg-gray-700' : '',
+                          'text-gray-700 dark:text-gray-300'
+                        ]"
+                      >
+                        <ArchiveBoxIcon class="w-4 h-4" />
+                        Archive
+                      </button>
+                    </MenuItem>
+
+                    <!-- Delete Record (For forms: only Draft status, for other types: always visible) -->
+                    <MenuItem v-if="props.recordType !== 'forms' || props.record?.status === 'Draft'" v-slot="{ active }">
                       <button
                         @click="$emit('delete')"
                         :class="[
@@ -376,13 +435,26 @@
       <div :class="tabContentPadding">
         <!-- Summary Tab with GridStack Dashboard -->
         <div v-if="activeTab === 'summary'" class="">
-          <!-- GridStack Container -->
-          <div ref="gridStackContainer" class="grid-stack bg-gray-100/70 dark:bg-gray-900 sm:p-3">
+          <!-- For forms: Show empty state if not Active -->
+          <div v-if="props.recordType === 'forms' && props.record?.status !== 'Active'" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center">
+            <div class="max-w-md mx-auto">
+              <div class="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                <DocumentTextIcon class="w-8 h-8 text-gray-400 dark:text-gray-500" />
+              </div>
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Form Not Yet Active</h3>
+              <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                This form has not been used yet. Assign it via events to start collecting responses.
+              </p>
+            </div>
+          </div>
+
+          <!-- GridStack Container (for Active forms or non-form records) -->
+          <div v-else ref="gridStackContainer" class="grid-stack bg-gray-100/70 dark:bg-gray-900 sm:p-3">
             <!-- Widgets will be rendered here by GridStack -->
           </div>
 
-          <!-- Floating Add Widget Button -->
-          <div class="fixed bottom-6 right-6 z-50">
+          <!-- Floating Add Widget Button (hidden for non-Active forms) -->
+          <div v-if="props.recordType !== 'forms' || props.record?.status === 'Active'" class="fixed bottom-6 right-6 z-50">
             <button
               @click="showWidgetModal = true"
               class="inline-flex items-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full font-medium transition-colors shadow-lg hover:shadow-xl"
@@ -638,6 +710,316 @@
             </div>
           </div>
 
+        </div>
+
+        <!-- Usage Tab (Forms only, Active status only) -->
+        <div v-else-if="activeTab === 'usage' && props.recordType === 'forms' && props.record?.status === 'Active'" class="space-y-4">
+          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Form Usage</h3>
+              <p class="text-sm text-gray-600 dark:text-gray-400">
+                List of form submissions with status, score, and submission date.
+              </p>
+            </div>
+            
+            <!-- Loading State -->
+            <div v-if="formResponsesLoading" class="p-12 text-center">
+              <div class="w-8 h-8 border-4 border-gray-200 dark:border-gray-700 border-t-indigo-600 dark:border-t-indigo-500 rounded-full animate-spin mx-auto mb-4"></div>
+              <p class="text-sm text-gray-600 dark:text-gray-400">Loading submissions...</p>
+            </div>
+            
+            <!-- Submissions Table -->
+            <div v-else-if="formResponses.length > 0" class="overflow-x-auto">
+              <table class="w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-900">
+                  <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Submitted</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Submitted By</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Score</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  <tr 
+                    v-for="response in formResponses" 
+                    :key="response._id"
+                    class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors"
+                    @click="viewResponseDetail(response)"
+                  >
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <DateCell :value="response.submittedAt" format="short" />
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div v-if="response.submittedBy" class="flex items-center gap-2">
+                        <Avatar
+                          :user="{
+                            firstName: response.submittedBy.firstName,
+                            lastName: response.submittedBy.lastName,
+                            email: response.submittedBy.email,
+                            avatar: response.submittedBy.avatar
+                          }"
+                          size="sm"
+                        />
+                        <span class="text-sm text-gray-900 dark:text-white">
+                          {{ response.submittedBy.firstName }} {{ response.submittedBy.lastName }}
+                        </span>
+                      </div>
+                      <span v-else class="text-sm text-gray-500 dark:text-gray-400">Anonymous</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <BadgeCell 
+                        :value="response.status" 
+                        :variant-map="{
+                          'New': 'default',
+                          'Pending Corrective Action': 'warning',
+                          'Needs Auditor Review': 'info',
+                          'Approved': 'success',
+                          'Rejected': 'danger',
+                          'Closed': 'default'
+                        }"
+                      />
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div v-if="response.sectionScores && typeof response.sectionScores === 'object'" class="text-sm">
+                        <span class="text-gray-900 dark:text-white font-medium">
+                          {{ calculateOverallScore(response.sectionScores) }}%
+                        </span>
+                      </div>
+                      <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <button
+                        @click.stop="viewResponseDetail(response)"
+                        class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300"
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              
+              <!-- Pagination -->
+              <div v-if="formResponsesPagination.totalPages > 1" class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <div class="text-sm text-gray-700 dark:text-gray-300">
+                  Showing page {{ formResponsesPagination.currentPage }} of {{ formResponsesPagination.totalPages }}
+                </div>
+                <div class="flex gap-2">
+                  <button
+                    @click="formResponsesPagination.currentPage > 1 && (formResponsesPagination.currentPage--, fetchFormResponses())"
+                    :disabled="formResponsesPagination.currentPage === 1"
+                    class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    @click="formResponsesPagination.currentPage < formResponsesPagination.totalPages && (formResponsesPagination.currentPage++, fetchFormResponses())"
+                    :disabled="formResponsesPagination.currentPage >= formResponsesPagination.totalPages"
+                    class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Empty State -->
+            <div v-else class="p-12 text-center">
+              <div class="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                <DocumentTextIcon class="w-8 h-8 text-gray-400 dark:text-gray-500" />
+              </div>
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Submissions Yet</h3>
+              <p class="text-sm text-gray-600 dark:text-gray-400">
+                This form hasn't received any submissions yet.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Preview Tab (Forms only) -->
+        <div v-else-if="activeTab === 'preview' && props.recordType === 'forms'" class="space-y-4">
+          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Form Preview</h3>
+              <p class="text-sm text-gray-600 dark:text-gray-400">
+                Preview how this form will appear to users when filling it out.
+              </p>
+            </div>
+            
+            <div class="p-6">
+              <FormPreview
+                :form="props.record"
+                :readOnly="true"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Responses Tab (Forms only, Active status only) -->
+        <div v-else-if="activeTab === 'responses' && props.recordType === 'forms' && props.record?.status === 'Active'" class="space-y-4">
+          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Form Responses</h3>
+                  <p class="text-sm text-gray-600 dark:text-gray-400">
+                    View and manage all responses submitted for this form.
+                  </p>
+                </div>
+                <button
+                  @click="viewFormResponses"
+                  class="px-4 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                >
+                  View All Responses →
+                </button>
+              </div>
+            </div>
+            
+            <!-- Loading State -->
+            <div v-if="formResponsesLoading" class="p-12 text-center">
+              <div class="w-8 h-8 border-4 border-gray-200 dark:border-gray-700 border-t-indigo-600 dark:border-t-indigo-500 rounded-full animate-spin mx-auto mb-4"></div>
+              <p class="text-sm text-gray-600 dark:text-gray-400">Loading responses...</p>
+            </div>
+            
+            <!-- Responses Table -->
+            <div v-else-if="formResponses.length > 0" class="overflow-x-auto">
+              <table class="w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-900">
+                  <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Submitted</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Submitted By</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Score</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">KPIs</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  <tr 
+                    v-for="response in formResponses" 
+                    :key="response._id"
+                    class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors"
+                    @click="viewResponseDetail(response)"
+                  >
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <DateCell :value="response.submittedAt" format="short" />
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div v-if="response.submittedBy" class="flex items-center gap-2">
+                        <Avatar
+                          :user="{
+                            firstName: response.submittedBy.firstName,
+                            lastName: response.submittedBy.lastName,
+                            email: response.submittedBy.email,
+                            avatar: response.submittedBy.avatar
+                          }"
+                          size="sm"
+                        />
+                        <span class="text-sm text-gray-900 dark:text-white">
+                          {{ response.submittedBy.firstName }} {{ response.submittedBy.lastName }}
+                        </span>
+                      </div>
+                      <span v-else class="text-sm text-gray-500 dark:text-gray-400">Anonymous</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <BadgeCell 
+                        :value="response.status" 
+                        :variant-map="{
+                          'New': 'default',
+                          'Pending Corrective Action': 'warning',
+                          'Needs Auditor Review': 'info',
+                          'Approved': 'success',
+                          'Rejected': 'danger',
+                          'Closed': 'default'
+                        }"
+                      />
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div v-if="response.sectionScores && typeof response.sectionScores === 'object'" class="text-sm">
+                        <span class="text-gray-900 dark:text-white font-medium">
+                          {{ calculateOverallScore(response.sectionScores) }}%
+                        </span>
+                      </div>
+                      <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
+                    </td>
+                    <td class="px-6 py-4">
+                      <div v-if="response.kpis && typeof response.kpis === 'object'" class="text-xs space-y-0.5">
+                        <div v-if="response.kpis.compliancePercentage !== undefined" class="text-gray-700 dark:text-gray-300">
+                          Compliance: {{ response.kpis.compliancePercentage }}%
+                        </div>
+                        <div v-if="response.kpis.avgRating !== undefined" class="text-gray-700 dark:text-gray-300">
+                          Rating: {{ response.kpis.avgRating }}/5
+                        </div>
+                        <div v-if="response.kpis.passRate !== undefined" class="text-gray-700 dark:text-gray-300">
+                          Pass: {{ response.kpis.passRate }}%
+                        </div>
+                      </div>
+                      <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <button
+                        @click.stop="viewResponseDetail(response)"
+                        class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300"
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              
+              <!-- Pagination -->
+              <div v-if="formResponsesPagination.totalPages > 1" class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <div class="text-sm text-gray-700 dark:text-gray-300">
+                  Showing page {{ formResponsesPagination.currentPage }} of {{ formResponsesPagination.totalPages }}
+                </div>
+                <div class="flex gap-2">
+                  <button
+                    @click="formResponsesPagination.currentPage > 1 && (formResponsesPagination.currentPage--, fetchFormResponses())"
+                    :disabled="formResponsesPagination.currentPage === 1"
+                    class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    @click="formResponsesPagination.currentPage < formResponsesPagination.totalPages && (formResponsesPagination.currentPage++, fetchFormResponses())"
+                    :disabled="formResponsesPagination.currentPage >= formResponsesPagination.totalPages"
+                    class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+              
+              <!-- View All Link -->
+              <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 text-center">
+                <button
+                  @click="viewFormResponses"
+                  class="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                >
+                  View All Responses →
+                </button>
+              </div>
+            </div>
+            
+            <!-- Empty State -->
+            <div v-else class="p-12 text-center">
+              <div class="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                <DocumentTextIcon class="w-8 h-8 text-gray-400 dark:text-gray-500" />
+              </div>
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Responses Yet</h3>
+              <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                This form hasn't received any responses yet.
+              </p>
+              <button
+                @click="viewFormResponses"
+                class="px-4 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+              >
+                View All Responses
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- Updates/Timeline Tab -->
@@ -1264,6 +1646,8 @@ import OrganizationAuditWidget from '@/components/organizations/OrganizationAudi
 import MetricsWidget from '@/components/common/metrics/MetricsWidget.vue';
 import LifecycleStageWidget from '@/components/common/metrics/LifecycleStageWidget.vue';
 import KeyFieldsWidget from '@/components/common/metrics/KeyFieldsWidget.vue';
+import FormAnalyticsWidget from '@/components/forms/widgets/FormAnalyticsWidget.vue';
+import FormPreview from '@/components/forms/FormPreview.vue';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import LinkRecordsDrawer from '@/components/common/LinkRecordsDrawer.vue';
 import apiClient from '@/utils/apiClient';
@@ -1272,6 +1656,9 @@ import { useTabs } from '@/composables/useTabs';
 import PermissionButton from '@/components/common/PermissionButton.vue';
 import DynamicFormField from '@/components/common/DynamicFormField.vue';
 import DependencyPopupModal from '@/components/common/DependencyPopupModal.vue';
+import BadgeCell from '@/components/common/table/BadgeCell.vue';
+import DateCell from '@/components/common/table/DateCell.vue';
+import Avatar from '@/components/common/Avatar.vue';
 import { getFieldDependencyState, evaluateDependency } from '@/utils/dependencyEvaluation';
 import { useRouter } from 'vue-router';
 import {
@@ -1290,7 +1677,10 @@ import {
   ChevronDownIcon,
   ChevronUpDownIcon,
   CheckIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  Square2StackIcon,
+  DocumentTextIcon,
+  ArchiveBoxIcon
 } from '@heroicons/vue/24/outline';
 import { HeartIcon as HeartIconSolid, TagIcon as TagIconSolid, ChatBubbleLeftEllipsisIcon } from '@heroicons/vue/24/solid';
 
@@ -1319,7 +1709,7 @@ const props = defineProps({
 });
 
 // Emits
-const emit = defineEmits(['close', 'update', 'edit', 'delete', 'addRelation', 'openRelatedRecord', 'recordUpdated']);
+const emit = defineEmits(['close', 'update', 'edit', 'delete', 'addRelation', 'openRelatedRecord', 'recordUpdated', 'duplicate']);
 
 // Create a reactive reference to the record prop to ensure reactivity
 // This ensures that computed properties that depend on record fields update properly
@@ -1462,6 +1852,7 @@ const availableRelationships = computed(() => {
 });
 
 // Fixed tabs - add Tenant Details tab if viewing tenant organization
+// For forms: add Usage and Responses tabs if status is Active
 const fixedTabs = computed(() => {
   const baseTabs = [
     { id: 'summary', name: 'Summary' },
@@ -1469,9 +1860,23 @@ const fixedTabs = computed(() => {
     { id: 'updates', name: 'Updates' }
   ];
   
-  // Add Tenant Details tab if viewing a tenant organization
-  if (props.record?.isTenant === true) {
-    baseTabs.splice(2, 0, { id: 'tenant-details', name: 'Tenant Details' });
+  // For forms: add Preview, Usage and Responses tabs
+  if (props.recordType === 'forms') {
+    const formStatus = props.record?.status;
+    // Always add Preview tab before Updates
+    baseTabs.splice(2, 0, { id: 'preview', name: 'Preview' });
+    if (formStatus === 'Active') {
+      // Insert Usage and Responses tabs before Preview tab
+      baseTabs.splice(2, 0, 
+        { id: 'usage', name: 'Usage' },
+        { id: 'responses', name: 'Responses' }
+      );
+    }
+  } else {
+    // Add Tenant Details tab if viewing a tenant organization
+    if (props.record?.isTenant === true) {
+      baseTabs.splice(2, 0, { id: 'tenant-details', name: 'Tenant Details' });
+    }
   }
   
   return baseTabs;
@@ -1500,6 +1905,16 @@ const originalFieldValues = ref({});
 // Details tab search
 const detailsSearch = ref('');
 const showEmptyFields = ref(true); // Show empty fields by default
+
+// Form responses state (for Usage and Responses tabs)
+const formResponses = ref([]);
+const formResponsesLoading = ref(false);
+const formResponsesPagination = ref({
+  currentPage: 1,
+  limit: 10,
+  total: 0,
+  totalPages: 1
+});
 
 // Permission check for managing fields
 const hasManageFieldsPermission = computed(() => {
@@ -2393,6 +2808,32 @@ const availableWidgets = computed(() => {
         description: 'Show tasks associated with this event',
       }
     );
+  } else if (props.recordType === 'forms') {
+    // Form-specific analytics widgets (only for Active forms)
+    if (props.record?.status === 'Active') {
+      widgets.push(
+        {
+          type: 'form-total-responses',
+          name: 'Total Responses',
+          description: 'Total number of form responses',
+        },
+        {
+          type: 'form-avg-compliance',
+          name: 'Avg Compliance',
+          description: 'Average compliance percentage',
+        },
+        {
+          type: 'form-avg-rating',
+          name: 'Avg Rating',
+          description: 'Average rating out of 5',
+        },
+        {
+          type: 'form-response-rate',
+          name: 'Response Rate',
+          description: 'Percentage of completed responses',
+        }
+      );
+    }
   }
   
   // Common widgets available for all record types
@@ -2816,10 +3257,21 @@ const loadSavedWidgets = (savedLayout) => {
   if (!gridStack) return;
   
   // Valid widget types - filter out deprecated types like 'related-records'
-  const validWidgetTypes = [
+  let validWidgetTypes = [
     'related-contacts', 'related-deals', 'related-tasks', 'related-events', 
     'related-organization', 'lifecycle-stage', 'key-fields', 'metrics'
   ];
+  
+  // Add form-specific widgets if this is a form record type with Active status
+  if (props.recordType === 'forms' && props.record?.status === 'Active') {
+    validWidgetTypes = [
+      ...validWidgetTypes,
+      'form-total-responses',
+      'form-avg-compliance',
+      'form-avg-rating',
+      'form-response-rate'
+    ];
+  }
   
   savedLayout.forEach(widgetData => {
     // Only load valid widget types, skip deprecated ones like 'related-records'
@@ -2828,6 +3280,9 @@ const loadSavedWidgets = (savedLayout) => {
     } else if (widgetData.type === 'related-records') {
       // Skip deprecated 'related-records' widget - it's been replaced by specific relationship widgets
       console.log('Skipping deprecated widget type: related-records');
+    } else {
+      // Log if we're skipping a widget type that's not in valid types
+      console.log('Skipping widget type not in validWidgetTypes:', widgetData.type);
     }
   });
   
@@ -2912,6 +3367,14 @@ const loadDefaultWidgets = () => {
     defaultWidgets.push(
       { type: 'related-deals', x: 0, y: yPosition, w: 6, h: 4 },
       { type: 'related-tasks', x: 6, y: yPosition, w: 6, h: 4 }
+    );
+  } else if (props.recordType === 'forms' && props.record?.status === 'Active') {
+    // Forms: Analytics widgets (Total Responses, Avg Compliance, Avg Rating, Response Rate)
+    defaultWidgets.push(
+      { type: 'form-total-responses', x: 0, y: yPosition, w: 3, h: 3 },
+      { type: 'form-avg-compliance', x: 3, y: yPosition, w: 3, h: 3 },
+      { type: 'form-avg-rating', x: 6, y: yPosition, w: 3, h: 3 },
+      { type: 'form-response-rate', x: 9, y: yPosition, w: 3, h: 3 }
     );
   }
 
@@ -3065,6 +3528,47 @@ const createWidgetElement = (widgetType) => {
         container.innerHTML = getWidgetContent(widgetType);
         return container;
     }
+  } else if (props.recordType === 'forms' && props.record?._id) {
+    // Form-specific widgets - check this BEFORE the generic record type check
+    switch (widgetType) {
+      case 'form-total-responses':
+      case 'form-avg-compliance':
+      case 'form-avg-rating':
+      case 'form-response-rate':
+        Component = FormAnalyticsWidget;
+        componentProps.formId = props.record._id;
+        componentProps.metricType = widgetType.replace('form-', '');
+        console.log('Creating FormAnalyticsWidget:', {
+          widgetType,
+          formId: componentProps.formId,
+          metricType: componentProps.metricType,
+          recordId: props.record._id
+        });
+        break;
+      case 'lifecycle-stage':
+        Component = LifecycleStageWidget;
+        componentProps.record = props.record;
+        componentProps.recordType = props.recordType;
+        componentProps.moduleDefinition = moduleDefinition.value;
+        break;
+      case 'metrics':
+        Component = MetricsWidget;
+        componentProps.stats = props.stats || {};
+        componentProps.record = props.record;
+        componentProps.recordType = props.recordType;
+        componentProps.moduleDefinition = moduleDefinition.value;
+        break;
+      case 'key-fields':
+        Component = KeyFieldsWidget;
+        componentProps.record = props.record;
+        componentProps.recordType = props.recordType;
+        componentProps.moduleDefinition = moduleDefinition.value;
+        break;
+      default:
+        // Fallback to simple HTML widget
+        container.innerHTML = getWidgetContent(widgetType);
+        return container;
+    }
   } else if (props.record?._id) {
     // For other record types, support lifecycle-stage, metrics, and related-organization widgets
     switch (widgetType) {
@@ -3123,10 +3627,6 @@ const createWidgetElement = (widgetType) => {
         componentProps.limit = 5;
         componentProps.moduleDefinition = allModuleDefinitions.value['events'];
         break;
-      default:
-        // Fallback to simple HTML widget
-        container.innerHTML = getWidgetContent(widgetType);
-        return container;
     }
   } else {
     // Fallback to simple HTML widget for other record types
@@ -5573,10 +6073,112 @@ const getCreateDrawerDescription = () => {
 
 const openEditDrawer = () => {
   if (!props.record || !props.recordType) return;
+  
+  // For forms, emit the edit event so the parent can handle it with custom logic
+  // (opening FormCreate tab instead of the drawer)
+  if (props.recordType === 'forms') {
+    handleEdit();
+    return;
+  }
+  
+  // For other record types, open the drawer as usual
   createDrawerModuleKey.value = props.recordType;
   createDrawerInitialData.value = {};
   createDrawerRecord.value = props.record;
   showCreateDrawer.value = true;
+};
+
+// View form responses (forms only, Active status only)
+const viewFormResponses = () => {
+  if (!props.record || props.recordType !== 'forms' || props.record.status !== 'Active') return;
+  
+  const formId = props.record._id;
+  openTab(`/forms/${formId}/responses`, {
+    name: `form-responses-${formId}`,
+    title: `${props.record.name || 'Form'} - Responses`,
+    component: 'FormResponses',
+    params: { formId }
+  });
+  router.push(`/forms/${formId}/responses`);
+};
+
+// Fetch form responses for Usage and Responses tabs
+const fetchFormResponses = async () => {
+  if (!props.record || props.recordType !== 'forms' || props.record.status !== 'Active') {
+    formResponses.value = [];
+    return;
+  }
+  
+  const formId = props.record._id;
+  if (!formId) return;
+  
+  formResponsesLoading.value = true;
+  try {
+    const params = {
+      page: formResponsesPagination.value.currentPage,
+      limit: formResponsesPagination.value.limit,
+      sortBy: 'submittedAt',
+      sortOrder: 'desc'
+    };
+    
+    const response = await apiClient(`/forms/${formId}/responses`, {
+      method: 'GET',
+      params
+    });
+    
+    if (response.success) {
+      formResponses.value = Array.isArray(response.data) ? response.data : [];
+      
+      if (response.pagination) {
+        formResponsesPagination.value.total = response.pagination.totalResponses || 0;
+        formResponsesPagination.value.totalPages = response.pagination.totalPages || 1;
+      }
+    } else {
+      formResponses.value = [];
+    }
+  } catch (error) {
+    console.error('Error fetching form responses:', error);
+    formResponses.value = [];
+  } finally {
+    formResponsesLoading.value = false;
+  }
+};
+
+// Calculate overall score from section scores
+const calculateOverallScore = (sectionScores) => {
+  if (!sectionScores || typeof sectionScores !== 'object') return 0;
+  
+  const scores = Object.values(sectionScores).filter(s => typeof s === 'number');
+  if (scores.length === 0) return 0;
+  
+  const sum = scores.reduce((acc, score) => acc + score, 0);
+  return Math.round(sum / scores.length);
+};
+
+// View response detail
+const viewResponseDetail = (response) => {
+  if (!props.record || props.recordType !== 'forms') return;
+  
+  const formId = props.record._id;
+  const responseId = response._id;
+  
+  openTab(`/forms/${formId}/responses/${responseId}`, {
+    name: `form-response-${responseId}`,
+    title: `Response - ${new Date(response.submittedAt).toLocaleDateString()}`,
+    component: 'FormResponseDetail',
+    params: { formId, responseId }
+  });
+  router.push(`/forms/${formId}/responses/${responseId}`);
+};
+
+// Archive form (forms only, Draft status only)
+const archiveForm = async () => {
+  if (!props.record || props.recordType !== 'forms' || props.record.status !== 'Draft') return;
+  
+  // TODO: Implement archive functionality
+  // For now, just emit an event that the parent can handle
+  console.log('Archive form:', props.record._id);
+  // Could emit an event: emit('archive', props.record);
 };
 
 const handleOpenRelatedRecord = async (relatedRecord) => {
@@ -5658,6 +6260,11 @@ watch(activeTab, (newTab, oldTab) => {
   } else if (oldTab === 'summary' && newTab !== 'summary') {
     // Destroy GridStack when leaving summary tab
     destroyGridStack();
+  }
+  
+  // Fetch form responses when switching to Usage or Responses tab
+  if ((newTab === 'usage' || newTab === 'responses') && props.recordType === 'forms' && props.record?.status === 'Active') {
+    fetchFormResponses();
   }
 });
 

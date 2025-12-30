@@ -2,18 +2,14 @@
  * Rate Limiting Middleware
  * Prevents brute force attacks and API abuse
  * 
- * DEVELOPMENT BYPASS:
- * In development mode (NODE_ENV !== 'production'), rate limiting can be bypassed
- * by sending the header: X-Bypass-Rate-Limit: true or X-Test-Mode: true
- * 
- * This is automatically enabled in test scripts but can be disabled by setting:
- * BYPASS_RATE_LIMIT=false
- * 
- * ⚠️  WARNING: This bypass is DISABLED in production mode for security.
+ * 🔓 SECURITY DISABLED FOR DEVELOPMENT
+ * Set DISABLE_SECURITY=true in .env to bypass all rate limiting
  */
 
 const rateLimit = require('express-rate-limit');
 
+// 🔓 SECURITY DISABLED: Bypass all rate limiting
+const SECURITY_DISABLED = process.env.DISABLE_SECURITY === 'true' || process.env.NODE_ENV !== 'production';
 const isProduction = process.env.NODE_ENV === 'production';
 const bypassDisabled = process.env.BYPASS_RATE_LIMIT === 'false';
 
@@ -52,6 +48,11 @@ const apiLimiter = rateLimit({
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
     // Skip rate limiting for certain conditions
     skip: (req) => {
+        // 🔓 BYPASS: Skip all rate limiting if security is disabled
+        if (SECURITY_DISABLED) {
+            return true;
+        }
+        
         if (shouldBypassRateLimit(req)) {
             return true;
         }
@@ -77,6 +78,11 @@ const authLimiter = rateLimit({
     },
     // DEVELOPMENT ONLY: Skip rate limiting if bypass header is present
     skip: (req) => {
+        // 🔓 BYPASS: Skip all rate limiting if security is disabled
+        if (SECURITY_DISABLED) {
+            return true;
+        }
+        
         if (shouldBypassRateLimit(req, { logContext: `auth request from ${req.ip} (${req.body?.email || 'unknown user'})` })) {
             return true;
         }
@@ -98,6 +104,10 @@ const passwordResetLimiter = rateLimit({
     legacyHeaders: false,
     // Skip rate limiting in development mode
     skip: (req) => {
+        // 🔓 BYPASS: Skip all rate limiting if security is disabled
+        if (SECURITY_DISABLED) {
+            return true;
+        }
         return process.env.NODE_ENV !== 'production';
     },
     keyGenerator: (req) => {

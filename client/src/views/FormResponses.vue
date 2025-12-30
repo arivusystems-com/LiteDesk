@@ -23,9 +23,9 @@
       row-key="_id"
       empty-title="No responses yet"
       empty-message="This form hasn't received any responses yet"
-      :hide-create="true"
-      :hide-import="true"
-      :hide-export="false"
+      :show-create="false"
+      :show-import="false"
+      :show-export="true"
       @update:searchQuery="handleSearchQueryUpdate"
       @update:filters="(newFilters) => { Object.assign(filters, newFilters); fetchResponses(); }"
       @update:sort="({ sortField: key, sortOrder: order }) => { handleSort({ key, order }); }"
@@ -60,19 +60,33 @@
         <span v-else class="text-sm text-gray-500 dark:text-gray-400">Anonymous</span>
       </template>
 
-      <!-- Custom Status Cell with Badge -->
-      <template #cell-status="{ value }">
+      <!-- Custom Execution Status Cell -->
+      <template #cell-executionStatus="{ row }">
         <BadgeCell 
-          :value="value" 
+          :value="row.executionStatus || 'Not Started'" 
           :variant-map="{
-            'New': 'default',
-            'Pending Corrective Action': 'warning',
-            'Needs Auditor Review': 'info',
-            'Approved': 'success',
-            'Rejected': 'danger',
-            'Closed': 'default'
+            'Not Started': 'default',
+            'In Progress': 'info',
+            'Submitted': 'success'
           }"
         />
+      </template>
+
+      <!-- Custom Review Status Cell -->
+      <template #cell-reviewStatus="{ row }">
+        <div v-if="row.executionStatus === 'Submitted' && row.reviewStatus" class="flex items-center gap-2">
+          <BadgeCell 
+            :value="row.reviewStatus" 
+            :variant-map="{
+              'Pending Corrective Action': 'warning',
+              'Needs Auditor Review': 'info',
+              'Approved': 'success',
+              'Rejected': 'danger',
+              'Closed': 'default'
+            }"
+          />
+        </div>
+        <span v-else class="text-xs text-gray-400 dark:text-gray-500 italic">Not in review</span>
       </template>
 
       <!-- Custom Score Cell -->
@@ -136,7 +150,7 @@
             </svg>
           </button>
           <button
-            v-if="row.status === 'New' || row.status === 'Needs Auditor Review'"
+            v-if="row.executionStatus === 'Submitted' && row.reviewStatus === 'Needs Auditor Review'"
             @click.stop="approveResponse(row)"
             class="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
             title="Approve"
@@ -146,7 +160,7 @@
             </svg>
           </button>
           <button
-            v-if="row.status === 'New' || row.status === 'Needs Auditor Review'"
+            v-if="row.executionStatus === 'Submitted' && row.reviewStatus === 'Needs Auditor Review'"
             @click.stop="rejectResponse(row)"
             class="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
             title="Reject"
@@ -156,7 +170,7 @@
             </svg>
           </button>
           <button
-            v-if="row.status === 'Pending Corrective Action'"
+            v-if="row.executionStatus === 'Submitted' && row.reviewStatus === 'Pending Corrective Action'"
             @click.stop="viewResponseDetail(row)"
             class="p-1.5 text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded transition-colors"
             title="Add Corrective Action"
@@ -193,7 +207,8 @@ const searchQuery = ref('');
 const sortField = ref('submittedAt');
 const sortOrder = ref('desc');
 const filters = ref({
-  status: '',
+  executionStatus: '',
+  reviewStatus: '',
   fromDate: '',
   toDate: '',
   linkedToType: ''
@@ -217,7 +232,8 @@ const statistics = ref({
 const columns = [
   { key: 'submittedAt', label: 'Submitted', sortable: true },
   { key: 'submittedBy', label: 'Submitted By', sortable: true },
-  { key: 'status', label: 'Status', sortable: true },
+  { key: 'executionStatus', label: 'Execution', sortable: true },
+  { key: 'reviewStatus', label: 'Review', sortable: true },
   { key: 'score', label: 'Score', sortable: false },
   { key: 'kpis', label: 'KPIs', sortable: false },
   { key: 'linkedTo', label: 'Linked To', sortable: false }
@@ -226,10 +242,18 @@ const columns = [
 // Filter configuration
 const filterConfig = computed(() => [
   {
-    key: 'status',
-    label: 'All Status',
+    key: 'executionStatus',
+    label: 'Execution Status',
     options: [
-      { value: 'New', label: 'New' },
+      { value: 'Not Started', label: 'Not Started' },
+      { value: 'In Progress', label: 'In Progress' },
+      { value: 'Submitted', label: 'Submitted' }
+    ]
+  },
+  {
+    key: 'reviewStatus',
+    label: 'Review Status',
+    options: [
       { value: 'Pending Corrective Action', label: 'Pending Corrective Action' },
       { value: 'Needs Auditor Review', label: 'Needs Auditor Review' },
       { value: 'Approved', label: 'Approved' },
@@ -304,7 +328,10 @@ const fetchResponses = async () => {
     });
 
     if (response.success) {
+      // Ensure we have an array of responses
       responses.value = Array.isArray(response.data) ? response.data : [];
+      
+      console.log(`Fetched ${responses.value.length} responses for form ${formId}`);
       
       // Handle pagination
       if (response.pagination) {
@@ -312,18 +339,36 @@ const fetchResponses = async () => {
         pagination.value.totalPages = response.pagination.totalPages || 1;
       }
       
-      // Calculate statistics
+      // Calculate statistics - use totalResponses for total count
+      // Note: Other statistics are calculated from current page only
+      // In the future, backend should provide aggregated statistics for filtered results
       statistics.value = {
-        total: responses.value.length,
-        new: responses.value.filter(r => r.status === 'New').length,
-        approved: responses.value.filter(r => r.status === 'Approved').length,
+        total: pagination.value.totalResponses || 0,
+        new: responses.value.filter(r => r.executionStatus === 'In Progress').length,
+        approved: responses.value.filter(r => r.executionStatus === 'Submitted' && r.reviewStatus === 'Approved').length,
         needsAction: responses.value.filter(r => 
-          r.status === 'Pending Corrective Action' || r.status === 'Needs Auditor Review'
+          r.executionStatus === 'Submitted' && (r.reviewStatus === 'Pending Corrective Action' || r.reviewStatus === 'Needs Auditor Review')
         ).length
+      };
+    } else {
+      console.error('Failed to fetch responses:', response.message || 'Unknown error');
+      responses.value = [];
+      statistics.value = {
+        total: 0,
+        new: 0,
+        approved: 0,
+        needsAction: 0
       };
     }
   } catch (error) {
     console.error('Error fetching responses:', error);
+    responses.value = [];
+    statistics.value = {
+      total: 0,
+      new: 0,
+      approved: 0,
+      needsAction: 0
+    };
   } finally {
     loading.value = false;
   }

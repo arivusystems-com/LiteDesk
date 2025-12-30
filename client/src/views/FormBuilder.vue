@@ -203,6 +203,8 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
+import { canEditForm } from '@/utils/formEditPermissions';
+import { isReadyFormValid } from '@/utils/formValidation';
 import FormDetailsTab from '@/components/forms/FormDetailsTab.vue';
 import SectionsBuilder from '@/components/forms/SectionsBuilder.vue';
 import FormSettingsTab from '@/components/forms/FormSettingsTab.vue';
@@ -232,16 +234,12 @@ const form = ref({
   name: '',
   description: '',
   formType: 'Audit',
-  linkedModule: null,
   visibility: 'Internal',
   status: 'Draft',
   assignedTo: null,
   expiryDate: null,
   tags: [],
   approvalRequired: false,
-  linkedReport: null,
-  attachments: [],
-  notes: '',
   sections: [],
   kpiMetrics: [],
   scoringFormula: '',
@@ -313,6 +311,16 @@ const saveForm = async (isAutoSave = false) => {
   // Prevent auto-save if manual save is in progress
   if (!isAutoSave && saving.value) {
     return;
+  }
+  
+  // For Ready forms: validate before auto-saving
+  // Auto-save should only happen if form remains valid
+  if (isAutoSave && form.value.status === 'Ready') {
+    if (!isReadyFormValid(form.value)) {
+      // Don't auto-save invalid Ready forms
+      // User will see inline validation errors
+      return;
+    }
   }
   
   saving.value = true;
@@ -434,20 +442,20 @@ const saveForm = async (isAutoSave = false) => {
     }
 
     // Create clean payload with only fields that should be sent
+    // CRITICAL: Never change status during auto-save
+    // Auto-save updates data, not intent
+    const currentStatus = form.value.status;
     const payload = {
       name: formData.name,
       description: formData.description || '',
       formType: formData.formType,
-      linkedModule: formData.linkedModule || null,
       visibility: formData.visibility,
-      status: formData.status,
+      // Preserve current status - auto-save never changes status
+      status: isAutoSave ? currentStatus : (formData.status || currentStatus),
       assignedTo: formData.assignedTo || null,
       expiryDate: formData.expiryDate || null,
       tags: formData.tags || [],
       approvalRequired: formData.approvalRequired || false,
-      linkedReport: formData.linkedReport || null,
-      attachments: formData.attachments || [],
-      notes: formData.notes || '',
       sections: formData.sections || [],
       kpiMetrics: formData.kpiMetrics,
       scoringFormula: formData.scoringFormula,
@@ -655,14 +663,22 @@ watch(() => form.value, (newForm) => {
   // 2. Form name is empty
   // 3. Manual save is in progress
   // 4. Currently saving
-  // 5. Form status is not 'Draft' (only Draft forms can be edited)
+  // 5. Form status doesn't allow editing (only Draft and Ready forms can be edited)
   // 6. Form hasn't actually changed (compare serialized versions)
   if (!formIdFromRoute.value || !form.value.name || isManualSave.value || saving.value) {
     return;
   }
   
-  // Only allow auto-save for Draft forms
-  if (form.value.status && form.value.status !== 'Draft') {
+  // Only allow auto-save for Draft and Ready forms (both allow full editing)
+  if (form.value.status && !canEditForm(form.value.status)) {
+    return;
+  }
+  
+  // For Ready forms: validate before auto-saving
+  // Auto-save only if form remains valid (preserves readiness)
+  if (form.value.status === 'Ready' && !isReadyFormValid(newForm)) {
+    // Don't auto-save invalid Ready forms
+    // User will see inline validation errors
     return;
   }
   
@@ -674,8 +690,13 @@ watch(() => form.value, (newForm) => {
   
   clearTimeout(autoSaveTimer);
   autoSaveTimer = setTimeout(() => {
-    // Only auto-save if form actually changed, we're not in the middle of a save, and form is Draft
-    if (!saving.value && !isManualSave.value && form.value.status === 'Draft') {
+    // Only auto-save if form actually changed, we're not in the middle of a save, and form is editable (Draft or Ready)
+    if (!saving.value && !isManualSave.value && canEditForm(form.value.status)) {
+      // Double-check Ready form validity before auto-saving
+      if (form.value.status === 'Ready' && !isReadyFormValid(form.value)) {
+        return; // Don't auto-save invalid Ready forms
+      }
+      
       const currentSerialized = JSON.stringify(form.value);
       if (currentSerialized !== lastSavedForm) {
         saveForm(true); // Pass true to indicate this is an auto-save

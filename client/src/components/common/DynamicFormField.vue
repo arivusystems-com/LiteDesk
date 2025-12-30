@@ -158,7 +158,6 @@
             leave-from-class="opacity-100"
             leave-to-class="opacity-0"
             @after-enter="focusPicklistSearch"
-            @enter="focusPicklistSearch"
           >
             <ComboboxOptions
               class="absolute z-10 mt-1 w-full overflow-hidden rounded-lg bg-white dark:bg-gray-700 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm"
@@ -441,7 +440,6 @@
             leave-from-class="opacity-100"
             leave-to-class="opacity-0"
             @after-enter="focusLookupSearch"
-            @enter="focusLookupSearch"
           >
             <ComboboxOptions
               class="absolute z-10 mt-1 w-full overflow-hidden rounded-lg bg-white dark:bg-gray-700 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm"
@@ -872,62 +870,84 @@ const handleLookupChange = (newValue) => {
 
 // Focus functions for auto-focusing search inputs when Combobox opens
 const focusPicklistSearch = () => {
-  // Multiple attempts to ensure focus works
-  const attemptFocus = (delay = 0) => {
-    window.setTimeout(() => {
-      if (picklistSearchInput.value) {
-        try {
-          picklistSearchInput.value.focus();
-          picklistSearchInput.value.select();
-        } catch (e) {
-          console.warn('Failed to focus picklist search:', e);
+  // Use requestAnimationFrame to ensure DOM is fully rendered
+  requestAnimationFrame(() => {
+    // Multiple attempts to ensure focus works
+    const attemptFocus = (delay = 0) => {
+      window.setTimeout(() => {
+        if (picklistSearchInput.value) {
+          try {
+            // Check if element is actually in the DOM
+            if (document.contains(picklistSearchInput.value)) {
+              picklistSearchInput.value.focus();
+              picklistSearchInput.value.select();
+            }
+          } catch (e) {
+            console.warn('Failed to focus picklist search:', e);
+          }
+        } else if (delay < 300) {
+          // Retry if element not ready yet, with longer timeout
+          attemptFocus(delay + 50);
         }
-      } else if (delay < 200) {
-        // Retry if element not ready yet
-        attemptFocus(delay + 50);
-      }
-    }, delay);
-  };
-  
-  nextTick(() => {
-    attemptFocus(0);
+      }, delay);
+    };
+    
+    nextTick(() => {
+      attemptFocus(0);
+    });
   });
 };
 
 const focusLookupSearch = () => {
-  // Multiple attempts to ensure focus works
-  const attemptFocus = (delay = 0) => {
-    window.setTimeout(() => {
-      if (lookupSearchInput.value) {
-        try {
-          lookupSearchInput.value.focus();
-          lookupSearchInput.value.select();
-        } catch (e) {
-          console.warn('Failed to focus lookup search:', e);
+  // Use requestAnimationFrame to ensure DOM is fully rendered
+  requestAnimationFrame(() => {
+    // Multiple attempts to ensure focus works
+    const attemptFocus = (delay = 0) => {
+      window.setTimeout(() => {
+        if (lookupSearchInput.value) {
+          try {
+            // Check if element is actually in the DOM
+            if (document.contains(lookupSearchInput.value)) {
+              lookupSearchInput.value.focus();
+              lookupSearchInput.value.select();
+            }
+          } catch (e) {
+            console.warn('Failed to focus lookup search:', e);
+          }
+        } else if (delay < 300) {
+          // Retry if element not ready yet, with longer timeout
+          attemptFocus(delay + 50);
         }
-      } else if (delay < 200) {
-        // Retry if element not ready yet
-        attemptFocus(delay + 50);
-      }
-    }, delay);
-  };
-  
-  nextTick(() => {
-    attemptFocus(0);
+      }, delay);
+    };
+    
+    nextTick(() => {
+      attemptFocus(0);
+    });
   });
 };
 
 // Handler functions for button clicks (to avoid setTimeout in template)
 const handlePicklistButtonClick = () => {
-  window.setTimeout(() => {
-    focusPicklistSearch();
-  }, 100);
+  // Wait for Combobox to open, then focus search
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        focusPicklistSearch();
+      }, 150);
+    });
+  });
 };
 
 const handleLookupButtonClick = () => {
-  window.setTimeout(() => {
-    focusLookupSearch();
-  }, 100);
+  // Wait for Combobox to open, then focus search
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        focusLookupSearch();
+      }, 150);
+    });
+  });
 };
 
 // Helper function to normalize picklist option (handle both strings and objects)

@@ -7,6 +7,7 @@ import LandingPage from '@/views/LandingPage.vue'
 import Dashboard from '@/views/Dashboard.vue'
 import Nav from '@/components/Nav.vue';
 import TabBar from '@/components/TabBar.vue';
+import NotificationContainer from '@/components/NotificationContainer.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 
@@ -157,6 +158,9 @@ usePermissionSync(2);
   <div v-else>
     <RouterView />
   </div>
+
+  <!-- Global Notification Container -->
+  <NotificationContainer />
 </template>
 
 <style>

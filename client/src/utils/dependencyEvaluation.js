@@ -161,6 +161,31 @@ export function getFieldDependencyState(field, formData, allFields = []) {
           });
         }
         break;
+      
+      case 'picklistValue':
+        // For picklistValue, filter options based on parent field value
+        if (dep.parentFieldKey && dep.mappings && Array.isArray(dep.mappings)) {
+          const parentValue = formData[dep.parentFieldKey];
+          if (parentValue !== null && parentValue !== undefined && parentValue !== '') {
+            // Find matching mapping for current parent value
+            const matchingMapping = dep.mappings.find(m => 
+              m.parentValue === String(parentValue) || m.parentValue === parentValue
+            );
+            
+            if (matchingMapping && matchingMapping.allowedOptions && Array.isArray(matchingMapping.allowedOptions)) {
+              // Normalize allowedOptions to strings
+              allowedOptions = matchingMapping.allowedOptions.map(opt => String(opt || '')).filter(Boolean);
+              console.log('📋 Picklist value rule active:', {
+                fieldKey: field.key,
+                parentFieldKey: dep.parentFieldKey,
+                parentValue: parentValue,
+                allowedOptionsCount: allowedOptions.length,
+                allowedOptions: allowedOptions
+              });
+            }
+          }
+        }
+        break;
     }
   }
 

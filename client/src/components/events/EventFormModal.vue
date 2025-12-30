@@ -37,14 +37,14 @@
               />
             </div>
 
-            <!-- Agenda Notes -->
+            <!-- Notes -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Agenda Notes</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
               <textarea
-                v-model="form.agendaNotes"
+                v-model="form.notes"
                 rows="3"
                 maxlength="5000"
-                placeholder="Add agenda, objectives or notes..."
+                placeholder="Add notes or description..."
                 class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               ></textarea>
             </div>
@@ -55,16 +55,15 @@
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Event Type <span class="text-red-500">*</span></label>
                 <select
                   v-model="form.eventType"
+                  @change="onEventTypeChange"
                   required
                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 >
-                  <option value="Meeting">Meeting</option>
-                  <option value="Call">Call</option>
-                  <option value="Site Visit">Site Visit</option>
-                  <option value="Demo">Demo</option>
-                  <option value="Training">Training</option>
-                  <option value="Webinar">Webinar</option>
-                  <option value="Other">Other</option>
+                  <option value="Meeting / Appointment">Meeting / Appointment</option>
+                  <option value="Internal Audit">Internal Audit</option>
+                  <option value="External Audit — Single Org">External Audit — Single Org</option>
+                  <option value="External Audit Beat">External Audit Beat</option>
+                  <option value="Field Sales Beat">Field Sales Beat</option>
                 </select>
               </div>
 
@@ -75,10 +74,18 @@
                   required
                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 >
-                  <option value="Scheduled">Scheduled</option>
-                  <option value="Completed">Completed</option>
-                  <option value="Cancelled">Cancelled</option>
-                  <option value="Rescheduled">Rescheduled</option>
+                  <option value="PLANNED">Planned</option>
+                  <option value="STARTED">Started</option>
+                  <option value="CHECKED_IN">Checked In</option>
+                  <option value="IN_PROGRESS">In Progress</option>
+                  <option value="PAUSED">Paused</option>
+                  <option value="CHECKED_OUT">Checked Out</option>
+                  <option value="SUBMITTED">Submitted</option>
+                  <option value="PENDING_CORRECTIVE">Pending Corrective</option>
+                  <option value="NEEDS_REVIEW">Needs Review</option>
+                  <option value="APPROVED">Approved</option>
+                  <option value="REJECTED">Rejected</option>
+                  <option value="CLOSED">Closed</option>
                 </select>
               </div>
             </div>
@@ -148,130 +155,239 @@
                 class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               />
             </div>
+          </div>
+
+          <!-- Recurrence -->
+          <div v-if="showRecurrence" class="space-y-4">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">Recurrence</h3>
             
-            <!-- Reminder -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reminder</label>
-              <input
-                v-model="form.reminderAt"
-                type="datetime-local"
-                placeholder="Set reminder time"
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Recurrence Pattern</label>
+              <select
+                v-model="form.recurrence"
                 class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              />
+              >
+                <option :value="null">None</option>
+                <option value="Daily">Daily</option>
+                <option value="Weekly">Weekly</option>
+                <option value="Monthly">Monthly</option>
+                <option value="Custom">Custom</option>
+              </select>
             </div>
           </div>
 
-          <!-- Attendees -->
+          <!-- Visibility -->
           <div class="space-y-4">
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">Attendees</h3>
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">Visibility</h3>
             
-            <!-- Add Attendee -->
-            <div class="flex gap-2">
-              <input
-                v-model="newAttendeeEmail"
-                type="email"
-                placeholder="Enter email address"
-                class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-                @keyup.enter="addAttendee"
-              />
-              <button
-                type="button"
-                @click="addAttendee"
-                class="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors"
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Visibility</label>
+              <select
+                v-model="form.visibility"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               >
-                Add
-              </button>
+                <option value="Internal">Internal</option>
+                <option value="Partner">Partner</option>
+                <option value="Public">Public</option>
+              </select>
             </div>
+          </div>
 
-            <!-- Attendees List -->
-            <div v-if="form.attendees.length > 0" class="space-y-2">
-              <div
-                v-for="(attendee, index) in form.attendees"
-                :key="index"
-                class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
-              >
-                <div class="flex items-center gap-3">
-                  <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm font-medium">
-                    {{ attendee.email.charAt(0).toUpperCase() }}
-                  </div>
+          <!-- Event Type Specific Fields -->
+          <div v-if="showEventTypeFields" :key="`event-type-${form.eventType}`" class="space-y-4">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">Event Configuration</h3>
+            
+            <!-- GEO Required Toggle -->
+            <div v-if="showGeoToggle" class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
                   <div>
-                    <div class="text-sm font-medium text-gray-900 dark:text-white">{{ attendee.email }}</div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400">{{ attendee.status }}</div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  @click="removeAttendee(index)"
-                  class="p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded transition-colors"
-                >
-                  <svg class="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">GEO Required</label>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {{ geoRequiredDescription }}
+                </p>
               </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  v-model="form.geoRequired"
+                  :disabled="!canToggleGeo"
+                  class="sr-only peer"
+                />
+                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+              </label>
             </div>
-          </div>
-
-          <!-- Related Record -->
-          <div class="space-y-4">
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">Related To</h3>
             
-            <div class="grid grid-cols-2 gap-4">
+            <div v-else-if="geoRequiredForced" class="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <p class="text-sm text-blue-800 dark:text-blue-300">
+                <strong>GEO Required:</strong> Always enabled for {{ form.eventType }}
+              </p>
+          </div>
+            
+            <!-- Linked Organization (for Audit events) -->
+            <div v-if="requiresLinkedOrg" class="grid grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Record Type</label>
-                <select
-                  v-model="form.relatedToType"
-                  @change="form.relatedToId = ''"
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                >
-                  <option value="">None</option>
-                  <option value="Person">Person</option>
-                  <option value="Organization">Organization</option>
-                  <option value="Deal">Deal</option>
-                  <option value="Item">Item</option>
-                </select>
-              </div>
-
-              <div v-if="form.relatedToType">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select {{ form.relatedToType === 'Person' ? 'Person' : form.relatedToType }}</label>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Linked Organization <span class="text-red-500">*</span>
+                </label>
                 <select
                   v-model="form.relatedToId"
+                  @change="fetchOrganizations"
+                  required
                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 >
-                  <option value="">Select...</option>
-                  <option v-for="record in relatedRecords" :key="record._id" :value="record._id">
-                    {{ getRecordName(record) }}
+                  <option value="">Select Organization...</option>
+                  <option v-for="org in organizations" :key="org._id" :value="org._id">
+                    {{ org.name }}
                   </option>
                 </select>
               </div>
+              </div>
+
+            <!-- Audit Form Selection -->
+            <div v-if="requiresAuditForm" :key="`audit-form-${form.eventType}-${auditForms.length}`" class="grid grid-cols-2 gap-4">
+              <div class="col-span-2">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Audit Form <span class="text-red-500">*</span>
+                </label>
+                <select
+                  v-model="form.linkedFormId"
+                  :required="linkedFormIdDependencyState.required"
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                >
+                  <option value="">Select Form...</option>
+                  <option v-if="auditForms.length === 0 && !loadingForms" value="" disabled>
+                    No forms available (create a form first)
+                  </option>
+                  <option v-for="formItem in auditForms" :key="formItem._id" :value="formItem._id">
+                    {{ formItem.name }} {{ formItem.status === 'Ready' ? '(Ready - will activate)' : formItem.status === 'Active' ? '(Active)' : '' }}
+                  </option>
+                </select>
+                <p v-if="requiresAuditForm && auditForms.length === 0 && !loadingForms" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Create an audit form first in the Forms module
+                </p>
+              </div>
+            </div>
+
+            <!-- Multi-Org Route (External Audit Beat, Field Sales Beat) -->
+            <div v-if="isMultiOrgRoute" class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Organization List <span class="text-red-500">*</span>
+                </label>
+                <div class="space-y-2 max-h-48 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-lg p-3">
+                  <div v-for="(org, index) in form.orgList" :key="index" class="flex items-center gap-2">
+                    <input
+                      type="number"
+                      v-model.number="org.sequence"
+                      min="1"
+                      placeholder="Sequence"
+                      class="w-20 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    />
+                    <select
+                      v-model="org.organizationId"
+                      class="flex-1 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    >
+                      <option value="">Select Org...</option>
+                      <option v-for="orgOption in organizations" :key="orgOption._id" :value="orgOption._id">
+                        {{ orgOption.name }}
+                      </option>
+                    </select>
+                    <button
+                      type="button"
+                      @click="removeOrgFromList(index)"
+                      class="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                <button
+                  type="button"
+                    @click="addOrgToList"
+                    class="w-full px-3 py-2 text-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg border border-dashed border-indigo-300 dark:border-indigo-700"
+                >
+                    + Add Organization
+                </button>
+                </div>
+              </div>
+              
+              <!-- Background Tracking (External Audit Beat) -->
+              <div v-if="form.eventType === 'External Audit Beat'" class="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  v-model="form.backgroundTracking"
+                  class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                />
+                <label class="text-sm text-gray-700 dark:text-gray-300">Enable Background Tracking</label>
+              </div>
+            </div>
+            
+            <!-- Min Visit Duration -->
+            <div v-if="showMinVisitDuration" class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Minimum Visit Duration (minutes)
+                </label>
+                <input
+                  type="number"
+                  v-model.number="form.minVisitDuration"
+                  min="1"
+                  placeholder="e.g., 30"
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+            
+            <!-- Field Sales Specific -->
+            <div v-if="form.eventType === 'Field Sales Beat'" class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Allowed Actions</label>
+                <div class="space-y-2">
+                  <label class="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      v-model="form.allowedActions.orders"
+                      class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                    />
+                    <span class="text-sm text-gray-700 dark:text-gray-300">Orders</span>
+                  </label>
+                  <label class="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      v-model="form.allowedActions.payments"
+                      class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                    />
+                    <span class="text-sm text-gray-700 dark:text-gray-300">Payments</span>
+                  </label>
+                  <label class="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      v-model="form.allowedActions.feedback"
+                      class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                    />
+                    <span class="text-sm text-gray-700 dark:text-gray-300">Feedback</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Partner Visibility (External Audit) -->
+            <div v-if="form.eventType === 'External Audit — Single Org'" class="flex items-center gap-2">
+              <input
+                type="checkbox"
+                v-model="form.partnerVisibility"
+                class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+              />
+              <label class="text-sm text-gray-700 dark:text-gray-300">Partner Visibility (for guest auditor)</label>
             </div>
           </div>
 
-          <!-- Tags -->
-          <div class="space-y-4">
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">Tags</h3>
-            <div class="flex flex-wrap gap-2">
-              <span
-                v-for="(tag, index) in form.tags"
-                :key="index"
-                class="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded text-sm"
-              >
-                {{ tag }}
-                <button
-                  type="button"
-                  @click="form.tags.splice(index, 1)"
-                  class="hover:text-indigo-600 dark:hover:text-indigo-200"
-                >
-                  ×
-                </button>
-              </span>
-              <input
-                v-model="newTag"
-                type="text"
-                placeholder="Add tag..."
-                @keyup.enter="addTag"
-                class="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              />
+
+          <!-- Attachments -->
+          <div v-if="showAttachments" class="space-y-4">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">Attachments</h3>
+            <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4 text-center">
+              <p class="text-sm text-gray-500 dark:text-gray-400">File upload functionality to be implemented</p>
             </div>
           </div>
 
@@ -303,9 +419,10 @@
 </template>
 
 <script setup>
-import { ref, watch, computed, onMounted } from 'vue';
+import { ref, watch, computed, onMounted, nextTick } from 'vue';
 import apiClient from '@/utils/apiClient';
 import dateUtils from '@/utils/dateUtils';
+import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
 import { useAuthStore } from '@/stores/auth';
 
 const props = defineProps({
@@ -325,10 +442,11 @@ const authStore = useAuthStore();
 const currentUser = computed(() => authStore.user || {});
 
 const saving = ref(false);
-const newAttendeeEmail = ref('');
-const newTag = ref('');
-const relatedRecords = ref([]);
 const users = ref([]);
+const organizations = ref([]);
+const auditForms = ref([]);
+const loadingForms = ref(false);
+const eventsModuleDefinition = ref(null);
 
 const colorOptions = [
   '#3B82F6', // Blue
@@ -343,28 +461,268 @@ const colorOptions = [
 
 const form = ref({
   eventName: '',
-  agendaNotes: '',
-  eventType: 'Meeting',
-  status: 'Scheduled',
+  notes: '',
+  eventType: 'Meeting / Appointment',
+  status: 'PLANNED',
   eventOwnerId: '',
   startDateTime: '',
   endDateTime: '',
   location: '',
-  reminderAt: '',
-  attendees: [],
-  relatedToType: '',
+  recurrence: null,
   relatedToId: '',
-  tags: [],
-  linkedTaskId: '',
-  linkedFormId: ''
+  linkedFormId: '',
+  geoRequired: false,
+  geoLocation: {
+    latitude: null,
+    longitude: null,
+    radius: 100
+  },
+  orgList: [],
+  minVisitDuration: null,
+  backgroundTracking: false,
+  minTimePerStop: null,
+  partnerVisibility: false,
+  allowedActions: {
+    orders: true,
+    payments: false,
+    feedback: true
+  },
+  visibility: 'Internal'
 });
 
 const isEditing = computed(() => !!props.event?._id);
 
+// Computed properties for dynamic field visibility
+const showEventTypeFields = computed(() => {
+  // Show fields for all event types except basic Meeting/Appointment
+  // This ensures audit form field appears for audit types
+  return form.value.eventType !== 'Meeting / Appointment';
+});
+
+const showGeoToggle = computed(() => {
+  return form.value.eventType === 'Meeting / Appointment' || 
+         form.value.eventType === 'External Audit — Single Org' || 
+         form.value.eventType === 'Field Sales Beat';
+});
+
+const geoRequiredForced = computed(() => {
+  return form.value.eventType === 'Internal Audit' || 
+         form.value.eventType === 'External Audit Beat';
+});
+
+const canToggleGeo = computed(() => {
+  // Admin permission check would go here
+  // For now, allow toggling for applicable types
+  return showGeoToggle.value;
+});
+
+const geoRequiredDescription = computed(() => {
+  if (form.value.eventType === 'Meeting / Appointment') {
+    return 'Optional: Enable location tracking for this meeting';
+  } else if (form.value.eventType === 'External Audit — Single Org') {
+    return 'Default: ON. Admin can disable if needed';
+  } else if (form.value.eventType === 'Field Sales Beat') {
+    return 'Default: ON. Some companies allow non-geo orders';
+  }
+  return '';
+});
+
+const requiresLinkedOrg = computed(() => {
+  return ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(form.value.eventType);
+});
+
+// Get linkedFormId field definition from module
+const linkedFormIdField = computed(() => {
+  if (!eventsModuleDefinition.value?.fields) return null;
+  return eventsModuleDefinition.value.fields.find(f => f.key === 'linkedFormId');
+});
+
+// Evaluate dependency state for linkedFormId field
+const linkedFormIdDependencyState = computed(() => {
+  const field = linkedFormIdField.value;
+  if (!field) {
+    // Fallback: if module definition not loaded, use hardcoded logic
+    const eventType = form.value.eventType;
+    const isAuditType = 
+      eventType === 'Internal Audit' ||
+      eventType === 'External Audit — Single Org' ||
+      eventType === 'External Audit Beat';
+    return { visible: isAuditType };
+  }
+  
+  // Use dependency evaluation system
+  return getFieldDependencyState(
+    field,
+    form.value,
+    eventsModuleDefinition.value?.fields || []
+  );
+});
+
+// Computed property for visibility (using dependency system)
+const requiresAuditForm = computed(() => {
+  return linkedFormIdDependencyState.value.visible !== false;
+});
+
+const isMultiOrgRoute = computed(() => {
+  return ['External Audit Beat', 'Field Sales Beat'].includes(form.value.eventType);
+});
+
+const showMinVisitDuration = computed(() => {
+  return form.value.geoRequired && (
+    form.value.eventType === 'Internal Audit' || 
+    form.value.eventType === 'External Audit Beat'
+  );
+});
+
+const showRecurrence = computed(() => {
+  return true; // Universal field, always show
+});
+
+const showAttachments = computed(() => {
+  return true; // Universal field, always show
+});
+
+// Watch eventType to fetch forms when it changes
+watch(() => form.value.eventType, (newEventType, oldEventType) => {
+  if (requiresAuditForm.value) {
+    fetchForms();
+  } else {
+    // Clear linked form if event type no longer requires audit form
+    if (oldEventType && !requiresAuditForm.value) {
+      form.value.linkedFormId = '';
+    }
+  }
+}, { immediate: false });
+
+// Fetch Events module definition to get field dependencies
+const fetchEventsModuleDefinition = async () => {
+  try {
+    const response = await apiClient.get('/modules');
+    if (response.success) {
+      const eventsModule = response.data.find(m => m.key === 'events');
+      if (eventsModule) {
+        eventsModuleDefinition.value = eventsModule;
+        console.log('✅ Events module definition loaded:', {
+          fieldsCount: eventsModule.fields?.length || 0,
+          linkedFormIdField: linkedFormIdField.value
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching Events module definition:', error);
+  }
+};
+
 // Fetch users when component mounts
 onMounted(() => {
   fetchUsers();
+  fetchOrganizations();
+  fetchEventsModuleDefinition();
+  // Forms will be fetched by the watch or when modal opens
 });
+
+// Methods for dynamic fields
+const onEventTypeChange = () => {
+  // Reset GEO based on event type rules
+  if (form.value.eventType === 'Internal Audit' || form.value.eventType === 'External Audit Beat') {
+    form.value.geoRequired = true; // Always ON
+  } else if (form.value.eventType === 'External Audit — Single Org' || form.value.eventType === 'Field Sales Beat') {
+    form.value.geoRequired = true; // Default ON
+  } else if (form.value.eventType === 'Meeting / Appointment') {
+    form.value.geoRequired = false; // Default OFF
+  }
+  
+  // Reset orgList for multi-org routes
+  if (isMultiOrgRoute.value) {
+    if (form.value.orgList.length === 0) {
+      form.value.orgList = [{ sequence: 1, organizationId: '', status: 'PENDING' }];
+    }
+  } else {
+    form.value.orgList = [];
+  }
+  
+  // Fetch forms if needed
+  if (requiresAuditForm.value) {
+    fetchForms();
+  }
+  
+  // Clear linked form if not needed
+  if (!requiresAuditForm.value) {
+    form.value.linkedFormId = '';
+  }
+};
+
+const addOrgToList = () => {
+  const nextSequence = form.value.orgList.length > 0 
+    ? Math.max(...form.value.orgList.map(o => o.sequence || 0)) + 1
+    : 1;
+  form.value.orgList.push({
+    sequence: nextSequence,
+    organizationId: '',
+    status: 'PENDING'
+  });
+};
+
+const removeOrgFromList = (index) => {
+  form.value.orgList.splice(index, 1);
+  // Re-sequence remaining orgs
+  form.value.orgList.forEach((org, idx) => {
+    org.sequence = idx + 1;
+  });
+};
+
+const fetchOrganizations = async () => {
+  try {
+    const response = await apiClient.get('/organization');
+    if (response.success) {
+      organizations.value = response.data || [];
+    }
+  } catch (error) {
+    console.error('Error fetching organizations:', error);
+  }
+};
+
+const fetchForms = async () => {
+  loadingForms.value = true;
+  try {
+    // Fetch both Ready and Active forms
+    // When a Ready form is linked to an event, it automatically becomes Active
+    const response = await apiClient.get('/forms', { params: { limit: 100 } });
+    if (response.success) {
+      const allForms = response.data || [];
+      
+      // Filter to show only Ready and Active forms
+      const readyAndActiveForms = allForms.filter(form => 
+        form.status === 'Ready' || form.status === 'Active'
+      );
+      
+      // Further filter to show audit-related forms if formType exists
+      auditForms.value = readyAndActiveForms.filter(form => {
+        // If formType exists, prefer Audit types; otherwise include all Ready/Active forms
+        return !form.formType || 
+               form.formType === 'Audit' || 
+               form.formType.toLowerCase().includes('audit');
+      });
+      
+      // If no audit-type forms found, show all Ready/Active forms as fallback
+      if (auditForms.value.length === 0 && readyAndActiveForms.length > 0) {
+        auditForms.value = readyAndActiveForms;
+      }
+      
+      // Sort: Active forms first, then Ready forms
+      auditForms.value.sort((a, b) => {
+        if (a.status === 'Active' && b.status === 'Ready') return -1;
+        if (a.status === 'Ready' && b.status === 'Active') return 1;
+        return 0;
+      });
+    }
+  } catch (error) {
+    console.error('Error fetching forms:', error);
+    auditForms.value = [];
+  } finally {
+    loadingForms.value = false;
+  }
+};
 
 // Watch for prop changes
 watch(() => props.isOpen, (newVal) => {
@@ -375,61 +733,48 @@ watch(() => props.isOpen, (newVal) => {
     }
   }
   if (newVal && props.event?._id) {
-    // Edit mode - populate form with full event data (support both old and new field names)
+    // Edit mode - populate form with event data
     form.value = {
-      eventName: props.event.eventName || props.event.title || '',
-      agendaNotes: props.event.agendaNotes || props.event.description || '',
-      eventType: props.event.eventType || props.event.type || 'Meeting',
-      status: props.event.status || 'Scheduled',
+      eventName: props.event.eventName || '',
+      notes: props.event.notes || '',
+      eventType: props.event.eventType || 'Meeting / Appointment',
+      status: props.event.status || 'PLANNED',
       eventOwnerId: props.event.eventOwnerId?._id || props.event.eventOwnerId || currentUser.value._id || '',
-      startDateTime: formatDateForInput(props.event.startDateTime || props.event.startDate),
-      endDateTime: formatDateForInput(props.event.endDateTime || props.event.endDate),
+      startDateTime: formatDateForInput(props.event.startDateTime),
+      endDateTime: formatDateForInput(props.event.endDateTime),
       location: props.event.location || '',
-      reminderAt: props.event.reminderAt ? formatDateForInput(props.event.reminderAt) : '',
-      attendees: props.event.attendees || [],
-      relatedToType: props.event.relatedToType || props.event.relatedTo?.type || '',
-      relatedToId: props.event.relatedToId || props.event.relatedTo?.id || '',
-      tags: props.event.tags || [],
-      linkedTaskId: props.event.linkedTaskId || '',
-      linkedFormId: props.event.linkedFormId || ''
+      recurrence: props.event.recurrence || null,
+      relatedToId: props.event.relatedToId || '',
+      linkedFormId: props.event.linkedFormId || '',
+      geoRequired: props.event.geoRequired || false,
+      geoLocation: props.event.geoLocation || { latitude: null, longitude: null, radius: 100 },
+      orgList: props.event.orgList || [],
+      minVisitDuration: props.event.minVisitDuration || null,
+      backgroundTracking: props.event.backgroundTracking || false,
+      minTimePerStop: props.event.minTimePerStop || null,
+      partnerVisibility: props.event.partnerVisibility || false,
+      allowedActions: props.event.allowedActions || { orders: true, payments: false, feedback: true },
+      visibility: props.event.visibility || 'Internal',
+      attachments: props.event.attachments || []
     };
     
-    // Fetch related records if type is specified
-    if (form.value.relatedToType) {
-      fetchRelatedRecords(form.value.relatedToType === 'Person' ? 'Contact' : form.value.relatedToType);
+    // Fetch organizations if needed
+    if (requiresLinkedOrg.value || isMultiOrgRoute.value) {
+      fetchOrganizations();
     }
-  } else if (newVal && props.event) {
-    // Create mode with pre-filled data (e.g., from related record)
-    resetForm();
-    // Override with any pre-filled values
-    if (props.event.relatedTo || props.event.relatedToType) {
-      form.value.relatedToType = props.event.relatedToType || props.event.relatedTo?.type || '';
-      form.value.relatedToId = props.event.relatedToId || props.event.relatedTo?.id || '';
-      // Fetch related records if type is specified
-      if (form.value.relatedToType) {
-        fetchRelatedRecords(form.value.relatedToType === 'Person' ? 'Contact' : form.value.relatedToType);
+    
+    // Fetch forms if needed - use nextTick to ensure form is fully populated
+    nextTick(() => {
+      if (requiresAuditForm.value) {
+        fetchForms();
       }
-    }
-    if (props.event.startDateTime || props.event.startDate) {
-      form.value.startDateTime = formatDateForInput(props.event.startDateTime || props.event.startDate);
-    }
-    if (props.event.endDateTime || props.event.endDate) {
-      form.value.endDateTime = formatDateForInput(props.event.endDateTime || props.event.endDate);
-    }
+    });
   } else if (newVal) {
     // Create mode - reset form
     resetForm();
   }
 });
 
-// Watch related type changes
-watch(() => form.value.relatedToType, async (newType) => {
-  if (newType) {
-    // Map Person to Contact for API calls
-    const apiType = newType === 'Person' ? 'Contact' : newType;
-    await fetchRelatedRecords(apiType);
-  }
-});
 
 const formatDateForInput = (date) => {
   if (!date) return '';
@@ -448,57 +793,37 @@ const resetForm = () => {
   
   form.value = {
     eventName: '',
-    agendaNotes: '',
-    eventType: 'Meeting',
-    status: 'Scheduled',
+    notes: '',
+    eventType: 'Meeting / Appointment',
+    status: 'PLANNED',
     eventOwnerId: currentUser.value._id || '',
     startDateTime: formatDateForInput(now),
     endDateTime: formatDateForInput(oneHourLater),
     location: '',
-    reminderAt: '',
-    attendees: [],
-    relatedToType: '',
+    recurrence: null,
     relatedToId: '',
-    tags: [],
-    linkedTaskId: '',
-    linkedFormId: ''
+    linkedFormId: '',
+    geoRequired: false,
+    geoLocation: {
+      latitude: null,
+      longitude: null,
+      radius: 100
+    },
+    orgList: [],
+    minVisitDuration: null,
+    backgroundTracking: false,
+    minTimePerStop: null,
+    partnerVisibility: false,
+    allowedActions: {
+      orders: true,
+      payments: false,
+      feedback: true
+    },
+    visibility: 'Internal',
+    attachments: []
   };
-  newAttendeeEmail.value = '';
-  newTag.value = '';
 };
 
-const addTag = () => {
-  if (!newTag.value.trim()) return;
-  if (form.value.tags.includes(newTag.value.trim())) {
-    alert('This tag already exists');
-    return;
-  }
-  form.value.tags.push(newTag.value.trim());
-  newTag.value = '';
-};
-
-const addAttendee = () => {
-  if (!newAttendeeEmail.value.trim()) return;
-  
-  // Check for duplicates
-  if (form.value.attendees.some(a => a.email === newAttendeeEmail.value)) {
-    alert('This attendee has already been added');
-    return;
-  }
-  
-  form.value.attendees.push({
-    email: newAttendeeEmail.value.trim(),
-    name: newAttendeeEmail.value.split('@')[0],
-    status: 'pending',
-    isOrganizer: false
-  });
-  
-  newAttendeeEmail.value = '';
-};
-
-const removeAttendee = (index) => {
-  form.value.attendees.splice(index, 1);
-};
 
 const fetchUsers = async () => {
   try {
@@ -511,43 +836,6 @@ const fetchUsers = async () => {
   }
 };
 
-const fetchRelatedRecords = async (type) => {
-  try {
-    let endpoint = '';
-    switch (type) {
-      case 'Contact':
-        endpoint = '/people';
-        break;
-      case 'Deal':
-        endpoint = '/deals';
-        break;
-      case 'Task':
-        endpoint = '/tasks';
-        break;
-      case 'Organization':
-        endpoint = '/organization';
-        break;
-    }
-    
-    if (endpoint) {
-      const response = await apiClient.get(endpoint, { params: { limit: 100 } });
-      if (response.success) {
-        relatedRecords.value = response.data;
-      }
-    }
-  } catch (error) {
-    console.error('Error fetching related records:', error);
-  }
-};
-
-const getRecordName = (record) => {
-  if (record.name) return record.name;
-  if (record.title) return record.title;
-  if (record.first_name || record.last_name) {
-    return `${record.first_name || ''} ${record.last_name || ''}`.trim();
-  }
-  return 'Unknown';
-};
 
 const handleSubmit = async () => {
   saving.value = true;
@@ -555,31 +843,71 @@ const handleSubmit = async () => {
   try {
     const payload = {
       eventName: form.value.eventName,
-      agendaNotes: form.value.agendaNotes,
+      notes: form.value.notes || '',
       eventType: form.value.eventType,
       status: form.value.status,
       eventOwnerId: form.value.eventOwnerId || currentUser.value._id,
       startDateTime: new Date(form.value.startDateTime).toISOString(),
       endDateTime: new Date(form.value.endDateTime).toISOString(),
       location: form.value.location || '',
-      reminderAt: form.value.reminderAt ? new Date(form.value.reminderAt).toISOString() : null,
-      attendees: form.value.attendees,
-      tags: form.value.tags || []
+      recurrence: form.value.recurrence || null,
+      visibility: form.value.visibility || 'Internal'
     };
     
-    // Add related record if selected
-    if (form.value.relatedToType && form.value.relatedToId) {
-      payload.relatedToType = form.value.relatedToType;
+    // Add linked organization if selected
+    if (form.value.relatedToId) {
       payload.relatedToId = form.value.relatedToId;
     }
     
-    // Add linked records if provided
-    if (form.value.linkedTaskId) {
-      payload.linkedTaskId = form.value.linkedTaskId;
-    }
-    if (form.value.linkedFormId) {
+    // Add linked form if provided (convert empty string to null)
+    if (form.value.linkedFormId && form.value.linkedFormId.trim() !== '') {
       payload.linkedFormId = form.value.linkedFormId;
+    } else {
+      // Explicitly set to null if empty to ensure it's cleared
+      payload.linkedFormId = null;
     }
+    
+    console.log('[EventFormModal] Submitting event with linkedFormId:', payload.linkedFormId, 'form.value.linkedFormId:', form.value.linkedFormId);
+    
+    // Add GEO and event-type specific fields
+    payload.geoRequired = form.value.geoRequired || false;
+    if (form.value.geoLocation && form.value.geoLocation.latitude) {
+      payload.geoLocation = form.value.geoLocation;
+    }
+    
+    // Add multi-org fields
+    if (isMultiOrgRoute.value && form.value.orgList.length > 0) {
+      payload.orgList = form.value.orgList.map(org => ({
+        organizationId: org.organizationId,
+        sequence: org.sequence,
+        status: 'PENDING'
+      }));
+      payload.isMultiOrg = true;
+    }
+    
+    // Add audit-specific fields
+    if (requiresAuditForm.value) {
+      if (form.value.minVisitDuration) {
+        payload.minVisitDuration = form.value.minVisitDuration;
+      }
+      if (form.value.eventType === 'External Audit Beat') {
+        payload.backgroundTracking = form.value.backgroundTracking;
+      }
+      if (form.value.eventType === 'External Audit — Single Org') {
+        payload.partnerVisibility = form.value.partnerVisibility;
+      }
+    }
+    
+    // Add field sales specific fields
+    if (form.value.eventType === 'Field Sales Beat') {
+      payload.allowedActions = form.value.allowedActions;
+      if (form.value.minTimePerStop) {
+        payload.minTimePerStop = form.value.minTimePerStop;
+      }
+    }
+    
+    // Add visibility
+    payload.visibility = form.value.visibility || 'Internal';
     
     let response;
     if (isEditing.value) {

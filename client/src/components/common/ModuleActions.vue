@@ -26,6 +26,7 @@
 
     <!-- Create Button -->
     <PermissionButton
+      v-if="showCreate"
       :module="module"
       action="create"
       variant="primary"
@@ -49,6 +50,10 @@ defineProps({
   createLabel: {
     type: String,
     default: 'New'
+  },
+  showCreate: {
+    type: Boolean,
+    default: true
   },
   showImport: {
     type: Boolean,

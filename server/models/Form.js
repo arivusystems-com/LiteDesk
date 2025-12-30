@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
-// Question Schema (nested in subsections)
+// Question Schema (nested in subsections and sections)
 const questionSchema = new Schema({
     questionId: {
         type: String,
@@ -14,7 +14,7 @@ const questionSchema = new Schema({
     },
     type: {
         type: String,
-        enum: ['Text', 'Dropdown', 'Rating', 'File', 'Signature', 'Yes-No'],
+        enum: ['Text', 'Textarea', 'Dropdown', 'Rating', 'File', 'Signature', 'Yes-No', 'Number'],
         required: true,
         default: 'Text'
     },
@@ -26,9 +26,76 @@ const questionSchema = new Schema({
         type: Boolean,
         default: false
     },
+    helpText: {
+        type: String,
+        trim: true
+    },
+    evidence: {
+        enabled: {
+            type: Boolean,
+            default: false
+        },
+        rules: [{
+            when: {
+                type: String,
+                required: true
+            },
+            comment: {
+                enabled: {
+                    type: Boolean,
+                    default: true
+                },
+                required: {
+                    type: String,
+                    enum: ['hidden', 'optional', 'required'],
+                    default: 'optional'
+                }
+            },
+            image: {
+                enabled: {
+                    type: Boolean,
+                    default: true
+                },
+                required: {
+                    type: String,
+                    enum: ['hidden', 'optional', 'required'],
+                    default: 'optional'
+                }
+            },
+            video: {
+                enabled: {
+                    type: Boolean,
+                    default: false
+                },
+                required: {
+                    type: String,
+                    enum: ['hidden', 'optional', 'required'],
+                    default: 'hidden'
+                }
+            }
+        }]
+    },
+    scoring: {
+        enabled: {
+            type: Boolean,
+            default: false
+        },
+        weight: {
+            type: Number,
+            default: 0,
+            min: 0,
+            max: 100
+        },
+        passCondition: Schema.Types.Mixed, // Flexible structure for different question types
+        critical: {
+            type: Boolean,
+            default: false
+        }
+    },
+    // Legacy field for backward compatibility
     scoringLogic: {
-        passValue: Schema.Types.Mixed, // e.g., "Yes" or 4
-        failValue: Schema.Types.Mixed, // e.g., "No" or < 4
+        passValue: Schema.Types.Mixed,
+        failValue: Schema.Types.Mixed,
         weightage: {
             type: Number,
             default: 0,
@@ -81,6 +148,19 @@ const subsectionSchema = new Schema({
         type: Number,
         default: 0
     },
+    subsectionScoring: {
+        weight: {
+            type: Number,
+            default: 1,
+            min: 0
+        },
+        threshold: {
+            type: Number,
+            default: 100,
+            min: 0,
+            max: 100
+        }
+    },
     questions: [questionSchema]
 }, { _id: false });
 
@@ -105,6 +185,24 @@ const sectionSchema = new Schema({
         type: Number,
         default: 0
     },
+    _isRootSection: {
+        type: Boolean,
+        default: false
+    },
+    sectionScoring: {
+        weight: {
+            type: Number,
+            default: 1,
+            min: 0
+        },
+        threshold: {
+            type: Number,
+            default: 100,
+            min: 0,
+            max: 100
+        }
+    },
+    questions: [questionSchema], // Sections can have questions directly (for flat mode)
     subsections: [subsectionSchema]
 }, { _id: false });
 
@@ -144,11 +242,6 @@ const FormSchema = new Schema({
 
     // 📝 FORM DETAILS TAB
     // **********************************
-    linkedModule: {
-        type: String,
-        enum: ['Organization', 'Deal', 'Task', 'Event', 'Lead', 'Contact', null],
-        default: null
-    },
     visibility: {
         type: String,
         enum: ['Internal', 'Partner', 'Public'],
@@ -156,7 +249,7 @@ const FormSchema = new Schema({
     },
     status: {
         type: String,
-        enum: ['Draft', 'Active', 'Closed'],
+        enum: ['Draft', 'Ready', 'Active', 'Archived'],
         default: 'Draft'
     },
     assignedTo: {
@@ -174,17 +267,6 @@ const FormSchema = new Schema({
     approvalRequired: {
         type: Boolean,
         default: false
-    },
-    linkedReport: {
-        type: Schema.Types.ObjectId,
-        ref: 'Report'
-    },
-    attachments: [{
-        type: String // File URLs
-    }],
-    notes: {
-        type: String,
-        trim: true
     },
 
     // 📊 SECTIONS & QUESTIONS (Hierarchical Structure)
@@ -279,31 +361,61 @@ const FormSchema = new Schema({
         }
     },
 
-    // 📄 RESPONSE TEMPLATE
+    // 📊 OUTCOMES & RULES
     // **********************************
-    responseTemplate: {
-        templateId: {
-            type: Schema.Types.ObjectId,
-            ref: 'ResponseTemplate'
+    outcomesAndRules: {
+        auditResultRule: {
+            type: String,
+            enum: ['any_section_fails', 'overall_score_below_threshold', 'critical_question_fails'],
+            default: 'overall_score_below_threshold'
         },
-        customTemplate: {
-            layout: Schema.Types.Mixed, // Drag-drop structure
-            includeComparison: {
+        reportingMetrics: {
+            overallCompliance: {
+                type: Boolean,
+                default: true
+            },
+            sectionWiseCompliance: {
+                type: Boolean,
+                default: true
+            },
+            evidenceCompletion: {
                 type: Boolean,
                 default: false
             },
-            includeTrends: {
-                type: Boolean,
-                default: false
-            },
-            includeCharts: {
-                type: Boolean,
-                default: false
-            },
-            includeCorrectiveActions: {
+            averageRating: {
                 type: Boolean,
                 default: false
             }
+        },
+        postSubmissionSignals: {
+            emitOnAuditFail: {
+                type: Boolean,
+                default: false
+            },
+            emitOnSectionFail: {
+                type: Boolean,
+                default: false
+            },
+            emitOnCriticalQuestionFail: {
+                type: Boolean,
+                default: false
+            },
+            emitOnMissingEvidence: {
+                type: Boolean,
+                default: false
+            }
+        }
+    },
+
+    // 📄 RESPONSE TEMPLATE
+    // **********************************
+    responseTemplate: {
+        templates: [{
+            type: Schema.Types.Mixed
+        }],
+        activeTemplateId: {
+            type: Schema.Types.ObjectId,
+            default: null
         }
     },
 
@@ -390,20 +502,36 @@ FormSchema.methods.getTotalQuestions = function() {
 
 // Method to validate form structure
 FormSchema.methods.validateStructure = function() {
-    if (!this.sections || this.sections.length === 0) {
+    // Get sections - handle both Mongoose document and plain object
+    const sections = this.sections || (this.toObject ? this.toObject().sections : null);
+    
+    if (!sections || !Array.isArray(sections) || sections.length === 0) {
         return { valid: false, error: 'Form must have at least one section' };
     }
     
     let hasQuestions = false;
-    this.sections.forEach(section => {
-        if (section.subsections && section.subsections.length > 0) {
-            section.subsections.forEach(subsection => {
-                if (subsection.questions && subsection.questions.length > 0) {
-                    hasQuestions = true;
-                }
-            });
+    for (const section of sections) {
+        if (!section) continue;
+        
+        // Check for questions directly in sections (flat mode)
+        const questions = section.questions;
+        if (Array.isArray(questions) && questions.length > 0) {
+            hasQuestions = true;
+            break; // Early exit if found
         }
-    });
+        
+        // Check for questions in subsections (hierarchical mode)
+        const subsections = section.subsections;
+        if (Array.isArray(subsections) && subsections.length > 0) {
+            for (const subsection of subsections) {
+                if (subsection && Array.isArray(subsection.questions) && subsection.questions.length > 0) {
+                    hasQuestions = true;
+                    break;
+                }
+            }
+            if (hasQuestions) break;
+        }
+    }
     
     if (!hasQuestions) {
         return { valid: false, error: 'Form must have at least one question' };

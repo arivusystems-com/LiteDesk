@@ -1,3 +1,14 @@
+/**
+ * @deprecated ResponseTemplate Model
+ * 
+ * This model is NOT currently used by the PDF generation system.
+ * Templates are stored in Form.responseTemplate.templates array.
+ * 
+ * This model may be removed in the future if it remains unused.
+ * 
+ * @see Form.responseTemplate field for the authoritative template storage
+ */
+
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
