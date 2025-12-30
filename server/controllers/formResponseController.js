@@ -61,7 +61,18 @@ exports.submitForm = async (req, res) => {
             organizationId = req.user.organizationId;
         }
         
-        const { responseDetails, linkedTo, eventId } = req.body;
+        const { responseDetails, linkedTo, eventId, responseId } = req.body;
+        
+        console.log('[submitForm] 📥 Received submission request:', {
+            formId: req.params.id || req.params.slug,
+            hasResponseDetails: !!(responseDetails && responseDetails.length > 0),
+            responseDetailsCount: responseDetails?.length || 0,
+            eventId: eventId,
+            responseId: responseId,
+            linkedTo: linkedTo,
+            hasLinkedTo: !!linkedTo,
+            bodyKeys: Object.keys(req.body)
+        });
         
         // Validate response details
         if (!responseDetails || !Array.isArray(responseDetails) || responseDetails.length === 0) {
@@ -71,16 +82,86 @@ exports.submitForm = async (req, res) => {
             });
         }
         
+        // If responseId is provided, use it directly (from check-in)
+        // This prevents duplicate creation - THIS IS THE PRIMARY METHOD
+        let existingResponse = null;
+        if (responseId) {
+            const mongoose = require('mongoose');
+            console.log('[submitForm] 🔍 Looking for existing response by responseId:', {
+                responseId: responseId,
+                responseIdType: typeof responseId,
+                isValid: mongoose.Types.ObjectId.isValid(responseId),
+                formId: form._id,
+                organizationId: organizationId
+            });
+            
+            if (mongoose.Types.ObjectId.isValid(responseId)) {
+                // Try exact match first
+                existingResponse = await FormResponse.findOne({
+                    _id: responseId,
+                    organizationId: organizationId,
+                    formId: form._id
+                });
+                
+                // If not found, try without formId constraint (in case formId doesn't match exactly)
+                if (!existingResponse) {
+                    existingResponse = await FormResponse.findOne({
+                        _id: responseId,
+                        organizationId: organizationId
+                    });
+                }
+                
+                if (existingResponse) {
+                    console.log('[submitForm] ✅ Found existing response by responseId:', {
+                        responseId: existingResponse._id,
+                        executionStatus: existingResponse.executionStatus,
+                        formId: existingResponse.formId,
+                        linkedTo: existingResponse.linkedTo,
+                        linkedToId: existingResponse.linkedTo?.id
+                    });
+                } else {
+                    console.log('[submitForm] ❌ Response not found by responseId:', responseId);
+                }
+            } else {
+                console.warn('[submitForm] ⚠️ Invalid responseId format:', responseId);
+            }
+        } else {
+            console.log('[submitForm] ⚠️ No responseId provided in request body');
+        }
+        
         // If eventId is provided, link to event
+        // Note: eventId can be either UUID string (eventId field) or ObjectId (_id field)
+        // When stored in FormResponse.linkedTo.id, it's stored as ObjectId (event._id)
         let finalLinkedTo = linkedTo;
         if (eventId) {
+            // Find the event to get its ObjectId (events can be identified by _id or eventId)
+            const Event = require('../models/Event');
+            const mongoose = require('mongoose');
+            let eventObjectId = eventId;
+            
+            // If eventId is not a valid ObjectId (24 hex chars), it's likely a UUID
+            // Find the event by eventId to get its _id
+            if (!mongoose.Types.ObjectId.isValid(eventId) || eventId.toString().length !== 24) {
+                const event = await Event.findOne({
+                    eventId: eventId,
+                    organizationId: organizationId
+                }).select('_id');
+                if (event) {
+                    eventObjectId = event._id;
+                }
+            } else {
+                // It's already an ObjectId format
+                eventObjectId = new mongoose.Types.ObjectId(eventId);
+            }
+            
             finalLinkedTo = {
                 type: 'Event',
-                id: eventId
+                id: eventObjectId
             };
         }
         
         // Process submission using service
+        // Pass existingResponse if found to prevent duplicate creation
         const processedResponse = await formProcessingService.processSubmission({
             form,
             responseDetails,
@@ -88,7 +169,8 @@ exports.submitForm = async (req, res) => {
             organizationId,
             submittedBy: req.user ? req.user._id : null,
             ipAddress: req.ip || req.connection.remoteAddress,
-            userAgent: req.get('user-agent')
+            userAgent: req.get('user-agent'),
+            existingResponse: existingResponse // Pass existing response to prevent duplicate
         });
         
         // If eventId provided, update event metadata with form response ID
@@ -216,19 +298,21 @@ exports.getAllResponses = async (req, res) => {
         let responses;
         try {
             responses = await FormResponse.find(query)
-                .populate('formId', 'name formId formType')
+                .populate('formId', '_id name formId formType')
                 .populate('submittedBy', 'firstName lastName email')
                 .populate('linkedTo.id')
                 .sort(sort)
                 .limit(limit)
-                .skip(skip);
+                .skip(skip)
+                .lean(); // Convert to plain objects for better JSON serialization
         } catch (populateError) {
             console.error('Populate error in getAllResponses:', populateError);
-            // Try without populate if there's an error
+            // Try without populate if there's an error - formId will still be included as ObjectId string
             responses = await FormResponse.find(query)
                 .sort(sort)
                 .limit(limit)
-                .skip(skip);
+                .skip(skip)
+                .lean(); // Convert to plain objects for better JSON serialization
         }
         
         const total = await FormResponse.countDocuments(query);
@@ -1282,7 +1366,6 @@ exports.generateComprehensiveReport = async (req, res) => {
     try {
         console.log('Generate comprehensive report called for form:', req.params.id, 'response:', req.params.responseId);
         const enhancedPdfReportService = require('../services/enhancedPdfReportService');
-        const reportTemplateService = require('../services/reportTemplateService');
         
         const response = await FormResponse.findOne({
             _id: req.params.responseId,
@@ -1316,38 +1399,13 @@ exports.generateComprehensiveReport = async (req, res) => {
             });
         }
 
-        // Validate that formId exists and is populated
+        // Validate that formId exists
         if (!response.formId) {
             console.error('FormId is null/undefined for response:', req.params.responseId);
             return res.status(400).json({
                 success: false,
                 message: 'Form data not found. Cannot generate report.'
             });
-        }
-        
-        // Check if formId is populated (has a name property) - if not, populate it
-        if (typeof response.formId === 'object' && !response.formId.name) {
-            console.log('FormId not fully populated, fetching form...');
-            const formIdToFetch = response.formId._id || response.formId || req.params.id;
-            const form = await Form.findById(formIdToFetch);
-            if (!form) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Form not found. Cannot generate report.'
-                });
-            }
-            response.formId = form;
-        } else if (typeof response.formId !== 'object') {
-            // formId is just an ObjectId string, populate it
-            console.log('FormId is just an ObjectId string, populating...');
-            const form = await Form.findById(response.formId);
-            if (!form) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Form not found. Cannot generate report.'
-                });
-            }
-            response.formId = form;
         }
 
         // Validate that organizationId exists
@@ -1359,35 +1417,45 @@ exports.generateComprehensiveReport = async (req, res) => {
             });
         }
 
-        // Get template configuration from request body or use default
-        const customTemplate = req.body.templateConfig || {};
-        const templateConfig = reportTemplateService.mergeTemplate(customTemplate);
+        // Ensure form is fully populated and validate it has a responseTemplate
+        let form;
+        if (typeof response.formId === 'object' && response.formId && response.formId._id) {
+            // formId is already populated, but we need to ensure it has the responseTemplate field
+            form = response.formId;
+            // If form was populated but doesn't have responseTemplate, fetch it fresh
+            if (!form.responseTemplate) {
+                form = await Form.findById(form._id);
+            }
+        } else {
+            // formId is just an ObjectId, fetch the full form
+            const formIdToFetch = response.formId || req.params.id;
+            form = await Form.findById(formIdToFetch);
+        }
         
-        // Validate template
-        const validation = reportTemplateService.validateTemplate(templateConfig);
-        if (!validation.valid) {
+        if (!form) {
+            console.error('Form not found for response:', req.params.responseId);
+            return res.status(404).json({
+                success: false,
+                message: 'Form not found. Cannot generate report.'
+            });
+        }
+        
+        // Validate that form has a responseTemplate with templates
+        if (!form.responseTemplate || !form.responseTemplate.templates || !Array.isArray(form.responseTemplate.templates) || form.responseTemplate.templates.length === 0) {
+            console.error('Form missing responseTemplate or templates array. Form ID:', form._id);
             return res.status(400).json({
                 success: false,
-                message: 'Invalid template configuration',
-                errors: validation.errors
+                message: 'No active template found. Please create a response template in the Response Template Builder.'
             });
         }
 
-        // Set defaults from response if not provided
-        if (!templateConfig.hotelName && response.formId.name) {
-            templateConfig.hotelName = response.formId.name;
-        }
-        if (!templateConfig.checkInDate) {
-            templateConfig.checkInDate = response.submittedAt;
-        }
-        if (!templateConfig.checkOutDate) {
-            templateConfig.checkOutDate = response.submittedAt;
-        }
+        // Get template configuration from request body (legacy support, merged into template if needed)
+        const customTemplateConfig = req.body.templateConfig || {};
 
         // Generate comprehensive PDF report
         const options = {
             organizationId: req.user.organizationId.toString(),
-            templateConfig,
+            templateConfig: customTemplateConfig, // Legacy template config for backward compatibility
             includeComparison: req.body.includeComparison || false,
             previousResponseId: req.body.previousResponseId || null
         };
@@ -1434,6 +1502,35 @@ exports.generateComprehensiveReport = async (req, res) => {
                 responseId: req.params.responseId
             }
         });
+        
+        // Handle template validation errors as 400 (bad request) instead of 500
+        if (error.message && (
+            error.message.includes('Template validation failed') ||
+            error.message.includes('missing required core blocks') ||
+            error.message.includes('No active template found') ||
+            error.message.includes('template') && error.message.includes('not found')
+        )) {
+            return res.status(400).json({
+                success: false,
+                message: error.message || 'Template validation failed. Please ensure your response template has all required blocks.',
+                error: error.message
+            });
+        }
+        
+        // Handle form/response not found errors as 404
+        if (error.message && (
+            error.message.includes('not found') ||
+            error.message.includes('Form ID not found') ||
+            error.message.includes('Response not found')
+        )) {
+            return res.status(404).json({
+                success: false,
+                message: error.message || 'Resource not found.',
+                error: error.message
+            });
+        }
+        
+        // All other errors return 500
         res.status(500).json({
             success: false,
             message: 'Error generating comprehensive report.',
@@ -1481,7 +1578,7 @@ exports.archiveResponse = async (req, res) => {
         const updatedResponse = await FormResponse.findById(response._id)
             .populate('submittedBy', 'firstName lastName email')
             .populate('archivedBy', 'firstName lastName email')
-            .populate('formId', 'name formId formType');
+            .populate('formId', '_id name formId formType');
         
         res.status(200).json({
             success: true,
@@ -1536,7 +1633,7 @@ exports.invalidateResponse = async (req, res) => {
         const updatedResponse = await FormResponse.findById(response._id)
             .populate('submittedBy', 'firstName lastName email')
             .populate('invalidatedBy', 'firstName lastName email')
-            .populate('formId', 'name formId formType');
+            .populate('formId', '_id name formId formType');
         
         res.status(200).json({
             success: true,
@@ -1585,7 +1682,7 @@ exports.restoreResponse = async (req, res) => {
         
         const updatedResponse = await FormResponse.findById(response._id)
             .populate('submittedBy', 'firstName lastName email')
-            .populate('formId', 'name formId formType');
+            .populate('formId', '_id name formId formType');
         
         res.status(200).json({
             success: true,

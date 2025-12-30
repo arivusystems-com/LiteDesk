@@ -10,7 +10,7 @@ const formScoringService = require('./formScoringService');
  * @returns {Promise<FormResponse>} Processed response
  */
 exports.processSubmission = async (params) => {
-    const { form, responseDetails, linkedTo, organizationId, submittedBy, ipAddress, userAgent } = params;
+    const { form, responseDetails, linkedTo, organizationId, submittedBy, ipAddress, userAgent, existingResponse } = params;
     
     try {
         // Validate responses against form structure
@@ -22,19 +22,35 @@ exports.processSubmission = async (params) => {
         // Calculate scores using scoring service
         const scoredResponse = await formScoringService.scoreResponse(form, responseDetails);
         
-        // Ensure responseDetails have section/subsection IDs
+        // Ensure responseDetails have section/subsection IDs (if not already set)
         scoredResponse.responseDetails = scoredResponse.responseDetails.map(detail => {
-            // Find the question in form to get section/subsection IDs
-            const question = findQuestionInForm(form, detail.questionId);
-            if (question) {
-                // Find which section/subsection contains this question
-                for (const section of form.sections) {
+            // If sectionId and subsectionId are already set, keep them
+            if (detail.sectionId) {
+                return detail;
+            }
+            
+            // Find which section/subsection contains this question
+            for (const section of form.sections) {
+                // Check section-level questions first
+                if (section.questions && Array.isArray(section.questions)) {
+                    const foundQuestion = section.questions.find(q => q.questionId === detail.questionId);
+                    if (foundQuestion) {
+                        detail.sectionId = section.sectionId;
+                        // No subsectionId for section-level questions
+                        return detail;
+                    }
+                }
+                
+                // Check subsection-level questions
+                if (section.subsections && Array.isArray(section.subsections)) {
                     for (const subsection of section.subsections) {
-                        const foundQuestion = subsection.questions.find(q => q.questionId === detail.questionId);
-                        if (foundQuestion) {
-                            detail.sectionId = section.sectionId;
-                            detail.subsectionId = subsection.subsectionId;
-                            break;
+                        if (subsection.questions && Array.isArray(subsection.questions)) {
+                            const foundQuestion = subsection.questions.find(q => q.questionId === detail.questionId);
+                            if (foundQuestion) {
+                                detail.sectionId = section.sectionId;
+                                detail.subsectionId = subsection.subsectionId;
+                                return detail;
+                            }
                         }
                     }
                 }
@@ -53,19 +69,124 @@ exports.processSubmission = async (params) => {
         }
         
         // Check if response already exists (from event check-in)
-        let formResponse = null;
-        if (linkedTo && linkedTo.type === 'Event' && linkedTo.id) {
-            formResponse = await FormResponse.findOne({
-                formId: form._id,
-                organizationId: organizationId,
-                'linkedTo.type': 'Event',
-                'linkedTo.id': linkedTo.id,
-                executionStatus: { $in: ['Not Started', 'In Progress'] }
-            });
+        // First check if existingResponse was passed (from responseId parameter)
+        let formResponse = existingResponse || null;
+        
+        console.log('[processSubmission] Checking for existing response:', {
+            hasExistingResponse: !!existingResponse,
+            existingResponseId: existingResponse?._id,
+            hasLinkedTo: !!(linkedTo && linkedTo.type === 'Event' && linkedTo.id),
+            linkedToId: linkedTo?.id
+        });
+        
+        // If not found by responseId, try to find by event+form combination
+        if (!formResponse && linkedTo && linkedTo.type === 'Event' && linkedTo.id) {
+            const mongoose = require('mongoose');
+            const Event = require('../models/Event');
+            const eventId = linkedTo.id;
+            
+            // Try to find the event to get its ObjectId
+            // Events can be identified by either _id or eventId
+            let eventObjectId = null;
+            if (mongoose.Types.ObjectId.isValid(eventId) && eventId.toString().length === 24) {
+                // It's already an ObjectId format
+                eventObjectId = new mongoose.Types.ObjectId(eventId);
+            } else {
+                // It's likely a UUID string - find the event by eventId to get its _id
+                const event = await Event.findOne({
+                    eventId: eventId,
+                    organizationId: organizationId
+                }).select('_id');
+                if (event) {
+                    eventObjectId = event._id;
+                }
+            }
+            
+            // Build query to find existing response
+            // First, try to find ANY response for this event+form combination (regardless of status)
+            // This ensures we update the response created during check-in instead of creating a duplicate
+            if (eventObjectId) {
+                // Use aggregation to find response with string comparison (more reliable than ObjectId comparison)
+                // This handles cases where ObjectId instances don't match exactly
+                const mongoose = require('mongoose');
+                const responses = await FormResponse.aggregate([
+                    {
+                        $match: {
+                            formId: mongoose.Types.ObjectId.isValid(form._id) 
+                                ? new mongoose.Types.ObjectId(form._id) 
+                                : form._id,
+                            organizationId: mongoose.Types.ObjectId.isValid(organizationId)
+                                ? new mongoose.Types.ObjectId(organizationId)
+                                : organizationId,
+                            'linkedTo.type': 'Event'
+                        }
+                    },
+                    {
+                        $addFields: {
+                            linkedToIdString: { $toString: '$linkedTo.id' },
+                            eventObjectIdString: eventObjectId.toString()
+                        }
+                    },
+                    {
+                        $match: {
+                            $expr: {
+                                $eq: ['$linkedToIdString', '$eventObjectIdString']
+                            }
+                        }
+                    }
+                ]);
+                
+                if (responses && responses.length > 0) {
+                    // Convert back to document
+                    formResponse = await FormResponse.findById(responses[0]._id);
+                    console.log('[processSubmission] Found existing response via aggregation:', {
+                        responseId: formResponse._id,
+                        executionStatus: formResponse.executionStatus,
+                        eventObjectId: eventObjectId.toString()
+                    });
+                } else {
+                    // Fallback to direct query
+                    let query = {
+                        formId: form._id,
+                        organizationId: organizationId,
+                        'linkedTo.type': 'Event',
+                        'linkedTo.id': eventObjectId
+                    };
+                    formResponse = await FormResponse.findOne(query);
+                    
+                    if (formResponse) {
+                        console.log('[processSubmission] Found existing response via direct query:', {
+                            responseId: formResponse._id,
+                            executionStatus: formResponse.executionStatus
+                        });
+                    } else {
+                        console.log('[processSubmission] No existing response found for event:', eventObjectId.toString());
+                    }
+                }
+            } else {
+                // If we couldn't convert to ObjectId, try finding by the original eventId string
+                // This handles cases where the event lookup failed
+                console.warn('[processSubmission] Could not convert eventId to ObjectId, trying string match:', eventId);
+                formResponse = await FormResponse.findOne({
+                    formId: form._id,
+                    organizationId: organizationId,
+                    'linkedTo.type': 'Event',
+                    $or: [
+                        { 'linkedTo.id': eventId },
+                        { 'linkedTo.id': eventId.toString() }
+                    ]
+                });
+            }
         }
         
         if (formResponse) {
             // Update existing response (from event check-in)
+            console.log('[processSubmission] ✅ Updating existing response:', {
+                responseId: formResponse._id,
+                currentStatus: formResponse.executionStatus,
+                willUpdateTo: 'Submitted'
+            });
+            
             formResponse.responseDetails = scoredResponse.responseDetails;
             formResponse.sectionScores = scoredResponse.sectionScores;
             formResponse.kpis = scoredResponse.kpis;
@@ -76,8 +197,17 @@ exports.processSubmission = async (params) => {
             formResponse.ipAddress = ipAddress || formResponse.ipAddress;
             formResponse.userAgent = userAgent || formResponse.userAgent;
             await formResponse.save();
+            
+            console.log('[processSubmission] ✅ Successfully updated existing response');
         } else {
             // Create new response document
+            console.log('[processSubmission] ⚠️ No existing response found, creating new one');
+            console.log('[processSubmission] Creating new response with:', {
+                formId: form._id,
+                organizationId: organizationId,
+                linkedTo: linkedTo
+            });
+            
             // reviewStatus will be computed automatically by pre-save hook based on business rules
             const responseData = {
                 organizationId: organizationId.toString ? organizationId.toString() : organizationId,
@@ -95,6 +225,7 @@ exports.processSubmission = async (params) => {
             };
             
             formResponse = await FormResponse.create(responseData);
+            console.log('[processSubmission] ✅ Created new response:', formResponse._id);
         }
         
         // Update form analytics
@@ -127,27 +258,60 @@ async function validateSubmission(form, responseDetails) {
         return { valid: false, error: 'Form has no sections' };
     }
     
-    // Collect all question IDs from form
+    // Collect all question IDs from form (section-level and subsection-level)
     const formQuestionIds = new Set();
     form.sections.forEach(section => {
-        section.subsections.forEach(subsection => {
-            subsection.questions.forEach(question => {
-                formQuestionIds.add(question.questionId);
+        // Check section-level questions
+        if (section.questions && Array.isArray(section.questions)) {
+            section.questions.forEach(question => {
+                if (question.questionId) {
+                    formQuestionIds.add(question.questionId);
+                }
             });
-        });
+        }
+        
+        // Check subsection-level questions
+        if (section.subsections && Array.isArray(section.subsections)) {
+            section.subsections.forEach(subsection => {
+                if (subsection.questions && Array.isArray(subsection.questions)) {
+                    subsection.questions.forEach(question => {
+                        if (question.questionId) {
+                            formQuestionIds.add(question.questionId);
+                        }
+                    });
+                }
+            });
+        }
     });
     
     // Check if all mandatory questions are answered
     const answeredQuestionIds = new Set(responseDetails.map(detail => detail.questionId));
     
     for (const section of form.sections) {
-        for (const subsection of section.subsections) {
-            for (const question of subsection.questions) {
+        // Check section-level mandatory questions
+        if (section.questions && Array.isArray(section.questions)) {
+            for (const question of section.questions) {
                 if (question.mandatory && !answeredQuestionIds.has(question.questionId)) {
                     return { 
                         valid: false, 
                         error: `Mandatory question "${question.questionText}" is not answered` 
                     };
+                }
+            }
+        }
+        
+        // Check subsection-level mandatory questions
+        if (section.subsections && Array.isArray(section.subsections)) {
+            for (const subsection of section.subsections) {
+                if (subsection.questions && Array.isArray(subsection.questions)) {
+                    for (const question of subsection.questions) {
+                        if (question.mandatory && !answeredQuestionIds.has(question.questionId)) {
+                            return { 
+                                valid: false, 
+                                error: `Mandatory question "${question.questionText}" is not answered` 
+                            };
+                        }
+                    }
                 }
             }
         }
@@ -341,14 +505,32 @@ exports.mapFormDataToContact = (form, responseDetails) => {
 };
 
 /**
- * Find question in form structure
+ * Find question in form structure (checks both section-level and subsection-level questions)
  */
 function findQuestionInForm(form, questionId) {
+    if (!form.sections || !Array.isArray(form.sections)) {
+        return null;
+    }
+    
     for (const section of form.sections) {
-        for (const subsection of section.subsections) {
-            for (const question of subsection.questions) {
+        // Check section-level questions first
+        if (section.questions && Array.isArray(section.questions)) {
+            for (const question of section.questions) {
                 if (question.questionId === questionId) {
                     return question;
+                }
+            }
+        }
+        
+        // Check subsection-level questions
+        if (section.subsections && Array.isArray(section.subsections)) {
+            for (const subsection of section.subsections) {
+                if (subsection.questions && Array.isArray(subsection.questions)) {
+                    for (const question of subsection.questions) {
+                        if (question.questionId === questionId) {
+                            return question;
+                        }
+                    }
                 }
             }
         }

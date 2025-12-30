@@ -65,8 +65,9 @@ const eventSchema = new Schema({
       'CHECKED_IN',       // User checked in (GEO mode)
       'IN_PROGRESS',      // Currently executing
       'PAUSED',           // Auto-paused (GEO exit) or manual pause
-      'CHECKED_OUT',      // User checked out (GEO mode)
-      'SUBMITTED',        // Audit/Form submitted
+      'CHECKOUT_PENDING', // Form submitted, awaiting checkout
+      'CHECKED_OUT',      // User checked out (GEO mode or after form submission)
+      'SUBMITTED',        // Audit/Form submitted (legacy, use CHECKOUT_PENDING)
       'PENDING_CORRECTIVE', // Audit needs corrective action
       'NEEDS_REVIEW',     // Corrective submitted, awaiting review
       'APPROVED',         // Corrective approved

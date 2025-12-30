@@ -1,16 +1,21 @@
 /**
  * Report Template Service
  * Manages customizable report templates
+ * 
+ * NOTE: Branding is now defined at template level (form.responseTemplate.templates[].branding)
+ * This service provides backward compatibility for legacy PDF generation.
+ * When block-based rendering is implemented, branding will come from template.branding.
  */
 
 /**
- * Get default template configuration
+ * Get default template configuration (legacy - for backward compatibility)
+ * @deprecated Branding should come from template.branding in form.responseTemplate
  */
 exports.getDefaultTemplate = () => {
     return {
         // Company/Brand Information
         companyName: 'GUEST DELIGHT INTERNATIONAL',
-        logo: null, // Path to logo image file
+        logo: null, // Path to logo image file (deprecated - use template.branding.logo)
         hotelName: null, // Will be set from form name
         address: '',
         generalManager: '',
@@ -27,7 +32,7 @@ exports.getDefaultTemplate = () => {
         executiveSummary: null, // Auto-generated if not provided
         executiveSummaryDetails: [], // Additional paragraphs
         
-        // Colors (can be customized)
+        // Colors (deprecated - use template.branding.colors)
         colors: {
             primary: '#FF6B35', // Orange
             secondary: '#004E89', // Dark blue
@@ -51,6 +56,47 @@ exports.getDefaultTemplate = () => {
         includeComparison: false,
         previousResponseId: null
     };
+};
+
+/**
+ * Extract branding from template configuration
+ * @param {Object} template - Template object with branding property
+ * @returns {Object} Branding configuration
+ */
+exports.extractBrandingFromTemplate = (template) => {
+    if (!template || !template.branding) {
+        // Fallback to default branding
+        return {
+            logo: null,
+            colors: {
+                primary: '#FF6B35',
+                secondary: '#004E89',
+                success: '#4CAF50',
+                danger: '#F44336',
+                warning: '#FF9800',
+                text: '#333333',
+                textLight: '#666666',
+                background: '#FFFFFF'
+            },
+            typography: {
+                fontFamily: 'Arial, sans-serif',
+                headingFont: 'Arial, sans-serif',
+                baseFontSize: 12
+            },
+            header: {
+                showLogo: true,
+                showCompanyName: true,
+                alignment: 'center'
+            },
+            footer: {
+                showDisclaimer: true,
+                disclaimerText: 'Confidential property of GDI',
+                alignment: 'right'
+            }
+        };
+    }
+    
+    return template.branding;
 };
 
 /**

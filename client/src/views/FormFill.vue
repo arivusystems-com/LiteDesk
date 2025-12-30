@@ -636,8 +636,9 @@ const formResponseId = ref(null);
 const autoSaveStatus = ref(null);
 const autoSaveTimer = ref(null);
 
-// Get eventId from query params
-const eventId = ref(route.query.eventId || null);
+// Get eventId and responseId from query params (make them reactive to route changes)
+const eventId = computed(() => route.query.eventId || null);
+const responseIdFromQuery = computed(() => route.query.responseId || null);
 
 // Computed properties
 const totalQuestions = computed(() => {
@@ -824,6 +825,9 @@ const fetchForm = async () => {
           }
         });
       }
+      
+      // Check if form has already been submitted (persist success state across refreshes)
+      await checkIfAlreadySubmitted();
     } else {
       error.value = 'Form not found or access denied';
     }
@@ -832,6 +836,68 @@ const fetchForm = async () => {
     error.value = err.message || 'Failed to load form';
   } finally {
     loading.value = false;
+  }
+};
+
+// Check if the form response has already been submitted
+const checkIfAlreadySubmitted = async () => {
+  try {
+    // Get responseId from various sources
+    let responseId = null;
+    
+    // Try URL query params first
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      responseId = urlParams.get('responseId') || null;
+    } catch (e) {
+      // Ignore
+    }
+    
+    // Try route.query
+    if (!responseId) {
+      responseId = route.query?.responseId || responseIdFromQuery.value || formResponseId.value || null;
+    }
+    
+    // Try sessionStorage as fallback
+    if (!responseId && eventId.value) {
+      try {
+        const storedResponseId = sessionStorage.getItem(`formResponse_${route.params.id}_${eventId.value}`);
+        if (storedResponseId) {
+          responseId = storedResponseId;
+        }
+      } catch (e) {
+        // Ignore
+      }
+    }
+    
+    // If we have a responseId, check if it's already submitted
+    if (responseId) {
+      console.log('[FormFill] Checking if response is already submitted:', responseId);
+      try {
+        const response = await apiClient.get(`/forms/${route.params.id}/responses/${responseId}`);
+        if (response.success && response.data) {
+          const formResponse = response.data;
+          // Check if response is submitted
+          if (formResponse.executionStatus === 'Submitted') {
+            console.log('[FormFill] Response already submitted, showing success state');
+            submitted.value = true;
+            formResponseId.value = responseId;
+            // Don't initialize form data if already submitted
+            formData.value = {};
+          } else {
+            console.log('[FormFill] Response exists but not submitted yet, status:', formResponse.executionStatus);
+            // If response exists but not submitted, we can optionally load the existing data
+            // For now, just continue with the form
+          }
+        }
+      } catch (err) {
+        console.warn('[FormFill] Could not fetch response status:', err);
+        // If we can't fetch the response, continue with the form
+      }
+    }
+  } catch (err) {
+    console.error('[FormFill] Error checking if already submitted:', err);
+    // Continue with form if check fails
   }
 };
 
@@ -901,11 +967,91 @@ const submitForm = async () => {
         };
       });
 
+    // Get current values - ALWAYS parse from URL first as primary method
+    // route.query might not be populated in some Vue Router configurations
+    let currentEventId = null;
+    let currentResponseId = null;
+    
+    try {
+      // Primary method: Parse directly from URL
+      const urlParams = new URLSearchParams(window.location.search);
+      currentEventId = urlParams.get('eventId') || null;
+      currentResponseId = urlParams.get('responseId') || null;
+      
+      console.log('[FormFill] 🔍 Parsed from URL:', {
+        urlSearch: window.location.search,
+        urlEventId: currentEventId,
+        urlResponseId: currentResponseId,
+        allParams: Object.fromEntries(urlParams.entries())
+      });
+    } catch (e) {
+      console.warn('[FormFill] Failed to parse URL params:', e);
+    }
+    
+    // Fallback 1: Try route.query
+    if (!currentEventId) {
+      currentEventId = route.query?.eventId || eventId.value || null;
+    }
+    if (!currentResponseId) {
+      currentResponseId = route.query?.responseId || responseIdFromQuery.value || formResponseId.value || null;
+    }
+    
+    // Fallback 2: Try sessionStorage (stored during check-in navigation)
+    if (currentEventId && !currentResponseId) {
+      try {
+        const storedResponseId = sessionStorage.getItem(`formResponse_${route.params.id}_${currentEventId}`);
+        if (storedResponseId) {
+          currentResponseId = storedResponseId;
+          console.log('[FormFill] ✅ Found responseId in sessionStorage:', currentResponseId);
+        }
+      } catch (e) {
+        console.warn('[FormFill] Failed to read from sessionStorage:', e);
+      }
+    }
+    
+    // Normalize: ensure they're strings, not empty strings
+    if (currentEventId === '' || currentEventId === undefined) currentEventId = null;
+    if (currentResponseId === '' || currentResponseId === undefined) currentResponseId = null;
+    
+    console.log('[FormFill] 🔍 Reading query params:', {
+      windowLocationHref: window.location.href,
+      windowLocationSearch: window.location.search,
+      routeQueryEventId: route.query?.eventId,
+      routeQueryResponseId: route.query?.responseId,
+      routeQueryKeys: Object.keys(route.query || {}),
+      routeFullPath: route.fullPath,
+      routePath: route.path,
+      computedEventId: eventId.value,
+      computedResponseId: responseIdFromQuery.value,
+      formResponseId: formResponseId.value,
+      finalEventId: currentEventId,
+      finalResponseId: currentResponseId
+    });
+    
+    // Warn if we don't have the required params
+    if (!currentEventId && !currentResponseId) {
+      console.warn('[FormFill] ⚠️ No eventId or responseId found! URL should contain ?eventId=...&responseId=...');
+    }
+    
+    // Build submission data with proper event linking
     const submissionData = {
       responseDetails,
-      linkedTo: null,
-      eventId: eventId.value || null
+      linkedTo: currentEventId ? {
+        type: 'Event',
+        id: currentEventId
+      } : null,
+      eventId: currentEventId,
+      responseId: currentResponseId // Pass responseId if available
     };
+
+    console.log('[FormFill] 📤 Submitting form with:', {
+      formId: route.params.id,
+      eventId: currentEventId,
+      responseId: currentResponseId,
+      linkedTo: submissionData.linkedTo,
+      hasResponseDetails: submissionData.responseDetails.length > 0,
+      submissionDataKeys: Object.keys(submissionData)
+    });
 
     const response = await apiClient.post(`/forms/${route.params.id}/submit`, submissionData);
 
@@ -972,8 +1118,43 @@ const goBackToEvent = () => {
 };
 
 onMounted(() => {
+  console.log('[FormFill] 🚀 Component mounted with route:', {
+    path: route.path,
+    fullPath: route.fullPath,
+    query: route.query,
+    queryKeys: Object.keys(route.query || {}),
+    eventId: route.query?.eventId,
+    responseId: route.query?.responseId,
+    params: route.params,
+    windowLocationHref: window.location.href,
+    windowLocationSearch: window.location.search,
+    windowLocationHash: window.location.hash
+  });
+  
+  // Also check if query params are in the hash (Vue Router hash mode)
+  if (window.location.hash) {
+    try {
+      const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+      console.log('[FormFill] 🔍 Found params in hash:', {
+        hash: window.location.hash,
+        hashParams: Object.fromEntries(hashParams.entries())
+      });
+    } catch (e) {
+      console.warn('[FormFill] Failed to parse hash params:', e);
+    }
+  }
+  
   fetchForm();
 });
+
+// Watch route changes to catch query param updates
+watch(() => route.query, (newQuery) => {
+  console.log('[FormFill] 🔄 Route query changed:', {
+    newQuery: newQuery,
+    eventId: newQuery?.eventId,
+    responseId: newQuery?.responseId
+  });
+}, { deep: true, immediate: true });
 
 // Cleanup
 watch(() => route.params.id, () => {

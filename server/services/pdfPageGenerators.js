@@ -3,8 +3,17 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * PDF Page Generators
- * Functions to generate individual pages of the comprehensive report
+ * @deprecated PDF Page Generators
+ * 
+ * This file contains legacy hardcoded PDF page generation functions.
+ * It has been replaced by block-based PDF generation in blockRenderers/.
+ * 
+ * DO NOT USE: All PDF generation must now use templates with blocks.
+ * 
+ * This file will be removed after full migration to block-based rendering.
+ * 
+ * @see blockRenderers/blockBasedPdfService.js
+ * @see blockRenderers/renderers/
  */
 
 // Color constants matching the report style
@@ -22,6 +31,9 @@ const COLORS = {
 };
 
 /**
+ * @deprecated This function is part of the legacy hardcoded PDF generation system.
+ * Use block-based rendering with REPORT_IDENTITY block instead.
+ * 
  * Generate cover page with header information
  */
 async function generateCoverPage(doc, reportData, templateConfig) {

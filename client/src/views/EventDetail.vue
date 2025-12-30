@@ -163,26 +163,6 @@
             </div>
           </div>
 
-          <!-- Audit Form Card -->
-          <div v-if="event.linkedFormId" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">Audit Form</h3>
-            <div class="space-y-2">
-              <div class="flex items-center justify-between">
-                <span class="text-sm text-gray-700 dark:text-gray-300">
-                  {{ getFormName(event.linkedFormId) }}
-                </span>
-                <button
-                  @click="openForm"
-                  class="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-                >
-                  {{ hasFormResponse ? 'View Form' : 'Open Form' }}
-                </button>
-              </div>
-              <div v-if="hasFormResponse" class="text-xs text-gray-500 dark:text-gray-400">
-                Form submitted: {{ formResponseCount }} response(s)
-              </div>
-            </div>
-          </div>
 
           <!-- GEO Tracking Card -->
           <div v-if="event.geoRequired && (event.checkIn || event.checkOut)" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
@@ -405,9 +385,30 @@ const editEvent = () => {
   showEditModal.value = true;
 };
 
+// Guard to prevent infinite loops
+let isHandlingUpdate = false;
+let lastUpdateTimestamp = 0;
+const UPDATE_DEBOUNCE = 1000; // Only update once per second
+
 const handleEventUpdated = async () => {
-  await fetchEvent();
-  showEditModal.value = false;
+  // Prevent infinite loops - don't handle if already handling or too soon
+  const now = Date.now();
+  if (isHandlingUpdate || (now - lastUpdateTimestamp < UPDATE_DEBOUNCE)) {
+    console.log('[EventDetail] Skipping handleEventUpdated - already handling or too soon');
+    return;
+  }
+  
+  isHandlingUpdate = true;
+  lastUpdateTimestamp = now;
+  
+  try {
+    await fetchEvent();
+    showEditModal.value = false;
+  } catch (err) {
+    console.error('[EventDetail] Error in handleEventUpdated:', err);
+  } finally {
+    isHandlingUpdate = false;
+  }
 };
 
 const deleteEvent = async () => {
@@ -487,7 +488,13 @@ const getFormName = (form) => {
 
 const openForm = () => {
   if (event.value?.linkedFormId) {
-    router.push(`/forms/${event.value.linkedFormId}/fill?eventId=${event.value.eventId || event.value._id}`);
+    const eventIdValue = event.value.eventId || event.value._id;
+    router.push({
+      path: `/forms/${event.value.linkedFormId}/fill`,
+      query: {
+        eventId: eventIdValue
+      }
+    });
   }
 };
 

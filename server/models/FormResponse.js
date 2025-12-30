@@ -363,18 +363,36 @@ FormResponseSchema.pre('save', async function(next) {
 FormResponseSchema.pre('save', function(next) {
     // If this is an update (not a new document) and executionStatus is 'Submitted'
     if (!this.isNew && this.executionStatus === 'Submitted') {
-        // Allow only specific fields to be updated (archive/invalidate, approval, corrective actions)
-        const allowedFields = [
+        // Allow transition from 'In Progress' to 'Submitted' (form submission after check-in)
+        // Check if executionStatus is being modified to 'Submitted'
+        const isTransitioningToSubmitted = this.isModified('executionStatus') && 
+                                          this.executionStatus === 'Submitted';
+        
+        // If transitioning to Submitted, allow all field updates (this handles In Progress -> Submitted)
+        // This is safe because we only allow this transition, not modifications to already-Submitted responses
+        if (isTransitioningToSubmitted) {
+            console.log('[FormResponse] Allowing transition to Submitted status - form submission after check-in');
+            return next();
+        }
+        
+        // Allow only specific fields to be updated (archive/invalidate, approval, corrective actions, finalReport)
+        const allowedFieldPrefixes = [
             'archived', 'archivedAt', 'archivedBy', 'archiveReason',
             'invalidated', 'invalidatedAt', 'invalidatedBy', 'invalidationReason',
             'reviewStatus', // Computed automatically, but can be set to 'Rejected' manually
             'approved', 'approvedBy', 'approvedAt', // Approval tracking
-            'correctiveActions', 'finalReport', 'updatedAt'
+            'correctiveActions', 'finalReport', 'updatedAt', // finalReport allows nested fields
+            'reportGenerated', 'reportUrl' // Legacy report fields for backward compatibility
         ];
         
         // Check if any restricted fields are being modified
         const modifiedFields = this.modifiedPaths();
-        const restrictedFields = modifiedFields.filter(field => !allowedFields.includes(field));
+        const restrictedFields = modifiedFields.filter(field => {
+            // Check if field matches any allowed prefix (handles nested fields like 'finalReport.reportUrl')
+            return !allowedFieldPrefixes.some(prefix => 
+                field === prefix || field.startsWith(prefix + '.')
+            );
+        });
         
         if (restrictedFields.length > 0) {
             return next(new Error(`Cannot modify submitted response. Restricted fields: ${restrictedFields.join(', ')}`));

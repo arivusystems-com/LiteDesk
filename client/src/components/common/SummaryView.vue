@@ -848,120 +848,10 @@
             </div>
             
             <div class="p-6">
-              <div class="bg-white dark:bg-gray-800 rounded-lg">
-                <!-- Embed FormFill in an iframe or router view for preview -->
-                <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                  <router-view v-if="false" /> <!-- Not using router-view, will embed directly -->
-                  <div class="p-8 bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-                    <div v-if="props.record?.sections && props.record.sections.length > 0" class="space-y-8 max-w-4xl mx-auto">
-                      <div v-for="(section, sectionIndex) in props.record.sections" :key="section.sectionId || sectionIndex" class="space-y-6">
-                        <!-- Section Header -->
-                        <div class="border-b border-gray-200 dark:border-gray-700 pb-4">
-                          <h3 class="text-xl font-semibold text-gray-900 dark:text-white">{{ section.name }}</h3>
-                          <p v-if="section.description" class="text-sm text-gray-600 dark:text-gray-400 mt-1">{{ section.description }}</p>
-                        </div>
-                        
-                        <!-- Section Questions -->
-                        <div v-if="section.questions && section.questions.length > 0" class="space-y-6">
-                          <div v-for="(question, questionIndex) in section.questions" :key="question.questionId || questionIndex" class="space-y-2">
-                            <div class="flex items-start gap-3">
-                              <span class="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs font-semibold mt-0.5">
-                                {{ questionIndex + 1 }}
-                              </span>
-                              <div class="flex-1 min-w-0">
-                                <label class="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-                                  {{ question.questionText }}
-                                  <span v-if="question.required" class="text-red-500 ml-1">*</span>
-                                  <span v-if="question.scorable && props.record.formType === 'Audit'" class="ml-2 text-xs text-indigo-600 dark:text-indigo-400 font-normal">(Scorable)</span>
-                                </label>
-                                
-                                <!-- Question Type Preview -->
-                                <div class="mt-2">
-                                  <div v-if="question.questionType === 'Text'" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500 text-sm">
-                                    Text input will appear here
-                                  </div>
-                                  <div v-else-if="question.questionType === 'Text-Area'" class="px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500 text-sm min-h-[100px]">
-                                    Text area will appear here
-                                  </div>
-                                  <div v-else-if="question.questionType === 'Number'" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500 text-sm">
-                                    Number input will appear here
-                                  </div>
-                                  <div v-else-if="question.questionType === 'Date'" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500 text-sm">
-                                    Date picker will appear here
-                                  </div>
-                                  <div v-else-if="question.questionType === 'Yes/No'" class="flex items-center gap-4">
-                                    <label class="flex items-center gap-2">
-                                      <input type="radio" disabled class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600" />
-                                      <span class="text-sm text-gray-700 dark:text-gray-300">Yes</span>
-                                    </label>
-                                    <label class="flex items-center gap-2">
-                                      <input type="radio" disabled class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600" />
-                                      <span class="text-sm text-gray-700 dark:text-gray-300">No</span>
-                                    </label>
-                                  </div>
-                                  <div v-else-if="question.questionType === 'Multiple Choice' && question.options" class="space-y-2">
-                                    <label v-for="(option, optIndex) in question.options" :key="optIndex" class="flex items-center gap-2">
-                                      <input type="radio" disabled class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600" />
-                                      <span class="text-sm text-gray-700 dark:text-gray-300">{{ option }}</span>
-                                    </label>
-                                  </div>
-                                  <div v-else-if="question.questionType === 'Checkbox' && question.options" class="space-y-2">
-                                    <label v-for="(option, optIndex) in question.options" :key="optIndex" class="flex items-center gap-2">
-                                      <input type="checkbox" disabled class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded" />
-                                      <span class="text-sm text-gray-700 dark:text-gray-300">{{ option }}</span>
-                                    </label>
-                                  </div>
-                                  <div v-else-if="question.questionType === 'Dropdown' && question.options" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500 text-sm">
-                                    Dropdown: {{ question.options.join(', ') }}
-                                  </div>
-                                  <div v-else-if="question.questionType === 'Rating'" class="flex items-center gap-2">
-                                    <div class="flex gap-1">
-                                      <svg v-for="i in 5" :key="i" class="w-5 h-5 text-gray-300 dark:text-gray-600" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                      </svg>
-                                    </div>
-                                    <span class="text-sm text-gray-500 dark:text-gray-400">(Rating scale)</span>
-                                  </div>
-                                  <div v-else class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500 text-sm">
-                                    {{ question.questionType }} input will appear here
-                                  </div>
-                                </div>
-                                
-                                <!-- Question Help Text -->
-                                <p v-if="question.helpText" class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ question.helpText }}</p>
-                                
-                                <!-- Question Attachments indicator -->
-                                <div v-if="question.allowAttachments" class="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                                  </svg>
-                                  Attachments allowed
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <!-- Empty Section State -->
-                        <div v-else class="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">
-                          No questions in this section
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <!-- Empty Form State -->
-                    <div v-else class="text-center py-12">
-                      <div class="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg class="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                      </div>
-                      <p class="text-gray-500 dark:text-gray-400 font-medium">No form structure available</p>
-                      <p class="text-sm text-gray-400 dark:text-gray-500 mt-1">Add sections and questions to preview the form</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <FormPreview
+                :form="props.record"
+                :readOnly="true"
+              />
             </div>
           </div>
         </div>
@@ -1757,6 +1647,7 @@ import MetricsWidget from '@/components/common/metrics/MetricsWidget.vue';
 import LifecycleStageWidget from '@/components/common/metrics/LifecycleStageWidget.vue';
 import KeyFieldsWidget from '@/components/common/metrics/KeyFieldsWidget.vue';
 import FormAnalyticsWidget from '@/components/forms/widgets/FormAnalyticsWidget.vue';
+import FormPreview from '@/components/forms/FormPreview.vue';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import LinkRecordsDrawer from '@/components/common/LinkRecordsDrawer.vue';
 import apiClient from '@/utils/apiClient';

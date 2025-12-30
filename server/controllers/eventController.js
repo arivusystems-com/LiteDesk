@@ -1016,6 +1016,13 @@ exports.checkIn = async (req, res) => {
                     
                     if (!formResponse) {
                         // Create new response record
+                        console.log('[checkIn] Creating new form response for event:', {
+                            eventId: event._id,
+                            eventIdField: event.eventId,
+                            formId: event.linkedFormId,
+                            organizationId: event.organizationId
+                        });
+                        
                         formResponse = new FormResponse({
                             formId: event.linkedFormId,
                             organizationId: event.organizationId,
@@ -1023,7 +1030,7 @@ exports.checkIn = async (req, res) => {
                             submittedAt: new Date(),
                             linkedTo: {
                                 type: 'Event',
-                                id: event._id
+                                id: event._id // Use event._id (ObjectId) for consistent lookup
                             },
                             executionStatus: 'In Progress',
                             reviewStatus: null, // Review status only applies after submission
@@ -1032,6 +1039,11 @@ exports.checkIn = async (req, res) => {
                         });
                         
                         await formResponse.save();
+                        console.log('[checkIn] ✅ Created form response:', {
+                            responseId: formResponse._id,
+                            linkedToId: formResponse.linkedTo.id,
+                            linkedToIdType: typeof formResponse.linkedTo.id
+                        });
                         
                         // Update event metadata with form response ID
                         if (!event.metadata) {
@@ -1100,10 +1112,12 @@ exports.checkOut = async (req, res) => {
             });
         }
         
-        if (!event.geoRequired) {
+        // Allow checkout for both GEO and non-GEO events (after form submission)
+        // For non-GEO events, checkout is allowed when status is CHECKOUT_PENDING
+        if (!event.geoRequired && event.status !== 'CHECKOUT_PENDING') {
             return res.status(400).json({
                 success: false,
-                message: 'This event does not require GEO check-out'
+                message: 'Check-out is only available after form submission'
             });
         }
         
@@ -1133,16 +1147,28 @@ exports.checkOut = async (req, res) => {
             };
         }
         
+        // Store previous status before changing
+        const previousStatus = event.status;
+        
         event.status = 'CHECKED_OUT';
         event.modifiedBy = req.user._id;
         
-        // Calculate time spent
+        // Calculate execution duration (time from check-in to check-out, or from start to check-out)
+        const checkoutTime = new Date();
         if (event.checkIn && event.checkIn.timestamp) {
-            const timeSpent = Math.floor((new Date() - event.checkIn.timestamp) / 1000);
+            // Calculate from check-in to check-out
+            const timeSpent = Math.floor((checkoutTime - event.checkIn.timestamp) / 1000);
+            event.timeSpent = (event.timeSpent || 0) + timeSpent;
+        } else if (event.executionStartTime) {
+            // Calculate from execution start to check-out
+            const timeSpent = Math.floor((checkoutTime - event.executionStartTime) / 1000);
             event.timeSpent = (event.timeSpent || 0) + timeSpent;
         }
         
-        event.addAuditEntry('status_changed', req.user._id, 'CHECKED_IN', 'CHECKED_OUT', {
+        // Set execution end time
+        event.executionEndTime = checkoutTime;
+        
+        event.addAuditEntry('status_changed', req.user._id, previousStatus, 'CHECKED_OUT', {
             location: location,
             orgIndex: orgIndex
         });
@@ -1272,7 +1298,8 @@ exports.submitAudit = async (req, res) => {
             event.status = 'PENDING_CORRECTIVE';
         } else {
             event.auditState = 'SUBMITTED';
-            event.status = 'SUBMITTED';
+            // Transition to CHECKOUT_PENDING after form submission (unless it's a GEO event that needs checkout)
+            event.status = 'CHECKOUT_PENDING';
         }
         
         // Link form response to event (store in metadata)

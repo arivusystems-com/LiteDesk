@@ -188,6 +188,24 @@ const orderedFields = computed(() => {
     }
     
     const fieldKeyLower = field.key?.toLowerCase();
+    
+    // For Events module, exclude relatedToId and linkedFormId from normal processing
+    // These fields are handled by special force-add logic below to prevent duplicates
+    if (props.moduleKey === 'events') {
+      const fieldKeyLower = field.key?.toLowerCase();
+      const isLinkedFormField = fieldKeyLower === 'linked-form-id' || 
+                                fieldKeyLower === 'linkedformid' ||
+                                field.key === 'linkedFormId';
+      const isRelatedToField = fieldKeyLower === 'related-to-id' || 
+                               fieldKeyLower === 'relatedtoid' ||
+                               field.key === 'relatedToId';
+      
+      if (isLinkedFormField || isRelatedToField) {
+        console.log(`⏭️  Skipping ${field.key} in quickCreate processing - will be handled by force-add logic`);
+        continue; // Skip these fields in normal processing
+      }
+    }
+    
     // Exclude system fields
     const isSystem = systemFieldKeys.includes(fieldKeyLower);
     
@@ -196,20 +214,6 @@ const orderedFields = computed(() => {
     if (field.dependencies && Array.isArray(field.dependencies) && field.dependencies.length > 0) {
       const depState = getFieldDependencyState(field, currentFormData, allFields);
       isVisible = depState.visible !== false; // Default to visible if undefined
-    }
-    
-    // Special handling for events: force include linkedFormId and relatedToId when eventType is audit type
-    // This ensures these fields are always available even if dependencies aren't met initially
-    if (props.moduleKey === 'events') {
-      const auditEventTypes = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
-      const isAuditType = auditEventTypes.includes(currentFormData.eventType);
-      const isLinkedFormField = field.key?.toLowerCase() === 'linked-form-id' || field.key === 'linkedFormId';
-      const isRelatedToField = field.key?.toLowerCase() === 'related-to-id' || field.key === 'relatedToId';
-      
-      if (isAuditType && (isLinkedFormField || isRelatedToField)) {
-        isVisible = true; // Force visible for audit event types
-        console.log(`✅ Force-visible field "${key}" for audit event type`);
-      }
     }
     
     console.log(`✅ Processing field "${key}":`, {
@@ -247,6 +251,23 @@ const orderedFields = computed(() => {
       const fieldKeyLower = field.key?.toLowerCase();
       const isSystem = systemFieldKeys.includes(fieldKeyLower);
       
+      // For Events module, exclude relatedToId and linkedFormId from required fields processing
+      // These fields are handled by special force-add logic below to prevent duplicates
+      if (props.moduleKey === 'events') {
+        const fieldKeyLower = field.key?.toLowerCase();
+        const isLinkedFormField = fieldKeyLower === 'linked-form-id' || 
+                                  fieldKeyLower === 'linkedformid' ||
+                                  field.key === 'linkedFormId';
+        const isRelatedToField = fieldKeyLower === 'related-to-id' || 
+                                 fieldKeyLower === 'relatedtoid' ||
+                                 field.key === 'relatedToId';
+        
+        if (isLinkedFormField || isRelatedToField) {
+          console.log(`⏭️  Skipping ${field.key} in required fields processing - will be handled by force-add logic`);
+          continue; // Skip these fields in required fields processing
+        }
+      }
+      
       // Check dependency visibility for required fields too
       let isVisible = true;
       if (field.dependencies && Array.isArray(field.dependencies) && field.dependencies.length > 0) {
@@ -278,6 +299,30 @@ const orderedFields = computed(() => {
     });
     
     if (isAuditType) {
+      // First, remove any existing instances of these fields to prevent duplicates
+      const linkedFormKeyVariations = ['linked-form-id', 'linkedformid', 'linkedformid'];
+      const relatedToKeyVariations = ['related-to-id', 'relatedtoid', 'relatedtoid'];
+      
+      // Remove any existing linkedFormId fields
+      for (let i = ordered.length - 1; i >= 0; i--) {
+        const fieldKeyLower = ordered[i].key?.toLowerCase();
+        if (linkedFormKeyVariations.includes(fieldKeyLower) || ordered[i].key === 'linkedFormId') {
+          console.log(`🗑️  Removing existing linkedFormId field "${ordered[i].key}" before force-add`);
+          seen.delete(fieldKeyLower);
+          ordered.splice(i, 1);
+        }
+      }
+      
+      // Remove any existing relatedToId fields
+      for (let i = ordered.length - 1; i >= 0; i--) {
+        const fieldKeyLower = ordered[i].key?.toLowerCase();
+        if (relatedToKeyVariations.includes(fieldKeyLower) || ordered[i].key === 'relatedToId') {
+          console.log(`🗑️  Removing existing relatedToId field "${ordered[i].key}" before force-add`);
+          seen.delete(fieldKeyLower);
+          ordered.splice(i, 1);
+        }
+      }
+      
       // Find and include linkedFormId field (check both kebab-case and camelCase)
       const linkedFormFields = allFields.filter(f => {
         const keyLower = f.key?.toLowerCase();
@@ -286,21 +331,13 @@ const orderedFields = computed(() => {
                f.key === 'linkedFormId';
       });
       
-      for (const field of linkedFormFields) {
+      // Add the first matching linkedFormId field
+      if (linkedFormFields.length > 0) {
+        const field = linkedFormFields[0]; // Use first match
         const fieldKeyLower = field.key?.toLowerCase();
-        if (!seen.has(fieldKeyLower)) {
-          ordered.push(field);
-          seen.add(fieldKeyLower);
-          console.log(`✅ Force-added linkedFormId field "${field.key}" for audit event type`);
-        } else {
-          // Field was already added but might have been excluded due to dependencies
-          // Re-add it to ensure it's visible
-          const existingIndex = ordered.findIndex(f => f.key?.toLowerCase() === fieldKeyLower);
-          if (existingIndex === -1) {
-            ordered.push(field);
-            console.log(`✅ Re-added linkedFormId field "${field.key}" for audit event type`);
-          }
-        }
+        ordered.push(field);
+        seen.add(fieldKeyLower);
+        console.log(`✅ Force-added linkedFormId field "${field.key}" for audit event type`);
       }
       
       // Find and include relatedToId field (check both kebab-case and camelCase)
@@ -311,21 +348,13 @@ const orderedFields = computed(() => {
                f.key === 'relatedToId';
       });
       
-      for (const field of relatedToFields) {
+      // Add the first matching relatedToId field
+      if (relatedToFields.length > 0) {
+        const field = relatedToFields[0]; // Use first match
         const fieldKeyLower = field.key?.toLowerCase();
-        if (!seen.has(fieldKeyLower)) {
-          ordered.push(field);
-          seen.add(fieldKeyLower);
-          console.log(`✅ Force-added relatedToId field "${field.key}" for audit event type`);
-        } else {
-          // Field was already added but might have been excluded due to dependencies
-          // Re-add it to ensure it's visible
-          const existingIndex = ordered.findIndex(f => f.key?.toLowerCase() === fieldKeyLower);
-          if (existingIndex === -1) {
-            ordered.push(field);
-            console.log(`✅ Re-added relatedToId field "${field.key}" for audit event type`);
-          }
-        }
+        ordered.push(field);
+        seen.add(fieldKeyLower);
+        console.log(`✅ Force-added relatedToId field "${field.key}" for audit event type`);
       }
     }
   }

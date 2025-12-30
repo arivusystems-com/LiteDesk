@@ -1,25 +1,39 @@
-const PDFDocument = require('pdfkit');
-const fs = require('fs');
-const path = require('path');
 const FormResponse = require('../models/FormResponse');
 const Form = require('../models/Form');
-const Organization = require('../models/Organization');
+const blockBasedPdfService = require('./blockRenderers/blockBasedPdfService');
+const { getActiveTemplate } = require('./blockRenderers/templateValidator');
 
 /**
  * Enhanced PDF Report Generation Service
- * Generates world-class audit reports similar to hotel audit reports
+ * 
+ * Generates PDF reports using block-based templates.
+ * This is the ONLY supported PDF generation path.
+ * 
+ * All PDF generation must use templates with blocks defined in the Response Template Builder.
+ * Legacy hardcoded PDF generation has been deprecated.
  */
 
 /**
  * Generate comprehensive PDF report
+ * 
+ * This function now exclusively uses block-based PDF generation.
+ * Templates must be defined in the Form's responseTemplate field.
+ * 
  * @param {ObjectId} responseId - Response ID
  * @param {Object} options - Report generation options
+ * @param {Object} options.organizationId - Organization ID
+ * @param {Object} options.template - Optional template override (if not provided, will fetch from form)
+ * @param {Object} options.templateConfig - Legacy template config (for backward compatibility, merged into template)
+ * @param {boolean} options.includeComparison - Whether to include comparison with previous response
+ * @param {ObjectId} options.previousResponseId - Previous response ID for comparison
  * @returns {Promise<String>} PDF file URL
+ * @throws {Error} If template is missing or invalid
  */
 exports.generateComprehensiveReport = async (responseId, options = {}) => {
     try {
         const {
             organizationId,
+            template: providedTemplate = null,
             templateConfig = {},
             includeComparison = false,
             previousResponseId = null
@@ -36,16 +50,54 @@ exports.generateComprehensiveReport = async (responseId, options = {}) => {
             throw new Error('Response not found');
         }
         
-        // Validate that formId exists (controller should have already populated it)
+        // Validate that formId exists
         if (!response.formId) {
             console.error('FormId is null/undefined for response:', responseId);
             throw new Error('Form ID not found in response');
         }
         
-        // Validate that organizationId exists (controller should have already populated it)
+        // Validate that organizationId exists
         if (!response.organizationId) {
             console.error('OrganizationId is null/undefined for response:', responseId);
             throw new Error('Organization ID not found in response');
+        }
+
+        // Get template - use provided template or fetch from form
+        let template = providedTemplate;
+        
+        if (!template) {
+            // Fetch form to get active template
+            const formId = response.formId._id || response.formId;
+            const form = await Form.findById(formId);
+            
+            if (!form) {
+                throw new Error('Form not found');
+            }
+            
+            template = getActiveTemplate(form);
+            
+            if (!template) {
+                throw new Error(
+                    'No active template found. Please create a response template in the Response Template Builder.'
+                );
+            }
+            
+        }
+
+        // Merge legacy templateConfig into template if needed (for backward compatibility)
+        if (templateConfig && Object.keys(templateConfig).length > 0) {
+            // Merge branding if provided in templateConfig
+            if (templateConfig.logo || templateConfig.colors) {
+                if (!template.branding) {
+                    template.branding = {};
+                }
+                if (templateConfig.logo) {
+                    template.branding.logo = templateConfig.logo;
+                }
+                if (templateConfig.colors) {
+                    template.branding.colors = { ...template.branding.colors, ...templateConfig.colors };
+                }
+            }
         }
 
         // Fetch previous response if comparison is needed
@@ -55,11 +107,19 @@ exports.generateComprehensiveReport = async (responseId, options = {}) => {
                 .populate('formId');
         }
 
-        // Build report data
-        const reportData = await buildReportData(response, previousResponse, templateConfig);
-
-        // Generate PDF
-        const pdfUrl = await generatePDF(reportData, organizationId, templateConfig);
+        // Generate PDF using block-based rendering (ONLY path)
+        console.log('Generating PDF using block-based template for response:', responseId);
+        const pdfUrl = await blockBasedPdfService.generatePdfFromTemplateBlocks(
+            responseId,
+            template,
+            {
+                organizationId,
+                includeComparison,
+                previousResponseId,
+                benchmarkScore: templateConfig.benchmarkScore || 80,
+                round: templateConfig.round || '1st Round 2024'
+            }
+        );
 
         return pdfUrl;
     } catch (error) {
@@ -75,7 +135,14 @@ exports.generateComprehensiveReport = async (responseId, options = {}) => {
 };
 
 /**
- * Build comprehensive report data structure
+ * @deprecated This function is part of the legacy hardcoded PDF generation system.
+ * It has been replaced by block-based PDF generation in blockBasedPdfService.js.
+ * 
+ * This function will be removed after full migration to block-based rendering.
+ * 
+ * DO NOT USE: All PDF generation must now use templates with blocks.
+ * 
+ * @see blockBasedPdfService.generatePdfFromTemplateBlocks
  */
 async function buildReportData(response, previousResponse, templateConfig) {
     console.log('Building report data for response:', response._id);
@@ -500,76 +567,23 @@ function getAnswerLabel(answer, passFail) {
 /**
  * Generate PDF document
  */
+/**
+ * @deprecated This function is part of the legacy hardcoded PDF generation system.
+ * It has been replaced by block-based PDF generation in blockBasedPdfService.js.
+ * 
+ * This function uses hardcoded page sequencing which is no longer supported.
+ * All PDF generation must now use templates with blocks.
+ * 
+ * This function will be removed after full migration to block-based rendering.
+ * 
+ * @see blockBasedPdfService.generatePdfFromTemplateBlocks
+ */
 async function generatePDF(reportData, organizationId, templateConfig) {
-    return new Promise(async (resolve, reject) => {
-        try {
-            const pdfPageGenerators = require('./pdfPageGenerators');
-            
-            // Validate reportData structure
-            if (!reportData || !reportData.header) {
-                throw new Error('Invalid report data structure: header is missing');
-            }
-            
-            const doc = new PDFDocument({ 
-                size: 'A4',
-                margin: 0
-            });
-
-            // Generate filename - use auditId or fallback to timestamp
-            const auditId = reportData.header?.auditId || `report-${Date.now()}`;
-            // Sanitize auditId for filename (remove invalid characters)
-            const sanitizedAuditId = auditId.toString().replace(/[^a-zA-Z0-9-_]/g, '-');
-            const filename = `comprehensive-report-${sanitizedAuditId}-${Date.now()}.pdf`;
-            
-            // Construct reports directory path
-            // __dirname is server/services, so ../uploads goes to server/uploads
-            const reportsDir = path.join(__dirname, '../uploads', organizationId.toString(), 'reports');
-            
-            // Ensure reports directory exists
-            try {
-                if (!fs.existsSync(reportsDir)) {
-                    fs.mkdirSync(reportsDir, { recursive: true });
-                }
-            } catch (dirError) {
-                console.error('Error creating reports directory:', dirError);
-                throw new Error(`Failed to create reports directory: ${dirError.message}`);
-            }
-            
-            const filePath = path.join(reportsDir, filename);
-            const stream = fs.createWriteStream(filePath);
-            doc.pipe(stream);
-
-            // Generate all pages
-            await pdfPageGenerators.generateCoverPage(doc, reportData, templateConfig);
-            doc.addPage();
-            await pdfPageGenerators.generateOverallPerformancePage(doc, reportData, templateConfig);
-            doc.addPage();
-            await pdfPageGenerators.generateExecutiveSummaryPage(doc, reportData, templateConfig);
-            doc.addPage();
-            await pdfPageGenerators.generateScoringAreasPage(doc, reportData, templateConfig);
-            doc.addPage();
-            await pdfPageGenerators.generateDepartmentBreakdownPage(doc, reportData, templateConfig);
-            doc.addPage();
-            await pdfPageGenerators.generateNonCompliancePage(doc, reportData, templateConfig);
-            doc.addPage();
-            await pdfPageGenerators.generateBrandRankingPage(doc, reportData, templateConfig);
-            await pdfPageGenerators.generateBrandStandardsPages(doc, reportData, templateConfig);
-
-            // Finalize PDF
-            doc.end();
-
-            // Wait for stream to finish
-            await new Promise((resolve, reject) => {
-                stream.on('finish', resolve);
-                stream.on('error', reject);
-            });
-
-            // Return URL
-            resolve(`/api/uploads/${organizationId}/reports/${filename}`);
-        } catch (error) {
-            reject(error);
-        }
-    });
+    // This function is deprecated and should not be called
+    throw new Error(
+        'Legacy PDF generation is no longer supported. ' +
+        'Please use block-based templates via blockBasedPdfService.generatePdfFromTemplateBlocks'
+    );
 }
 
 module.exports = exports;

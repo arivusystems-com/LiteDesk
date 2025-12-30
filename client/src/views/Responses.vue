@@ -259,6 +259,17 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
+          <!-- Delete button for non-audit, non-submitted responses -->
+          <button
+            v-if="!isAuditResponse(row) && row.executionStatus !== 'Submitted' && !row.archived && !row.invalidated"
+            @click.stop="handleDelete(row)"
+            class="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+            title="Delete"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
         </div>
       </template>
     </ListView>
@@ -542,10 +553,94 @@ const handleSort = ({ key, order }) => {
   fetchResponses();
 };
 
+// Helper function to extract formId from response object
+const getFormId = (response) => {
+  if (!response) {
+    console.error('getFormId: response is null/undefined');
+    return null;
+  }
+  
+  // Check if formId key exists (even if value might be null/undefined)
+  const hasFormIdKey = 'formId' in response;
+  
+  if (!hasFormIdKey) {
+    console.error('getFormId: formId key does not exist in response object');
+    console.error('Response keys:', Object.keys(response || {}));
+    return null;
+  }
+  
+  // Try to get formId value - handle Vue Proxy objects
+  let formIdValue;
+  try {
+    formIdValue = response.formId;
+  } catch (e) {
+    // If direct access fails (e.g., Proxy issue), try via JSON
+    try {
+      const json = JSON.parse(JSON.stringify(response));
+      formIdValue = json.formId;
+    } catch (e2) {
+      console.error('getFormId: Could not access formId value:', e2);
+      return null;
+    }
+  }
+  
+  // Debug: Log the actual value to understand what we're dealing with
+  console.log('getFormId: formIdValue type:', typeof formIdValue, 'value:', formIdValue);
+  console.log('getFormId: formIdValue constructor:', formIdValue?.constructor?.name);
+  
+  // Handle different formId value types
+  if (formIdValue === null || formIdValue === undefined) {
+    console.error('getFormId: formId exists but is null/undefined');
+    return null;
+  }
+  
+  // Method 1: Populated object with _id
+  if (typeof formIdValue === 'object' && formIdValue !== null) {
+    // Check for _id property
+    if (formIdValue._id !== undefined && formIdValue._id !== null) {
+      return String(formIdValue._id);
+    }
+    // Check for $oid (MongoDB format)
+    if (formIdValue.$oid !== undefined && formIdValue.$oid !== null) {
+      return String(formIdValue.$oid);
+    }
+    // Check if the object itself is an ObjectId-like object
+    if (formIdValue.toString && typeof formIdValue.toString === 'function') {
+      const str = formIdValue.toString();
+      if (str && str !== '[object Object]') {
+        return str;
+      }
+    }
+    // If it's an object but no _id, log and return null
+    console.error('getFormId: formId is object but missing _id or toString:', formIdValue);
+    console.error('getFormId: Object keys:', Object.keys(formIdValue));
+    return null;
+  }
+  
+  // Method 2: String/ObjectId
+  if (typeof formIdValue === 'string') {
+    const trimmed = formIdValue.trim();
+    if (trimmed !== '') {
+      return trimmed;
+    }
+    console.error('getFormId: formId is empty string');
+    return null;
+  }
+  
+  // Method 3: Number (unlikely but possible)
+  if (typeof formIdValue === 'number') {
+    return String(formIdValue);
+  }
+  
+  // If we get here, formId exists but is in an unexpected format
+  console.error('getFormId: formId exists but in unexpected format:', typeof formIdValue, formIdValue);
+  return null;
+};
+
 const viewResponseDetail = (response) => {
-  const formId = response.formId?._id || response.formId;
+  const formId = getFormId(response);
   if (!formId) {
-    console.error('Form ID not found in response');
+    console.error('Form ID not found in response:', response);
     return;
   }
   
@@ -563,9 +658,9 @@ const approveResponse = async (response) => {
     return;
   }
 
-  const formId = response.formId?._id || response.formId;
+  const formId = getFormId(response);
   if (!formId) {
-    alert('Form ID not found');
+    alert('Form ID not found. Please refresh the page and try again.');
     return;
   }
 
@@ -588,9 +683,9 @@ const rejectResponse = async (response) => {
     return;
   }
 
-  const formId = response.formId?._id || response.formId;
+  const formId = getFormId(response);
   if (!formId) {
-    alert('Form ID not found');
+    alert('Form ID not found. Please refresh the page and try again.');
     return;
   }
 
@@ -633,9 +728,9 @@ const handleArchiveInvalidate = async () => {
     return;
   }
 
-  const formId = selectedResponse.value.formId?._id || selectedResponse.value.formId;
+  const formId = getFormId(selectedResponse.value);
   if (!formId) {
-    alert('Form ID not found');
+    alert('Form ID not found. Please refresh the page and try again.');
     return;
   }
 
@@ -667,9 +762,9 @@ const restoreResponse = async (response) => {
     return;
   }
 
-  const formId = response.formId?._id || response.formId;
+  const formId = getFormId(response);
   if (!formId) {
-    alert('Form ID not found');
+    alert('Form ID not found. Please refresh the page and try again.');
     return;
   }
 
@@ -705,9 +800,10 @@ const handleDelete = async (response) => {
     return;
   }
 
-  const formId = response.formId?._id || response.formId;
+  const formId = getFormId(response);
   if (!formId) {
-    alert('Form ID not found');
+    console.error('Form ID not found in response:', response);
+    alert('Form ID not found. Please refresh the page and try again.');
     return;
   }
 

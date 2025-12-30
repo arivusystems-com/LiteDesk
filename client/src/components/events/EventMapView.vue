@@ -43,7 +43,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 
 const props = defineProps({
   event: {
@@ -128,33 +128,48 @@ const createMap = () => {
   }
   
   // Create map
-  map = L.map(mapContainer.value).setView(center, zoom);
+  map = L.map(mapContainer.value, {
+    zoomControl: true
+  }).setView(center, zoom);
   
   // Add tile layer
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors',
     maxZoom: 19
   }).addTo(map);
   
-  // Add event location marker if available
-  if (props.event.geoLocation?.latitude) {
-    const eventMarker = L.marker([props.event.geoLocation.latitude, props.event.geoLocation.longitude])
-      .addTo(map)
-      .bindPopup('Event Location');
-    
-    // Add radius circle
-    if (props.event.geoLocation.radius) {
-      L.circle([props.event.geoLocation.latitude, props.event.geoLocation.longitude], {
-        radius: props.event.geoLocation.radius,
-        color: '#3b82f6',
-        fillColor: '#3b82f6',
-        fillOpacity: 0.1
-      }).addTo(map);
-    }
-  }
-  
-  // Add tracking points
-  updateTrackingPoints();
+  // Wait for tiles to load before invalidating size and fitting bounds
+  map.whenReady(() => {
+    // Invalidate size to ensure map renders correctly
+    setTimeout(() => {
+      map.invalidateSize();
+      
+      // Add event location marker if available
+      if (props.event.geoLocation?.latitude) {
+        const eventMarker = L.marker([props.event.geoLocation.latitude, props.event.geoLocation.longitude])
+          .addTo(map)
+          .bindPopup('Event Location');
+        
+        // Add radius circle
+        if (props.event.geoLocation.radius) {
+          L.circle([props.event.geoLocation.latitude, props.event.geoLocation.longitude], {
+            radius: props.event.geoLocation.radius,
+            color: '#3b82f6',
+            fillColor: '#3b82f6',
+            fillOpacity: 0.1
+          }).addTo(map);
+        }
+      }
+      
+      // Add tracking points (this will also fit bounds)
+      updateTrackingPoints();
+      
+      // Invalidate size again after everything is loaded
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 100);
+    }, 100);
+  });
   
   mapLoaded.value = true;
 };
@@ -254,37 +269,94 @@ const updateTrackingPoints = () => {
   trackingPoints.value = points;
   
   // Fit bounds if we have points
-  if (points.length > 0) {
-    const group = new L.featureGroup(markers);
-    map.fitBounds(group.getBounds().pad(0.1));
+  if (points.length > 0 && markers.length > 0) {
+    try {
+      const group = new L.featureGroup(markers);
+      const bounds = group.getBounds();
+      if (bounds.isValid()) {
+        map.fitBounds(bounds.pad(0.2), {
+          padding: [20, 20],
+          maxZoom: 18
+        });
+        // Invalidate size after fitting bounds to ensure proper rendering
+        setTimeout(() => {
+          map.invalidateSize();
+        }, 100);
+      }
+    } catch (error) {
+      console.warn('Error fitting map bounds:', error);
+      // Fallback: center on first point
+      if (points[0] && points[0].lat != null && points[0].lng != null) {
+        map.setView([points[0].lat, points[0].lng], 15);
+        map.invalidateSize();
+      }
+    }
+  } else if (points.length === 1 && points[0] && points[0].lat != null && points[0].lng != null) {
+    // Single point: center on it with appropriate zoom
+    map.setView([points[0].lat, points[0].lng], 15);
+    map.invalidateSize();
   }
 };
 
 const centerMap = () => {
   if (!map) return;
   
-  if (trackingPoints.value.length > 0) {
-    const group = new window.L.featureGroup(markers);
-    map.fitBounds(group.getBounds().pad(0.1));
+  if (trackingPoints.value.length > 0 && markers.length > 0) {
+    try {
+      const group = new window.L.featureGroup(markers);
+      const bounds = group.getBounds();
+      if (bounds.isValid()) {
+        map.fitBounds(bounds.pad(0.2), {
+          padding: [20, 20],
+          maxZoom: 18
+        });
+        map.invalidateSize();
+      }
+    } catch (error) {
+      console.warn('Error centering map:', error);
+      // Fallback: center on first point
+      if (trackingPoints.value[0] && trackingPoints.value[0].lat != null && trackingPoints.value[0].lng != null) {
+        map.setView([trackingPoints.value[0].lat, trackingPoints.value[0].lng], 15);
+        map.invalidateSize();
+      }
+    }
   } else if (props.event.geoLocation?.latitude != null && props.event.geoLocation?.longitude != null) {
     map.setView([props.event.geoLocation.latitude, props.event.geoLocation.longitude], 15);
+    map.invalidateSize();
+  } else if (props.event.checkIn?.location && props.event.checkIn.location.latitude != null && props.event.checkIn.location.longitude != null) {
+    map.setView([props.event.checkIn.location.latitude, props.event.checkIn.location.longitude], 15);
+    map.invalidateSize();
   }
 };
 
 watch(() => props.currentLocation, () => {
-  if (mapLoaded.value) {
+  if (mapLoaded.value && map) {
     updateTrackingPoints();
+    // Invalidate size after updating to ensure proper rendering
+    setTimeout(() => {
+      if (map) map.invalidateSize();
+    }, 100);
   }
 }, { deep: true });
 
 watch(() => props.event, () => {
-  if (mapLoaded.value) {
+  if (mapLoaded.value && map) {
     updateTrackingPoints();
+    // Invalidate size after updating to ensure proper rendering
+    setTimeout(() => {
+      if (map) map.invalidateSize();
+    }, 100);
   }
 }, { deep: true });
 
-onMounted(() => {
-  initMap();
+onMounted(async () => {
+  // Wait for next tick to ensure DOM is fully rendered
+  await nextTick();
+  
+  // Small delay to ensure container has dimensions
+  setTimeout(() => {
+    initMap();
+  }, 100);
 });
 
 onUnmounted(() => {

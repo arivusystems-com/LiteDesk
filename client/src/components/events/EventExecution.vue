@@ -46,7 +46,7 @@
           </button>
         </div>
 
-        <div v-else class="space-y-3">
+        <div v-else-if="event.status !== 'CHECKED_OUT'" class="space-y-3">
           <div class="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
             <p class="text-sm text-green-800 dark:text-green-300">
               <strong>Checked In</strong> at {{ formatTime(event.checkIn?.timestamp) }}
@@ -55,7 +55,9 @@
               Location: {{ event.checkIn.location.latitude.toFixed(6) }}, {{ event.checkIn.location.longitude.toFixed(6) }}
             </p>
           </div>
+          <!-- Only show checkout button if form is not submitted yet (for GEO events) -->
           <button
+            v-if="!isFormSubmitted"
             @click="checkOut"
             :disabled="checkingOut"
             class="w-full px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
@@ -114,23 +116,83 @@
       </div>
 
       <!-- Audit Submission -->
-      <div v-if="requiresAuditForm && isCheckedIn && (event.status === 'IN_PROGRESS' || event.status === 'CHECKED_IN' || event.status === 'STARTED')" class="mt-6 space-y-3">
+      <div v-if="requiresAuditForm && isCheckedIn && (event.status === 'IN_PROGRESS' || event.status === 'CHECKED_IN' || event.status === 'STARTED' || event.status === 'CHECKOUT_PENDING')" class="mt-6 space-y-3">
         <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Audit Form</h4>
         <div v-if="linkedFormIdValue" class="space-y-2">
-          <button
-            @click="openAuditForm"
-            class="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors"
-          >
-            Open Audit Form
-          </button>
-          <button
-            v-if="hasFormResponse"
-            @click="submitAudit"
-            :disabled="submitting"
-            class="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors disabled:opacity-50"
-          >
-            Submit Audit
-          </button>
+          <!-- Show success message and checkout button if form is submitted but not checked out -->
+          <div v-if="isFormSubmitted && event.status === 'CHECKOUT_PENDING'" class="space-y-3">
+            <div class="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+              <div class="flex items-center gap-2 mb-2">
+                <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <p class="text-sm font-medium text-green-800 dark:text-green-300">
+                  Audit Form Submitted
+                </p>
+              </div>
+              <p class="text-xs text-green-700 dark:text-green-400">
+                The audit form has been successfully submitted. Please check out to complete the event.
+              </p>
+            </div>
+            <!-- Primary Check Out Action -->
+            <button
+              @click="checkOut"
+              :disabled="checkingOut"
+              class="w-full px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Check Out
+            </button>
+          </div>
+          
+          <!-- Show read-only actions after checkout -->
+          <div v-else-if="event.status === 'CHECKED_OUT'" class="space-y-3">
+            <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <div class="flex items-center gap-2 mb-2">
+                <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p class="text-sm font-medium text-blue-800 dark:text-blue-300">
+                  Event Completed
+                </p>
+              </div>
+              <p class="text-xs text-blue-700 dark:text-blue-400">
+                Checked out at {{ formatTime(event.checkOut?.timestamp) }}
+              </p>
+            </div>
+            <!-- View Response Button (Read-only) -->
+            <button
+              v-if="hasFormResponse"
+              @click="viewFormResponse"
+              class="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium transition-colors flex items-center justify-center gap-2"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              View Response
+            </button>
+          </div>
+          
+          <!-- Show form buttons only if form is not yet submitted and not checked out -->
+          <template v-else>
+            <button
+              @click="openAuditForm"
+              class="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors"
+            >
+              Open Audit Form
+            </button>
+            <button
+              v-if="hasFormResponse"
+              @click="submitAudit"
+              :disabled="submitting"
+              class="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors disabled:opacity-50"
+            >
+              Submit Audit
+            </button>
+          </template>
         </div>
         <p v-else class="text-sm text-gray-500 dark:text-gray-400">No audit form linked to this event</p>
       </div>
@@ -302,8 +364,12 @@ const linkedFormIdValue = computed(() => {
 });
 
 const formResponseId = ref(null);
+const formResponseStatus = ref(null); // Track the execution status of the form response
 const hasFormResponse = computed(() => {
   return formResponseId.value !== null;
+});
+const isFormSubmitted = computed(() => {
+  return formResponseStatus.value === 'Submitted';
 });
 
 const canComplete = computed(() => {
@@ -424,9 +490,31 @@ const checkIn = async () => {
       
       // Event → Response execution handoff
       if (response.formResponseId && response.hasForm && linkedFormIdValue.value) {
-        // Redirect immediately to form fill page
-        const formUrl = `/forms/${linkedFormIdValue.value}/fill?eventId=${props.event.eventId || props.event._id}&responseId=${response.formResponseId}`;
-        router.push(formUrl);
+        // Redirect immediately to form fill page with query params
+        const eventIdValue = props.event.eventId || props.event._id;
+        const formId = linkedFormIdValue.value;
+        const responseId = response.formResponseId;
+        
+        console.log('[EventExecution] Redirecting to form with:', {
+          formId: formId,
+          eventId: eventIdValue,
+          responseId: responseId
+        });
+        
+        // Build full URL with query params to ensure they're preserved
+        const formUrl = `/forms/${formId}/fill?eventId=${encodeURIComponent(eventIdValue)}&responseId=${encodeURIComponent(responseId)}`;
+        console.log('[EventExecution] Full form URL:', formUrl);
+        
+        // Store responseId in sessionStorage as backup (in case URL params get lost)
+        sessionStorage.setItem(`formResponse_${formId}_${eventIdValue}`, responseId);
+        console.log('[EventExecution] Stored responseId in sessionStorage:', {
+          key: `formResponse_${formId}_${eventIdValue}`,
+          value: responseId
+        });
+        
+        // Use window.location.href for absolute reliability (ensures query params are preserved)
+        // This causes a full page reload but guarantees query params are in the URL
+        window.location.href = formUrl;
       } else if (!response.hasForm) {
         // Show message if no form is assigned
         alert('No form is assigned to this event. Please contact your administrator to assign a form.');
@@ -474,9 +562,31 @@ const checkInOrg = async (orgSequence) => {
       
       // Event → Response execution handoff
       if (response.formResponseId && response.hasForm && linkedFormIdValue.value) {
-        // Redirect immediately to form fill page
-        const formUrl = `/forms/${linkedFormIdValue.value}/fill?eventId=${props.event.eventId || props.event._id}&responseId=${response.formResponseId}&orgIndex=${orgSequence}`;
-        router.push(formUrl);
+        // Redirect immediately to form fill page with query params
+        const eventIdValue = props.event.eventId || props.event._id;
+        const formId = linkedFormIdValue.value;
+        const responseId = response.formResponseId;
+        
+        console.log('[EventExecution] Redirecting to form (multi-org) with:', {
+          formId: formId,
+          eventId: eventIdValue,
+          responseId: responseId,
+          orgIndex: orgSequence
+        });
+        
+        // Build full URL with query params to ensure they're preserved
+        const formUrl = `/forms/${formId}/fill?eventId=${encodeURIComponent(eventIdValue)}&responseId=${encodeURIComponent(responseId)}&orgIndex=${encodeURIComponent(orgSequence)}`;
+        console.log('[EventExecution] Full form URL (multi-org):', formUrl);
+        
+        // Store responseId in sessionStorage as backup (in case URL params get lost)
+        sessionStorage.setItem(`formResponse_${formId}_${eventIdValue}`, responseId);
+        console.log('[EventExecution] Stored responseId in sessionStorage (multi-org):', {
+          key: `formResponse_${formId}_${eventIdValue}`,
+          value: responseId
+        });
+        
+        // Use window.location.href for absolute reliability (ensures query params are preserved)
+        window.location.href = formUrl;
       } else if (!response.hasForm) {
         // Show message if no form is assigned
         alert('No form is assigned to this event. Please contact your administrator to assign a form.');
@@ -496,12 +606,22 @@ const checkOut = async () => {
   try {
     checkingOut.value = true;
     
+    // Capture location if GEO is enabled (or if event requires it)
     let location = null;
     if (props.event.geoRequired) {
       try {
         location = await getCurrentLocation();
       } catch (error) {
         console.warn('Could not get location for check-out:', error);
+        // For non-GEO events or if location fails, still allow checkout
+        if (props.event.status === 'CHECKOUT_PENDING') {
+          // Allow checkout without location if form is submitted
+          console.log('[EventExecution] Proceeding with checkout without location (form submitted)');
+        } else {
+          alert('Could not get location for check-out. Please try again.');
+          checkingOut.value = false;
+          return;
+        }
       }
     }
 
@@ -553,6 +673,8 @@ const submitAudit = async () => {
       emit('updated', response.data);
       cacheEvent(response.data);
       notifyEvent(response.data, NotifTypes.AUDIT_SUBMITTED, `Audit submitted for "${response.data.eventName}"`);
+      // Update form response status to 'Submitted'
+      formResponseStatus.value = 'Submitted';
       if (response.requiresCorrective) {
         alert('Audit submitted. Some items require corrective action.');
       } else {
@@ -577,6 +699,20 @@ const submitAudit = async () => {
   } finally {
     submitting.value = false;
   }
+};
+
+const viewFormResponse = () => {
+  if (!formResponseId.value || !linkedFormIdValue.value) return;
+  
+  const formId = linkedFormIdValue.value;
+  const responseId = formResponseId.value;
+  
+  // Open form response in a new tab (read-only view)
+  const responseUrl = `/forms/${formId}/responses/${responseId}`;
+  router.push(responseUrl).catch((err) => {
+    console.warn('[EventExecution] Router push failed:', err);
+    window.location.href = responseUrl;
+  });
 };
 
 const moveToNextOrg = async () => {
@@ -620,11 +756,31 @@ const handlePaymentCollected = (payment) => {
 };
 
 const openAuditForm = () => {
+  // Disable form reopening after checkout
+  if (props.event.status === 'CHECKED_OUT') {
+    alert('This event has been checked out. Form cannot be reopened.');
+    return;
+  }
+  
   const formId = linkedFormIdValue.value;
   if (formId) {
     // Open form in same tab with event context
-    const formUrl = `/forms/${formId}/fill?eventId=${props.event.eventId || props.event._id}`;
-    router.push(formUrl);
+    const eventIdValue = props.event.eventId || props.event._id;
+    console.log('[EventExecution] Opening audit form with:', {
+      formId: formId,
+      eventId: eventIdValue
+    });
+    
+    // Build full URL with query params
+    const formUrl = `/forms/${formId}/fill?eventId=${encodeURIComponent(eventIdValue)}`;
+    console.log('[EventExecution] Full audit form URL:', formUrl);
+    
+    // Use router.push with full URL string (Vue Router supports this)
+    router.push(formUrl).catch((err) => {
+      console.warn('[EventExecution] Router push failed, using window.location:', err);
+      // Fallback to window.location if router fails
+      window.location.href = formUrl;
+    });
     
     // Also listen for form submission via storage event (for cross-tab)
     const handleStorageChange = (e) => {
@@ -633,6 +789,8 @@ const openAuditForm = () => {
           const response = JSON.parse(e.newValue);
           if (response.eventId === (props.event.eventId || props.event._id)) {
             formResponseId.value = response.responseId;
+            // Fetch the status to check if form is already submitted
+            fetchFormResponseStatus(response.responseId);
             // Refresh event data
             fetchEvent();
           }
@@ -650,6 +808,8 @@ const openAuditForm = () => {
           const response = JSON.parse(e.newValue);
           if (response.eventId === (props.event.eventId || props.event._id)) {
             formResponseId.value = response.responseId;
+            // Fetch the status to check if form is already submitted
+            fetchFormResponseStatus(response.responseId);
             // Refresh event data
             fetchEvent();
           }
@@ -713,6 +873,7 @@ const getStatusBadgeClass = (status) => {
     STARTED: 'px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs font-medium',
     CHECKED_IN: 'px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium',
     IN_PROGRESS: 'px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded-full text-xs font-medium',
+    CHECKOUT_PENDING: 'px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 rounded-full text-xs font-medium',
     CHECKED_OUT: 'px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded-full text-xs font-medium',
     SUBMITTED: 'px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded-full text-xs font-medium',
     CLOSED: 'px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs font-medium'
@@ -804,8 +965,15 @@ onMounted(() => {
       try {
         const notification = JSON.parse(e.newValue || localStorage.getItem(e.key));
         if (notification.eventId === (props.event.eventId || props.event._id)) {
+        // Only update if responseId changed to prevent loops
+        if (formResponseId.value !== notification.responseId) {
+          console.log('[EventExecution] Form response notification received:', notification.responseId);
           formResponseId.value = notification.responseId;
-          fetchEvent();
+          // Fetch the status to check if form is already submitted
+          fetchFormResponseStatus(notification.responseId);
+          // Don't call fetchEvent here - let the parent handle updates through normal flow
+          // The parent will fetch when needed (e.g., on user action or page refresh)
+        }
         }
       } catch (err) {
         console.error('Error parsing form response notification:', err);
@@ -815,13 +983,34 @@ onMounted(() => {
   
   window.addEventListener('storage', handleFormResponse);
   
-  // Also check on focus (when returning from form fill tab)
-  window.addEventListener('focus', checkForFormResponse);
+  // Also check on focus (when returning from form fill tab) - but with debounce
+  let focusCheckTimeout = null;
+  window.addEventListener('focus', () => {
+    if (focusCheckTimeout) clearTimeout(focusCheckTimeout);
+    focusCheckTimeout = setTimeout(() => {
+      checkForFormResponse();
+    }, 500); // Debounce focus checks
+  });
 });
+
+// Guard to prevent infinite loops
+let isCheckingFormResponse = false;
+let lastCheckedTimestamp = 0;
+const CHECK_INTERVAL = 2000; // Only check once every 2 seconds
 
 const checkForFormResponse = () => {
   const formId = linkedFormIdValue.value;
   if (!formId) return;
+  
+  // Prevent infinite loops - don't check if already checking or checked recently
+  const now = Date.now();
+  if (isCheckingFormResponse || (now - lastCheckedTimestamp < CHECK_INTERVAL)) {
+    console.log('[EventExecution] Skipping checkForFormResponse - already checking or too soon');
+    return;
+  }
+  
+  isCheckingFormResponse = true;
+  lastCheckedTimestamp = now;
   
   try {
     const key = `formResponse_${formId}`;
@@ -829,12 +1018,40 @@ const checkForFormResponse = () => {
     if (stored) {
       const notification = JSON.parse(stored);
       if (notification.eventId === (props.event.eventId || props.event._id)) {
-        formResponseId.value = notification.responseId;
-        fetchEvent();
+        // Only update if responseId changed
+        if (formResponseId.value !== notification.responseId) {
+          console.log('[EventExecution] Form response found, updating responseId:', notification.responseId);
+          formResponseId.value = notification.responseId;
+          // Fetch the status to check if form is already submitted
+          fetchFormResponseStatus(notification.responseId);
+          // Don't call fetchEvent here - let the parent handle updates
+          // fetchEvent() will be called by the parent when needed
+        }
       }
     }
   } catch (err) {
     console.error('Error checking for form response:', err);
+  } finally {
+    isCheckingFormResponse = false;
+  }
+};
+
+// Function to fetch form response status
+const fetchFormResponseStatus = async (responseId) => {
+  const formId = linkedFormIdValue.value;
+  if (!formId || !responseId) return;
+  
+  try {
+    const response = await apiClient.get(`/forms/${formId}/responses/${responseId}`);
+    if (response.success && response.data) {
+      formResponseStatus.value = response.data.executionStatus || null;
+      console.log('[EventExecution] Fetched form response status:', {
+        responseId: responseId,
+        executionStatus: formResponseStatus.value
+      });
+    }
+  } catch (err) {
+    console.warn('[EventExecution] Error fetching form response status:', err);
   }
 };
 
@@ -852,13 +1069,31 @@ const loadExistingFormResponse = async () => {
       const response = await apiClient.get(`/forms/${formId}/responses/${latestResponseId}`);
       if (response.success && response.data) {
         formResponseId.value = latestResponseId;
+        // Store the execution status to check if form is already submitted
+        formResponseStatus.value = response.data.executionStatus || null;
+        console.log('[EventExecution] Loaded existing form response:', {
+          responseId: latestResponseId,
+          executionStatus: formResponseStatus.value
+        });
       }
     } catch (err) {
       console.error('Error loading existing form response:', err);
       // If form response doesn't exist, it will be cleaned up by backend on next access
     }
   }
+  
+  // Also check if we have a responseId from other sources (e.g., from check-in)
+  if (formResponseId.value && !formResponseStatus.value) {
+    await fetchFormResponseStatus(formResponseId.value);
+  }
 };
+
+// Watch for formResponseId changes and fetch status
+watch(() => formResponseId.value, async (newResponseId) => {
+  if (newResponseId && !formResponseStatus.value) {
+    await fetchFormResponseStatus(newResponseId);
+  }
+});
 
 onUnmounted(() => {
   stopWatchingLocation();
