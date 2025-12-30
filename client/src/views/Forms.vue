@@ -126,23 +126,17 @@
         <span v-else class="text-sm text-gray-500 dark:text-gray-400">Unassigned</span>
       </template>
 
-      <!-- Custom Sections Count -->
-      <template #cell-sections="{ row }">
-        <span class="text-sm text-gray-700 dark:text-gray-300">
-          {{ row.sections?.length || 0 }} section{{ (row.sections?.length || 0) !== 1 ? 's' : '' }}
+      <!-- Custom Organization ID Cell -->
+      <template #cell-organizationId="{ row }">
+        <span v-if="row.organizationId && typeof row.organizationId === 'object' && row.organizationId.name" class="text-sm text-gray-900 dark:text-white">
+          {{ row.organizationId.name }}
         </span>
+        <span v-else-if="row.organizationId && typeof row.organizationId === 'string'" class="text-sm text-gray-500 dark:text-gray-400 font-mono">
+          {{ row.organizationId }}
+        </span>
+        <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
       </template>
 
-      <!-- Custom Public Link Cell -->
-      <template #cell-publicLink="{ row }">
-        <div v-if="row.publicLink?.enabled" class="flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-4 h-4 text-green-600 dark:text-green-400">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span class="text-xs text-gray-600 dark:text-gray-400">Public</span>
-        </div>
-        <span v-else class="text-xs text-gray-400 dark:text-gray-500">Private</span>
-      </template>
 
       <!-- Custom Actions -->
       <template #row-actions="{ row }">
@@ -197,10 +191,68 @@
       @imported="handleImportSuccess"
     />
   </div>
+
+  <!-- Type Picker Modal -->
+  <Teleport to="body">
+    <Transition
+      enter-active-class="transition duration-200 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition duration-150 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="showTypePicker"
+        class="fixed inset-0 z-[1200] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+        @click.self="showTypePicker = false"
+      >
+        <div class="bg-white dark:bg-gray-900 w-full max-w-3xl rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <div>
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Choose a form type</h3>
+              <p class="text-sm text-gray-500 dark:text-gray-400">Start with the right template for your workflow.</p>
+            </div>
+            <button
+              @click="showTypePicker = false"
+              class="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+            >
+              <XMarkIcon class="w-5 h-5" />
+            </button>
+          </div>
+
+          <div class="flex flex-col gap-3 p-6">
+            <button
+              v-for="type in typeOptions"
+              :key="type.value"
+              @click="startFormWithType(type.value)"
+              class="group text-left rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition p-4 flex items-start gap-3"
+            >
+              <div
+                class="w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0"
+                :class="type.badge"
+              >
+                <component :is="type.icon" class="w-5 h-5" />
+              </div>
+              <div class="flex-1">
+                <p class="text-sm font-semibold text-gray-900 dark:text-white">{{ type.label }}</p>
+                <p class="text-xs text-gray-600 dark:text-gray-300 leading-5 mt-1">
+                  {{ type.description }}
+                </p>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                  {{ type.subtitle }}
+                </p>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onActivated, watch } from 'vue';
+import { ref, computed, onMounted, onActivated, watch, onBeforeMount } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';
@@ -209,16 +261,44 @@ import ListView from '@/components/common/ListView.vue';
 import BadgeCell from '@/components/common/table/BadgeCell.vue';
 import Avatar from '@/components/common/Avatar.vue';
 import UniversalImportModal from '@/components/import/UniversalImportModal.vue';
+import { XMarkIcon, ClipboardDocumentCheckIcon, ChatBubbleLeftRightIcon, HandThumbUpIcon } from '@heroicons/vue/24/outline';
 
 const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
-const { openTab } = useTabs();
+const { openTab, findTabByPath, switchToTab, closeTab, tabs } = useTabs();
 
 // State
 const forms = ref([]);
 const loading = ref(false);
 const showImportModal = ref(false);
+const showTypePicker = ref(false);
+const typeOptions = [
+  {
+    value: 'Audit',
+    label: 'Audit',
+    subtitle: 'Checklists & compliance',
+    description: 'Structured audits with scoring, evidence capture, and approvals.',
+    badge: 'bg-amber-500',
+    icon: ClipboardDocumentCheckIcon
+  },
+  {
+    value: 'Survey',
+    label: 'Survey',
+    subtitle: 'Customer & employee insights',
+    description: 'Multi-question surveys with logic, branching, and scoring.',
+    badge: 'bg-blue-500',
+    icon: ChatBubbleLeftRightIcon
+  },
+  {
+    value: 'Feedback',
+    label: 'Feedback',
+    subtitle: 'NPS / CSAT / CES',
+    description: 'Quick feedback with ratings, comments, and optional follow-up.',
+    badge: 'bg-emerald-500',
+    icon: HandThumbUpIcon
+  }
+];
 const searchQuery = ref('');
 const sortField = ref('createdAt');
 const sortOrder = ref('desc');
@@ -244,15 +324,13 @@ const statistics = ref({
 
 // Columns configuration
 const columns = [
-  { key: 'formId', label: 'Form ID', sortable: true },
-  { key: 'name', label: 'Name', sortable: true },
-  { key: 'formType', label: 'Type', sortable: true },
-  { key: 'status', label: 'Status', sortable: true },
-  { key: 'visibility', label: 'Visibility', sortable: true },
-  { key: 'sections', label: 'Sections', sortable: false },
-  { key: 'assignedTo', label: 'Assigned To', sortable: true },
-  { key: 'publicLink', label: 'Public', sortable: false },
-  { key: 'createdAt', label: 'Created', sortable: true }
+  { key: 'formId', label: 'Form ID', sortable: true, visible: true, showInTable: true, visibility: { list: true } },
+  { key: 'name', label: 'Name', sortable: true, visible: true, showInTable: true, visibility: { list: true } },
+  { key: 'formType', label: 'Type', sortable: true, visible: true, showInTable: true, visibility: { list: true } },
+  { key: 'status', label: 'Status', sortable: true, visible: true, showInTable: true, visibility: { list: true } },
+  { key: 'visibility', label: 'Visibility', sortable: true, visible: true, showInTable: true, visibility: { list: true } },
+  { key: 'assignedTo', label: 'Assigned To', sortable: true, visible: true, showInTable: true, visibility: { list: true } },
+  { key: 'createdAt', label: 'Created', sortable: true, visible: true, showInTable: true, visibility: { list: true } }
 ];
 
 // Methods
@@ -329,13 +407,41 @@ const handleSort = ({ key, order }) => {
 };
 
 const openCreateForm = () => {
-  openTab('/forms/builder', {
-    name: 'form-builder',
-    title: 'New Form',
-    component: 'FormBuilder',
-    params: { formId: null }
-  });
-  router.push('/forms/builder');
+  showTypePicker.value = true;
+};
+
+const startFormWithType = (type) => {
+  showTypePicker.value = false;
+  const pathBase = '/forms/create';
+  const query = { formType: type };
+
+  // Utility: close all create-form tabs except one to keep things clean
+  const closeOtherCreateTabs = (keepId = null) => {
+    tabs.value
+      .filter(tab => tab.path && tab.path.startsWith(pathBase) && tab.id !== keepId)
+      .forEach(tab => closeTab(tab.id));
+  };
+
+  // Reuse any existing create-form tab (always keyed on /forms/create)
+  const existingTab = findTabByPath(pathBase);
+
+  if (existingTab) {
+    closeOtherCreateTabs(existingTab.id);
+    existingTab.title = `New ${type}`;
+    switchToTab(existingTab.id);
+  } else {
+    closeOtherCreateTabs();
+    openTab(pathBase, {
+      name: 'form-create',
+      title: `New ${type}`,
+      component: 'FormCreate',
+      params: {},
+      query
+    });
+  }
+
+  // Navigate with the selected type to ensure the form picks it up (no new tab path)
+  router.replace({ path: pathBase, query }).catch(() => {});
 };
 
 const openFormBuilder = (form) => {
@@ -347,6 +453,7 @@ const openFormBuilder = (form) => {
   });
   router.push(`/forms/builder/${form._id}`);
 };
+
 
 const duplicateForm = async (form) => {
   try {
@@ -384,10 +491,6 @@ const viewResponses = (form) => {
 };
 
 const handleDelete = async (form) => {
-  if (!confirm(`Are you sure you want to delete "${form.name}"?`)) {
-    return;
-  }
-
   try {
     const response = await apiClient(`/forms/${form._id}`, {
       method: 'DELETE'
@@ -401,9 +504,28 @@ const handleDelete = async (form) => {
   }
 };
 
-const handleBulkAction = async (action, selectedRows) => {
-  // Handle bulk actions (delete, export, etc.)
-  console.log('Bulk action:', action, selectedRows);
+const handleBulkAction = async (actionId, selectedRows) => {
+  const formIds = selectedRows.map(form => form._id);
+
+  try {
+    // For forms, the ListView already shows a confirmation modal for bulk delete,
+    // so we don't need an additional browser confirm here.
+    if (actionId === 'bulk-delete' || actionId === 'delete') {
+      if (!formIds.length) return;
+
+      await Promise.all(
+        formIds.map(id =>
+          apiClient(`/forms/${id}`, { method: 'DELETE' })
+        )
+      );
+
+      await fetchForms();
+    }
+    // Placeholder: add other bulk actions (e.g., export) here if needed
+  } catch (error) {
+    console.error('Error performing bulk action on forms:', error);
+    alert('Error performing bulk action. Please try again.');
+  }
 };
 
 const exportForms = async () => {
@@ -432,7 +554,77 @@ const handleImportSuccess = () => {
   fetchForms();
 };
 
-// Lifecycle
+// Lifecycle - Ensure all columns are visible by default
+onBeforeMount(() => {
+  // Check and reset column visibility if columns don't match expected
+  if (typeof window !== 'undefined') {
+    const expectedKeys = new Set([
+      'formId',
+      'name',
+      'formType',
+      'status',
+      'visibility',
+      'assignedTo',
+      'createdAt'
+    ]);
+    
+    const listViewKey = 'litedesk-listview-forms-columns';
+    const savedListView = localStorage.getItem(listViewKey);
+    let shouldReset = false;
+    
+    if (savedListView) {
+      try {
+        const parsed = JSON.parse(savedListView);
+        if (Array.isArray(parsed)) {
+          const savedKeys = new Set(parsed.map(c => c.key || c));
+          
+          // Check if saved columns match expected columns
+          const hasAllExpected = [...expectedKeys].every(key => savedKeys.has(key));
+          const hasOnlyExpected = [...savedKeys].every(key => expectedKeys.has(key));
+          const sizeMatches = savedKeys.size === expectedKeys.size;
+          
+          if (!hasAllExpected || !hasOnlyExpected || !sizeMatches) {
+            console.log('Forms columns mismatch - resetting. Expected:', [...expectedKeys].sort(), 'Saved:', [...savedKeys].sort());
+            shouldReset = true;
+          } else {
+            // Check if all columns are visible
+            const allVisible = parsed.every(c => {
+              const key = c.key || c;
+              return expectedKeys.has(key) && (c.visible !== false);
+            });
+            if (!allVisible) {
+              console.log('Some Forms columns are hidden - resetting visibility');
+              shouldReset = true;
+            }
+          }
+        } else {
+          shouldReset = true;
+        }
+      } catch (e) {
+        console.log('Error parsing saved Forms columns - resetting:', e);
+        shouldReset = true;
+      }
+    } else {
+      shouldReset = true; // No saved settings, need to set our columns
+    }
+    
+    if (shouldReset) {
+      // Save our 7 columns to localStorage with all visible
+      const columnsToSave = columns.map(col => ({
+        key: col.key,
+        label: col.label,
+        visible: true,
+        sortable: col.sortable !== false,
+        dataType: col.dataType || 'Text',
+        showInTable: true
+      }));
+      
+      localStorage.setItem(listViewKey, JSON.stringify(columnsToSave));
+      console.log('Saved Forms columns to localStorage:', columnsToSave.map(c => c.key));
+    }
+  }
+});
+
 onMounted(() => {
   fetchForms();
 });

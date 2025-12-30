@@ -1,7 +1,37 @@
 const mongoose = require('mongoose');
 const Event = require('../models/Event');
-const Deal = require('../models/Deal');
-const People = require('../models/People');
+const EventTracking = require('../models/EventTracking');
+const EventOrder = require('../models/EventOrder');
+const geoValidationService = require('../services/geoValidationService');
+
+// Helper function to normalize status to uppercase enum values
+const normalizeEventStatus = (status) => {
+    if (!status || typeof status !== 'string') return status;
+    
+    // Map common variations to correct uppercase enum values
+    const statusMap = {
+        'planned': 'PLANNED',
+        'started': 'STARTED',
+        'checked_in': 'CHECKED_IN',
+        'checked-in': 'CHECKED_IN',
+        'in_progress': 'IN_PROGRESS',
+        'in-progress': 'IN_PROGRESS',
+        'paused': 'PAUSED',
+        'checked_out': 'CHECKED_OUT',
+        'checked-out': 'CHECKED_OUT',
+        'submitted': 'SUBMITTED',
+        'pending_corrective': 'PENDING_CORRECTIVE',
+        'pending-corrective': 'PENDING_CORRECTIVE',
+        'needs_review': 'NEEDS_REVIEW',
+        'needs-review': 'NEEDS_REVIEW',
+        'approved': 'APPROVED',
+        'rejected': 'REJECTED',
+        'closed': 'CLOSED'
+    };
+    
+    const normalized = status.trim().toUpperCase().replace(/-/g, '_');
+    return statusMap[status.toLowerCase().replace(/_/g, '-')] || normalized;
+};
 
 // Get all events (with date range filtering for calendar)
 exports.getEvents = async (req, res) => {
@@ -37,49 +67,20 @@ exports.getEvents = async (req, res) => {
         
         // Status filter
         if (status) {
-            // Normalize status (capitalize first letter)
-            const normalizedStatus = status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
-            query.status = normalizedStatus;
+            // Normalize status to uppercase enum value
+            query.status = normalizeEventStatus(status);
         }
         
-        // Related record filter with rollup support
-        if (relatedType && relatedId) {
-            // Map Person to Contact for database queries
-            const dbRelatedType = relatedType === 'Person' ? 'Contact' : relatedType;
-            
-            // If fetching for a Contact/Person and includeRelated is true, also fetch events from related Deals
-            if ((relatedType === 'Contact' || relatedType === 'Person') && includeRelated === 'true') {
-                // Find all deals related to this contact
-                const relatedDeals = await Deal.find({
-                    contactId: relatedId,
-                    organizationId: req.user.organizationId
-                }).select('_id').lean();
-                
-                const dealIds = relatedDeals.map(deal => deal._id);
-                
-                // Query for events related to the contact OR related to any of the contact's deals
-                query.$or = [
-                    {
-                        relatedToType: 'Person',
-                        relatedToId: relatedId
-                    },
-                    {
-                        relatedToType: 'Deal',
-                        relatedToId: { $in: dealIds }
-                    }
-                ];
-            } else {
-                // Standard query - just the specified related record
-                query.relatedToType = relatedType;
-                query.relatedToId = relatedId;
-            }
+        // Related organization filter
+        if (relatedId) {
+            query.relatedToId = relatedId;
         }
         
         // Search filter
         if (search) {
             const searchConditions = [
                 { eventName: { $regex: search, $options: 'i' } },
-                { agendaNotes: { $regex: search, $options: 'i' } },
+                { notes: { $regex: search, $options: 'i' } },
                 { location: { $regex: search, $options: 'i' } }
             ];
             
@@ -99,51 +100,17 @@ exports.getEvents = async (req, res) => {
         const sortOptions = {};
         sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
         
-        // Fetch events without populating relatedToId (since refPath 'Person' doesn't match model 'People')
+        // Fetch events
         const events = await Event.find(query)
             .populate('eventOwnerId', 'firstName lastName email')
-            .populate('attendees.userId', 'firstName lastName email')
-            .populate('attendees.personId', 'first_name last_name email')
             .populate('linkedFormId', 'name formId formType status')
-            .populate('formAssignment.assignedAuditor', 'firstName lastName email')
+            .populate('relatedToId', 'name')
             .populate('createdBy', 'firstName lastName')
             .populate('modifiedBy', 'firstName lastName')
-            .populate('linkedTaskId', 'title description')
             .sort(sortOptions)
             .limit(limit * 1)
             .skip((page - 1) * limit)
             .lean();
-        
-        // Manually populate relatedToId for 'Person' type (maps to 'People' model)
-        // Batch populate for better performance
-        const personIds = events
-            .filter(e => e.relatedToId && e.relatedToType === 'Person')
-            .map(e => e.relatedToId);
-        
-        if (personIds.length > 0) {
-            try {
-                const peopleMap = new Map();
-                const people = await People.find({ _id: { $in: personIds } })
-                    .select('name title first_name last_name')
-                    .lean();
-                
-                people.forEach(person => {
-                    peopleMap.set(person._id.toString(), person);
-                });
-                
-                // Assign populated data back to events
-                events.forEach(event => {
-                    if (event.relatedToId && event.relatedToType === 'Person') {
-                        const personIdStr = event.relatedToId.toString();
-                        if (peopleMap.has(personIdStr)) {
-                            event.relatedToId = peopleMap.get(personIdStr);
-                        }
-                    }
-                });
-            } catch (err) {
-                console.warn('Failed to populate relatedToId for Person type:', err.message);
-            }
-        }
         
         const count = await Event.countDocuments(query);
         
@@ -179,35 +146,12 @@ exports.getEventById = async (req, res) => {
         
         let event = await Event.findOne(query)
             .populate('eventOwnerId', 'firstName lastName email')
-            .populate('attendees.userId', 'firstName lastName email')
-            .populate('attendees.personId', 'first_name last_name email')
             .populate('linkedFormId', 'name formId formType status')
-            .populate('formAssignment.assignedAuditor', 'firstName lastName email')
-            .populate('notes.created_by', 'firstName lastName')
+            .populate('relatedToId', 'name')
             .populate('createdBy', 'firstName lastName')
             .populate('modifiedBy', 'firstName lastName')
-            .populate('linkedTaskId', 'title description')
             .populate('auditHistory.actorUserId', 'firstName lastName email')
             .lean();
-        
-        // Manually populate relatedToId based on relatedToType
-        // Since refPath uses 'Person' but model is 'People', we need to handle this manually
-        // Only populate if relatedToId exists and relatedToType is 'Person' (which maps to 'People')
-        if (event && event.relatedToId && event.relatedToType === 'Person') {
-            try {
-                const relatedDoc = await People.findById(event.relatedToId)
-                    .select('name title first_name last_name')
-                    .lean();
-                if (relatedDoc) {
-                    event.relatedToId = relatedDoc;
-                }
-            } catch (err) {
-                // If populate fails, leave relatedToId as is
-                console.warn(`Failed to populate relatedToId for event ${event._id}:`, err.message);
-            }
-        }
-        // For other types (Organization, Deal, etc.), Mongoose refPath should work
-        // But if it doesn't, we can add them here if needed
         
         if (!event) {
             return res.status(404).json({ 
@@ -243,9 +187,9 @@ exports.createEvent = async (req, res) => {
             modifiedBy: req.user._id
         };
         
-        // Normalize status if provided
+        // Normalize status if provided - convert to uppercase enum value
         if (eventData.status && typeof eventData.status === 'string') {
-            eventData.status = eventData.status.charAt(0).toUpperCase() + eventData.status.slice(1).toLowerCase();
+            eventData.status = normalizeEventStatus(eventData.status);
         }
         
         // Normalize eventType if provided
@@ -253,20 +197,49 @@ exports.createEvent = async (req, res) => {
             eventData.eventType = eventData.eventType.charAt(0).toUpperCase() + eventData.eventType.slice(1);
         }
         
-        // Map Person to Contact for relatedToType
-        if (eventData.relatedToType === 'Person') {
-            // Keep as Person in the schema, but we'll handle it in queries
+        // If linkedFormId is provided, check if form is Ready and activate it
+        // Also handle empty strings by converting to null
+        if (eventData.linkedFormId === '' || eventData.linkedFormId === null || eventData.linkedFormId === undefined) {
+            eventData.linkedFormId = null;
         }
         
-        // If no attendees provided, add owner as attendee
-        if (!eventData.attendees || eventData.attendees.length === 0) {
-            eventData.attendees = [{
-                userId: req.user._id,
-                email: req.user.email || 'no-email@example.com',
-                name: `${req.user.firstName || 'User'} ${req.user.lastName || ''}`.trim(),
-                status: 'accepted'
-            }];
+        if (eventData.linkedFormId) {
+            console.log('[createEvent] Processing linkedFormId:', eventData.linkedFormId);
+            const Form = require('../models/Form');
+            const linkedForm = await Form.findOne({
+                _id: eventData.linkedFormId,
+                organizationId: req.user.organizationId
+            });
+            
+            if (!linkedForm) {
+                console.warn('[createEvent] Linked form not found:', eventData.linkedFormId);
+                // Don't fail, just log warning - form might have been deleted
+            } else if (linkedForm.status === 'Ready') {
+                // Automatically activate the form when linked to an event
+                linkedForm.status = 'Active';
+                linkedForm.modifiedBy = req.user._id;
+                await linkedForm.save();
+                console.log(`Form ${linkedForm._id} automatically activated from Ready to Active`);
+            }
+            
+            // Set formAssignment if not already provided
+            // Default: assign to event owner, due date is event end date
+            if (!eventData.formAssignment || !eventData.formAssignment.assignedAuditor) {
+                eventData.formAssignment = {
+                    assignedAuditor: eventData.eventOwnerId || req.user._id,
+                    dueDate: eventData.endDateTime || null,
+                    assignedAt: new Date()
+                };
+                console.log('[createEvent] Auto-set formAssignment:', eventData.formAssignment);
+            }
+        } else {
+            console.log('[createEvent] No linkedFormId provided, setting to null');
+            eventData.linkedFormId = null;
+            // Clear formAssignment if no form is linked
+            eventData.formAssignment = null;
         }
+        
+        console.log('[createEvent] Final eventData.linkedFormId:', eventData.linkedFormId);
         
         const event = new Event(eventData);
         await event.save();
@@ -275,14 +248,10 @@ exports.createEvent = async (req, res) => {
         
         const populatedEvent = await Event.findById(event._id)
             .populate('eventOwnerId', 'firstName lastName email')
-            .populate('attendees.userId', 'firstName lastName email')
-            .populate('attendees.personId', 'first_name last_name email')
-            .populate('relatedToId', 'name title first_name last_name')
-            .populate('linkedTaskId', 'title description')
+            .populate('relatedToId', 'name')
             .populate('createdBy', 'firstName lastName')
             .populate('modifiedBy', 'firstName lastName')
-            .populate('linkedFormId', 'name formId formType status')
-            .populate('formAssignment.assignedAuditor', 'firstName lastName email');
+            .populate('linkedFormId', 'name formId formType status');
         
         res.status(201).json({
             success: true,
@@ -337,14 +306,48 @@ exports.updateEvent = async (req, res) => {
             });
         }
         
-        // Normalize status if provided
+        // Normalize status if provided - convert to uppercase enum value
         if (req.body.status && typeof req.body.status === 'string') {
-            req.body.status = req.body.status.charAt(0).toUpperCase() + req.body.status.slice(1).toLowerCase();
+            req.body.status = normalizeEventStatus(req.body.status);
         }
         
         // Track status changes for audit
         if (req.body.status && req.body.status !== currentEvent.status) {
             currentEvent.addAuditEntry('status_changed', req.user._id, currentEvent.status, req.body.status);
+        }
+        
+        // If linkedFormId is being updated, check if form is Ready and activate it
+        if (req.body.linkedFormId !== undefined) {
+            // Handle empty string or null
+            if (req.body.linkedFormId === '' || req.body.linkedFormId === null) {
+                req.body.linkedFormId = null;
+                // Clear formAssignment if form is being unlinked
+                req.body.formAssignment = null;
+            } else if (req.body.linkedFormId !== currentEvent.linkedFormId?.toString()) {
+                const Form = require('../models/Form');
+                const linkedForm = await Form.findOne({
+                    _id: req.body.linkedFormId,
+                    organizationId: req.user.organizationId
+                });
+                
+                if (linkedForm && linkedForm.status === 'Ready') {
+                    // Automatically activate the form when linked to an event
+                    linkedForm.status = 'Active';
+                    linkedForm.modifiedBy = req.user._id;
+                    await linkedForm.save();
+                    console.log(`Form ${linkedForm._id} automatically activated from Ready to Active`);
+                }
+                
+                // Set formAssignment if not already provided and form is being linked
+                if (!req.body.formAssignment || !req.body.formAssignment.assignedAuditor) {
+                    req.body.formAssignment = {
+                        assignedAuditor: currentEvent.eventOwnerId || req.user._id,
+                        dueDate: req.body.endDateTime ? new Date(req.body.endDateTime) : (currentEvent.endDateTime || null),
+                        assignedAt: new Date()
+                    };
+                    console.log('[updateEvent] Auto-set formAssignment:', req.body.formAssignment);
+                }
+            }
         }
         
         // Track reschedule for audit
@@ -379,13 +382,9 @@ exports.updateEvent = async (req, res) => {
             { new: true, runValidators: true }
         )
             .populate('eventOwnerId', 'firstName lastName email')
-            .populate('attendees.userId', 'firstName lastName email')
-            .populate('attendees.personId', 'first_name last_name email')
-            .populate('relatedToId', 'name title first_name last_name')
-            .populate('linkedTaskId', 'title description')
+            .populate('relatedToId', 'name')
             .populate('modifiedBy', 'firstName lastName')
-            .populate('linkedFormId', 'name formId formType status')
-            .populate('formAssignment.assignedAuditor', 'firstName lastName email');
+            .populate('linkedFormId', 'name formId formType status');
         
         res.status(200).json({
             success: true,
@@ -538,8 +537,6 @@ exports.updateEventStatus = async (req, res) => {
             { new: true }
         )
             .populate('eventOwnerId', 'firstName lastName email')
-            .populate('attendees.userId', 'firstName lastName email')
-            .populate('attendees.personId', 'first_name last_name email')
             .populate('modifiedBy', 'firstName lastName');
         
         res.status(200).json({
@@ -659,16 +656,13 @@ exports.addNote = async (req, res) => {
             });
         }
         
-        // Add note to notes array (backward compatibility) or create it if it doesn't exist
-        if (!event.notes) {
-            event.notes = [];
-        }
+        // Update notes field (append to existing notes)
+        const existingNotes = event.notes || '';
+        const newNoteText = existingNotes 
+            ? `${existingNotes}\n\n[${new Date().toLocaleString()}] ${text.trim()}`
+            : text.trim();
         
-        event.notes.push({
-            text: text.trim(),
-            created_by: req.user._id,
-            created_at: new Date()
-        });
+        event.notes = newNoteText;
         
         // Add audit entry for note addition
         event.addAuditEntry('note_added', req.user._id, null, null, {
@@ -683,11 +677,7 @@ exports.addNote = async (req, res) => {
         
         const populatedEvent = await Event.findById(event._id)
             .populate('eventOwnerId', 'firstName lastName email')
-            .populate('attendees.userId', 'firstName lastName email')
-            .populate('attendees.personId', 'first_name last_name email')
-            .populate('relatedToId', 'name title first_name last_name')
-            .populate('linkedTaskId', 'title description')
-            .populate('notes.created_by', 'firstName lastName')
+            .populate('relatedToId', 'name')
             .populate('modifiedBy', 'firstName lastName');
         
         res.status(200).json({
@@ -712,7 +702,7 @@ exports.exportEvents = async (req, res) => {
             organizationId: req.user.organizationId 
         })
             .populate('eventOwnerId', 'firstName lastName email')
-            .populate('relatedToId', 'name title first_name last_name')
+            .populate('relatedToId', 'name')
             .sort({ startDateTime: -1 })
             .lean();
         
@@ -724,12 +714,12 @@ exports.exportEvents = async (req, res) => {
             startDateTime: event.startDateTime,
             endDateTime: event.endDateTime,
             location: event.location,
-            agendaNotes: event.agendaNotes,
+            notes: event.notes || '',
             eventOwner: event.eventOwnerId ? 
                 `${event.eventOwnerId.firstName} ${event.eventOwnerId.lastName}` : '',
-            attendeesCount: event.attendees?.length || 0,
-            relatedToType: event.relatedToType,
-            tags: event.tags?.join(', ') || '',
+            relatedOrganization: event.relatedToId ? event.relatedToId.name : '',
+            recurrence: event.recurrence || '',
+            visibility: event.visibility || 'Internal',
             createdTime: event.createdTime,
             modifiedTime: event.modifiedTime
         }));
@@ -744,6 +734,808 @@ exports.exportEvents = async (req, res) => {
             success: false,
             message: 'Error exporting events.', 
             error: error.message 
+        });
+    }
+};
+
+// ===== EXECUTION WORKFLOW APIs =====
+
+// Start Event Execution
+exports.startEvent = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { location } = req.body; // Optional: {latitude, longitude, accuracy}
+        
+        const query = { organizationId: req.user.organizationId };
+        if (id.match(/^[0-9a-f]{24}$/i)) {
+            query._id = id;
+        } else {
+            query.eventId = id;
+        }
+        
+        const event = await Event.findOne(query);
+        if (!event) {
+            return res.status(404).json({
+                success: false,
+                message: 'Event not found.'
+            });
+        }
+        
+        // Validate event can be started
+        if (event.status !== 'PLANNED' && event.status !== 'Scheduled') {
+            return res.status(400).json({
+                success: false,
+                message: `Event cannot be started. Current status: ${event.status}`
+            });
+        }
+        
+        // If GEO required, validate location
+        if (event.geoRequired) {
+            if (!location || !location.latitude || !location.longitude) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Location is required for GEO-enabled events'
+                });
+            }
+            
+            // If event location is not configured, use user's location as initial event location
+            if (!event.geoLocation || !event.geoLocation.latitude || !event.geoLocation.longitude) {
+                event.geoLocation = {
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                    radius: event.geoLocation?.radius || 100, // Use existing radius or default to 100m
+                    accuracy: location.accuracy || null
+                };
+            } else {
+                // Validate user location against event location
+                const validation = geoValidationService.validateLocation(
+                    event.geoLocation,
+                    location
+                );
+                
+                if (!validation.isValid) {
+                    return res.status(400).json({
+                        success: false,
+                        message: validation.message,
+                        distance: validation.distance
+                    });
+                }
+            }
+            
+            // Update geoLocation with current accuracy if available
+            if (location.accuracy) {
+                event.geoLocation.accuracy = location.accuracy;
+            }
+        }
+        
+        // Update event status
+        event.status = 'STARTED';
+        event.executionStartTime = new Date();
+        if (event.auditState) {
+            event.auditState = 'IN_PROGRESS';
+        }
+        
+        // Add audit entry
+        event.addAuditEntry('status_changed', req.user._id, 'PLANNED', 'STARTED', {
+            location: location,
+            deviceInfo: req.headers['user-agent']
+        });
+        
+        event.modifiedBy = req.user._id;
+        await event.save();
+        
+        // Create tracking entry
+        if (event.geoRequired && location) {
+            await EventTracking.create({
+                eventId: event._id,
+                organizationId: event.organizationId,
+                userId: req.user._id,
+                entryType: 'GPS_POINT',
+                location: {
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                    accuracy: location.accuracy
+                },
+                timestamp: new Date(),
+                deviceInfo: {
+                    userAgent: req.headers['user-agent']
+                }
+            });
+        }
+        
+        const populatedEvent = await Event.findById(event._id)
+            .populate('eventOwnerId', 'firstName lastName email')
+            .populate('linkedFormId', 'name formId formType status');
+        
+        res.status(200).json({
+            success: true,
+            message: 'Event started successfully.',
+            data: populatedEvent
+        });
+    } catch (error) {
+        console.error('Error starting event:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error starting event.',
+            error: error.message
+        });
+    }
+};
+
+// Check-In (GEO mode)
+exports.checkIn = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { location, orgIndex } = req.body; // orgIndex for multi-org routes
+        
+        if (!location || !location.latitude || !location.longitude) {
+            return res.status(400).json({
+                success: false,
+                message: 'Location is required for check-in'
+            });
+        }
+        
+        const query = { organizationId: req.user.organizationId };
+        if (id.match(/^[0-9a-f]{24}$/i)) {
+            query._id = id;
+        } else {
+            query.eventId = id;
+        }
+        
+        const event = await Event.findOne(query);
+        if (!event) {
+            return res.status(404).json({
+                success: false,
+                message: 'Event not found.'
+            });
+        }
+        
+        if (!event.geoRequired) {
+            return res.status(400).json({
+                success: false,
+                message: 'This event does not require GEO check-in'
+            });
+        }
+        
+        // For multi-org routes, validate orgIndex
+        let targetLocation = event.geoLocation;
+        if (event.isMultiOrg && orgIndex !== undefined) {
+            const org = event.orgList.find(o => o.sequence === orgIndex);
+            if (!org) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid organization index'
+                });
+            }
+            // Use org-specific location if available
+            // For now, use event location
+        }
+        
+        // Validate location
+        const validation = geoValidationService.validateLocation(targetLocation, location);
+        if (!validation.isValid) {
+            return res.status(400).json({
+                success: false,
+                message: validation.message,
+                distance: validation.distance
+            });
+        }
+        
+        // Check GPS accuracy
+        const accuracyCheck = geoValidationService.checkAccuracy(location.accuracy);
+        if (!accuracyCheck.acceptable) {
+            return res.status(400).json({
+                success: false,
+                message: accuracyCheck.message
+            });
+        }
+        
+        // Update event
+        if (event.isMultiOrg && orgIndex !== undefined) {
+            const org = event.orgList.find(o => o.sequence === orgIndex);
+            if (org) {
+                org.checkIn = {
+                    timestamp: new Date(),
+                    location: {
+                        latitude: location.latitude,
+                        longitude: location.longitude
+                    }
+                };
+                org.status = 'IN_PROGRESS';
+                event.currentOrgIndex = orgIndex;
+            }
+        } else {
+            event.checkIn = {
+                timestamp: new Date(),
+                location: {
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                    accuracy: location.accuracy
+                },
+                userId: req.user._id
+            };
+        }
+        
+        event.status = 'CHECKED_IN';
+        if (event.auditState) {
+            event.auditState = 'IN_PROGRESS';
+        }
+        
+        event.addAuditEntry('status_changed', req.user._id, event.status, 'CHECKED_IN', {
+            location: location,
+            orgIndex: orgIndex
+        });
+        
+        event.modifiedBy = req.user._id;
+        await event.save();
+        
+        // Create tracking entry
+        await EventTracking.create({
+            eventId: event._id,
+            organizationId: event.organizationId,
+            userId: req.user._id,
+            orgIndex: orgIndex || null,
+            entryType: 'CHECK_IN',
+            location: {
+                latitude: location.latitude,
+                longitude: location.longitude,
+                accuracy: location.accuracy
+            },
+            timestamp: new Date(),
+            deviceInfo: {
+                userAgent: req.headers['user-agent']
+            }
+        });
+        
+        // Event → Response execution handoff
+        // If event has an assigned form, create/update response
+        let formResponse = null;
+        let formResponseId = null;
+        
+        if (event.linkedFormId) {
+            try {
+                const FormResponse = require('../models/FormResponse');
+                const Form = require('../models/Form');
+                
+                // Verify form exists and is active
+                const form = await Form.findOne({
+                    _id: event.linkedFormId,
+                    organizationId: event.organizationId,
+                    status: 'Active'
+                });
+                
+                if (form) {
+                    // Check if response already exists for this event
+                    formResponse = await FormResponse.findOne({
+                        formId: event.linkedFormId,
+                        organizationId: event.organizationId,
+                        'linkedTo.type': 'Event',
+                        'linkedTo.id': event._id,
+                        executionStatus: { $in: ['Not Started', 'In Progress'] }
+                    });
+                    
+                    if (!formResponse) {
+                        // Create new response record
+                        formResponse = new FormResponse({
+                            formId: event.linkedFormId,
+                            organizationId: event.organizationId,
+                            submittedBy: req.user._id,
+                            submittedAt: new Date(),
+                            linkedTo: {
+                                type: 'Event',
+                                id: event._id
+                            },
+                            executionStatus: 'In Progress',
+                            reviewStatus: null, // Review status only applies after submission
+                            ipAddress: req.ip || req.connection.remoteAddress,
+                            userAgent: req.get('user-agent')
+                        });
+                        
+                        await formResponse.save();
+                        
+                        // Update event metadata with form response ID
+                        if (!event.metadata) {
+                            event.metadata = {};
+                        }
+                        if (!event.metadata.formResponses) {
+                            event.metadata.formResponses = [];
+                        }
+                        if (!event.metadata.formResponses.includes(formResponse._id.toString())) {
+                            event.metadata.formResponses.push(formResponse._id.toString());
+                        }
+                        await event.save();
+                    } else {
+                        // Update existing response to In Progress if it was Not Started
+                        if (formResponse.executionStatus === 'Not Started') {
+                            formResponse.executionStatus = 'In Progress';
+                            await formResponse.save();
+                        }
+                    }
+                    
+                    formResponseId = formResponse._id.toString();
+                }
+            } catch (formError) {
+                console.error('Error creating form response during check-in:', formError);
+                // Don't fail check-in if form response creation fails
+                // Log error but continue with check-in success
+            }
+        }
+        
+        res.status(200).json({
+            success: true,
+            message: 'Checked in successfully.',
+            data: event,
+            warning: accuracyCheck.warning ? accuracyCheck.message : null,
+            formResponseId: formResponseId, // Include response ID for frontend redirect
+            hasForm: !!event.linkedFormId
+        });
+    } catch (error) {
+        console.error('Error checking in:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error checking in.',
+            error: error.message
+        });
+    }
+};
+
+// Check-Out (GEO mode)
+exports.checkOut = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { location, orgIndex } = req.body;
+        
+        const query = { organizationId: req.user.organizationId };
+        if (id.match(/^[0-9a-f]{24}$/i)) {
+            query._id = id;
+        } else {
+            query.eventId = id;
+        }
+        
+        const event = await Event.findOne(query);
+        if (!event) {
+            return res.status(404).json({
+                success: false,
+                message: 'Event not found.'
+            });
+        }
+        
+        if (!event.geoRequired) {
+            return res.status(400).json({
+                success: false,
+                message: 'This event does not require GEO check-out'
+            });
+        }
+        
+        // Update event
+        if (event.isMultiOrg && orgIndex !== undefined) {
+            const org = event.orgList.find(o => o.sequence === orgIndex);
+            if (org) {
+                org.checkOut = {
+                    timestamp: new Date(),
+                    location: location ? {
+                        latitude: location.latitude,
+                        longitude: location.longitude
+                    } : null
+                };
+                org.status = 'COMPLETED';
+                org.completedAt = new Date();
+            }
+        } else {
+            event.checkOut = {
+                timestamp: new Date(),
+                location: location ? {
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                    accuracy: location.accuracy
+                } : null,
+                userId: req.user._id
+            };
+        }
+        
+        event.status = 'CHECKED_OUT';
+        event.modifiedBy = req.user._id;
+        
+        // Calculate time spent
+        if (event.checkIn && event.checkIn.timestamp) {
+            const timeSpent = Math.floor((new Date() - event.checkIn.timestamp) / 1000);
+            event.timeSpent = (event.timeSpent || 0) + timeSpent;
+        }
+        
+        event.addAuditEntry('status_changed', req.user._id, 'CHECKED_IN', 'CHECKED_OUT', {
+            location: location,
+            orgIndex: orgIndex
+        });
+        
+        await event.save();
+        
+        // Create tracking entry
+        if (location) {
+            await EventTracking.create({
+                eventId: event._id,
+                organizationId: event.organizationId,
+                userId: req.user._id,
+                orgIndex: orgIndex || null,
+                entryType: 'CHECK_OUT',
+                location: {
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                    accuracy: location.accuracy
+                },
+                timestamp: new Date(),
+                deviceInfo: {
+                    userAgent: req.headers['user-agent']
+                }
+            });
+        }
+        
+        res.status(200).json({
+            success: true,
+            message: 'Checked out successfully.',
+            data: event
+        });
+    } catch (error) {
+        console.error('Error checking out:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error checking out.',
+            error: error.message
+        });
+    }
+};
+
+// Submit Audit Form
+exports.submitAudit = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { formResponseId, orgIndex } = req.body;
+        
+        if (!formResponseId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Form response ID is required'
+            });
+        }
+        
+        const FormResponse = require('../models/FormResponse');
+        
+        // Verify form response exists and belongs to event's form
+        const formResponse = await FormResponse.findOne({
+            _id: formResponseId,
+            organizationId: req.user.organizationId
+        });
+        
+        if (!formResponse) {
+            return res.status(404).json({
+                success: false,
+                message: 'Form response not found'
+            });
+        }
+        
+        const query = { organizationId: req.user.organizationId };
+        if (id.match(/^[0-9a-f]{24}$/i)) {
+            query._id = id;
+        } else {
+            query.eventId = id;
+        }
+        
+        const event = await Event.findOne(query);
+        if (!event) {
+            return res.status(404).json({
+                success: false,
+                message: 'Event not found.'
+            });
+        }
+        
+        // Validate event type
+        if (!['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(event.eventType)) {
+            return res.status(400).json({
+                success: false,
+                message: 'This event type does not support audit submission'
+            });
+        }
+        
+        // Validate form response belongs to event's linked form
+        if (formResponse.formId.toString() !== event.linkedFormId?.toString()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Form response does not match event\'s linked form'
+            });
+        }
+        
+        // Validate check-in for GEO events
+        if (event.geoRequired) {
+            if (event.isMultiOrg && orgIndex !== undefined) {
+                const org = event.orgList.find(o => o.sequence === orgIndex);
+                if (!org || !org.checkIn || !org.checkIn.timestamp) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Please check in before submitting audit'
+                    });
+                }
+            } else {
+                if (!event.checkIn || !event.checkIn.timestamp) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Please check in before submitting audit'
+                    });
+                }
+            }
+        }
+        
+        // Check if form response has failures (needs corrective action)
+        const hasFailures = formResponse.responseDetails?.some(detail => detail.passFail === 'Fail');
+        
+        // Update audit state based on form response status
+        if (hasFailures && formResponse.status === 'Pending Corrective Action') {
+            event.auditState = 'PENDING_CORRECTIVE';
+            event.status = 'PENDING_CORRECTIVE';
+        } else {
+            event.auditState = 'SUBMITTED';
+            event.status = 'SUBMITTED';
+        }
+        
+        // Link form response to event (store in metadata)
+        if (!event.metadata) {
+            event.metadata = {};
+        }
+        if (!event.metadata.formResponses) {
+            event.metadata.formResponses = [];
+        }
+        if (!event.metadata.formResponses.includes(formResponseId)) {
+            event.metadata.formResponses.push(formResponseId);
+        }
+        
+        // For multi-org, mark current org as completed
+        if (event.isMultiOrg && orgIndex !== undefined) {
+            const org = event.orgList.find(o => o.sequence === orgIndex);
+            if (org) {
+                org.status = 'COMPLETED';
+                org.completedAt = new Date();
+            }
+        }
+        
+        event.addAuditEntry('status_changed', req.user._id, 'IN_PROGRESS', event.auditState, {
+            formResponseId: formResponseId,
+            orgIndex: orgIndex,
+            hasFailures: hasFailures
+        });
+        
+        event.modifiedBy = req.user._id;
+        await event.save();
+        
+        res.status(200).json({
+            success: true,
+            message: hasFailures 
+                ? 'Audit submitted. Corrective actions required.' 
+                : 'Audit submitted successfully.',
+            data: event,
+            requiresCorrective: hasFailures
+        });
+    } catch (error) {
+        console.error('Error submitting audit:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error submitting audit.',
+            error: error.message
+        });
+    }
+};
+
+// Move to Next Org (Multi-org routes)
+exports.moveToNextOrg = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const query = { organizationId: req.user.organizationId };
+        if (id.match(/^[0-9a-f]{24}$/i)) {
+            query._id = id;
+        } else {
+            query.eventId = id;
+        }
+        
+        const event = await Event.findOne(query);
+        if (!event) {
+            return res.status(404).json({
+                success: false,
+                message: 'Event not found.'
+            });
+        }
+        
+        if (!event.isMultiOrg) {
+            return res.status(400).json({
+                success: false,
+                message: 'This is not a multi-organization route event'
+            });
+        }
+        
+        const currentIndex = event.currentOrgIndex || 0;
+        const nextIndex = currentIndex + 1;
+        
+        if (nextIndex >= event.orgList.length) {
+            return res.status(400).json({
+                success: false,
+                message: 'All organizations in route have been visited'
+            });
+        }
+        
+        event.currentOrgIndex = nextIndex;
+        event.modifiedBy = req.user._id;
+        
+        event.addAuditEntry('status_changed', req.user._id, 
+            `Org ${currentIndex}`, `Org ${nextIndex}`, {
+            action: 'MOVE_TO_NEXT_ORG'
+        });
+        
+        await event.save();
+        
+        res.status(200).json({
+            success: true,
+            message: 'Moved to next organization.',
+            data: event,
+            currentOrg: event.orgList[nextIndex]
+        });
+    } catch (error) {
+        console.error('Error moving to next org:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error moving to next organization.',
+            error: error.message
+        });
+    }
+};
+
+// Create Order (Field Sales Beat)
+exports.createOrder = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { orderData, orgIndex } = req.body;
+        
+        const query = { organizationId: req.user.organizationId };
+        if (id.match(/^[0-9a-f]{24}$/i)) {
+            query._id = id;
+        } else {
+            query.eventId = id;
+        }
+        
+        const event = await Event.findOne(query);
+        if (!event) {
+            return res.status(404).json({
+                success: false,
+                message: 'Event not found.'
+            });
+        }
+        
+        if (event.eventType !== 'Field Sales Beat') {
+            return res.status(400).json({
+                success: false,
+                message: 'Orders can only be created for Field Sales Beat events'
+            });
+        }
+        
+        // Validate check-in if GEO required
+        if (event.geoRequired) {
+            if (event.isMultiOrg && orgIndex !== undefined) {
+                const org = event.orgList.find(o => o.sequence === orgIndex);
+                if (!org || !org.checkIn || !org.checkIn.timestamp) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Please check in before creating order'
+                    });
+                }
+            } else {
+                if (!event.checkIn || !event.checkIn.timestamp) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Please check in before creating order'
+                    });
+                }
+            }
+        }
+        
+        // Determine target org
+        let targetOrgId = event.relatedToId; // Single org
+        if (event.isMultiOrg && orgIndex !== undefined) {
+            const org = event.orgList.find(o => o.sequence === orgIndex);
+            if (!org) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid organization index'
+                });
+            }
+            targetOrgId = org.organizationId;
+        }
+        
+        // Create order
+        const order = await EventOrder.create({
+            eventId: event._id,
+            organizationId: event.organizationId,
+            targetOrgId: targetOrgId,
+            orderType: 'ORDER',
+            orderData: orderData,
+            amount: orderData.amount || null,
+            currency: orderData.currency || 'USD',
+            status: 'CONFIRMED',
+            createdBy: req.user._id
+        });
+        
+        // Update KPI actuals
+        event.kpiActuals = event.kpiActuals || {};
+        event.kpiActuals.orderCount = (event.kpiActuals.orderCount || 0) + 1;
+        event.kpiActuals.orderValue = (event.kpiActuals.orderValue || 0) + (orderData.amount || 0);
+        event.kpiActuals.ordersCreated = (event.kpiActuals.ordersCreated || 0) + 1;
+        
+        event.modifiedBy = req.user._id;
+        await event.save();
+        
+        res.status(201).json({
+            success: true,
+            message: 'Order created successfully.',
+            data: order
+        });
+    } catch (error) {
+        console.error('Error creating order:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error creating order.',
+            error: error.message
+        });
+    }
+};
+
+// Complete Event
+exports.completeEvent = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const query = { organizationId: req.user.organizationId };
+        if (id.match(/^[0-9a-f]{24}$/i)) {
+            query._id = id;
+        } else {
+            query.eventId = id;
+        }
+        
+        const event = await Event.findOne(query);
+        if (!event) {
+            return res.status(404).json({
+                success: false,
+                message: 'Event not found.'
+            });
+        }
+        
+        // Validate all orgs completed for multi-org routes
+        if (event.isMultiOrg) {
+            const incompleteOrgs = event.orgList.filter(o => o.status !== 'COMPLETED');
+            if (incompleteOrgs.length > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Please complete all organizations in route. ${incompleteOrgs.length} remaining.`
+                });
+            }
+        }
+        
+        // Update status
+        event.status = 'CLOSED';
+        event.executionEndTime = new Date();
+        if (event.auditState) {
+            event.auditState = 'CLOSED';
+        }
+        
+        event.addAuditEntry('status_changed', req.user._id, event.status, 'CLOSED', {});
+        event.modifiedBy = req.user._id;
+        await event.save();
+        
+        res.status(200).json({
+            success: true,
+            message: 'Event completed successfully.',
+            data: event
+        });
+    } catch (error) {
+        console.error('Error completing event:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error completing event.',
+            error: error.message
         });
     }
 };

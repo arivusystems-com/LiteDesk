@@ -23,7 +23,9 @@
               <ModuleActions 
                 :module="moduleKey"
                 :create-label="createLabel"
+                :show-create="showCreate !== false"
                 :show-import="showImport !== false"
+                :show-export="showExport !== false"
                 @create="$emit('create')"
                 @import="$emit('import')"
                 @export="$emit('export')"
@@ -61,7 +63,9 @@
           <ModuleActions 
             :module="moduleKey"
             :create-label="createLabel"
+            :show-create="showCreate !== false"
             :show-import="showImport !== false"
+            :show-export="showExport !== false"
             @create="$emit('create')"
             @import="$emit('import')"
             @export="$emit('export')"
@@ -724,7 +728,7 @@
                         <div
                           v-for="(field, index) in shownFields"
                           :key="field.key"
-                          :draggable="true"
+                          :draggable="!(props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name')"
                           @dragstart="handleDragStart($event, index)"
                           @dragover.prevent="handleDragOver"
                           @dragenter.prevent="handleDragEnter($event, index)"
@@ -750,14 +754,19 @@
                             class="w-4 h-4 text-gray-500 dark:text-gray-400 flex-shrink-0"
                           />
                           <span class="flex-1 text-sm text-gray-900 dark:text-white">{{ field.label }}</span>
+                          <span v-if="props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name'" class="text-xs text-gray-500 dark:text-gray-400 mr-2">Required</span>
                           <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
                             <input 
                               type="checkbox" 
                               :checked="field.visible"
                               @change="toggleFieldVisibility(field.key)"
-                              class="sr-only peer"
+                              :disabled="props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name'"
+                              :class="['sr-only peer', props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name' ? 'cursor-not-allowed opacity-50' : '']"
                             >
-                            <div class="w-9 h-5 bg-indigo-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-indigo-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600"></div>
+                            <div :class="[
+                              'w-9 h-5 bg-indigo-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-indigo-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600',
+                              props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name' ? 'opacity-50 cursor-not-allowed' : ''
+                            ]"></div>
                           </label>
                         </div>
                       </div>
@@ -784,7 +793,8 @@
                               type="checkbox" 
                               :checked="field.visible"
                               @change="toggleFieldVisibility(field.key)"
-                              class="sr-only peer"
+                              :disabled="props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name'"
+                              :class="['sr-only peer', props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name' ? 'cursor-not-allowed opacity-50' : '']"
                             >
                             <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                           </label>
@@ -875,7 +885,15 @@ const props = defineProps({
     type: String,
     default: 'New Record'
   },
+  showCreate: {
+    type: Boolean,
+    default: true
+  },
   showImport: {
+    type: Boolean,
+    default: true
+  },
+  showExport: {
     type: Boolean,
     default: true
   },
@@ -1233,6 +1251,23 @@ const fetchFieldConfiguration = async () => {
   }
 };
 
+// Normalize column order - ensure 'name' field is at top for forms module
+const normalizeColumnOrder = (columns) => {
+  if (props.moduleKey !== 'forms' || !Array.isArray(columns)) {
+    return columns;
+  }
+  
+  const nameFieldIndex = columns.findIndex(col => col.key?.toLowerCase() === 'name');
+  if (nameFieldIndex > 0) {
+    // Move name field to the top
+    const nameField = columns[nameFieldIndex];
+    columns.splice(nameFieldIndex, 1);
+    columns.unshift(nameField);
+  }
+  
+  return columns;
+};
+
 // Initialize visible columns from props.columns, saved settings, or backend configuration
 const initializeColumns = async () => {
   if (!Array.isArray(props.columns)) {
@@ -1304,7 +1339,7 @@ const initializeColumns = async () => {
       }
     });
     
-    visibleColumns.value = orderedColumns;
+    visibleColumns.value = normalizeColumnOrder(orderedColumns);
   } else {
     // No saved settings - fetch from backend configuration
     const moduleConfig = await fetchFieldConfiguration();
@@ -1357,13 +1392,13 @@ const initializeColumns = async () => {
         }
       });
       
-      visibleColumns.value = initializedColumns;
+      visibleColumns.value = normalizeColumnOrder(initializedColumns);
       
       // Save the initial state
       saveColumnSettings();
     } else {
       // Fallback to props with visibility.list check
-      visibleColumns.value = props.columns.map(col => {
+      const mappedColumns = props.columns.map(col => {
         const visibilityFromConfig = col.visibility?.list !== undefined ? col.visibility.list : undefined;
         const visible = visibilityFromConfig !== undefined ? visibilityFromConfig : (col.visible !== false);
         
@@ -1376,6 +1411,7 @@ const initializeColumns = async () => {
           showInTable: col.showInTable !== undefined ? col.showInTable : visible
         };
       });
+      visibleColumns.value = normalizeColumnOrder(mappedColumns);
     }
   }
 };
@@ -1402,6 +1438,8 @@ watch(() => props.columns, async () => {
           showInTable: col.showInTable !== false
         });
       });
+      // Normalize order after adding new columns
+      visibleColumns.value = normalizeColumnOrder(visibleColumns.value);
       saveColumnSettings();
     }
   }
@@ -1843,6 +1881,20 @@ const resetColumnSettings = () => {
 };
 
 const toggleFieldVisibility = async (fieldKey) => {
+  // Prevent hiding 'name' field for forms module
+  if (props.moduleKey === 'forms' && fieldKey?.toLowerCase() === 'name') {
+    const column = visibleColumns.value.find(col => col.key === fieldKey);
+    if (column && !column.visible) {
+      // Allow showing it, but prevent hiding
+      return;
+    }
+    if (!column || column.visible) {
+      // Trying to hide - prevent it
+      alert('The "name" field must always be visible in table and detail views for Forms.');
+      return;
+    }
+  }
+  
   let column = visibleColumns.value.find(col => col.key === fieldKey);
   
   // If field doesn't exist in visibleColumns, add it
@@ -1863,6 +1915,8 @@ const toggleFieldVisibility = async (fieldKey) => {
       
       // Add to visibleColumns
       visibleColumns.value.push(newColumn);
+      // Normalize order after adding new column
+      visibleColumns.value = normalizeColumnOrder(visibleColumns.value);
       column = newColumn;
     } else {
       console.warn(`Field ${fieldKey} not found in backend or props`);
@@ -1873,6 +1927,9 @@ const toggleFieldVisibility = async (fieldKey) => {
     column.visible = !column.visible;
     column.showInTable = column.visible;
   }
+  
+  // Normalize order after toggling (ensures name stays at top for forms)
+  visibleColumns.value = normalizeColumnOrder(visibleColumns.value);
   
   // Explicitly save the change
   saveColumnSettings();
@@ -2025,6 +2082,28 @@ const handleDrop = (event, dropIndex) => {
     return;
   }
   
+  // Prevent reordering 'name' field for forms module
+  if (props.moduleKey === 'forms') {
+    const visibleCols = visibleColumns.value.filter(col => col.visible);
+    const draggedField = shownFields.value[dragStartIndex.value];
+    const dropField = shownFields.value[dropIndex];
+    
+    // Prevent dragging 'name' field away from position 0
+    if (draggedField?.key?.toLowerCase() === 'name' && dragStartIndex.value === 0) {
+      dragStartIndex.value = null;
+      return;
+    }
+    
+    // Prevent dropping other fields at position 0 if 'name' is already there
+    if (dropIndex === 0 && draggedField?.key?.toLowerCase() !== 'name') {
+      const nameFieldIndex = shownFields.value.findIndex(f => f.key?.toLowerCase() === 'name');
+      if (nameFieldIndex === 0) {
+        dragStartIndex.value = null;
+        return;
+      }
+    }
+  }
+  
   // Get the current visible columns in their current order
   const visibleCols = visibleColumns.value.filter(col => col.visible);
   const hiddenCols = visibleColumns.value.filter(col => !col.visible);
@@ -2051,7 +2130,8 @@ const handleDrop = (event, dropIndex) => {
     visibleCols.splice(insertIndex, 0, draggedColumn);
     
     // Reconstruct visibleColumns with new order (visible first, then hidden)
-    visibleColumns.value = [...visibleCols, ...hiddenCols];
+    const reorderedColumns = [...visibleCols, ...hiddenCols];
+    visibleColumns.value = normalizeColumnOrder(reorderedColumns);
     
     // Save the new order immediately
     saveColumnSettings();

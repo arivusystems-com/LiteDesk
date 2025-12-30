@@ -221,13 +221,40 @@ const FormResponseSchema = new Schema({
         }
     },
 
-    // 🔄 STATUS & WORKFLOW
+    // 🚀 EXECUTION STATUS (Execution Phase)
     // **********************************
-    status: {
+    executionStatus: {
+        type: String,
+        enum: ['Not Started', 'In Progress', 'Submitted'],
+        default: 'Not Started',
+        index: true
+    },
+
+    // 🔄 REVIEW STATUS (Review Phase - only applies after submission)
+    // NOTE: This field is now computed automatically based on business rules
+    // It is stored for indexing purposes but should not be manually set
+    // **********************************
+    reviewStatus: {
         type: String,
         enum: ['Pending Corrective Action', 'Needs Auditor Review', 'Approved', 'Rejected', 'Closed'],
-        default: 'Pending Corrective Action',
+        default: null, // null until executionStatus = 'Submitted'
         index: true
+    },
+    
+    // ✅ APPROVAL TRACKING (explicit approval by auditor)
+    // **********************************
+    approved: {
+        type: Boolean,
+        default: false
+    },
+    approvedBy: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
+    },
+    approvedAt: {
+        type: Date,
+        default: null
     },
 
     // ✅ CORRECTIVE ACTIONS
@@ -262,17 +289,65 @@ const FormResponseSchema = new Schema({
     userAgent: {
         type: String,
         trim: true
+    },
+
+    // 🗄️ ARCHIVE & INVALIDATION (for Audit Integrity)
+    // **********************************
+    archived: {
+        type: Boolean,
+        default: false,
+        index: true
+    },
+    archivedAt: {
+        type: Date,
+        default: null
+    },
+    archivedBy: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
+    },
+    archiveReason: {
+        type: String,
+        trim: true,
+        maxlength: 1000
+    },
+    
+    invalidated: {
+        type: Boolean,
+        default: false,
+        index: true
+    },
+    invalidatedAt: {
+        type: Date,
+        default: null
+    },
+    invalidatedBy: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
+    },
+    invalidationReason: {
+        type: String,
+        trim: true,
+        maxlength: 1000,
+        required: function() {
+            return this.invalidated === true;
+        }
     }
 }, {
     timestamps: true // Automatically handles 'createdAt' and 'updatedAt'
 });
 
 // Compound indexes
-FormResponseSchema.index({ formId: 1, status: 1 });
+FormResponseSchema.index({ formId: 1, reviewStatus: 1 });
+FormResponseSchema.index({ formId: 1, executionStatus: 1 });
 FormResponseSchema.index({ organizationId: 1, submittedAt: -1 });
-FormResponseSchema.index({ organizationId: 1, status: 1 });
+FormResponseSchema.index({ organizationId: 1, reviewStatus: 1 });
+FormResponseSchema.index({ organizationId: 1, executionStatus: 1 });
 FormResponseSchema.index({ 'linkedTo.type': 1, 'linkedTo.id': 1 });
 FormResponseSchema.index({ submittedBy: 1 });
+FormResponseSchema.index({ archived: 1, invalidated: 1 });
 
 // Pre-save middleware to auto-generate responseId
 FormResponseSchema.pre('save', async function(next) {
@@ -280,6 +355,30 @@ FormResponseSchema.pre('save', async function(next) {
         // Generate responseId: RSP-001, RSP-002, etc.
         const count = await mongoose.model('FormResponse').countDocuments({ organizationId: this.organizationId });
         this.responseId = `RSP-${String(count + 1).padStart(3, '0')}`;
+    }
+    next();
+});
+
+// Pre-save middleware to enforce immutability for submitted responses
+FormResponseSchema.pre('save', function(next) {
+    // If this is an update (not a new document) and executionStatus is 'Submitted'
+    if (!this.isNew && this.executionStatus === 'Submitted') {
+        // Allow only specific fields to be updated (archive/invalidate, approval, corrective actions)
+        const allowedFields = [
+            'archived', 'archivedAt', 'archivedBy', 'archiveReason',
+            'invalidated', 'invalidatedAt', 'invalidatedBy', 'invalidationReason',
+            'reviewStatus', // Computed automatically, but can be set to 'Rejected' manually
+            'approved', 'approvedBy', 'approvedAt', // Approval tracking
+            'correctiveActions', 'finalReport', 'updatedAt'
+        ];
+        
+        // Check if any restricted fields are being modified
+        const modifiedFields = this.modifiedPaths();
+        const restrictedFields = modifiedFields.filter(field => !allowedFields.includes(field));
+        
+        if (restrictedFields.length > 0) {
+            return next(new Error(`Cannot modify submitted response. Restricted fields: ${restrictedFields.join(', ')}`));
+        }
     }
     next();
 });
@@ -317,6 +416,98 @@ FormResponseSchema.methods.areCorrectiveActionsComplete = function() {
 FormResponseSchema.methods.getFailedQuestionsCount = function() {
     return this.responseDetails.filter(detail => detail.passFail === 'Fail').length;
 };
+
+// Method to get failed scorable questions count
+FormResponseSchema.methods.getFailedScorableQuestionsCount = function() {
+    // Failed scorable questions are those with passFail === 'Fail' (not 'N/A')
+    return this.responseDetails.filter(detail => detail.passFail === 'Fail').length;
+};
+
+// Method to check if there are any incomplete corrective actions
+// NOTE: This should only be called when there ARE failed questions
+// Returns true if corrective actions are needed but not completed
+FormResponseSchema.methods.hasIncompleteCorrectiveActions = function() {
+    // If there are no corrective actions, they need to be added (incomplete)
+    if (!this.correctiveActions || this.correctiveActions.length === 0) {
+        return true; // No corrective actions means they're incomplete (need to be added)
+    }
+    
+    // A corrective action is incomplete if:
+    // - managerAction.status is not 'Resolved', OR
+    // - auditorVerification.approved is not true
+    return this.correctiveActions.some(action => {
+        return action.managerAction.status !== 'Resolved' || 
+               action.auditorVerification.approved !== true;
+    });
+};
+
+/**
+ * Compute review status based on business rules
+ * Rules:
+ * 1. If there are one or more failed scorable questions AND at least one corrective action is not completed → status = "Pending Corrective Action"
+ * 2. If there are failed questions but all corrective actions are completed → status = "Needs Auditor Review"
+ * 3. If there are no failed questions AND response is not yet reviewed → status = "Needs Auditor Review"
+ * 4. If auditor has approved the response → status = "Approved"
+ * 5. If response is approved and finalized (all corrective actions completed) → status = "Closed"
+ * 6. Status must NEVER be "Pending Corrective Action" when there are zero failed questions
+ */
+FormResponseSchema.methods.computeReviewStatus = function() {
+    // If not submitted, status is null
+    if (this.executionStatus !== 'Submitted') {
+        return null;
+    }
+    
+    const failedScorableQuestionsCount = this.getFailedScorableQuestionsCount();
+    const hasIncompleteActions = this.hasIncompleteCorrectiveActions();
+    const allActionsComplete = this.areCorrectiveActionsComplete();
+    
+    // Rule 5: If approved and all corrective actions are completed → "Closed"
+    if (this.approved && allActionsComplete) {
+        return 'Closed';
+    }
+    
+    // Rule 4: If auditor has approved the response → "Approved"
+    if (this.approved) {
+        return 'Approved';
+    }
+    
+    // Rule 6: Status must NEVER be "Pending Corrective Action" when there are zero failed questions
+    // Rule 1: If there are failed scorable questions AND at least one corrective action is not completed → "Pending Corrective Action"
+    // IMPORTANT: Only check hasIncompleteActions if there are actually failed questions
+    if (failedScorableQuestionsCount > 0) {
+        // If there are failed questions but no corrective actions added yet, or incomplete actions
+        if (hasIncompleteActions) {
+            return 'Pending Corrective Action';
+        }
+    }
+    
+    // Rule 2: If there are failed questions but all corrective actions are completed → "Needs Auditor Review"
+    if (failedScorableQuestionsCount > 0 && allActionsComplete) {
+        return 'Needs Auditor Review';
+    }
+    
+    // Rule 3: If there are no failed questions AND response is not yet reviewed → "Needs Auditor Review"
+    if (failedScorableQuestionsCount === 0) {
+        return 'Needs Auditor Review';
+    }
+    
+    // Default fallback (should not reach here based on rules above)
+    return 'Needs Auditor Review';
+};
+
+// Pre-save hook to automatically compute reviewStatus
+FormResponseSchema.pre('save', function(next) {
+    // Only compute status for submitted responses
+    if (this.executionStatus === 'Submitted') {
+        // Preserve 'Rejected' status if it was explicitly set (it's the only manually settable status)
+        // Otherwise, compute status based on business rules
+        if (this.reviewStatus !== 'Rejected') {
+            const computedStatus = this.computeReviewStatus();
+            this.reviewStatus = computedStatus;
+        }
+    }
+    next();
+});
 
 // Enable virtuals in JSON
 FormResponseSchema.set('toJSON', { virtuals: true });

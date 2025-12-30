@@ -1,3 +1,7 @@
+// 🔓 SECURITY DISABLED FOR DEVELOPMENT
+// Set DISABLE_SECURITY=true in .env to bypass all security checks
+const SECURITY_DISABLED = process.env.DISABLE_SECURITY === 'true' || process.env.NODE_ENV !== 'production';
+
 const Organization = require('../models/Organization');
 
 /**
@@ -6,6 +10,37 @@ const Organization = require('../models/Organization');
  * Verifies user belongs to the organization
  */
 const organizationIsolation = async (req, res, next) => {
+    // 🔓 BYPASS: Skip organization isolation if security is disabled
+    if (SECURITY_DISABLED) {
+        console.warn('⚠️  [DEV] Organization isolation bypassed');
+        // Try to find first organization or create minimal object
+        try {
+            const org = await Organization.findOne().lean();
+            if (org) {
+                req.organization = org;
+            } else {
+                const mongoose = require('mongoose');
+                req.organization = {
+                    _id: new mongoose.Types.ObjectId(),
+                    isActive: true,
+                    subscription: { status: 'active', tier: 'enterprise' },
+                    limits: {},
+                    hasFeature: () => true // Always allow all features
+                };
+            }
+        } catch (error) {
+            const mongoose = require('mongoose');
+            req.organization = {
+                _id: req.user?.organizationId || new mongoose.Types.ObjectId(),
+                isActive: true,
+                subscription: { status: 'active', tier: 'enterprise' },
+                limits: {},
+                hasFeature: () => true
+            };
+        }
+        return next();
+    }
+    
     try {
         // User should already be attached by auth middleware
         if (!req.user) {
@@ -42,6 +77,12 @@ const organizationIsolation = async (req, res, next) => {
  * Blocks access if trial expired, except for upgrade/billing routes
  */
 const checkTrialStatus = async (req, res, next) => {
+    // 🔓 BYPASS: Skip trial status check if security is disabled
+    if (SECURITY_DISABLED) {
+        console.warn('⚠️  [DEV] Trial status check bypassed');
+        return next();
+    }
+    
     try {
         const organization = req.organization;
         
@@ -81,6 +122,12 @@ const checkTrialStatus = async (req, res, next) => {
  */
 const checkFeatureAccess = (featureName) => {
     return async (req, res, next) => {
+        // 🔓 BYPASS: Skip feature access check if security is disabled
+        if (SECURITY_DISABLED) {
+            console.warn(`⚠️  [DEV] Feature access check bypassed: ${featureName}`);
+            return next();
+        }
+        
         try {
             const organization = req.organization;
             

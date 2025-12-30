@@ -11,12 +11,12 @@ const {
     getFormKPIs,
     linkFormToEvent,
     enablePublicLink,
-    getMyAudits,
     getOrganizationAudits
 } = require('../controllers/formController');
 
 const {
     submitForm,
+    getAllResponses,
     getResponses,
     getResponseById,
     updateResponseStatus,
@@ -25,9 +25,13 @@ const {
     approveResponse,
     rejectResponse,
     deleteResponse,
+    archiveResponse,
+    invalidateResponse,
+    restoreResponse,
     exportResponses,
     getResponseComparison,
     generateReport,
+    generateComprehensiveReport,
     exportExcel
 } = require('../controllers/formResponseController');
 
@@ -56,9 +60,6 @@ protectedRouter.use(organizationIsolation);
 protectedRouter.use(checkTrialStatus);
 protectedRouter.use(checkFeatureAccess('forms'));
 
-// My Audits (must come before /:id routes)
-protectedRouter.get('/my-audits', checkPermission('forms', 'view'), getMyAudits);
-
 // Organization Audits (must come before /:id routes)
 protectedRouter.get('/organization/:organizationId/audits', checkPermission('forms', 'view'), getOrganizationAudits);
 
@@ -84,6 +85,9 @@ protectedRouter.post('/:id/duplicate', checkPermission('forms', 'create'), dupli
 // Form submission (authenticated)
 protectedRouter.post('/:id/submit', checkPermission('forms', 'create'), submitForm);
 
+// All responses route (must come before /:id/responses)
+protectedRouter.get('/responses/all', checkPermission('forms', 'view'), getAllResponses);
+
 // Form responses routes
 protectedRouter.route('/:id/responses')
     .get(checkPermission('forms', 'view'), getResponses);
@@ -99,8 +103,12 @@ protectedRouter.post('/:id/responses/:responseId/corrective-action', checkPermis
 protectedRouter.post('/:id/responses/:responseId/verify', checkPermission('forms', 'edit'), verifyCorrectiveAction);
 protectedRouter.post('/:id/responses/:responseId/approve', checkPermission('forms', 'edit'), approveResponse);
 protectedRouter.post('/:id/responses/:responseId/reject', checkPermission('forms', 'edit'), rejectResponse);
+protectedRouter.post('/:id/responses/:responseId/archive', checkPermission('forms', 'edit'), archiveResponse);
+protectedRouter.post('/:id/responses/:responseId/invalidate', checkPermission('forms', 'edit'), invalidateResponse);
+protectedRouter.post('/:id/responses/:responseId/restore', checkPermission('forms', 'edit'), restoreResponse);
 protectedRouter.get('/:id/responses/:responseId/compare', checkPermission('forms', 'view'), getResponseComparison);
 protectedRouter.post('/:id/responses/:responseId/generate-report', checkPermission('forms', 'view'), generateReport);
+protectedRouter.post('/:id/responses/:responseId/generate-comprehensive-report', checkPermission('forms', 'view'), generateComprehensiveReport);
 protectedRouter.post('/:id/responses/:responseId/export-excel', checkPermission('forms', 'view'), exportExcel);
 
 // Export both routers

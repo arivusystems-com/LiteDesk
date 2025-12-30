@@ -3,7 +3,17 @@ const FormResponse = require('../models/FormResponse');
 const FormKPIs = require('../models/FormKPIs');
 const Event = require('../models/Event');
 const User = require('../models/User');
+const Organization = require('../models/Organization');
 const mongoose = require('mongoose');
+
+// Helper function to clean responseTemplate.activeTemplateId
+// Converts string "default" to null since schema expects ObjectId or null
+const cleanResponseTemplateActiveId = (payload) => {
+    if (payload.responseTemplate?.activeTemplateId === 'default') {
+        payload.responseTemplate.activeTemplateId = null;
+    }
+    return payload;
+};
 
 // @desc    Create new form
 // @route   POST /api/forms
@@ -17,9 +27,34 @@ exports.createForm = async (req, res) => {
             modifiedBy: req.user._id
         };
 
-        // Validate form structure only if form is Active (Draft forms can be saved without sections)
+        // Clean up responseTemplate.activeTemplateId - convert "default" string to null
+        cleanResponseTemplateActiveId(payload);
+
+        // Clean up publicLink.slug - remove the field entirely if empty or if publicLink is disabled
+        // This prevents MongoDB unique sparse index conflicts (sparse indexes ignore missing fields, not null values)
+        if (payload.publicLink) {
+            if (!payload.publicLink.enabled || !payload.publicLink.slug || payload.publicLink.slug.trim() === '') {
+                // Remove the slug field entirely (don't set to null) so sparse index ignores it
+                delete payload.publicLink.slug;
+            }
+        }
+
+        // Draft forms can be saved without validation (incomplete state is allowed)
+        // Only validate if form is being set to Ready or Active
         const form = new Form(payload);
-        if (payload.status === 'Active') {
+        if (payload.status === 'Ready' || payload.status === 'Active') {
+            // Debug logging in development
+            if (process.env.NODE_ENV === 'development') {
+                console.log('Validating form structure:', {
+                    status: payload.status,
+                    sectionsCount: payload.sections?.length || 0,
+                    sections: payload.sections?.map(s => ({
+                        name: s.name,
+                        questionsCount: s.questions?.length || 0,
+                        subsectionsCount: s.subsections?.length || 0
+                    }))
+                });
+            }
             const validation = form.validateStructure();
             if (!validation.valid) {
                 return res.status(400).json({
@@ -28,12 +63,14 @@ exports.createForm = async (req, res) => {
                 });
             }
         }
+        // Draft forms: no validation required (allow incomplete/invalid states)
 
         const newForm = await Form.create(payload);
         
         const populatedForm = await Form.findById(newForm._id)
             .populate('assignedTo', 'firstName lastName email')
             .populate('createdBy', 'firstName lastName email')
+            .populate('organizationId', 'name')
             .populate('approvalWorkflow.approver', 'firstName lastName email');
         
         res.status(201).json({
@@ -42,10 +79,17 @@ exports.createForm = async (req, res) => {
         });
     } catch (error) {
         console.error('Create form error:', error);
+        console.error('Create form error details:', {
+            message: error.message,
+            name: error.name,
+            stack: error.stack,
+            payload: req.body
+        });
         res.status(400).json({ 
             success: false,
             message: 'Error creating form.', 
-            error: error.message 
+            error: error.message,
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 };
@@ -72,9 +116,6 @@ exports.getForms = async (req, res) => {
         if (req.query.assignedTo) {
             query.assignedTo = req.query.assignedTo;
         }
-        if (req.query.linkedModule) {
-            query.linkedModule = req.query.linkedModule;
-        }
         if (req.query.visibility) {
             query.visibility = req.query.visibility;
         }
@@ -98,6 +139,7 @@ exports.getForms = async (req, res) => {
         const forms = await Form.find(query)
             .populate('assignedTo', 'firstName lastName email')
             .populate('createdBy', 'firstName lastName email')
+            .populate('organizationId', 'name')
             .sort(sort)
             .limit(limit)
             .skip(skip);
@@ -117,8 +159,11 @@ exports.getForms = async (req, res) => {
                     draftForms: {
                         $sum: { $cond: [{ $eq: ['$status', 'Draft'] }, 1, 0] }
                     },
-                    closedForms: {
-                        $sum: { $cond: [{ $eq: ['$status', 'Closed'] }, 1, 0] }
+                    readyForms: {
+                        $sum: { $cond: [{ $eq: ['$status', 'Ready'] }, 1, 0] }
+                    },
+                    archivedForms: {
+                        $sum: { $cond: [{ $eq: ['$status', 'Archived'] }, 1, 0] }
                     },
                     totalResponses: { $sum: '$totalResponses' }
                 }
@@ -138,7 +183,8 @@ exports.getForms = async (req, res) => {
                 totalForms: 0,
                 activeForms: 0,
                 draftForms: 0,
-                closedForms: 0,
+                readyForms: 0,
+                archivedForms: 0,
                 totalResponses: 0
             }
         });
@@ -157,16 +203,18 @@ exports.getForms = async (req, res) => {
 // @access  Private
 exports.getFormById = async (req, res) => {
     try {
-        const form = await Form.findOne({ 
+        // Validate ObjectId format
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid form ID format.'
+            });
+        }
+
+        let form = await Form.findOne({ 
             _id: req.params.id, 
             organizationId: req.user.organizationId 
-        })
-        .populate('assignedTo', 'firstName lastName email')
-        .populate('createdBy', 'firstName lastName email')
-        .populate('modifiedBy', 'firstName lastName email')
-        .populate('approvalWorkflow.approver', 'firstName lastName email')
-        .populate('workflowOnSubmit.notify', 'firstName lastName email')
-        .populate('responseTemplate.templateId');
+        }).lean();
         
         if (!form) {
             return res.status(404).json({ 
@@ -175,18 +223,294 @@ exports.getFormById = async (req, res) => {
             });
         }
         
+        // Helper function to get ObjectId string or ObjectId instance
+        const getObjectId = (value) => {
+            if (!value) return null;
+            // If it's already a string, return it
+            if (typeof value === 'string') {
+                return mongoose.Types.ObjectId.isValid(value) ? value : null;
+            }
+            // If it's an ObjectId instance
+            if (value instanceof mongoose.Types.ObjectId || value.constructor?.name === 'ObjectID') {
+                return value;
+            }
+            // If it has _id property
+            if (value._id) {
+                return getObjectId(value._id);
+            }
+            // If it has toString method, try to use it
+            if (typeof value.toString === 'function') {
+                const str = value.toString();
+                return mongoose.Types.ObjectId.isValid(str) ? str : null;
+            }
+            return null;
+        };
+        
+        // Populate fields manually to avoid populate errors
+        if (form.assignedTo) {
+            try {
+                const assignedToId = getObjectId(form.assignedTo);
+                if (assignedToId) {
+                    const assignedUser = await User.findById(assignedToId).select('firstName lastName email').lean();
+                    if (assignedUser) form.assignedTo = assignedUser;
+                }
+            } catch (err) {
+                console.warn('Error populating assignedTo:', err.message);
+            }
+        }
+        
+        if (form.createdBy) {
+            try {
+                const createdById = getObjectId(form.createdBy);
+                if (createdById) {
+                    const createdUser = await User.findById(createdById).select('firstName lastName email').lean();
+                    if (createdUser) form.createdBy = createdUser;
+                }
+            } catch (err) {
+                console.warn('Error populating createdBy:', err.message);
+            }
+        }
+        
+        if (form.modifiedBy) {
+            try {
+                const modifiedById = getObjectId(form.modifiedBy);
+                if (modifiedById) {
+                    const modifiedUser = await User.findById(modifiedById).select('firstName lastName email').lean();
+                    if (modifiedUser) form.modifiedBy = modifiedUser;
+                }
+            } catch (err) {
+                console.warn('Error populating modifiedBy:', err.message);
+            }
+        }
+        
+        if (form.approvalWorkflow && form.approvalWorkflow.approver) {
+            try {
+                const approverId = getObjectId(form.approvalWorkflow.approver);
+                if (approverId) {
+                    const approver = await User.findById(approverId).select('firstName lastName email').lean();
+                    if (approver) form.approvalWorkflow.approver = approver;
+                }
+            } catch (err) {
+                console.warn('Error populating approver:', err.message);
+            }
+        }
+        
+        if (form.workflowOnSubmit && form.workflowOnSubmit.notify && Array.isArray(form.workflowOnSubmit.notify) && form.workflowOnSubmit.notify.length > 0) {
+            try {
+                const validNotifyIds = form.workflowOnSubmit.notify
+                    .map(id => getObjectId(id))
+                    .filter(id => id !== null);
+                    
+                if (validNotifyIds.length > 0) {
+                    const notifyUsers = await User.find({ 
+                        _id: { $in: validNotifyIds } 
+                    }).select('firstName lastName email').lean();
+                    form.workflowOnSubmit.notify = notifyUsers || [];
+                } else {
+                    form.workflowOnSubmit.notify = [];
+                }
+            } catch (err) {
+                console.warn('Error populating notify users:', err.message);
+                form.workflowOnSubmit.notify = [];
+            }
+        }
+        
+        // Populate organizationId
+        if (form.organizationId) {
+            try {
+                const orgId = getObjectId(form.organizationId);
+                if (orgId) {
+                    const organization = await Organization.findById(orgId).select('name').lean();
+                    if (organization) form.organizationId = organization;
+                }
+            } catch (err) {
+                console.warn('Error populating organizationId:', err.message);
+            }
+        }
+        
         res.status(200).json({
             success: true,
             data: form
         });
     } catch (error) {
         console.error('Get form error:', error);
+        console.error('Error stack:', error.stack);
         res.status(500).json({ 
             success: false,
             message: 'Error fetching form.', 
-            error: error.message 
+            error: error.message,
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
+};
+
+// Helper function to check if a change is breaking (affects responses)
+const isBreakingChange = (existingForm, updateData) => {
+    // Check if sections are being removed or modified
+    if (updateData.sections) {
+        const existingSectionIds = new Set(
+            (existingForm.sections || []).map(s => s.sectionId)
+        );
+        const newSectionIds = new Set(
+            (updateData.sections || []).map(s => s.sectionId)
+        );
+        
+        // Check for removed sections
+        for (const existingId of existingSectionIds) {
+            if (!newSectionIds.has(existingId)) {
+                return true; // Section removed
+            }
+        }
+        
+        // Check for removed subsections or questions
+        for (const existingSection of existingForm.sections || []) {
+            const newSection = updateData.sections.find(s => s.sectionId === existingSection.sectionId);
+            if (!newSection) continue;
+            
+            // Check subsection removal
+            const existingSubsectionIds = new Set(
+                (existingSection.subsections || []).map(ss => ss.subsectionId)
+            );
+            const newSubsectionIds = new Set(
+                (newSection.subsections || []).map(ss => ss.subsectionId)
+            );
+            
+            for (const existingId of existingSubsectionIds) {
+                if (!newSubsectionIds.has(existingId)) {
+                    return true; // Subsection removed
+                }
+            }
+            
+            // Check question removal or type change
+            for (const existingSubsection of existingSection.subsections || []) {
+                const newSubsection = newSection.subsections?.find(ss => ss.subsectionId === existingSubsection.subsectionId);
+                if (!newSubsection) continue;
+                
+                const existingQuestionIds = new Set(
+                    (existingSubsection.questions || []).map(q => q.questionId)
+                );
+                const newQuestionIds = new Set(
+                    (newSubsection.questions || []).map(q => q.questionId)
+                );
+                
+                // Check for removed questions
+                for (const existingId of existingQuestionIds) {
+                    if (!newQuestionIds.has(existingId)) {
+                        return true; // Question removed
+                    }
+                }
+                
+                // Check for question type changes
+                for (const existingQuestion of existingSubsection.questions || []) {
+                    const newQuestion = newSubsection.questions?.find(q => q.questionId === existingQuestion.questionId);
+                    if (newQuestion && newQuestion.type !== existingQuestion.type) {
+                        return true; // Question type changed
+                    }
+                    
+                    // Check for scoring logic changes
+                    if (newQuestion && existingQuestion.scoringLogic) {
+                        const existingScoring = JSON.stringify(existingQuestion.scoringLogic);
+                        const newScoring = JSON.stringify(newQuestion.scoringLogic || {});
+                        if (existingScoring !== newScoring) {
+                            return true; // Scoring logic changed
+                        }
+                    }
+                    
+                    // Check for mandatory/required changes
+                    if (newQuestion && newQuestion.mandatory !== existingQuestion.mandatory) {
+                        return true; // Required status changed
+                    }
+                }
+            }
+            
+            // Check section-level questions
+            const existingSectionQuestionIds = new Set(
+                (existingSection.questions || []).map(q => q.questionId)
+            );
+            const newSectionQuestionIds = new Set(
+                (newSection.questions || []).map(q => q.questionId)
+            );
+            
+            for (const existingId of existingSectionQuestionIds) {
+                if (!newSectionQuestionIds.has(existingId)) {
+                    return true; // Section-level question removed
+                }
+            }
+            
+            for (const existingQuestion of existingSection.questions || []) {
+                const newQuestion = newSection.questions?.find(q => q.questionId === existingQuestion.questionId);
+                if (newQuestion && newQuestion.type !== existingQuestion.type) {
+                    return true; // Question type changed
+                }
+            }
+        }
+    }
+    
+    // Check for scoring formula changes
+    if (updateData.scoringFormula && updateData.scoringFormula !== existingForm.scoringFormula) {
+        return true;
+    }
+    
+    // Check for threshold changes
+    if (updateData.thresholds) {
+        if (updateData.thresholds.pass !== existingForm.thresholds?.pass ||
+            updateData.thresholds.partial !== existingForm.thresholds?.partial) {
+            return true;
+        }
+    }
+    
+    // Check for outcome rules changes
+    if (updateData.outcomesAndRules) {
+        const existingRules = JSON.stringify(existingForm.outcomesAndRules || {});
+        const newRules = JSON.stringify(updateData.outcomesAndRules);
+        if (existingRules !== newRules) {
+            return true;
+        }
+    }
+    
+    // Check for response template changes (active template)
+    if (updateData.responseTemplate && existingForm.responseTemplate?.activeTemplateId) {
+        const existingTemplate = JSON.stringify(existingForm.responseTemplate);
+        const newTemplate = JSON.stringify(updateData.responseTemplate);
+        if (existingTemplate !== newTemplate) {
+            return true;
+        }
+    }
+    
+    return false;
+};
+
+// Helper function to check if only cosmetic changes are being made
+const isCosmeticChangeOnly = (existingForm, updateData) => {
+    // Allowed cosmetic changes: name, description, section titles, question labels, help text
+    const allowedFields = ['name', 'description', 'notes', 'tags', 'visibility'];
+    
+    // Check if only allowed fields are being updated
+    const updateKeys = Object.keys(updateData);
+    const hasOnlyAllowedFields = updateKeys.every(key => allowedFields.includes(key));
+    
+    if (hasOnlyAllowedFields) {
+        return true;
+    }
+    
+    // Check if sections only have cosmetic changes (titles, question text, help text)
+    if (updateData.sections) {
+        // Deep comparison would be complex, so we'll use a simpler approach:
+        // If sections structure is the same (same IDs, same types, same order), allow
+        // This is a simplified check - in production, you might want more thorough validation
+        const existingSectionIds = (existingForm.sections || []).map(s => s.sectionId).sort();
+        const newSectionIds = (updateData.sections || []).map(s => s.sectionId).sort();
+        
+        if (JSON.stringify(existingSectionIds) !== JSON.stringify(newSectionIds)) {
+            return false; // Structure changed
+        }
+        
+        // For now, we'll be conservative and only allow if no sections are in the update
+        // or if we can verify it's only cosmetic
+        // In a real implementation, you'd do deeper comparison
+    }
+    
+    return false;
 };
 
 // @desc    Update form
@@ -199,7 +523,7 @@ exports.updateForm = async (req, res) => {
         delete req.body.formId; // Cannot change formId
         req.body.modifiedBy = req.user._id;
         
-        // Check if form is Draft (only Draft forms can be edited)
+        // Get existing form
         const existingForm = await Form.findOne({
             _id: req.params.id,
             organizationId: req.user.organizationId
@@ -212,16 +536,81 @@ exports.updateForm = async (req, res) => {
             });
         }
         
-        if (existingForm.status !== 'Draft') {
+        // Handle status transitions
+        const newStatus = req.body.status;
+        const currentStatus = existingForm.status;
+        
+        // Validate status transitions
+        if (newStatus && newStatus !== currentStatus) {
+            const validTransitions = {
+                'Draft': ['Ready'],
+                'Ready': ['Active', 'Archived'],
+                'Active': ['Archived'],
+                'Archived': [] // No transitions from Archived
+            };
+            
+            if (!validTransitions[currentStatus]?.includes(newStatus)) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Invalid status transition from ${currentStatus} to ${newStatus}.`
+                });
+            }
+        }
+        
+        // Edit permission enforcement
+        if (existingForm.status === 'Archived') {
             return res.status(400).json({
                 success: false,
-                message: 'Only Draft forms can be edited. Please create a new version or duplicate the form.'
+                message: 'This form is archived and cannot be edited. To make changes, duplicate the form.'
             });
         }
         
-        // Validate form structure only if form is being set to Active status
-        // Draft forms can be saved without sections/questions
-        if (req.body.status === 'Active' || (existingForm.status === 'Active' && req.body.sections)) {
+        if (existingForm.status === 'Active') {
+            // Check for breaking changes
+            if (isBreakingChange(existingForm, req.body)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'This form is currently active and in use. To make this change, create a new version.',
+                    code: 'BREAKING_CHANGE_BLOCKED',
+                    action: 'duplicate'
+                });
+            }
+            
+            // Allow cosmetic changes only
+            if (!isCosmeticChangeOnly(existingForm, req.body)) {
+                // Additional check: allow section/question text edits but not structure changes
+                // This is a simplified check - you may want to refine this
+                const hasStructureChanges = req.body.sections && 
+                    JSON.stringify((existingForm.sections || []).map(s => ({
+                        sectionId: s.sectionId,
+                        subsections: (s.subsections || []).map(ss => ({
+                            subsectionId: ss.subsectionId,
+                            questions: (ss.questions || []).map(q => q.questionId)
+                        })),
+                        questions: (s.questions || []).map(q => q.questionId)
+                    }))) !== JSON.stringify((req.body.sections || []).map(s => ({
+                        sectionId: s.sectionId,
+                        subsections: (s.subsections || []).map(ss => ({
+                            subsectionId: ss.subsectionId,
+                            questions: (ss.questions || []).map(q => q.questionId)
+                        })),
+                        questions: (s.questions || []).map(q => q.questionId)
+                    })));
+                
+                if (hasStructureChanges) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'This form is currently active and in use. To make this change, create a new version.',
+                        code: 'BREAKING_CHANGE_BLOCKED',
+                        action: 'duplicate'
+                    });
+                }
+            }
+        }
+        
+        // Draft and Ready: Allow full editing
+        // Validate form structure only if form is being set to Active or Ready status
+        if (req.body.status === 'Active' || req.body.status === 'Ready') {
             const tempForm = new Form({ ...existingForm.toObject(), ...req.body });
             const validation = tempForm.validateStructure();
             if (!validation.valid) {
@@ -232,11 +621,23 @@ exports.updateForm = async (req, res) => {
             }
         }
         
+        // Clean up responseTemplate.activeTemplateId - convert "default" string to null
+        cleanResponseTemplateActiveId(req.body);
+
+        // Clean up publicLink.slug - remove the field entirely if empty or if publicLink is disabled
+        // This prevents MongoDB unique sparse index conflicts (sparse indexes ignore missing fields, not null values)
+        if (req.body.publicLink) {
+            if (!req.body.publicLink.enabled || !req.body.publicLink.slug || req.body.publicLink.slug.trim() === '') {
+                // Remove the slug field entirely (don't set to null) so sparse index ignores it
+                delete req.body.publicLink.slug;
+            }
+        }
+        
+        // Perform update
         const updatedForm = await Form.findOneAndUpdate(
             { 
                 _id: req.params.id, 
-                organizationId: req.user.organizationId,
-                status: 'Draft' // Double-check status
+                organizationId: req.user.organizationId
             },
             req.body,
             { new: true, runValidators: true }
@@ -248,7 +649,7 @@ exports.updateForm = async (req, res) => {
         if (!updatedForm) {
             return res.status(404).json({ 
                 success: false,
-                message: 'Form not found, access denied, or form is not in Draft status.' 
+                message: 'Form not found or access denied.' 
             });
         }
         
@@ -680,123 +1081,6 @@ exports.enablePublicLink = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error enabling public link.',
-            error: error.message
-        });
-    }
-};
-
-// @desc    Get forms assigned to current user via events (My Audits)
-// @route   GET /api/forms/my-audits
-// @access  Private
-exports.getMyAudits = async (req, res) => {
-    try {
-        const { status, dueDate, page = 1, limit = 20 } = req.query;
-        
-        // Find events where current user is assigned as auditor
-        const query = {
-            organizationId: req.user.organizationId,
-            'formAssignment.assignedAuditor': req.user._id,
-            linkedFormId: { $ne: null }
-        };
-        
-        // Filter by status if provided
-        if (status) {
-            query.status = status;
-        }
-        
-        // Filter by due date if provided
-        if (dueDate) {
-            if (dueDate === 'overdue') {
-                query['formAssignment.dueDate'] = { $lt: new Date() };
-            } else if (dueDate === 'today') {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const tomorrow = new Date(today);
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                query['formAssignment.dueDate'] = { $gte: today, $lt: tomorrow };
-            } else if (dueDate === 'upcoming') {
-                query['formAssignment.dueDate'] = { $gte: new Date() };
-            }
-        }
-        
-        const skip = (parseInt(page) - 1) * parseInt(limit);
-        
-        // Get events with linked forms
-        const events = await Event.find(query)
-            .populate('linkedFormId', 'name formId formType status description')
-            .populate('organizer', 'firstName lastName email')
-            .sort({ 'formAssignment.dueDate': 1, startDate: 1 })
-            .skip(skip)
-            .limit(parseInt(limit));
-        
-        // Get total count
-        const total = await Event.countDocuments(query);
-        
-        // Transform to include form details and check for existing responses
-        const audits = await Promise.all(events.map(async (event) => {
-            if (!event.linkedFormId) return null;
-            
-            // Populate assignedAuditor manually if it exists
-            let assignedAuditor = null;
-            if (event.formAssignment && event.formAssignment.assignedAuditor) {
-                if (typeof event.formAssignment.assignedAuditor === 'object' && event.formAssignment.assignedAuditor._id) {
-                    // Already populated
-                    assignedAuditor = event.formAssignment.assignedAuditor;
-                } else {
-                    // Need to populate
-                    assignedAuditor = await User.findById(event.formAssignment.assignedAuditor)
-                        .select('firstName lastName email')
-                        .lean();
-                }
-            }
-            
-            // Check if user has already submitted a response for this form
-            const existingResponse = await FormResponse.findOne({
-                formId: event.linkedFormId._id,
-                organizationId: req.user.organizationId,
-                submittedBy: req.user._id
-            })
-            .sort({ submittedAt: -1 })
-            .select('_id responseId status submittedAt kpis')
-            .lean();
-            
-            return {
-                eventId: event._id,
-                formId: event.linkedFormId._id,
-                formName: event.linkedFormId.name,
-                formType: event.linkedFormId.formType,
-                formStatus: event.linkedFormId.status,
-                eventTitle: event.title,
-                eventDescription: event.description || '',
-                dueDate: event.formAssignment?.dueDate || null,
-                assignedAt: event.formAssignment?.assignedAt || null,
-                assignedBy: assignedAuditor || event.organizer || null,
-                startDate: event.startDate,
-                endDate: event.endDate,
-                location: event.location || '',
-                existingResponse: existingResponse || null,
-                canStart: !existingResponse || existingResponse.status === 'Draft'
-            };
-        }));
-        
-        // Filter out null values
-        const validAudits = audits.filter(audit => audit !== null);
-        
-        res.status(200).json({
-            success: true,
-            data: validAudits,
-            pagination: {
-                currentPage: parseInt(page),
-                totalPages: Math.ceil(total / parseInt(limit)),
-                totalRecords: total,
-                limit: parseInt(limit)
-            }
-        });
-    } catch (error) {
-        console.error('Get my audits error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error fetching my audits.',
             error: error.message
         });
     }

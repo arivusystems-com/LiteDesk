@@ -140,50 +140,161 @@
 
         <!-- Right Columns - Details -->
         <div class="lg:col-span-2 space-y-4">
-          <!-- Agenda Notes Card -->
-          <div v-if="event.agendaNotes || event.description" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">Agenda Notes</h3>
-            <p class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{{ event.agendaNotes || event.description }}</p>
+          <!-- Event Execution Component -->
+          <EventExecution 
+            v-if="event.status !== 'CLOSED'"
+            :event="event" 
+            @updated="handleEventUpdated"
+          />
+
+          <!-- Notes Card -->
+          <div v-if="event.notes" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">Notes</h3>
+            <p class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{{ event.notes }}</p>
           </div>
 
-          <!-- Attendees Card -->
-          <div v-if="event.attendees && event.attendees.length > 0" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">
-              Attendees ({{ event.attendees.length }})
-            </h3>
+          <!-- Linked Organization Card -->
+          <div v-if="event.relatedToId" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">Linked Organization</h3>
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-gray-900 dark:text-white font-medium">
+                {{ getOrgName(event.relatedToId) }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Audit Form Card -->
+          <div v-if="event.linkedFormId" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">Audit Form</h3>
             <div class="space-y-2">
-              <div v-for="attendee in event.attendees" :key="attendee.email" class="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">
-                <div class="flex items-center gap-2">
-                  <div class="w-8 h-8 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white text-xs font-medium">
-                    {{ attendee.name ? attendee.name.charAt(0).toUpperCase() : attendee.email.charAt(0).toUpperCase() }}
-                  </div>
-                  <div>
-                    <div class="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
-                      {{ attendee.name || attendee.email }}
-                      <span v-if="attendee.isOrganizer" class="px-1.5 py-0.5 bg-brand-100 dark:bg-brand-900/30 text-brand-800 dark:text-brand-300 rounded text-xs">
-                        Organizer
-                      </span>
-                    </div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400">{{ attendee.email }}</div>
-                  </div>
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-gray-700 dark:text-gray-300">
+                  {{ getFormName(event.linkedFormId) }}
+                </span>
+                <button
+                  @click="openForm"
+                  class="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                >
+                  {{ hasFormResponse ? 'View Form' : 'Open Form' }}
+                </button>
+              </div>
+              <div v-if="hasFormResponse" class="text-xs text-gray-500 dark:text-gray-400">
+                Form submitted: {{ formResponseCount }} response(s)
+              </div>
+            </div>
+          </div>
+
+          <!-- GEO Tracking Card -->
+          <div v-if="event.geoRequired && (event.checkIn || event.checkOut)" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">GEO Tracking</h3>
+            <div class="space-y-3">
+              <div v-if="event.checkIn" class="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Check-In</div>
+                <div class="text-sm font-medium text-gray-900 dark:text-white">
+                  {{ formatDateTime(event.checkIn.timestamp) }}
                 </div>
-                <span :class="getAttendeeStatusBadge(attendee.status)">
-                  {{ attendee.status }}
+                <div v-if="event.checkIn.location && event.checkIn.location.latitude != null && event.checkIn.location.longitude != null" class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  {{ event.checkIn.location.latitude.toFixed(6) }}, {{ event.checkIn.location.longitude.toFixed(6) }}
+                </div>
+              </div>
+              <div v-if="event.checkOut" class="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Check-Out</div>
+                <div class="text-sm font-medium text-gray-900 dark:text-white">
+                  {{ formatDateTime(event.checkOut.timestamp) }}
+                </div>
+                <div v-if="event.checkOut.location && event.checkOut.location.latitude != null && event.checkOut.location.longitude != null" class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  {{ event.checkOut.location.latitude.toFixed(6) }}, {{ event.checkOut.location.longitude.toFixed(6) }}
+                </div>
+              </div>
+              <div v-if="event.timeSpent" class="text-xs text-gray-600 dark:text-gray-400">
+                Time Spent: {{ formatDuration(event.timeSpent) }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Audit Workflow State -->
+          <div v-if="event.auditState" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Audit Workflow</h3>
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-gray-700 dark:text-gray-300">Current State:</span>
+                <span :class="getAuditStateBadgeClass(event.auditState)">
+                  {{ event.auditState }}
+                </span>
+              </div>
+              <!-- Workflow Progress -->
+              <div class="mt-4">
+                <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  <span>Progress</span>
+                  <span>{{ getAuditProgress() }}%</span>
+                </div>
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div 
+                    class="bg-indigo-600 h-2 rounded-full transition-all"
+                    :style="{ width: `${getAuditProgress()}%` }"
+                  ></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Multi-Org Route Summary -->
+          <div v-if="event.isMultiOrg && event.orgList" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Route Summary</h3>
+            <div class="space-y-2">
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-gray-600 dark:text-gray-400">Total Organizations:</span>
+                <span class="font-medium text-gray-900 dark:text-white">{{ event.orgList.length }}</span>
+              </div>
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-gray-600 dark:text-gray-400">Completed:</span>
+                <span class="font-medium text-green-600 dark:text-green-400">
+                  {{ event.orgList.filter(o => o.status === 'COMPLETED').length }}
+                </span>
+              </div>
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-gray-600 dark:text-gray-400">In Progress:</span>
+                <span class="font-medium text-blue-600 dark:text-blue-400">
+                  {{ event.orgList.filter(o => o.status === 'IN_PROGRESS').length }}
+                </span>
+              </div>
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-gray-600 dark:text-gray-400">Pending:</span>
+                <span class="font-medium text-gray-600 dark:text-gray-400">
+                  {{ event.orgList.filter(o => o.status === 'PENDING').length }}
                 </span>
               </div>
             </div>
           </div>
 
-          <!-- Related Record Card -->
-          <div v-if="(event.relatedToId || event.relatedTo?.id) && (event.relatedToType || event.relatedTo?.type)" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">Related To</h3>
-            <div class="flex items-center gap-2">
-              <span class="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-xs font-medium">
-                {{ event.relatedToType || event.relatedTo?.type }}
-              </span>
-              <span class="text-sm text-gray-900 dark:text-white font-medium">
-                {{ getRelatedRecordName(event.relatedToId || event.relatedTo?.id) }}
-              </span>
+          <!-- Field Sales KPI -->
+          <div v-if="event.eventType === 'Field Sales Beat' && event.kpiActuals" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Sales KPIs</h3>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">Orders Created</div>
+                <div class="text-lg font-bold text-gray-900 dark:text-white">
+                  {{ event.kpiActuals.orderCount || 0 }}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">Order Value</div>
+                <div class="text-lg font-bold text-gray-900 dark:text-white">
+                  ${{ (event.kpiActuals.orderValue || 0).toLocaleString() }}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">Visits Completed</div>
+                <div class="text-lg font-bold text-gray-900 dark:text-white">
+                  {{ event.kpiActuals.visitsCompleted || 0 }}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">Conversion Rate</div>
+                <div class="text-lg font-bold text-gray-900 dark:text-white">
+                  {{ getConversionRate() }}%
+                </div>
+              </div>
             </div>
           </div>
           
@@ -231,16 +342,9 @@
               + Add Note
             </button>
 
-            <!-- Notes List -->
-            <div v-if="event.notes && event.notes.length > 0" class="mt-4 space-y-3">
-              <div v-for="(note, index) in event.notes" :key="index" class="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                <p class="text-sm text-gray-700 dark:text-gray-300">{{ note.text }}</p>
-                <div class="flex items-center gap-2 mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  <span v-if="note.created_by">{{ note.created_by.firstName }} {{ note.created_by.lastName }}</span>
-                  <span>•</span>
-                  <span>{{ formatTimeAgo(note.created_at) }}</span>
-                </div>
-              </div>
+            <!-- Notes Display -->
+            <div v-if="event.notes" class="mt-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+              <p class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{{ event.notes }}</p>
             </div>
 
             <div v-else class="mt-4 text-center py-6 text-sm text-gray-500 dark:text-gray-400">
@@ -263,11 +367,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
 import dateUtils from '@/utils/dateUtils';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
+import EventExecution from '@/components/events/EventExecution.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -364,42 +469,93 @@ const getInitials = (user) => {
   return `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`;
 };
 
-const getRelatedRecordName = (record) => {
-  if (!record) return 'N/A';
-  return record.name || record.title || `${record.first_name || ''} ${record.last_name || ''}`.trim() || 'N/A';
+const getOrgName = (org) => {
+  if (!org) return 'N/A';
+  if (typeof org === 'object' && org.name) {
+    return org.name;
+  }
+  return 'Organization';
 };
+
+const getFormName = (form) => {
+  if (!form) return 'N/A';
+  if (typeof form === 'object' && form.name) {
+    return form.name;
+  }
+  return 'Form';
+};
+
+const openForm = () => {
+  if (event.value?.linkedFormId) {
+    router.push(`/forms/${event.value.linkedFormId}/fill?eventId=${event.value.eventId || event.value._id}`);
+  }
+};
+
+const getAuditStateBadgeClass = (state) => {
+  const classes = {
+    DRAFT: 'px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs font-medium',
+    IN_PROGRESS: 'px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs font-medium',
+    PAUSED: 'px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded-full text-xs font-medium',
+    SUBMITTED: 'px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded-full text-xs font-medium',
+    PENDING_CORRECTIVE: 'px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 rounded-full text-xs font-medium',
+    NEEDS_REVIEW: 'px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded-full text-xs font-medium',
+    APPROVED: 'px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium',
+    REJECTED: 'px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-full text-xs font-medium',
+    CLOSED: 'px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs font-medium'
+  };
+  return classes[state] || classes.DRAFT;
+};
+
+const getAuditProgress = () => {
+  const states = ['DRAFT', 'IN_PROGRESS', 'SUBMITTED', 'PENDING_CORRECTIVE', 'NEEDS_REVIEW', 'APPROVED', 'CLOSED'];
+  const currentIndex = states.indexOf(event.value?.auditState || 'DRAFT');
+  return Math.round(((currentIndex + 1) / states.length) * 100);
+};
+
+const formatDuration = (seconds) => {
+  if (!seconds) return '0m';
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+};
+
+const getConversionRate = () => {
+  if (!event.value?.kpiActuals) return 0;
+  const visits = event.value.kpiActuals.visitsCompleted || 0;
+  const orders = event.value.kpiActuals.ordersCreated || 0;
+  if (visits === 0) return 0;
+  return Math.round((orders / visits) * 100);
+};
+
+const hasFormResponse = computed(() => {
+  return event.value?.metadata?.formResponses && event.value.metadata.formResponses.length > 0;
+});
+
+const formResponseCount = computed(() => {
+  return event.value?.metadata?.formResponses?.length || 0;
+});
 
 const getStatusBadgeClass = (status) => {
-  // Normalize status to lowercase for class lookup
-  const normalizedStatus = status?.toLowerCase() || 'scheduled';
   const classes = {
-    scheduled: 'px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs font-medium',
-    completed: 'px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium',
-    cancelled: 'px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-full text-xs font-medium',
-    rescheduled: 'px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded-full text-xs font-medium'
+    PLANNED: 'px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs font-medium',
+    STARTED: 'px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs font-medium',
+    CHECKED_IN: 'px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium',
+    IN_PROGRESS: 'px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded-full text-xs font-medium',
+    PAUSED: 'px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded-full text-xs font-medium',
+    CHECKED_OUT: 'px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded-full text-xs font-medium',
+    SUBMITTED: 'px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded-full text-xs font-medium',
+    PENDING_CORRECTIVE: 'px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 rounded-full text-xs font-medium',
+    NEEDS_REVIEW: 'px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded-full text-xs font-medium',
+    APPROVED: 'px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium',
+    REJECTED: 'px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-full text-xs font-medium',
+    CLOSED: 'px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs font-medium'
   };
-  return classes[normalizedStatus] || classes.scheduled;
+  return classes[status] || classes.PLANNED;
 };
 
-const getPriorityBadgeClass = (priority) => {
-  const classes = {
-    low: 'px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs font-medium',
-    medium: 'px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs font-medium',
-    high: 'px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 rounded-full text-xs font-medium',
-    urgent: 'px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-full text-xs font-medium'
-  };
-  return classes[priority] || classes.medium;
-};
-
-const getAttendeeStatusBadge = (status) => {
-  const classes = {
-    pending: 'px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs',
-    accepted: 'px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs',
-    declined: 'px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-full text-xs',
-    tentative: 'px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded-full text-xs'
-  };
-  return classes[status] || classes.pending;
-};
 
 onMounted(() => {
   fetchEvent();

@@ -1,4 +1,5 @@
 <template>
+  <!-- Always show comparison section -->
   <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
     <div class="p-6 border-b border-gray-200 dark:border-gray-700">
       <div class="flex items-center justify-between">
@@ -21,7 +22,16 @@
         <p class="mt-4 text-gray-600 dark:text-gray-400">Loading comparison...</p>
       </div>
 
-      <div v-else-if="comparisonData" class="space-y-6">
+      <!-- Empty State: No previous audit available -->
+      <div v-else-if="!hasPreviousResponse || !comparisonData || !comparisonData.comparison" class="text-center py-12 text-gray-500 dark:text-gray-400">
+        <svg class="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+        <p class="text-sm font-medium">No previous audit available for comparison.</p>
+      </div>
+
+      <!-- Comparison Data -->
+      <div v-else-if="hasMeaningfulData" class="space-y-6">
         <!-- Overall Comparison -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-4">
@@ -37,7 +47,9 @@
             <p class="text-2xl font-bold text-gray-900 dark:text-white">
               {{ comparisonScore }}%
             </p>
+            <!-- Only show delta if meaningful (not 0% vs 0%) -->
             <p
+              v-if="showScoreDifference"
               class="text-sm mt-1"
               :class="scoreDifference >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'"
             >
@@ -46,12 +58,12 @@
           </div>
         </div>
 
-        <!-- Section Comparison -->
-        <div v-if="comparisonData.sectionComparison && Object.keys(comparisonData.sectionComparison).length > 0" class="space-y-4">
+        <!-- Section Comparison (only show if meaningful data exists) -->
+        <div v-if="hasMeaningfulSectionData" class="space-y-4">
           <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Section Comparison</h3>
           <div class="space-y-3">
             <div
-              v-for="(comparison, sectionId) in comparisonData.sectionComparison"
+              v-for="(comparison, sectionId) in meaningfulSectionComparisons"
               :key="sectionId"
               class="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
             >
@@ -88,7 +100,9 @@
                   </div>
                 </div>
               </div>
+              <!-- Only show difference if meaningful -->
               <p
+                v-if="showSectionDifference(comparison)"
                 class="text-xs mt-2"
                 :class="comparison.difference >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'"
               >
@@ -107,19 +121,19 @@
         </div>
       </div>
 
-      <!-- No Comparison Data -->
+      <!-- No meaningful comparison data -->
       <div v-else class="text-center py-12 text-gray-500 dark:text-gray-400">
         <svg class="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
         </svg>
-        <p>No comparison data available. Select a comparison type above.</p>
+        <p class="text-sm font-medium">No meaningful comparison data available.</p>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import apiClient from '@/utils/apiClient';
 import TrendsChart from './TrendsChart.vue';
 
@@ -137,6 +151,7 @@ const props = defineProps({
 const loading = ref(false);
 const selectedComparisonType = ref('last_audit');
 const comparisonData = ref(null);
+const hasPreviousResponse = ref(false);
 
 const currentScore = computed(() => {
   if (!props.response || !props.response.sectionScores) return 0;
@@ -154,6 +169,50 @@ const comparisonScore = computed(() => {
 const scoreDifference = computed(() => {
   return currentScore.value - comparisonScore.value;
 });
+
+// Check if score difference should be shown (not 0% vs 0%)
+const showScoreDifference = computed(() => {
+  return !(currentScore.value === 0 && comparisonScore.value === 0);
+});
+
+// Check if there's meaningful data (not all zeros)
+const hasMeaningfulData = computed(() => {
+  if (!comparisonData.value || !comparisonData.value.comparison) return false;
+  
+  const current = currentScore.value;
+  const previous = comparisonScore.value;
+  
+  // Don't show if both are 0%
+  if (current === 0 && previous === 0) return false;
+  
+  return true;
+});
+
+// Filter section comparisons to only show meaningful ones (not 0% vs 0%)
+const meaningfulSectionComparisons = computed(() => {
+  if (!comparisonData.value || !comparisonData.value.sectionComparison) return {};
+  
+  const filtered = {};
+  Object.entries(comparisonData.value.sectionComparison).forEach(([sectionId, comparison]) => {
+    // Only include if not both 0%
+    if (comparison.current !== 0 || comparison.previous !== 0) {
+      filtered[sectionId] = comparison;
+    }
+  });
+  
+  return filtered;
+});
+
+// Check if there are meaningful section comparisons
+const hasMeaningfulSectionData = computed(() => {
+  return Object.keys(meaningfulSectionComparisons.value).length > 0;
+});
+
+// Check if section difference should be shown
+const showSectionDifference = (comparison) => {
+  // Don't show if both are 0%
+  return !(comparison.current === 0 && comparison.previous === 0);
+};
 
 const comparisonLabel = computed(() => {
   switch (selectedComparisonType.value) {
@@ -190,17 +249,64 @@ const fetchComparison = async () => {
 
     if (result.success) {
       comparisonData.value = result.data;
+      
+      // Check if previous response exists
+      // If comparison is null, there's no previous response
+      if (result.data.comparison !== null && result.data.comparison !== undefined) {
+        hasPreviousResponse.value = true;
+      } else {
+        hasPreviousResponse.value = false;
+      }
+    } else {
+      comparisonData.value = null;
+      hasPreviousResponse.value = false;
     }
   } catch (error) {
     console.error('Error fetching comparison:', error);
-    alert('Failed to load comparison data. Please try again.');
+    comparisonData.value = null;
+    hasPreviousResponse.value = false;
   } finally {
     loading.value = false;
   }
 };
 
-onMounted(() => {
-  fetchComparison();
+// Check for previous response on mount and when response changes
+const checkForPreviousResponse = async () => {
+  try {
+    // Try to fetch comparison to see if previous response exists
+    const result = await apiClient(`/forms/${props.form._id}/responses/${props.response._id}/compare`, {
+      method: 'GET',
+      params: {
+        compareWith: 'last_audit'
+      }
+    });
+
+    if (result.success) {
+      // If comparison exists, there's a previous response
+      if (result.data.comparison !== null && result.data.comparison !== undefined) {
+        hasPreviousResponse.value = true;
+        // Load the comparison data
+        comparisonData.value = result.data;
+      } else {
+        hasPreviousResponse.value = false;
+      }
+    } else {
+      hasPreviousResponse.value = false;
+    }
+  } catch (error) {
+    console.error('Error checking for previous response:', error);
+    hasPreviousResponse.value = false;
+  }
+};
+
+onMounted(async () => {
+  await checkForPreviousResponse();
+});
+
+// Watch for response changes to re-check
+watch(() => props.response?._id, async () => {
+  if (props.response?._id) {
+    await checkForPreviousResponse();
+  }
 });
 </script>
-

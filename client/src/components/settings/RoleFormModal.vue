@@ -446,7 +446,7 @@ watch(() => props.isOpen, (newVal) => {
       }
       // Merge per module and action
       Object.keys(basePerms).forEach(m => {
-        basePerms[m] = { ...basePerms[m], ...(existingPerms[m] || {}) };
+        basePerms[m] = { ...basePerms[m], ...existingPerms[m] };
       });
 
       form.value = {

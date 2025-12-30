@@ -145,14 +145,14 @@ const navigation = computed(() => {
       name: 'Forms', 
       href: '/forms', 
       icon: ClipboardDocumentIcon,
-      current: route.path.startsWith('/forms') && route.path !== '/forms/my-audits'
+      current: route.path.startsWith('/forms') && route.path !== '/responses'
     });
-    // My Audits - for auditors
+    // Responses - show all form responses
     nav.push({ 
-      name: 'My Audits', 
-      href: '/forms/my-audits', 
+      name: 'Responses', 
+      href: '/responses', 
       icon: ClipboardDocumentIcon,
-      current: route.path === '/forms/my-audits'
+      current: route.path === '/responses'
     });
   }
   

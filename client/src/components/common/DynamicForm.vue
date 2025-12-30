@@ -167,13 +167,24 @@ const orderedFields = computed(() => {
       continue; // Skip duplicates
     }
     
-    const field = fieldMapByKey.get(keyLower);
+    let field = fieldMapByKey.get(keyLower);
     if (!field) {
-      console.warn(`⚠️  Field "${key}" (${keyLower}) from quickCreate not found in module fields`, {
-        availableKeys: Array.from(fieldMapByKey.keys()).slice(0, 10),
-        keyLower: keyLower
-      });
-      continue;
+      // Try kebab-case to camelCase conversion (event-type -> eventType)
+      const camelCaseKey = key.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
+      const camelCaseKeyLower = camelCaseKey.toLowerCase();
+      field = fieldMapByKey.get(camelCaseKeyLower);
+      
+      if (field) {
+        console.log(`✅ Normalized field key "${key}" to "${field.key}"`);
+      } else {
+        console.warn(`⚠️  Field "${key}" (${keyLower}) from quickCreate not found in module fields`, {
+          availableKeys: Array.from(fieldMapByKey.keys()).slice(0, 20),
+          keyLower: keyLower,
+          camelCaseAttempt: camelCaseKey,
+          moduleKey: props.moduleKey
+        });
+        continue;
+      }
     }
     
     const fieldKeyLower = field.key?.toLowerCase();
@@ -185,6 +196,20 @@ const orderedFields = computed(() => {
     if (field.dependencies && Array.isArray(field.dependencies) && field.dependencies.length > 0) {
       const depState = getFieldDependencyState(field, currentFormData, allFields);
       isVisible = depState.visible !== false; // Default to visible if undefined
+    }
+    
+    // Special handling for events: force include linkedFormId and relatedToId when eventType is audit type
+    // This ensures these fields are always available even if dependencies aren't met initially
+    if (props.moduleKey === 'events') {
+      const auditEventTypes = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
+      const isAuditType = auditEventTypes.includes(currentFormData.eventType);
+      const isLinkedFormField = field.key?.toLowerCase() === 'linked-form-id' || field.key === 'linkedFormId';
+      const isRelatedToField = field.key?.toLowerCase() === 'related-to-id' || field.key === 'relatedToId';
+      
+      if (isAuditType && (isLinkedFormField || isRelatedToField)) {
+        isVisible = true; // Force visible for audit event types
+        console.log(`✅ Force-visible field "${key}" for audit event type`);
+      }
     }
     
     console.log(`✅ Processing field "${key}":`, {
@@ -239,18 +264,92 @@ const orderedFields = computed(() => {
     }
   }
   
-  // Sort by order property while maintaining quickCreate order for fields with same order
+  // For events module, ensure linkedFormId and relatedToId are included when eventType is an audit type
+  // These fields might be hidden initially but should be visible when eventType matches
+  if (props.moduleKey === 'events') {
+    const auditEventTypes = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
+    const currentEventType = currentFormData.eventType;
+    const isAuditType = auditEventTypes.includes(currentEventType);
+    
+    console.log('[DynamicForm] Checking audit fields for events:', {
+      eventType: currentEventType,
+      isAuditType: isAuditType,
+      currentFormDataKeys: Object.keys(currentFormData)
+    });
+    
+    if (isAuditType) {
+      // Find and include linkedFormId field (check both kebab-case and camelCase)
+      const linkedFormFields = allFields.filter(f => {
+        const keyLower = f.key?.toLowerCase();
+        return keyLower === 'linked-form-id' || 
+               keyLower === 'linkedformid' ||
+               f.key === 'linkedFormId';
+      });
+      
+      for (const field of linkedFormFields) {
+        const fieldKeyLower = field.key?.toLowerCase();
+        if (!seen.has(fieldKeyLower)) {
+          ordered.push(field);
+          seen.add(fieldKeyLower);
+          console.log(`✅ Force-added linkedFormId field "${field.key}" for audit event type`);
+        } else {
+          // Field was already added but might have been excluded due to dependencies
+          // Re-add it to ensure it's visible
+          const existingIndex = ordered.findIndex(f => f.key?.toLowerCase() === fieldKeyLower);
+          if (existingIndex === -1) {
+            ordered.push(field);
+            console.log(`✅ Re-added linkedFormId field "${field.key}" for audit event type`);
+          }
+        }
+      }
+      
+      // Find and include relatedToId field (check both kebab-case and camelCase)
+      const relatedToFields = allFields.filter(f => {
+        const keyLower = f.key?.toLowerCase();
+        return keyLower === 'related-to-id' || 
+               keyLower === 'relatedtoid' ||
+               f.key === 'relatedToId';
+      });
+      
+      for (const field of relatedToFields) {
+        const fieldKeyLower = field.key?.toLowerCase();
+        if (!seen.has(fieldKeyLower)) {
+          ordered.push(field);
+          seen.add(fieldKeyLower);
+          console.log(`✅ Force-added relatedToId field "${field.key}" for audit event type`);
+        } else {
+          // Field was already added but might have been excluded due to dependencies
+          // Re-add it to ensure it's visible
+          const existingIndex = ordered.findIndex(f => f.key?.toLowerCase() === fieldKeyLower);
+          if (existingIndex === -1) {
+            ordered.push(field);
+            console.log(`✅ Re-added relatedToId field "${field.key}" for audit event type`);
+          }
+        }
+      }
+    }
+  }
+  
+  // Prioritize quickCreate order - only use field.order as tiebreaker for fields not in quickCreate
+  // This ensures the order set in Settings > Modules & Fields > Quick Create is respected
   ordered.sort((a, b) => {
-    const orderA = a.order ?? Number.MAX_SAFE_INTEGER;
-    const orderB = b.order ?? Number.MAX_SAFE_INTEGER;
-    if (orderA !== orderB) return orderA - orderB;
-    // If order is same, maintain quickCreate order
+    // First, check if both fields are in quickCreate array
     const idxA = quickCreate.findIndex(k => k?.toLowerCase() === a.key?.toLowerCase());
     const idxB = quickCreate.findIndex(k => k?.toLowerCase() === b.key?.toLowerCase());
-    if (idxA >= 0 && idxB >= 0) return idxA - idxB;
+    
+    // If both are in quickCreate, use their order in the array
+    if (idxA >= 0 && idxB >= 0) {
+      return idxA - idxB;
+    }
+    
+    // If only one is in quickCreate, it comes first
     if (idxA >= 0) return -1;
     if (idxB >= 0) return 1;
-    return 0;
+    
+    // If neither is in quickCreate, use field.order as tiebreaker
+    const orderA = a.order ?? Number.MAX_SAFE_INTEGER;
+    const orderB = b.order ?? Number.MAX_SAFE_INTEGER;
+    return orderA - orderB;
   });
   
   console.log('Ordered fields result:', ordered.map(f => ({ key: f.key, label: f.label })));

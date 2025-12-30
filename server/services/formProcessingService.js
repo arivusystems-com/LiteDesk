@@ -52,22 +52,50 @@ exports.processSubmission = async (params) => {
             throw new Error('Organization ID is missing');
         }
         
-        // Create response document
-        const responseData = {
-            organizationId: organizationId.toString ? organizationId.toString() : organizationId,
-            formId: form._id.toString ? form._id.toString() : form._id,
-            linkedTo: linkedTo || null,
-            submittedBy: submittedBy || null,
-            submittedAt: new Date(),
-            responseDetails: scoredResponse.responseDetails,
-            sectionScores: scoredResponse.sectionScores,
-            kpis: scoredResponse.kpis,
-            status: determineInitialStatus(form, scoredResponse.kpis),
-            ipAddress,
-            userAgent
-        };
+        // Check if response already exists (from event check-in)
+        let formResponse = null;
+        if (linkedTo && linkedTo.type === 'Event' && linkedTo.id) {
+            formResponse = await FormResponse.findOne({
+                formId: form._id,
+                organizationId: organizationId,
+                'linkedTo.type': 'Event',
+                'linkedTo.id': linkedTo.id,
+                executionStatus: { $in: ['Not Started', 'In Progress'] }
+            });
+        }
         
-        const formResponse = await FormResponse.create(responseData);
+        if (formResponse) {
+            // Update existing response (from event check-in)
+            formResponse.responseDetails = scoredResponse.responseDetails;
+            formResponse.sectionScores = scoredResponse.sectionScores;
+            formResponse.kpis = scoredResponse.kpis;
+            formResponse.executionStatus = 'Submitted';
+            // reviewStatus will be computed automatically by pre-save hook
+            formResponse.submittedAt = new Date();
+            formResponse.submittedBy = submittedBy || formResponse.submittedBy;
+            formResponse.ipAddress = ipAddress || formResponse.ipAddress;
+            formResponse.userAgent = userAgent || formResponse.userAgent;
+            await formResponse.save();
+        } else {
+            // Create new response document
+            // reviewStatus will be computed automatically by pre-save hook based on business rules
+            const responseData = {
+                organizationId: organizationId.toString ? organizationId.toString() : organizationId,
+                formId: form._id.toString ? form._id.toString() : form._id,
+                linkedTo: linkedTo || null,
+                submittedBy: submittedBy || null,
+                submittedAt: new Date(),
+                responseDetails: scoredResponse.responseDetails,
+                sectionScores: scoredResponse.sectionScores,
+                kpis: scoredResponse.kpis,
+                executionStatus: 'Submitted',
+                approved: false, // Initially not approved
+                ipAddress,
+                userAgent
+            };
+            
+            formResponse = await FormResponse.create(responseData);
+        }
         
         // Update form analytics
         await updateFormAnalytics(form._id.toString ? form._id.toString() : form._id, organizationId.toString ? organizationId.toString() : organizationId);
@@ -75,8 +103,8 @@ exports.processSubmission = async (params) => {
         // Trigger workflows
         await triggerWorkflows(form, formResponse);
         
-        // Create corrective task if needed
-        if (formResponse.status === 'Pending Corrective Action') {
+        // Create corrective task if needed (check computed status)
+        if (formResponse.reviewStatus === 'Pending Corrective Action') {
             await createCorrectiveTask(form, formResponse, organizationId);
         }
         
@@ -140,22 +168,13 @@ async function validateSubmission(form, responseDetails) {
 
 /**
  * Determine initial status based on KPIs
+ * @deprecated Status is now computed automatically based on business rules in FormResponse model
+ * This function is kept for reference but is no longer used
  */
 function determineInitialStatus(form, kpis) {
-    // If form requires approval workflow
-    if (form.approvalRequired) {
-        return 'Pending Corrective Action';
-    }
-    
-    // For Audit forms, check if compliance is below threshold
-    if (form.formType === 'Audit') {
-        if (kpis.compliancePercentage < form.thresholds.partial) {
-            return 'Pending Corrective Action';
-        }
-    }
-    
-    // Default status
-    return 'Pending Corrective Action';
+    // Status is now computed automatically by FormResponse.computeReviewStatus()
+    // This function is deprecated and kept for reference only
+    return null;
 }
 
 /**
@@ -265,7 +284,7 @@ async function createCorrectiveTask(form, formResponse, organizationId) {
             title: `Corrective Actions Required: ${form.name}`,
             description: `Please address ${failedQuestions.length} failed question(s) from form submission ${formResponse.responseId}`,
             relatedTo: {
-                type: form.linkedModule ? form.linkedModule.toLowerCase() : 'none',
+                type: formResponse.linkedTo?.type || 'none',
                 id: formResponse.linkedTo ? formResponse.linkedTo.id : null
             },
             assignedTo: form.assignedTo || formResponse.submittedBy,
@@ -274,7 +293,7 @@ async function createCorrectiveTask(form, formResponse, organizationId) {
             dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
         };
         
-        // Only create task if form is linked to a module
+        // Only create task if form response is linked to a module
         if (formResponse.linkedTo && formResponse.linkedTo.id) {
             await Task.create(taskData);
         }

@@ -22,5 +22,14 @@ router.post('/bulk-delete', eventController.bulkDeleteEvents);
 router.post('/:id/notes', eventController.addNote);
 router.patch('/:id/status', eventController.updateEventStatus);
 
+// Execution workflow routes
+router.post('/:id/start', eventController.startEvent);
+router.post('/:id/check-in', eventController.checkIn);
+router.post('/:id/check-out', eventController.checkOut);
+router.post('/:id/submit-audit', eventController.submitAudit);
+router.post('/:id/next-org', eventController.moveToNextOrg);
+router.post('/:id/orders', eventController.createOrder);
+router.post('/:id/complete', eventController.completeEvent);
+
 module.exports = router;
 

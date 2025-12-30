@@ -1,4 +1,4 @@
-import { ref, computed, watch, getCurrentInstance } from 'vue';
+import { ref, computed, watch, getCurrentInstance, nextTick } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { 
   HomeIcon,
@@ -266,9 +266,18 @@ export function useTabs() {
     return tabs.value.find(tab => tab.id === id);
   };
 
-  // Find tab by path
+  // Find tab by path (exact match or path without query params)
   const findTabByPath = (path) => {
-    return tabs.value.find(tab => tab.path === path);
+    // First try exact match
+    const exactMatch = tabs.value.find(tab => tab.path === path);
+    if (exactMatch) return exactMatch;
+    
+    // If path has query params, try matching without them
+    const pathWithoutQuery = path.split('?')[0];
+    return tabs.value.find(tab => {
+      const tabPathWithoutQuery = tab.path.split('?')[0];
+      return tabPathWithoutQuery === pathWithoutQuery;
+    });
   };
 
   // Sync active tab with current route (for browser navigation ONLY)
@@ -287,7 +296,13 @@ export function useTabs() {
       return;
     }
     
-    // Find existing tab for this path
+    // Double-check programmatic navigation flag (safety check)
+    if (isProgrammaticNavigation) {
+      console.log('🔒 syncTabWithRoute: Programmatic navigation detected, skipping');
+      return;
+    }
+    
+    // Find existing tab for this path (with or without query params)
     const existingTab = findTabByPath(path);
     
     if (existingTab) {
@@ -355,7 +370,10 @@ export function useTabs() {
     
     // Watch for route changes (browser navigation)
     // Only sync tabs when route changes from browser back/forward buttons
-    watch(() => route.path, (newPath, oldPath) => {
+    watch(() => route.fullPath, (newFullPath, oldFullPath) => {
+      const newPath = route.path; // Path without query
+      const oldPath = oldFullPath ? oldFullPath.split('?')[0] : '';
+      
       // Skip if paths are the same
       if (newPath === oldPath) {
         return;
@@ -371,22 +389,49 @@ export function useTabs() {
       console.log('🔍 Route watcher triggered:', {
         oldPath,
         newPath,
+        newFullPath,
         isProgrammaticNavigation,
         activeTabId: activeTabId.value,
         lastProgrammaticPath
       });
       
       // Check if this route change matches a programmatic navigation we just did
-      if (isProgrammaticNavigation || newPath === lastProgrammaticPath) {
-        console.log('🔒 Programmatic navigation detected, skipping route sync');
-        lastProgrammaticPath = null; // Reset after use
+      // Compare both path and fullPath to catch query parameter changes
+      if (isProgrammaticNavigation) {
+        console.log('🔒 Programmatic navigation flag is set, skipping route sync');
         return;
       }
       
-      // Check if active tab already matches this route
+      // Check if this matches the last programmatic path (with or without query)
+      if (lastProgrammaticPath) {
+        const lastPathWithoutQuery = lastProgrammaticPath.split('?')[0];
+        const newPathWithoutQuery = newPath.split('?')[0];
+        if (lastPathWithoutQuery === newPathWithoutQuery || newFullPath === lastProgrammaticPath) {
+          console.log('🔒 Programmatic navigation path matches, skipping route sync');
+          lastProgrammaticPath = null; // Reset after use
+          return;
+        }
+      }
+      
+      // Check if active tab already matches this route (with or without query params)
       const currentActiveTab = tabs.value.find(tab => tab.id === activeTabId.value);
-      if (currentActiveTab && currentActiveTab.path === newPath) {
-        console.log('✅ Active tab already matches route, skipping sync');
+      if (currentActiveTab) {
+        const currentPathWithoutQuery = currentActiveTab.path.split('?')[0];
+        const newPathWithoutQuery = newPath.split('?')[0];
+        if (currentPathWithoutQuery === newPathWithoutQuery) {
+          console.log('✅ Active tab already matches route, skipping sync');
+          return;
+        }
+      }
+      
+      // Check if a tab already exists for this route (to prevent duplicates)
+      // Check both with and without query params
+      const existingTabForRoute = findTabByPath(newFullPath) || findTabByPath(newPath);
+      if (existingTabForRoute) {
+        console.log('✅ Tab already exists for route, switching to it instead of creating duplicate');
+        if (activeTabId.value !== existingTabForRoute.id) {
+          activeTabId.value = existingTabForRoute.id;
+        }
         return;
       }
       
@@ -436,12 +481,12 @@ export function useTabs() {
           setTimeout(() => {
             isProgrammaticNavigation = false;
             lastProgrammaticPath = null;
-          }, 100);
+          }, 300); // Increased timeout to prevent route watcher from creating duplicate tabs
         }).catch(() => {
           setTimeout(() => {
             isProgrammaticNavigation = false;
             lastProgrammaticPath = null;
-          }, 100);
+          }, 300);
         });
       } else {
         console.log('🔕 Background mode: tab exists but not switching to it');
@@ -465,20 +510,21 @@ export function useTabs() {
     // Only switch to tab and navigate if NOT background mode
     if (!isBackground) {
       activeTabId.value = newTab.id;
-      // Mark as programmatic navigation to prevent route watcher from syncing
+      // Mark as programmatic navigation BEFORE navigating to prevent route watcher from syncing
       isProgrammaticNavigation = true;
       lastProgrammaticPath = path;
+      
       // Always navigate to show the new tab content
       navigateToPath(path).then(() => {
         setTimeout(() => {
           isProgrammaticNavigation = false;
           lastProgrammaticPath = null;
-        }, 100);
+        }, 500); // Increased timeout to prevent route watcher from creating duplicate tabs
       }).catch(() => {
         setTimeout(() => {
           isProgrammaticNavigation = false;
           lastProgrammaticPath = null;
-        }, 100);
+        }, 500);
       });
       console.log('✅ openTab complete (foreground), activeTabId:', activeTabId.value);
     } else {
@@ -489,7 +535,7 @@ export function useTabs() {
   };
 
   // Close tab
-  const closeTab = (tabId) => {
+  const closeTab = async (tabId) => {
     const index = tabs.value.findIndex(tab => tab.id === tabId);
     
     if (index === -1) return;
@@ -498,6 +544,25 @@ export function useTabs() {
     
     // Don't close non-closable tabs
     if (!tab.closable) return;
+    
+    // Check for beforeClose callback (can be async)
+    console.log('🔵 closeTab: Checking beforeClose for tab:', tab.id, 'has callback:', !!tab.beforeClose);
+    if (tab.beforeClose && typeof tab.beforeClose === 'function') {
+      console.log('🔵 closeTab: Calling beforeClose for tab:', tab.id);
+      try {
+        const shouldClose = await tab.beforeClose();
+        console.log('🔵 closeTab: beforeClose returned:', shouldClose);
+        if (shouldClose === false) {
+          console.log('🔵 closeTab: beforeClose returned false, not closing');
+          return; // Don't close if beforeClose returns false
+        }
+      } catch (error) {
+        console.error('🔵 closeTab: Error in beforeClose:', error);
+        // Continue with close even if beforeClose errors
+      }
+    } else {
+      console.log('🔵 closeTab: No beforeClose callback for tab:', tab.id);
+    }
     
     // Remove tab
     tabs.value.splice(index, 1);
