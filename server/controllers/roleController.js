@@ -8,7 +8,7 @@ function normalizeRolePermissions(input) {
         src.contacts = src.people;
     }
 
-    const modules = ['contacts','organizations','deals','tasks','events','reports','users','settings'];
+    const modules = ['contacts','organizations','deals','tasks','events','items','reports','users','settings'];
     const out = {};
     for (const mod of modules) {
         const m = src[mod] || {};
@@ -37,7 +37,7 @@ function normalizeRolePermissions(input) {
 
         // Default module shape with import/export/scope where applicable
         const base = { create, read, update, delete: del };
-        if (['contacts','organizations','deals','tasks'].includes(mod)) {
+        if (['contacts','organizations','deals','tasks','items'].includes(mod)) {
             base.export = exp;
             base.import = imp;
             if (scope) base.scope = scope;
@@ -398,6 +398,13 @@ exports.getPermissionModules = async (req, res) => {
                 label: 'Forms',
                 description: 'Manage forms and form responses',
                 actions: ['create', 'read', 'update', 'delete', 'export'],
+                hasScope: true
+            },
+            {
+                key: 'items',
+                label: 'Items',
+                description: 'Manage products, services, and inventory',
+                actions: ['create', 'read', 'update', 'delete', 'export', 'import'],
                 hasScope: true
             },
             {

@@ -1,0 +1,519 @@
+const Item = require('../models/Item');
+const mongoose = require('mongoose');
+
+// @desc    Create new item
+// @route   POST /api/items
+// @access  Private
+exports.createItem = async (req, res) => {
+    try {
+        const payload = {
+            ...req.body,
+            organizationId: req.user.organizationId,
+            createdBy: req.user._id,
+            modifiedBy: req.user._id
+        };
+
+        // Validate required fields
+        if (!payload.item_name) {
+            return res.status(400).json({
+                success: false,
+                message: 'Item name is required'
+            });
+        }
+
+        // Set defaults
+        if (!payload.status) {
+            payload.status = 'Active';
+        }
+        if (!payload.item_type) {
+            payload.item_type = 'Product';
+        }
+
+        const newItem = await Item.create(payload);
+        
+        const item = await Item.findById(newItem._id)
+            .populate('vendor', 'name')
+            .populate('createdBy', 'firstName lastName email')
+            .populate('modifiedBy', 'firstName lastName email');
+        
+        res.status(201).json({
+            success: true,
+            data: item
+        });
+    } catch (error) {
+        console.error('Create item error:', error);
+        res.status(400).json({ 
+            success: false,
+            message: 'Error creating item.', 
+            error: error.message 
+        });
+    }
+};
+
+// @desc    Get all items
+// @route   GET /api/items
+// @access  Private
+exports.getItems = async (req, res) => {
+    try {
+        const query = { organizationId: req.user.organizationId };
+        
+        // Filters
+        if (req.query.status) {
+            query.status = req.query.status;
+        }
+        if (req.query.item_type) {
+            query.item_type = req.query.item_type;
+        }
+        if (req.query.category) {
+            query.category = req.query.category;
+        }
+        if (req.query.vendor) {
+            if (mongoose.Types.ObjectId.isValid(req.query.vendor)) {
+                query.vendor = new mongoose.Types.ObjectId(req.query.vendor);
+            }
+        }
+        if (req.query.tag) {
+            query.tags = req.query.tag;
+        }
+        
+        // Search functionality
+        if (req.query.search) {
+            const searchRegex = new RegExp(req.query.search, 'i');
+            query.$or = [
+                { item_name: searchRegex },
+                { item_code: searchRegex },
+                { description: searchRegex }
+            ];
+        }
+        
+        // Low stock filter
+        if (req.query.low_stock === 'true') {
+            query.item_type = { $in: ['Product', 'Serialized Product'] };
+            query.status = 'Active';
+            query.$expr = {
+                $lte: ['$stock_quantity', '$reorder_level']
+            };
+        }
+        
+        // Out of stock filter
+        if (req.query.out_of_stock === 'true') {
+            query.item_type = { $in: ['Product', 'Serialized Product'] };
+            query.stock_quantity = 0;
+        }
+        
+        // Pagination
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const skip = (page - 1) * limit;
+        
+        // Sorting
+        const sortBy = req.query.sortBy || 'createdAt';
+        const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
+        const sort = { [sortBy]: sortOrder };
+        
+        // Execute query
+        const items = await Item.find(query)
+            .populate('vendor', 'name')
+            .populate('createdBy', 'firstName lastName email')
+            .populate('modifiedBy', 'firstName lastName email')
+            .sort(sort)
+            .limit(limit)
+            .skip(skip);
+        
+        const total = await Item.countDocuments(query);
+        
+        // Get statistics
+        const stats = await Item.getItemStatistics(req.user.organizationId);
+        
+        res.status(200).json({
+            success: true,
+            data: items,
+            pagination: {
+                currentPage: page,
+                limit,
+                totalItems: total,
+                totalPages: Math.ceil(total / limit)
+            },
+            statistics: stats[0] || {
+                totalItems: 0,
+                activeItems: 0,
+                inactiveItems: 0,
+                products: 0,
+                services: 0,
+                serializedProducts: 0,
+                nonStockProducts: 0,
+                totalStockValue: 0
+            }
+        });
+    } catch (error) {
+        console.error('Get items error:', error);
+        res.status(500).json({ 
+            success: false,
+            message: 'Error fetching items.', 
+            error: error.message 
+        });
+    }
+};
+
+// @desc    Get single item
+// @route   GET /api/items/:id
+// @access  Private
+exports.getItemById = async (req, res) => {
+    try {
+        const item = await Item.findOne({ 
+            _id: req.params.id, 
+            organizationId: req.user.organizationId 
+        })
+        .populate('vendor', 'name industry phone email')
+        .populate('linked_deals', 'name amount stage status')
+        .populate('linked_forms', 'name formType status')
+        .populate('linked_contacts', 'first_name last_name email phone')
+        .populate('createdBy', 'firstName lastName email')
+        .populate('modifiedBy', 'firstName lastName email');
+        
+        if (!item) {
+            return res.status(404).json({ 
+                success: false,
+                message: 'Item not found or access denied.' 
+            });
+        }
+        
+        res.status(200).json({
+            success: true,
+            data: item
+        });
+    } catch (error) {
+        console.error('Get item error:', error);
+        res.status(500).json({ 
+            success: false,
+            message: 'Error fetching item.', 
+            error: error.message 
+        });
+    }
+};
+
+// @desc    Update item
+// @route   PUT /api/items/:id
+// @access  Private
+exports.updateItem = async (req, res) => {
+    try {
+        // Prevent changing organizationId
+        delete req.body.organizationId;
+        req.body.modifiedBy = req.user._id;
+        
+        const updatedItem = await Item.findOneAndUpdate(
+            { 
+                _id: req.params.id, 
+                organizationId: req.user.organizationId 
+            },
+            req.body,
+            { new: true, runValidators: true }
+        )
+        .populate('vendor', 'name')
+        .populate('createdBy', 'firstName lastName email')
+        .populate('modifiedBy', 'firstName lastName email');
+
+        if (!updatedItem) {
+            return res.status(404).json({ 
+                success: false,
+                message: 'Item not found or access denied.' 
+            });
+        }
+        
+        res.status(200).json({
+            success: true,
+            data: updatedItem
+        });
+    } catch (error) {
+        console.error('Update item error:', error);
+        res.status(400).json({ 
+            success: false,
+            message: 'Error updating item.', 
+            error: error.message 
+        });
+    }
+};
+
+// @desc    Delete item
+// @route   DELETE /api/items/:id
+// @access  Private
+exports.deleteItem = async (req, res) => {
+    try {
+        const result = await Item.findOneAndDelete({ 
+            _id: req.params.id, 
+            organizationId: req.user.organizationId 
+        });
+
+        if (!result) {
+            return res.status(404).json({ 
+                success: false,
+                message: 'Item not found or access denied.' 
+            });
+        }
+        
+        res.status(200).json({
+            success: true,
+            message: 'Item deleted successfully'
+        });
+    } catch (error) {
+        console.error('Delete item error:', error);
+        res.status(500).json({ 
+            success: false,
+            message: 'Error deleting item.', 
+            error: error.message 
+        });
+    }
+};
+
+// @desc    Update stock quantity
+// @route   PATCH /api/items/:id/stock
+// @access  Private
+exports.updateStock = async (req, res) => {
+    try {
+        const { stock_quantity, operation } = req.body; // operation: 'set', 'add', 'subtract'
+        
+        if (stock_quantity === undefined && !operation) {
+            return res.status(400).json({
+                success: false,
+                message: 'stock_quantity or operation is required'
+            });
+        }
+        
+        const item = await Item.findOne({
+            _id: req.params.id,
+            organizationId: req.user.organizationId
+        });
+        
+        if (!item) {
+            return res.status(404).json({
+                success: false,
+                message: 'Item not found or access denied'
+            });
+        }
+        
+        if (item.item_type === 'Service' || item.item_type === 'Non-Stock Product') {
+            return res.status(400).json({
+                success: false,
+                message: 'Stock cannot be updated for Service or Non-Stock Product items'
+            });
+        }
+        
+        let newStockQuantity = item.stock_quantity;
+        
+        if (operation === 'add' && stock_quantity !== undefined) {
+            newStockQuantity = item.stock_quantity + stock_quantity;
+        } else if (operation === 'subtract' && stock_quantity !== undefined) {
+            newStockQuantity = Math.max(0, item.stock_quantity - stock_quantity);
+        } else if (operation === 'set' && stock_quantity !== undefined) {
+            newStockQuantity = Math.max(0, stock_quantity);
+        } else if (stock_quantity !== undefined) {
+            newStockQuantity = Math.max(0, stock_quantity);
+        }
+        
+        item.stock_quantity = newStockQuantity;
+        item.modifiedBy = req.user._id;
+        await item.save();
+        
+        const updatedItem = await Item.findById(item._id)
+            .populate('vendor', 'name')
+            .populate('createdBy', 'firstName lastName email')
+            .populate('modifiedBy', 'firstName lastName email');
+        
+        res.status(200).json({
+            success: true,
+            data: updatedItem
+        });
+    } catch (error) {
+        console.error('Update stock error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error updating stock',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Get low stock items
+// @route   GET /api/items/low-stock
+// @access  Private
+exports.getLowStockItems = async (req, res) => {
+    try {
+        const items = await Item.getLowStockItems(req.user.organizationId);
+        
+        res.status(200).json({
+            success: true,
+            data: items
+        });
+    } catch (error) {
+        console.error('Get low stock items error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching low stock items',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Get items by type
+// @route   GET /api/items/type/:type
+// @access  Private
+exports.getItemsByType = async (req, res) => {
+    try {
+        const { type } = req.params;
+        const validTypes = ['Product', 'Service', 'Serialized Product', 'Non-Stock Product'];
+        
+        if (!validTypes.includes(type)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid item type'
+            });
+        }
+        
+        const items = await Item.getItemsByType(req.user.organizationId, type);
+        
+        res.status(200).json({
+            success: true,
+            data: items
+        });
+    } catch (error) {
+        console.error('Get items by type error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching items by type',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Get item statistics
+// @route   GET /api/items/statistics
+// @access  Private
+exports.getItemStatistics = async (req, res) => {
+    try {
+        const stats = await Item.getItemStatistics(req.user.organizationId);
+        
+        res.status(200).json({
+            success: true,
+            data: stats[0] || {
+                totalItems: 0,
+                activeItems: 0,
+                inactiveItems: 0,
+                products: 0,
+                services: 0,
+                serializedProducts: 0,
+                nonStockProducts: 0,
+                totalStockValue: 0
+            }
+        });
+    } catch (error) {
+        console.error('Get item statistics error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching item statistics',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Link item to deal
+// @route   POST /api/items/:id/link-deal
+// @access  Private
+exports.linkDeal = async (req, res) => {
+    try {
+        const { dealId } = req.body;
+        
+        if (!dealId || !mongoose.Types.ObjectId.isValid(dealId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Valid dealId is required'
+            });
+        }
+        
+        const item = await Item.findOneAndUpdate(
+            { 
+                _id: req.params.id, 
+                organizationId: req.user.organizationId 
+            },
+            {
+                $addToSet: { linked_deals: dealId },
+                $set: { modifiedBy: req.user._id }
+            },
+            { new: true, runValidators: true }
+        )
+        .populate('vendor', 'name')
+        .populate('linked_deals', 'name amount stage status')
+        .populate('createdBy', 'firstName lastName email')
+        .populate('modifiedBy', 'firstName lastName email');
+        
+        if (!item) {
+            return res.status(404).json({
+                success: false,
+                message: 'Item not found or access denied'
+            });
+        }
+        
+        res.status(200).json({
+            success: true,
+            data: item
+        });
+    } catch (error) {
+        console.error('Link deal error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error linking deal',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Unlink item from deal
+// @route   DELETE /api/items/:id/unlink-deal/:dealId
+// @access  Private
+exports.unlinkDeal = async (req, res) => {
+    try {
+        const { dealId } = req.params;
+        
+        if (!mongoose.Types.ObjectId.isValid(dealId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid dealId'
+            });
+        }
+        
+        const item = await Item.findOneAndUpdate(
+            { 
+                _id: req.params.id, 
+                organizationId: req.user.organizationId 
+            },
+            {
+                $pull: { linked_deals: dealId },
+                $set: { modifiedBy: req.user._id }
+            },
+            { new: true, runValidators: true }
+        )
+        .populate('vendor', 'name')
+        .populate('linked_deals', 'name amount stage status')
+        .populate('createdBy', 'firstName lastName email')
+        .populate('modifiedBy', 'firstName lastName email');
+        
+        if (!item) {
+            return res.status(404).json({
+                success: false,
+                message: 'Item not found or access denied'
+            });
+        }
+        
+        res.status(200).json({
+            success: true,
+            data: item
+        });
+    } catch (error) {
+        console.error('Unlink deal error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error unlinking deal',
+            error: error.message
+        });
+    }
+};
+

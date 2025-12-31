@@ -1018,8 +1018,8 @@
       </div>
 
       <!-- Other tabs: Module details, Relationship, Quick Create -->
-      <section v-else class="flex-1 min-w-0 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div class="p-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
+      <section v-else class="flex-1 min-w-0 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
+        <div class="p-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between flex-shrink-0">
           <div>
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ currentTopTabLabel }}
@@ -1060,7 +1060,7 @@
           </div>
         </div>
 
-        <div class="p-4" v-if="activeTopTab === 'details'">
+        <div class="p-4 overflow-y-auto" v-if="activeTopTab === 'details'">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Display Name</label>
@@ -1081,7 +1081,8 @@
           </div>
         </div>
 
-        <div class="p-6" v-else-if="activeTopTab === 'relationships'">
+        <div class="flex-1 overflow-y-auto" v-else-if="activeTopTab === 'relationships'">
+          <div class="p-6">
           <!-- Header -->
           <div class="mb-6">
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Relationships</h3>
@@ -1296,9 +1297,11 @@
               Add Another Relationship
             </button>
           </div>
+          </div>
         </div>
 
-        <div class="p-6 h-full" v-else-if="activeTopTab === 'pipeline'">
+        <div class="flex-1 overflow-y-auto" v-else-if="activeTopTab === 'pipeline'">
+          <div class="p-6 h-full">
           <div class="h-full flex flex-col lg:flex-row gap-4">
             <aside class="w-full lg:w-80 flex-none bg-white dark:bg-gray-900/60 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
               <div class="p-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
@@ -1518,9 +1521,11 @@
               </div>
             </section>
           </div>
+          </div>
         </div>
 
-        <div class="p-4" v-else-if="activeTopTab === 'playbooks'">
+        <div class="flex-1 overflow-y-auto" v-else-if="activeTopTab === 'playbooks'">
+          <div class="p-4">
           <div class="h-full flex flex-col lg:flex-row gap-4">
             <aside class="w-full lg:w-80 flex-none bg-white dark:bg-gray-900/60 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
               <div class="p-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
@@ -1814,9 +1819,11 @@
               </div>
             </section>
           </div>
+          </div>
         </div>
 
-        <div class="p-4" v-else>
+        <div class="flex-1 overflow-y-auto" v-else>
+          <div class="p-4">
           <!-- Quick Create Mode Toggle - Advanced mode hidden for now -->
           <!-- <div class="mb-3 flex items-center justify-between">
             <div class="text-sm font-semibold text-gray-800 dark:text-gray-200">Quick Create Mode</div>
@@ -1965,6 +1972,7 @@
                 </div>
               </div> -->
             </section>
+          </div>
           </div>
         </div>
       </section>
@@ -2424,6 +2432,7 @@ const fieldTypes = [
   'Email',
   'Phone',
   'URL',
+  'Image',
   'Auto-Number',
   'Lookup (Relationship)',
   'Formula',

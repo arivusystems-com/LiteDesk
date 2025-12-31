@@ -38,7 +38,7 @@
         <div 
           v-for="field in orderedFields" 
           :key="field.key"
-          :class="field.dataType === 'Text-Area' || field.dataType === 'Rich Text' ? 'md:col-span-2' : ''"
+          :class="field.dataType === 'Text-Area' || field.dataType === 'Rich Text' || field.dataType === 'Image' ? 'md:col-span-2' : ''"
         >
           <DynamicFormField 
             :field="field"

@@ -185,6 +185,39 @@ function getFieldDataType(key, fieldName, path) {
         return formFieldMappings[fieldName];
     }
     
+    // Items module field mappings
+    const itemFieldMappings = {
+        'product_image': 'Image',
+        'item_id': 'Auto-Number',
+        'item_name': 'Text',
+        'item_code': 'Text',
+        'item_type': 'Picklist',
+        'category': 'Picklist',
+        'subcategory': 'Picklist',
+        'unit_of_measure': 'Picklist',
+        'status': 'Picklist',
+        'description': 'Text-Area',
+        'cost_price': 'Currency',
+        'selling_price': 'Currency',
+        'tax_type': 'Picklist',
+        'tax_percentage': 'Decimal',
+        'commission_rate': 'Decimal',
+        'warranty_period_months': 'Integer',
+        'serial_numbers': 'Multi-Picklist',
+        'stock_quantity': 'Integer',
+        'reorder_level': 'Integer',
+        'vendor': 'Lookup (Relationship)',
+        'linked_deals': 'Multi-Picklist',
+        'linked_invoices': 'Multi-Picklist',
+        'linked_forms': 'Multi-Picklist',
+        'linked_contacts': 'Multi-Picklist',
+        'tags': 'Multi-Picklist'
+    };
+    
+    if (key === 'items' && itemFieldMappings[fieldName]) {
+        return itemFieldMappings[fieldName];
+    }
+    
     // Fall back to inference based on schema type
     return inferDataType(path);
 }
@@ -199,6 +232,7 @@ function getBaseFieldsForKey(key) {
             events: require('../models/Event'),
             imports: require('../models/ImportHistory'),
             forms: require('../models/Form'),
+            items: require('../models/Item'),
         };
         const model = modelByKey[key];
         if (!model) return [];
@@ -334,6 +368,43 @@ function getBaseFieldsForKey(key) {
                         value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
                         logic: 'AND'
                     }];
+                }
+                
+                // Special handling for Items module - add dependencies based on item_type
+                if (key === 'items') {
+                    // Stock fields: Show for Product and Serialized Product, hide for Service and Non-Stock Product
+                    if (name === 'stock_quantity' || name === 'reorder_level') {
+                        dependencies = [{
+                            name: 'Show for stock-managed items',
+                            type: 'visibility',
+                            fieldKey: 'item_type',
+                            operator: 'in',
+                            value: ['Product', 'Serialized Product'],
+                            logic: 'AND'
+                        }];
+                    }
+                    // Commission rate: Show for Service
+                    if (name === 'commission_rate') {
+                        dependencies = [{
+                            name: 'Show for services',
+                            type: 'visibility',
+                            fieldKey: 'item_type',
+                            operator: 'equals',
+                            value: 'Service',
+                            logic: 'AND'
+                        }];
+                    }
+                    // Serial number fields: Show only for Serialized Product
+                    if (name === 'serial_numbers' || name === 'warranty_period_months') {
+                        dependencies = [{
+                            name: 'Show for serialized products',
+                            type: 'visibility',
+                            fieldKey: 'item_type',
+                            operator: 'equals',
+                            value: 'Serialized Product',
+                            logic: 'AND'
+                        }];
+                    }
                 }
                 
                 return {
@@ -819,6 +890,7 @@ exports.listModules = async (req, res) => {
             { key: 'tasks', name: 'Tasks' },
             { key: 'events', name: 'Events' },
             { key: 'forms', name: 'Forms' },
+            { key: 'items', name: 'Items' },
             { key: 'imports', name: 'Imports' },
             { key: 'reports', name: 'Reports' },
             { key: 'users', name: 'Users' } // For lookup targets (assignedTo, lead_owner, createdBy)
@@ -849,6 +921,67 @@ exports.listModules = async (req, res) => {
                     cascadeDelete: false,
                     label: 'Linked Form',
                     description: 'Link audit forms to events for audit event types'
+                }
+            ] : m.key === 'items' ? [
+                {
+                    name: 'Vendor',
+                    type: 'lookup',
+                    targetModuleKey: 'organizations',
+                    localField: 'vendor',
+                    foreignField: '_id',
+                    inverseName: 'Items',
+                    inverseField: '',
+                    required: false,
+                    unique: false,
+                    index: true,
+                    cascadeDelete: false,
+                    label: 'Vendor',
+                    description: 'Link to vendor/supplier organization'
+                },
+                {
+                    name: 'Linked Deals',
+                    type: 'many_to_many',
+                    targetModuleKey: 'deals',
+                    localField: 'linked_deals',
+                    foreignField: '_id',
+                    inverseName: 'Linked Items',
+                    inverseField: '',
+                    required: false,
+                    unique: false,
+                    index: true,
+                    cascadeDelete: false,
+                    label: 'Linked Deals',
+                    description: 'Deals where this item is quoted or sold'
+                },
+                {
+                    name: 'Linked Forms',
+                    type: 'many_to_many',
+                    targetModuleKey: 'forms',
+                    localField: 'linked_forms',
+                    foreignField: '_id',
+                    inverseName: 'Linked Items',
+                    inverseField: '',
+                    required: false,
+                    unique: false,
+                    index: true,
+                    cascadeDelete: false,
+                    label: 'Linked Forms',
+                    description: 'Audit, feedback, or maintenance forms linked to this item'
+                },
+                {
+                    name: 'Linked Contacts',
+                    type: 'many_to_many',
+                    targetModuleKey: 'people',
+                    localField: 'linked_contacts',
+                    foreignField: '_id',
+                    inverseName: 'Linked Items',
+                    inverseField: '',
+                    required: false,
+                    unique: false,
+                    index: true,
+                    cascadeDelete: false,
+                    label: 'Linked Contacts',
+                    description: 'Contacts linked to this item (end users, product testers, etc.)'
                 }
             ] : []
         }));
@@ -917,7 +1050,11 @@ exports.listModules = async (req, res) => {
                         if (baseField.lookupSettings) {
                             savedField.lookupSettings = baseField.lookupSettings;
                         }
-                        // For linkedFormId in events module, ensure visibility dependency exists
+                        // Always use base dependencies if available (base is source of truth for system modules)
+                        if (baseField.dependencies && Array.isArray(baseField.dependencies) && baseField.dependencies.length > 0) {
+                            savedField.dependencies = JSON.parse(JSON.stringify(baseField.dependencies));
+                        }
+                        // For linkedFormId in events module, ensure visibility dependency exists (backward compatibility check)
                         if (sys.key === 'events' && savedField.key === 'linkedFormId') {
                             const hasVisibilityDep = savedField.dependencies && savedField.dependencies.some(
                                 dep => dep.type === 'visibility' && dep.fieldKey === 'eventType'
@@ -1267,7 +1404,7 @@ exports.updateModule = async (req, res) => {
 exports.updateSystemModule = async (req, res) => {
     try {
         const { key } = req.params;
-        const systemKeys = new Set(['people','organizations','deals','tasks','events','forms','imports','reports']);
+        const systemKeys = new Set(['people','organizations','deals','tasks','events','forms','items','imports','reports']);
         if (!systemKeys.has(key)) return res.status(400).json({ success: false, message: 'Invalid system module key' });
         const { fields, enabled, name, relationships, quickCreate, quickCreateLayout, pipelineSettings } = req.body;
         

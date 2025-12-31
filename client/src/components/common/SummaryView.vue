@@ -509,7 +509,8 @@
                 :key="fieldData.key"
                 :class="[
                   fieldData.field.dataType === 'Text-Area' || 
-                  fieldData.field.dataType === 'Rich Text' 
+                  fieldData.field.dataType === 'Rich Text' ||
+                  fieldData.field.dataType === 'Image'
                     ? 'md:col-span-2' 
                     : ''
                 ]"
