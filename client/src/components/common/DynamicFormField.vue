@@ -594,6 +594,55 @@
       class="block w-full mt-2 rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
     />
     
+    <!-- Image -->
+    <div v-else-if="field.dataType === 'Image'" class="mt-2">
+      <input 
+        type="file"
+        :id="field.key"
+        :name="field.key"
+        accept="image/*"
+        @change="handleImageUpload"
+        :required="isRequired && !value"
+        :disabled="isReadOnly || uploading"
+        class="hidden"
+        :ref="el => imageInputRef = el"
+      />
+      <div 
+        v-if="value"
+        class="relative inline-block"
+      >
+        <img 
+          :src="value" 
+          :alt="field.label || field.key"
+          class="max-w-full h-32 object-contain rounded-lg border border-gray-300 dark:border-gray-600"
+        />
+        <button
+          v-if="!isReadOnly"
+          type="button"
+          @click="removeImage"
+          class="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow-lg"
+        >
+          <XMarkIcon class="w-4 h-4" />
+        </button>
+      </div>
+      <button
+        v-else
+        type="button"
+        @click="triggerImageUpload"
+        :disabled="isReadOnly || uploading"
+        class="w-full px-4 py-3 border-2 border-dashed rounded-lg transition-colors"
+        :class="uploading 
+          ? 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 cursor-wait' 
+          : 'border-gray-300 dark:border-gray-600 hover:border-indigo-500 dark:hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 cursor-pointer'"
+      >
+        <div class="flex items-center justify-center gap-2 text-gray-600 dark:text-gray-400">
+          <ArrowUpTrayIcon class="w-5 h-5" />
+          <span v-if="uploading">Uploading...</span>
+          <span v-else>Upload Image</span>
+        </div>
+      </button>
+    </div>
+    
     <!-- Auto-Number, Formula, Rollup Summary (Read-only display) -->
     <input 
       v-else-if="['Auto-Number', 'Formula', 'Rollup Summary'].includes(field.dataType)"
@@ -615,7 +664,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { Listbox, ListboxButton, ListboxOptions, ListboxOption, Combobox, ComboboxButton, ComboboxInput, ComboboxOptions, ComboboxOption } from '@headlessui/vue';
-import { CheckIcon, ChevronUpDownIcon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline';
+import { CheckIcon, ChevronUpDownIcon, XMarkIcon, MagnifyingGlassIcon, ArrowUpTrayIcon } from '@heroicons/vue/24/outline';
 import { CheckIcon as CheckSolidIcon } from '@heroicons/vue/24/solid';
 import { Teleport, Transition } from 'vue';
 import DataTable from '@/components/common/DataTable.vue';
@@ -695,6 +744,10 @@ const lookupSearchQuery = ref('');
 // Refs for search inputs to auto-focus
 const picklistSearchInput = ref(null);
 const lookupSearchInput = ref(null);
+
+// Image upload refs
+const imageInputRef = ref(null);
+const uploading = ref(false);
 
 // Lookup modal state
 const showLookupModal = ref(false);
@@ -866,6 +919,71 @@ const handleLookupChange = (newValue) => {
   updateValue(newValue);
   // Emit blur immediately after selection for lookup fields
   emit('blur');
+};
+
+// Image upload functions
+const triggerImageUpload = () => {
+  if (imageInputRef.value) {
+    imageInputRef.value.click();
+  }
+};
+
+const handleImageUpload = async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  // Validate file type
+  if (!file.type.startsWith('image/')) {
+    alert('Please select an image file');
+    return;
+  }
+
+  // Validate file size (10MB limit)
+  if (file.size > 10 * 1024 * 1024) {
+    alert('Image size must be less than 10MB');
+    return;
+  }
+
+  uploading.value = true;
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const authStore = useAuthStore();
+    const token = authStore.user?.token;
+
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error('Upload failed');
+    }
+
+    const result = await response.json();
+    if (result.success && result.url) {
+      updateValue(result.url);
+    } else {
+      throw new Error(result.message || 'Upload failed');
+    }
+  } catch (error) {
+    console.error('Image upload error:', error);
+    alert('Failed to upload image. Please try again.');
+  } finally {
+    uploading.value = false;
+    // Reset input to allow re-uploading the same file
+    if (imageInputRef.value) {
+      imageInputRef.value.value = '';
+    }
+  }
+};
+
+const removeImage = () => {
+  updateValue('');
 };
 
 // Focus functions for auto-focusing search inputs when Combobox opens

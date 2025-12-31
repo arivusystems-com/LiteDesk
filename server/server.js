@@ -106,6 +106,8 @@ const moduleRoutes = require('./routes/moduleRoutes');
 const groupRoutes = require('./routes/groupRoutes');
 const formRoutes = require('./routes/formRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const itemRoutes = require('./routes/itemRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
 
 // Route Linking
 app.use('/api/auth', authRoutes);
@@ -131,6 +133,8 @@ app.use('/api/groups', groupRoutes);
 app.use('/api/public/forms', formRoutes); // Public form routes
 app.use('/api/forms', formRoutes.protected); // Protected form routes
 app.use('/api/reports', reportRoutes);
+app.use('/api/items', itemRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Serve uploaded files (including reports)
 app.use('/api/uploads', express.static(path.join(__dirname, 'uploads'), {

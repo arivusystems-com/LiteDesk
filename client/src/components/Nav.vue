@@ -22,7 +22,8 @@ import {
   ServerIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  ClipboardDocumentIcon
+  ClipboardDocumentIcon,
+  CubeIcon
 } from '@heroicons/vue/24/outline'
 
 // Define props and emits
@@ -138,6 +139,16 @@ const navigation = computed(() => {
           current: route.path.startsWith('/events') || route.path.startsWith('/calendar')
         });
       }
+  
+  // Items - check permission
+  if (authStore.can('items', 'view')) {
+    nav.push({ 
+      name: 'Items', 
+      href: '/items', 
+      icon: CubeIcon,
+      current: route.path.startsWith('/items')
+    });
+  }
   
   // Forms - check permission
   if (authStore.can('forms', 'view')) {

@@ -90,6 +90,18 @@ const routes = [
     meta: { requiresAuth: true, requiresPermission: { module: 'events', action: 'view' } }
   },
   {
+    path: '/items',
+    name: 'items',
+    component: () => import('@/views/Items.vue'),
+    meta: { requiresAuth: true, requiresPermission: { module: 'items', action: 'view' } }
+  },
+  {
+    path: '/items/:id',
+    name: 'item-detail',
+    component: () => import('@/views/ItemDetail.vue'),
+    meta: { requiresAuth: true, requiresPermission: { module: 'items', action: 'view' } }
+  },
+  {
     path: '/imports',
     name: 'imports',
     component: () => import('@/views/Imports.vue'),
