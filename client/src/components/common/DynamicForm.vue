@@ -121,15 +121,16 @@ const orderedFields = computed(() => {
   const quickCreate = moduleDefinition.value.quickCreate || [];
   const allFields = moduleDefinition.value.fields || [];
   
-  // Exclude system fields and hidden fields
-  // assignedTo should be visible in Quick Create forms (admin can assign)
-  // Note: activitylogs is NOT in this list so it's available in edit forms
-  // Note: createdby is excluded from Quick Create (set by backend automatically)
-  const systemFieldKeys = [
-    'organizationid', 'createdat', 'updatedat', '_id', '__v', 'createdby',
-    // Events-specific system fields
-    'eventid', 'createdtime', 'modifiedby', 'modifiedtime', 'audithistory'
-  ];
+    // Exclude system fields and hidden fields
+    // assignedTo should be visible in Quick Create forms (admin can assign)
+    // Note: activitylogs is NOT in this list so it's available in edit forms
+    // Note: createdby is excluded from Quick Create (set by backend automatically)
+    // Note: status is system-controlled for Events (not user-editable)
+    const systemFieldKeys = [
+      'organizationid', 'createdat', 'updatedat', '_id', '__v', 'createdby',
+      // Events-specific system fields (status is system-controlled, not user-editable)
+      'eventid', 'createdtime', 'modifiedby', 'modifiedtime', 'audithistory', 'status'
+    ];
   
   // Access localFormData.value to ensure Vue tracks this dependency for reactivity
   const currentFormData = localFormData.value || {};
@@ -412,10 +413,11 @@ const shouldShowField = (field) => {
   if (!field || !field.key) return false;
   // Exclude system fields - assignedTo should be visible in Quick Create, createdby should not
   // Note: createdby is excluded from Quick Create (set by backend automatically)
+  // Note: status is system-controlled for Events (not user-editable)
   const systemFieldKeys = [
     'organizationid', 'createdat', 'updatedat', '_id', '__v', 'createdby',
-    // Events-specific system fields
-    'eventid', 'createdtime', 'modifiedby', 'modifiedtime', 'audithistory'
+    // Events-specific system fields (status is system-controlled, not user-editable)
+    'eventid', 'createdtime', 'modifiedby', 'modifiedtime', 'audithistory', 'status'
   ];
   if (systemFieldKeys.includes(field.key.toLowerCase())) return false;
   
@@ -428,8 +430,6 @@ const shouldShowField = (field) => {
     if (depState.visible === false) return false;
   }
   
-  // For Quick Create fields, ignore visibility - if admin added it to Quick Create, show it
-  // Visibility settings apply to detail/list views, not Quick Create forms
   return true;
 };
 
@@ -439,7 +439,8 @@ const getFieldState = (field) => {
     return {
       readonly: false,
       required: field.required || false,
-      allowedOptions: null
+      allowedOptions: null,
+      label: null
     };
   }
   // Access localFormData.value to ensure reactivity - Vue tracks this dependency

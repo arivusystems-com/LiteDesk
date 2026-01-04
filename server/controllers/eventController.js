@@ -3,6 +3,8 @@ const Event = require('../models/Event');
 const EventTracking = require('../models/EventTracking');
 const EventOrder = require('../models/EventOrder');
 const geoValidationService = require('../services/geoValidationService');
+const ModuleDefinition = require('../models/ModuleDefinition');
+const { getFieldDependencyState } = require('../utils/dependencyEvaluation');
 
 // Helper function to normalize status to uppercase enum values
 const normalizeEventStatus = (status) => {
@@ -65,10 +67,36 @@ exports.getEvents = async (req, res) => {
             query.eventType = eventType;
         }
         
-        // Status filter
+        // Status filter (system-controlled: Planned, Completed, Cancelled)
         if (status) {
-            // Normalize status to uppercase enum value
-            query.status = normalizeEventStatus(status);
+            // Normalize status to match new enum values
+            const normalizedStatus = status.trim();
+            const validStatuses = ['Planned', 'Completed', 'Cancelled'];
+            if (validStatuses.includes(normalizedStatus)) {
+                query.status = normalizedStatus;
+            } else {
+                // Try to map legacy statuses for backward compatibility
+                const legacyMap = {
+                    'PLANNED': 'Planned',
+                    'STARTED': 'Planned',
+                    'CHECKED_IN': 'Planned',
+                    'IN_PROGRESS': 'Planned',
+                    'PAUSED': 'Planned',
+                    'CHECKED_OUT': 'Planned',
+                    'SUBMITTED': 'Planned',
+                    'PENDING_CORRECTIVE': 'Planned',
+                    'NEEDS_REVIEW': 'Planned',
+                    'REJECTED': 'Planned',
+                    'APPROVED': 'Completed',
+                    'CLOSED': 'Completed',
+                    'COMPLETED': 'Completed',
+                    'CANCELLED': 'Cancelled',
+                    'CANCELED': 'Cancelled'
+                };
+                if (legacyMap[normalizedStatus.toUpperCase()]) {
+                    query.status = legacyMap[normalizedStatus.toUpperCase()];
+                }
+            }
         }
         
         // Related organization filter
@@ -103,6 +131,9 @@ exports.getEvents = async (req, res) => {
         // Fetch events
         const events = await Event.find(query)
             .populate('eventOwnerId', 'firstName lastName email')
+            .populate('auditorId', 'firstName lastName email')
+            .populate('reviewerId', 'firstName lastName email')
+            .populate('correctiveOwnerId', 'firstName lastName email')
             .populate('linkedFormId', 'name formId formType status')
             .populate('relatedToId', 'name')
             .populate('createdBy', 'firstName lastName')
@@ -146,6 +177,9 @@ exports.getEventById = async (req, res) => {
         
         let event = await Event.findOne(query)
             .populate('eventOwnerId', 'firstName lastName email')
+            .populate('auditorId', 'firstName lastName email')
+            .populate('reviewerId', 'firstName lastName email')
+            .populate('correctiveOwnerId', 'firstName lastName email')
             .populate('linkedFormId', 'name formId formType status')
             .populate('relatedToId', 'name')
             .populate('createdBy', 'firstName lastName')
@@ -179,22 +213,107 @@ exports.createEvent = async (req, res) => {
     try {
         console.log('Creating event with data:', JSON.stringify(req.body, null, 2));
         
+        // ===== STRIP STATUS FROM CLIENT REQUESTS =====
+        // Status is system-controlled and cannot be set by clients
+        if (req.body.status !== undefined) {
+            console.warn(`⚠️  Client attempted to set status "${req.body.status}" on event creation. Status will be set to "Planned" by system.`);
+            delete req.body.status;
+        }
+        
+        const auditEventTypes = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
+        const isAuditType = auditEventTypes.includes(req.body?.eventType);
+
+        // For audit events, allow auditor selection to come from either auditorId or eventOwnerId
+        // (eventOwnerId is a legacy/ownership field; label can be overridden to "Auditor" via dependencies).
+        const auditorSelection = isAuditType ? (req.body.auditorId || req.body.eventOwnerId) : null;
+
         const eventData = {
             ...req.body,
             organizationId: req.user.organizationId,
-            eventOwnerId: req.body.eventOwnerId || req.user._id,
+            // IMPORTANT: do not auto-assign audit roles.
+            // For non-audit events, we keep the convenience default for eventOwnerId.
+            eventOwnerId: isAuditType ? auditorSelection : (req.body.eventOwnerId || req.user._id),
+            // Keep explicit auditorId stored for audit events (no defaults).
+            auditorId: isAuditType ? auditorSelection : (req.body.auditorId || null),
             createdBy: req.user._id,
             modifiedBy: req.user._id
+            // status will be set to "Planned" by model default and pre-save hook
+            // Explicitly set to undefined so model default applies
         };
         
-        // Normalize status if provided - convert to uppercase enum value
-        if (eventData.status && typeof eventData.status === 'string') {
-            eventData.status = normalizeEventStatus(eventData.status);
-        }
+        // Explicitly ensure status is not in eventData (let model default handle it)
+        delete eventData.status;
         
         // Normalize eventType if provided
         if (eventData.eventType && typeof eventData.eventType === 'string') {
             eventData.eventType = eventData.eventType.charAt(0).toUpperCase() + eventData.eventType.slice(1);
+        }
+        
+        // For audit events, enforce explicit responsibility assignment (no defaults)
+        if (isAuditType) {
+            const missing = [];
+            if (!eventData.auditorId) missing.push('auditorId');
+            if (!eventData.reviewerId) missing.push('reviewerId');
+            if (!eventData.correctiveOwnerId) missing.push('correctiveOwnerId');
+            if (missing.length > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Missing required audit role field(s): ${missing.join(', ')}`,
+                    code: 'AUDIT_ROLE_REQUIRED'
+                });
+            }
+        }
+
+        const moduleDefForClear = await ModuleDefinition.findOne({
+            key: 'events',
+            organizationId: req.user.organizationId
+        });
+        
+        if (moduleDefForClear && moduleDefForClear.fields && eventData.eventType) {
+            // Clear allowSelfReview if it shouldn't be visible for this eventType (dependency-driven)
+            const allowSelfReviewField = moduleDefForClear.fields.find(f =>
+                f.key && f.key.toLowerCase() === 'allowselfreview'
+            );
+            if (allowSelfReviewField) {
+                const depState = getFieldDependencyState(allowSelfReviewField, eventData);
+                if (!depState.visible) {
+                    eventData.allowSelfReview = false;
+                }
+            }
+
+            // Clear reviewerId if it shouldn't be visible for this eventType (dependency-driven)
+            const reviewerField = moduleDefForClear.fields.find(f =>
+                f.key && f.key.toLowerCase() === 'reviewerid'
+            );
+            if (reviewerField) {
+                const depState = getFieldDependencyState(reviewerField, eventData);
+                if (!depState.visible) {
+                    eventData.reviewerId = null;
+                }
+            }
+
+            // Clear auditorId if it shouldn't be visible for this eventType (dependency-driven)
+            const auditorField = moduleDefForClear.fields.find(f =>
+                f.key && f.key.toLowerCase() === 'auditorid'
+            );
+            if (auditorField) {
+                const depState = getFieldDependencyState(auditorField, eventData);
+                if (!depState.visible) {
+                    eventData.auditorId = null;
+                    eventData.eventOwnerId = null;
+                }
+            }
+
+            // Clear correctiveOwnerId if it shouldn't be visible for this eventType (dependency-driven)
+            const correctiveOwnerField = moduleDefForClear.fields.find(f =>
+                f.key && f.key.toLowerCase() === 'correctiveownerid'
+            );
+            if (correctiveOwnerField) {
+                const depState = getFieldDependencyState(correctiveOwnerField, eventData);
+                if (!depState.visible) {
+                    eventData.correctiveOwnerId = null;
+                }
+            }
         }
         
         // If linkedFormId is provided, check if form is Ready and activate it
@@ -240,6 +359,9 @@ exports.createEvent = async (req, res) => {
         }
         
         console.log('[createEvent] Final eventData.linkedFormId:', eventData.linkedFormId);
+        
+        // Validate field dependencies (configurable, not hardcoded)
+        // NOTE: legacy plural corrective owners removed; corrective accountability is enforced via `correctiveOwnerId`.
         
         const event = new Event(eventData);
         await event.save();
@@ -306,9 +428,86 @@ exports.updateEvent = async (req, res) => {
             });
         }
         
-        // Normalize status if provided - convert to uppercase enum value
-        if (req.body.status && typeof req.body.status === 'string') {
-            req.body.status = normalizeEventStatus(req.body.status);
+        // Disallow edits after approval or closure
+        if (currentEvent.auditState === 'approved' || currentEvent.auditState === 'closed') {
+            return res.status(403).json({
+                success: false,
+                message: 'Event cannot be edited after approval or closure.'
+            });
+        }
+        
+        // Disallow edits if event is Completed or Cancelled
+        if (currentEvent.status === 'Completed' || currentEvent.status === 'Cancelled') {
+            return res.status(403).json({
+                success: false,
+                message: `Event cannot be edited when status is "${currentEvent.status}".`
+            });
+        }
+        
+        // ===== STRIP STATUS FROM CLIENT REQUESTS =====
+        // Status is system-controlled and cannot be set by clients via update
+        if (req.body.status !== undefined) {
+            console.warn(`⚠️  Client attempted to set status "${req.body.status}" on event update. Status change ignored. Use cancel/complete endpoints instead.`);
+            delete req.body.status;
+        }
+        
+        // Normalize eventType if provided
+        if (req.body.eventType && typeof req.body.eventType === 'string') {
+            req.body.eventType = req.body.eventType.charAt(0).toUpperCase() + req.body.eventType.slice(1);
+        }
+        
+        if (req.body.eventType && req.body.eventType !== currentEvent.eventType) {
+            const moduleDefForClear = await ModuleDefinition.findOne({
+                key: 'events',
+                organizationId: req.user.organizationId
+            });
+            
+            if (moduleDefForClear && moduleDefForClear.fields) {
+                const allowSelfReviewField = moduleDefForClear.fields.find(f =>
+                    f.key && f.key.toLowerCase() === 'allowselfreview'
+                );
+                if (allowSelfReviewField) {
+                    const validationDataForClear = { ...currentEvent.toObject(), ...req.body };
+                    const depState = getFieldDependencyState(allowSelfReviewField, validationDataForClear);
+                    if (!depState.visible) {
+                        req.body.allowSelfReview = false;
+                    }
+                }
+
+                const reviewerField = moduleDefForClear.fields.find(f =>
+                    f.key && f.key.toLowerCase() === 'reviewerid'
+                );
+                if (reviewerField) {
+                    const validationDataForClear = { ...currentEvent.toObject(), ...req.body };
+                    const depState = getFieldDependencyState(reviewerField, validationDataForClear);
+                    if (!depState.visible) {
+                        req.body.reviewerId = null;
+                    }
+                }
+
+                const auditorField = moduleDefForClear.fields.find(f =>
+                    f.key && f.key.toLowerCase() === 'auditorid'
+                );
+                if (auditorField) {
+                    const validationDataForClear = { ...currentEvent.toObject(), ...req.body };
+                    const depState = getFieldDependencyState(auditorField, validationDataForClear);
+                    if (!depState.visible) {
+                        req.body.auditorId = null;
+                        req.body.eventOwnerId = null;
+                    }
+                }
+
+                const correctiveOwnerField = moduleDefForClear.fields.find(f =>
+                    f.key && f.key.toLowerCase() === 'correctiveownerid'
+                );
+                if (correctiveOwnerField) {
+                    const validationDataForClear = { ...currentEvent.toObject(), ...req.body };
+                    const depState = getFieldDependencyState(correctiveOwnerField, validationDataForClear);
+                    if (!depState.visible) {
+                        req.body.correctiveOwnerId = null;
+                    }
+                }
+            }
         }
         
         // Track status changes for audit
@@ -341,7 +540,7 @@ exports.updateEvent = async (req, res) => {
                 // Set formAssignment if not already provided and form is being linked
                 if (!req.body.formAssignment || !req.body.formAssignment.assignedAuditor) {
                     req.body.formAssignment = {
-                        assignedAuditor: currentEvent.eventOwnerId || req.user._id,
+                        assignedAuditor: currentEvent.auditorId || currentEvent.eventOwnerId || req.user._id,
                         dueDate: req.body.endDateTime ? new Date(req.body.endDateTime) : (currentEvent.endDateTime || null),
                         assignedAt: new Date()
                     };
@@ -375,6 +574,60 @@ exports.updateEvent = async (req, res) => {
             modifiedBy: req.user._id,
             auditHistory: currentEvent.auditHistory
         };
+
+        // Keep audit auditor selection consistent: if updating auditorId, mirror to eventOwnerId (and vice versa)
+        const auditEventTypes = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
+        const effectiveEventType = updateData.eventType || currentEvent.eventType;
+        const isAuditType = auditEventTypes.includes(effectiveEventType);
+        if (isAuditType) {
+            const auditorSelection = updateData.auditorId || updateData.eventOwnerId || currentEvent.auditorId || currentEvent.eventOwnerId;
+            if (auditorSelection) {
+                updateData.auditorId = auditorSelection;
+                updateData.eventOwnerId = auditorSelection;
+            }
+        }
+        
+        // Validate field dependencies (configurable, not hardcoded)
+        // Merge current event data with update data for validation
+        const validationData = { ...currentEvent.toObject(), ...updateData };
+        const moduleDef = await ModuleDefinition.findOne({
+            key: 'events',
+            organizationId: req.user.organizationId
+        });
+        
+        if (moduleDef && moduleDef.fields) {
+            // Validate dependency-driven required fields (no hardcoding of eventType logic)
+            const requiredByDependency = [
+                { keyLower: 'auditorid', fieldKey: 'auditorId', emptyCheck: (v) => !v },
+                { keyLower: 'reviewerid', fieldKey: 'reviewerId', emptyCheck: (v) => !v },
+                { keyLower: 'correctiveownerid', fieldKey: 'correctiveOwnerId', emptyCheck: (v) => !v }
+            ];
+
+            const validationErrors = [];
+            for (const item of requiredByDependency) {
+                const f = moduleDef.fields.find(x => x.key && x.key.toLowerCase() === item.keyLower);
+                if (!f) continue;
+                const depState = getFieldDependencyState(f, validationData);
+                if (depState.visible && depState.required) {
+                    const v = validationData[item.fieldKey];
+                    if (item.emptyCheck(v)) {
+                        validationErrors.push({
+                            field: item.fieldKey,
+                            message: `${f.label || item.fieldKey} is required.`
+                        });
+                    }
+                }
+            }
+
+            if (validationErrors.length > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Validation failed.',
+                    error: 'One or more required fields are missing.',
+                    validationErrors
+                });
+            }
+        }
         
         const updatedEvent = await Event.findOneAndUpdate(
             query,
@@ -382,6 +635,9 @@ exports.updateEvent = async (req, res) => {
             { new: true, runValidators: true }
         )
             .populate('eventOwnerId', 'firstName lastName email')
+            .populate('auditorId', 'firstName lastName email')
+            .populate('reviewerId', 'firstName lastName email')
+            .populate('correctiveOwnerId', 'firstName lastName email')
             .populate('relatedToId', 'name')
             .populate('modifiedBy', 'firstName lastName')
             .populate('linkedFormId', 'name formId formType status');
@@ -808,17 +1064,17 @@ exports.startEvent = async (req, res) => {
             }
         }
         
-        // Update event status
-        event.status = 'STARTED';
+        // Status remains 'Planned' during execution (system-controlled)
+        // Only transitions to 'Completed' or 'Cancelled' via explicit actions
         event.executionStartTime = new Date();
-        if (event.auditState) {
-            event.auditState = 'IN_PROGRESS';
-        }
+        // Note: For audit events, auditState is managed separately (Ready to start -> checked_in -> submitted)
+        // Do not change auditState here
         
-        // Add audit entry
-        event.addAuditEntry('status_changed', req.user._id, 'PLANNED', 'STARTED', {
+        // Add audit entry for execution start
+        event.addAuditEntry('status_changed', req.user._id, null, 'execution_started', {
             location: location,
-            deviceInfo: req.headers['user-agent']
+            deviceInfo: req.headers['user-agent'],
+            executionStartTime: event.executionStartTime
         });
         
         event.modifiedBy = req.user._id;
@@ -911,6 +1167,19 @@ exports.checkIn = async (req, res) => {
             // For now, use event location
         }
         
+        // If event location is not configured, use user's location as initial event location
+        // This allows check-in even if the event location wasn't set during creation
+        if (!event.geoLocation || !event.geoLocation.latitude || !event.geoLocation.longitude) {
+            event.geoLocation = {
+                latitude: location.latitude,
+                longitude: location.longitude,
+                radius: event.geoLocation?.radius || 100, // Use existing radius or default to 100m
+                accuracy: location.accuracy || null
+            };
+            targetLocation = event.geoLocation;
+            // Note: event will be saved at the end of this function
+        }
+        
         // Validate location
         const validation = geoValidationService.validateLocation(targetLocation, location);
         if (!validation.isValid) {
@@ -956,12 +1225,13 @@ exports.checkIn = async (req, res) => {
             };
         }
         
-        event.status = 'CHECKED_IN';
-        if (event.auditState) {
-            event.auditState = 'IN_PROGRESS';
+        // Status remains 'Planned' during execution (system-controlled)
+        // Update audit state for audit events
+        if (event.auditState && ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(event.eventType)) {
+            event.auditState = 'checked_in';
         }
         
-        event.addAuditEntry('status_changed', req.user._id, event.status, 'CHECKED_IN', {
+        event.addAuditEntry('status_changed', req.user._id, null, 'checked_in', {
             location: location,
             orgIndex: orgIndex
         });
@@ -1147,10 +1417,8 @@ exports.checkOut = async (req, res) => {
             };
         }
         
-        // Store previous status before changing
-        const previousStatus = event.status;
-        
-        event.status = 'CHECKED_OUT';
+        // Status remains 'Planned' during execution (system-controlled)
+        // Only transitions to 'Completed' or 'Cancelled' via explicit actions
         event.modifiedBy = req.user._id;
         
         // Calculate execution duration (time from check-in to check-out, or from start to check-out)
@@ -1292,14 +1560,155 @@ exports.submitAudit = async (req, res) => {
         // Check if form response has failures (needs corrective action)
         const hasFailures = formResponse.responseDetails?.some(detail => detail.passFail === 'Fail');
         
-        // Update audit state based on form response status
-        if (hasFailures && formResponse.status === 'Pending Corrective Action') {
-            event.auditState = 'PENDING_CORRECTIVE';
-            event.status = 'PENDING_CORRECTIVE';
+        // Automatically create corrective actions for all failed questions
+        if (hasFailures) {
+            const Form = require('../models/Form');
+            const form = await Form.findById(event.linkedFormId);
+            
+            if (form) {
+                // Helper function to find question in form structure
+                const findQuestionInForm = (form, questionId) => {
+                    if (!form.sections || !Array.isArray(form.sections)) {
+                        return { question: null, section: null, subsection: null };
+                    }
+                    
+                    for (const section of form.sections) {
+                        // Check section-level questions
+                        if (section.questions && Array.isArray(section.questions)) {
+                            for (const question of section.questions) {
+                                if (question.questionId === questionId) {
+                                    return { question, section, subsection: null };
+                                }
+                            }
+                        }
+                        
+                        // Check subsection-level questions
+                        if (section.subsections && Array.isArray(section.subsections)) {
+                            for (const subsection of section.subsections) {
+                                if (subsection.questions && Array.isArray(subsection.questions)) {
+                                    for (const question of subsection.questions) {
+                                        if (question.questionId === questionId) {
+                                            return { question, section, subsection };
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    return { question: null, section: null, subsection: null };
+                };
+                
+                // Get all failed questions
+                const failedQuestions = formResponse.responseDetails.filter(detail => detail.passFail === 'Fail');
+                
+                // Initialize correctiveActions array if it doesn't exist
+                if (!formResponse.correctiveActions) {
+                    formResponse.correctiveActions = [];
+                }
+                
+                // Create corrective action for each failed question
+                for (const failedDetail of failedQuestions) {
+                    // Check if corrective action already exists for this question
+                    const existingAction = formResponse.correctiveActions.find(
+                        action => action.questionId === failedDetail.questionId
+                    );
+                    
+                    if (!existingAction) {
+                        // Find question in form to get question text and section info
+                        const { question, section } = findQuestionInForm(form, failedDetail.questionId);
+                        
+                        // Create new corrective action
+                        const correctiveAction = {
+                            eventId: event._id,
+                            responseId: formResponse._id,
+                            sectionId: failedDetail.sectionId || (section ? section.sectionId : null),
+                            questionId: failedDetail.questionId,
+                            questionText: question ? question.questionText : 'Unknown Question',
+                            auditorFinding: failedDetail.answer ? String(failedDetail.answer) : '',
+                            managerAction: {
+                                comment: '',
+                                proof: [],
+                                status: 'open',
+                                addedBy: null,
+                                addedAt: null
+                            },
+                            auditorVerification: {
+                                approved: false,
+                                comment: '',
+                                verifiedBy: null,
+                                verifiedAt: null
+                            }
+                        };
+                        
+                        formResponse.correctiveActions.push(correctiveAction);
+                    }
+                }
+                
+                // Save form response with corrective actions
+                await formResponse.save();
+                
+                // Notify the single corrective owner (explicit accountability)
+                if (event.correctiveOwnerId) {
+                    const User = require('../models/User');
+                    const owner = await User.findById(event.correctiveOwnerId).select('email firstName lastName').lean();
+                    // TODO: Implement notification service
+                    console.log(`[Corrective Action] Created ${failedQuestions.length} corrective action(s) for event ${event.eventId}. Corrective Owner:`,
+                        owner?.email || String(event.correctiveOwnerId));
+                } else {
+                    console.warn('[Corrective Action] Event has failures but no correctiveOwnerId set:', {
+                        eventId: event._id,
+                        eventIdField: event.eventId
+                    });
+                }
+            }
+        }
+        
+        // Update audit state - always set to submitted, then auto check-out
+        event.auditState = 'submitted';
+        
+        // Auto check-out the event on form submission
+        const checkoutTime = new Date();
+        if (event.isMultiOrg && orgIndex !== undefined) {
+            const org = event.orgList.find(o => o.sequence === orgIndex);
+            if (org) {
+                org.checkOut = {
+                    timestamp: checkoutTime,
+                    location: org.checkIn?.location || null
+                };
+            }
         } else {
-            event.auditState = 'SUBMITTED';
-            // Transition to CHECKOUT_PENDING after form submission (unless it's a GEO event that needs checkout)
-            event.status = 'CHECKOUT_PENDING';
+            event.checkOut = {
+                timestamp: checkoutTime,
+                location: event.checkIn?.location || null,
+                userId: req.user._id
+            };
+        }
+        
+        // Calculate execution duration
+        if (event.checkIn && event.checkIn.timestamp) {
+            const timeSpent = Math.floor((checkoutTime - event.checkIn.timestamp) / 1000);
+            event.timeSpent = (event.timeSpent || 0) + timeSpent;
+        }
+        event.executionEndTime = checkoutTime;
+        
+        // Update auditState based on failures (status remains 'Planned' during workflow)
+        if (hasFailures && formResponse.status === 'Pending Corrective Action') {
+            event.auditState = 'pending_corrective';
+            // Status remains 'Planned' - will transition to 'Completed' when audit workflow completes
+        } else {
+            // No failures - go directly to needs_review (auditor can approve/reject)
+            // This allows auditor to review even when there are no failures
+            event.auditState = 'needs_review';
+            // Status remains 'Planned' - will transition to 'Completed' when approved
+        }
+        
+        // Ensure correctiveOwnerId exists for audit events with failures
+        if (hasFailures && !event.correctiveOwnerId) {
+            console.warn('[submitAudit] Event has failures but no correctiveOwnerId set:', {
+                eventId: event._id,
+                eventIdField: event.eventId
+            });
         }
         
         // Link form response to event (store in metadata)
@@ -1322,10 +1731,11 @@ exports.submitAudit = async (req, res) => {
             }
         }
         
-        event.addAuditEntry('status_changed', req.user._id, 'IN_PROGRESS', event.auditState, {
+        event.addAuditEntry('status_changed', req.user._id, 'checked_in', event.auditState, {
             formResponseId: formResponseId,
             orgIndex: orgIndex,
-            hasFailures: hasFailures
+            hasFailures: hasFailures,
+            autoCheckedOut: true
         });
         
         event.modifiedBy = req.user._id;
@@ -1344,6 +1754,234 @@ exports.submitAudit = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error submitting audit.',
+            error: error.message
+        });
+    }
+};
+
+// Approve Audit
+exports.approveAudit = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const query = { organizationId: req.user.organizationId };
+        if (id.match(/^[0-9a-f]{24}$/i)) {
+            query._id = id;
+        } else {
+            query.eventId = id;
+        }
+        
+        const event = await Event.findOne(query);
+        if (!event) {
+            return res.status(404).json({
+                success: false,
+                message: 'Event not found.'
+            });
+        }
+        
+        // Validate event type
+        if (!['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(event.eventType)) {
+            return res.status(400).json({
+                success: false,
+                message: 'This event type does not support audit approval.'
+            });
+        }
+        
+        // Validate current state
+        if (event.auditState !== 'needs_review') {
+            return res.status(400).json({
+                success: false,
+                message: `Event is not in 'needs_review' state. Current state: ${event.auditState}`
+            });
+        }
+        
+        // Authorization: Only event owner (auditor) can approve
+        if (event.eventOwnerId.toString() !== req.user._id.toString()) {
+            return res.status(403).json({
+                success: false,
+                message: 'Only the event owner (auditor) can approve this audit.'
+            });
+        }
+        
+        // Get all form responses linked to this event
+        const FormResponse = require('../models/FormResponse');
+        const eventResponses = await FormResponse.find({
+            'linkedTo.type': 'Event',
+            'linkedTo.id': event._id,
+            organizationId: req.user.organizationId
+        });
+        
+        // Update event state: approved -> immediately closed -> Completed
+        const previousState = event.auditState;
+        const previousStatus = event.status;
+        event.auditState = 'approved';
+        event.modifiedBy = req.user._id;
+        
+        // Immediately transition to closed
+        event.auditState = 'closed';
+        
+        // Set status to Completed (system-controlled transition)
+        event.status = 'Completed';
+        event.completedAt = new Date();
+        
+        await event.save();
+        
+        // Make all form responses read-only by marking them as approved and closed
+        for (const response of eventResponses) {
+            if (response.executionStatus === 'Submitted') {
+                response.approved = true;
+                response.approvedBy = req.user._id;
+                response.approvedAt = new Date();
+                // Set review status to Closed
+                response.reviewStatus = 'Closed';
+                await response.save();
+            }
+        }
+        
+        // Add audit entry for status change
+        event.addAuditEntry('status_changed', req.user._id, previousStatus, 'Completed', {
+            action: 'approved',
+            approvedBy: req.user._id,
+            auditState: 'closed',
+            completedAt: event.completedAt
+        });
+        await event.save();
+        
+        const populatedEvent = await Event.findById(event._id)
+            .populate('eventOwnerId', 'firstName lastName email')
+            .populate('relatedToId', 'name')
+            .populate('modifiedBy', 'firstName lastName');
+        
+        res.status(200).json({
+            success: true,
+            message: 'Audit approved and closed successfully.',
+            data: populatedEvent
+        });
+    } catch (error) {
+        console.error('Error approving audit:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error approving audit.',
+            error: error.message
+        });
+    }
+};
+
+// Reject Audit
+exports.rejectAudit = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason } = req.body; // Optional rejection reason
+        
+        const query = { organizationId: req.user.organizationId };
+        if (id.match(/^[0-9a-f]{24}$/i)) {
+            query._id = id;
+        } else {
+            query.eventId = id;
+        }
+        
+        const event = await Event.findOne(query);
+        if (!event) {
+            return res.status(404).json({
+                success: false,
+                message: 'Event not found.'
+            });
+        }
+        
+        // Validate event type
+        if (!['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(event.eventType)) {
+            return res.status(400).json({
+                success: false,
+                message: 'This event type does not support audit rejection.'
+            });
+        }
+        
+        // Validate current state
+        if (event.auditState !== 'needs_review') {
+            return res.status(400).json({
+                success: false,
+                message: `Event is not in 'needs_review' state. Current state: ${event.auditState}`
+            });
+        }
+        
+        // Authorization: Only event owner (auditor) can reject
+        if (event.eventOwnerId.toString() !== req.user._id.toString()) {
+            return res.status(403).json({
+                success: false,
+                message: 'Only the event owner (auditor) can reject this audit.'
+            });
+        }
+        
+        // Get all form responses linked to this event
+        const FormResponse = require('../models/FormResponse');
+        const eventResponses = await FormResponse.find({
+            'linkedTo.type': 'Event',
+            'linkedTo.id': event._id,
+            organizationId: req.user.organizationId
+        });
+        
+        // Reopen all corrective actions (set status back to 'open')
+        let reopenedCount = 0;
+        for (const response of eventResponses) {
+            if (response.correctiveActions && Array.isArray(response.correctiveActions)) {
+                for (const correctiveAction of response.correctiveActions) {
+                    if (correctiveAction.eventId && 
+                        correctiveAction.eventId.toString() === event._id.toString() &&
+                        correctiveAction.managerAction.status === 'completed') {
+                        correctiveAction.managerAction.status = 'open';
+                        // Clear verification
+                        correctiveAction.auditorVerification.approved = false;
+                        correctiveAction.auditorVerification.comment = '';
+                        correctiveAction.auditorVerification.verifiedBy = null;
+                        correctiveAction.auditorVerification.verifiedAt = null;
+                        reopenedCount++;
+                    }
+                }
+                await response.save();
+            }
+        }
+        
+        // Update event state
+        // Status remains 'Planned' when rejected (can be retried)
+        const previousState = event.auditState;
+        event.auditState = 'rejected';
+        event.modifiedBy = req.user._id;
+        await event.save();
+        
+        // Add audit entry
+        event.addAuditEntry('status_changed', req.user._id, previousState, 'rejected', {
+            action: 'rejected',
+            rejectedBy: req.user._id,
+            reason: reason || 'No reason provided',
+            reopenedCorrectiveActions: reopenedCount
+        });
+        await event.save();
+        
+        // Notify corrective owner
+        if (event.correctiveOwnerId) {
+            const User = require('../models/User');
+            const owner = await User.findById(event.correctiveOwnerId).select('email firstName lastName').lean();
+            // TODO: Implement notification service
+            console.log(`[Audit Rejection] Event ${event.eventId} rejected. Reopened ${reopenedCount} corrective action(s). Corrective Owner:`,
+                owner?.email || String(event.correctiveOwnerId));
+        }
+        
+        const populatedEvent = await Event.findById(event._id)
+            .populate('eventOwnerId', 'firstName lastName email')
+            .populate('relatedToId', 'name')
+            .populate('modifiedBy', 'firstName lastName');
+        
+        res.status(200).json({
+            success: true,
+            message: `Audit rejected. ${reopenedCount} corrective action(s) reopened.`,
+            data: populatedEvent,
+            reopenedCount: reopenedCount
+        });
+    } catch (error) {
+        console.error('Error rejecting audit:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error rejecting audit.',
             error: error.message
         });
     }
@@ -1510,7 +2148,7 @@ exports.createOrder = async (req, res) => {
     }
 };
 
-// Complete Event
+// Complete Event - System-controlled status transition
 exports.completeEvent = async (req, res) => {
     try {
         const { id } = req.params;
@@ -1530,6 +2168,23 @@ exports.completeEvent = async (req, res) => {
             });
         }
         
+        // Cannot complete if already cancelled
+        if (event.status === 'Cancelled') {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot complete a cancelled event.'
+            });
+        }
+        
+        // Already completed
+        if (event.status === 'Completed') {
+            return res.status(200).json({
+                success: true,
+                message: 'Event is already completed.',
+                data: event
+            });
+        }
+        
         // Validate all orgs completed for multi-org routes
         if (event.isMultiOrg) {
             const incompleteOrgs = event.orgList.filter(o => o.status !== 'COMPLETED');
@@ -1541,14 +2196,24 @@ exports.completeEvent = async (req, res) => {
             }
         }
         
-        // Update status
-        event.status = 'CLOSED';
+        const oldStatus = event.status;
+        
+        // Update status to Completed
+        event.status = 'Completed';
+        event.completedAt = new Date();
         event.executionEndTime = new Date();
-        if (event.auditState) {
-            event.auditState = 'CLOSED';
+        
+        // For audit events, also set auditState to closed if not already
+        if (event.auditState && event.auditState !== 'closed') {
+            event.auditState = 'closed';
         }
         
-        event.addAuditEntry('status_changed', req.user._id, event.status, 'CLOSED', {});
+        // Add audit entry
+        event.addAuditEntry('status_changed', req.user._id, oldStatus, 'Completed', {
+            reason: 'Event manually completed',
+            completedAt: event.completedAt
+        });
+        
         event.modifiedBy = req.user._id;
         await event.save();
         
@@ -1562,6 +2227,90 @@ exports.completeEvent = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error completing event.',
+            error: error.message
+        });
+    }
+};
+
+// Cancel Event - System-controlled status transition
+exports.cancelEvent = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason } = req.body; // Optional cancellation reason
+        
+        const query = { organizationId: req.user.organizationId };
+        if (id.match(/^[0-9a-f]{24}$/i)) {
+            query._id = id;
+        } else {
+            query.eventId = id;
+        }
+        
+        const event = await Event.findOne(query);
+        if (!event) {
+            return res.status(404).json({
+                success: false,
+                message: 'Event not found.'
+            });
+        }
+        
+        // Authorization: Only event owner or admin can cancel
+        const isOwner = event.eventOwnerId.toString() === req.user._id.toString();
+        const isAdmin = req.user.role === 'admin' || req.user.role === 'Admin';
+        
+        if (!isOwner && !isAdmin) {
+            return res.status(403).json({
+                success: false,
+                message: 'Only event owner or admin can cancel this event.'
+            });
+        }
+        
+        // Cannot cancel if already completed
+        if (event.status === 'Completed') {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot cancel a completed event.'
+            });
+        }
+        
+        // Already cancelled
+        if (event.status === 'Cancelled') {
+            return res.status(200).json({
+                success: true,
+                message: 'Event is already cancelled.',
+                data: event
+            });
+        }
+        
+        const oldStatus = event.status;
+        
+        // Update status to Cancelled
+        event.status = 'Cancelled';
+        event.cancelledAt = new Date();
+        event.cancelledBy = req.user._id;
+        if (reason) {
+            event.cancellationReason = reason.substring(0, 500); // Enforce max length
+        }
+        
+        // Add audit entry
+        event.addAuditEntry('status_changed', req.user._id, oldStatus, 'Cancelled', {
+            reason: reason || 'Event cancelled',
+            cancelledAt: event.cancelledAt,
+            cancelledBy: req.user._id
+        });
+        
+        event.modifiedBy = req.user._id;
+        await event.save();
+        
+        res.status(200).json({
+            success: true,
+            message: 'Event cancelled successfully.',
+            data: event
+        });
+    } catch (error) {
+        console.error('Error cancelling event:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error cancelling event.',
             error: error.message
         });
     }

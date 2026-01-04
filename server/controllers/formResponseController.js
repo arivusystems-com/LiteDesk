@@ -127,6 +127,31 @@ exports.submitForm = async (req, res) => {
             }
         } else {
             console.log('[submitForm] ⚠️ No responseId provided in request body');
+            
+            // DEFENSIVE CHECK: If no responseId AND no eventId, check if there are any "In Progress" responses
+            // for this form+organization that are linked to events. This prevents duplicate creation when
+            // users access the form directly (without eventId/responseId in URL).
+            if (!eventId) {
+                const inProgressResponses = await FormResponse.find({
+                    formId: form._id,
+                    organizationId: organizationId,
+                    executionStatus: { $in: ['Not Started', 'In Progress'] },
+                    'linkedTo.type': 'Event'
+                }).sort({ createdAt: -1 }).limit(1);
+                
+                if (inProgressResponses && inProgressResponses.length > 0) {
+                    const foundResponse = inProgressResponses[0];
+                    console.warn('[submitForm] ⚠️ Found existing "In Progress" response linked to event, but no eventId/responseId provided:', {
+                        existingResponseId: foundResponse._id,
+                        linkedToEventId: foundResponse.linkedTo?.id,
+                        executionStatus: foundResponse.executionStatus
+                    });
+                    
+                    // Use the existing response to prevent duplicate creation
+                    existingResponse = foundResponse;
+                    console.log('[submitForm] ✅ Using existing "In Progress" response to prevent duplicate');
+                }
+            }
         }
         
         // If eventId is provided, link to event
@@ -173,19 +198,27 @@ exports.submitForm = async (req, res) => {
             existingResponse: existingResponse // Pass existing response to prevent duplicate
         });
         
-        // If eventId provided, update event metadata with form response ID
+        // If eventId provided, update event metadata and audit state
         if (eventId && processedResponse && processedResponse._id) {
             try {
                 const Event = require('../models/Event');
+                const mongoose = require('mongoose');
+                
+                // Build query - eventId can be either UUID string (eventId field) or ObjectId (_id field)
+                // Only include _id condition if eventId is a valid ObjectId to avoid casting errors
+                const queryConditions = [];
+                if (mongoose.Types.ObjectId.isValid(eventId) && eventId.toString().length === 24) {
+                    queryConditions.push({ _id: new mongoose.Types.ObjectId(eventId) });
+                }
+                queryConditions.push({ eventId: eventId }); // Always check eventId field (UUID)
+                
                 const event = await Event.findOne({
-                    $or: [
-                        { _id: eventId },
-                        { eventId: eventId }
-                    ],
+                    $or: queryConditions,
                     organizationId: organizationId
                 });
                 
                 if (event) {
+                    // Update event metadata with form response ID
                     if (!event.metadata) {
                         event.metadata = {};
                     }
@@ -195,10 +228,367 @@ exports.submitForm = async (req, res) => {
                     if (!event.metadata.formResponses.includes(processedResponse._id.toString())) {
                         event.metadata.formResponses.push(processedResponse._id.toString());
                     }
+                    
+                    // If this is an audit event and form is being submitted, update audit state
+                    const isAuditEvent = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(event.eventType);
+                    const isFormSubmitted = processedResponse.executionStatus === 'Submitted';
+                    const isCheckedIn = event.auditState === 'checked_in';
+                    
+                    if (isAuditEvent && isFormSubmitted && isCheckedIn) {
+                        console.log('[submitForm] Updating audit state for event:', {
+                            eventId: event.eventId || event._id,
+                            currentAuditState: event.auditState,
+                            formResponseId: processedResponse._id
+                        });
+                        
+                        // Check if form response has failures (needs corrective action)
+                        const hasFailures = processedResponse.responseDetails?.some(detail => detail.passFail === 'Fail');
+                        
+                        // Auto check-out the event on form submission
+                        const checkoutTime = new Date();
+                        if (event.isMultiOrg) {
+                            // For multi-org, check out current org
+                            const currentOrg = event.orgList.find(o => o.sequence === event.currentOrgIndex);
+                            if (currentOrg) {
+                                currentOrg.checkOut = {
+                                    timestamp: checkoutTime,
+                                    location: currentOrg.checkIn?.location || null
+                                };
+                            }
+                        } else {
+                            event.checkOut = {
+                                timestamp: checkoutTime,
+                                location: event.checkIn?.location || null,
+                                userId: req.user ? req.user._id : null
+                            };
+                        }
+                        
+                        // Calculate execution duration
+                        if (event.checkIn && event.checkIn.timestamp) {
+                            const timeSpent = Math.floor((checkoutTime - event.checkIn.timestamp) / 1000);
+                            event.timeSpent = (event.timeSpent || 0) + timeSpent;
+                        }
+                        event.executionEndTime = checkoutTime;
+                        
+                        // Generate corrective actions for failed questions (if not already generated)
+                        if (hasFailures) {
+                            const Form = require('../models/Form');
+                            const form = await Form.findById(event.linkedFormId);
+                            
+                            if (form && processedResponse) {
+                                // Helper function to find question in form structure
+                                const findQuestionInForm = (form, questionId) => {
+                                    if (!form.sections || !Array.isArray(form.sections)) {
+                                        return { question: null, section: null, subsection: null };
+                                    }
+                                    
+                                    for (const section of form.sections) {
+                                        // Check section-level questions
+                                        if (section.questions && Array.isArray(section.questions)) {
+                                            for (const question of section.questions) {
+                                                if (question.questionId === questionId) {
+                                                    return { question, section, subsection: null };
+                                                }
+                                            }
+                                        }
+                                        
+                                        // Check subsection-level questions
+                                        if (section.subsections && Array.isArray(section.subsections)) {
+                                            for (const subsection of section.subsections) {
+                                                if (subsection.questions && Array.isArray(subsection.questions)) {
+                                                    for (const question of subsection.questions) {
+                                                        if (question.questionId === questionId) {
+                                                            return { question, section, subsection };
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    return { question: null, section: null, subsection: null };
+                                };
+                                
+                                // Get all failed questions
+                                const failedQuestions = processedResponse.responseDetails.filter(detail => detail.passFail === 'Fail');
+                                
+                                // Initialize correctiveActions array if it doesn't exist
+                                if (!processedResponse.correctiveActions) {
+                                    processedResponse.correctiveActions = [];
+                                }
+                                
+                                // Create corrective action for each failed question (if not already exists)
+                                for (const failedDetail of failedQuestions) {
+                                    const existingAction = processedResponse.correctiveActions.find(
+                                        action => action.questionId === failedDetail.questionId
+                                    );
+                                    
+                                    if (!existingAction) {
+                                        // Find question in form to get question text and section info
+                                        const { question, section } = findQuestionInForm(form, failedDetail.questionId);
+                                        
+                                        // Create new corrective action
+                                        const correctiveAction = {
+                                            eventId: event._id,
+                                            responseId: processedResponse._id,
+                                            sectionId: failedDetail.sectionId || (section ? section.sectionId : null),
+                                            questionId: failedDetail.questionId,
+                                            questionText: question ? question.questionText : 'Unknown Question',
+                                            auditorFinding: failedDetail.answer ? String(failedDetail.answer) : '',
+                                            managerAction: {
+                                                comment: '',
+                                                proof: [],
+                                                status: 'open',
+                                                addedBy: null,
+                                                addedAt: null
+                                            },
+                                            auditorVerification: {
+                                                approved: false,
+                                                comment: '',
+                                                verifiedBy: null,
+                                                verifiedAt: null
+                                            }
+                                        };
+                                        
+                                        processedResponse.correctiveActions.push(correctiveAction);
+                                    }
+                                }
+                                
+                                // Save form response with corrective actions
+                                await processedResponse.save();
+                                
+                                // Notify the single corrective owner (explicit accountability)
+                                if (event.correctiveOwnerId) {
+                                    const User = require('../models/User');
+                                    const owner = await User.findById(event.correctiveOwnerId).select('email firstName lastName').lean();
+                                    console.log(
+                                        `[submitForm] Created ${failedQuestions.length} corrective action(s) for event ${event.eventId}. Corrective Owner:`,
+                                        owner?.email || String(event.correctiveOwnerId)
+                                    );
+                                } else {
+                                    console.warn(`[submitForm] No correctiveOwnerId assigned for audit event ${event.eventId} (cannot notify)`);
+                                }
+                            }
+                        }
+                        
+                        // Update auditState based on failures
+                        if (hasFailures && processedResponse.reviewStatus === 'Pending Corrective Action') {
+                            event.auditState = 'pending_corrective';
+                            console.log('[submitForm] Event has failures, setting auditState to pending_corrective');
+                        } else {
+                            // No failures - go directly to needs_review (auditor can approve/reject)
+                            // This allows auditor to review even when there are no failures
+                            event.auditState = 'needs_review';
+                            console.log('[submitForm] No failures, setting auditState to needs_review (ready for auditor review)');
+                        }
+                        
+                        // Add audit entry
+                        event.addAuditEntry('status_changed', req.user ? req.user._id : null, 'checked_in', event.auditState, {
+                            formResponseId: processedResponse._id.toString(),
+                            hasFailures: hasFailures,
+                            autoCheckedOut: true
+                        });
+                        
+                        event.modifiedBy = req.user ? req.user._id : null;
+                    }
+                    
                     await event.save();
                 }
             } catch (err) {
-                console.error('Error updating event metadata:', err);
+                console.error('Error updating event metadata and audit state:', err);
+                // Don't fail the form submission if event update fails
+            }
+        }
+        
+        // Also check if form response is linked to an event via linkedTo field (created during check-in)
+        if (processedResponse && processedResponse.linkedTo && processedResponse.linkedTo.type === 'Event') {
+            try {
+                const Event = require('../models/Event');
+                const mongoose = require('mongoose');
+                
+                const eventLinkedId = processedResponse.linkedTo.id;
+                if (eventLinkedId) {
+                    // Find event by _id (linkedTo.id stores the ObjectId)
+                    const event = await Event.findOne({
+                        _id: eventLinkedId,
+                        organizationId: organizationId
+                    });
+                    
+                    if (event) {
+                        const isAuditEvent = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(event.eventType);
+                        const isFormSubmitted = processedResponse.executionStatus === 'Submitted';
+                        const isCheckedIn = event.auditState === 'checked_in';
+                        
+                        if (isAuditEvent && isFormSubmitted && isCheckedIn) {
+                            console.log('[submitForm] Updating audit state for event (via linkedTo):', {
+                                eventId: event.eventId || event._id,
+                                currentAuditState: event.auditState,
+                                formResponseId: processedResponse._id
+                            });
+                            
+                            // Check if form response has failures
+                            const hasFailures = processedResponse.responseDetails?.some(detail => detail.passFail === 'Fail');
+                            
+                            // Auto check-out the event on form submission
+                            const checkoutTime = new Date();
+                            if (event.isMultiOrg) {
+                                const currentOrg = event.orgList.find(o => o.sequence === event.currentOrgIndex);
+                                if (currentOrg) {
+                                    currentOrg.checkOut = {
+                                        timestamp: checkoutTime,
+                                        location: currentOrg.checkIn?.location || null
+                                    };
+                                }
+                            } else {
+                                event.checkOut = {
+                                    timestamp: checkoutTime,
+                                    location: event.checkIn?.location || null,
+                                    userId: req.user ? req.user._id : null
+                                };
+                            }
+                            
+                            // Calculate execution duration
+                            if (event.checkIn && event.checkIn.timestamp) {
+                                const timeSpent = Math.floor((checkoutTime - event.checkIn.timestamp) / 1000);
+                                event.timeSpent = (event.timeSpent || 0) + timeSpent;
+                            }
+                            event.executionEndTime = checkoutTime;
+                            
+                            // Generate corrective actions for failed questions (if not already generated)
+                            if (hasFailures) {
+                                const Form = require('../models/Form');
+                                const form = await Form.findById(event.linkedFormId);
+                                
+                                if (form && processedResponse) {
+                                    // Helper function to find question in form structure
+                                    const findQuestionInForm = (form, questionId) => {
+                                        if (!form.sections || !Array.isArray(form.sections)) {
+                                            return { question: null, section: null, subsection: null };
+                                        }
+                                        
+                                        for (const section of form.sections) {
+                                            // Check section-level questions
+                                            if (section.questions && Array.isArray(section.questions)) {
+                                                for (const question of section.questions) {
+                                                    if (question.questionId === questionId) {
+                                                        return { question, section, subsection: null };
+                                                    }
+                                                }
+                                            }
+                                            
+                                            // Check subsection-level questions
+                                            if (section.subsections && Array.isArray(section.subsections)) {
+                                                for (const subsection of section.subsections) {
+                                                    if (subsection.questions && Array.isArray(subsection.questions)) {
+                                                        for (const question of subsection.questions) {
+                                                            if (question.questionId === questionId) {
+                                                                return { question, section, subsection };
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        
+                                        return { question: null, section: null, subsection: null };
+                                    };
+                                    
+                                    // Get all failed questions
+                                    const failedQuestions = processedResponse.responseDetails.filter(detail => detail.passFail === 'Fail');
+                                    
+                                    // Initialize correctiveActions array if it doesn't exist
+                                    if (!processedResponse.correctiveActions) {
+                                        processedResponse.correctiveActions = [];
+                                    }
+                                    
+                                    // Create corrective action for each failed question (if not already exists)
+                                    for (const failedDetail of failedQuestions) {
+                                        const existingAction = processedResponse.correctiveActions.find(
+                                            action => action.questionId === failedDetail.questionId
+                                        );
+                                        
+                                        if (!existingAction) {
+                                            // Find question in form to get question text and section info
+                                            const { question, section } = findQuestionInForm(form, failedDetail.questionId);
+                                            
+                                            // Create new corrective action
+                                            const correctiveAction = {
+                                                eventId: event._id,
+                                                responseId: processedResponse._id,
+                                                sectionId: failedDetail.sectionId || (section ? section.sectionId : null),
+                                                questionId: failedDetail.questionId,
+                                                questionText: question ? question.questionText : 'Unknown Question',
+                                                auditorFinding: failedDetail.answer ? String(failedDetail.answer) : '',
+                                                managerAction: {
+                                                    comment: '',
+                                                    proof: [],
+                                                    status: 'open',
+                                                    addedBy: null,
+                                                    addedAt: null
+                                                },
+                                                auditorVerification: {
+                                                    approved: false,
+                                                    comment: '',
+                                                    verifiedBy: null,
+                                                    verifiedAt: null
+                                                }
+                                            };
+                                            
+                                            processedResponse.correctiveActions.push(correctiveAction);
+                                        }
+                                    }
+                                    
+                                    // Save form response with corrective actions
+                                    await processedResponse.save();
+                                    
+                                    // Notify the single corrective owner (explicit accountability)
+                                    if (event.correctiveOwnerId) {
+                                        const User = require('../models/User');
+                                        const owner = await User.findById(event.correctiveOwnerId).select('email firstName lastName').lean();
+                                        console.log(`[submitForm] Created ${failedQuestions.length} corrective action(s) for event ${event.eventId} (via linkedTo). Corrective Owner:`,
+                                            owner?.email || String(event.correctiveOwnerId));
+                                    } else {
+                                        console.warn(`[submitForm] No correctiveOwnerId assigned for audit event ${event.eventId} (via linkedTo)`);
+                                    }
+                                }
+                            }
+                            
+                            // Update auditState based on failures
+                            if (hasFailures && processedResponse.reviewStatus === 'Pending Corrective Action') {
+                                event.auditState = 'pending_corrective';
+                                console.log('[submitForm] Event has failures (via linkedTo), setting auditState to pending_corrective');
+                            } else {
+                                // No failures - go directly to needs_review (auditor can approve/reject)
+                                // This allows auditor to review even when there are no failures
+                                event.auditState = 'needs_review';
+                                console.log('[submitForm] No failures (via linkedTo), setting auditState to needs_review (ready for auditor review)');
+                            }
+                            
+                            // Update event metadata
+                            if (!event.metadata) {
+                                event.metadata = {};
+                            }
+                            if (!event.metadata.formResponses) {
+                                event.metadata.formResponses = [];
+                            }
+                            if (!event.metadata.formResponses.includes(processedResponse._id.toString())) {
+                                event.metadata.formResponses.push(processedResponse._id.toString());
+                            }
+                            
+                            // Add audit entry
+                            event.addAuditEntry('status_changed', req.user ? req.user._id : null, 'checked_in', event.auditState, {
+                                formResponseId: processedResponse._id.toString(),
+                                hasFailures: hasFailures,
+                                autoCheckedOut: true
+                            });
+                            
+                            event.modifiedBy = req.user ? req.user._id : null;
+                            await event.save();
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('Error updating event audit state (via linkedTo):', err);
                 // Don't fail the form submission if event update fails
             }
         }
@@ -517,7 +907,10 @@ exports.getResponseById = async (req, res) => {
             organizationId: req.user.organizationId
         })
         .populate('submittedBy', 'firstName lastName email')
-        .populate('linkedTo.id')
+        .populate({
+            path: 'linkedTo.id',
+            select: 'eventId eventName auditState correctiveOwnerId auditorId reviewerId allowSelfReview',
+        })
         .populate('correctiveActions.managerAction.addedBy', 'firstName lastName email')
         .populate('correctiveActions.auditorVerification.verifiedBy', 'firstName lastName email')
         .populate('finalReport.previousResponseId');
@@ -620,6 +1013,19 @@ exports.updateResponseStatus = async (req, res) => {
 exports.addCorrectiveAction = async (req, res) => {
     try {
         const { questionId, comment, status } = req.body;
+
+        // Normalize incoming status to schema enum (UI historically sent friendly labels)
+        const normalizeCaStatus = (value) => {
+            const v = String(value || '').trim();
+            if (!v) return undefined;
+            const lower = v.toLowerCase();
+            if (lower === 'open') return 'open';
+            if (lower === 'in_progress' || lower === 'in progress') return 'in_progress';
+            if (lower === 'completed' || lower === 'resolved') return 'completed';
+            if (lower === 'pending') return 'open';
+            return v; // let mongoose validate (and error) if unknown
+        };
+        const normalizedStatus = normalizeCaStatus(status);
         
         // Handle file uploads
         const proofUrls = [];
@@ -643,12 +1049,49 @@ exports.addCorrectiveAction = async (req, res) => {
                 message: 'Response not found or access denied.'
             });
         }
+
+        // Ensure correctiveActions array exists (older responses may not have this field set)
+        if (!Array.isArray(response.correctiveActions)) {
+            response.correctiveActions = [];
+        }
         
         // Immutability check: Corrective actions can only be added to submitted responses
         if (response.executionStatus !== 'Submitted') {
             return res.status(400).json({
                 success: false,
                 message: 'Corrective actions can only be added to submitted responses.'
+            });
+        }
+        
+        // Check if response is linked to an event that is approved or closed
+        if (response.linkedTo && response.linkedTo.type === 'Event' && response.linkedTo.id) {
+            const Event = require('../models/Event');
+            const event = await Event.findById(response.linkedTo.id);
+            
+            if (event && (event.auditState === 'approved' || event.auditState === 'closed')) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Response cannot be edited. The linked event has been approved or closed.'
+                });
+            }
+
+            // Authorization: only the single corrective owner can add/update corrective actions
+            if (event) {
+                const ownerId = event.correctiveOwnerId ? String(event.correctiveOwnerId) : '';
+                if (!ownerId || ownerId !== String(req.user._id)) {
+                    return res.status(403).json({
+                        success: false,
+                        message: 'Only the assigned corrective owner can update this action.'
+                    });
+                }
+            }
+        }
+        
+        // Also check if response itself is approved or closed
+        if (response.reviewStatus === 'Closed' || (response.approved && response.reviewStatus === 'Approved')) {
+            return res.status(403).json({
+                success: false,
+                message: 'Response cannot be edited after approval or closure.'
             });
         }
         
@@ -700,19 +1143,27 @@ exports.addCorrectiveAction = async (req, res) => {
             // Merge new proof files with existing ones
             const existingProof = correctiveAction.managerAction.proof || [];
             correctiveAction.managerAction.proof = [...existingProof, ...proofUrls];
-            correctiveAction.managerAction.status = status || correctiveAction.managerAction.status;
+            correctiveAction.managerAction.status = normalizedStatus || correctiveAction.managerAction.status;
             correctiveAction.managerAction.addedBy = req.user._id;
             correctiveAction.managerAction.addedAt = new Date();
+
+            // Ensure linkage fields are set for event-driven workflows
+            if (!correctiveAction.responseId) correctiveAction.responseId = response._id;
+            if (response.linkedTo && response.linkedTo.type === 'Event' && response.linkedTo.id && !correctiveAction.eventId) {
+                correctiveAction.eventId = response.linkedTo.id;
+            }
         } else {
             // Create new corrective action
             correctiveAction = {
                 questionId,
                 questionText: questionText,
                 auditorFinding: questionResponse.answer || '',
+                eventId: (response.linkedTo && response.linkedTo.type === 'Event' && response.linkedTo.id) ? response.linkedTo.id : undefined,
+                responseId: response._id,
                 managerAction: {
                     comment: comment || '',
                     proof: proofUrls,
-                    status: status || 'Pending',
+                    status: normalizedStatus || 'open',
                     addedBy: req.user._id,
                     addedAt: new Date()
                 },
@@ -721,12 +1172,84 @@ exports.addCorrectiveAction = async (req, res) => {
                 }
             };
             response.correctiveActions.push(correctiveAction);
+            
+            // Notify corrective owner if linked to event
+            if (correctiveAction.eventId) {
+                const Event = require('../models/Event');
+                const event = await Event.findById(correctiveAction.eventId);
+                
+                if (event && event.correctiveOwnerId) {
+                    const User = require('../models/User');
+                    const owner = await User.findById(event.correctiveOwnerId).select('email firstName lastName').lean();
+                    
+                    // TODO: Implement notification service
+                    console.log(`[Corrective Action] Created corrective action for event ${event.eventId}. Corrective Owner:`,
+                        owner?.email || String(event.correctiveOwnerId));
+                    
+                    // await notificationService.notifyUser(owner._id, { ... })
+                }
+            }
         }
         
         // Status will be computed automatically by pre-save hook based on business rules
         // No need to manually set reviewStatus
         
         await response.save();
+
+        // Keep linked Event auditState consistent with corrective-action completion/regression.
+        // NOTE: The UI uses this POST endpoint for edits + file uploads, so we must handle both:
+        // - all completed => needs_review
+        // - any reopened/incomplete => pending_corrective
+        if (response.linkedTo && response.linkedTo.type === 'Event' && response.linkedTo.id) {
+            const Event = require('../models/Event');
+            const event = await Event.findById(response.linkedTo.id);
+            if (event) {
+                const allEventResponses = await FormResponse.find({
+                    'linkedTo.type': 'Event',
+                    'linkedTo.id': event._id,
+                    organizationId: req.user.organizationId
+                });
+
+                const allCorrectiveActions = [];
+                for (const resp of allEventResponses) {
+                    if (Array.isArray(resp.correctiveActions)) {
+                        allCorrectiveActions.push(...resp.correctiveActions);
+                    }
+                }
+
+                const anyIncomplete = allCorrectiveActions.some(ca => ca.managerAction?.status !== 'completed');
+                const allCompleted = allCorrectiveActions.length > 0 && !anyIncomplete;
+
+                const previousState = event.auditState;
+
+                if (allCompleted) {
+                    const validTransitionStates = ['pending_corrective', 'submitted', 'rejected', 'needs_review'];
+                    if (validTransitionStates.includes(previousState) && previousState !== 'needs_review') {
+                        event.auditState = 'needs_review';
+                        event.modifiedBy = req.user._id;
+                        event.addAuditEntry('status_changed', req.user._id, previousState, 'needs_review', {
+                            action: 'all_corrective_actions_completed',
+                            completedActionsCount: allCorrectiveActions.length,
+                            triggeredBy: 'corrective_action_completion'
+                        });
+                        await event.save();
+                    }
+                } else if (anyIncomplete) {
+                    // Regression: if any corrective action becomes incomplete again after reaching needs_review,
+                    // move event back to pending_corrective.
+                    const validRegressionStates = ['needs_review', 'submitted', 'rejected'];
+                    if (validRegressionStates.includes(previousState)) {
+                        event.auditState = 'pending_corrective';
+                        event.modifiedBy = req.user._id;
+                        event.addAuditEntry('status_changed', req.user._id, previousState, 'pending_corrective', {
+                            action: 'corrective_action_reopened',
+                            triggeredBy: 'corrective_action_edit'
+                        });
+                        await event.save();
+                    }
+                }
+            }
+        }
         
         const updatedResponse = await FormResponse.findById(response._id)
             .populate('submittedBy', 'firstName lastName email')
@@ -742,6 +1265,214 @@ exports.addCorrectiveAction = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error adding corrective action.',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Update corrective action status
+// @route   PATCH /api/forms/:id/responses/:responseId/corrective-action/:questionId
+// @access  Private
+exports.updateCorrectiveActionStatus = async (req, res) => {
+    try {
+        const { questionId } = req.params;
+        const { status, comment, proof } = req.body;
+        
+        if (!status || !['open', 'in_progress', 'completed'].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Valid status is required (open, in_progress, completed)'
+            });
+        }
+        
+        const FormResponse = require('../models/FormResponse');
+        const Event = require('../models/Event');
+        
+        // Find the form response
+        const response = await FormResponse.findOne({
+            _id: req.params.responseId,
+            formId: req.params.id,
+            organizationId: req.user.organizationId
+        });
+        
+        if (!response) {
+            return res.status(404).json({
+                success: false,
+                message: 'Response not found or access denied.'
+            });
+        }
+        
+        // Find the corrective action
+        const correctiveAction = response.correctiveActions.find(action => action.questionId === questionId);
+        if (!correctiveAction) {
+            return res.status(404).json({
+                success: false,
+                message: 'Corrective action not found.'
+            });
+        }
+        
+        // Check if response is linked to an event that is approved or closed
+        if (response.linkedTo && response.linkedTo.type === 'Event' && response.linkedTo.id) {
+            const Event = require('../models/Event');
+            const event = await Event.findById(response.linkedTo.id);
+            
+            if (event && (event.auditState === 'approved' || event.auditState === 'closed')) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Response cannot be edited. The linked event has been approved or closed.'
+                });
+            }
+        }
+        
+        // Also check if response itself is approved or closed
+        if (response.reviewStatus === 'Closed' || (response.approved && response.reviewStatus === 'Approved')) {
+            return res.status(403).json({
+                success: false,
+                message: 'Response cannot be edited after approval or closure.'
+            });
+        }
+        
+        // Authorization: Only the assigned corrective owner can update
+        if (correctiveAction.eventId) {
+            const event = await Event.findById(correctiveAction.eventId);
+            if (!event || !event.correctiveOwnerId) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Event not found or no corrective owner assigned.'
+                });
+            }
+            
+            const isOwner = String(event.correctiveOwnerId) === String(req.user._id);
+            if (!isOwner) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Only the assigned corrective owner can update this action.'
+                });
+            }
+        }
+        
+        // Validation: If status is 'completed', evidence and comment are mandatory
+        if (status === 'completed') {
+            const hasProof = (correctiveAction.managerAction.proof && correctiveAction.managerAction.proof.length > 0) ||
+                            (proof && Array.isArray(proof) && proof.length > 0);
+            const hasComment = (comment && comment.trim().length > 0) ||
+                              (correctiveAction.managerAction.comment && correctiveAction.managerAction.comment.trim().length > 0);
+            
+            if (!hasProof) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Evidence upload is mandatory when completing a corrective action.'
+                });
+            }
+            
+            if (!hasComment) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Comment is mandatory when completing a corrective action.'
+                });
+            }
+        }
+        
+        // Handle file uploads for proof
+        let proofUrls = [];
+        if (req.files && req.files.length > 0) {
+            const { getFileUrl } = require('../middleware/uploadMiddleware');
+            proofUrls.push(...req.files.map(file => getFileUrl(req, file.filename)));
+        } else if (proof && Array.isArray(proof)) {
+            proofUrls = proof;
+        }
+        
+        // Update corrective action
+        correctiveAction.managerAction.status = status;
+        if (comment !== undefined) {
+            correctiveAction.managerAction.comment = comment;
+        }
+        if (proofUrls.length > 0) {
+            // Merge new proof with existing
+            const existingProof = correctiveAction.managerAction.proof || [];
+            correctiveAction.managerAction.proof = [...existingProof, ...proofUrls];
+        }
+        if (!correctiveAction.managerAction.addedBy) {
+            correctiveAction.managerAction.addedBy = req.user._id;
+        }
+        if (!correctiveAction.managerAction.addedAt) {
+            correctiveAction.managerAction.addedAt = new Date();
+        }
+        
+        await response.save();
+        
+        // Keep linked Event auditState consistent with corrective-action completion/regression.
+        if (correctiveAction.eventId) {
+            const event = await Event.findById(correctiveAction.eventId);
+            if (event) {
+                // Get all form responses linked to this event
+                const allEventResponses = await FormResponse.find({
+                    'linkedTo.type': 'Event',
+                    'linkedTo.id': event._id,
+                    organizationId: req.user.organizationId
+                });
+
+                // Collect all corrective actions for this event
+                const allCorrectiveActions = [];
+                for (const resp of allEventResponses) {
+                    if (resp.correctiveActions && Array.isArray(resp.correctiveActions)) {
+                        for (const ca of resp.correctiveActions) {
+                            if (ca.eventId && ca.eventId.toString() === event._id.toString()) {
+                                allCorrectiveActions.push(ca);
+                            }
+                        }
+                    }
+                }
+
+                const anyIncomplete = allCorrectiveActions.some(ca => ca.managerAction.status !== 'completed');
+                const allCompleted = allCorrectiveActions.length > 0 && !anyIncomplete;
+
+                const previousState = event.auditState;
+
+                if (allCompleted) {
+                    // Transition to needs_review from any state that has corrective actions
+                    const validTransitionStates = ['pending_corrective', 'submitted', 'rejected', 'needs_review'];
+                    if (validTransitionStates.includes(previousState) && previousState !== 'needs_review') {
+                        event.auditState = 'needs_review';
+                        event.modifiedBy = req.user._id;
+                        event.addAuditEntry('status_changed', req.user._id, previousState, 'needs_review', {
+                            action: 'all_corrective_actions_completed',
+                            completedActionsCount: allCorrectiveActions.length,
+                            triggeredBy: 'corrective_action_completion'
+                        });
+                        await event.save();
+                    }
+                } else if (anyIncomplete) {
+                    // Regression: if any corrective action becomes incomplete again after reaching needs_review,
+                    // move event back to pending_corrective.
+                    const validRegressionStates = ['needs_review', 'submitted', 'rejected'];
+                    if (validRegressionStates.includes(previousState)) {
+                        event.auditState = 'pending_corrective';
+                        event.modifiedBy = req.user._id;
+                        event.addAuditEntry('status_changed', req.user._id, previousState, 'pending_corrective', {
+                            action: 'corrective_action_reopened',
+                            triggeredBy: 'corrective_action_status_update'
+                        });
+                        await event.save();
+                    }
+                }
+            }
+        }
+        
+        const updatedResponse = await FormResponse.findById(response._id)
+            .populate('submittedBy', 'firstName lastName email')
+            .populate('correctiveActions.managerAction.addedBy', 'firstName lastName email');
+        
+        res.status(200).json({
+            success: true,
+            data: updatedResponse,
+            message: 'Corrective action status updated successfully'
+        });
+    } catch (error) {
+        console.error('Update corrective action status error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error updating corrective action status.',
             error: error.message
         });
     }
@@ -824,21 +1555,151 @@ exports.approveResponse = async (req, res) => {
             });
         }
         
+        // Self-review enforcement is audit-event-specific and must be server-side enforced.
+        // If this response is linked to an audit Event, disallow approving your own submission unless explicitly enabled on that Event.
         if (response.executionStatus === 'Submitted') {
+            let linkedEvent = null;
+            let isAuditEvent = false;
+            if (response.linkedTo && response.linkedTo.type === 'Event' && response.linkedTo.id) {
+                const Event = require('../models/Event');
+                linkedEvent = await Event.findOne({
+                    _id: response.linkedTo.id,
+                    organizationId: req.user.organizationId
+                }).lean();
+                if (linkedEvent) {
+                    isAuditEvent = ['Internal Audit', 'External Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(linkedEvent.eventType);
+                }
+            }
+
+            if (linkedEvent && isAuditEvent) {
+                // Reviewer authority enforcement (non-bypassable)
+                // Only the explicitly assigned reviewer for the audit Event may approve audit responses.
+                const eventReviewerId = linkedEvent.reviewerId ? linkedEvent.reviewerId.toString() : null;
+                const currentUserId = req.user._id.toString();
+                if (!eventReviewerId) {
+                    return res.status(403).json({
+                        success: false,
+                        message: 'No reviewer is assigned for this audit.',
+                        code: 'AUDIT_REVIEWER_NOT_ASSIGNED'
+                    });
+                }
+                if (currentUserId !== eventReviewerId) {
+                    return res.status(403).json({
+                        success: false,
+                        message: 'You are not assigned as the reviewer for this audit.',
+                        code: 'AUDIT_REVIEWER_MISMATCH'
+                    });
+                }
+
+                const submittedById = response.submittedBy ? response.submittedBy.toString() : null;
+                const reviewerId = req.user._id.toString();
+                const isSelfReview = submittedById && submittedById === reviewerId;
+                const allowSelfReview = linkedEvent.allowSelfReview === true;
+
+                if (isSelfReview && !allowSelfReview) {
+                    return res.status(403).json({
+                        success: false,
+                        message: 'Self-review is not allowed for this audit',
+                        code: 'SELF_REVIEW_NOT_ALLOWED'
+                    });
+                }
+            }
+
             // Set approved flag - status will be computed automatically by pre-save hook
             response.approved = true;
             response.approvedBy = req.user._id;
             response.approvedAt = new Date();
+
+            // Reviewer tracking (immutable after approval)
+            response.reviewedBy = req.user._id;
+            response.selfReviewed = !!(response.submittedBy && response.submittedBy.toString() === req.user._id.toString());
+
             // Reset rejected status if it was previously rejected
             if (response.reviewStatus === 'Rejected') {
                 response.reviewStatus = null; // Will be recomputed
             }
         }
+
         await response.save();
+        
+        // Check if response is linked to an audit event and update event state
+        if (response.linkedTo && response.linkedTo.type === 'Event' && response.linkedTo.id) {
+            try {
+                const Event = require('../models/Event');
+                const event = await Event.findById(response.linkedTo.id);
+                
+                if (event) {
+                    const isAuditEvent = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(event.eventType);
+                    const isInReviewState = event.auditState === 'needs_review';
+                    
+                    if (isAuditEvent && isInReviewState) {
+                        // Check if all responses for this event are approved
+                        const FormResponse = require('../models/FormResponse');
+                        const allEventResponses = await FormResponse.find({
+                            'linkedTo.type': 'Event',
+                            'linkedTo.id': event._id,
+                            organizationId: req.user.organizationId,
+                            executionStatus: 'Submitted'
+                        });
+                        
+                        const allApproved = allEventResponses.length > 0 && 
+                                          allEventResponses.every(resp => resp.approved === true);
+                        
+                        if (allApproved) {
+                            console.log('[approveResponse] All responses approved for event. Closing event.');
+                            
+                            // Update event state: approved -> immediately closed -> Completed
+                            const previousState = event.auditState;
+                            const previousStatus = event.status;
+                            event.auditState = 'approved';
+                            event.modifiedBy = req.user._id;
+                            
+                            // Immediately transition to closed
+                            event.auditState = 'closed';
+                            
+                            // Set status to Completed (system-controlled transition)
+                            event.status = 'Completed';
+                            event.completedAt = new Date();
+                            
+                            // Make all form responses read-only by marking them as closed
+                            for (const resp of allEventResponses) {
+                                if (resp.executionStatus === 'Submitted') {
+                                    resp.reviewStatus = 'Closed';
+                                    await resp.save();
+                                }
+                            }
+                            
+                            // Add audit entry for status change
+                            event.addAuditEntry('status_changed', req.user._id, previousStatus, 'Completed', {
+                                action: 'approved_via_response',
+                                approvedBy: req.user._id,
+                                auditState: 'closed',
+                                completedAt: event.completedAt,
+                                allResponsesApproved: true
+                            });
+                            
+                            await event.save();
+                            
+                            console.log(`[approveResponse] Event ${event.eventId} closed after all responses approved.`);
+                        } else {
+                            console.log(`[approveResponse] Response approved, but ${allEventResponses.length - allEventResponses.filter(r => r.approved).length} response(s) still pending approval.`);
+                        }
+                    }
+                }
+            } catch (eventError) {
+                console.error('[approveResponse] Error updating linked event:', eventError);
+                // Don't fail the response approval if event update fails
+            }
+        }
+        
+        const updatedResponse = await FormResponse.findById(response._id)
+            .populate('submittedBy', 'firstName lastName email')
+            .populate('approvedBy', 'firstName lastName email')
+            .populate('reviewedBy', 'firstName lastName email');
         
         res.status(200).json({
             success: true,
-            data: response,
+            data: updatedResponse,
             message: 'Response approved successfully'
         });
     } catch (error) {

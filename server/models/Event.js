@@ -56,33 +56,47 @@ const eventSchema = new Schema({
     default: 'Meeting / Appointment'
   },
   
-  // Execution Status - Per Events Module Spec
+  // Execution Status - System-controlled only
+  // Status transitions happen only through system actions (cancel, complete)
   status: { 
     type: String, 
     enum: [
-      'PLANNED',           // Event created but not started
-      'STARTED',          // Event execution started
-      'CHECKED_IN',       // User checked in (GEO mode)
-      'IN_PROGRESS',      // Currently executing
-      'PAUSED',           // Auto-paused (GEO exit) or manual pause
-      'CHECKOUT_PENDING', // Form submitted, awaiting checkout
-      'CHECKED_OUT',      // User checked out (GEO mode or after form submission)
-      'SUBMITTED',        // Audit/Form submitted (legacy, use CHECKOUT_PENDING)
-      'PENDING_CORRECTIVE', // Audit needs corrective action
-      'NEEDS_REVIEW',     // Corrective submitted, awaiting review
-      'APPROVED',         // Corrective approved
-      'REJECTED',         // Corrective rejected
-      'CLOSED'            // Event completed and closed
+      'Planned',      // Event created but not completed
+      'Completed',    // Event completed (via audit flow or manual completion)
+      'Cancelled'     // Event cancelled by user/admin
     ],
     required: true,
-    default: 'PLANNED'
+    default: 'Planned'
+  },
+  
+  // Timestamps for status transitions
+  completedAt: {
+    type: Date,
+    default: null
+  },
+  
+  cancelledAt: {
+    type: Date,
+    default: null
+  },
+  
+  cancelledBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  
+  cancellationReason: {
+    type: String,
+    maxlength: 500,
+    default: null
   },
   
   // Audit Workflow State (for audit events only)
   auditState: {
     type: String,
-    enum: ['DRAFT', 'IN_PROGRESS', 'PAUSED', 'SUBMITTED', 'PENDING_CORRECTIVE', 'NEEDS_REVIEW', 'APPROVED', 'REJECTED', 'CLOSED'],
-    default: null
+    enum: ['Ready to start', 'checked_in', 'submitted', 'pending_corrective', 'needs_review', 'approved', 'rejected', 'closed'],
+    default: 'Ready to start'
   },
   
   // Linked Organization (for audit events)
@@ -212,6 +226,49 @@ const eventSchema = new Schema({
   minVisitDuration: {
     type: Number,
     default: null // minutes
+  },
+
+  // Audit Auditor (AUDIT EVENTS ONLY)
+  // Explicitly assigned user responsible for executing the audit.
+  // NOTE: No default / no auto-assignment.
+  auditorId: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: function () {
+      return ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(this.eventType);
+    }
+  },
+
+  // Audit Reviewer (AUDIT EVENTS ONLY)
+  // Explicitly assigned reviewer responsible for reviewing/approving audit responses.
+  // NOTE: No default / no auto-assignment. Visibility & required state are driven via Settings → Modules & Fields.
+  reviewerId: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: function () {
+      // Required ONLY for audit event types.
+      // IMPORTANT: No default; must be explicitly selected.
+      return ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(this.eventType);
+    }
+  },
+
+  // Audit Corrective Owner (AUDIT EVENTS ONLY)
+  // Explicitly assigned user responsible for addressing corrective actions raised in this audit.
+  // NOTE: No default / no auto-assignment.
+  correctiveOwnerId: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: function () {
+      return ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(this.eventType);
+    }
+  },
+
+  // Controlled self-review support (AUDIT EVENTS ONLY)
+  // NOTE: This is intentionally optional and defaults to false to preserve audit integrity.
+  // Visibility is controlled via Settings → Modules & Fields → Event → Field Dependencies.
+  allowSelfReview: {
+    type: Boolean,
+    default: false
   },
   
   backgroundTracking: {
@@ -385,6 +442,16 @@ eventSchema.pre('save', function(next) {
     this.createdTime = now;
     this.modifiedTime = now;
     
+    // ===== ENFORCE STATUS ON CREATION =====
+    // Force status to "Planned" for new events, reject any client-provided status
+    // Check undefined/null first, then check if it's not 'Planned'
+    if (!this.status || this.status === undefined || this.status === null) {
+      this.status = 'Planned';
+    } else if (this.status !== 'Planned') {
+      console.warn(`⚠️  Attempted to set status "${this.status}" on new event. Forcing to "Planned".`);
+      this.status = 'Planned';
+    }
+    
     // Add creation audit entry
     if (!this.auditHistory) {
       this.auditHistory = [];
@@ -398,12 +465,30 @@ eventSchema.pre('save', function(next) {
       metadata: {
         eventName: this.eventName,
         eventType: this.eventType,
-        startDateTime: this.startDateTime
+        startDateTime: this.startDateTime,
+        status: this.status
       }
     });
   } else {
     // Update modifiedTime on existing documents
     this.modifiedTime = now;
+    
+    // ===== PREVENT MANUAL STATUS CHANGES =====
+    // If status is being modified, check if it's a valid system transition
+    if (this.isModified('status')) {
+      const oldStatus = this.get('status', null, { getters: false });
+      const newStatus = this.status;
+      
+      // Only allow transitions via system methods (will be set by cancelEvent/completeEvent)
+      // If status changed but not via system method, log warning and revert
+      // Note: We can't easily detect if it's a system call, so we'll rely on controller-level enforcement
+      // But we can ensure status is never set to invalid values
+      const validStatuses = ['Planned', 'Completed', 'Cancelled'];
+      if (!validStatuses.includes(newStatus)) {
+        console.error(`❌ Invalid status "${newStatus}" attempted. Reverting to previous status.`);
+        this.status = oldStatus || 'Planned';
+      }
+    }
   }
   
   // Validate end date is after start date
@@ -414,10 +499,10 @@ eventSchema.pre('save', function(next) {
   // ===== GEO REQUIRED ENFORCEMENT =====
   // Enforce GEO Required based on event type per spec
   if (this.isNew || this.isModified('eventType')) {
-    if (this.eventType === 'Internal Audit' || this.eventType === 'External Audit Beat') {
-      // Always ON, cannot be disabled
+    if (['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(this.eventType)) {
+      // Audit event types: Always ON, cannot be disabled
       this.geoRequired = true;
-    } else if (this.eventType === 'External Audit — Single Org' || this.eventType === 'Field Sales Beat') {
+    } else if (this.eventType === 'Field Sales Beat') {
       // ON by default, but can be disabled by admin
       if (this.geoRequired === undefined || this.geoRequired === null) {
         this.geoRequired = true;
@@ -434,7 +519,7 @@ eventSchema.pre('save', function(next) {
   // Set audit state for audit event types
   if (['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(this.eventType)) {
     if (!this.auditState) {
-      this.auditState = 'DRAFT';
+      this.auditState = 'Ready to start';
     }
   } else {
     // Clear audit state for non-audit events
@@ -456,23 +541,28 @@ eventSchema.pre('save', function(next) {
     this.isMultiOrg = false;
   }
   
-  // ===== STATUS SYNCHRONIZATION =====
-  // Sync status with auditState for audit events
-  if (this.auditState) {
-    const statusMap = {
-      'DRAFT': 'PLANNED',
-      'IN_PROGRESS': 'IN_PROGRESS',
-      'PAUSED': 'PAUSED',
-      'SUBMITTED': 'SUBMITTED',
-      'PENDING_CORRECTIVE': 'PENDING_CORRECTIVE',
-      'NEEDS_REVIEW': 'NEEDS_REVIEW',
-      'APPROVED': 'APPROVED',
-      'REJECTED': 'REJECTED',
-      'CLOSED': 'CLOSED'
-    };
-    if (statusMap[this.auditState] && !['PLANNED', 'STARTED', 'CHECKED_IN', 'CHECKED_OUT'].includes(this.status)) {
-      this.status = statusMap[this.auditState];
+  // ===== STATUS TRANSITION: COMPLETED =====
+  // When auditState reaches 'closed' (approved and closed), mark event as Completed
+  if (this.auditState === 'closed' && this.status !== 'Completed' && this.status !== 'Cancelled') {
+    this.status = 'Completed';
+    if (!this.completedAt) {
+      this.completedAt = now;
     }
+    // Add audit entry for completion
+    if (!this.auditHistory) {
+      this.auditHistory = [];
+    }
+    this.auditHistory.push({
+      timestamp: now,
+      actorUserId: this.modifiedBy || this.createdBy,
+      action: 'status_changed',
+      from: this.get('status', null, { getters: false }) || 'Planned',
+      to: 'Completed',
+      metadata: {
+        reason: 'Audit workflow completed',
+        auditState: this.auditState
+      }
+    });
   }
   
   next();

@@ -224,9 +224,11 @@ const ModuleDefinitionSchema = new mongoose.Schema({
                         // Support unified dependency structure (new format)
                         new mongoose.Schema({
                             name: { type: String, trim: true, default: '' },
-                            type: { type: String, enum: ['visibility','readonly','required','picklist','popup'], required: false },
+                            type: { type: String, enum: ['visibility','readonly','required','picklist','popup','label'], required: false },
                             // For popup type: fields to show in the popup modal
                             popupFields: { type: [String], default: [] },
+                            // For label type: override label when conditions satisfied
+                            labelValue: { type: String, trim: true, default: '' },
                             logic: { type: String, enum: ['AND','OR'], default: 'AND' },
                             // For backward compatibility and simple dependencies
                             fieldKey: { type: String, trim: true },

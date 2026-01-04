@@ -189,9 +189,15 @@ const getTitleForPath = (path, params = {}) => {
   // Check for base path
   const basePath = '/' + path.split('/')[1];
   
+  // Special case: Form Response detail view
+  // Route shape: /forms/:formId/responses/:responseId
+  const segments = path.split('/');
+  if (segments[1] === 'forms' && segments[3] === 'responses' && segments[4]) {
+    return `(${segments[4]}) Details`;
+  }
+
   // If it's a detail page (has ID), customize title
   if (path.split('/').length > 2) {
-    const segments = path.split('/');
     const module = segments[1];
     const id = segments[2];
     
@@ -312,6 +318,12 @@ export function useTabs() {
         activeTabId.value = existingTab.id;
       } else {
         console.log('✅ Already on correct tab, no sync needed');
+      }
+
+      // Keep titles fresh for routes with dynamic IDs (e.g. form response details)
+      const newTitle = getTitleForPath(path, existingTab.params || {});
+      if (newTitle && existingTab.title !== newTitle) {
+        existingTab.title = newTitle;
       }
     } else {
       // Tab doesn't exist, create one
@@ -469,6 +481,12 @@ export function useTabs() {
     
     if (existingTab) {
       console.log('📍 Tab already exists:', existingTab.id);
+
+      // Update title for dynamic routes if the title is outdated
+      const newTitle = options.title || getTitleForPath(path, options.params);
+      if (newTitle && existingTab.title !== newTitle) {
+        existingTab.title = newTitle;
+      }
       
       // If not background mode, focus the tab
       if (!isBackground) {

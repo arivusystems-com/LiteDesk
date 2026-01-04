@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/auth';
 import { usePermissionSync } from '@/composables/usePermissionSync';
 import { useTabs } from '@/composables/useTabs';
 import { useColorMode } from '@/composables/useColorMode';
+import { useNotifications } from '@/composables/useNotifications';
 import LandingPage from '@/views/LandingPage.vue'
 import Dashboard from '@/views/Dashboard.vue'
 import Nav from '@/components/Nav.vue';
@@ -15,6 +16,7 @@ const authStore = useAuthStore();
 const router = useRouter();
 const route = useRoute();
 const { initTabs, setupRouteWatcher } = useTabs();
+const { warning } = useNotifications();
 
 // Initialize color mode
 const { colorMode } = useColorMode();
@@ -77,6 +79,37 @@ const handleResize = () => {
   updateContentOffset();
 };
 
+// Cross-tab auth guard: if another tab logs in/out and changes localStorage.user,
+// don't silently switch accounts in this tab.
+const handleStorageEvent = (e) => {
+  if (e.key !== 'user') return;
+  if (!authStore.isAuthenticated || !authStore.user?._id) return;
+
+  // User removed (logout in another tab)
+  if (!e.newValue) {
+    warning('You were signed out because your session changed in another tab.', 6000);
+    authStore.logout();
+    router.push('/');
+    return;
+  }
+
+  try {
+    const incoming = JSON.parse(e.newValue);
+    const incomingId = incoming?._id;
+    if (incomingId && String(incomingId) !== String(authStore.user._id)) {
+      warning('You were signed out because you logged into a different account in another tab.', 6500);
+      authStore.logout();
+      router.push('/');
+    }
+  } catch (err) {
+    console.warn('Failed to parse localStorage user in storage event:', err);
+    // Safe fallback: logout rather than risk inconsistent state
+    warning('You were signed out due to a session change in another tab.', 6000);
+    authStore.logout();
+    router.push('/');
+  }
+};
+
 // Refresh permissions on app mount (page refresh)
 onMounted(async () => {
   if (authStore.isAuthenticated) {
@@ -97,10 +130,12 @@ onMounted(async () => {
 
   queueContentOffsetUpdate();
   window.addEventListener('resize', handleResize, { passive: true });
+  window.addEventListener('storage', handleStorageEvent);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize);
+  window.removeEventListener('storage', handleStorageEvent);
 });
 
 // Enable automatic permission sync every 2 minutes for real-time updates

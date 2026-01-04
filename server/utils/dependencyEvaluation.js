@@ -1,14 +1,13 @@
 /**
- * Evaluates if a dependency condition is met based on form data
- * @param {Object} dependency - The dependency rule
- * @param {Object} formData - Current form data
- * @param {Array} allFields - All field definitions for lookups
+ * Evaluates if a dependency condition is met based on data
+ * @param {Object} condition - The dependency condition
+ * @param {Object} data - Current data object
  * @returns {boolean} - True if condition is met
  */
-export function evaluateDependencyCondition(condition, formData, allFields = []) {
+function evaluateDependencyCondition(condition, data) {
   if (!condition || !condition.fieldKey) return false;
 
-  const fieldValue = formData[condition.fieldKey];
+  const fieldValue = data[condition.fieldKey];
   const operator = condition.operator || 'equals';
   const conditionValue = condition.value;
 
@@ -69,11 +68,10 @@ export function evaluateDependencyCondition(condition, formData, allFields = [])
 /**
  * Evaluates all conditions for a dependency rule
  * @param {Object} dependency - The dependency rule
- * @param {Object} formData - Current form data
- * @param {Array} allFields - All field definitions
+ * @param {Object} data - Current data object
  * @returns {boolean} - True if dependency conditions are met
  */
-export function evaluateDependency(dependency, formData, allFields = []) {
+function evaluateDependency(dependency, data) {
   if (!dependency) return false;
 
   // Handle simple condition (backward compatible)
@@ -81,8 +79,7 @@ export function evaluateDependency(dependency, formData, allFields = []) {
     if (!dependency.fieldKey) return false;
     return evaluateDependencyCondition(
       { fieldKey: dependency.fieldKey, operator: dependency.operator || 'equals', value: dependency.value },
-      formData,
-      allFields
+      data
     );
   }
 
@@ -91,7 +88,7 @@ export function evaluateDependency(dependency, formData, allFields = []) {
 
   const logic = dependency.logic || 'AND';
   const results = dependency.conditions.map(condition => 
-    evaluateDependencyCondition(condition, formData, allFields)
+    evaluateDependencyCondition(condition, data)
   );
 
   if (logic === 'AND') {
@@ -104,24 +101,21 @@ export function evaluateDependency(dependency, formData, allFields = []) {
 /**
  * Get the effective state of a field based on dependencies
  * @param {Object} field - The field definition
- * @param {Object} formData - Current form data
- * @param {Array} allFields - All field definitions
- * @returns {Object} - { visible: boolean, readonly: boolean, required: boolean, allowedOptions: Array }
+ * @param {Object} data - Current data object
+ * @returns {Object} - { visible: boolean, readonly: boolean, required: boolean }
  */
-export function getFieldDependencyState(field, formData, allFields = []) {
+function getFieldDependencyState(field, data) {
   if (!field || !field.dependencies || !Array.isArray(field.dependencies) || field.dependencies.length === 0) {
     return {
       visible: true,
       readonly: false,
       required: field.required || false,
-      allowedOptions: null,
       label: null
     };
   }
 
   let readonly = false;
   let required = field.required || false;
-  let allowedOptions = null;
   let label = null;
 
   // Separate visibility dependencies from others
@@ -132,12 +126,12 @@ export function getFieldDependencyState(field, formData, allFields = []) {
   // If no visibility dependencies, field is visible by default
   let visible = true;
   if (visibilityDeps.length > 0) {
-    visible = visibilityDeps.some(dep => evaluateDependency(dep, formData, allFields));
+    visible = visibilityDeps.some(dep => evaluateDependency(dep, data));
   }
 
   // Handle other dependency types (readonly, required, picklist)
   for (const dep of otherDeps) {
-    const conditionMet = evaluateDependency(dep, formData, allFields);
+    const conditionMet = evaluateDependency(dep, data);
     
     if (!conditionMet) continue;
 
@@ -149,45 +143,6 @@ export function getFieldDependencyState(field, formData, allFields = []) {
       case 'required':
         required = conditionMet; // Override required state when condition is met
         break;
-      
-      case 'picklist':
-        // For picklist, only apply filter if condition is met
-        if (conditionMet && dep.allowedOptions && Array.isArray(dep.allowedOptions) && dep.allowedOptions.length > 0) {
-          // Normalize allowedOptions to strings to ensure consistent comparison
-          allowedOptions = dep.allowedOptions.map(opt => String(opt || '')).filter(Boolean);
-          console.log('📋 Picklist dependency active:', {
-            fieldKey: field.key,
-            dependencyName: dep.name,
-            allowedOptionsCount: allowedOptions.length,
-            allowedOptions: allowedOptions
-          });
-        }
-        break;
-      
-      case 'picklistValue':
-        // For picklistValue, filter options based on parent field value
-        if (dep.parentFieldKey && dep.mappings && Array.isArray(dep.mappings)) {
-          const parentValue = formData[dep.parentFieldKey];
-          if (parentValue !== null && parentValue !== undefined && parentValue !== '') {
-            // Find matching mapping for current parent value
-            const matchingMapping = dep.mappings.find(m => 
-              m.parentValue === String(parentValue) || m.parentValue === parentValue
-            );
-            
-            if (matchingMapping && matchingMapping.allowedOptions && Array.isArray(matchingMapping.allowedOptions)) {
-              // Normalize allowedOptions to strings
-              allowedOptions = matchingMapping.allowedOptions.map(opt => String(opt || '')).filter(Boolean);
-              console.log('📋 Picklist value rule active:', {
-                fieldKey: field.key,
-                parentFieldKey: dep.parentFieldKey,
-                parentValue: parentValue,
-                allowedOptionsCount: allowedOptions.length,
-                allowedOptions: allowedOptions
-              });
-            }
-          }
-        }
-        break;
 
       case 'label':
         // Label override is additive: first matching rule wins
@@ -198,28 +153,17 @@ export function getFieldDependencyState(field, formData, allFields = []) {
     }
   }
 
-  // Check for popup dependencies
-  let popupTrigger = null;
-  for (const dep of field.dependencies) {
-    if (dep.type === 'popup') {
-      const conditionMet = evaluateDependency(dep, formData, allFields);
-      if (conditionMet && dep.popupFields && Array.isArray(dep.popupFields) && dep.popupFields.length > 0) {
-        popupTrigger = {
-          dependencyName: dep.name || '',
-          fields: dep.popupFields
-        };
-        break; // Use first matching popup dependency
-      }
-    }
-  }
-
   return {
     visible,
     readonly,
     required,
-    allowedOptions,
-    popupTrigger,
     label
   };
 }
+
+module.exports = {
+  evaluateDependencyCondition,
+  evaluateDependency,
+  getFieldDependencyState
+};
 

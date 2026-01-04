@@ -8,7 +8,7 @@
       </div>
 
       <!-- Execution Actions -->
-      <div v-if="event.status === 'PLANNED'" class="space-y-3">
+      <div v-if="event.status === 'PLANNED' && !isAuditEvent" class="space-y-3">
         <button
           @click="startEvent"
           :disabled="starting"
@@ -22,8 +22,34 @@
         </button>
       </div>
 
+      <!-- Check-In for Audit Events (when auditState = Ready to start) -->
+      <div v-if="isAuditEvent && event.auditState === 'Ready to start' && !isReadOnly" class="space-y-3">
+        <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <p class="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">
+            Ready to Start Audit
+          </p>
+          <p class="text-xs text-blue-700 dark:text-blue-400">
+            Check in to begin the audit process.
+          </p>
+          <p v-if="event.geoRequired && !currentLocation" class="text-xs text-yellow-700 dark:text-yellow-400 mt-2">
+            Waiting for GPS location...
+          </p>
+        </div>
+        <button
+          @click="checkIn"
+          :disabled="checkingIn || (event.geoRequired && !currentLocation)"
+          class="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          Check In
+        </button>
+      </div>
+
       <!-- Check-In/Check-Out (GEO Mode) -->
-      <div v-if="event.geoRequired && (event.status === 'STARTED' || event.status === 'CHECKED_OUT')" class="space-y-3">
+      <div v-if="!isReadOnly && event.geoRequired && (event.status === 'STARTED' || event.status === 'CHECKED_OUT')" class="space-y-3">
         <div v-if="!isCheckedIn" class="space-y-3">
           <div class="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
             <p class="text-sm text-yellow-800 dark:text-yellow-300 mb-2">
@@ -115,90 +141,64 @@
         </div>
       </div>
 
-      <!-- Audit Submission -->
-      <div v-if="requiresAuditForm && isCheckedIn && (event.status === 'IN_PROGRESS' || event.status === 'CHECKED_IN' || event.status === 'STARTED' || event.status === 'CHECKOUT_PENDING')" class="mt-6 space-y-3">
-        <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Audit Form</h4>
+      <!-- Form Submission -->
+      <div v-if="requiresAuditForm && !isReadOnly && isCheckedIn && (event.auditState === 'checked_in' || event.auditState === 'submitted' || event.status === 'SUBMITTED' || event.status === 'CHECKED_OUT' || isFormSubmitted)" class="mt-6 space-y-3">
+        <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Form</h4>
         <div v-if="linkedFormIdValue" class="space-y-2">
-          <!-- Show success message and checkout button if form is submitted but not checked out -->
-          <div v-if="isFormSubmitted && event.status === 'CHECKOUT_PENDING'" class="space-y-3">
+          <!-- Show "Open Response" button when form is submitted -->
+          <div v-if="isFormSubmitted || event.auditState === 'submitted' || event.status === 'SUBMITTED' || event.status === 'CHECKED_OUT'" class="space-y-3">
             <div class="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
               <div class="flex items-center gap-2 mb-2">
                 <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                 </svg>
                 <p class="text-sm font-medium text-green-800 dark:text-green-300">
-                  Audit Form Submitted
+                  Form Submitted
                 </p>
               </div>
               <p class="text-xs text-green-700 dark:text-green-400">
-                The audit form has been successfully submitted. Please check out to complete the event.
+                The form has been successfully submitted and you have been automatically checked out.
               </p>
             </div>
-            <!-- Primary Check Out Action -->
-            <button
-              @click="checkOut"
-              :disabled="checkingOut"
-              class="w-full px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              Check Out
-            </button>
-          </div>
-          
-          <!-- Show read-only actions after checkout -->
-          <div v-else-if="event.status === 'CHECKED_OUT'" class="space-y-3">
-            <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-              <div class="flex items-center gap-2 mb-2">
-                <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <p class="text-sm font-medium text-blue-800 dark:text-blue-300">
-                  Event Completed
-                </p>
-              </div>
-              <p class="text-xs text-blue-700 dark:text-blue-400">
-                Checked out at {{ formatTime(event.checkOut?.timestamp) }}
-              </p>
-            </div>
-            <!-- View Response Button (Read-only) -->
             <button
               v-if="hasFormResponse"
               @click="viewFormResponse"
-              class="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium transition-colors flex items-center justify-center gap-2"
+              class="w-full px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors flex items-center justify-center gap-2"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
-              View Response
+              Open Response
             </button>
           </div>
           
-          <!-- Show form buttons only if form is not yet submitted and not checked out -->
-          <template v-else>
+          <!-- Show "Open Form" when checked in but not submitted -->
+          <template v-else-if="event.auditState === 'checked_in' && !isFormSubmitted">
+            <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg mb-3">
+              <p class="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">
+                Form
+              </p>
+              <p class="text-xs text-blue-700 dark:text-blue-400">
+                Open the form to fill and submit.
+              </p>
+            </div>
             <button
               @click="openAuditForm"
-              class="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors"
+              class="w-full px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors flex items-center justify-center gap-2"
             >
-              Open Audit Form
-            </button>
-            <button
-              v-if="hasFormResponse"
-              @click="submitAudit"
-              :disabled="submitting"
-              class="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors disabled:opacity-50"
-            >
-              Submit Audit
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Open Form
             </button>
           </template>
         </div>
-        <p v-else class="text-sm text-gray-500 dark:text-gray-400">No audit form linked to this event</p>
+        <p v-else class="text-sm text-gray-500 dark:text-gray-400">No form linked to this event</p>
       </div>
 
       <!-- Field Sales Actions -->
-      <div v-if="event.eventType === 'Field Sales Beat' && isCheckedIn" class="mt-6 space-y-3">
+      <div v-if="!isReadOnly && event.eventType === 'Field Sales Beat' && isCheckedIn" class="mt-6 space-y-3">
         <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Sales Actions</h4>
         <div class="grid grid-cols-2 gap-2">
           <button
@@ -337,8 +337,18 @@ const isCheckedIn = computed(() => {
   return props.event.checkIn?.timestamp != null;
 });
 
-const requiresAuditForm = computed(() => {
+// Check if event is an audit event
+const isAuditEvent = computed(() => {
   return ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(props.event.eventType);
+});
+
+// Check if event is read-only (approved or closed)
+const isReadOnly = computed(() => {
+  return props.event.auditState === 'approved' || props.event.auditState === 'closed';
+});
+
+const requiresAuditForm = computed(() => {
+  return isAuditEvent.value;
 });
 
 // Handle linkedFormId whether it's a string ID or populated object
@@ -675,10 +685,11 @@ const submitAudit = async () => {
       notifyEvent(response.data, NotifTypes.AUDIT_SUBMITTED, `Audit submitted for "${response.data.eventName}"`);
       // Update form response status to 'Submitted'
       formResponseStatus.value = 'Submitted';
+      // Note: Event is automatically checked out on form submission
       if (response.requiresCorrective) {
-        alert('Audit submitted. Some items require corrective action.');
+        alert('Audit submitted and checked out. Some items require corrective action.');
       } else {
-        alert('Audit submitted successfully');
+        alert('Audit submitted successfully and you have been automatically checked out.');
       }
     } else {
       // Queue for offline retry
@@ -766,13 +777,36 @@ const openAuditForm = () => {
   if (formId) {
     // Open form in same tab with event context
     const eventIdValue = props.event.eventId || props.event._id;
+    
+    // Get responseId from formResponseId ref, or from event metadata, or from sessionStorage
+    let responseId = formResponseId.value;
+    if (!responseId && props.event.metadata?.formResponses && props.event.metadata.formResponses.length > 0) {
+      // Use the most recent form response
+      responseId = props.event.metadata.formResponses[props.event.metadata.formResponses.length - 1];
+    }
+    if (!responseId) {
+      // Try sessionStorage as fallback
+      try {
+        const storedResponseId = sessionStorage.getItem(`formResponse_${formId}_${eventIdValue}`);
+        if (storedResponseId) {
+          responseId = storedResponseId;
+        }
+      } catch (e) {
+        console.warn('[EventExecution] Failed to read responseId from sessionStorage:', e);
+      }
+    }
+    
     console.log('[EventExecution] Opening audit form with:', {
       formId: formId,
-      eventId: eventIdValue
+      eventId: eventIdValue,
+      responseId: responseId
     });
     
-    // Build full URL with query params
-    const formUrl = `/forms/${formId}/fill?eventId=${encodeURIComponent(eventIdValue)}`;
+    // Build full URL with query params - include responseId if available
+    let formUrl = `/forms/${formId}/fill?eventId=${encodeURIComponent(eventIdValue)}`;
+    if (responseId) {
+      formUrl += `&responseId=${encodeURIComponent(responseId)}`;
+    }
     console.log('[EventExecution] Full audit form URL:', formUrl);
     
     // Use router.push with full URL string (Vue Router supports this)
@@ -939,7 +973,16 @@ watch(() => props.event, (newEvent) => {
 }, { immediate: true, deep: true });
 
 onMounted(() => {
-  if (props.event.geoRequired && (props.event.status === 'STARTED' || isCheckedIn.value)) {
+  // Start location watching if:
+  // 1. Event requires GEO AND (status is STARTED OR already checked in), OR
+  // 2. Event is an audit event in "Ready to start" state (needs location for check-in)
+  const shouldWatchLocation = props.event.geoRequired && (
+    props.event.status === 'STARTED' || 
+    isCheckedIn.value ||
+    (isAuditEvent.value && props.event.auditState === 'Ready to start')
+  );
+  
+  if (shouldWatchLocation) {
     startWatchingLocation();
     getCurrentLocation().then(loc => {
       currentLocation.value = loc;

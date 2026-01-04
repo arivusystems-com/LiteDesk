@@ -622,9 +622,11 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
+import { useTabs } from '@/composables/useTabs';
 
 const route = useRoute();
 const router = useRouter();
+const { activeTabId, closeTab } = useTabs();
 
 const form = ref(null);
 const formData = ref({});
@@ -1063,11 +1065,22 @@ const submitForm = async () => {
         notifyEventExecution(eventId.value, formResponseId.value);
       }
       
-      if (eventId.value) {
-        setTimeout(() => {
+      // Navigate away after a brief delay to show success message (1.5 seconds)
+      // Close the form fill tab and navigate to event record
+      setTimeout(() => {
+        // Close the current tab
+        const currentTabId = activeTabId.value;
+        if (currentTabId) {
+          closeTab(currentTabId);
+        }
+        
+        // Navigate to event record (or forms list if no eventId)
+        if (eventId.value) {
           router.push(`/events/${eventId.value}`);
-        }, 5000);
-      }
+        } else {
+          router.push('/forms');
+        }
+      }, 1500);
     } else {
       error.value = response.message || 'Failed to submit form';
     }

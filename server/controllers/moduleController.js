@@ -298,6 +298,16 @@ function getBaseFieldsForKey(key) {
                 
                 // Get data type - if options exist and no explicit mapping, infer Picklist
                 let dataType = getFieldDataType(key, name, path);
+                
+                // Special handling for array fields with ObjectId refs
+                // Check if this is an array of ObjectIds with a ref before auto-detecting Picklist
+                if (path.instance === 'Array' && path.schema && path.schema.paths) {
+                    const arrayItemPath = path.schema.paths[0] || path.schema.paths['0'];
+                    if (arrayItemPath && arrayItemPath.instance === 'ObjectID' && arrayItemPath.options && arrayItemPath.options.ref) {
+                        dataType = 'Lookup (Relationship)';
+                    }
+                }
+                
                 // Auto-detect Picklist if enum options exist and dataType is still Text
                 // Note: getFieldDataType already handles field-specific mappings, so we just check if it's still Text
                 if (options.length > 0 && dataType === 'Text') {
@@ -319,14 +329,19 @@ function getBaseFieldsForKey(key) {
                         options = [...treeDef[0].enum];
                     }
                 }
-                // Custom label for eventOwnerId
+                // Custom label for eventOwnerId / reviewerId / audit roles
                 let fieldLabel = name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                if (name === 'eventOwnerId') {
-                    fieldLabel = 'Event Owner';
-                }
+                if (name === 'eventOwnerId') fieldLabel = 'Event Owner';
+                // UX normalization: hide technical relationship naming in Events module UI
+                if (key === 'events' && name === 'relatedToId') fieldLabel = 'Organization';
+                if (key === 'events' && name === 'linkedFormId') fieldLabel = 'Form';
+                if (key === 'events' && name === 'reviewerId') fieldLabel = 'Reviewer';
+                if (key === 'events' && name === 'auditorId') fieldLabel = 'Auditor';
+                if (key === 'events' && name === 'correctiveOwnerId') fieldLabel = 'Corrective Owner';
                 
                 // Add lookupSettings for User lookup fields
                 let lookupSettings = null;
+                
                 if (dataType === 'Lookup (Relationship)') {
                     // Check if this is a User lookup field
                     if (name === 'eventOwnerId' || name === 'createdBy' || name === 'modifiedBy' || 
@@ -357,6 +372,32 @@ function getBaseFieldsForKey(key) {
                     }
                 }
                 
+                // Also check for array fields with ObjectId refs
+                if (!lookupSettings && path.instance === 'Array' && path.schema && path.schema.paths) {
+                    // Check if array items are ObjectIds with ref
+                    const arrayItemPath = path.schema.paths[0] || path.schema.paths['0'];
+                    if (arrayItemPath && arrayItemPath.options && arrayItemPath.options.ref) {
+                        const ref = arrayItemPath.options.ref;
+                        const moduleMap = {
+                            'User': 'users',
+                            'People': 'people',
+                            'Contact': 'people',
+                            'Organization': 'organizations',
+                            'Deal': 'deals',
+                            'Task': 'tasks',
+                            'Event': 'events',
+                            'Form': 'forms',
+                            'Report': 'reports'
+                        };
+                        if (moduleMap[ref]) {
+                            dataType = 'Lookup (Relationship)';
+                            lookupSettings = {
+                                targetModule: moduleMap[ref]
+                            };
+                        }
+                    }
+                }
+                
                 // Special handling for linkedFormId in events module - add visibility dependency
                 let dependencies = [];
                 if (key === 'events' && name === 'linkedFormId') {
@@ -369,6 +410,136 @@ function getBaseFieldsForKey(key) {
                         logic: 'AND'
                     }];
                 }
+
+                // Events: prevent duplicate "Event Owner" + "Auditor" fields in audit flows.
+                // Keep `eventOwnerId` as the internal canonical owner field, but hide it for audit event types.
+                // The explicit audit role field is `auditorId` (shown/required via dependencies).
+                if (key === 'events' && name === 'eventOwnerId') {
+                    dependencies = [
+                        ...(dependencies || []),
+                        {
+                            name: 'Show only for non-audit event types',
+                            type: 'visibility',
+                            fieldKey: 'eventType',
+                            operator: 'not_in',
+                            value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                            logic: 'AND'
+                        }
+                    ];
+                }
+
+                // Special handling for reviewerId in events module - audit-only visibility + required
+                // Default dependency: only show/require for audit event types. Admins can override in Settings → Modules & Fields.
+                if (key === 'events' && name === 'reviewerId') {
+                    dependencies = [
+                        {
+                            name: 'Show for audit event types',
+                            type: 'visibility',
+                            fieldKey: 'eventType',
+                            operator: 'in',
+                            value: ['Internal Audit', 'External Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                            logic: 'AND'
+                        },
+                        {
+                            name: 'Required for audit event types',
+                            type: 'required',
+                            fieldKey: 'eventType',
+                            operator: 'in',
+                            value: ['Internal Audit', 'External Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                            logic: 'AND'
+                        }
+                    ];
+                }
+
+                // Special handling for auditorId in events module - audit-only visibility + required
+                if (key === 'events' && name === 'auditorId') {
+                    dependencies = [
+                        {
+                            name: 'Show for audit event types',
+                            type: 'visibility',
+                            fieldKey: 'eventType',
+                            operator: 'in',
+                            value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                            logic: 'AND'
+                        },
+                        {
+                            name: 'Required for audit event types',
+                            type: 'required',
+                            fieldKey: 'eventType',
+                            operator: 'in',
+                            value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                            logic: 'AND'
+                        }
+                    ];
+                }
+
+                // Special handling for correctiveOwnerId in events module - audit-only visibility + required
+                if (key === 'events' && name === 'correctiveOwnerId') {
+                    dependencies = [
+                        {
+                            name: 'Show for audit event types',
+                            type: 'visibility',
+                            fieldKey: 'eventType',
+                            operator: 'in',
+                            value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                            logic: 'AND'
+                        },
+                        {
+                            name: 'Required for audit event types',
+                            type: 'required',
+                            fieldKey: 'eventType',
+                            operator: 'in',
+                            value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                            logic: 'AND'
+                        }
+                    ];
+                }
+
+                // Special handling for allowSelfReview in events module - audit-only visibility
+                // Default dependency: only show for audit event types. Admins can override in Settings → Modules & Fields.
+                if (key === 'events' && name === 'allowSelfReview') {
+                    dependencies = [{
+                        name: 'Show for audit event types',
+                        type: 'visibility',
+                        fieldKey: 'eventType',
+                        operator: 'in',
+                        value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                        logic: 'AND'
+                    }];
+                }
+
+                // GEO Required: for audit event types, show it and make it read-only (always ON).
+                if (key === 'events' && name === 'geoRequired') {
+                    dependencies = [
+                        ...(dependencies || []),
+                        {
+                            name: 'Show for audit event types',
+                            type: 'visibility',
+                            fieldKey: 'eventType',
+                            operator: 'in',
+                            value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                            logic: 'AND'
+                        },
+                        {
+                            name: 'Read-only for audit event types',
+                            type: 'readonly',
+                            fieldKey: 'eventType',
+                            operator: 'in',
+                            value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                            logic: 'AND'
+                        },
+                        {
+                            name: 'Required for audit event types',
+                            type: 'required',
+                            fieldKey: 'eventType',
+                            operator: 'in',
+                            value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                            logic: 'AND'
+                        }
+                    ];
+                }
+                
+                // NOTE: legacy plural corrective owners have been deprecated and removed.
                 
                 // Special handling for Items module - add dependencies based on item_type
                 if (key === 'items') {
@@ -411,9 +582,17 @@ function getBaseFieldsForKey(key) {
                     key: name,
                     label: fieldLabel,
                     dataType: dataType,
-                    required: !!path.isRequired,
+                    // IMPORTANT: Some schema fields are conditionally required (function-based required).
+                    // For dependency-driven required fields (like events.reviewerId), the module definition must NOT mark them required globally.
+                    required: (key === 'events' && name === 'reviewerId') ? false : !!path.isRequired,
                     options: options,
                     defaultValue: path.defaultValue ?? null,
+                    // Use placeholder as helper text for Lookup fields (shown under label in UI); never show technical IDs.
+                    placeholder:
+                        (key === 'events' && name === 'reviewerId') ? 'User responsible for reviewing and approving this audit.' :
+                        (key === 'events' && name === 'relatedToId') ? 'The organization this event is associated with.' :
+                        (key === 'events' && name === 'linkedFormId') ? 'The form that will be executed as part of this event.' :
+                        '',
                     index: !!path._index,
                     visibility: { list: true, detail: true },
                     order: 0,
@@ -987,11 +1166,51 @@ exports.listModules = async (req, res) => {
         }));
 
         // Exclude 'groups' from modules list (it's a settings feature, not a module)
+        // Use select() to explicitly include quickCreate and quickCreateLayout fields
         const custom = await ModuleDefinition.find({ 
             organizationId: req.user.organizationId,
             key: { $ne: 'groups' } // Exclude groups
-        }).lean();
+        }).select('+quickCreate +quickCreateLayout').lean();
         const customByKey = new Map(custom.map(m => [m.key, m]));
+
+        // Canonicalize/normalize known system field keys to avoid duplicates from legacy casing/kebab-case.
+        // This prevents UI from rendering the same field twice (e.g., "linkedFormId" vs "Linked Form ID").
+        const normalizeKebabToCamel = (s) => String(s || '').replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+        const normalizeEventFieldKey = (key) => {
+            const raw = String(key || '').trim();
+            const camel = normalizeKebabToCamel(raw);
+            const normalized = camel.toLowerCase().replace(/[^a-z0-9]/g, ''); // remove dashes/underscores/spaces defensively
+            // Map legacy variants to canonical schema keys
+            const canonicalMap = {
+                linkedformid: 'linkedFormId',
+                relatedtoid: 'relatedToId',
+                // Legacy aliases seen in older org configs / UI
+                relatedorg: 'relatedToId',
+                relatedorgid: 'relatedToId',
+                relatedorganization: 'relatedToId',
+                eventownerid: 'eventOwnerId',
+                startdatetime: 'startDateTime',
+                enddatetime: 'endDateTime',
+                allowselfreview: 'allowSelfReview',
+                auditorid: 'auditorId',
+                reviewerid: 'reviewerId',
+                correctiveownerid: 'correctiveOwnerId'
+            };
+            return canonicalMap[normalized] || camel || raw;
+        };
+        const dedupeFieldsByKey = (fields) => {
+            const seenLower = new Set();
+            const out = [];
+            for (const f of (Array.isArray(fields) ? fields : [])) {
+                const k = String(f?.key || '');
+                const lower = k.toLowerCase();
+                if (!lower) continue;
+                if (seenLower.has(lower)) continue;
+                seenLower.add(lower);
+                out.push(f);
+            }
+            return out;
+        };
 
         // Merge: system base + stored overrides for same key (both custom and system-typed docs are stored in ModuleDefinition)
         const merged = [];
@@ -999,7 +1218,26 @@ exports.listModules = async (req, res) => {
             const override = customByKey.get(sys.key);
             if (override) {
                 // Respect saved order from override; append any base fields not present, in base order
-                const saved = Array.isArray(override.fields) ? [...override.fields] : [];
+                // Remove legacy/deprecated fields from saved overrides to prevent "ghost" fields reappearing.
+                // (Even if they exist in the DB config, we treat them as removed from the product.)
+                const deprecatedEventAliasKeys = new Set(['relatedorg', 'relatedorgid', 'relatedorganization']);
+                let saved = (Array.isArray(override.fields) ? [...override.fields] : [])
+                    .filter(f => {
+                        const k = String(f?.key || '').toLowerCase();
+                        if (k === 'correctiveactionowners') return false;
+                        // Remove legacy/alias event field keys that should not exist in UI config
+                        if (sys.key === 'events' && deprecatedEventAliasKeys.has(k)) return false;
+                        return true;
+                    });
+
+                // Normalize + dedupe Event system fields so key variants don't create duplicate fields in UI
+                if (sys.key === 'events') {
+                    saved = saved.map(f => {
+                        if (!f || !f.key) return f;
+                        return { ...f, key: normalizeEventFieldKey(f.key) };
+                    });
+                    saved = dedupeFieldsByKey(saved);
+                }
                 saved.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
                 const seen = new Set(saved.map(f => f.key));
                 
@@ -1038,13 +1276,30 @@ exports.listModules = async (req, res) => {
                         }
                         // Update required from base (schema is source of truth for system modules)
                         savedField.required = baseField.required;
-                        // Use base label if it's better (e.g., "Event Owner" vs "Event Owner Id")
-                        if (baseField.label && (
-                            !savedField.label || 
-                            savedField.label.toLowerCase() === 'event owner id' ||
-                            savedField.label.toLowerCase() === 'eventownerid'
-                        )) {
-                            savedField.label = baseField.label;
+                        // Use base label if saved label is empty or is a technical/internal default.
+                        // This prevents exposing keys like relatedToId/linkedFormId in the UI.
+                        if (baseField.label) {
+                            const savedLabelLower = String(savedField.label || '').toLowerCase().trim();
+                            const isTechnicalDefault = [
+                                'event owner id',
+                                'eventownerid',
+                                'linked form id',
+                                'linkedformid',
+                                'related to id',
+                                'relatedtoid',
+                                'form id',
+                                'formid',
+                                'organization id',
+                                'organizationid'
+                            ].includes(savedLabelLower);
+                            if (!savedField.label || isTechnicalDefault) {
+                                savedField.label = baseField.label;
+                            }
+                        }
+
+                        // Carry base placeholder (used as helper text for Lookup fields) if none is configured.
+                        if (baseField.placeholder && !savedField.placeholder) {
+                            savedField.placeholder = baseField.placeholder;
                         }
                         // Always use base lookupSettings if available (base is source of truth for system modules)
                         if (baseField.lookupSettings) {
@@ -1052,7 +1307,39 @@ exports.listModules = async (req, res) => {
                         }
                         // Always use base dependencies if available (base is source of truth for system modules)
                         if (baseField.dependencies && Array.isArray(baseField.dependencies) && baseField.dependencies.length > 0) {
-                            savedField.dependencies = JSON.parse(JSON.stringify(baseField.dependencies));
+                            // Respect saved dependency configuration if present (Settings → Modules & Fields → Field Dependencies).
+                            // Only default to base dependencies when none are configured.
+                            const hasSavedDeps = Array.isArray(savedField.dependencies) && savedField.dependencies.length > 0;
+                            if (!hasSavedDeps) {
+                                savedField.dependencies = JSON.parse(JSON.stringify(baseField.dependencies));
+                            }
+                        }
+
+                        // Enforce enterprise audit UX: hide eventOwnerId for audit event types (even if org has older saved deps)
+                        if (sys.key === 'events' && savedField.key === 'eventOwnerId') {
+                            const deps = Array.isArray(savedField.dependencies) ? savedField.dependencies : [];
+
+                            // Remove any legacy label override that rebrands eventOwnerId as "Auditor"
+                            const cleaned = deps.filter(d => !(d && d.type === 'label' && String(d.labelValue || '').toLowerCase() === 'auditor'));
+
+                            const hasHideForAudits = cleaned.some(d =>
+                                d.type === 'visibility' &&
+                                d.fieldKey === 'eventType' &&
+                                d.operator === 'not_in'
+                            );
+
+                            if (!hasHideForAudits) {
+                                cleaned.push({
+                                    name: 'Show only for non-audit event types',
+                                    type: 'visibility',
+                                    fieldKey: 'eventType',
+                                    operator: 'not_in',
+                                    value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                                    logic: 'AND'
+                                });
+                            }
+
+                            savedField.dependencies = cleaned;
                         }
                         // For linkedFormId in events module, ensure visibility dependency exists (backward compatibility check)
                         if (sys.key === 'events' && savedField.key === 'linkedFormId') {
@@ -1067,6 +1354,53 @@ exports.listModules = async (req, res) => {
                                     fieldKey: 'eventType',
                                     operator: 'in',
                                     value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                                    logic: 'AND'
+                                });
+                            }
+                        }
+
+                        // For allowSelfReview in events module, ensure audit-only visibility dependency exists by default
+                        if (sys.key === 'events' && savedField.key === 'allowSelfReview') {
+                            const hasVisibilityDep = savedField.dependencies && savedField.dependencies.some(
+                                dep => dep.type === 'visibility' && dep.fieldKey === 'eventType'
+                            );
+                            if (!hasVisibilityDep) {
+                                if (!savedField.dependencies) savedField.dependencies = [];
+                                savedField.dependencies.push({
+                                    name: 'Show for audit event types',
+                                    type: 'visibility',
+                                    fieldKey: 'eventType',
+                                    operator: 'in',
+                                    value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                                    logic: 'AND'
+                                });
+                            }
+                        }
+
+                        // For reviewerId in events module, ensure audit-only visibility + required dependencies exist by default
+                        if (sys.key === 'events' && savedField.key === 'reviewerId') {
+                            const deps = Array.isArray(savedField.dependencies) ? savedField.dependencies : [];
+                            const hasVisibilityDep = deps.some(dep => dep.type === 'visibility' && dep.fieldKey === 'eventType');
+                            const hasRequiredDep = deps.some(dep => dep.type === 'required' && dep.fieldKey === 'eventType');
+                        if (!hasVisibilityDep) {
+                                if (!savedField.dependencies) savedField.dependencies = [];
+                                savedField.dependencies.push({
+                                    name: 'Show for audit event types',
+                                    type: 'visibility',
+                                    fieldKey: 'eventType',
+                                    operator: 'in',
+                                value: ['Internal Audit', 'External Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                                    logic: 'AND'
+                                });
+                            }
+                            if (!hasRequiredDep) {
+                                if (!savedField.dependencies) savedField.dependencies = [];
+                                savedField.dependencies.push({
+                                    name: 'Required for audit event types',
+                                    type: 'required',
+                                    fieldKey: 'eventType',
+                                    operator: 'in',
+                                value: ['Internal Audit', 'External Audit', 'External Audit — Single Org', 'External Audit Beat'],
                                     logic: 'AND'
                                 });
                             }
@@ -1091,6 +1425,16 @@ exports.listModules = async (req, res) => {
                                 logic: 'AND'
                             }];
                         }
+                        if (sys.key === 'events' && baseField.key === 'allowSelfReview' && (!fieldToAdd.dependencies || fieldToAdd.dependencies.length === 0)) {
+                            fieldToAdd.dependencies = [{
+                                name: 'Show for audit event types',
+                                type: 'visibility',
+                                fieldKey: 'eventType',
+                                operator: 'in',
+                                value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                                logic: 'AND'
+                            }];
+                        }
                         saved.push(fieldToAdd);
                     }
                 }
@@ -1104,17 +1448,187 @@ exports.listModules = async (req, res) => {
                     }
                     pipelineSettings = normalizePipelineSettings(pipelineSettings);
                 }
-                // Use override quickCreate if it exists and has sufficient fields, otherwise use default
+                // Use override quickCreate if it exists (even if empty array - that's a valid saved state)
                 // For Events module, ensure quickCreate has at least the essential fields
-                // Use override quickCreate if present, otherwise use saved quickCreate, otherwise empty array
+                // Use override quickCreate if present (check for undefined/null, not falsy), otherwise use saved quickCreate, otherwise empty array
                 // NO hardcoding - all configuration comes from the module definition saved in database
-                let finalQuickCreate = override.quickCreate || sys.quickCreate || [];
+                let finalQuickCreate = (override.quickCreate !== undefined && override.quickCreate !== null) 
+                    ? override.quickCreate 
+                    : (sys.quickCreate || []);
+                let finalQuickCreateLayout = override.quickCreateLayout || { version: 1, rows: [] };
+
+                // Events Quick Create defaults:
+                // If quickCreate is empty / underconfigured, the create drawer will not show optional-but-important audit controls
+                // like allowSelfReview (even though it's dependency-gated to audit event types).
+                // We treat very short quickCreate arrays as "not configured yet" and apply a sensible default.
+                if (sys.key === 'events') {
+                    // Normalize quickCreate keys so variants don't appear twice (e.g. linkedformid vs linked-form-id)
+                    if (Array.isArray(finalQuickCreate)) {
+                        const normalized = finalQuickCreate
+                            .map(k => normalizeEventFieldKey(k))
+                            .filter(Boolean);
+                        // case-insensitive dedupe while preserving order
+                        const seenQc = new Set();
+                        finalQuickCreate = normalized.filter(k => {
+                            const low = String(k).toLowerCase();
+                            if (!low || seenQc.has(low)) return false;
+                            seenQc.add(low);
+                            return true;
+                        });
+                    }
+
+                    // Normalize quickCreateLayout field keys
+                    if (finalQuickCreateLayout && Array.isArray(finalQuickCreateLayout.rows)) {
+                        const rows = finalQuickCreateLayout.rows.map(r => {
+                            if (!r || !Array.isArray(r.cols)) return r;
+                            return {
+                                ...r,
+                                cols: r.cols.map(c => ({
+                                    ...c,
+                                    fieldKey: normalizeEventFieldKey(c?.fieldKey)
+                                }))
+                            };
+                        });
+                        finalQuickCreateLayout = { ...(finalQuickCreateLayout || { version: 1 }), rows };
+                    }
+
+                    const eventsDefaultQuickCreate = [
+                        'eventName',
+                        'eventType',
+                        'eventOwnerId',
+                        'geoRequired',
+                        'startDateTime',
+                        'endDateTime',
+                        'location',
+                        // Audit-related (dependency-gated)
+                        'relatedToId',
+                        'linkedFormId',
+                        'auditorId',
+                        'reviewerId',
+                        'correctiveOwnerId',
+                        'allowSelfReview'
+                    ];
+
+                    const qc = Array.isArray(finalQuickCreate) ? finalQuickCreate.filter(Boolean) : [];
+                    const isUnderConfigured = qc.length < 5;
+                    // Also upgrade known legacy defaults that predate audit-only quick-create fields.
+                    // This keeps "default behavior" working (field shows up) without overriding truly customized quickCreate configs.
+                    const qcLower = qc.map(k => String(k).toLowerCase());
+                    const hasCore =
+                        qcLower.includes('eventname') &&
+                        qcLower.includes('eventtype') &&
+                        qcLower.includes('eventownerid') &&
+                        qcLower.includes('startdatetime') &&
+                        qcLower.includes('enddatetime');
+                    const looksLegacy =
+                        hasCore &&
+                        (qcLower.includes('status') || qcLower.includes('agendanotes')) &&
+                        !qcLower.includes('linkedformid') &&
+                        !qcLower.includes('relatedtoid') &&
+                        !qcLower.includes('allowselfreview');
+
+                    if (isUnderConfigured || looksLegacy) {
+                        finalQuickCreate = eventsDefaultQuickCreate;
+                    } else {
+                        // If the org is using simple quickCreate mode (no advanced layout),
+                        // ensure allowSelfReview + reviewerId are present so the fields can appear when dependency-visible.
+                        // NOTE: This affects only the quickCreate list returned by /modules; admins can still manage layout via Settings.
+                        const hasAdvancedLayout = !!(finalQuickCreateLayout && Array.isArray(finalQuickCreateLayout.rows) && finalQuickCreateLayout.rows.length > 0);
+                        if (!hasAdvancedLayout) {
+                            const qc2 = Array.isArray(finalQuickCreate) ? [...finalQuickCreate] : [];
+                            const hasGeo = qc2.some(k => String(k).toLowerCase() === 'georequired');
+                            const hasAllow = qc2.some(k => String(k).toLowerCase() === 'allowselfreview');
+                            const hasReviewer = qc2.some(k => String(k).toLowerCase() === 'reviewerid');
+                            const hasAuditor = qc2.some(k => String(k).toLowerCase() === 'auditorid');
+                            const hasCorrectiveOwner = qc2.some(k => String(k).toLowerCase() === 'correctiveownerid');
+                            if (!hasGeo) qc2.push('geoRequired');
+                            if (!hasAllow) qc2.push('allowSelfReview');
+                            if (!hasReviewer) qc2.push('reviewerId');
+                            if (!hasAuditor) qc2.push('auditorId');
+                            if (!hasCorrectiveOwner) qc2.push('correctiveOwnerId');
+                            finalQuickCreate = qc2;
+                        }
+                    }
+
+                    // If org uses advanced quickCreateLayout mode, the create drawer renders ONLY the layout rows.
+                    // Ensure audit-role fields are present in the layout so they can show when dependency-visible.
+                    const hasAdvancedLayout = !!(finalQuickCreateLayout && Array.isArray(finalQuickCreateLayout.rows) && finalQuickCreateLayout.rows.length > 0);
+                    if (hasAdvancedLayout) {
+                        const rows = Array.isArray(finalQuickCreateLayout.rows) ? [...finalQuickCreateLayout.rows] : [];
+                        const hasGeoInLayout = rows.some(r =>
+                            Array.isArray(r?.cols) && r.cols.some(c => String(c?.fieldKey || '').toLowerCase() === 'georequired')
+                        );
+                        const hasAllowInLayout = rows.some(r =>
+                            Array.isArray(r?.cols) && r.cols.some(c => String(c?.fieldKey || '').toLowerCase() === 'allowselfreview')
+                        );
+                        const hasReviewerInLayout = rows.some(r =>
+                            Array.isArray(r?.cols) && r.cols.some(c => String(c?.fieldKey || '').toLowerCase() === 'reviewerid')
+                        );
+                        const hasAuditorInLayout = rows.some(r =>
+                            Array.isArray(r?.cols) && r.cols.some(c => String(c?.fieldKey || '').toLowerCase() === 'auditorid')
+                        );
+                        const hasCorrectiveOwnerInLayout = rows.some(r =>
+                            Array.isArray(r?.cols) && r.cols.some(c => String(c?.fieldKey || '').toLowerCase() === 'correctiveownerid')
+                        );
+                        if (!hasGeoInLayout) {
+                            rows.push({
+                                cols: [{
+                                    span: 12,
+                                    fieldKey: 'geoRequired',
+                                    widget: 'input',
+                                    props: {}
+                                }]
+                            });
+                        }
+                        if (!hasAllowInLayout) {
+                            rows.push({
+                                cols: [{
+                                    span: 12,
+                                    fieldKey: 'allowSelfReview',
+                                    widget: 'input',
+                                    props: {}
+                                }]
+                            });
+                        }
+                        if (!hasReviewerInLayout) {
+                            rows.push({
+                                cols: [{
+                                    span: 12,
+                                    fieldKey: 'reviewerId',
+                                    widget: 'input',
+                                    props: {}
+                                }]
+                            });
+                        }
+                        if (!hasAuditorInLayout) {
+                            rows.push({
+                                cols: [{
+                                    span: 12,
+                                    fieldKey: 'auditorId',
+                                    widget: 'input',
+                                    props: {}
+                                }]
+                            });
+                        }
+                        if (!hasCorrectiveOwnerInLayout) {
+                            rows.push({
+                                cols: [{
+                                    span: 12,
+                                    fieldKey: 'correctiveOwnerId',
+                                    widget: 'input',
+                                    props: {}
+                                }]
+                            });
+                        }
+                        finalQuickCreateLayout = { ...(finalQuickCreateLayout || { version: 1 }), rows };
+                    }
+                }
                 
                 merged.push({ 
                     ...sys, 
                     fields: saved,
                     quickCreate: finalQuickCreate,
-                    quickCreateLayout: override.quickCreateLayout || { version: 1, rows: [] },
+                    quickCreateLayout: finalQuickCreateLayout,
                     relationships: override.relationships !== undefined ? override.relationships : (sys.relationships || []),
                     name: override.name || sys.name,
                     enabled: override.enabled !== undefined ? override.enabled : sys.enabled,
@@ -1124,10 +1638,32 @@ exports.listModules = async (req, res) => {
             } else {
                 // No overrides; ensure base fields have stable order by index
                 const withOrder = sys.fields.map((f, i) => ({ ...f, order: i }));
+
+                // Provide sensible defaults for system modules that rely on quick create UI.
+                // For Events, include allowSelfReview so it shows up in the create drawer when dependency-visible.
+                let defaultQuickCreate = [];
+                if (sys.key === 'events') {
+                    defaultQuickCreate = [
+                        'eventName',
+                        'eventType',
+                        'eventOwnerId',
+                        'geoRequired',
+                        'startDateTime',
+                        'endDateTime',
+                        'location',
+                        'relatedToId',
+                        'linkedFormId',
+                        'auditorId',
+                        'reviewerId',
+                        'correctiveOwnerId',
+                        'allowSelfReview'
+                    ];
+                }
+
                 merged.push({ 
                     ...sys, 
                     fields: withOrder,
-                    quickCreate: [],
+                    quickCreate: defaultQuickCreate,
                     quickCreateLayout: { version: 1, rows: [] },
                     relationships: sys.relationships || [],
                     pipelineSettings: sys.key === 'deals'
@@ -1258,6 +1794,7 @@ exports.updateModule = async (req, res) => {
         if (!mod) return res.status(404).json({ success: false, message: 'Module not found' });
 
         const { name, enabled, fields, relationships, quickCreate, quickCreateLayout, pipelineSettings } = req.body;
+        const deprecatedEventAliasKeys = new Set(['relatedorg', 'relatedorgid', 'relatedorganization']);
         
         console.log('🔵 updateModule called:', {
             moduleId: id,
@@ -1273,7 +1810,13 @@ exports.updateModule = async (req, res) => {
         
         if (name !== undefined) mod.name = String(name).trim();
         if (enabled !== undefined) mod.enabled = !!enabled;
-        if (Array.isArray(fields)) mod.fields = fields;
+        if (Array.isArray(fields)) {
+            // Events: strip deprecated/alias fields from saved config
+            const sanitizedFields = (mod.key === 'events')
+                ? fields.filter(f => !deprecatedEventAliasKeys.has(String(f?.key || '').toLowerCase()))
+                : fields;
+            mod.fields = sanitizedFields;
+        }
         
         // Always update relationships if provided (even if empty array)
         if (relationships !== undefined) {
@@ -1289,7 +1832,10 @@ exports.updateModule = async (req, res) => {
         
         // Always update quickCreate if provided (even if empty array)
         if (quickCreate !== undefined) {
-            const newQuickCreate = Array.isArray(quickCreate) ? quickCreate : [];
+            let newQuickCreate = Array.isArray(quickCreate) ? quickCreate : [];
+            if (mod.key === 'events') {
+                newQuickCreate = newQuickCreate.filter(k => !deprecatedEventAliasKeys.has(String(k || '').toLowerCase()));
+            }
             console.log('📝 Setting quickCreate:', {
                 from: mod.quickCreate,
                 to: newQuickCreate,
@@ -1301,9 +1847,23 @@ exports.updateModule = async (req, res) => {
         
         // Always update quickCreateLayout if provided
         if (quickCreateLayout !== undefined) {
-            const newLayout = (quickCreateLayout && typeof quickCreateLayout === 'object') 
+            let newLayout = (quickCreateLayout && typeof quickCreateLayout === 'object') 
                 ? quickCreateLayout 
                 : { version: 1, rows: [] };
+            if (mod.key === 'events' && newLayout && Array.isArray(newLayout.rows)) {
+                // Remove deprecated/alias fields from layout cols and drop empty rows
+                newLayout = {
+                    ...newLayout,
+                    rows: newLayout.rows
+                        .map(r => ({
+                            ...r,
+                            cols: Array.isArray(r?.cols)
+                                ? r.cols.filter(c => !deprecatedEventAliasKeys.has(String(c?.fieldKey || '').toLowerCase()))
+                                : r?.cols
+                        }))
+                        .filter(r => Array.isArray(r?.cols) ? r.cols.length > 0 : true)
+                };
+            }
             console.log('📝 Setting quickCreateLayout:', {
                 from: mod.quickCreateLayout,
                 to: newLayout,
@@ -1407,6 +1967,7 @@ exports.updateSystemModule = async (req, res) => {
         const systemKeys = new Set(['people','organizations','deals','tasks','events','forms','items','imports','reports']);
         if (!systemKeys.has(key)) return res.status(400).json({ success: false, message: 'Invalid system module key' });
         const { fields, enabled, name, relationships, quickCreate, quickCreateLayout, pipelineSettings } = req.body;
+        const deprecatedEventAliasKeys = new Set(['relatedorg', 'relatedorgid', 'relatedorganization']);
         
         console.log('🔵 updateSystemModule called:', {
             moduleKey: key,
@@ -1427,7 +1988,11 @@ exports.updateSystemModule = async (req, res) => {
         
         if (name !== undefined) updateObj.name = String(name).trim();
         if (enabled !== undefined) updateObj.enabled = !!enabled;
-        if (Array.isArray(fields)) updateObj.fields = fields;
+        if (Array.isArray(fields)) {
+            updateObj.fields = (key === 'events')
+                ? fields.filter(f => !deprecatedEventAliasKeys.has(String(f?.key || '').toLowerCase()))
+                : fields;
+        }
         if (Array.isArray(relationships)) updateObj.relationships = relationships;
         if (pipelineSettings !== undefined) {
             const pipelineValue = Array.isArray(pipelineSettings) ? pipelineSettings : [];
@@ -1438,7 +2003,11 @@ exports.updateSystemModule = async (req, res) => {
         
         // Always update quickCreate if provided (even if empty array)
         if (quickCreate !== undefined) {
-            updateObj.quickCreate = Array.isArray(quickCreate) ? quickCreate : [];
+            let qc = Array.isArray(quickCreate) ? quickCreate : [];
+            if (key === 'events') {
+                qc = qc.filter(k => !deprecatedEventAliasKeys.has(String(k || '').toLowerCase()));
+            }
+            updateObj.quickCreate = qc;
             console.log('📝 Setting quickCreate in updateObj:', {
                 value: updateObj.quickCreate,
                 length: updateObj.quickCreate.length,
@@ -1449,9 +2018,23 @@ exports.updateSystemModule = async (req, res) => {
         
         // Always update quickCreateLayout if provided
         if (quickCreateLayout !== undefined) {
-            updateObj.quickCreateLayout = (quickCreateLayout && typeof quickCreateLayout === 'object') 
+            let layout = (quickCreateLayout && typeof quickCreateLayout === 'object') 
                 ? quickCreateLayout 
                 : { version: 1, rows: [] };
+            if (key === 'events' && layout && Array.isArray(layout.rows)) {
+                layout = {
+                    ...layout,
+                    rows: layout.rows
+                        .map(r => ({
+                            ...r,
+                            cols: Array.isArray(r?.cols)
+                                ? r.cols.filter(c => !deprecatedEventAliasKeys.has(String(c?.fieldKey || '').toLowerCase()))
+                                : r?.cols
+                        }))
+                        .filter(r => Array.isArray(r?.cols) ? r.cols.length > 0 : true)
+                };
+            }
+            updateObj.quickCreateLayout = layout;
             console.log('📝 Setting quickCreateLayout in updateObj:', {
                 version: updateObj.quickCreateLayout?.version,
                 rows: updateObj.quickCreateLayout?.rows?.length || 0,

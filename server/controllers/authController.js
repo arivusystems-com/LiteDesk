@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const Organization = require('../models/Organization');
 const Role = require('../models/Role');
+const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const updatePeopleModuleFields = require('../scripts/updatePeopleModuleFields');
@@ -393,6 +394,22 @@ exports.loginUser = async (req, res) => {
                     edit: orgUser.roleId.permissions.events?.update || false,
                     delete: orgUser.roleId.permissions.events?.delete || false,
                     viewAll: orgUser.roleId.permissions.events?.viewAll || false
+                },
+                forms: {
+                    view: orgUser.roleId.permissions.forms?.read || false,
+                    create: orgUser.roleId.permissions.forms?.create || false,
+                    edit: orgUser.roleId.permissions.forms?.update || false,
+                    delete: orgUser.roleId.permissions.forms?.delete || false,
+                    viewAll: orgUser.roleId.permissions.forms?.viewAll || false,
+                    exportData: orgUser.roleId.permissions.forms?.export || false
+                },
+                items: {
+                    view: orgUser.roleId.permissions.items?.read || false,
+                    create: orgUser.roleId.permissions.items?.create || false,
+                    edit: orgUser.roleId.permissions.items?.update || false,
+                    delete: orgUser.roleId.permissions.items?.delete || false,
+                    viewAll: orgUser.roleId.permissions.items?.viewAll || false,
+                    exportData: orgUser.roleId.permissions.items?.export || false
                 },
                 imports: {
                     view: orgUser.roleId.permissions.contacts?.import || orgUser.roleId.permissions.deals?.import || false,

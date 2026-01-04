@@ -67,11 +67,11 @@
 
               <!-- Action Details Grid -->
               <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
-                <!-- Assigned User -->
+                <!-- Last Updated By -->
                 <div>
-                  <p class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Assigned To</p>
+                  <p class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Last Updated By</p>
                   <p class="text-sm text-gray-900 dark:text-white">
-                    {{ getAssignedUserName(question.questionId) || 'Unassigned' }}
+                    {{ getLastUpdatedByName(question.questionId) || '—' }}
                   </p>
                 </div>
 
@@ -117,9 +117,9 @@
               </div>
             </div>
 
-            <!-- Edit Button -->
+            <!-- Edit Button (only for corrective action owners) -->
             <button
-              v-if="editingQuestionId !== question.questionId"
+              v-if="canUpdateCorrectiveActions === true && editingQuestionId !== question.questionId"
               @click="startEdit(question.questionId)"
               class="px-3 py-1.5 text-sm text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded transition-colors"
             >
@@ -128,7 +128,10 @@
           </div>
 
           <!-- Add/Edit Corrective Action Form (inline) -->
-          <div v-if="!getCorrectiveAction(question.questionId) || editingQuestionId === question.questionId" class="border-t border-gray-200 dark:border-gray-700 pt-4 space-y-4">
+          <div
+            v-if="canUpdateCorrectiveActions === true && (!getCorrectiveAction(question.questionId) || editingQuestionId === question.questionId)"
+            class="border-t border-gray-200 dark:border-gray-700 pt-4 space-y-4"
+          >
             <div>
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Action Title <span class="text-red-500">*</span>
@@ -152,9 +155,9 @@
                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   required
                 >
-                  <option value="Pending">Open</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Resolved">Completed</option>
+                  <option value="open">Open</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="completed">Completed</option>
                 </select>
               </div>
             </div>
@@ -191,7 +194,7 @@
               <button
                 @click="saveCorrectiveAction(question.questionId)"
                 :disabled="saving || !getCorrectiveActionData(question.questionId).comment.trim()"
-                class="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                class="px-4 py-2 bg-indigo-600 text-white dark:text-white dark:bg-indigo-700 rounded-lg hover:bg-indigo-700 font-medium transition-colors shadow-sm ring-1 ring-black/5 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {{ saving ? 'Saving...' : (getCorrectiveAction(question.questionId) ? 'Update' : 'Add') }} Corrective Action
               </button>
@@ -204,6 +207,24 @@
               </button>
             </div>
           </div>
+
+          <!-- Read-only message for non-owners -->
+          <div
+            v-else-if="canUpdateCorrectiveActions === false"
+            class="border-t border-gray-200 dark:border-gray-700 pt-4"
+          >
+            <p class="text-sm text-gray-600 dark:text-gray-400">
+              This section is read-only. Only users assigned in the event’s <span class="font-medium">Corrective Action Owners</span> can update corrective actions.
+            </p>
+          </div>
+          <div
+            v-else-if="canUpdateCorrectiveActions === null"
+            class="border-t border-gray-200 dark:border-gray-700 pt-4"
+          >
+            <p class="text-sm text-gray-600 dark:text-gray-400">
+              Loading permissions…
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -214,6 +235,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import apiClient from '@/utils/apiClient';
 import BadgeCell from '@/components/common/table/BadgeCell.vue';
+import { useAuthStore } from '@/stores/auth';
 
 const props = defineProps({
   response: {
@@ -233,6 +255,32 @@ const saving = ref(false);
 const editingQuestionId = ref(null);
 const correctiveActions = ref({});
 const isExpanded = ref(false); // Collapsed by default
+
+const authStore = useAuthStore();
+
+// Authorization: only the linked Event.correctiveOwnerId can update corrective actions
+const linkedEvent = computed(() => {
+  if (props.response?.linkedTo?.type !== 'Event') return null;
+  // When populated, this is the full Event doc. Otherwise it's an ObjectId/string.
+  return props.response?.linkedTo?.id || null;
+});
+
+// null = unknown (e.g., linked event not populated yet)
+const canUpdateCorrectiveActions = computed(() => {
+  const currentUserId = authStore.user?._id;
+  if (!currentUserId) return false;
+
+  // If we don't have an expanded linked event doc, we can't reliably determine owners.
+  const isPopulatedEventDoc =
+    linkedEvent.value &&
+    typeof linkedEvent.value === 'object' &&
+    (linkedEvent.value._id || linkedEvent.value.correctiveOwnerId);
+  if (!isPopulatedEventDoc) return null;
+
+  const ownerId = String(linkedEvent.value?.correctiveOwnerId?._id || linkedEvent.value?.correctiveOwnerId || '');
+  if (!ownerId) return false;
+  return ownerId === String(currentUserId);
+});
 
 // Computed
 const failedQuestions = computed(() => {
@@ -276,7 +324,8 @@ const getCorrectiveActionData = (questionId) => {
     const existing = getCorrectiveAction(questionId);
     correctiveActions.value[questionId] = {
       comment: existing?.managerAction?.comment || '',
-      status: existing?.managerAction?.status || 'Pending',
+      // Stored values are enum: open | in_progress | completed
+      status: existing?.managerAction?.status || 'open',
       proofFiles: []
     };
   }
@@ -300,6 +349,11 @@ const formatDate = (date) => {
 
 const mapStatus = (status) => {
   const statusMap = {
+    // Stored enum values
+    'open': 'Open',
+    'in_progress': 'In Progress',
+    'completed': 'Completed',
+    // Legacy UI values (backward compatibility)
     'Pending': 'Open',
     'In Progress': 'In Progress',
     'Resolved': 'Completed'
@@ -307,7 +361,7 @@ const mapStatus = (status) => {
   return statusMap[status] || status;
 };
 
-const getAssignedUserName = (questionId) => {
+const getLastUpdatedByName = (questionId) => {
   const action = getCorrectiveAction(questionId);
   if (!action || !action.managerAction?.addedBy) return null;
   
@@ -363,8 +417,7 @@ const saveCorrectiveAction = async (questionId) => {
       });
     }
 
-    // Use fetch for FormData (apiClient might not handle it properly)
-    const authStore = JSON.parse(localStorage.getItem('auth') || '{}');
+    // Use fetch for FormData (apiClient sets JSON headers; FormData needs custom handling)
     const token = authStore.user?.token;
     
     const response = await fetch(`/api/forms/${props.form._id}/responses/${props.response._id}/corrective-action`, {
@@ -375,7 +428,20 @@ const saveCorrectiveAction = async (questionId) => {
       body: formData
     });
 
-    const result = await response.json();
+    // Some failures return HTML (proxy/error pages). Parse safely.
+    const contentType = response.headers.get('content-type') || '';
+    let result = null;
+    if (contentType.includes('application/json')) {
+      result = await response.json();
+    } else {
+      const text = await response.text();
+      console.error('Non-JSON response received from corrective-action endpoint:', {
+        status: response.status,
+        contentType,
+        bodyPreview: text?.slice(0, 300)
+      });
+      throw new Error(`Server error (${response.status}). Please try again.`);
+    }
 
     if (result.success) {
       editingQuestionId.value = null;
@@ -384,11 +450,11 @@ const saveCorrectiveAction = async (questionId) => {
       // Emit updated event - this will trigger response status recalculation via backend
       emit('updated');
     } else {
-      throw new Error(result.message || 'Failed to save corrective action');
+      throw new Error(result.error || result.message || 'Failed to save corrective action');
     }
   } catch (error) {
     console.error('Error saving corrective action:', error);
-    alert('Failed to save corrective action. Please try again.');
+    alert(error?.message || 'Failed to save corrective action. Please try again.');
   } finally {
     saving.value = false;
   }

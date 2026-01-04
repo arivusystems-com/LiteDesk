@@ -1,12 +1,28 @@
 <template>
   <div>
-    <label 
-      :for="field.key" 
-      class="block text-sm/6 font-medium text-gray-900 dark:text-white"
-    >
-      {{ field.label || field.key }}
-      <span v-if="isRequired" class="text-red-500">*</span>
-    </label>
+    <div class="flex items-start justify-between gap-3">
+      <label 
+        :for="field.key" 
+        class="block text-sm/6 font-medium text-gray-900 dark:text-white"
+      >
+        {{ effectiveLabel }}
+        <span v-if="isRequired" class="text-red-500">*</span>
+      </label>
+
+      <!-- Explicit action only: never auto-assign -->
+      <button
+        v-if="showAssignToMe"
+        type="button"
+        class="text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline whitespace-nowrap"
+        @click="assignReviewerToMe"
+      >
+        Assign to me
+      </button>
+    </div>
+
+    <p v-if="helperText" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+      {{ helperText }}
+    </p>
     
     <!-- Text -->
     <input 
@@ -418,7 +434,7 @@
               <span class="block truncate">{{ getLookupSelectedLabel() }}</span>
             </div>
             <!-- Default placeholder or non-user lookup -->
-            <span v-else :class="['block truncate', !value && 'text-gray-500 dark:text-gray-500']">{{ getLookupSelectedLabel() || (field.placeholder || `Select ${field.label || field.key}`) }}</span>
+            <span v-else :class="['block truncate', !value && 'text-gray-500 dark:text-gray-500']">{{ getLookupSelectedLabel() || `Select ${effectiveLabel}` }}</span>
             <!-- Modal browse button -->
             <button
               type="button"
@@ -732,6 +748,41 @@ const props = defineProps({
 
 const emit = defineEmits(['update:value', 'validation-error', 'blur']);
 
+const effectiveLabel = computed(() => {
+  return props.dependencyState?.label || props.field?.label || props.field?.key || '';
+});
+
+const isAuditRoleLookupField = computed(() => {
+  const key = String(props.field?.key || '').toLowerCase();
+  const isUserLookup = props.field?.lookupSettings?.targetModule === 'users';
+  return isUserLookup && (key === 'auditorid' || key === 'reviewerid' || key === 'correctiveownerid');
+});
+
+const isLookupField = computed(() => {
+  return props.field?.dataType === 'Lookup (Relationship)';
+});
+
+const helperText = computed(() => {
+  const key = String(props.field?.key || '').toLowerCase();
+  if (key === 'auditorid') return 'User responsible for executing the audit.';
+  if (key === 'reviewerid') return 'User responsible for reviewing and approving this audit.';
+  if (key === 'correctiveownerid') return 'User responsible for addressing corrective actions raised in this audit.';
+  // For other Lookup fields, use configured placeholder as helper text (shown under label).
+  if (isLookupField.value && props.field?.placeholder) return String(props.field.placeholder);
+  return '';
+});
+
+const showAssignToMe = computed(() => {
+  // Only show when we have a logged-in user and field is editable
+  return isAuditRoleLookupField.value && !isReadOnly.value && !!authStore.user?._id;
+});
+
+const assignReviewerToMe = () => {
+  if (!authStore.user?._id) return;
+  // Explicit action only; never triggered automatically.
+  emit('update:value', authStore.user._id);
+};
+
 const authStore = useAuthStore();
 const lookupOptions = ref([]);
 const isLoadingUsers = ref(false);
@@ -862,7 +913,8 @@ watch(() => props.value, (newValue) => {
   validateValue(newValue);
 }, { immediate: true });
 
-// Check if this is a user lookup field that should fetch users (assignedTo, accountManager, etc.)
+// Check if this is an "owner/assignee" style user lookup field.
+// These fields may be auto-defaulted to current user (convenience), unlike audit role fields.
 const isAssignedToField = computed(() => {
   const key = props.field.key?.toLowerCase();
   const label = props.field.label?.toLowerCase() || '';
@@ -882,12 +934,7 @@ const isAssignedToField = computed(() => {
       (label.includes('manager') && props.field.lookupSettings?.targetModule === 'users')) {
     return true;
   }
-  
-  // Check if lookup target is users
-  if (props.field.lookupSettings?.targetModule === 'users') {
-    return true;
-  }
-  
+
   return false;
 });
 
@@ -1347,9 +1394,9 @@ const getLookupSelectedLabel = () => {
   return props.value;
 };
 
-// Fetch users for assignedTo field
-const fetchUsers = async () => {
-  if (!isAssignedToField.value) return;
+// Fetch users for any users-lookup field (assignedTo, eventOwnerId, auditorId, reviewerId, etc.)
+const fetchUsers = async ({ autoDefault = false } = {}) => {
+  if (props.field.lookupSettings?.targetModule !== 'users') return;
   
   isLoadingUsers.value = true;
   try {
@@ -1359,13 +1406,19 @@ const fetchUsers = async () => {
     if (response.success && Array.isArray(response.data)) {
       lookupOptions.value = response.data;
       
-      // Set default value to logged-in user if no value exists
-      if (!props.value && authStore.user?._id) {
-        // Check if the logged-in user is in the options list
-        const currentUser = response.data.find(u => u._id === authStore.user._id || u._id?.toString() === authStore.user._id?.toString());
-        if (currentUser) {
-          emit('update:value', currentUser._id);
-        }
+      // Optional: auto-default convenience fields ONLY.
+      // NEVER auto-default audit roles (Auditor/Reviewer/Corrective Owner) — must be explicitly assigned.
+      const keyLower = String(props.field?.key || '').toLowerCase();
+      const canAutoDefault =
+        autoDefault &&
+        !isAuditRoleLookupField.value &&
+        (keyLower === 'assignedto' || keyLower === 'eventownerid' || keyLower === 'accountmanager' || keyLower === 'account_manager');
+
+      if (canAutoDefault && !props.value && authStore.user?._id) {
+        const currentUser = response.data.find(u =>
+          u._id === authStore.user._id || u._id?.toString() === authStore.user._id?.toString()
+        );
+        if (currentUser) emit('update:value', currentUser._id);
       }
     } else {
       console.warn('Unexpected response format from /users/list:', response);
@@ -1384,9 +1437,9 @@ const fetchUsers = async () => {
 const fetchLookupOptions = async () => {
   if (props.field.dataType !== 'Lookup (Relationship)') return;
   
-  // If it's assignedTo, fetch users instead
-  if (isAssignedToField.value) {
-    await fetchUsers();
+  // Users lookup: always use /users/list. Only auto-default for assignee/owner fields (never audit roles).
+  if (props.field.lookupSettings?.targetModule === 'users') {
+    await fetchUsers({ autoDefault: isAssignedToField.value || String(props.field?.key || '').toLowerCase() === 'eventownerid' });
     return;
   }
   
@@ -1437,7 +1490,7 @@ const fetchLookupOptions = async () => {
 
 // Get lookup module name for modal header
 const getLookupModuleName = () => {
-  if (isAssignedToField.value) {
+  if (props.field.lookupSettings?.targetModule === 'users') {
     return 'Users';
   }
   if (props.field.lookupSettings?.targetModule) {

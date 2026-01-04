@@ -22,6 +22,7 @@
           <template v-if="(response.reviewStatus || response.status) === 'Needs Auditor Review'">
             <button
               @click="approveResponse"
+              v-if="canReviewAuditResponse"
               :disabled="!canEditForms"
               class="w-full sm:w-auto px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
             >
@@ -29,11 +30,18 @@
             </button>
             <button
               @click="sendBackForCorrection"
+              v-if="canReviewAuditResponse"
               :disabled="!canEditForms"
               class="w-full sm:w-auto px-4 py-2.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
             >
               Send Back for Correction
             </button>
+            <span
+              v-else
+              class="text-sm text-gray-500 dark:text-gray-400 italic"
+            >
+              Only the assigned reviewer can approve or send back this audit response.
+            </span>
           </template>
 
           <!-- Approved Actions -->
@@ -76,6 +84,46 @@
           <p v-if="response" class="text-sm text-gray-600 dark:text-gray-400 mt-1">
             Submitted {{ formatDate(response.submittedAt) }}
           </p>
+          <div v-if="linkedEvent" class="mt-2 space-y-1 text-sm text-gray-700 dark:text-gray-300">
+            <div v-if="linkedEvent.auditorId" class="flex items-center gap-2">
+              <span class="font-medium">Auditor:</span>
+              <a
+                v-if="linkedEvent.auditorId?.email"
+                :href="`mailto:${linkedEvent.auditorId.email}`"
+                class="text-indigo-600 dark:text-indigo-400 hover:underline"
+                :title="linkedEvent.auditorId.email"
+              >
+                {{ formatUserName(linkedEvent.auditorId) }}
+              </a>
+              <span v-else>{{ formatUserName(linkedEvent.auditorId) }}</span>
+            </div>
+
+            <div v-if="linkedEvent.reviewerId" class="flex items-center gap-2">
+              <span class="font-medium">Reviewer:</span>
+              <a
+                v-if="linkedEvent.reviewerId?.email"
+                :href="`mailto:${linkedEvent.reviewerId.email}`"
+                class="text-indigo-600 dark:text-indigo-400 hover:underline"
+                :title="linkedEvent.reviewerId.email"
+              >
+                {{ formatUserName(linkedEvent.reviewerId) }}
+              </a>
+              <span v-else>{{ formatUserName(linkedEvent.reviewerId) }}</span>
+            </div>
+
+            <div v-if="linkedEvent.correctiveOwnerId" class="flex items-center gap-2">
+              <span class="font-medium">Corrective Owner:</span>
+              <a
+                v-if="linkedEvent.correctiveOwnerId?.email"
+                :href="`mailto:${linkedEvent.correctiveOwnerId.email}`"
+                class="text-indigo-600 dark:text-indigo-400 hover:underline"
+                :title="linkedEvent.correctiveOwnerId.email"
+              >
+                {{ formatUserName(linkedEvent.correctiveOwnerId) }}
+              </a>
+              <span v-else>{{ formatUserName(linkedEvent.correctiveOwnerId) }}</span>
+            </div>
+          </div>
         </div>
         <div class="flex items-center gap-2">
           <BadgeCell 
@@ -90,6 +138,13 @@
               'Closed': 'default'
             }"
           />
+          <span
+            v-if="response?.selfReviewed === true"
+            class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600"
+            title="This audit was reviewed by the same user who conducted it."
+          >
+            Self-Reviewed Audit
+          </span>
         </div>
       </div>
 
@@ -428,6 +483,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
 import BadgeCell from '@/components/common/table/BadgeCell.vue';
 import CorrectiveActionPanel from '@/components/forms/CorrectiveActionPanel.vue';
@@ -438,6 +494,7 @@ import FormComparisonView from '@/components/forms/FormComparisonView.vue';
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+const { activeTabId, updateTabTitle } = useTabs();
 
 // Props
 const formId = computed(() => route.params.id);
@@ -448,6 +505,7 @@ const loading = ref(true);
 const error = ref(null);
 const form = ref(null);
 const response = ref(null);
+const linkedEvent = ref(null);
 const previousResponse = ref(null);
 const showTooltip = ref(null);
 const activeSectionId = ref('');
@@ -456,6 +514,32 @@ const observer = ref(null);
 
 // Permissions
 const canEditForms = computed(() => authStore.can('forms', 'edit'));
+
+// Audit approval permissions: only the assigned reviewer can approve/reject.
+const currentUserId = computed(() => authStore.user?._id || null);
+const reviewerId = computed(() => {
+  const r = linkedEvent.value?.reviewerId;
+  return (r && typeof r === 'object') ? (r._id || r.id) : r;
+});
+const submittedById = computed(() => {
+  const s = response.value?.submittedBy;
+  return (s && typeof s === 'object') ? (s._id || s.id) : s;
+});
+const isAssignedReviewer = computed(() => {
+  if (!currentUserId.value || !reviewerId.value) return false;
+  return String(currentUserId.value) === String(reviewerId.value);
+});
+const selfReviewBlocked = computed(() => {
+  if (!currentUserId.value || !submittedById.value) return false;
+  const isSelfReview = String(currentUserId.value) === String(submittedById.value);
+  const allow = linkedEvent.value?.allowSelfReview === true;
+  return isSelfReview && !allow;
+});
+const canReviewAuditResponse = computed(() => {
+  // If we don't have the linked event yet, be conservative and hide actions.
+  if (!linkedEvent.value) return false;
+  return isAssignedReviewer.value && !selfReviewBlocked.value;
+});
 
 // Check if response can be closed (all corrective actions must be completed)
 const canCloseResponse = computed(() => {
@@ -518,6 +602,52 @@ const fetchResponse = async () => {
     const result = await apiClient(`/forms/${formId.value}/responses/${responseId.value}`, { method: 'GET' });
     if (result.success) {
       response.value = result.data.data || result.data;
+
+      const setResponseTabTitle = () => {
+        const tabId = activeTabId.value;
+        if (!tabId) return;
+
+        const displayResponseId = response.value?.responseId || responseId.value;
+        const eventName =
+          linkedEvent.value?.eventName ||
+          linkedEvent.value?.name ||
+          null;
+
+        if (displayResponseId && eventName) {
+          updateTabTitle(tabId, `${displayResponseId} · ${eventName}`);
+          return;
+        }
+
+        // Fallback while linked event is still loading
+        if (displayResponseId) {
+          updateTabTitle(tabId, `${displayResponseId} · Response`);
+        }
+      };
+
+      // Set a good initial title immediately, then refine once linkedEvent is fetched.
+      setResponseTabTitle();
+
+      // Fetch linked event (for Reviewer display + audit context)
+      linkedEvent.value = null;
+      if (response.value?.linkedTo?.type === 'Event' && response.value?.linkedTo?.id) {
+        try {
+          const rawLinkedId = response.value.linkedTo.id;
+          const linkedEventId =
+            (rawLinkedId && typeof rawLinkedId === 'object')
+              ? (rawLinkedId._id || rawLinkedId.eventId || rawLinkedId.id)
+              : rawLinkedId;
+
+          if (linkedEventId) {
+            const ev = await apiClient(`/events/${linkedEventId}`, { method: 'GET' });
+            if (ev.success) {
+              linkedEvent.value = ev.data;
+              setResponseTabTitle();
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to fetch linked event:', e);
+        }
+      }
       
       // Fetch previous response if available
       if (result.data.data?.finalReport?.previousResponseId) {
@@ -539,6 +669,18 @@ const fetchResponse = async () => {
   } finally {
     loading.value = false;
   }
+};
+
+const formatUserName = (user) => {
+  if (!user) return '';
+  // populated user
+  if (typeof user === 'object') {
+    const first = user.firstName || '';
+    const last = user.lastName || '';
+    const name = `${first} ${last}`.trim();
+    return name || user.email || user._id || '';
+  }
+  return String(user);
 };
 
 const getQuestionResponse = (questionId) => {
@@ -603,11 +745,14 @@ const approveResponse = async () => {
 
     if (result.success) {
       await fetchResponse();
-      router.push(`/forms/${formId.value}/responses`);
+      // Stay on the same response detail record; just refresh state in-place.
+      alert(result.message || 'Response approved.');
+    } else {
+      alert(result.message || 'Failed to approve response.');
     }
   } catch (err) {
     console.error('Error approving response:', err);
-    alert('Failed to approve response. Please try again.');
+    alert(err?.message || 'Failed to approve response. Please try again.');
   }
 };
 
@@ -623,7 +768,8 @@ const rejectResponse = async () => {
 
     if (result.success) {
       await fetchResponse();
-      router.push(`/forms/${formId.value}/responses`);
+      // Stay on the same response detail record; just refresh state in-place.
+      alert(result.message || 'Response rejected.');
     }
   } catch (err) {
     console.error('Error rejecting response:', err);

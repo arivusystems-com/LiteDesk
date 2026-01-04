@@ -596,6 +596,7 @@
                             <option value="required">Required</option>
                             <option value="picklist">Picklist Options Filter</option>
                             <option value="popup">Popup Modal</option>
+                            <option value="label">Label Override</option>
                           </select>
                         </div>
                       </div>
@@ -833,6 +834,19 @@
                             </label>
                           </div>
                         </div>
+                      </div>
+
+                      <!-- Label override settings -->
+                      <div v-if="d.type === 'label'" class="border-t border-gray-200 dark:border-white/10 pt-3">
+                        <label class="block text-xs text-gray-600 dark:text-gray-400 mb-2">Label to Display</label>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                          Override this field’s label when the conditions are met.
+                        </p>
+                        <input
+                          v-model="d.labelValue"
+                          placeholder="e.g., Auditor"
+                          class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm"
+                        />
                       </div>
                     </div>
                   </div>
@@ -5403,17 +5417,42 @@ async function saveQuickCreate() {
   isSavingQuickCreate.value = true;
   try {
     const url = mod.type === 'system' ? `/api/modules/system/${mod.key}` : `/api/modules/${mod._id}`;
-    const orderedKeys = orderedQuickCreate.value.map(f => f.key);
+    const orderedKeys = orderedQuickCreate.value.map(f => f.key).filter(key => key);
+    
+    // Also include any keys from quickCreateSelected that might not be in orderedQuickCreate
+    // This handles cases where a field is selected but not yet in the order
+    const selectedKeys = Array.from(quickCreateSelected.value);
+    const allKeys = quickMode.value === 'simple' 
+      ? Array.from(new Set([...orderedKeys, ...selectedKeys])).filter(key => {
+          // Verify the key exists in editFields
+          const exists = editFields.value.some(f => f.key === key);
+          if (!exists) {
+            console.warn(`⚠️  Key "${key}" in quickCreateSelected but not in editFields, excluding from save`);
+          }
+          return exists;
+        })
+      : selectedKeys.filter(key => {
+          const exists = editFields.value.some(f => f.key === key);
+          if (!exists) {
+            console.warn(`⚠️  Key "${key}" in quickCreateSelected but not in editFields, excluding from save`);
+          }
+          return exists;
+        });
+    
     const payload = {
-      quickCreate: quickMode.value === 'simple' ? orderedKeys : Array.from(quickCreateSelected.value),
+      quickCreate: allKeys,
       quickCreateLayout: quickMode.value === 'advanced' ? quickLayout.value : { version: 1, rows: [] }
     };
     
     console.log('Saving Quick Create:', {
       module: mod.key,
       mode: quickMode.value,
+      orderedKeys: orderedKeys,
+      selectedKeys: selectedKeys,
+      allKeys: allKeys,
       quickCreate: payload.quickCreate,
       quickCreateLayout: payload.quickCreateLayout,
+      editFieldsKeys: editFields.value.map(f => f.key).slice(0, 10),
       payload
     });
     
@@ -5431,15 +5470,41 @@ async function saveQuickCreate() {
     
     console.log('Quick Create saved successfully:', {
       quickCreate: data.data?.quickCreate,
-      quickCreateLayout: data.data?.quickCreateLayout
+      quickCreateLayout: data.data?.quickCreateLayout,
+      savedPayload: payload.quickCreate
     });
     // cache selection locally for resilience
     try {
       localStorage.setItem(`litedesk-modfields-quick-${mod.key}`, JSON.stringify(payload.quickCreate));
     } catch (e) {}
+    
+    // Refresh modules to get the latest data from server
     await fetchModules();
+    
+    // Find the updated module and verify quickCreate was saved
     const updated = modules.value.find(m => m.key === mod.key);
-    if (updated) selectModule(updated, editFields.value[selectedFieldIdx.value]?.key || null);
+    if (updated) {
+      console.log('Module after refresh:', {
+        key: updated.key,
+        quickCreate: updated.quickCreate,
+        quickCreateLength: updated.quickCreate?.length || 0,
+        expectedLength: payload.quickCreate.length
+      });
+      
+      // Verify the saved quickCreate matches what we sent
+      if (updated.quickCreate && Array.isArray(updated.quickCreate) && updated.quickCreate.length !== payload.quickCreate.length) {
+        console.warn('⚠️  QuickCreate length mismatch after save:', {
+          saved: payload.quickCreate.length,
+          loaded: updated.quickCreate.length,
+          savedKeys: payload.quickCreate,
+          loadedKeys: updated.quickCreate
+        });
+      }
+      
+      selectModule(updated, editFields.value[selectedFieldIdx.value]?.key || null);
+    } else {
+      console.error('❌ Updated module not found after refresh');
+    }
     quickOriginalSnapshot.value = getQuickSnapshot();
   } catch (e) {
     console.error('Save quick create failed', e);

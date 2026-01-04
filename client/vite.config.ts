@@ -8,6 +8,8 @@ import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Avoid writing cache under node_modules (can fail on some setups with restricted permissions)
+  cacheDir: '.vite',
   plugins: [
     vue(),
     vueDevTools(),

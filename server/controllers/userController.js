@@ -570,6 +570,22 @@ exports.getProfile = async (req, res) => {
                     delete: user.roleId.permissions.events?.delete || false,
                     viewAll: user.roleId.permissions.events?.viewAll || false
                 },
+                forms: {
+                    view: user.roleId.permissions.forms?.read || false,
+                    create: user.roleId.permissions.forms?.create || false,
+                    edit: user.roleId.permissions.forms?.update || false,
+                    delete: user.roleId.permissions.forms?.delete || false,
+                    viewAll: user.roleId.permissions.forms?.viewAll || false,
+                    exportData: user.roleId.permissions.forms?.export || false
+                },
+                items: {
+                    view: user.roleId.permissions.items?.read || false,
+                    create: user.roleId.permissions.items?.create || false,
+                    edit: user.roleId.permissions.items?.update || false,
+                    delete: user.roleId.permissions.items?.delete || false,
+                    viewAll: user.roleId.permissions.items?.viewAll || false,
+                    exportData: user.roleId.permissions.items?.export || false
+                },
                 imports: {
                     view: user.roleId.permissions.contacts?.import || user.roleId.permissions.deals?.import || false,
                     create: user.roleId.permissions.contacts?.import || user.roleId.permissions.deals?.import || false,
@@ -602,6 +618,8 @@ exports.getProfile = async (req, res) => {
             ensureModule('deals', { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false });
             ensureModule('tasks', { view: false, create: false, edit: false, delete: false, viewAll: false });
             ensureModule('events', { view: false, create: false, edit: false, delete: false, viewAll: false });
+            ensureModule('forms', { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false });
+            ensureModule('items', { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false });
             ensureModule('imports', { view: false, create: false, delete: false });
             ensureModule('settings', { manageUsers: false, manageBilling: false, manageIntegrations: false, customizeFields: false });
             ensureModule('reports', { viewStandard: false, viewCustom: false, createCustom: false, exportReports: false });

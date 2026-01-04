@@ -20,16 +20,20 @@ router.post('/bulk-delete', eventController.bulkDeleteEvents);
 
 // Event-specific actions
 router.post('/:id/notes', eventController.addNote);
-router.patch('/:id/status', eventController.updateEventStatus);
+// Status is system-controlled - use cancel/complete endpoints instead
+// router.patch('/:id/status', eventController.updateEventStatus); // DEPRECATED - use cancel/complete
 
 // Execution workflow routes
 router.post('/:id/start', eventController.startEvent);
 router.post('/:id/check-in', eventController.checkIn);
 router.post('/:id/check-out', eventController.checkOut);
 router.post('/:id/submit-audit', eventController.submitAudit);
+router.post('/:id/approve-audit', eventController.approveAudit);
+router.post('/:id/reject-audit', eventController.rejectAudit);
 router.post('/:id/next-org', eventController.moveToNextOrg);
 router.post('/:id/orders', eventController.createOrder);
 router.post('/:id/complete', eventController.completeEvent);
+router.post('/:id/cancel', eventController.cancelEvent);
 
 module.exports = router;
 

@@ -109,6 +109,7 @@ import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } fro
 import { XMarkIcon } from '@heroicons/vue/24/outline';
 import DynamicForm from './DynamicForm.vue';
 import apiClient from '@/utils/apiClient';
+import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
 
 const props = defineProps({
   isOpen: {
@@ -289,6 +290,16 @@ const initializeForm = (module) => {
       formData.value = initialForm;
     }
   }
+
+  // Events: geoRequired must be enabled for audit event types and default ON
+  // (enterprise audit requirement; enforced on backend too)
+  if (props.moduleKey === 'events') {
+    const auditTypes = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
+    const eventType = formData.value?.eventType;
+    if (auditTypes.includes(eventType)) {
+      formData.value.geoRequired = true;
+    }
+  }
 };
 
 const onFormReady = (module) => {
@@ -311,6 +322,14 @@ watch(() => props.record, () => {
 // Watch for form data changes and clear errors for fields that are now valid
 watch(() => formData.value, (newFormData, oldFormData) => {
   if (!moduleDefinition.value || !oldFormData) return;
+
+  // Events: ensure geoRequired is ON for audit event types (default + enforced)
+  if (props.moduleKey === 'events') {
+    const auditTypes = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
+    if (auditTypes.includes(newFormData?.eventType) && newFormData.geoRequired !== true) {
+      formData.value.geoRequired = true;
+    }
+  }
   
   // Check which fields have changed
   const changedFields = new Set();
@@ -339,6 +358,12 @@ watch(() => formData.value, (newFormData, oldFormData) => {
 }, { deep: true });
 
 const handleSubmit = async () => {
+  console.log('[CreateRecordDrawer] 🚀 handleSubmit called', {
+    moduleKey: props.moduleKey,
+    isEditing: isEditing.value,
+    formDataKeys: Object.keys(formData.value)
+  });
+  
   errors.value = {};
   saving.value = true;
 
@@ -346,11 +371,28 @@ const handleSubmit = async () => {
     // Client-side validation (like ContactFormModal)
     if (moduleDefinition.value?.fields) {
       // System fields that are auto-set by backend
-      const systemFieldKeys = ['organizationid', 'createdby', 'createdat', 'updatedat', '_id', '__v', 'activitylogs'];
+      // Note: 'status' is system-controlled for events (not user-editable)
+      const systemFieldKeys = [
+        'organizationid', 
+        'createdby', 
+        'createdat', 
+        'updatedat', 
+        '_id', 
+        '__v', 
+        'activitylogs',
+        'status' // System-controlled for events
+      ];
       
-      // Get required fields (excluding system fields)
-      const requiredFields = moduleDefinition.value.fields
-        .filter(f => f.required && !systemFieldKeys.includes(f.key?.toLowerCase()));
+      const allFields = moduleDefinition.value.fields || [];
+
+      // Get effective required fields (dependency-driven), excluding system fields
+      const requiredFields = allFields.filter(f => {
+        const keyLower = f.key?.toLowerCase();
+        if (!f.key || systemFieldKeys.includes(keyLower)) return false;
+        const depState = getFieldDependencyState(f, formData.value, allFields);
+        // Only validate when visible and required
+        return depState.required === true && depState.visible !== false;
+      });
       
       // Validate each required field
       for (const field of requiredFields) {
@@ -367,10 +409,13 @@ const handleSubmit = async () => {
       
       // If validation fails, stop here
       if (Object.keys(errors.value).length > 0) {
+        console.log('[CreateRecordDrawer] ❌ Validation failed:', errors.value);
         saving.value = false;
         return;
       }
     }
+    
+    console.log('[CreateRecordDrawer] ✅ Validation passed, proceeding with submission...');
     
     // Clean up form data - remove system fields that shouldn't be sent
     const submitData = { ...formData.value };
@@ -393,8 +438,25 @@ const handleSubmit = async () => {
         'linked-form-id': 'linkedFormId',
         'related-to-id': 'relatedToId',
         'event-owner-id': 'eventOwnerId',
+        'auditor-id': 'auditorId',
+        'reviewer-id': 'reviewerId',
+        'corrective-owner-id': 'correctiveOwnerId',
+        'allow-self-review': 'allowSelfReview',
         'start-date-time': 'startDateTime',
         'end-date-time': 'endDateTime'
+      };
+
+      // Also normalize lowercased keys that can come from saved module definitions (defensive)
+      const lowercaseMappings = {
+        eventownerid: 'eventOwnerId',
+        auditorid: 'auditorId',
+        reviewerid: 'reviewerId',
+        correctiveownerid: 'correctiveOwnerId',
+        allowselfreview: 'allowSelfReview',
+        linkedformid: 'linkedFormId',
+        relatedtoid: 'relatedToId',
+        startdatetime: 'startDateTime',
+        enddatetime: 'endDateTime'
       };
       
       // Convert kebab-case keys to camelCase
@@ -408,8 +470,18 @@ const handleSubmit = async () => {
           delete submitData[kebabKey];
         }
       }
+
+      // Convert lowercase keys to camelCase equivalents
+      for (const [lowerKey, camelKey] of Object.entries(lowercaseMappings)) {
+        if (submitData[lowerKey] !== undefined) {
+          if (submitData[camelKey] === undefined || submitData[camelKey] === '') {
+            submitData[camelKey] = submitData[lowerKey];
+          }
+          delete submitData[lowerKey];
+        }
+      }
       
-      // For audit event types, ensure linkedFormId and relatedToId are included even if null
+      // For audit event types, ensure important audit fields are included even if null
       const auditEventTypes = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
       const isAuditType = auditEventTypes.includes(submitData.eventType);
       
@@ -421,16 +493,23 @@ const handleSubmit = async () => {
         if (submitData.relatedToId === undefined) {
           submitData.relatedToId = null;
         }
+        if (submitData.auditorId === undefined) submitData.auditorId = null;
+        if (submitData.reviewerId === undefined) submitData.reviewerId = null;
+        if (submitData.correctiveOwnerId === undefined) submitData.correctiveOwnerId = null;
         
         console.log('[CreateRecordDrawer] After ensuring audit fields:', {
           linkedFormId: submitData.linkedFormId,
           relatedToId: submitData.relatedToId,
+          auditorId: submitData.auditorId,
+          reviewerId: submitData.reviewerId,
+          correctiveOwnerId: submitData.correctiveOwnerId,
           eventType: submitData.eventType,
           allKeys: Object.keys(submitData)
         });
       }
     }
     
+    // Strip system-controlled fields
     delete submitData.createdBy;
     delete submitData.organizationId;
     delete submitData.organizationid;
@@ -438,6 +517,14 @@ const handleSubmit = async () => {
     delete submitData.updatedAt;
     delete submitData._id;
     delete submitData.__v;
+    
+    // Strip status field for events (system-controlled)
+    if (props.moduleKey === 'events') {
+      if (submitData.status !== undefined) {
+        console.log('[CreateRecordDrawer] ⚠️ Stripping status field from event payload:', submitData.status);
+        delete submitData.status;
+      }
+    }
     
     // Handle nested object conflicts (e.g., 'settings' and 'settings.primaryColor')
     // Remove parent keys if nested dot-notation keys exist to avoid Mongoose conflicts
@@ -517,6 +604,12 @@ const handleSubmit = async () => {
       delete submitData.legacyOrganizationId;
     }
     
+    console.log('[CreateRecordDrawer] 📤 Making API call:', {
+      method: isEditing.value ? 'PUT' : 'POST',
+      endpoint: isEditing.value ? `${endpoint}/${props.record._id}` : endpoint,
+      payloadKeys: Object.keys(submitData)
+    });
+    
     let response;
     if (isEditing.value && props.record?._id) {
       // Update existing record
@@ -526,12 +619,21 @@ const handleSubmit = async () => {
       response = await apiClient.post(endpoint, submitData);
     }
     
+    console.log('[CreateRecordDrawer] 📥 API response:', {
+      success: response.success,
+      hasData: !!response.data,
+      errors: response.errors,
+      message: response.message
+    });
+    
     if (response.success || response.data) {
+      console.log('[CreateRecordDrawer] ✅ Success! Closing drawer...');
       saving.value = false; // Reset saving state before closing
       emit('saved', response.data || response);
       closeDrawer();
     } else {
-      errors.value = response.errors || { _general: `Failed to ${isEditing.value ? 'update' : 'create'} record` };
+      console.log('[CreateRecordDrawer] ❌ Failed:', response);
+      errors.value = response.errors || { _general: response.message || `Failed to ${isEditing.value ? 'update' : 'create'} record` };
       saving.value = false;
     }
   } catch (error) {
@@ -554,21 +656,8 @@ const handleSubmit = async () => {
         // Don't show general message if we have field-specific errors
         // Field errors will be shown next to each field via DynamicFormField
       } 
-      // Check for message in error data (no field-specific errors)
-      else if (errorData.message) {
-        // Show the message, but prefer it over generic "Error creating record"
-        // If it's "Validation failed. Please check the fields below." that's good
-        if (errorData.message.includes('Validation failed') || errorData.message.includes('check the fields')) {
-          errors.value._general = errorData.message;
-        } else if (errorData.message !== 'Error creating record') {
-          errors.value._general = errorData.message;
-        } else {
-          // If it's the generic message, try error field or show helpful message
-          errors.value._general = errorData.error || 'Please fill in all required fields and try again.';
-        }
-      }
-      // Check for error field (some APIs use 'error' instead of 'message')
-      // Try to parse validation errors from error message if it contains "validation failed"
+      // Check for error field first (it's usually more specific than generic message)
+      // Some APIs use 'error' instead of 'message', and it often contains the actual error
       else if (errorData.error) {
         // Check if error message contains validation info that we can parse
         if (errorData.error.includes('validation failed')) {
@@ -612,6 +701,19 @@ const handleSubmit = async () => {
           }
         } else {
           errors.value._general = errorData.error;
+        }
+      }
+      // Check for message in error data (if error field wasn't present)
+      else if (errorData.message) {
+        // Show the message, but prefer it over generic "Error creating record"
+        // If it's "Validation failed. Please check the fields below." that's good
+        if (errorData.message.includes('Validation failed') || errorData.message.includes('check the fields')) {
+          errors.value._general = errorData.message;
+        } else if (errorData.message !== 'Error creating record.' && errorData.message !== 'Error updating record.') {
+          errors.value._general = errorData.message;
+        } else {
+          // If it's the generic message, show helpful message
+          errors.value._general = 'Please fill in all required fields and try again.';
         }
       }
       // Fallback - try to parse the error message for validation hints
