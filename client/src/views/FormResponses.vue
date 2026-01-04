@@ -189,6 +189,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
+import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/utils/apiClient';
 import ListView from '@/components/common/ListView.vue';
 import BadgeCell from '@/components/common/table/BadgeCell.vue';
@@ -470,10 +471,10 @@ const exportResponses = async () => {
       search: searchQuery.value
     });
     
+    const authStore = useAuthStore();
+    const token = authStore.user?.token;
     const response = await fetch(`/api/forms/${route.params.id}/responses/export?${params.toString()}`, {
-      headers: {
-        'Authorization': `Bearer ${JSON.parse(localStorage.getItem('auth')).user?.token}`
-      }
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
     });
 
     if (response.ok) {

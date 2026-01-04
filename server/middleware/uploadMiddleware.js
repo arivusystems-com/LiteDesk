@@ -2,24 +2,34 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Ensure uploads directory exists
+// Ensure uploads directory exists (best-effort; fall back to per-request creation)
 const uploadsDir = path.join(__dirname, '../uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+try {
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+} catch (err) {
+  console.error('[uploadMiddleware] Failed to create base uploads dir:', uploadsDir, err);
 }
 
 // Configure storage
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     // Create organization-specific folder
-    const orgId = req.user?.organizationId?.toString() || 'public';
-    const orgDir = path.join(uploadsDir, orgId);
-    
-    if (!fs.existsSync(orgDir)) {
-      fs.mkdirSync(orgDir, { recursive: true });
+    const rawOrgId = req.user?.organizationId?.toString() || 'public';
+    // Sanitize folder name to prevent path traversal / invalid characters
+    const safeOrgId = String(rawOrgId).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const orgDir = path.join(uploadsDir, safeOrgId);
+
+    try {
+      if (!fs.existsSync(orgDir)) {
+        fs.mkdirSync(orgDir, { recursive: true });
+      }
+      cb(null, orgDir);
+    } catch (err) {
+      console.error('[uploadMiddleware] Failed to create org upload dir:', { rawOrgId, safeOrgId, orgDir, err });
+      cb(err);
     }
-    
-    cb(null, orgDir);
   },
   filename: function (req, file, cb) {
     // Generate unique filename: timestamp-random-originalname
@@ -70,7 +80,26 @@ exports.uploadSingle = (fieldName = 'file') => {
 
 // Middleware for multiple file uploads
 exports.uploadMultiple = (fieldName = 'files', maxCount = 10) => {
-  return upload.array(fieldName, maxCount);
+  // Wrap multer so errors return JSON (instead of Express default HTML error page)
+  const mw = upload.array(fieldName, maxCount);
+  return (req, res, next) => {
+    mw(req, res, (err) => {
+      if (!err) return next();
+
+      const message =
+        err.message ||
+        (err.code ? `Upload error (${err.code})` : 'Upload failed');
+
+      // Multer errors are typically client errors
+      const status = err.name === 'MulterError' ? 400 : 500;
+
+      return res.status(status).json({
+        success: false,
+        message: 'File upload failed.',
+        error: message
+      });
+    });
+  };
 };
 
 // Middleware for multiple fields

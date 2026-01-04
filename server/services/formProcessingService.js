@@ -74,12 +74,20 @@ exports.processSubmission = async (params) => {
         
         console.log('[processSubmission] Checking for existing response:', {
             hasExistingResponse: !!existingResponse,
-            existingResponseId: existingResponse?._id,
+            existingResponseId: existingResponse?._id?.toString(),
+            existingResponseStatus: existingResponse?.executionStatus,
             hasLinkedTo: !!(linkedTo && linkedTo.type === 'Event' && linkedTo.id),
-            linkedToId: linkedTo?.id
+            linkedToId: linkedTo?.id?.toString(),
+            linkedToType: linkedTo?.type
         });
         
+        // If existingResponse was provided, use it and skip further lookup
+        if (formResponse) {
+            console.log('[processSubmission] ✅ Using provided existingResponse, skipping eventId lookup');
+        }
+        
         // If not found by responseId, try to find by event+form combination
+        // BUT ONLY if existingResponse was not provided (to avoid unnecessary queries)
         if (!formResponse && linkedTo && linkedTo.type === 'Event' && linkedTo.id) {
             const mongoose = require('mongoose');
             const Event = require('../models/Event');
@@ -182,10 +190,19 @@ exports.processSubmission = async (params) => {
         if (formResponse) {
             // Update existing response (from event check-in)
             console.log('[processSubmission] ✅ Updating existing response:', {
-                responseId: formResponse._id,
+                responseId: formResponse._id.toString(),
                 currentStatus: formResponse.executionStatus,
-                willUpdateTo: 'Submitted'
+                willUpdateTo: 'Submitted',
+                foundBy: existingResponse ? 'responseId' : 'eventId'
             });
+            
+            // Prevent duplicate creation - if response is already submitted, log warning
+            if (formResponse.executionStatus === 'Submitted') {
+                console.warn('[processSubmission] ⚠️ Response already submitted, updating anyway:', {
+                    responseId: formResponse._id.toString(),
+                    submittedAt: formResponse.submittedAt
+                });
+            }
             
             formResponse.responseDetails = scoredResponse.responseDetails;
             formResponse.sectionScores = scoredResponse.sectionScores;
@@ -201,31 +218,80 @@ exports.processSubmission = async (params) => {
             console.log('[processSubmission] ✅ Successfully updated existing response');
         } else {
             // Create new response document
-            console.log('[processSubmission] ⚠️ No existing response found, creating new one');
-            console.log('[processSubmission] Creating new response with:', {
-                formId: form._id,
-                organizationId: organizationId,
-                linkedTo: linkedTo
-            });
+            // BUT FIRST: Double-check if we should really create a new one
+            // This is a safety check to prevent duplicates
+            console.log('[processSubmission] ⚠️ No existing response found, checking one more time before creating...');
             
-            // reviewStatus will be computed automatically by pre-save hook based on business rules
-            const responseData = {
-                organizationId: organizationId.toString ? organizationId.toString() : organizationId,
-                formId: form._id.toString ? form._id.toString() : form._id,
-                linkedTo: linkedTo || null,
-                submittedBy: submittedBy || null,
-                submittedAt: new Date(),
-                responseDetails: scoredResponse.responseDetails,
-                sectionScores: scoredResponse.sectionScores,
-                kpis: scoredResponse.kpis,
-                executionStatus: 'Submitted',
-                approved: false, // Initially not approved
-                ipAddress,
-                userAgent
-            };
+            // Final safety check: if linkedTo is Event, try one more time with a broader query
+            if (linkedTo && linkedTo.type === 'Event' && linkedTo.id) {
+                const mongoose = require('mongoose');
+                const finalCheck = await FormResponse.findOne({
+                    formId: form._id,
+                    organizationId: organizationId,
+                    'linkedTo.type': 'Event'
+                }).sort({ createdAt: -1 }); // Get most recent
+                
+                if (finalCheck) {
+                    // Check if linkedTo.id matches (using string comparison for safety)
+                    const finalCheckLinkedId = finalCheck.linkedTo?.id?.toString();
+                    const providedLinkedId = linkedTo.id?.toString();
+                    
+                    if (finalCheckLinkedId === providedLinkedId) {
+                        console.log('[processSubmission] ✅ Found existing response in final safety check, using it instead of creating new one:', {
+                            responseId: finalCheck._id.toString(),
+                            executionStatus: finalCheck.executionStatus
+                        });
+                        formResponse = finalCheck;
+                        
+                        // Update it
+                        formResponse.responseDetails = scoredResponse.responseDetails;
+                        formResponse.sectionScores = scoredResponse.sectionScores;
+                        formResponse.kpis = scoredResponse.kpis;
+                        formResponse.executionStatus = 'Submitted';
+                        formResponse.submittedAt = new Date();
+                        formResponse.submittedBy = submittedBy || formResponse.submittedBy;
+                        formResponse.ipAddress = ipAddress || formResponse.ipAddress;
+                        formResponse.userAgent = userAgent || formResponse.userAgent;
+                        await formResponse.save();
+                        
+                        console.log('[processSubmission] ✅ Successfully updated response from final safety check');
+                    } else {
+                        console.log('[processSubmission] Final check found response but linkedTo.id mismatch:', {
+                            foundId: finalCheckLinkedId,
+                            providedId: providedLinkedId,
+                            willCreateNew: true
+                        });
+                    }
+                }
+            }
             
-            formResponse = await FormResponse.create(responseData);
-            console.log('[processSubmission] ✅ Created new response:', formResponse._id);
+            // Only create new response if we still don't have one
+            if (!formResponse) {
+                console.log('[processSubmission] Creating new response with:', {
+                    formId: form._id.toString(),
+                    organizationId: organizationId.toString(),
+                    linkedTo: linkedTo
+                });
+                
+                // reviewStatus will be computed automatically by pre-save hook based on business rules
+                const responseData = {
+                    organizationId: organizationId.toString ? organizationId.toString() : organizationId,
+                    formId: form._id.toString ? form._id.toString() : form._id,
+                    linkedTo: linkedTo || null,
+                    submittedBy: submittedBy || null,
+                    submittedAt: new Date(),
+                    responseDetails: scoredResponse.responseDetails,
+                    sectionScores: scoredResponse.sectionScores,
+                    kpis: scoredResponse.kpis,
+                    executionStatus: 'Submitted',
+                    approved: false, // Initially not approved
+                    ipAddress,
+                    userAgent
+                };
+                
+                formResponse = await FormResponse.create(responseData);
+                console.log('[processSubmission] ✅ Created new response:', formResponse._id.toString());
+            }
         }
         
         // Update form analytics
@@ -443,13 +509,27 @@ async function createCorrectiveTask(form, formResponse, organizationId) {
         if (failedQuestions.length === 0) return;
         
         // Create task for corrective actions
+        // Note: Task.relatedTo.type only supports: 'contact', 'deal', 'project', 'organization', 'none'
+        // Events are not supported, so we set relatedTo to 'none' when linkedTo.type is 'Event'
+        let relatedToType = 'none';
+        let relatedToId = null;
+        
+        if (formResponse.linkedTo && formResponse.linkedTo.type && formResponse.linkedTo.type !== 'Event') {
+            // Only set relatedTo if it's a supported type (not Event)
+            const supportedTypes = ['contact', 'deal', 'project', 'organization'];
+            if (supportedTypes.includes(formResponse.linkedTo.type.toLowerCase())) {
+                relatedToType = formResponse.linkedTo.type.toLowerCase();
+                relatedToId = formResponse.linkedTo.id;
+            }
+        }
+        
         const taskData = {
             organizationId,
             title: `Corrective Actions Required: ${form.name}`,
             description: `Please address ${failedQuestions.length} failed question(s) from form submission ${formResponse.responseId}`,
             relatedTo: {
-                type: formResponse.linkedTo?.type || 'none',
-                id: formResponse.linkedTo ? formResponse.linkedTo.id : null
+                type: relatedToType,
+                id: relatedToId
             },
             assignedTo: form.assignedTo || formResponse.submittedBy,
             status: 'todo',
@@ -457,10 +537,8 @@ async function createCorrectiveTask(form, formResponse, organizationId) {
             dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
         };
         
-        // Only create task if form response is linked to a module
-        if (formResponse.linkedTo && formResponse.linkedTo.id) {
-            await Task.create(taskData);
-        }
+        // Create task (even if not linked to a supported module type)
+        await Task.create(taskData);
     } catch (error) {
         console.error('Create corrective task error:', error);
     }

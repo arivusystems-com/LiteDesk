@@ -68,6 +68,21 @@ const sectionScoreSchema = new Schema({
 
 // Corrective Action Schema
 const correctiveActionSchema = new Schema({
+    // Links to related entities
+    eventId: {
+        type: Schema.Types.ObjectId,
+        ref: 'Event',
+        required: false // Optional for backward compatibility
+    },
+    responseId: {
+        type: Schema.Types.ObjectId,
+        ref: 'FormResponse',
+        required: false // Optional for backward compatibility
+    },
+    sectionId: {
+        type: String,
+        required: false // Optional for backward compatibility
+    },
     questionId: {
         type: String,
         required: true
@@ -90,8 +105,8 @@ const correctiveActionSchema = new Schema({
         }],
         status: {
             type: String,
-            enum: ['Resolved', 'In Progress', 'Pending'],
-            default: 'Pending'
+            enum: ['open', 'in_progress', 'completed'],
+            default: 'open'
         },
         addedBy: {
             type: Schema.Types.ObjectId,
@@ -257,6 +272,18 @@ const FormResponseSchema = new Schema({
         default: null
     },
 
+    // ✅ REVIEWER TRACKING (who performed the review action)
+    // **********************************
+    reviewedBy: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
+    },
+    selfReviewed: {
+        type: Boolean,
+        default: false
+    },
+
     // ✅ CORRECTIVE ACTIONS
     // **********************************
     correctiveActions: [correctiveActionSchema],
@@ -363,6 +390,14 @@ FormResponseSchema.pre('save', async function(next) {
 FormResponseSchema.pre('save', function(next) {
     // If this is an update (not a new document) and executionStatus is 'Submitted'
     if (!this.isNew && this.executionStatus === 'Submitted') {
+        // If already approved, reviewer metadata must not change
+        // Allow setting reviewedBy/selfReviewed during the approval operation itself (when approvedAt is being set).
+        if (this.approvedAt && !this.isModified('approvedAt')) {
+            if (this.isModified('reviewedBy') || this.isModified('selfReviewed')) {
+                return next(new Error('Cannot modify review metadata after approval.'));
+            }
+        }
+
         // Allow transition from 'In Progress' to 'Submitted' (form submission after check-in)
         // Check if executionStatus is being modified to 'Submitted'
         const isTransitioningToSubmitted = this.isModified('executionStatus') && 
@@ -381,6 +416,7 @@ FormResponseSchema.pre('save', function(next) {
             'invalidated', 'invalidatedAt', 'invalidatedBy', 'invalidationReason',
             'reviewStatus', // Computed automatically, but can be set to 'Rejected' manually
             'approved', 'approvedBy', 'approvedAt', // Approval tracking
+            'reviewedBy', 'selfReviewed', // Review metadata (set on approval)
             'correctiveActions', 'finalReport', 'updatedAt', // finalReport allows nested fields
             'reportGenerated', 'reportUrl' // Legacy report fields for backward compatibility
         ];
@@ -425,8 +461,9 @@ FormResponseSchema.methods.areCorrectiveActionsComplete = function() {
     }
     
     return this.correctiveActions.every(action => {
-        return action.managerAction.status === 'Resolved' && 
-               action.auditorVerification.approved === true;
+        // Corrective-action completion is owned by the corrective action owner.
+        // Auditor verification is a separate step and should NOT block moving to "Needs Auditor Review".
+        return action.managerAction.status === 'completed';
     });
 };
 
@@ -451,11 +488,9 @@ FormResponseSchema.methods.hasIncompleteCorrectiveActions = function() {
     }
     
     // A corrective action is incomplete if:
-    // - managerAction.status is not 'Resolved', OR
-    // - auditorVerification.approved is not true
+    // - managerAction.status is not 'completed'
     return this.correctiveActions.some(action => {
-        return action.managerAction.status !== 'Resolved' || 
-               action.auditorVerification.approved !== true;
+        return action.managerAction.status !== 'completed';
     });
 };
 

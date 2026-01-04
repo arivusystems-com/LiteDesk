@@ -21,6 +21,7 @@ const {
     getResponseById,
     updateResponseStatus,
     addCorrectiveAction,
+    updateCorrectiveActionStatus,
     verifyCorrectiveAction,
     approveResponse,
     rejectResponse,
@@ -100,6 +101,7 @@ protectedRouter.route('/:id/responses/:responseId')
 
 protectedRouter.patch('/:id/responses/:responseId/status', checkPermission('forms', 'edit'), updateResponseStatus);
 protectedRouter.post('/:id/responses/:responseId/corrective-action', checkPermission('forms', 'edit'), uploadMultiple('proof', 10), addCorrectiveAction);
+protectedRouter.patch('/:id/responses/:responseId/corrective-action/:questionId', checkPermission('forms', 'edit'), uploadMultiple('proof', 10), updateCorrectiveActionStatus);
 protectedRouter.post('/:id/responses/:responseId/verify', checkPermission('forms', 'edit'), verifyCorrectiveAction);
 protectedRouter.post('/:id/responses/:responseId/approve', checkPermission('forms', 'edit'), approveResponse);
 protectedRouter.post('/:id/responses/:responseId/reject', checkPermission('forms', 'edit'), rejectResponse);

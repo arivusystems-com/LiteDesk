@@ -53,6 +53,8 @@ export const useAuthStore = defineStore('auth', {
             this.organization = null;
             localStorage.removeItem('user');
             localStorage.removeItem('organization');
+            // Legacy cleanup (older builds stored auth under 'auth')
+            localStorage.removeItem('auth');
             this.error = null;
         },
 
@@ -195,6 +197,22 @@ export const useAuthStore = defineStore('auth', {
                                 delete: !!rolePerms.events?.delete,
                                 viewAll: !!rolePerms.events?.viewAll,
                             };
+                            const forms = {
+                                view: !!rolePerms.forms?.read,
+                                create: !!rolePerms.forms?.create,
+                                edit: !!rolePerms.forms?.update,
+                                delete: !!rolePerms.forms?.delete,
+                                viewAll: !!rolePerms.forms?.viewAll,
+                                exportData: !!rolePerms.forms?.export,
+                            };
+                            const items = {
+                                view: !!rolePerms.items?.read,
+                                create: !!rolePerms.items?.create,
+                                edit: !!rolePerms.items?.update,
+                                delete: !!rolePerms.items?.delete,
+                                viewAll: !!rolePerms.items?.viewAll,
+                                exportData: !!rolePerms.items?.export,
+                            };
                             const imports = {
                                 view: !!(rolePerms.contacts?.import || rolePerms.deals?.import),
                                 create: !!(rolePerms.contacts?.import || rolePerms.deals?.import),
@@ -213,16 +231,31 @@ export const useAuthStore = defineStore('auth', {
                                 createCustom: !!rolePerms.reports?.create,
                                 exportReports: !!rolePerms.reports?.export,
                             };
-                            const built = { contacts, organizations, deals, tasks, events, imports, settings, reports };
+                            const built = { contacts, organizations, deals, tasks, events, forms, items, imports, settings, reports };
                             built.people = built.contacts;
                             return built;
                         };
 
                         const incoming = data.data;
+                        // Safety: if the profile endpoint returns a different user than the one in memory,
+                        // do NOT silently switch accounts (this can happen with stale/incorrect tokens).
+                        if (this.user?._id && incoming?._id && String(incoming._id) !== String(this.user._id)) {
+                            console.warn('Auth mismatch: profile returned a different user. Logging out for safety.', {
+                                currentUserId: this.user._id,
+                                incomingUserId: incoming._id,
+                                currentEmail: this.user.email,
+                                incomingEmail: incoming.email
+                            });
+                            this.logout();
+                            return false;
+                        }
                         const ensuredPermissions = incoming.permissions || deriveFromRole(incoming.roleId?.permissions) || {};
                         if (ensuredPermissions.contacts && !ensuredPermissions.people) {
                             ensuredPermissions.people = ensuredPermissions.contacts;
                         }
+                        // Ensure newly added modules exist so the sidebar can render them immediately.
+                        if (!ensuredPermissions.forms) ensuredPermissions.forms = { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false };
+                        if (!ensuredPermissions.items) ensuredPermissions.items = { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false };
                         // Update user data while preserving token
                         const token = this.user.token;
                         this.user = {

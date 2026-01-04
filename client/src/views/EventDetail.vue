@@ -34,7 +34,43 @@
         </button>
 
         <div class="flex items-center gap-2">
-          <button @click="editEvent" class="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium transition-all">
+          <!-- Approve/Reject buttons for needs_review state -->
+          <template v-if="event.auditState === 'needs_review' && isAuditor">
+            <button 
+              @click="approveAudit" 
+              :disabled="processing"
+              class="px-4 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              Approve
+            </button>
+            <button 
+              @click="rejectAudit" 
+              :disabled="processing"
+              class="px-4 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Reject
+            </button>
+          </template>
+          
+          <!-- Edit button (disabled when locked, approved, or closed) -->
+          <button 
+            v-if="event.auditState !== 'approved' && event.auditState !== 'closed'"
+            @click="editEvent" 
+            :disabled="isEventLocked"
+            :class="[
+              'px-3 py-1.5 text-sm rounded-lg font-medium transition-all',
+              isEventLocked 
+                ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed' 
+                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+            ]"
+            :title="isEventLocked ? 'Event is locked for editing' : 'Edit event'"
+          >
             Edit
           </button>
           <button @click="deleteEvent" class="px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg font-medium transition-all">
@@ -55,8 +91,11 @@
               </svg>
             </div>
             <h1 class="text-xl font-bold text-gray-900 dark:text-white mb-2">{{ event.eventName || event.title }}</h1>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <span :class="getStatusBadgeClass(event.status)">{{ event.status }}</span>
+              <span v-if="event.auditState" :class="getAuditStateBadgeClass(event.auditState)" class="capitalize">
+                {{ formatAuditState(event.auditState) }}
+              </span>
               <span v-if="event.eventType || event.type" class="px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded text-xs font-medium">
                 {{ event.eventType || event.type }}
               </span>
@@ -65,6 +104,21 @@
 
           <!-- Quick Info Card -->
           <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+            <!-- Audit State (for audit events only) -->
+            <div v-if="event.auditState" class="flex items-start gap-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+              <svg class="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div class="flex-1">
+                <div class="text-xs text-gray-500 dark:text-gray-400">Audit State</div>
+                <div class="mt-1">
+                  <span :class="getAuditStateBadgeClass(event.auditState)" class="capitalize">
+                    {{ formatAuditState(event.auditState) }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            
             <div class="flex items-start gap-3">
               <svg class="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -119,18 +173,18 @@
               </div>
             </div>
 
-            <div v-if="event.eventOwnerId || event.organizer" class="flex items-start gap-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+            <div v-if="primaryOwnerUser" class="flex items-start gap-3 pt-3 border-t border-gray-200 dark:border-gray-700">
               <svg class="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
               <div class="flex-1">
-                <div class="text-xs text-gray-500 dark:text-gray-400">Event Owner</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">{{ primaryOwnerLabel }}</div>
                 <div class="flex items-center gap-2 mt-1">
                   <div class="w-6 h-6 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white text-xs font-medium">
-                    {{ getInitials(event.eventOwnerId || event.organizer) }}
+                    {{ getInitials(primaryOwnerUser) }}
                   </div>
                   <div class="text-sm font-medium text-gray-900 dark:text-white">
-                    {{ (event.eventOwnerId || event.organizer)?.firstName }} {{ (event.eventOwnerId || event.organizer)?.lastName }}
+                    {{ primaryOwnerUser?.firstName }} {{ primaryOwnerUser?.lastName }}
                   </div>
                 </div>
               </div>
@@ -142,10 +196,57 @@
         <div class="lg:col-span-2 space-y-4">
           <!-- Event Execution Component -->
           <EventExecution 
-            v-if="event.status !== 'CLOSED'"
+            v-if="event.auditState !== 'approved' && event.auditState !== 'closed'"
             :event="event" 
             @updated="handleEventUpdated"
           />
+          
+          <!-- Read-Only Message for Approved/Closed Events -->
+          <div v-if="event.auditState === 'approved' || event.auditState === 'closed'" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div class="flex items-center gap-3 mb-4">
+              <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Event is Read-Only</h3>
+            </div>
+            <p class="text-sm text-gray-600 dark:text-gray-400">
+              This event has been {{ event.auditState === 'approved' ? 'approved' : 'closed' }} and is now read-only. No further actions can be taken.
+            </p>
+            <div v-if="hasFormResponse" class="mt-4">
+              <button
+                @click="viewFormResponse"
+                class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium transition-colors flex items-center gap-2"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                View Form Response
+              </button>
+            </div>
+          </div>
+          
+          <!-- Corrective Actions Section (when auditState = pending_corrective) -->
+          <div v-if="event.auditState === 'pending_corrective' && hasFormResponse" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Corrective Actions</h3>
+              <span class="px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 rounded-full text-xs font-medium">
+                Pending
+              </span>
+            </div>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              This audit requires corrective actions. Review and manage corrective actions for failed audit questions.
+            </p>
+            <button
+              @click="viewFormResponse"
+              class="w-full px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors flex items-center justify-center gap-2"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              View Corrective Actions
+            </button>
+          </div>
 
           <!-- Notes Card -->
           <div v-if="event.notes" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
@@ -153,13 +254,29 @@
             <p class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{{ event.notes }}</p>
           </div>
 
-          <!-- Linked Organization Card -->
+          <!-- Organization Card -->
           <div v-if="event.relatedToId" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">Linked Organization</h3>
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">Organization</h3>
             <div class="flex items-center gap-2">
               <span class="text-sm text-gray-900 dark:text-white font-medium">
                 {{ getOrgName(event.relatedToId) }}
               </span>
+            </div>
+          </div>
+
+          <!-- Form Card -->
+          <div v-if="event.linkedFormId" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">Form</h3>
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-sm text-gray-900 dark:text-white font-medium truncate">
+                {{ getFormName(event.linkedFormId) }}
+              </span>
+              <button
+                @click="openForm"
+                class="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 font-medium transition-colors"
+              >
+                Open
+              </button>
             </div>
           </div>
 
@@ -351,6 +468,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
 import dateUtils from '@/utils/dateUtils';
+import { useAuthStore } from '@/stores/auth';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import EventExecution from '@/components/events/EventExecution.vue';
 
@@ -363,6 +481,49 @@ const error = ref(null);
 const showNoteForm = ref(false);
 const newNote = ref('');
 const showEditModal = ref(false);
+
+// Check if event is locked for editing (checked in for audit events)
+const isEventLocked = computed(() => {
+  if (!event.value) return false;
+  // Lock editing when audit event is checked in, approved, or closed
+  return event.value.auditState === 'checked_in' || 
+         event.value.auditState === 'submitted' ||
+         event.value.auditState === 'approved' ||
+         event.value.auditState === 'closed' ||
+         (['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(event.value.eventType) && 
+          event.value.auditState && 
+          event.value.auditState !== 'Ready to start');
+});
+
+// Check if current user is the auditor (explicit audit role)
+const isAuditor = computed(() => {
+  if (!event.value) return false;
+  // Get current user from auth store
+  const authStore = useAuthStore();
+  const currentUser = authStore.user;
+  if (!currentUser) return false;
+  
+  // Prefer explicit auditorId; fall back to eventOwnerId for legacy records
+  const auditorId = event.value.auditorId?._id || event.value.auditorId || event.value.eventOwnerId?._id || event.value.eventOwnerId;
+  return auditorId && auditorId.toString() === currentUser._id.toString();
+});
+
+const isAuditEventType = computed(() => {
+  if (!event.value) return false;
+  return ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(event.value.eventType);
+});
+
+const primaryOwnerUser = computed(() => {
+  if (!event.value) return null;
+  // For audits: show auditorId (fallback to eventOwnerId for legacy)
+  if (isAuditEventType.value) return event.value.auditorId || event.value.eventOwnerId || event.value.organizer || null;
+  // For non-audits: show eventOwnerId
+  return event.value.eventOwnerId || event.value.organizer || null;
+});
+
+const primaryOwnerLabel = computed(() => (isAuditEventType.value ? 'Auditor' : 'Event Owner'));
+
+const processing = ref(false);
 
 const fetchEvent = async () => {
   try {
@@ -408,6 +569,63 @@ const handleEventUpdated = async () => {
     console.error('[EventDetail] Error in handleEventUpdated:', err);
   } finally {
     isHandlingUpdate = false;
+  }
+};
+
+const approveAudit = async () => {
+  if (!confirm('Are you sure you want to approve this audit? This will immediately close the event and make all responses read-only.')) {
+    return;
+  }
+  
+  try {
+    processing.value = true;
+    const eventId = event.value.eventId || event.value._id;
+    const response = await apiClient.post(`/events/${eventId}/approve-audit`);
+    
+    if (response.success) {
+      event.value = response.data;
+      alert('Audit approved and closed successfully.');
+      await fetchEvent(); // Refresh event data
+    } else {
+      alert(response.message || 'Failed to approve audit.');
+    }
+  } catch (error) {
+    console.error('Error approving audit:', error);
+    alert('Failed to approve audit: ' + (error.message || 'Unknown error'));
+  } finally {
+    processing.value = false;
+  }
+};
+
+const rejectAudit = async () => {
+  const reason = prompt('Please provide a reason for rejection (optional):');
+  if (reason === null) {
+    return; // User cancelled
+  }
+  
+  if (!confirm('Are you sure you want to reject this audit? All corrective actions will be reopened.')) {
+    return;
+  }
+  
+  try {
+    processing.value = true;
+    const eventId = event.value.eventId || event.value._id;
+    const response = await apiClient.post(`/events/${eventId}/reject-audit`, {
+      reason: reason || undefined
+    });
+    
+    if (response.success) {
+      event.value = response.data;
+      alert(`Audit rejected. ${response.reopenedCount || 0} corrective action(s) reopened.`);
+      await fetchEvent(); // Refresh event data
+    } else {
+      alert(response.message || 'Failed to reject audit.');
+    }
+  } catch (error) {
+    console.error('Error rejecting audit:', error);
+    alert('Failed to reject audit: ' + (error.message || 'Unknown error'));
+  } finally {
+    processing.value = false;
   }
 };
 
@@ -465,6 +683,18 @@ const getDuration = () => {
   }
 };
 
+const viewFormResponse = () => {
+  if (!hasFormResponse.value || !event.value.metadata.formResponses) return;
+  
+  // Get the first form response ID
+  const responseId = event.value.metadata.formResponses[0];
+  const formId = event.value.linkedFormId?._id || event.value.linkedFormId;
+  
+  if (formId && responseId) {
+    router.push(`/forms/${formId}/responses/${responseId}`);
+  }
+};
+
 const getInitials = (user) => {
   if (!user) return '';
   return `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`;
@@ -489,34 +719,137 @@ const getFormName = (form) => {
 const openForm = () => {
   if (event.value?.linkedFormId) {
     const eventIdValue = event.value.eventId || event.value._id;
-    router.push({
-      path: `/forms/${event.value.linkedFormId}/fill`,
-      query: {
-        eventId: eventIdValue
+    const formId = event.value.linkedFormId;
+    
+    // Get responseId from event metadata if available
+    let responseId = null;
+    if (event.value.metadata?.formResponses && event.value.metadata.formResponses.length > 0) {
+      // Use the most recent form response
+      responseId = event.value.metadata.formResponses[event.value.metadata.formResponses.length - 1];
+    }
+    
+    // Try sessionStorage as fallback
+    if (!responseId) {
+      try {
+        const storedResponseId = sessionStorage.getItem(`formResponse_${formId}_${eventIdValue}`);
+        if (storedResponseId) {
+          responseId = storedResponseId;
+        }
+      } catch (e) {
+        console.warn('[EventDetail] Failed to read responseId from sessionStorage:', e);
       }
+    }
+    
+    const query = {
+      eventId: eventIdValue
+    };
+    
+    if (responseId) {
+      query.responseId = responseId;
+    }
+    
+    router.push({
+      path: `/forms/${formId}/fill`,
+      query: query
     });
   }
 };
 
+// Audit state badge classes (for audit events only)
 const getAuditStateBadgeClass = (state) => {
+  if (!state) return '';
+  
+  const normalizedState = String(state).trim();
+  
   const classes = {
-    DRAFT: 'px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs font-medium',
-    IN_PROGRESS: 'px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs font-medium',
-    PAUSED: 'px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded-full text-xs font-medium',
-    SUBMITTED: 'px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded-full text-xs font-medium',
-    PENDING_CORRECTIVE: 'px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 rounded-full text-xs font-medium',
-    NEEDS_REVIEW: 'px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded-full text-xs font-medium',
-    APPROVED: 'px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium',
-    REJECTED: 'px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-full text-xs font-medium',
-    CLOSED: 'px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs font-medium'
+    // Current audit state values
+    'Ready to start': 'px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs font-medium',
+    'checked_in': 'px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs font-medium',
+    'submitted': 'px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded-full text-xs font-medium',
+    'pending_corrective': 'px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 rounded-full text-xs font-medium',
+    'needs_review': 'px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded-full text-xs font-medium',
+    'approved': 'px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium',
+    'rejected': 'px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-full text-xs font-medium',
+    'closed': 'px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs font-medium',
+    // Legacy values (for backward compatibility)
+    'DRAFT': 'px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs font-medium',
+    'IN_PROGRESS': 'px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs font-medium',
+    'PAUSED': 'px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded-full text-xs font-medium',
+    'SUBMITTED': 'px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded-full text-xs font-medium',
+    'PENDING_CORRECTIVE': 'px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 rounded-full text-xs font-medium',
+    'NEEDS_REVIEW': 'px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded-full text-xs font-medium',
+    'APPROVED': 'px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium',
+    'REJECTED': 'px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-full text-xs font-medium',
+    'CLOSED': 'px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs font-medium'
   };
-  return classes[state] || classes.DRAFT;
+  
+  return classes[normalizedState] || classes['Ready to start'];
+};
+
+// Format audit state for display (capitalize and add spaces)
+const formatAuditState = (state) => {
+  if (!state) return '';
+  
+  // Handle camelCase/snake_case states
+  const formatted = String(state)
+    .replace(/_/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+  
+  return formatted;
 };
 
 const getAuditProgress = () => {
-  const states = ['DRAFT', 'IN_PROGRESS', 'SUBMITTED', 'PENDING_CORRECTIVE', 'NEEDS_REVIEW', 'APPROVED', 'CLOSED'];
-  const currentIndex = states.indexOf(event.value?.auditState || 'DRAFT');
-  return Math.round(((currentIndex + 1) / states.length) * 100);
+  const rawState = event.value?.auditState;
+  if (!rawState) return 0;
+
+  // Canonical (current) audit state flow
+  const steps = [
+    'ready to start',
+    'checked_in',
+    'submitted',
+    'pending_corrective',
+    'needs_review',
+    'approved',
+    'closed'
+  ];
+
+  // Backward-compatible aliases + minor normalization
+  const aliases = {
+    // Current states (case/spacing variants)
+    'ready to start': 'ready to start',
+    'checked_in': 'checked_in',
+    'submitted': 'submitted',
+    'pending_corrective': 'pending_corrective',
+    'needs_review': 'needs_review',
+    'approved': 'approved',
+    'closed': 'closed',
+    'rejected': 'rejected',
+
+    // Legacy states
+    'draft': 'ready to start',
+    'in_progress': 'checked_in',
+    'pending corrective': 'pending_corrective',
+    'needs review': 'needs_review'
+  };
+
+  const normalized = String(rawState).trim().toLowerCase();
+  const canonical = aliases[normalized] || normalized;
+
+  // Rejection re-opens corrective actions; treat it as a mid-workflow regression.
+  if (canonical === 'rejected') {
+    const pendingIdx = steps.indexOf('pending_corrective');
+    return pendingIdx >= 0 ? Math.round((pendingIdx / (steps.length - 1)) * 100) : 50;
+  }
+
+  const idx = steps.indexOf(canonical);
+  if (idx < 0) return 0;
+
+  // 0% at "ready to start", 100% at "closed"
+  return Math.round((idx / (steps.length - 1)) * 100);
 };
 
 const formatDuration = (seconds) => {
@@ -545,22 +878,32 @@ const formResponseCount = computed(() => {
   return event.value?.metadata?.formResponses?.length || 0;
 });
 
+// Status badge classes for system-controlled status (Planned, Completed, Cancelled)
+// Status badge classes for system-controlled status (Planned, Completed, Cancelled)
 const getStatusBadgeClass = (status) => {
+  // Normalize status to handle both old and new values during migration
+  const normalizedStatus = status ? String(status).trim() : 'Planned';
+  
   const classes = {
-    PLANNED: 'px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs font-medium',
-    STARTED: 'px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs font-medium',
-    CHECKED_IN: 'px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium',
-    IN_PROGRESS: 'px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded-full text-xs font-medium',
-    PAUSED: 'px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded-full text-xs font-medium',
-    CHECKED_OUT: 'px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded-full text-xs font-medium',
-    SUBMITTED: 'px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded-full text-xs font-medium',
-    PENDING_CORRECTIVE: 'px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 rounded-full text-xs font-medium',
-    NEEDS_REVIEW: 'px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded-full text-xs font-medium',
-    APPROVED: 'px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium',
-    REJECTED: 'px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-full text-xs font-medium',
-    CLOSED: 'px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs font-medium'
+    // New system-controlled statuses
+    'Planned': 'px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs font-medium',
+    'Completed': 'px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium',
+    'Cancelled': 'px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-full text-xs font-medium',
+    // Legacy statuses (for backward compatibility during migration)
+    'PLANNED': 'px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs font-medium',
+    'STARTED': 'px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs font-medium',
+    'CHECKED_IN': 'px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium',
+    'IN_PROGRESS': 'px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded-full text-xs font-medium',
+    'PAUSED': 'px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded-full text-xs font-medium',
+    'CHECKED_OUT': 'px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded-full text-xs font-medium',
+    'SUBMITTED': 'px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded-full text-xs font-medium',
+    'PENDING_CORRECTIVE': 'px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 rounded-full text-xs font-medium',
+    'NEEDS_REVIEW': 'px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded-full text-xs font-medium',
+    'APPROVED': 'px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium',
+    'REJECTED': 'px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-full text-xs font-medium',
+    'CLOSED': 'px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs font-medium'
   };
-  return classes[status] || classes.PLANNED;
+  return classes[normalizedStatus] || classes['Planned'];
 };
 
 

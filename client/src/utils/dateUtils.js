@@ -27,12 +27,12 @@ export const dateUtils = {
       'a': d.getHours() >= 12 ? 'pm' : 'am'
     };
     
-    let result = formatStr;
-    Object.keys(replacements).forEach(key => {
-      result = result.replace(key, replacements[key]);
-    });
-    
-    return result;
+    // IMPORTANT: Replace only format tokens from the template string.
+    // Do NOT run naive string replacements on the final output, otherwise tokens like "a"
+    // can corrupt month names (e.g. "Jan" -> "Jpmn" when replacing "a" with "pm").
+    const tokens = Object.keys(replacements).sort((a, b) => b.length - a.length);
+    const tokenRegex = new RegExp(tokens.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+    return String(formatStr).replace(tokenRegex, (match) => String(replacements[match]));
   },
 
   // Start of day

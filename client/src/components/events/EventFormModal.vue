@@ -17,7 +17,7 @@
         </div>
 
         <!-- Form -->
-        <form @submit.prevent="handleSubmit" class="p-6 space-y-6">
+        <form @submit.prevent="handleSubmit" @keydown.enter.prevent="handleSubmit" class="p-6 space-y-6">
           <!-- Basic Information -->
           <div class="space-y-4">
             <h3 class="text-sm font-semibold text-gray-900 dark:text-white uppercase tracking-wide">Basic Information</h3>
@@ -49,45 +49,21 @@
               ></textarea>
             </div>
 
-            <!-- Event Type and Status -->
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Event Type <span class="text-red-500">*</span></label>
-                <select
-                  v-model="form.eventType"
-                  @change="onEventTypeChange"
-                  required
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                >
-                  <option value="Meeting / Appointment">Meeting / Appointment</option>
-                  <option value="Internal Audit">Internal Audit</option>
-                  <option value="External Audit — Single Org">External Audit — Single Org</option>
-                  <option value="External Audit Beat">External Audit Beat</option>
-                  <option value="Field Sales Beat">Field Sales Beat</option>
-                </select>
-              </div>
-
-              <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status <span class="text-red-500">*</span></label>
-                <select
-                  v-model="form.status"
-                  required
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                >
-                  <option value="PLANNED">Planned</option>
-                  <option value="STARTED">Started</option>
-                  <option value="CHECKED_IN">Checked In</option>
-                  <option value="IN_PROGRESS">In Progress</option>
-                  <option value="PAUSED">Paused</option>
-                  <option value="CHECKED_OUT">Checked Out</option>
-                  <option value="SUBMITTED">Submitted</option>
-                  <option value="PENDING_CORRECTIVE">Pending Corrective</option>
-                  <option value="NEEDS_REVIEW">Needs Review</option>
-                  <option value="APPROVED">Approved</option>
-                  <option value="REJECTED">Rejected</option>
-                  <option value="CLOSED">Closed</option>
-                </select>
-              </div>
+            <!-- Event Type -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Event Type <span class="text-red-500">*</span></label>
+              <select
+                v-model="form.eventType"
+                @change="onEventTypeChange"
+                required
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              >
+                <option value="Meeting / Appointment">Meeting / Appointment</option>
+                <option value="Internal Audit">Internal Audit</option>
+                <option value="External Audit — Single Org">External Audit — Single Org</option>
+                <option value="External Audit Beat">External Audit Beat</option>
+                <option value="Field Sales Beat">Field Sales Beat</option>
+              </select>
             </div>
 
             <!-- Event Owner -->
@@ -222,12 +198,15 @@
               </p>
           </div>
             
-            <!-- Linked Organization (for Audit events) -->
+            <!-- Organization (for audit events) -->
             <div v-if="requiresLinkedOrg" class="grid grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Linked Organization <span class="text-red-500">*</span>
+                  Organization <span class="text-red-500">*</span>
                 </label>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  The organization this event is associated with.
+                </p>
                 <select
                   v-model="form.relatedToId"
                   @change="fetchOrganizations"
@@ -242,12 +221,15 @@
               </div>
               </div>
 
-            <!-- Audit Form Selection -->
+            <!-- Form Selection -->
             <div v-if="requiresAuditForm" :key="`audit-form-${form.eventType}-${auditForms.length}`" class="grid grid-cols-2 gap-4">
               <div class="col-span-2">
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Audit Form <span class="text-red-500">*</span>
+                  Form <span class="text-red-500">*</span>
                 </label>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  The form that will be executed as part of this event.
+                </p>
                 <select
                   v-model="form.linkedFormId"
                   :required="linkedFormIdDependencyState.required"
@@ -262,9 +244,27 @@
                   </option>
                 </select>
                 <p v-if="requiresAuditForm && auditForms.length === 0 && !loadingForms" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Create an audit form first in the Forms module
+                  Create a form first in the Forms module
                 </p>
               </div>
+            </div>
+
+            <!-- Controlled Self Review (audit events only; dependency-driven visibility) -->
+            <div v-if="showAllowSelfReview" class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+              <div class="pr-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Allow Self Review</label>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Enable only if the auditor is responsible for both execution and approval.
+                </p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  v-model="form.allowSelfReview"
+                  class="sr-only peer"
+                />
+                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+              </label>
             </div>
 
             <!-- Multi-Org Route (External Audit Beat, Field Sales Beat) -->
@@ -401,7 +401,9 @@
               Cancel
             </button>
             <button
-              type="submit"
+              type="button"
+              @click="handleSubmit"
+              @mousedown="() => console.log('[EventFormModal] Button clicked!')"
               :disabled="saving"
               class="px-6 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
@@ -463,8 +465,11 @@ const form = ref({
   eventName: '',
   notes: '',
   eventType: 'Meeting / Appointment',
-  status: 'PLANNED',
+  // status is system-controlled, not user-editable
   eventOwnerId: '',
+  auditorId: '',
+  reviewerId: '',
+  correctiveOwnerId: '',
   startDateTime: '',
   endDateTime: '',
   location: '',
@@ -482,12 +487,15 @@ const form = ref({
   backgroundTracking: false,
   minTimePerStop: null,
   partnerVisibility: false,
+  // Controlled self-review support (audit events only; visibility is dependency-driven)
+  allowSelfReview: false,
   allowedActions: {
     orders: true,
     payments: false,
     feedback: true
   },
-  visibility: 'Internal'
+  visibility: 'Internal',
+  // Legacy: plural corrective owners removed (single-owner enforced via correctiveOwnerId)
 });
 
 const isEditing = computed(() => !!props.event?._id);
@@ -534,7 +542,7 @@ const requiresLinkedOrg = computed(() => {
 // Get linkedFormId field definition from module
 const linkedFormIdField = computed(() => {
   if (!eventsModuleDefinition.value?.fields) return null;
-  return eventsModuleDefinition.value.fields.find(f => f.key === 'linkedFormId');
+  return eventsModuleDefinition.value.fields.find(f => (f.key || '').toLowerCase() === 'linkedformid');
 });
 
 // Evaluate dependency state for linkedFormId field
@@ -561,6 +569,33 @@ const linkedFormIdDependencyState = computed(() => {
 // Computed property for visibility (using dependency system)
 const requiresAuditForm = computed(() => {
   return linkedFormIdDependencyState.value.visible !== false;
+});
+
+// Legacy: plural corrective owners removed (single-owner enforced via correctiveOwnerId)
+
+// Get allowSelfReview field definition from module (dependency-driven visibility)
+const allowSelfReviewField = computed(() => {
+  if (!eventsModuleDefinition.value?.fields) return null;
+  return eventsModuleDefinition.value.fields.find(f => (f.key || '').toLowerCase() === 'allowselfreview');
+});
+
+// Evaluate dependency state for allowSelfReview field
+const allowSelfReviewDependencyState = computed(() => {
+  const field = allowSelfReviewField.value;
+  if (!field) {
+    // Safety-first fallback: if module definition isn't loaded, do NOT show this field.
+    // (Prevents accidentally enabling self-review visibility outside audit configuration.)
+    return { visible: false, required: false, readonly: false };
+  }
+  return getFieldDependencyState(
+    field,
+    form.value,
+    eventsModuleDefinition.value?.fields || []
+  );
+});
+
+const showAllowSelfReview = computed(() => {
+  return allowSelfReviewDependencyState.value.visible !== false;
 });
 
 const isMultiOrgRoute = computed(() => {
@@ -591,6 +626,11 @@ watch(() => form.value.eventType, (newEventType, oldEventType) => {
     if (oldEventType && !requiresAuditForm.value) {
       form.value.linkedFormId = '';
     }
+  }
+  
+  // Clear allowSelfReview if event type no longer shows it (dependency-driven)
+  if (oldEventType && !showAllowSelfReview.value) {
+    form.value.allowSelfReview = false;
   }
 }, { immediate: false });
 
@@ -738,8 +778,11 @@ watch(() => props.isOpen, (newVal) => {
       eventName: props.event.eventName || '',
       notes: props.event.notes || '',
       eventType: props.event.eventType || 'Meeting / Appointment',
-      status: props.event.status || 'PLANNED',
+      // status is system-controlled, not user-editable
       eventOwnerId: props.event.eventOwnerId?._id || props.event.eventOwnerId || currentUser.value._id || '',
+      auditorId: props.event.auditorId?._id || props.event.auditorId || '',
+      reviewerId: props.event.reviewerId?._id || props.event.reviewerId || '',
+      correctiveOwnerId: props.event.correctiveOwnerId?._id || props.event.correctiveOwnerId || '',
       startDateTime: formatDateForInput(props.event.startDateTime),
       endDateTime: formatDateForInput(props.event.endDateTime),
       location: props.event.location || '',
@@ -753,6 +796,7 @@ watch(() => props.isOpen, (newVal) => {
       backgroundTracking: props.event.backgroundTracking || false,
       minTimePerStop: props.event.minTimePerStop || null,
       partnerVisibility: props.event.partnerVisibility || false,
+      allowSelfReview: props.event.allowSelfReview === true,
       allowedActions: props.event.allowedActions || { orders: true, payments: false, feedback: true },
       visibility: props.event.visibility || 'Internal',
       attachments: props.event.attachments || []
@@ -795,8 +839,11 @@ const resetForm = () => {
     eventName: '',
     notes: '',
     eventType: 'Meeting / Appointment',
-    status: 'PLANNED',
+    // status is system-controlled, defaults to 'Planned' on creation
     eventOwnerId: currentUser.value._id || '',
+    auditorId: '',
+    reviewerId: '',
+    correctiveOwnerId: '',
     startDateTime: formatDateForInput(now),
     endDateTime: formatDateForInput(oneHourLater),
     location: '',
@@ -814,13 +861,14 @@ const resetForm = () => {
     backgroundTracking: false,
     minTimePerStop: null,
     partnerVisibility: false,
+    allowSelfReview: false,
     allowedActions: {
       orders: true,
       payments: false,
       feedback: true
     },
     visibility: 'Internal',
-    attachments: []
+    attachments: [],
   };
 };
 
@@ -837,18 +885,90 @@ const fetchUsers = async () => {
 };
 
 
-const handleSubmit = async () => {
+const handleSubmit = async (e) => {
+  console.log('[EventFormModal] 🚀 handleSubmit STARTED', {
+    isEditing: isEditing.value,
+    saving: saving.value,
+    hasEvent: !!e,
+    formKeys: Object.keys(form.value)
+  });
+  
+  // Prevent default form submission
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  
+  // Early return if already saving
+  if (saving.value) {
+    console.log('[EventFormModal] ⏸️ Already saving, ignoring submit');
+    return;
+  }
+  
+  console.log('[EventFormModal] ✅ Proceeding with validation...');
+  
+  // Validate required fields
+  if (!form.value.eventName || !form.value.eventName.trim()) {
+    alert('Event Name is required');
+    return;
+  }
+  
+  if (!form.value.startDateTime) {
+    alert('Start Date/Time is required');
+    return;
+  }
+  
+  if (!form.value.endDateTime) {
+    alert('End Date/Time is required');
+    return;
+  }
+  
+  if (!form.value.eventOwnerId && !currentUser.value._id) {
+    alert('Event Owner is required');
+    return;
+  }
+  
   saving.value = true;
   
   try {
+    // Validate and convert dates
+    let startDate, endDate;
+    try {
+      startDate = new Date(form.value.startDateTime);
+      if (isNaN(startDate.getTime())) {
+        throw new Error('Invalid start date/time');
+      }
+    } catch (error) {
+      alert('Invalid start date/time. Please select a valid date and time.');
+      saving.value = false;
+      return;
+    }
+    
+    try {
+      endDate = new Date(form.value.endDateTime);
+      if (isNaN(endDate.getTime())) {
+        throw new Error('Invalid end date/time');
+      }
+    } catch (error) {
+      alert('Invalid end date/time. Please select a valid date and time.');
+      saving.value = false;
+      return;
+    }
+    
+    if (endDate <= startDate) {
+      alert('End date/time must be after start date/time.');
+      saving.value = false;
+      return;
+    }
+    
     const payload = {
-      eventName: form.value.eventName,
+      eventName: form.value.eventName.trim(),
       notes: form.value.notes || '',
       eventType: form.value.eventType,
-      status: form.value.status,
+      // status is system-controlled - backend will set to 'Planned' on creation
       eventOwnerId: form.value.eventOwnerId || currentUser.value._id,
-      startDateTime: new Date(form.value.startDateTime).toISOString(),
-      endDateTime: new Date(form.value.endDateTime).toISOString(),
+      startDateTime: startDate.toISOString(),
+      endDateTime: endDate.toISOString(),
       location: form.value.location || '',
       recurrence: form.value.recurrence || null,
       visibility: form.value.visibility || 'Internal'
@@ -867,7 +987,7 @@ const handleSubmit = async () => {
       payload.linkedFormId = null;
     }
     
-    console.log('[EventFormModal] Submitting event with linkedFormId:', payload.linkedFormId, 'form.value.linkedFormId:', form.value.linkedFormId);
+    console.log('[EventFormModal] Submitting event payload:', JSON.stringify(payload, null, 2));
     
     // Add GEO and event-type specific fields
     payload.geoRequired = form.value.geoRequired || false;
@@ -897,6 +1017,15 @@ const handleSubmit = async () => {
         payload.partnerVisibility = form.value.partnerVisibility;
       }
     }
+
+    // Controlled self-review (dependency-driven visibility)
+    payload.allowSelfReview = showAllowSelfReview.value ? (form.value.allowSelfReview === true) : false;
+ 
+    // Legacy: plural corrective owners removed (single-owner enforced via correctiveOwnerId)
+    // Ensure audit role fields are included when set
+    if (form.value.auditorId) payload.auditorId = form.value.auditorId;
+    if (form.value.reviewerId) payload.reviewerId = form.value.reviewerId;
+    if (form.value.correctiveOwnerId) payload.correctiveOwnerId = form.value.correctiveOwnerId;
     
     // Add field sales specific fields
     if (form.value.eventType === 'Field Sales Beat') {
@@ -909,6 +1038,11 @@ const handleSubmit = async () => {
     // Add visibility
     payload.visibility = form.value.visibility || 'Internal';
     
+    console.log('[EventFormModal] Making API call...', {
+      method: isEditing.value ? 'PUT' : 'POST',
+      url: isEditing.value ? `/events/${props.event.eventId || props.event._id}` : '/events'
+    });
+    
     let response;
     if (isEditing.value) {
       // Support both _id and eventId
@@ -918,7 +1052,7 @@ const handleSubmit = async () => {
       response = await apiClient.post('/events', payload);
     }
     
-    console.log('Event save response:', response);
+    console.log('[EventFormModal] Event save response:', response);
     
     if (response.success) {
       emit('saved', response.data);
@@ -937,20 +1071,46 @@ const handleSubmit = async () => {
       message: error.message,
       status: error.status,
       response: error.response,
+      responseData: error.response?.data,
       validationErrors: error.validationErrors
     });
     
-    let errorMessage = 'Failed to save event: ' + (error.message || 'Unknown error');
+    // Extract actual error message from backend response
+    let errorMessage = 'Failed to save event';
     
-    // Add validation errors if present
-    if (error.validationErrors && error.validationErrors.length > 0) {
-      errorMessage += '\n\nValidation Errors:\n';
-      errorMessage += error.validationErrors.map(e => `• ${e.field}: ${e.message}`).join('\n');
+    if (error.response?.data) {
+      const errorData = error.response.data;
+      
+      // Prioritize actual error message over generic ones
+      if (errorData.error && errorData.error !== 'Error creating event.' && errorData.error !== 'Error updating event.') {
+        errorMessage = errorData.error;
+      } else if (errorData.message && errorData.message !== 'Error creating event.' && errorData.message !== 'Error updating event.') {
+        errorMessage = errorData.message;
+      } else if (errorData.error) {
+        errorMessage = errorData.error;
+      } else if (errorData.message) {
+        errorMessage = errorData.message;
+      } else if (typeof errorData === 'string') {
+        errorMessage = errorData;
+      }
+      
+      // Add validation errors if present
+      if (errorData.validationErrors && Array.isArray(errorData.validationErrors) && errorData.validationErrors.length > 0) {
+        errorMessage += '\n\nValidation Errors:\n';
+        errorMessage += errorData.validationErrors.map((e: any) => `• ${e.field || 'Field'}: ${e.message || e}`).join('\n');
+      }
+      
+      // Add error field if it contains more details
+      if (errorData.error && errorData.error !== errorMessage && !errorMessage.includes(errorData.error)) {
+        errorMessage += '\n\nDetails: ' + errorData.error;
+      }
+    } else if (error.message && error.message !== 'Failed to save event') {
+      errorMessage = error.message;
     }
     
-    // Add server error details if present
-    if (error.response && error.response.error && error.response.error !== error.message) {
-      errorMessage += '\n\nDetails: ' + error.response.error;
+    // Fallback to error.message if we still have generic message
+    if (errorMessage === 'Failed to save event' && error.message) {
+      errorMessage = error.message;
     }
     
     alert(errorMessage);
