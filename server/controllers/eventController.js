@@ -2,9 +2,168 @@ const mongoose = require('mongoose');
 const Event = require('../models/Event');
 const EventTracking = require('../models/EventTracking');
 const EventOrder = require('../models/EventOrder');
+const User = require('../models/User');
 const geoValidationService = require('../services/geoValidationService');
 const ModuleDefinition = require('../models/ModuleDefinition');
 const { getFieldDependencyState } = require('../utils/dependencyEvaluation');
+
+const AUDIT_EVENT_TYPES = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
+
+async function validateAuditUserRoleScopes({
+    eventType,
+    requesterOrgId,
+    relatedToId,
+    auditorUserId,
+    reviewerUserId,
+    correctiveOwnerUserId,
+    allowSelfReview
+}) {
+    if (!AUDIT_EVENT_TYPES.includes(eventType)) return;
+
+    const requesterOrg = String(requesterOrgId);
+    const targetOrg = relatedToId ? String(relatedToId) : null;
+
+    const normalizeId = (v) => {
+        if (!v) return null;
+        if (typeof v === 'object' && v._id) return String(v._id);
+        return String(v);
+    };
+
+    const isSingleOrgAudit = (eventType === 'Internal Audit' || eventType === 'External Audit — Single Org');
+    if (isSingleOrgAudit && !targetOrg) {
+        const err = new Error('relatedToId is required for single-organization audit events.');
+        err.statusCode = 400;
+        err.code = 'AUDIT_ORG_REQUIRED';
+        throw err;
+    }
+
+    // Internal Audit must always be scoped to the requester's organization
+    if (eventType === 'Internal Audit' && targetOrg && targetOrg !== requesterOrg) {
+        const err = new Error('Internal Audit must be scoped to the current organization.');
+        err.statusCode = 400;
+        err.code = 'INTERNAL_AUDIT_ORG_MISMATCH';
+        throw err;
+    }
+
+    const idsToFetch = [auditorUserId, reviewerUserId, correctiveOwnerUserId].map(normalizeId).filter(Boolean);
+    const users = await User.find({ _id: { $in: idsToFetch } })
+        .select('_id organizationId status firstName lastName email')
+        .lean();
+    const byId = new Map(users.map(u => [String(u._id), u]));
+
+    const getOrgId = (id) => byId.get(normalizeId(id))?.organizationId ? String(byId.get(normalizeId(id)).organizationId) : null;
+    const isActive = (id) => byId.get(normalizeId(id))?.status === 'active';
+
+    const assertUser = (id, label) => {
+        if (!id) return;
+        const u = byId.get(normalizeId(id));
+        if (!u) {
+            const err = new Error(`${label} user not found.`);
+            err.statusCode = 400;
+            err.code = 'USER_NOT_FOUND';
+            throw err;
+        }
+        if (!isActive(id)) {
+            const err = new Error(`${label} must be an active user.`);
+            err.statusCode = 400;
+            err.code = 'USER_INACTIVE';
+            throw err;
+        }
+    };
+
+    assertUser(auditorUserId, 'Auditor');
+    assertUser(reviewerUserId, 'Reviewer');
+    assertUser(correctiveOwnerUserId, 'Corrective Owner');
+
+    const auditorOrg = auditorUserId ? getOrgId(auditorUserId) : null;
+    const reviewerOrg = reviewerUserId ? getOrgId(reviewerUserId) : null;
+    const correctiveOrg = correctiveOwnerUserId ? getOrgId(correctiveOwnerUserId) : null;
+
+    const isInternal = (orgId) => orgId && orgId === requesterOrg;
+    const isTargetOrg = (orgId) => targetOrg && orgId && orgId === targetOrg;
+
+    // Reviewer: always internal when provided (and required for External Audit — Single Org)
+    if (reviewerUserId && !isInternal(reviewerOrg)) {
+        const err = new Error('Reviewer must be an internal user.');
+        err.statusCode = 400;
+        err.code = 'REVIEWER_NOT_INTERNAL';
+        throw err;
+    }
+
+    // Internal Audit: all roles must belong to relatedToId (which equals requester org)
+    if (eventType === 'Internal Audit') {
+        if (auditorUserId && !isTargetOrg(auditorOrg)) {
+            const err = new Error('Auditor must belong to the audit Organization.');
+            err.statusCode = 400;
+            err.code = 'AUDITOR_SCOPE_INVALID';
+            throw err;
+        }
+        if (reviewerUserId && !isTargetOrg(reviewerOrg)) {
+            const err = new Error('Reviewer must belong to the audit Organization.');
+            err.statusCode = 400;
+            err.code = 'REVIEWER_SCOPE_INVALID';
+            throw err;
+        }
+        if (correctiveOwnerUserId && !isTargetOrg(correctiveOrg)) {
+            const err = new Error('Corrective Owner must belong to the audit Organization.');
+            err.statusCode = 400;
+            err.code = 'CORRECTIVE_OWNER_SCOPE_INVALID';
+            throw err;
+        }
+    }
+
+    // Corrective Owner:
+    // - For single-org audits: must belong to selected Organization (relatedToId)
+    // - For route audits (External Audit Beat): default to internal users only (safe)
+    if (correctiveOwnerUserId) {
+        if (isSingleOrgAudit) {
+            if (!isTargetOrg(correctiveOrg)) {
+                const err = new Error('Corrective Owner must belong to the selected Organization.');
+                err.statusCode = 400;
+                err.code = 'CORRECTIVE_OWNER_SCOPE_INVALID';
+                throw err;
+            }
+        } else {
+            if (!isInternal(correctiveOrg)) {
+                const err = new Error('Corrective Owner must be an internal user for this audit type.');
+                err.statusCode = 400;
+                err.code = 'CORRECTIVE_OWNER_NOT_INTERNAL';
+                throw err;
+            }
+        }
+    }
+
+    // Auditor selection scope:
+    // - Internal Audit: internal users only
+    // - External Audit — Single Org: internal OR selected Organization users
+    // - External Audit Beat: internal users only (by default)
+    if (auditorUserId) {
+        if (eventType === 'External Audit — Single Org') {
+            if (!isInternal(auditorOrg) && !isTargetOrg(auditorOrg)) {
+                const err = new Error('Auditor must be an internal user or a user belonging to the selected Organization.');
+                err.statusCode = 400;
+                err.code = 'AUDITOR_SCOPE_INVALID';
+                throw err;
+            }
+        } else {
+            if (!isInternal(auditorOrg)) {
+                const err = new Error('Auditor must be an internal user for this audit type.');
+                err.statusCode = 400;
+                err.code = 'AUDITOR_NOT_INTERNAL';
+                throw err;
+            }
+        }
+    }
+
+    // Self-review constraints (backend guard; model enforces too)
+    const allow = allowSelfReview === true;
+    if (auditorUserId && reviewerUserId && String(auditorUserId) === String(reviewerUserId) && !allow) {
+        const err = new Error('Reviewer cannot be the same as Auditor unless allowSelfReview is enabled.');
+        err.statusCode = 400;
+        err.code = 'SELF_REVIEW_FORBIDDEN';
+        throw err;
+    }
+}
 
 // Helper function to normalize status to uppercase enum values
 const normalizeEventStatus = (status) => {
@@ -220,12 +379,11 @@ exports.createEvent = async (req, res) => {
             delete req.body.status;
         }
         
-        const auditEventTypes = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
-        const isAuditType = auditEventTypes.includes(req.body?.eventType);
+        const isAuditType = AUDIT_EVENT_TYPES.includes(req.body?.eventType);
 
-        // For audit events, allow auditor selection to come from either auditorId or eventOwnerId
-        // (eventOwnerId is a legacy/ownership field; label can be overridden to "Auditor" via dependencies).
-        const auditorSelection = isAuditType ? (req.body.auditorId || req.body.eventOwnerId) : null;
+        // For audit events, use explicit `auditorId` as the source of truth.
+        // (eventOwnerId is hidden in audit UX; we still mirror auditorId into eventOwnerId for ownership.)
+        const auditorSelection = isAuditType ? (req.body.auditorId || null) : null;
 
         const eventData = {
             ...req.body,
@@ -240,6 +398,19 @@ exports.createEvent = async (req, res) => {
             // status will be set to "Planned" by model default and pre-save hook
             // Explicitly set to undefined so model default applies
         };
+
+        // Internal Audit: relatedToId is locked to the current user's organization
+        if (eventData.eventType === 'Internal Audit') {
+            const desired = String(req.user.organizationId);
+            if (req.body.relatedToId && String(req.body.relatedToId) !== desired) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Internal Audit organization is locked and cannot be changed.',
+                    code: 'INTERNAL_AUDIT_ORG_LOCKED'
+                });
+            }
+            eventData.relatedToId = req.user.organizationId;
+        }
         
         // Explicitly ensure status is not in eventData (let model default handle it)
         delete eventData.status;
@@ -249,19 +420,37 @@ exports.createEvent = async (req, res) => {
             eventData.eventType = eventData.eventType.charAt(0).toUpperCase() + eventData.eventType.slice(1);
         }
         
-        // For audit events, enforce explicit responsibility assignment (no defaults)
+        // For audit events, enforce role constraints and user scope rules (do not rely on UI)
         if (isAuditType) {
+            const inferredAllowSelfReview =
+                eventData.allowSelfReview === true ||
+                (eventData.allowSelfReview === undefined && eventData.eventType === 'Internal Audit');
+
+            // Requiredness is dependency-driven; but we must always have an Auditor + Corrective Owner,
+            // and for External Audit — Single Org we require a Reviewer and Organization.
             const missing = [];
             if (!eventData.auditorId) missing.push('auditorId');
-            if (!eventData.reviewerId) missing.push('reviewerId');
             if (!eventData.correctiveOwnerId) missing.push('correctiveOwnerId');
+            if (eventData.eventType === 'Internal Audit' && !eventData.relatedToId) missing.push('relatedToId');
+            if (eventData.eventType === 'External Audit — Single Org' && !eventData.reviewerId) missing.push('reviewerId');
+            if (eventData.eventType === 'External Audit — Single Org' && !eventData.relatedToId) missing.push('relatedToId');
             if (missing.length > 0) {
                 return res.status(400).json({
                     success: false,
-                    message: `Missing required audit role field(s): ${missing.join(', ')}`,
-                    code: 'AUDIT_ROLE_REQUIRED'
+                    message: `Missing required audit field(s): ${missing.join(', ')}`,
+                    code: 'AUDIT_FIELD_REQUIRED'
                 });
             }
+
+            await validateAuditUserRoleScopes({
+                eventType: eventData.eventType,
+                requesterOrgId: req.user.organizationId,
+                relatedToId: eventData.relatedToId,
+                auditorUserId: eventData.auditorId,
+                reviewerUserId: eventData.reviewerId,
+                correctiveOwnerUserId: eventData.correctiveOwnerId,
+                allowSelfReview: inferredAllowSelfReview
+            });
         }
 
         const moduleDefForClear = await ModuleDefinition.findOne({
@@ -289,18 +478,6 @@ exports.createEvent = async (req, res) => {
                 const depState = getFieldDependencyState(reviewerField, eventData);
                 if (!depState.visible) {
                     eventData.reviewerId = null;
-                }
-            }
-
-            // Clear auditorId if it shouldn't be visible for this eventType (dependency-driven)
-            const auditorField = moduleDefForClear.fields.find(f =>
-                f.key && f.key.toLowerCase() === 'auditorid'
-            );
-            if (auditorField) {
-                const depState = getFieldDependencyState(auditorField, eventData);
-                if (!depState.visible) {
-                    eventData.auditorId = null;
-                    eventData.eventOwnerId = null;
                 }
             }
 
@@ -455,6 +632,21 @@ exports.updateEvent = async (req, res) => {
         if (req.body.eventType && typeof req.body.eventType === 'string') {
             req.body.eventType = req.body.eventType.charAt(0).toUpperCase() + req.body.eventType.slice(1);
         }
+
+        // Internal Audit: relatedToId is locked to the current user's organization
+        // Reject any attempt to override, and force to current org when switching to Internal Audit.
+        const incomingEventType = req.body.eventType || currentEvent.eventType;
+        if (incomingEventType === 'Internal Audit') {
+            const desired = String(req.user.organizationId);
+            if (req.body.relatedToId && String(req.body.relatedToId) !== desired) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Internal Audit organization is locked and cannot be changed.',
+                    code: 'INTERNAL_AUDIT_ORG_LOCKED'
+                });
+            }
+            req.body.relatedToId = req.user.organizationId;
+        }
         
         if (req.body.eventType && req.body.eventType !== currentEvent.eventType) {
             const moduleDefForClear = await ModuleDefinition.findOne({
@@ -482,18 +674,6 @@ exports.updateEvent = async (req, res) => {
                     const depState = getFieldDependencyState(reviewerField, validationDataForClear);
                     if (!depState.visible) {
                         req.body.reviewerId = null;
-                    }
-                }
-
-                const auditorField = moduleDefForClear.fields.find(f =>
-                    f.key && f.key.toLowerCase() === 'auditorid'
-                );
-                if (auditorField) {
-                    const validationDataForClear = { ...currentEvent.toObject(), ...req.body };
-                    const depState = getFieldDependencyState(auditorField, validationDataForClear);
-                    if (!depState.visible) {
-                        req.body.auditorId = null;
-                        req.body.eventOwnerId = null;
                     }
                 }
 
@@ -575,21 +755,28 @@ exports.updateEvent = async (req, res) => {
             auditHistory: currentEvent.auditHistory
         };
 
-        // Keep audit auditor selection consistent: if updating auditorId, mirror to eventOwnerId (and vice versa)
-        const auditEventTypes = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
+        // Keep audit auditor selection consistent: auditorId is source of truth; mirror to eventOwnerId for ownership.
         const effectiveEventType = updateData.eventType || currentEvent.eventType;
-        const isAuditType = auditEventTypes.includes(effectiveEventType);
+        const isAuditType = AUDIT_EVENT_TYPES.includes(effectiveEventType);
         if (isAuditType) {
-            const auditorSelection = updateData.auditorId || updateData.eventOwnerId || currentEvent.auditorId || currentEvent.eventOwnerId;
+            const auditorSelection = updateData.auditorId || currentEvent.auditorId || currentEvent.eventOwnerId;
             if (auditorSelection) {
                 updateData.auditorId = auditorSelection;
                 updateData.eventOwnerId = auditorSelection;
+            }
+            // Ignore any client attempt to set eventOwnerId directly in audit events.
+            if (updateData.eventOwnerId && updateData.auditorId && String(updateData.eventOwnerId) !== String(updateData.auditorId)) {
+                updateData.eventOwnerId = updateData.auditorId;
             }
         }
         
         // Validate field dependencies (configurable, not hardcoded)
         // Merge current event data with update data for validation
         const validationData = { ...currentEvent.toObject(), ...updateData };
+        // Ensure forced org is reflected in validationData too
+        if (effectiveEventType === 'Internal Audit') {
+            validationData.relatedToId = req.user.organizationId;
+        }
         const moduleDef = await ModuleDefinition.findOne({
             key: 'events',
             organizationId: req.user.organizationId
@@ -627,6 +814,23 @@ exports.updateEvent = async (req, res) => {
                     validationErrors
                 });
             }
+        }
+
+        // Audit role scope + self-review validation (backend guard; do not rely on UI)
+        if (AUDIT_EVENT_TYPES.includes(effectiveEventType)) {
+            const inferredAllowSelfReview =
+                validationData.allowSelfReview === true ||
+                (validationData.allowSelfReview === undefined && effectiveEventType === 'Internal Audit');
+
+            await validateAuditUserRoleScopes({
+                eventType: effectiveEventType,
+                requesterOrgId: req.user.organizationId,
+                relatedToId: validationData.relatedToId,
+                auditorUserId: validationData.eventOwnerId || validationData.auditorId,
+                reviewerUserId: validationData.reviewerId,
+                correctiveOwnerUserId: validationData.correctiveOwnerId,
+                allowSelfReview: inferredAllowSelfReview
+            });
         }
         
         const updatedEvent = await Event.findOneAndUpdate(

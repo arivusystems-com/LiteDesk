@@ -59,6 +59,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import DynamicFormField from './DynamicFormField.vue';
 import apiClient from '@/utils/apiClient';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
+import { useAuthStore } from '@/stores/auth';
 
 const props = defineProps({
   moduleKey: {
@@ -82,6 +83,7 @@ const moduleDefinition = ref(null);
 const loading = ref(true);
 const localFormData = ref({ ...props.formData });
 const error = ref(null);
+const authStore = useAuthStore();
 
 // Field rendering helpers - case-insensitive lookup
 const fieldMap = computed(() => {
@@ -190,23 +192,6 @@ const orderedFields = computed(() => {
     
     const fieldKeyLower = field.key?.toLowerCase();
     
-    // For Events module, exclude relatedToId and linkedFormId from normal processing
-    // These fields are handled by special force-add logic below to prevent duplicates
-    if (props.moduleKey === 'events') {
-      const fieldKeyLower = field.key?.toLowerCase();
-      const isLinkedFormField = fieldKeyLower === 'linked-form-id' || 
-                                fieldKeyLower === 'linkedformid' ||
-                                field.key === 'linkedFormId';
-      const isRelatedToField = fieldKeyLower === 'related-to-id' || 
-                               fieldKeyLower === 'relatedtoid' ||
-                               field.key === 'relatedToId';
-      
-      if (isLinkedFormField || isRelatedToField) {
-        console.log(`⏭️  Skipping ${field.key} in quickCreate processing - will be handled by force-add logic`);
-        continue; // Skip these fields in normal processing
-      }
-    }
-    
     // Exclude system fields
     const isSystem = systemFieldKeys.includes(fieldKeyLower);
     
@@ -252,23 +237,6 @@ const orderedFields = computed(() => {
       const fieldKeyLower = field.key?.toLowerCase();
       const isSystem = systemFieldKeys.includes(fieldKeyLower);
       
-      // For Events module, exclude relatedToId and linkedFormId from required fields processing
-      // These fields are handled by special force-add logic below to prevent duplicates
-      if (props.moduleKey === 'events') {
-        const fieldKeyLower = field.key?.toLowerCase();
-        const isLinkedFormField = fieldKeyLower === 'linked-form-id' || 
-                                  fieldKeyLower === 'linkedformid' ||
-                                  field.key === 'linkedFormId';
-        const isRelatedToField = fieldKeyLower === 'related-to-id' || 
-                                 fieldKeyLower === 'relatedtoid' ||
-                                 field.key === 'relatedToId';
-        
-        if (isLinkedFormField || isRelatedToField) {
-          console.log(`⏭️  Skipping ${field.key} in required fields processing - will be handled by force-add logic`);
-          continue; // Skip these fields in required fields processing
-        }
-      }
-      
       // Check dependency visibility for required fields too
       let isVisible = true;
       if (field.dependencies && Array.isArray(field.dependencies) && field.dependencies.length > 0) {
@@ -282,80 +250,6 @@ const orderedFields = computed(() => {
           isVisible) {
         ordered.push(field);
         seen.add(fieldKeyLower);
-      }
-    }
-  }
-  
-  // For events module, ensure linkedFormId and relatedToId are included when eventType is an audit type
-  // These fields might be hidden initially but should be visible when eventType matches
-  if (props.moduleKey === 'events') {
-    const auditEventTypes = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
-    const currentEventType = currentFormData.eventType;
-    const isAuditType = auditEventTypes.includes(currentEventType);
-    
-    console.log('[DynamicForm] Checking audit fields for events:', {
-      eventType: currentEventType,
-      isAuditType: isAuditType,
-      currentFormDataKeys: Object.keys(currentFormData)
-    });
-    
-    if (isAuditType) {
-      // First, remove any existing instances of these fields to prevent duplicates
-      const linkedFormKeyVariations = ['linked-form-id', 'linkedformid', 'linkedformid'];
-      const relatedToKeyVariations = ['related-to-id', 'relatedtoid', 'relatedtoid'];
-      
-      // Remove any existing linkedFormId fields
-      for (let i = ordered.length - 1; i >= 0; i--) {
-        const fieldKeyLower = ordered[i].key?.toLowerCase();
-        if (linkedFormKeyVariations.includes(fieldKeyLower) || ordered[i].key === 'linkedFormId') {
-          console.log(`🗑️  Removing existing linkedFormId field "${ordered[i].key}" before force-add`);
-          seen.delete(fieldKeyLower);
-          ordered.splice(i, 1);
-        }
-      }
-      
-      // Remove any existing relatedToId fields
-      for (let i = ordered.length - 1; i >= 0; i--) {
-        const fieldKeyLower = ordered[i].key?.toLowerCase();
-        if (relatedToKeyVariations.includes(fieldKeyLower) || ordered[i].key === 'relatedToId') {
-          console.log(`🗑️  Removing existing relatedToId field "${ordered[i].key}" before force-add`);
-          seen.delete(fieldKeyLower);
-          ordered.splice(i, 1);
-        }
-      }
-      
-      // Find and include linkedFormId field (check both kebab-case and camelCase)
-      const linkedFormFields = allFields.filter(f => {
-        const keyLower = f.key?.toLowerCase();
-        return keyLower === 'linked-form-id' || 
-               keyLower === 'linkedformid' ||
-               f.key === 'linkedFormId';
-      });
-      
-      // Add the first matching linkedFormId field
-      if (linkedFormFields.length > 0) {
-        const field = linkedFormFields[0]; // Use first match
-        const fieldKeyLower = field.key?.toLowerCase();
-        ordered.push(field);
-        seen.add(fieldKeyLower);
-        console.log(`✅ Force-added linkedFormId field "${field.key}" for audit event type`);
-      }
-      
-      // Find and include relatedToId field (check both kebab-case and camelCase)
-      const relatedToFields = allFields.filter(f => {
-        const keyLower = f.key?.toLowerCase();
-        return keyLower === 'related-to-id' || 
-               keyLower === 'relatedtoid' ||
-               f.key === 'relatedToId';
-      });
-      
-      // Add the first matching relatedToId field
-      if (relatedToFields.length > 0) {
-        const field = relatedToFields[0]; // Use first match
-        const fieldKeyLower = field.key?.toLowerCase();
-        ordered.push(field);
-        seen.add(fieldKeyLower);
-        console.log(`✅ Force-added relatedToId field "${field.key}" for audit event type`);
       }
     }
   }
@@ -440,18 +334,64 @@ const getFieldState = (field) => {
       readonly: false,
       required: field.required || false,
       allowedOptions: null,
-      label: null
+      label: null,
+      lookupQuery: null,
+      setValue: null
     };
   }
   // Access localFormData.value to ensure reactivity - Vue tracks this dependency
   const currentFormData = localFormData.value;
-  return getFieldDependencyState(field, currentFormData, moduleDefinition.value?.fields || []);
+  return getFieldDependencyState(field, currentFormData, moduleDefinition.value?.fields || [], { currentUser: authStore.user });
 };
 
 const updateField = (key, value) => {
   localFormData.value[key] = value;
   emit('update:formData', { ...localFormData.value });
 };
+
+// Generic dependency-driven value enforcement:
+// If a field becomes readonly + required, ensure its value is set to a safe default.
+// (Used to keep audit GEO UI accurate without event-type hardcoding.)
+watch(
+  () => [moduleDefinition.value?.fields, localFormData.value, authStore.user?.organizationId],
+  () => {
+    const fields = moduleDefinition.value?.fields || [];
+    if (!Array.isArray(fields) || fields.length === 0) return;
+
+    let changed = false;
+    for (const field of fields) {
+      if (!field?.key) continue;
+      const depState = getFieldDependencyState(field, localFormData.value, fields, { currentUser: authStore.user });
+
+      // 1) Forced values (dependency-driven)
+      if (depState && depState.setValue !== null && depState.setValue !== undefined) {
+        const current = localFormData.value[field.key];
+        const currentNorm = (current && typeof current === 'object' && current._id) ? String(current._id) : (current == null ? null : String(current));
+        const forcedNorm = (depState.setValue && typeof depState.setValue === 'object' && depState.setValue._id)
+          ? String(depState.setValue._id)
+          : (depState.setValue == null ? null : String(depState.setValue));
+        if (currentNorm !== forcedNorm) {
+          localFormData.value[field.key] = depState.setValue;
+          changed = true;
+        }
+      }
+
+      // 2) Readonly+required checkbox => true (generic)
+      if (field.dataType === 'Checkbox' && depState?.readonly === true && depState?.required === true) {
+        const current = localFormData.value[field.key];
+        if (current !== true) {
+          localFormData.value[field.key] = true;
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      emit('update:formData', { ...localFormData.value });
+    }
+  },
+  { deep: true }
+);
 
 // Watch for external formData changes
 watch(() => props.formData, (newData) => {
