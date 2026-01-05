@@ -411,9 +411,48 @@ function getBaseFieldsForKey(key) {
                     }];
                 }
 
-                // Events: prevent duplicate "Event Owner" + "Auditor" fields in audit flows.
-                // Keep `eventOwnerId` as the internal canonical owner field, but hide it for audit event types.
-                // The explicit audit role field is `auditorId` (shown/required via dependencies).
+                // Events: relatedToId is the "Organization" field for single-org audits.
+                if (key === 'events' && name === 'relatedToId') {
+                    dependencies = [
+                        ...(dependencies || []),
+                        {
+                            name: 'Show for single-org audit event types',
+                            type: 'visibility',
+                            fieldKey: 'eventType',
+                            operator: 'in',
+                            value: ['Internal Audit', 'External Audit — Single Org'],
+                            logic: 'AND'
+                        },
+                        {
+                            name: 'Required for single-org audit event types',
+                            type: 'required',
+                            fieldKey: 'eventType',
+                            operator: 'in',
+                            value: ['Internal Audit', 'External Audit — Single Org'],
+                            logic: 'AND'
+                        },
+                        {
+                            name: 'Internal Audit: lock organization to current org',
+                            type: 'readonly',
+                            fieldKey: 'eventType',
+                            operator: 'equals',
+                            value: 'Internal Audit',
+                            logic: 'AND'
+                        },
+                        {
+                            name: 'Internal Audit: force relatedToId = current org',
+                            type: 'setValue',
+                            fieldKey: 'eventType',
+                            operator: 'equals',
+                            value: 'Internal Audit',
+                            logic: 'AND',
+                            setValue: '$currentUser.organizationId'
+                        }
+                    ];
+                }
+
+                // Events: audit UX uses explicit audit role field `auditorId`.
+                // Hide `eventOwnerId` for audit event types to prevent duplicate "Event Owner" vs "Auditor" confusion.
                 if (key === 'events' && name === 'eventOwnerId') {
                     dependencies = [
                         ...(dependencies || []),
@@ -437,16 +476,34 @@ function getBaseFieldsForKey(key) {
                             type: 'visibility',
                             fieldKey: 'eventType',
                             operator: 'in',
-                            value: ['Internal Audit', 'External Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                            value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
                             logic: 'AND'
                         },
                         {
-                            name: 'Required for audit event types',
+                            name: 'Required for External Audit — Single Org',
                             type: 'required',
                             fieldKey: 'eventType',
-                            operator: 'in',
-                            value: ['Internal Audit', 'External Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                            operator: 'equals',
+                            value: 'External Audit — Single Org',
                             logic: 'AND'
+                        },
+                        {
+                            name: 'Reviewer pool: internal users only',
+                            type: 'lookup',
+                            fieldKey: 'eventType',
+                            operator: 'in',
+                            value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                            logic: 'AND',
+                            lookupQuery: { scope: 'internal' }
+                        },
+                        {
+                            name: 'Internal Audit: reviewer pool -> users in relatedToId (current org)',
+                            type: 'lookup',
+                            fieldKey: 'eventType',
+                            operator: 'equals',
+                            value: 'Internal Audit',
+                            logic: 'AND',
+                            lookupQuery: { scope: 'org', orgId: '$field:relatedToId' }
                         }
                     ];
                 }
@@ -469,6 +526,34 @@ function getBaseFieldsForKey(key) {
                             operator: 'in',
                             value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
                             logic: 'AND'
+                        },
+                        // User pool scoping (UI picker)
+                        {
+                            name: 'Auditor pool: Internal Audit -> users in relatedToId (current org)',
+                            type: 'lookup',
+                            fieldKey: 'eventType',
+                            operator: 'equals',
+                            value: 'Internal Audit',
+                            logic: 'AND',
+                            lookupQuery: { scope: 'org', orgId: '$field:relatedToId' }
+                        },
+                        {
+                            name: 'Auditor pool: External Audit — Single Org -> internal + org users',
+                            type: 'lookup',
+                            logic: 'AND',
+                            conditions: [
+                                { fieldKey: 'eventType', operator: 'equals', value: 'External Audit — Single Org' }
+                            ],
+                            lookupQuery: { scope: 'internal_or_org', orgId: '$field:relatedToId' }
+                        },
+                        {
+                            name: 'Auditor pool: External Audit Beat -> internal users only',
+                            type: 'lookup',
+                            fieldKey: 'eventType',
+                            operator: 'equals',
+                            value: 'External Audit Beat',
+                            logic: 'AND',
+                            lookupQuery: { scope: 'internal' }
                         }
                     ];
                 }
@@ -491,6 +576,15 @@ function getBaseFieldsForKey(key) {
                             operator: 'in',
                             value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
                             logic: 'AND'
+                        },
+                        {
+                            name: 'Corrective owner pool: users from selected Organization',
+                            type: 'lookup',
+                            logic: 'AND',
+                            conditions: [
+                                { fieldKey: 'eventType', operator: 'in', value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'] }
+                            ],
+                            lookupQuery: { scope: 'org', orgId: '$field:relatedToId' }
                         }
                     ];
                 }
@@ -508,18 +602,10 @@ function getBaseFieldsForKey(key) {
                     }];
                 }
 
-                // GEO Required: for audit event types, show it and make it read-only (always ON).
+                // GEO Required: for audit event types, make it read-only + required (always ON).
                 if (key === 'events' && name === 'geoRequired') {
                     dependencies = [
                         ...(dependencies || []),
-                        {
-                            name: 'Show for audit event types',
-                            type: 'visibility',
-                            fieldKey: 'eventType',
-                            operator: 'in',
-                            value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
-                            logic: 'AND'
-                        },
                         {
                             name: 'Read-only for audit event types',
                             type: 'readonly',
@@ -534,6 +620,34 @@ function getBaseFieldsForKey(key) {
                             fieldKey: 'eventType',
                             operator: 'in',
                             value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                            logic: 'AND'
+                        }
+                    ];
+                }
+
+                // Min Visit Duration: show whenever geoRequired = true (no eventType branching)
+                if (key === 'events' && name === 'minVisitDuration') {
+                    dependencies = [
+                        {
+                            name: 'Show when GEO is required',
+                            type: 'visibility',
+                            fieldKey: 'geoRequired',
+                            operator: 'equals',
+                            value: true,
+                            logic: 'AND'
+                        }
+                    ];
+                }
+
+                // Partner Visibility: only for External Audit — Single Org
+                if (key === 'events' && name === 'partnerVisibility') {
+                    dependencies = [
+                        {
+                            name: 'Show only for External Audit — Single Org',
+                            type: 'visibility',
+                            fieldKey: 'eventType',
+                            operator: 'equals',
+                            value: 'External Audit — Single Org',
                             logic: 'AND'
                         }
                     ];
@@ -1315,7 +1429,8 @@ exports.listModules = async (req, res) => {
                             }
                         }
 
-                        // Enforce enterprise audit UX: hide eventOwnerId for audit event types (even if org has older saved deps)
+                        // Events: normalize eventOwnerId audit UX (even if org has older saved deps):
+                        // - Hide eventOwnerId for audit event types (auditorId is used)
                         if (sys.key === 'events' && savedField.key === 'eventOwnerId') {
                             const deps = Array.isArray(savedField.dependencies) ? savedField.dependencies : [];
 
@@ -1359,6 +1474,60 @@ exports.listModules = async (req, res) => {
                             }
                         }
 
+                        // For relatedToId in events module, ensure single-org audit visibility + required dependencies exist
+                        if (sys.key === 'events' && savedField.key === 'relatedToId') {
+                            const deps = Array.isArray(savedField.dependencies) ? savedField.dependencies : [];
+                            const hasVisibility = deps.some(d => d && d.type === 'visibility' && d.fieldKey === 'eventType');
+                            const hasRequired = deps.some(d => d && d.type === 'required' && d.fieldKey === 'eventType');
+                            const hasReadonly = deps.some(d => d && d.type === 'readonly' && d.fieldKey === 'eventType' && d.operator === 'equals' && d.value === 'Internal Audit');
+                            const hasSetValue = deps.some(d => d && d.type === 'setValue' && d.fieldKey === 'eventType' && d.operator === 'equals' && d.value === 'Internal Audit');
+                            if (!hasVisibility) {
+                                if (!savedField.dependencies) savedField.dependencies = [];
+                                savedField.dependencies.push({
+                                    name: 'Show for single-org audit event types',
+                                    type: 'visibility',
+                                    fieldKey: 'eventType',
+                                    operator: 'in',
+                                    value: ['Internal Audit', 'External Audit — Single Org'],
+                                    logic: 'AND'
+                                });
+                            }
+                            if (!hasRequired) {
+                                if (!savedField.dependencies) savedField.dependencies = [];
+                                savedField.dependencies.push({
+                                    name: 'Required for single-org audit event types',
+                                    type: 'required',
+                                    fieldKey: 'eventType',
+                                    operator: 'in',
+                                    value: ['Internal Audit', 'External Audit — Single Org'],
+                                    logic: 'AND'
+                                });
+                            }
+                            if (!hasReadonly) {
+                                if (!savedField.dependencies) savedField.dependencies = [];
+                                savedField.dependencies.push({
+                                    name: 'Internal Audit: lock organization to current org',
+                                    type: 'readonly',
+                                    fieldKey: 'eventType',
+                                    operator: 'equals',
+                                    value: 'Internal Audit',
+                                    logic: 'AND'
+                                });
+                            }
+                            if (!hasSetValue) {
+                                if (!savedField.dependencies) savedField.dependencies = [];
+                                savedField.dependencies.push({
+                                    name: 'Internal Audit: force relatedToId = current org',
+                                    type: 'setValue',
+                                    fieldKey: 'eventType',
+                                    operator: 'equals',
+                                    value: 'Internal Audit',
+                                    logic: 'AND',
+                                    setValue: '$currentUser.organizationId'
+                                });
+                            }
+                        }
+
                         // For allowSelfReview in events module, ensure audit-only visibility dependency exists by default
                         if (sys.key === 'events' && savedField.key === 'allowSelfReview') {
                             const hasVisibilityDep = savedField.dependencies && savedField.dependencies.some(
@@ -1377,11 +1546,81 @@ exports.listModules = async (req, res) => {
                             }
                         }
 
+                        // For geoRequired in events module: remove legacy visibility gating and enforce audit readonly + required
+                        if (sys.key === 'events' && savedField.key === 'geoRequired') {
+                            const deps = Array.isArray(savedField.dependencies) ? savedField.dependencies : [];
+                            // Remove any legacy visibility dependency that hides GEO outside audits
+                            const cleaned = deps.filter(d => !(d && d.type === 'visibility' && d.fieldKey === 'eventType'));
+
+                            const hasReadonlyAudit = cleaned.some(d =>
+                                d && d.type === 'readonly' && d.fieldKey === 'eventType'
+                            );
+                            const hasRequiredAudit = cleaned.some(d =>
+                                d && d.type === 'required' && d.fieldKey === 'eventType'
+                            );
+
+                            if (!hasReadonlyAudit) {
+                                cleaned.push({
+                                    name: 'Read-only for audit event types',
+                                    type: 'readonly',
+                                    fieldKey: 'eventType',
+                                    operator: 'in',
+                                    value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                                    logic: 'AND'
+                                });
+                            }
+                            if (!hasRequiredAudit) {
+                                cleaned.push({
+                                    name: 'Required for audit event types',
+                                    type: 'required',
+                                    fieldKey: 'eventType',
+                                    operator: 'in',
+                                    value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                                    logic: 'AND'
+                                });
+                            }
+
+                            savedField.dependencies = cleaned;
+                        }
+
+                        // For minVisitDuration in events module: show whenever geoRequired = true
+                        if (sys.key === 'events' && savedField.key === 'minVisitDuration') {
+                            const deps = Array.isArray(savedField.dependencies) ? savedField.dependencies : [];
+                            // Remove any legacy visibility dependencies (e.g., eventType-based)
+                            const cleaned = deps.filter(d => !(d && d.type === 'visibility'));
+                            cleaned.push({
+                                name: 'Show when GEO is required',
+                                type: 'visibility',
+                                fieldKey: 'geoRequired',
+                                operator: 'equals',
+                                value: true,
+                                logic: 'AND'
+                            });
+                            savedField.dependencies = cleaned;
+                        }
+
+                        // For partnerVisibility in events module: only External Audit — Single Org
+                        if (sys.key === 'events' && savedField.key === 'partnerVisibility') {
+                            const deps = Array.isArray(savedField.dependencies) ? savedField.dependencies : [];
+                            // Normalize: keep non-visibility deps, replace visibility with the correct scope
+                            const cleaned = deps.filter(d => !(d && d.type === 'visibility'));
+                            cleaned.push({
+                                name: 'Show only for External Audit — Single Org',
+                                type: 'visibility',
+                                fieldKey: 'eventType',
+                                operator: 'equals',
+                                value: 'External Audit — Single Org',
+                                logic: 'AND'
+                            });
+                            savedField.dependencies = cleaned;
+                        }
+
                         // For reviewerId in events module, ensure audit-only visibility + required dependencies exist by default
                         if (sys.key === 'events' && savedField.key === 'reviewerId') {
                             const deps = Array.isArray(savedField.dependencies) ? savedField.dependencies : [];
                             const hasVisibilityDep = deps.some(dep => dep.type === 'visibility' && dep.fieldKey === 'eventType');
                             const hasRequiredDep = deps.some(dep => dep.type === 'required' && dep.fieldKey === 'eventType');
+                            const hasLookupDep = deps.some(dep => dep.type === 'lookup');
                         if (!hasVisibilityDep) {
                                 if (!savedField.dependencies) savedField.dependencies = [];
                                 savedField.dependencies.push({
@@ -1389,7 +1628,50 @@ exports.listModules = async (req, res) => {
                                     type: 'visibility',
                                     fieldKey: 'eventType',
                                     operator: 'in',
-                                value: ['Internal Audit', 'External Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                                value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                                    logic: 'AND'
+                                });
+                            }
+                            if (!hasRequiredDep) {
+                                if (!savedField.dependencies) savedField.dependencies = [];
+                                savedField.dependencies.push({
+                                    name: 'Required for External Audit — Single Org',
+                                    type: 'required',
+                                    fieldKey: 'eventType',
+                                    operator: 'equals',
+                                value: 'External Audit — Single Org',
+                                    logic: 'AND'
+                                });
+                            }
+                            if (!hasLookupDep) {
+                                if (!savedField.dependencies) savedField.dependencies = [];
+                                savedField.dependencies.push({
+                                    name: 'Reviewer pool: internal users only',
+                                    type: 'lookup',
+                                    fieldKey: 'eventType',
+                                    operator: 'in',
+                                    value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                                    logic: 'AND',
+                                    lookupQuery: { scope: 'internal' }
+                                });
+                            }
+                        }
+
+                        // For auditorId in events module, ensure audit-only visibility + required dependencies + lookup scoping exist by default
+                        if (sys.key === 'events' && savedField.key === 'auditorId') {
+                            const deps = Array.isArray(savedField.dependencies) ? savedField.dependencies : [];
+                            const hasVisibilityDep = deps.some(dep => dep.type === 'visibility' && dep.fieldKey === 'eventType');
+                            const hasRequiredDep = deps.some(dep => dep.type === 'required' && dep.fieldKey === 'eventType');
+                            const hasLookupDep = deps.some(dep => dep.type === 'lookup');
+
+                            if (!hasVisibilityDep) {
+                                if (!savedField.dependencies) savedField.dependencies = [];
+                                savedField.dependencies.push({
+                                    name: 'Show for audit event types',
+                                    type: 'visibility',
+                                    fieldKey: 'eventType',
+                                    operator: 'in',
+                                    value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
                                     logic: 'AND'
                                 });
                             }
@@ -1400,8 +1682,83 @@ exports.listModules = async (req, res) => {
                                     type: 'required',
                                     fieldKey: 'eventType',
                                     operator: 'in',
-                                value: ['Internal Audit', 'External Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                                    value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
                                     logic: 'AND'
+                                });
+                            }
+                            if (!hasLookupDep) {
+                                if (!savedField.dependencies) savedField.dependencies = [];
+                                savedField.dependencies.push(
+                                    {
+                                        name: 'Auditor pool: Internal Audit -> internal users only',
+                                        type: 'lookup',
+                                        fieldKey: 'eventType',
+                                        operator: 'equals',
+                                        value: 'Internal Audit',
+                                        logic: 'AND',
+                                        lookupQuery: { scope: 'internal' }
+                                    },
+                                    {
+                                        name: 'Auditor pool: External Audit — Single Org -> internal + org users',
+                                        type: 'lookup',
+                                        logic: 'AND',
+                                        conditions: [
+                                            { fieldKey: 'eventType', operator: 'equals', value: 'External Audit — Single Org' }
+                                        ],
+                                        lookupQuery: { scope: 'internal_or_org', orgId: '$field:relatedToId' }
+                                    },
+                                    {
+                                        name: 'Auditor pool: External Audit Beat -> internal users only',
+                                        type: 'lookup',
+                                        fieldKey: 'eventType',
+                                        operator: 'equals',
+                                        value: 'External Audit Beat',
+                                        logic: 'AND',
+                                        lookupQuery: { scope: 'internal' }
+                                    }
+                                );
+                            }
+                        }
+
+                        // For correctiveOwnerId in events module: ensure audit visibility/required and org-scoped picker
+                        if (sys.key === 'events' && savedField.key === 'correctiveOwnerId') {
+                            const deps = Array.isArray(savedField.dependencies) ? savedField.dependencies : [];
+                            const hasVisibilityDep = deps.some(dep => dep.type === 'visibility' && dep.fieldKey === 'eventType');
+                            const hasRequiredDep = deps.some(dep => dep.type === 'required' && dep.fieldKey === 'eventType');
+                            const hasLookupDep = deps.some(dep => dep.type === 'lookup');
+
+                            if (!hasVisibilityDep) {
+                                if (!savedField.dependencies) savedField.dependencies = [];
+                                savedField.dependencies.push({
+                                    name: 'Show for audit event types',
+                                    type: 'visibility',
+                                    fieldKey: 'eventType',
+                                    operator: 'in',
+                                    value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                                    logic: 'AND'
+                                });
+                            }
+                            if (!hasRequiredDep) {
+                                if (!savedField.dependencies) savedField.dependencies = [];
+                                savedField.dependencies.push({
+                                    name: 'Required for audit event types',
+                                    type: 'required',
+                                    fieldKey: 'eventType',
+                                    operator: 'in',
+                                    value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'],
+                                    logic: 'AND'
+                                });
+                            }
+                            if (!hasLookupDep) {
+                                if (!savedField.dependencies) savedField.dependencies = [];
+                                savedField.dependencies.push({
+                                    name: 'Corrective owner pool: users from selected Organization',
+                                    type: 'lookup',
+                                    logic: 'AND',
+                                    conditions: [
+                                        { fieldKey: 'eventType', operator: 'in', value: ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'] }
+                                    ],
+                                    lookupQuery: { scope: 'org', orgId: '$field:relatedToId' }
                                 });
                             }
                         }
@@ -1506,7 +1863,11 @@ exports.listModules = async (req, res) => {
                         'auditorId',
                         'reviewerId',
                         'correctiveOwnerId',
-                        'allowSelfReview'
+                        'allowSelfReview',
+                        // When GEO is enabled (dependency-gated by geoRequired = true)
+                        'minVisitDuration',
+                        // External audit only (dependency-gated)
+                        'partnerVisibility'
                     ];
 
                     const qc = Array.isArray(finalQuickCreate) ? finalQuickCreate.filter(Boolean) : [];
@@ -1539,13 +1900,20 @@ exports.listModules = async (req, res) => {
                             const hasGeo = qc2.some(k => String(k).toLowerCase() === 'georequired');
                             const hasAllow = qc2.some(k => String(k).toLowerCase() === 'allowselfreview');
                             const hasReviewer = qc2.some(k => String(k).toLowerCase() === 'reviewerid');
-                            const hasAuditor = qc2.some(k => String(k).toLowerCase() === 'auditorid');
                             const hasCorrectiveOwner = qc2.some(k => String(k).toLowerCase() === 'correctiveownerid');
+                            const hasMinVisit = qc2.some(k => String(k).toLowerCase() === 'minvisitduration');
+                            const hasPartnerVis = qc2.some(k => String(k).toLowerCase() === 'partnervisibility');
+                            const hasRelatedTo = qc2.some(k => String(k).toLowerCase() === 'relatedtoid');
+                            const hasLinkedForm = qc2.some(k => String(k).toLowerCase() === 'linkedformid');
                             if (!hasGeo) qc2.push('geoRequired');
                             if (!hasAllow) qc2.push('allowSelfReview');
                             if (!hasReviewer) qc2.push('reviewerId');
-                            if (!hasAuditor) qc2.push('auditorId');
                             if (!hasCorrectiveOwner) qc2.push('correctiveOwnerId');
+                            // Single-org audits need Organization + Form (dependency-gated)
+                            if (!hasRelatedTo) qc2.push('relatedToId');
+                            if (!hasLinkedForm) qc2.push('linkedFormId');
+                            if (!hasMinVisit) qc2.push('minVisitDuration');
+                            if (!hasPartnerVis) qc2.push('partnerVisibility');
                             finalQuickCreate = qc2;
                         }
                     }
@@ -1555,6 +1923,12 @@ exports.listModules = async (req, res) => {
                     const hasAdvancedLayout = !!(finalQuickCreateLayout && Array.isArray(finalQuickCreateLayout.rows) && finalQuickCreateLayout.rows.length > 0);
                     if (hasAdvancedLayout) {
                         const rows = Array.isArray(finalQuickCreateLayout.rows) ? [...finalQuickCreateLayout.rows] : [];
+                        const hasRelatedToInLayout = rows.some(r =>
+                            Array.isArray(r?.cols) && r.cols.some(c => String(c?.fieldKey || '').toLowerCase() === 'relatedtoid')
+                        );
+                        const hasLinkedFormInLayout = rows.some(r =>
+                            Array.isArray(r?.cols) && r.cols.some(c => String(c?.fieldKey || '').toLowerCase() === 'linkedformid')
+                        );
                         const hasGeoInLayout = rows.some(r =>
                             Array.isArray(r?.cols) && r.cols.some(c => String(c?.fieldKey || '').toLowerCase() === 'georequired')
                         );
@@ -1564,12 +1938,35 @@ exports.listModules = async (req, res) => {
                         const hasReviewerInLayout = rows.some(r =>
                             Array.isArray(r?.cols) && r.cols.some(c => String(c?.fieldKey || '').toLowerCase() === 'reviewerid')
                         );
-                        const hasAuditorInLayout = rows.some(r =>
-                            Array.isArray(r?.cols) && r.cols.some(c => String(c?.fieldKey || '').toLowerCase() === 'auditorid')
-                        );
                         const hasCorrectiveOwnerInLayout = rows.some(r =>
                             Array.isArray(r?.cols) && r.cols.some(c => String(c?.fieldKey || '').toLowerCase() === 'correctiveownerid')
                         );
+                        const hasMinVisitInLayout = rows.some(r =>
+                            Array.isArray(r?.cols) && r.cols.some(c => String(c?.fieldKey || '').toLowerCase() === 'minvisitduration')
+                        );
+                        const hasPartnerVisInLayout = rows.some(r =>
+                            Array.isArray(r?.cols) && r.cols.some(c => String(c?.fieldKey || '').toLowerCase() === 'partnervisibility')
+                        );
+                        if (!hasRelatedToInLayout) {
+                            rows.push({
+                                cols: [{
+                                    span: 12,
+                                    fieldKey: 'relatedToId',
+                                    widget: 'input',
+                                    props: {}
+                                }]
+                            });
+                        }
+                        if (!hasLinkedFormInLayout) {
+                            rows.push({
+                                cols: [{
+                                    span: 12,
+                                    fieldKey: 'linkedFormId',
+                                    widget: 'input',
+                                    props: {}
+                                }]
+                            });
+                        }
                         if (!hasGeoInLayout) {
                             rows.push({
                                 cols: [{
@@ -1600,21 +1997,31 @@ exports.listModules = async (req, res) => {
                                 }]
                             });
                         }
-                        if (!hasAuditorInLayout) {
-                            rows.push({
-                                cols: [{
-                                    span: 12,
-                                    fieldKey: 'auditorId',
-                                    widget: 'input',
-                                    props: {}
-                                }]
-                            });
-                        }
                         if (!hasCorrectiveOwnerInLayout) {
                             rows.push({
                                 cols: [{
                                     span: 12,
                                     fieldKey: 'correctiveOwnerId',
+                                    widget: 'input',
+                                    props: {}
+                                }]
+                            });
+                        }
+                        if (!hasMinVisitInLayout) {
+                            rows.push({
+                                cols: [{
+                                    span: 12,
+                                    fieldKey: 'minVisitDuration',
+                                    widget: 'input',
+                                    props: {}
+                                }]
+                            });
+                        }
+                        if (!hasPartnerVisInLayout) {
+                            rows.push({
+                                cols: [{
+                                    span: 12,
+                                    fieldKey: 'partnerVisibility',
                                     widget: 'input',
                                     props: {}
                                 }]
@@ -1653,10 +2060,11 @@ exports.listModules = async (req, res) => {
                         'location',
                         'relatedToId',
                         'linkedFormId',
-                        'auditorId',
                         'reviewerId',
                         'correctiveOwnerId',
-                        'allowSelfReview'
+                        'allowSelfReview',
+                        'minVisitDuration',
+                        'partnerVisibility'
                     ];
                 }
 

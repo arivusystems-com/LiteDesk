@@ -413,7 +413,17 @@
     
     <!-- Lookup (Relationship) - with searchable Combobox and modal browse button -->
     <div v-else-if="field.dataType === 'Lookup (Relationship)'" class="mt-2 relative">
-      <Combobox :model-value="normalizedLookupValue || ''" @update:model-value="handleLookupChange" :disabled="isReadOnly" nullable>
+      <!-- Read-only lookup: show static text (no dropdown / no browse icon) -->
+      <div
+        v-if="isReadOnly"
+        class="block w-full rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 sm:text-sm/6 dark:outline-white/10"
+      >
+        <span :class="['block truncate', !value && 'text-gray-500 dark:text-gray-500']">
+          {{ getLookupSelectedLabel() || '—' }}
+        </span>
+      </div>
+
+      <Combobox v-else :model-value="normalizedLookupValue || ''" @update:model-value="handleLookupChange" :disabled="isReadOnly" nullable>
         <div class="relative">
           <ComboboxButton
             @click="handleLookupButtonClick"
@@ -439,8 +449,7 @@
             <button
               type="button"
               @click.stop="openLookupModal"
-              :disabled="isReadOnly"
-              class="absolute inset-y-0 right-8 flex items-center justify-center px-2 w-8 text-gray-400 dark:text-gray-500 hover:text-brand-600 dark:hover:text-brand-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed z-10"
+              class="absolute inset-y-0 right-8 flex items-center justify-center px-2 w-8 text-gray-400 dark:text-gray-500 hover:text-brand-600 dark:hover:text-brand-400 transition-colors z-10"
               title="Browse records"
             >
               <MagnifyingGlassIcon class="w-5 h-5" />
@@ -755,7 +764,10 @@ const effectiveLabel = computed(() => {
 const isAuditRoleLookupField = computed(() => {
   const key = String(props.field?.key || '').toLowerCase();
   const isUserLookup = props.field?.lookupSettings?.targetModule === 'users';
-  return isUserLookup && (key === 'auditorid' || key === 'reviewerid' || key === 'correctiveownerid');
+  // Treat eventOwnerId as an audit role when dependencies relabel it to "Auditor" (dependency-driven, not hardcoded per module).
+  const labelLower = String(props.dependencyState?.label || '').toLowerCase();
+  const isAuditorLabel = labelLower === 'auditor';
+  return isUserLookup && (isAuditorLabel || key === 'auditorid' || key === 'reviewerid' || key === 'correctiveownerid');
 });
 
 const isLookupField = computed(() => {
@@ -1401,7 +1413,10 @@ const fetchUsers = async ({ autoDefault = false } = {}) => {
   isLoadingUsers.value = true;
   try {
     // Use the /users/list endpoint which doesn't require manageUsers permission
-    const response = await apiClient.get('/users/list');
+    const params = (props.dependencyState && typeof props.dependencyState.lookupQuery === 'object' && props.dependencyState.lookupQuery)
+      ? props.dependencyState.lookupQuery
+      : undefined;
+    const response = await apiClient.get('/users/list', params ? { params } : undefined);
     
     if (response.success && Array.isArray(response.data)) {
       lookupOptions.value = response.data;
@@ -1488,6 +1503,31 @@ const fetchLookupOptions = async () => {
   }
 };
 
+// Ensure read-only lookups can still render a human-friendly label
+// by fetching the record by id if it isn't in the option list.
+const fetchLookupOptionById = async (id) => {
+  if (!id || props.field.dataType !== 'Lookup (Relationship)') return;
+  const moduleKey = props.field.lookupSettings?.targetModule;
+  if (!moduleKey || moduleKey === 'users') return; // users list is list-only here
+
+  try {
+    let endpoint = `/${moduleKey}/${id}`;
+    if (moduleKey === 'organization' || moduleKey === 'organizations') {
+      endpoint = `/v2/organization/${id}`;
+    }
+    const response = await apiClient.get(endpoint);
+    if (response?.success) {
+      const record = response.data?.data || response.data;
+      if (record && record._id) {
+        const exists = lookupOptions.value.some(opt => String(opt._id) === String(record._id));
+        if (!exists) lookupOptions.value = [record, ...lookupOptions.value];
+      }
+    }
+  } catch {
+    // Non-fatal: we can still display the raw id fallback
+  }
+};
+
 // Get lookup module name for modal header
 const getLookupModuleName = () => {
   if (props.field.lookupSettings?.targetModule === 'users') {
@@ -1537,8 +1577,11 @@ const fetchLookupModalData = async () => {
       params.sortOrder = lookupModalSortOrder.value;
     }
     
-    if (isAssignedToField.value) {
+    if (props.field.lookupSettings?.targetModule === 'users') {
       endpoint = '/users/list';
+      if (props.dependencyState?.lookupQuery && typeof props.dependencyState.lookupQuery === 'object') {
+        params = { ...params, ...props.dependencyState.lookupQuery };
+      }
     } else if (props.field.lookupSettings?.targetModule) {
       const moduleKey = props.field.lookupSettings.targetModule;
       // Handle special module key mappings
@@ -1674,6 +1717,10 @@ onMounted(async () => {
     await fetchLookupOptions();
     // Handle populated object value after fetching options
     handlePopulatedValue();
+    // If read-only and we still can't resolve display label, fetch the single record
+    if (isReadOnly.value && normalizedLookupValue.value && !getSelectedLookupOption()) {
+      await fetchLookupOptionById(normalizedLookupValue.value);
+    }
   }
   
   // Set default value if provided

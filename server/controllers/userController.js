@@ -75,18 +75,76 @@ exports.getUsersForAssignment = async (req, res) => {
             });
         }
 
-        // Simple query - just get users in the organization with basic info
-        const users = await User.find({ 
-            organizationId: req.user.organizationId,
-            status: 'active' // Only active users
-        })
-        .select('_id firstName lastName email username avatar') // Include avatar for display
-        .sort({ firstName: 1, lastName: 1 })
-        .lean();
+        const { scope = 'internal', orgId = null } = req.query;
+
+        // Supported scopes:
+        // - internal: users in req.user.organizationId
+        // - org: users in orgId
+        // - internal_or_org: users in either req.user.organizationId or orgId
+        const isValidScope = ['internal', 'org', 'internal_or_org'].includes(String(scope));
+        if (!isValidScope) {
+            return res.status(400).json({
+                success: false,
+                message: `Invalid scope. Must be one of: internal, org, internal_or_org`,
+                code: 'INVALID_SCOPE'
+            });
+        }
+
+        const orgIdStr = orgId ? String(orgId) : null;
+        const orgIdIsValid = !orgIdStr || /^[0-9a-fA-F]{24}$/.test(orgIdStr);
+        if (!orgIdIsValid) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid orgId format',
+                code: 'INVALID_ORG_ID'
+            });
+        }
+
+        const ids = new Set();
+        const allUsers = [];
+
+        const fetchByOrg = async (organizationId) => {
+            if (!organizationId) return;
+            const list = await User.find({
+                organizationId,
+                status: 'active'
+            })
+                .select('_id firstName lastName email username avatar organizationId')
+                .sort({ firstName: 1, lastName: 1 })
+                .lean();
+            for (const u of list) {
+                const key = String(u._id);
+                if (!ids.has(key)) {
+                    ids.add(key);
+                    allUsers.push(u);
+                }
+            }
+        };
+
+        if (scope === 'internal') {
+            await fetchByOrg(req.user.organizationId);
+        } else if (scope === 'org') {
+            // If orgId isn't selected yet (common during form entry), return an empty list (not an error)
+            if (orgIdStr) await fetchByOrg(orgIdStr);
+        } else if (scope === 'internal_or_org') {
+            await fetchByOrg(req.user.organizationId);
+            if (orgIdStr) await fetchByOrg(orgIdStr);
+        }
+
+        // Keep deterministic ordering (firstName/lastName) even when merging two org lists
+        allUsers.sort((a, b) => {
+            const aFirst = (a.firstName || '').toLowerCase();
+            const bFirst = (b.firstName || '').toLowerCase();
+            if (aFirst !== bFirst) return aFirst.localeCompare(bFirst);
+            const aLast = (a.lastName || '').toLowerCase();
+            const bLast = (b.lastName || '').toLowerCase();
+            if (aLast !== bLast) return aLast.localeCompare(bLast);
+            return String(a._id).localeCompare(String(b._id));
+        });
 
         res.json({
             success: true,
-            data: users
+            data: allUsers
         });
     } catch (error) {
         console.error('Get users for assignment error:', error);

@@ -224,11 +224,17 @@ const ModuleDefinitionSchema = new mongoose.Schema({
                         // Support unified dependency structure (new format)
                         new mongoose.Schema({
                             name: { type: String, trim: true, default: '' },
-                            type: { type: String, enum: ['visibility','readonly','required','picklist','popup','label'], required: false },
+                            type: { type: String, enum: ['visibility','readonly','required','picklist','popup','label','lookup','setValue'], required: false },
                             // For popup type: fields to show in the popup modal
                             popupFields: { type: [String], default: [] },
                             // For label type: override label when conditions satisfied
                             labelValue: { type: String, trim: true, default: '' },
+                            // For lookup type: pass query params to lookup endpoint (e.g., /users/list) when conditions satisfied
+                            // Supports templating on frontend via "$field:<fieldKey>" values.
+                            lookupQuery: { type: mongoose.Schema.Types.Mixed, default: null },
+                            // For setValue type: force the field's value (UI-level enforcement)
+                            // Supports templating on frontend via "$field:<fieldKey>" and "$currentUser.organizationId"
+                            setValue: { type: mongoose.Schema.Types.Mixed, default: null },
                             logic: { type: String, enum: ['AND','OR'], default: 'AND' },
                             // For backward compatibility and simple dependencies
                             fieldKey: { type: String, trim: true },

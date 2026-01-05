@@ -291,15 +291,6 @@ const initializeForm = (module) => {
     }
   }
 
-  // Events: geoRequired must be enabled for audit event types and default ON
-  // (enterprise audit requirement; enforced on backend too)
-  if (props.moduleKey === 'events') {
-    const auditTypes = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
-    const eventType = formData.value?.eventType;
-    if (auditTypes.includes(eventType)) {
-      formData.value.geoRequired = true;
-    }
-  }
 };
 
 const onFormReady = (module) => {
@@ -322,14 +313,6 @@ watch(() => props.record, () => {
 // Watch for form data changes and clear errors for fields that are now valid
 watch(() => formData.value, (newFormData, oldFormData) => {
   if (!moduleDefinition.value || !oldFormData) return;
-
-  // Events: ensure geoRequired is ON for audit event types (default + enforced)
-  if (props.moduleKey === 'events') {
-    const auditTypes = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
-    if (auditTypes.includes(newFormData?.eventType) && newFormData.geoRequired !== true) {
-      formData.value.geoRequired = true;
-    }
-  }
   
   // Check which fields have changed
   const changedFields = new Set();
@@ -481,32 +464,6 @@ const handleSubmit = async () => {
         }
       }
       
-      // For audit event types, ensure important audit fields are included even if null
-      const auditEventTypes = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
-      const isAuditType = auditEventTypes.includes(submitData.eventType);
-      
-      if (isAuditType) {
-        // Ensure these fields exist in submitData (set to null if missing)
-        if (submitData.linkedFormId === undefined) {
-          submitData.linkedFormId = null;
-        }
-        if (submitData.relatedToId === undefined) {
-          submitData.relatedToId = null;
-        }
-        if (submitData.auditorId === undefined) submitData.auditorId = null;
-        if (submitData.reviewerId === undefined) submitData.reviewerId = null;
-        if (submitData.correctiveOwnerId === undefined) submitData.correctiveOwnerId = null;
-        
-        console.log('[CreateRecordDrawer] After ensuring audit fields:', {
-          linkedFormId: submitData.linkedFormId,
-          relatedToId: submitData.relatedToId,
-          auditorId: submitData.auditorId,
-          reviewerId: submitData.reviewerId,
-          correctiveOwnerId: submitData.correctiveOwnerId,
-          eventType: submitData.eventType,
-          allKeys: Object.keys(submitData)
-        });
-      }
     }
     
     // Strip system-controlled fields

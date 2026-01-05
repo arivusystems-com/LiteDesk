@@ -246,9 +246,9 @@ const eventSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: 'User',
     required: function () {
-      // Required ONLY for audit event types.
+      // Required ONLY for External Audit — Single Org.
       // IMPORTANT: No default; must be explicitly selected.
-      return ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(this.eventType);
+      return this.eventType === 'External Audit — Single Org';
     }
   },
 
@@ -514,6 +514,7 @@ eventSchema.pre('save', function(next) {
       }
     }
   }
+
   
   // ===== AUDIT STATE INITIALIZATION =====
   // Set audit state for audit event types
@@ -566,6 +567,40 @@ eventSchema.pre('save', function(next) {
   }
   
   next();
+});
+
+// ===== AUDIT SELF-REVIEW CONSTRAINTS =====
+// Enforce:
+// - If reviewerId === auditor (eventOwnerId), allowSelfReview MUST be true
+// - If allowSelfReview = false, reviewerId MUST be different from auditor (eventOwnerId)
+eventSchema.pre('validate', function (next) {
+  try {
+    const auditTypes = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
+    if (!auditTypes.includes(this.eventType)) return next();
+
+    // ===== SELF-REVIEW DEFAULTS (must run before validation) =====
+    // Defaults are per audit type:
+    // - Internal Audit -> allowSelfReview = true
+    // - External Audit — Single Org -> allowSelfReview = false
+    // (External Audit Beat defaults to false; can be enabled explicitly if org wants it.)
+    if (this.allowSelfReview === undefined || this.allowSelfReview === null) {
+      this.allowSelfReview = this.eventType === 'Internal Audit';
+    }
+
+    const auditor = this.eventOwnerId || this.auditorId;
+    const reviewer = this.reviewerId;
+    if (!auditor || !reviewer) return next();
+
+    const same = auditor.toString() === reviewer.toString();
+    if (same && this.allowSelfReview !== true) {
+      this.invalidate('allowSelfReview', 'allowSelfReview must be true when Reviewer is the same as Auditor.');
+      this.invalidate('reviewerId', 'Reviewer must be different from Auditor unless allowSelfReview is enabled.');
+    }
+
+    next();
+  } catch (e) {
+    next(e);
+  }
 });
 
 // Method to add audit history entry

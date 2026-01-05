@@ -108,14 +108,16 @@ export function evaluateDependency(dependency, formData, allFields = []) {
  * @param {Array} allFields - All field definitions
  * @returns {Object} - { visible: boolean, readonly: boolean, required: boolean, allowedOptions: Array }
  */
-export function getFieldDependencyState(field, formData, allFields = []) {
+export function getFieldDependencyState(field, formData, allFields = [], context = {}) {
   if (!field || !field.dependencies || !Array.isArray(field.dependencies) || field.dependencies.length === 0) {
     return {
       visible: true,
       readonly: false,
       required: field.required || false,
       allowedOptions: null,
-      label: null
+      label: null,
+      lookupQuery: null,
+      setValue: null
     };
   }
 
@@ -123,6 +125,35 @@ export function getFieldDependencyState(field, formData, allFields = []) {
   let required = field.required || false;
   let allowedOptions = null;
   let label = null;
+  let lookupQuery = null;
+  let setValue = null;
+
+  const resolveLookupQuery = (value) => {
+    // Allow templating: "$field:<fieldKey>" will be replaced with formData[fieldKey]
+    // Works for nested objects/arrays.
+    if (value === null || value === undefined) return value;
+    if (typeof value === 'string') {
+      const s = value.trim();
+      if (s === '$currentUser.organizationId') {
+        return context?.currentUser?.organizationId || context?.currentUser?.organizationId?._id || null;
+      }
+      if (s.startsWith('$field:')) {
+        const key = s.slice('$field:'.length).trim();
+        const v = formData ? formData[key] : undefined;
+        // If the form stores populated objects, normalize to _id when present
+        if (v && typeof v === 'object' && v._id) return v._id;
+        return v;
+      }
+      return value;
+    }
+    if (Array.isArray(value)) return value.map(resolveLookupQuery);
+    if (typeof value === 'object') {
+      const out = {};
+      for (const [k, v] of Object.entries(value)) out[k] = resolveLookupQuery(v);
+      return out;
+    }
+    return value;
+  };
 
   // Separate visibility dependencies from others
   const visibilityDeps = field.dependencies.filter(d => d.type === 'visibility');
@@ -195,6 +226,20 @@ export function getFieldDependencyState(field, formData, allFields = []) {
           label = String(dep.labelValue);
         }
         break;
+
+      case 'lookup':
+        // Lookup query params: last matching rule wins (lets more-specific rules override generic ones)
+        if (dep.lookupQuery && typeof dep.lookupQuery === 'object') {
+          lookupQuery = resolveLookupQuery(dep.lookupQuery);
+        }
+        break;
+
+      case 'setValue':
+        // Forced field value: last matching rule wins
+        if (dep.setValue !== undefined) {
+          setValue = resolveLookupQuery(dep.setValue);
+        }
+        break;
     }
   }
 
@@ -219,7 +264,9 @@ export function getFieldDependencyState(field, formData, allFields = []) {
     required,
     allowedOptions,
     popupTrigger,
-    label
+    label,
+    lookupQuery,
+    setValue
   };
 }
 
