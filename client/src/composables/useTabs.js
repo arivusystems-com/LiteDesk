@@ -17,6 +17,11 @@ import {
 // Tab state management
 const tabs = ref([]);
 const activeTabId = ref(null);
+// Storage key is computed per instance+user to prevent tab leakage across instances/users.
+// Design invariant: Persistent UI state must be scoped at the same granularity as access control.
+// Tabs are therefore scoped strictly by instanceId + userId.
+let storageKey = null;
+let storageConfigured = false;
 
 // Flag to track programmatic navigation (to avoid circular loops)
 let isProgrammaticNavigation = false;
@@ -62,10 +67,42 @@ const getIconComponent = (iconId) => {
   return iconMap[iconId] || DocumentTextIcon;
 };
 
+// Compute storage key based on instance and user identifiers
+const getStorageKey = (instanceId, userId) => {
+  if (!instanceId || !userId) {
+    // Fail loud: tabs must never initialize without instance + user context.
+    throw new Error('[Tabs] Missing instanceId or userId. Tabs storage must never initialize without both.');
+  }
+  return `litedesk-tabs:${instanceId}:${userId}`;
+};
+
+// Allow app bootstrap to configure per-instance, per-user storage scoping (one-time)
+export const configureTabsStorage = ({ instanceId, userId }) => {
+  if (storageConfigured) {
+    console.warn('[Tabs] configureTabsStorage called multiple times; ignoring reconfiguration.', {
+      currentKey: storageKey
+    });
+    return;
+  }
+  storageKey = getStorageKey(instanceId, userId);
+  storageConfigured = true;
+};
+
+// Clear in-memory tab state (used on logout/auth reset). Does not touch persisted storage.
+export const resetTabsState = () => {
+  tabs.value = [];
+  activeTabId.value = null;
+  isProgrammaticNavigation = false;
+  lastProgrammaticPath = null;
+};
+
 // Load tabs from localStorage on initialization
 const loadTabsFromStorage = () => {
   try {
-    const stored = localStorage.getItem('litedesk-tabs');
+    if (!storageConfigured || !storageKey) {
+      throw new Error('[Tabs] loadTabsFromStorage called before storage was configured.');
+    }
+    const stored = localStorage.getItem(storageKey);
     if (stored) {
       const parsed = JSON.parse(stored);
       tabs.value = parsed.tabs || [];
@@ -110,13 +147,16 @@ const getIconId = (iconComponent) => {
 // Save tabs to localStorage
 const saveTabsToStorage = () => {
   try {
+    if (!storageConfigured || !storageKey) {
+      throw new Error('[Tabs] saveTabsToStorage called before storage was configured.');
+    }
     // Convert icon components to identifiers for serialization
     const tabsToSave = tabs.value.map(tab => ({
       ...tab,
       icon: typeof tab.icon === 'function' ? getIconId(tab.icon) : tab.icon
     }));
     
-    localStorage.setItem('litedesk-tabs', JSON.stringify({
+    localStorage.setItem(storageKey, JSON.stringify({
       tabs: tabsToSave,
       activeTabId: activeTabId.value
     }));
@@ -183,11 +223,30 @@ const getTitleForPath = (path, params = {}) => {
     '/imports': 'Imports',
     '/items': 'Projects',
     '/demo-requests': 'Demo Requests',
-    '/instances': 'Instances'
+    '/instances': 'Instances',
+    // Audit app routes
+    '/audit/dashboard': 'Audit Dashboard',
+    '/audit/audits': 'My Audits'
   };
   
   // Check for base path
   const basePath = '/' + path.split('/')[1];
+  
+  // Special case: Audit app routes (should not use tabs system)
+  if (path.startsWith('/audit/')) {
+    // Return specific titles for audit routes
+    if (path === '/audit/dashboard' || path.startsWith('/audit/dashboard')) {
+      return 'Audit Dashboard';
+    } else if (path === '/audit/audits' || path.startsWith('/audit/audits')) {
+      const segments = path.split('/');
+      if (segments.length > 3) {
+        // Detail page: /audit/audits/:eventId
+        return 'Audit Detail';
+      }
+      return 'My Audits';
+    }
+    return 'Audit';
+  }
   
   // Special case: Form Response detail view
   // Route shape: /forms/:formId/responses/:responseId
@@ -197,7 +256,8 @@ const getTitleForPath = (path, params = {}) => {
   }
 
   // If it's a detail page (has ID), customize title
-  if (path.split('/').length > 2) {
+  // But skip if it's an audit route (handled above)
+  if (path.split('/').length > 2 && !path.startsWith('/audit/')) {
     const module = segments[1];
     const id = segments[2];
     
@@ -296,8 +356,9 @@ export function useTabs() {
       return;
     }
     
-    // Skip if path is login, landing, or settings (no tabs)
-    if (path === '/login' || path === '/' || path.startsWith('/settings')) {
+    // Skip if path is login, landing, settings, or audit app (no tabs)
+    // Audit app has its own layout and doesn't use the CRM tabs system
+    if (path === '/login' || path === '/' || path.startsWith('/settings') || path.startsWith('/audit/')) {
       console.log('⏭️ Skipping sync for path:', path);
       return;
     }
@@ -351,6 +412,10 @@ export function useTabs() {
       console.log('📱 Mobile detected, skipping tab initialization');
       return;
     }
+  if (!storageConfigured || !storageKey) {
+    console.error('[Tabs] initTabs called before storage was configured. Tabs will not initialize.');
+    return;
+  }
     loadTabsFromStorage();
     // Note: Route syncing is handled by setupRouteWatcher() in App.vue
   };
@@ -359,6 +424,12 @@ export function useTabs() {
   const setupRouteWatcher = (route) => {
     if (!route) {
       console.warn('⚠️ setupRouteWatcher called without route parameter');
+      return;
+    }
+    
+    // Skip audit routes - they don't use tabs (have their own layout)
+    if (route.path.startsWith('/audit/')) {
+      console.log('⏭️ Audit route detected, skipping tab watcher setup');
       return;
     }
     
@@ -391,9 +462,10 @@ export function useTabs() {
         return;
       }
       
-      // Skip routes that don't use tabs (login, landing, settings)
+      // Skip routes that don't use tabs (login, landing, settings, audit app)
       // These routes should be handled by the router, not by tab syncing
-      if (newPath === '/login' || newPath === '/' || newPath.startsWith('/settings')) {
+      // Audit app has its own layout and doesn't use the CRM tabs system
+      if (newPath === '/login' || newPath === '/' || newPath.startsWith('/settings') || newPath.startsWith('/audit/')) {
         console.log('⏭️ Route watcher: skipping tab sync for non-tab route:', newPath);
         return;
       }

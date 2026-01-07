@@ -1,5 +1,46 @@
 const ModuleDefinition = require('../models/ModuleDefinition');
 
+/**
+ * Get default notification metadata for system modules.
+ * Phase 17: Notification Rules - Default configuration for rule-eligible modules.
+ */
+function getDefaultNotificationMetadata(moduleKey) {
+  const defaults = {
+    tasks: {
+      ruleEligible: true,
+      supportedEvents: ['ASSIGNED', 'STATUS_CHANGED'],
+      supportedConditions: ['assignedTo', 'priority', 'status']
+    },
+    deals: {
+      ruleEligible: true,
+      supportedEvents: ['ASSIGNED', 'STATUS_CHANGED'],
+      supportedConditions: ['assignedTo', 'status']
+    },
+    people: {
+      ruleEligible: true,
+      supportedEvents: ['ASSIGNED', 'STATUS_CHANGED'],
+      supportedConditions: ['assignedTo']
+    },
+    organizations: {
+      ruleEligible: true,
+      supportedEvents: ['ASSIGNED', 'STATUS_CHANGED'],
+      supportedConditions: ['assignedTo']
+    },
+    events: {
+      ruleEligible: true,
+      supportedEvents: ['ASSIGNED', 'STATUS_CHANGED'],
+      supportedConditions: ['assignedTo', 'status']
+    }
+    // Other modules (forms, items, imports, reports, users) are not rule-eligible by default
+  };
+  
+  return defaults[moduleKey] || {
+    ruleEligible: false,
+    supportedEvents: [],
+    supportedConditions: []
+  };
+}
+
 // Utility to count fields from a Mongoose model schema (excluding system fields)
 function getSchemaFieldCount(model) {
     if (!model || !model.schema) return 0;
@@ -1187,18 +1228,19 @@ exports.listModules = async (req, res) => {
             { key: 'imports', name: 'Imports' },
             { key: 'reports', name: 'Reports' },
             { key: 'users', name: 'Users' } // For lookup targets (assignedTo, lead_owner, createdBy)
-        ].map(m => ({
-            _id: `system:${m.key}`,
-            organizationId: req.user.organizationId,
-            key: m.key,
-            name: m.name,
-            type: 'system',
-            enabled: true,
-            fields: m.key === 'users' ? [] : getBaseFieldsForKey(m.key), // Users module has no fields for lookup purposes
-            fieldCount: 0,
-            createdAt: null,
-            updatedAt: null,
-            pipelineSettings: m.key === 'deals' ? getDefaultPipelineSettings() : [],
+        ].map(m => {
+            const baseModule = {
+                _id: `system:${m.key}`,
+                organizationId: req.user.organizationId,
+                key: m.key,
+                name: m.name,
+                type: 'system',
+                enabled: true,
+                fields: m.key === 'users' ? [] : getBaseFieldsForKey(m.key), // Users module has no fields for lookup purposes
+                fieldCount: 0,
+                createdAt: null,
+                updatedAt: null,
+                pipelineSettings: m.key === 'deals' ? getDefaultPipelineSettings() : [],
             relationships: m.key === 'events' ? [
                 {
                     name: 'Linked Forms',
@@ -1276,8 +1318,13 @@ exports.listModules = async (req, res) => {
                     label: 'Linked Contacts',
                     description: 'Contacts linked to this item (end users, product testers, etc.)'
                 }
-            ] : []
-        }));
+            ] : [],
+            // Phase 17: Add default notification metadata
+            notifications: getDefaultNotificationMetadata(m.key)
+        };
+        
+        return baseModule;
+        });
 
         // Exclude 'groups' from modules list (it's a settings feature, not a module)
         // Use select() to explicitly include quickCreate and quickCreateLayout fields
@@ -2037,6 +2084,8 @@ exports.listModules = async (req, res) => {
                     quickCreate: finalQuickCreate,
                     quickCreateLayout: finalQuickCreateLayout,
                     relationships: override.relationships !== undefined ? override.relationships : (sys.relationships || []),
+                    // Phase 17: Preserve notification metadata (use override if exists, else default)
+                    notifications: override.notifications || sys.notifications || getDefaultNotificationMetadata(sys.key),
                     name: override.name || sys.name,
                     enabled: override.enabled !== undefined ? override.enabled : sys.enabled,
                     pipelineSettings
@@ -2074,6 +2123,8 @@ exports.listModules = async (req, res) => {
                     quickCreate: defaultQuickCreate,
                     quickCreateLayout: { version: 1, rows: [] },
                     relationships: sys.relationships || [],
+                    // Phase 17: Include default notification metadata
+                    notifications: sys.notifications || getDefaultNotificationMetadata(sys.key),
                     pipelineSettings: sys.key === 'deals'
                         ? normalizePipelineSettings(JSON.parse(JSON.stringify(sys.pipelineSettings || [])))
                         : JSON.parse(JSON.stringify(sys.pipelineSettings || []))
@@ -2090,6 +2141,8 @@ exports.listModules = async (req, res) => {
                 quickCreate: m.quickCreate || [],
                 quickCreateLayout: m.quickCreateLayout || { version: 1, rows: [] },
                 relationships: m.relationships || [],
+                // Phase 17: Include notification metadata (use saved or default)
+                notifications: m.notifications || getDefaultNotificationMetadata(m.key),
                 pipelineSettings: Array.isArray(m.pipelineSettings) ? m.pipelineSettings : []
             });
         }

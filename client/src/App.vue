@@ -1,7 +1,10 @@
 <script setup>
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+
 import { useAuthStore } from '@/stores/auth';
 import { usePermissionSync } from '@/composables/usePermissionSync';
-import { useTabs } from '@/composables/useTabs';
+import { configureTabsStorage, resetTabsState, useTabs } from '@/composables/useTabs';
 import { useColorMode } from '@/composables/useColorMode';
 import { useNotifications } from '@/composables/useNotifications';
 import LandingPage from '@/views/LandingPage.vue'
@@ -9,8 +12,7 @@ import Dashboard from '@/views/Dashboard.vue'
 import Nav from '@/components/Nav.vue';
 import TabBar from '@/components/TabBar.vue';
 import NotificationContainer from '@/components/NotificationContainer.vue';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
+import NotificationSheet from '@/components/notifications/NotificationSheet.vue';
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -23,7 +25,16 @@ const { colorMode } = useColorMode();
 
 // Check authentication status to conditionally show the navigation bar
 const isAuthenticated = computed(() => authStore.isAuthenticated);
-const hideShell = computed(() => !!route.meta.hideShell);
+// Hide CRM shell for audit and portal routes (they have their own layout) or routes with hideShell meta
+const hideShell = computed(() => {
+  // Check route meta first
+  if (route.meta.hideShell) return true;
+  // Also hide for audit routes (they use AuditLayout)
+  if (route.path.startsWith('/audit/')) return true;
+  // Also hide for portal routes (they use PortalLayout)
+  if (route.path.startsWith('/portal/')) return true;
+  return false;
+});
 const isPublicRoute = computed(() => route.meta.requiresAuth === false);
 
 const DEFAULT_CONTENT_OFFSET = 0;
@@ -31,6 +42,14 @@ const EXTRA_OFFSET_LIGHT = '2rem';
 const EXTRA_OFFSET_LARGE = '2rem';
 const contentWrapperRef = ref(null);
 const tableStickyOffset = ref(`calc(${DEFAULT_CONTENT_OFFSET}px + ${EXTRA_OFFSET_LIGHT})`);
+const crmNotificationSheetOpen = ref(false);
+
+const handleCrmOpenNotifications = () => {
+  if (!authStore.isAuthenticated) return;
+  if (window.innerWidth < 1024) {
+    crmNotificationSheetOpen.value = true;
+  }
+};
 
 // Sidebar collapsed state - Load from localStorage, default to false
 const sidebarCollapsed = ref(
@@ -89,6 +108,7 @@ const handleStorageEvent = (e) => {
   if (!e.newValue) {
     warning('You were signed out because your session changed in another tab.', 6000);
     authStore.logout();
+    resetTabsState(); // Clear in-memory tabs so next login starts clean
     router.push('/');
     return;
   }
@@ -99,6 +119,7 @@ const handleStorageEvent = (e) => {
     if (incomingId && String(incomingId) !== String(authStore.user._id)) {
       warning('You were signed out because you logged into a different account in another tab.', 6500);
       authStore.logout();
+      resetTabsState(); // Clear in-memory tabs so next login starts clean
       router.push('/');
     }
   } catch (err) {
@@ -106,6 +127,7 @@ const handleStorageEvent = (e) => {
     // Safe fallback: logout rather than risk inconsistent state
     warning('You were signed out due to a session change in another tab.', 6000);
     authStore.logout();
+    resetTabsState(); // Clear in-memory tabs so next login starts clean
     router.push('/');
   }
 };
@@ -115,13 +137,34 @@ onMounted(async () => {
   if (authStore.isAuthenticated) {
     console.log('Auto-refreshing permissions on page load...');
     await authStore.refreshUser();
-    
-    // Initialize tabs system
-    initTabs();
-    
-    // Setup route watcher for browser navigation (pass route from setup context)
-    setupRouteWatcher(route);
-    
+
+    // Only initialize tabs system for CRM routes (not audit or portal apps)
+    // Audit and Portal apps have their own layouts and don't use the tabs system
+    const isAuditRoute = route.path.startsWith('/audit/');
+    const isPortalRoute = route.path.startsWith('/portal/');
+    if (!isAuditRoute && !isPortalRoute) {
+      // Configure per-instance, per-user storage key for tab persistence
+      // Tabs are scoped by instanceId + userId to prevent leakage across instances/users.
+      const instanceId = authStore.organization?._id || authStore.organization?.instanceId;
+      const userId = authStore.user?._id;
+
+      if (instanceId && userId) {
+        configureTabsStorage({ instanceId, userId });
+        // Initialize tabs system after storage is configured
+        initTabs();
+
+        // Setup route watcher for browser navigation (pass route from setup context)
+        setupRouteWatcher(route);
+      } else {
+        console.error('[Tabs] Skipping tab initialization: missing instanceId or userId', {
+          instanceId,
+          userId
+        });
+      }
+    } else {
+      console.log('📋 Audit/Portal route detected, skipping tabs initialization');
+    }
+
     // Note: We don't need a router.beforeEach guard here because:
     // 1. Tab creation is handled by click handlers (Nav.vue, DataTables, etc.)
     // 2. Page refresh will restore tabs from localStorage
@@ -131,12 +174,28 @@ onMounted(async () => {
   queueContentOffsetUpdate();
   window.addEventListener('resize', handleResize, { passive: true });
   window.addEventListener('storage', handleStorageEvent);
+  window.addEventListener('crm-open-notifications', handleCrmOpenNotifications);
+});
+
+watch(crmNotificationSheetOpen, (val) => {
+  console.log('[App] crmNotificationSheetOpen changed:', val);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize);
   window.removeEventListener('storage', handleStorageEvent);
+  window.removeEventListener('crm-open-notifications', handleCrmOpenNotifications);
 });
+
+// Clear in-memory tabs on logout/auth reset (SPA user switch)
+watch(
+  () => authStore.isAuthenticated,
+  (isAuthed, wasAuthed) => {
+    if (wasAuthed && !isAuthed) {
+      resetTabsState();
+    }
+  }
+);
 
 // Enable automatic permission sync every 2 minutes for real-time updates
 usePermissionSync(2);
@@ -159,33 +218,33 @@ usePermissionSync(2);
 
     <!-- Default shell with Sidebar/Tabbar -->
     <div v-else class="min-h-screen bg-gray-100/70 dark:bg-gray-900 flex overflow-x-hidden">
-    <!-- Sidebar Navigation - v-model binds collapsed state -->
-    <Nav v-model="sidebarCollapsed" />
-    
-    <!-- Main Content Area - Dynamic margin based on sidebar state -->
-    <main 
-      :class="[
-        'flex-1 flex flex-col transition-all duration-300 min-h-screen overflow-x-hidden',
-        sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
-      ]"
-    >
-      <!-- Tab Bar - Hidden on mobile, visible on tablet and up -->
-      <TabBar class="hidden md:block" />
+      <!-- Sidebar Navigation - v-model binds collapsed state -->
+      <Nav v-model="sidebarCollapsed" />
       
-      <!-- Content wrapper with padding -->
-      <div
-        ref="contentWrapperRef"
-        class="flex-1 p-4 lg:p-6 overflow-y-auto overflow-x-hidden mt-16 md:mt-30 lg:mt-14"
-        :style="{ '--table-sticky-offset': tableStickyOffset }"
+      <!-- Main Content Area - Dynamic margin based on sidebar state -->
+      <main 
+        :class="[
+          'flex-1 flex flex-col transition-all duration-300 min-h-screen overflow-x-hidden',
+          sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
+        ]"
       >
-        <!-- Keep-alive caches component instances to prevent remounting on tab switch -->
-        <RouterView v-slot="{ Component }">
-          <keep-alive :max="10">
-            <component :is="Component" :key="$route.fullPath" />
-          </keep-alive>
-        </RouterView>
-      </div>
-    </main>
+        <!-- Tab Bar - Hidden on mobile, visible on tablet and up -->
+        <TabBar class="hidden md:block" />
+        
+        <!-- Content wrapper with padding -->
+        <div
+          ref="contentWrapperRef"
+          class="flex-1 p-4 lg:p-6 overflow-y-auto overflow-x-hidden mt-16 md:mt-30 lg:mt-14"
+          :style="{ '--table-sticky-offset': tableStickyOffset }"
+        >
+          <!-- Keep-alive caches component instances to prevent remounting on tab switch -->
+          <RouterView v-slot="{ Component }">
+            <keep-alive :max="10">
+              <component :is="Component" :key="$route.fullPath" />
+            </keep-alive>
+          </RouterView>
+        </div>
+      </main>
     </div>
   </div>
 
@@ -196,6 +255,14 @@ usePermissionSync(2);
 
   <!-- Global Notification Container -->
   <NotificationContainer />
+
+  <!-- CRM Notification Sheet (mobile) -->
+  <NotificationSheet
+    :open="crmNotificationSheetOpen"
+    app-key="CRM"
+    :mark-all-disabled="false"
+    @close="crmNotificationSheetOpen = false"
+  />
 </template>
 
 <style>

@@ -27,9 +27,29 @@ export const useAuthStore = defineStore('auth', {
         subscriptionTier: (state) => state.organization?.subscription?.tier || 'trial',
         enabledModules: (state) => state.organization?.enabledModules || [],
         isMasterOrganization: (state) => state.organization?.name === 'LiteDesk Master',
+        hasAppAccess: (state) => {
+            return (appKey) => {
+                if (!state.user?.allowedApps) return false;
+                return state.user.allowedApps.includes(appKey);
+            };
+        },
     },
     actions: {
         setUser(userData) {
+            // Derive allowedApps from appAccess if not provided
+            let allowedApps = userData.allowedApps;
+            if (!allowedApps || allowedApps.length === 0) {
+                if (userData.appAccess && userData.appAccess.length > 0) {
+                    // Derive from appAccess array
+                    allowedApps = userData.appAccess
+                        .filter(access => access.status === 'ACTIVE')
+                        .map(access => access.appKey);
+                } else {
+                    // Default to CRM for backward compatibility
+                    allowedApps = ['CRM'];
+                }
+            }
+            
             this.user = {
                 _id: userData._id,
                 username: userData.username,
@@ -37,7 +57,8 @@ export const useAuthStore = defineStore('auth', {
                 role: userData.role,
                 isOwner: userData.isOwner,
                 permissions: userData.permissions,
-                token: userData.token
+                token: userData.token,
+                allowedApps: allowedApps
             };
             
             if (userData.organization) {
@@ -56,6 +77,13 @@ export const useAuthStore = defineStore('auth', {
             // Legacy cleanup (older builds stored auth under 'auth')
             localStorage.removeItem('auth');
             this.error = null;
+            
+            // Clear offline data (IndexedDB) on logout
+            import('@/services/offlineDb.js').then(({ clearAllData }) => {
+                clearAllData().catch(err => {
+                    console.error('[Auth] Error clearing offline data:', err);
+                });
+            });
         },
 
     async authenticate(endpoint, credentials) {
@@ -256,12 +284,14 @@ export const useAuthStore = defineStore('auth', {
                         // Ensure newly added modules exist so the sidebar can render them immediately.
                         if (!ensuredPermissions.forms) ensuredPermissions.forms = { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false };
                         if (!ensuredPermissions.items) ensuredPermissions.items = { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false };
-                        // Update user data while preserving token
+                        // Update user data while preserving token and allowedApps
                         const token = this.user.token;
+                        const existingAllowedApps = this.user.allowedApps;
                         this.user = {
                             ...incoming,
                             permissions: ensuredPermissions,
-                            token: token
+                            token: token,
+                            allowedApps: incoming.allowedApps || existingAllowedApps || ['CRM'] // Preserve or default
                         };
                         localStorage.setItem('user', JSON.stringify(this.user));
                         console.log('User permissions refreshed successfully');

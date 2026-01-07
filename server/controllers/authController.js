@@ -1,12 +1,31 @@
+/**
+ * ============================================================================
+ * PLATFORM CORE: Authentication & Session Handling
+ * ============================================================================
+ * 
+ * This controller handles app-agnostic authentication:
+ * - User registration (creates organization + owner)
+ * - User login with JWT tokens
+ * - Password hashing and verification
+ * - Token generation
+ * 
+ * ✅ FIXED: Registration no longer initializes CRM-specific modules.
+ *    CRM initialization has been moved to crmAppInitializer service.
+ *    Registration is now app-agnostic.
+ * 
+ * See PLATFORM_CORE_ANALYSIS.md and REGISTRATION_REFACTORING.md for details.
+ * ============================================================================
+ */
+
 const User = require('../models/User');
 const Organization = require('../models/Organization');
 const Role = require('../models/Role');
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const updatePeopleModuleFields = require('../scripts/updatePeopleModuleFields');
-const updateDealsModuleFields = require('../scripts/updateDealsModuleFields');
+const { APP_KEYS } = require('../constants/appKeys');
 const securityLogger = require('../middleware/securityLoggingMiddleware');
+const { getDefaultRoleForApp } = require('../utils/appAccessUtils');
 
 // --- Helper Function: Generate Token ---
 const generateToken = (id) => {
@@ -78,7 +97,13 @@ exports.registerUser = async (req, res) => {
                 maxDeals: 50,
                 maxStorageGB: 1
             },
-            enabledModules: ['contacts', 'deals', 'tasks', 'events']
+            enabledModules: ['contacts', 'deals', 'tasks', 'events'],
+            // New organizations start with CRM enabled only
+            enabledApps: [{
+                appKey: 'CRM',
+                status: 'ACTIVE',
+                enabledAt: new Date()
+            }]
         });
         console.log('✅ ✅ ✅ ORGANIZATION CREATED SUCCESSFULLY! ✅ ✅ ✅');
         console.log('   ID:', organization._id);
@@ -101,22 +126,9 @@ exports.registerUser = async (req, res) => {
         }
         console.log('\n');
 
-        // 1.6. Initialize People Module Definition with dependencies
-        console.log('🔍 Step 3.6: Initializing People module definition...');
-        try {
-            await updatePeopleModuleFields(organization._id);
-            console.log('✅ People module definition initialized with dependencies');
-        } catch (moduleError) {
-            console.warn('⚠️  Failed to initialize People module:', moduleError.message);
-            // Continue even if module initialization fails - can be run manually later
-        }
-        try {
-            await updateDealsModuleFields(organization._id);
-            console.log('✅ Deals module definition initialized with standardized fields');
-        } catch (moduleError) {
-            console.warn('⚠️  Failed to initialize Deals module:', moduleError.message);
-        }
-        console.log('\n');
+        // NOTE: CRM module initialization (People, Deals) has been moved to crmAppInitializer
+        // This keeps registration app-agnostic. CRM initialization should be called separately
+        // when CRM app is enabled for the organization.
 
         // 2. Hash Password
         console.log('🔍 Step 4: Hashing password...');
@@ -135,13 +147,23 @@ exports.registerUser = async (req, res) => {
             vertical,
             role: 'owner',
             isOwner: true,
-            status: 'active'
+            status: 'active',
+            userType: 'INTERNAL', // Platform user type
+            appAccess: [{
+                appKey: APP_KEYS.CRM,
+                roleKey: 'ADMIN', // Organization owner must have CRM: ADMIN
+                status: 'ACTIVE',
+                addedAt: new Date()
+            }],
+            allowedApps: [APP_KEYS.CRM] // Legacy field for backward compatibility
         });
         console.log('✅ ✅ ✅ USER CREATED SUCCESSFULLY! ✅ ✅ ✅');
         console.log('   ID:', user._id);
         console.log('   Email:', user.email);
         console.log('   Role:', user.role);
         console.log('   IsOwner:', user.isOwner);
+        console.log('   UserType:', user.userType);
+        console.log('   AppAccess:', JSON.stringify(user.appAccess));
         console.log('   Organization ID:', user.organizationId);
         console.log('\n');
 
@@ -165,7 +187,8 @@ exports.registerUser = async (req, res) => {
                 industry: organization.industry,
                 subscription: organization.subscription,
                 limits: organization.limits,
-                enabledModules: organization.enabledModules
+                enabledApps: organization.enabledApps || [APP_KEYS.CRM], // App-level enablement
+                enabledModules: organization.enabledModules // Legacy: kept for backward compatibility
             },
             token: generateToken(user._id),
         };
@@ -444,7 +467,21 @@ exports.loginUser = async (req, res) => {
             success: true
         });
 
-        // 9. Respond with Token and Organization Info (use orgUser data)
+        // 9. Derive allowedApps from appAccess if not set (for backward compatibility)
+        let allowedApps = orgUser.allowedApps;
+        if (!allowedApps || allowedApps.length === 0) {
+            // Derive from appAccess array
+            if (orgUser.appAccess && orgUser.appAccess.length > 0) {
+                allowedApps = orgUser.appAccess
+                    .filter(access => access.status === 'ACTIVE')
+                    .map(access => access.appKey);
+            } else {
+                // Default to CRM if nothing is set
+                allowedApps = ['CRM'];
+            }
+        }
+
+        // 10. Respond with Token and Organization Info (use orgUser data)
         res.json({
             _id: orgUser._id,
             username: orgUser.username,
@@ -452,6 +489,7 @@ exports.loginUser = async (req, res) => {
             role: orgUser.role,
             isOwner: orgUser.isOwner,
             permissions: orgUser.permissions,
+            allowedApps: allowedApps, // Include app access
             organization: {
                 _id: user.organizationId._id,
                 name: user.organizationId.name,

@@ -1,3 +1,26 @@
+/**
+ * ============================================================================
+ * PLATFORM CORE: Role & Permissions Model (App-Aware)
+ * ============================================================================
+ * 
+ * This model provides app-aware role-based access control:
+ * - Role definition and hierarchy
+ * - App-scoped permission management
+ * - User-role assignment
+ * 
+ * App-Aware Structure:
+ * - appPermissions: App-scoped permissions (new, for multi-app support)
+ * - permissions: Legacy CRM-scoped permissions (backward compatibility)
+ * 
+ * ✅ FIXED: Permissions are now app-aware
+ *    - appPermissions field supports multi-app permissions
+ *    - Legacy permissions treated as CRM-scoped
+ *    - Platform core does not assume CRM modules
+ * 
+ * See PLATFORM_CORE_ANALYSIS.md and APP_AWARE_PERMISSIONS.md for details.
+ * ============================================================================
+ */
+
 const mongoose = require('mongoose');
 
 const roleSchema = new mongoose.Schema({
@@ -30,7 +53,18 @@ const roleSchema = new mongoose.Schema({
         default: null // For organizational hierarchy
     },
     
-    // Module Permissions - CRUD for each module
+    // App-Scoped Permissions (new structure for multi-app support)
+    // Format: { appKey: { module: { action: boolean } } }
+    // Example: { CRM: { contacts: { create: true, read: true } }, PORTAL: { profile: { read: true } } }
+    appPermissions: {
+        type: Map,
+        of: mongoose.Schema.Types.Mixed,
+        default: new Map()
+    },
+    
+    // Legacy: Module Permissions - CRUD for each module (CRM-specific)
+    // Kept for backward compatibility - treated as CRM-app scoped
+    // @deprecated Use appPermissions instead
     permissions: {
         // Contacts Module
         contacts: {
@@ -206,10 +240,34 @@ roleSchema.pre('save', async function(next) {
     next();
 });
 
-// Instance method to check if role has specific permission
-roleSchema.methods.hasPermission = function(module, action) {
-    if (!this.permissions[module]) return false;
-    return this.permissions[module][action] === true;
+// Instance method to check if role has specific permission (app-aware)
+// @param {string} module - Module name (e.g., 'contacts', 'deals')
+// @param {string} action - Action name (e.g., 'create', 'read', 'update', 'delete')
+// @param {string} appKey - Optional app key (e.g., 'CRM', 'PORTAL'). If not provided, checks legacy permissions (CRM-scoped)
+roleSchema.methods.hasPermission = function(module, action, appKey = null) {
+    // If appKey is provided, check app-scoped permissions
+    if (appKey && this.appPermissions && this.appPermissions.has(appKey)) {
+        const appPerms = this.appPermissions.get(appKey);
+        if (appPerms[module] && appPerms[module][action] === true) {
+            return true;
+        }
+    }
+    
+    // Fallback to legacy permissions (treated as CRM-scoped)
+    // This ensures backward compatibility with existing roles
+    if (this.permissions && this.permissions[module]) {
+        return this.permissions[module][action] === true;
+    }
+    
+    return false;
+};
+
+// Instance method to check if role has permission for a specific app
+// @param {string} appKey - App key (e.g., 'CRM', 'PORTAL')
+// @param {string} module - Module name
+// @param {string} action - Action name
+roleSchema.methods.hasAppPermission = function(appKey, module, action) {
+    return this.hasPermission(module, action, appKey);
 };
 
 // Static method to get role hierarchy

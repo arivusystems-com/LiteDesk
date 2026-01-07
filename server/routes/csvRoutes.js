@@ -3,6 +3,10 @@ const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
 const { organizationIsolation, checkTrialStatus } = require('../middleware/organizationMiddleware');
 const { checkPermission, requireAdmin } = require('../middleware/permissionMiddleware');
+const { resolveAppContext } = require('../middleware/resolveAppContextMiddleware');
+const { requireAppEntitlement } = require('../middleware/requireAppEntitlementMiddleware');
+const { lazyCRMInitialization } = require('../middleware/lazyCRMInitializationMiddleware');
+const { requireCRMApp } = require('../middleware/requireCRMAppMiddleware');
 const {
   parseCSVFile,
   checkContactDuplicates,
@@ -19,6 +23,10 @@ const {
 
 // Apply authentication to all routes
 router.use(protect);
+router.use(resolveAppContext); // After auth, resolve appKey from URL
+router.use(requireAppEntitlement); // Check user's app entitlements
+router.use(lazyCRMInitialization); // Lazy initialize CRM if needed
+router.use(requireCRMApp); // Enforce CRM-only access
 
 // Parse CSV file (preview)
 router.post('/parse', parseCSVFile);

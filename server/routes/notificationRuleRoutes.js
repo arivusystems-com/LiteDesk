@@ -1,0 +1,33 @@
+const express = require('express');
+const router = express.Router();
+const { protect } = require('../middleware/authMiddleware');
+const { organizationIsolation } = require('../middleware/organizationMiddleware');
+const { resolveAppContext } = require('../middleware/resolveAppContextMiddleware');
+const { requireAppEntitlement } = require('../middleware/requireAppEntitlementMiddleware');
+const { requireCRMApp } = require('../middleware/requireCRMAppMiddleware');
+const { lazyCRMInitialization } = require('../middleware/lazyCRMInitializationMiddleware');
+const {
+  listRules,
+  createRule,
+  updateRule,
+  deleteRule,
+  toggleRule
+} = require('../controllers/notificationRuleController');
+
+// Auth + app context + org isolation for notification rules
+// Notification rules are user-level and app-scoped
+router.use(protect);
+router.use(resolveAppContext);
+router.use(requireAppEntitlement); // Check user's app entitlements
+router.use(lazyCRMInitialization); // Lazy initialize CRM if needed
+router.use(requireCRMApp); // Enforce CRM-only access
+router.use(organizationIsolation);
+
+router.get('/', listRules);
+router.post('/', createRule);
+router.put('/:id', updateRule);
+router.delete('/:id', deleteRule);
+router.post('/:id/toggle', toggleRule);
+
+module.exports = router;
+

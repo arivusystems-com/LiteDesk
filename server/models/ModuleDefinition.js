@@ -320,6 +320,20 @@ const ModuleDefinitionSchema = new mongoose.Schema({
         }, { _id: false })],
         default: []
     },
+    // Notification rule eligibility (Phase 16: User-Defined Notification Rules)
+    notifications: {
+        ruleEligible: { type: Boolean, default: false },
+        supportedEvents: {
+            type: [String],
+            enum: ['ASSIGNED', 'CREATED', 'STATUS_CHANGED', 'DUE_SOON'],
+            default: []
+        },
+        supportedConditions: {
+            type: [String],
+            enum: ['assignedTo', 'priority', 'status'],
+            default: []
+        }
+    },
     // Quick Create layout: list of field keys to include (respects main field order)
     quickCreate: { type: [String], default: [] },
     // Visual quick create layout (12-column grid)

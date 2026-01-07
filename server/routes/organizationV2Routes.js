@@ -1,9 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
+const { resolveAppContext } = require('../middleware/resolveAppContextMiddleware');
+const { requireAppEntitlement } = require('../middleware/requireAppEntitlementMiddleware');
+const { lazyCRMInitialization } = require('../middleware/lazyCRMInitializationMiddleware');
+const { requireCRMApp } = require('../middleware/requireCRMAppMiddleware');
 const controller = require('../controllers/organizationV2Controller');
 
 router.use(protect);
+router.use(resolveAppContext); // After auth, resolve appKey from URL
+router.use(requireAppEntitlement); // Check user's app entitlements
+router.use(lazyCRMInitialization); // Lazy initialize CRM if needed
+router.use(requireCRMApp); // Enforce CRM-only access
 
 router.post('/', controller.create);
 router.get('/', controller.list);

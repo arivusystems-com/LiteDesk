@@ -2221,15 +2221,12 @@ const getCurrentUserName = () => {
 
 // Get activity logs API endpoint
 const getActivityLogsEndpoint = (recordId) => {
-  const isAdmin = authStore.isOwner || authStore.userRole === 'admin';
-  
+  // Always use tenant-scoped endpoint for data isolation
   if (props.recordType === 'people') {
-    return isAdmin 
-      ? `/admin/contacts/${recordId}/activity-logs`
-      : `/people/${recordId}/activity-logs`;
+    return `/people/${recordId}/activity-logs`;
   } else if (props.recordType === 'organizations') {
-    // Organizations always use admin endpoint
-    return `/admin/organizations/${recordId}/activity-logs`;
+    // Always use tenant-scoped endpoint for data isolation
+    return `/v2/organization/${recordId}/activity-logs`;
   }
   return null;
 };
@@ -4918,13 +4915,11 @@ const handlePopupSave = async (updatedData) => {
     try {
       // Determine the API endpoint based on recordType
       const recordId = props.record._id;
-      const isAdmin = authStore.isOwner || authStore.userRole === 'admin';
       
       let endpoint = '';
       if (props.recordType === 'people') {
-        endpoint = isAdmin 
-          ? `/admin/contacts/${recordId}`
-          : `/people/${recordId}`;
+        // Always use tenant-scoped endpoint for data isolation
+        endpoint = `/people/${recordId}`;
       } else {
         // For other record types, construct endpoint from recordType
         const moduleKey = props.recordType === 'organizations' ? 'organizations' 
@@ -6202,17 +6197,11 @@ const handleOpenRelatedRecord = async (relatedRecord) => {
         // Determine API endpoint based on record type
         let endpoint = '';
         if (relatedRecord.type === 'organizations') {
-          const authStore = useAuthStore();
-          const isAdmin = authStore.isOwner || authStore.userRole === 'admin';
-          endpoint = isAdmin 
-            ? `/admin/organizations/${relatedRecord.id}`
-            : `/organization`;
+          // Always use tenant-scoped endpoint for data isolation
+          endpoint = `/v2/organization/${relatedRecord.id}`;
         } else if (relatedRecord.type === 'contacts' || relatedRecord.type === 'people') {
-          const authStore = useAuthStore();
-          const isAdmin = authStore.isOwner || authStore.userRole === 'admin';
-          endpoint = isAdmin 
-            ? `/admin/contacts/${relatedRecord.id}`
-            : `/people/${relatedRecord.id}`;
+          // Always use tenant-scoped endpoint for data isolation
+          endpoint = `/people/${relatedRecord.id}`;
         } else {
           endpoint = `/${relatedRecord.type}/${relatedRecord.id}`;
         }

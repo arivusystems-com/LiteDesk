@@ -480,14 +480,12 @@ const fetchModuleDefinition = async () => {
 
 // Get activity logs API endpoint
 const getActivityLogsEndpoint = (recordId) => {
-  const isAdmin = authStore.isOwner || authStore.userRole === 'admin';
-  
+  // Always use tenant-scoped endpoint for data isolation
   if (props.moduleKey === 'people') {
-    return isAdmin 
-      ? `/admin/contacts/${recordId}/activity-logs`
-      : `/people/${recordId}/activity-logs`;
+    return `/people/${recordId}/activity-logs`;
   } else if (props.moduleKey === 'organizations') {
-    return `/admin/organizations/${recordId}/activity-logs`;
+    // Always use tenant-scoped endpoint for data isolation
+    return `/v2/organization/${recordId}/activity-logs`;
   }
   return null;
 };

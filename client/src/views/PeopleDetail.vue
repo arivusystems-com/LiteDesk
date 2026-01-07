@@ -72,10 +72,8 @@ const fetchPerson = async () => {
   loading.value = true;
   error.value = null;
   try {
-    const isAdmin = authStore.isOwner || authStore.userRole === 'admin';
-    const endpoint = isAdmin 
-      ? `/admin/contacts/${route.params.id}`
-      : `/people/${route.params.id}`;
+    // Always use tenant-scoped endpoint for data isolation
+    const endpoint = `/people/${route.params.id}`;
     
     const data = await apiClient(endpoint, {
       method: 'GET'
@@ -98,10 +96,8 @@ const goBack = () => {
 
 const handleUpdate = async (updateData) => {
   try {
-    const isAdmin = authStore.isOwner || authStore.userRole === 'admin';
-    const endpoint = isAdmin 
-      ? `/admin/contacts/${route.params.id}`
-      : `/people/${route.params.id}`;
+    // Always use tenant-scoped endpoint for data isolation
+    const endpoint = `/people/${route.params.id}`;
     
     // Update local state immediately for UI responsiveness
     if (person.value) {
@@ -153,10 +149,8 @@ const deletePerson = async () => {
   deleting.value = true;
   
   try {
-    const isAdmin = authStore.isOwner || authStore.userRole === 'admin';
-    const endpoint = isAdmin 
-      ? `/admin/contacts/${route.params.id}`
-      : `/people/${route.params.id}`;
+    // Always use tenant-scoped endpoint for data isolation
+    const endpoint = `/people/${route.params.id}`;
     
     await apiClient.delete(endpoint);
     

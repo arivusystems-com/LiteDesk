@@ -1,6 +1,17 @@
 /**
- * Security Event Logging Middleware
- * Logs security-relevant events for monitoring and auditing
+ * ============================================================================
+ * PLATFORM CORE: Security Event Logging Middleware
+ * ============================================================================
+ * 
+ * This middleware provides app-agnostic audit logging:
+ * - Authentication events (login, logout, failed attempts)
+ * - Permission denial events
+ * - Suspicious activity detection
+ * - Rate limit violations
+ * - Data access events
+ * 
+ * See PLATFORM_CORE_ANALYSIS.md for details.
+ * ============================================================================
  */
 
 const securityLogger = {

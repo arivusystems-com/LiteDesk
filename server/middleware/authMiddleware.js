@@ -1,3 +1,17 @@
+/**
+ * ============================================================================
+ * PLATFORM CORE: Authentication Middleware
+ * ============================================================================
+ * 
+ * This middleware handles app-agnostic authentication:
+ * - JWT token verification
+ * - User authentication
+ * - Session management
+ * 
+ * See PLATFORM_CORE_ANALYSIS.md for details.
+ * ============================================================================
+ */
+
 // 🔓 OPTIONAL AUTH BYPASS (explicit opt-in only)
 // Set DISABLE_SECURITY=true in .env to bypass all security checks.
 // IMPORTANT: Do NOT disable security by default in development, otherwise the backend will
@@ -18,35 +32,50 @@ const protect = async (req, res, next) => {
         } else {
         console.warn('⚠️  [DEV] Security disabled - bypassing authentication');
         
-        // Try to find first user in database as dummy user, or create minimal user object
+        // CRITICAL: Even in bypass mode, we should NOT use the first user found
+        // because that could be from a different organization. Instead, we should
+        // require a token or fail. However, for backward compatibility, we'll
+        // try to extract organizationId from query params or headers if available.
+        
+        // Try to get organizationId from query params (for testing)
+        const orgIdFromQuery = req.query?.organizationId || req.headers['x-organization-id'];
+        
         try {
-            const dummyUser = await User.findOne().lean();
-            if (dummyUser) {
-                req.user = dummyUser;
-                req.user.organizationId = dummyUser.organizationId || dummyUser._id;
-                req.user.isOwner = true; // Grant all permissions
-                req.user.role = 'owner';
-                req.user.permissions = {}; // Empty permissions = all allowed
-            } else {
-                // No users exist yet - create minimal user object
-                req.user = {
-                    _id: new require('mongoose').Types.ObjectId(),
-                    organizationId: new require('mongoose').Types.ObjectId(),
-                    isOwner: true,
-                    role: 'owner',
-                    permissions: {}
-                };
+            let dummyUser = null;
+            
+            // If organizationId is provided, try to find a user from that org
+            if (orgIdFromQuery) {
+                dummyUser = await User.findOne({ organizationId: orgIdFromQuery }).lean();
             }
+            
+            // If no user found with orgId, or no orgId provided, we cannot safely proceed
+            // because using the first user would cause data leakage between organizations
+            if (!dummyUser) {
+                console.error('[AuthMiddleware] SECURITY BYPASS: Cannot determine user context. Token required or provide organizationId in query.');
+                return res.status(400).json({ 
+                    message: 'In development bypass mode, either provide a Bearer token or organizationId query param',
+                    code: 'DEV_BYPASS_REQUIRES_CONTEXT'
+                });
+            }
+            
+            req.user = dummyUser;
+            req.user.organizationId = dummyUser.organizationId || dummyUser._id;
+            req.user.isOwner = true; // Grant all permissions
+            req.user.role = 'owner';
+            req.user.permissions = {}; // Empty permissions = all allowed
+            
+            console.log('[AuthMiddleware] Using user from organization:', {
+                userId: req.user._id,
+                userEmail: req.user.email,
+                organizationId: req.user.organizationId
+            });
+            
         } catch (error) {
-            // If we can't find a user, create minimal object
-            const mongoose = require('mongoose');
-            req.user = {
-                _id: new mongoose.Types.ObjectId(),
-                organizationId: new mongoose.Types.ObjectId(),
-                isOwner: true,
-                role: 'owner',
-                permissions: {}
-            };
+            console.error('[AuthMiddleware] Error in security bypass:', error);
+            return res.status(500).json({ 
+                message: 'Error in development bypass mode',
+                code: 'DEV_BYPASS_ERROR'
+            });
         }
         return next();
         }
