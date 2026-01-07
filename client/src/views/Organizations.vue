@@ -18,7 +18,7 @@
       ]"
       :sort-field="sortField"
       :sort-order="sortOrder"
-      :pagination="{ currentPage: pagination.currentPage, totalPages: pagination.totalPages, totalRecords: pagination.totalOrganizations, limit: pagination.limit }"
+      :pagination="{ currentPage: pagination?.currentPage || 1, totalPages: pagination?.totalPages || 1, totalRecords: pagination?.totalOrganizations || 0, limit: pagination?.limit || 20 }"
       :filter-config="[
         {
           key: 'industry',
@@ -239,6 +239,7 @@ import { ref, reactive, computed, onMounted, watch, onActivated } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useBulkActions } from '@/composables/useBulkActions';
 import { useTabs } from '@/composables/useTabs';
+import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/utils/apiClient';
 import ListView from '@/components/common/ListView.vue';
 import BadgeCell from '@/components/common/table/BadgeCell.vue';
@@ -248,6 +249,7 @@ import Avatar from '@/components/common/Avatar.vue';
 
 const router = useRouter();
 const route = useRoute();
+const authStore = useAuthStore();
 
 // Use tabs composable
 const { openTab } = useTabs();
@@ -295,6 +297,11 @@ const upsertUsers = (users) => {
 };
 
 const loadUsers = async () => {
+  // Don't fetch if user is not authenticated
+  if (!authStore.isAuthenticated) {
+    return;
+  }
+  
   if (usersLoaded.value && Object.keys(usersById.value).length > 0) {
     return;
   }
@@ -319,6 +326,10 @@ const loadUsers = async () => {
       upsertUsers(users);
     }
   } catch (error) {
+    // Silently ignore 401 errors (user logged out)
+    if (error.status === 401 || error.message?.includes('Session expired')) {
+      return;
+    }
     console.error('Error loading users for organizations list:', error);
   } finally {
     usersLoaded.value = true;
@@ -413,6 +424,11 @@ const hasActiveFilters = computed(() => {
 
 // Fetch module definition to build columns dynamically
 const fetchModuleDefinition = async () => {
+  // Don't fetch if user is not authenticated
+  if (!authStore.isAuthenticated) {
+    return;
+  }
+  
   try {
     const response = await apiClient.get('/modules');
     const modules = response.data || [];
@@ -422,6 +438,10 @@ const fetchModuleDefinition = async () => {
       initializeColumnsFromModule(orgsModule);
     }
   } catch (error) {
+    // Silently ignore 401 errors (user logged out)
+    if (error.status === 401 || error.message?.includes('Session expired')) {
+      return;
+    }
     console.error('Error fetching module definition:', error);
   }
 };
@@ -489,6 +509,12 @@ const handleSort = ({ key, order }) => {
 
 // Methods
 const fetchOrganizations = async () => {
+  // Don't fetch if user is not authenticated
+  if (!authStore.isAuthenticated) {
+    loading.value = false;
+    return;
+  }
+  
   loading.value = true;
   console.log('🔍 Fetching organizations...');
   
@@ -506,7 +532,9 @@ const fetchOrganizations = async () => {
     if (filters.tier) params.append('tier', filters.tier);
     if (filters.status) params.append('status', filters.status);
 
-    const data = await apiClient(`/admin/organizations/all?${params.toString()}`, {
+    // Use the tenant-scoped endpoint that filters by organizationId
+    // Note: apiClient already prepends /api, so we use /v2/organization
+    const data = await apiClient(`/v2/organization?${params.toString()}`, {
       method: 'GET'
     });
 
@@ -539,11 +567,30 @@ const fetchOrganizations = async () => {
       if (discoveredUsers.length > 0) {
         upsertUsers(discoveredUsers);
       }
-      pagination.value = data.pagination;
+      
+      // Handle both 'pagination' and 'meta' response formats
+      if (data.pagination) {
+        pagination.value = data.pagination;
+      } else if (data.meta) {
+        pagination.value = {
+          currentPage: data.meta.page || 1,
+          totalPages: Math.ceil((data.meta.total || 0) / (data.meta.limit || 20)),
+          totalOrganizations: data.meta.total || 0,
+          limit: data.meta.limit || 20
+        };
+      } else {
+        // Fallback if neither format is present
+        pagination.value = {
+          currentPage: 1,
+          totalPages: 1,
+          totalOrganizations: data.data.length,
+          limit: 20
+        };
+      }
       
       // Calculate statistics
       statistics.value = {
-        totalOrganizations: data.pagination.totalOrganizations,
+        totalOrganizations: pagination.value.totalOrganizations || data.data.length,
         activeOrganizations: data.data.filter(o => o.isActive).length,
         trialOrganizations: data.data.filter(o => o.subscription?.status === 'trial').length,
         paidOrganizations: data.data.filter(o => o.subscription?.status === 'active').length
@@ -552,6 +599,10 @@ const fetchOrganizations = async () => {
       console.log(`✅ Loaded ${data.data.length} organizations`);
     }
   } catch (error) {
+    // Silently ignore 401 errors (user logged out)
+    if (error.status === 401 || error.message?.includes('Session expired')) {
+      return;
+    }
     console.error('❌ Error fetching organizations:', error);
   } finally {
     loading.value = false;
@@ -620,7 +671,8 @@ const handleOrganizationSaved = (savedOrganization) => {
 
 const deleteOrganization = async (orgId) => {
   try {
-    await apiClient(`/admin/organizations/${orgId}`, {
+    // Note: apiClient already prepends /api, so we use /v2/organization
+    await apiClient(`/v2/organization/${orgId}`, {
       method: 'DELETE'
     });
     fetchOrganizations();
@@ -640,7 +692,8 @@ const handleBulkAction = async (actionId, selectedRows) => {
   try {
     if (actionId === 'bulk-delete' || actionId === 'delete') {
       await Promise.all(orgIds.map(id => 
-        apiClient(`/admin/organizations/${id}`, { method: 'DELETE' })
+        // Note: apiClient already prepends /api, so we use /v2/organization
+        apiClient(`/v2/organization/${id}`, { method: 'DELETE' })
       ));
       fetchOrganizations();
       
@@ -878,6 +931,11 @@ const formatDate = (date) => {
 
 // Lifecycle
 onMounted(async () => {
+  // Don't fetch if user is not authenticated
+  if (!authStore.isAuthenticated) {
+    return;
+  }
+  
   // Fetch module definition first to build columns dynamically
   await fetchModuleDefinition();
   await loadUsers();
@@ -900,6 +958,11 @@ onMounted(async () => {
 
 // Refresh module definition when component is activated (e.g., returning from settings)
 onActivated(async () => {
+  // Don't fetch if user is not authenticated
+  if (!authStore.isAuthenticated) {
+    return;
+  }
+  
   await fetchModuleDefinition();
 });
 

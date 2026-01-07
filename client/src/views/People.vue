@@ -616,10 +616,9 @@ const fetchContacts = async () => {
     if (filters.status) params.append('status', filters.status);
     if (filters.owner_id === 'me') params.append('owner', 'me');
  
-    // Admins/Owners see ALL contacts across organizations
-    const endpoint = isAdmin.value
-      ? `/admin/contacts/all?${params.toString()}`
-      : `/people?${params.toString()}`;
+    // Always use tenant-scoped endpoint for data isolation
+    // Even admins should only see contacts from their own organization
+    const endpoint = `/people?${params.toString()}`;
  
     console.log('🌐 API Endpoint:', endpoint);
  

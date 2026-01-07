@@ -1,0 +1,154 @@
+const mongoose = require('mongoose');
+const Notification = require('../models/Notification');
+
+const APP_KEYS = ['CRM', 'AUDIT', 'PORTAL'];
+
+function normalizeAppKey(req) {
+  const fromQuery = req.query.appKey;
+  const fromBody = req.body?.appKey;
+  const fromContext = req.appContext?.appKey;
+  const appKey = fromQuery || fromBody || fromContext;
+  if (!appKey || !APP_KEYS.includes(appKey)) {
+    return null;
+  }
+  return appKey;
+}
+
+// GET /api/notifications
+exports.listNotifications = async (req, res) => {
+  const appKey = normalizeAppKey(req);
+  if (!appKey) {
+    return res.status(400).json({ success: false, message: 'appKey is required' });
+  }
+
+  const unreadOnly = String(req.query.unreadOnly || '').toLowerCase() === 'true';
+  const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
+  const cursor = req.query.cursor;
+
+  const query = {
+    userId: req.user._id,
+    organizationId: req.user.organizationId,
+    appKey
+  };
+
+  if (unreadOnly) {
+    query.readAt = null;
+  }
+
+  if (cursor && mongoose.isValidObjectId(cursor)) {
+    query._id = { $lt: new mongoose.Types.ObjectId(cursor) };
+  }
+
+  try {
+    const items = await Notification.find(query)
+      .sort({ _id: -1 })
+      .limit(limit + 1); // fetch one extra to compute nextCursor
+
+    let nextCursor = null;
+    if (items.length > limit) {
+      const next = items.pop();
+      nextCursor = String(next._id);
+    }
+
+    const responseItems = items.map(n => ({
+      id: String(n._id),
+      eventType: n.eventType,
+      title: n.title,
+      body: n.body,
+      priority: n.priority,
+      entity: n.entity ? {
+        type: n.entity.type,
+        id: n.entity.id ? String(n.entity.id) : null
+      } : null,
+      readAt: n.readAt,
+      createdAt: n.createdAt
+    }));
+
+    // If unreadOnly is true, also include the total unread count
+    let unreadCount = null;
+    if (unreadOnly) {
+      unreadCount = await Notification.countDocuments({
+        userId: req.user._id,
+        organizationId: req.user.organizationId,
+        appKey,
+        readAt: null
+      });
+    }
+
+    return res.json({
+      items: responseItems,
+      nextCursor,
+      ...(unreadCount !== null && { unreadCount })
+    });
+  } catch (err) {
+    console.error('[notificationController:listNotifications] Error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to list notifications' });
+  }
+};
+
+// POST /api/notifications/:id/read
+exports.markRead = async (req, res) => {
+  const appKey = normalizeAppKey(req);
+  if (!appKey) {
+    return res.status(400).json({ success: false, message: 'appKey is required' });
+  }
+
+  const id = req.params.id;
+  if (!mongoose.isValidObjectId(id)) {
+    return res.status(400).json({ success: false, message: 'Invalid notification id' });
+  }
+
+  try {
+    const notification = await Notification.findOne({
+      _id: id,
+      userId: req.user._id,
+      organizationId: req.user.organizationId,
+      appKey
+    });
+
+    if (!notification) {
+      // Do not leak existence; treat as success
+      return res.json({ success: true });
+    }
+
+    if (!notification.readAt) {
+      notification.readAt = new Date();
+      await notification.save();
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[notificationController:markRead] Error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to mark notification as read' });
+  }
+};
+
+// POST /api/notifications/read-all
+exports.markAllRead = async (req, res) => {
+  const appKey = normalizeAppKey(req);
+  if (!appKey) {
+    return res.status(400).json({ success: false, message: 'appKey is required' });
+  }
+
+  try {
+    const result = await Notification.updateMany(
+      {
+        userId: req.user._id,
+        organizationId: req.user.organizationId,
+        appKey,
+        readAt: null
+      },
+      { $set: { readAt: new Date() } }
+    );
+
+    return res.json({
+      success: true,
+      updated: result.modifiedCount || 0
+    });
+  } catch (err) {
+    console.error('[notificationController:markAllRead] Error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to mark notifications as read' });
+  }
+};
+
+

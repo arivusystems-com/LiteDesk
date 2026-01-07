@@ -155,6 +155,34 @@ const getAllOrganizations = async (req, res) => {
             query.isActive = req.query.status === 'active';
         }
         
+        // CRITICAL: Filter by tenant organizationId to prevent data leakage
+        // Even admin endpoints should respect tenant isolation unless explicitly
+        // marked as platform admin (which would require a different permission check)
+        if (req.user?.organizationId) {
+            // Get all users from this tenant organization
+            const User = require('../models/User');
+            const tenantUserIds = await User.find({ organizationId: req.user.organizationId })
+                .select('_id')
+                .lean();
+            const userIds = tenantUserIds.map(u => u._id);
+            
+            // Only show CRM organizations created by users from this tenant
+            andConditions.push({
+                $or: [
+                    // CRM organizations created by tenant users
+                    { 
+                        isTenant: false,
+                        createdBy: { $in: userIds }
+                    },
+                    // Or tenant organizations that belong to this tenant
+                    {
+                        isTenant: true,
+                        _id: req.user.organizationId
+                    }
+                ]
+            });
+        }
+        
         // Show all organizations by default (both CRM and tenant)
         // Only filter out tenant organizations if explicitly requested
         // Note: You can add a query param ?excludeTenants=true to hide tenant orgs

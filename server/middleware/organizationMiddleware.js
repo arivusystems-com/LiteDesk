@@ -1,6 +1,26 @@
+/**
+ * ============================================================================
+ * PLATFORM CORE: Organization Isolation & Feature Access Middleware
+ * ============================================================================
+ * 
+ * This middleware provides app-agnostic organization management:
+ * - Organization isolation (multi-tenancy)
+ * - Trial status checking
+ * - Feature/module access control
+ * - Usage limit checking
+ * 
+ * ⚠️ VIOLATION: Feature access checks CRM-specific feature names
+ *    Should use generic app/feature identifiers.
+ * 
+ * See PLATFORM_CORE_ANALYSIS.md for details.
+ * ============================================================================
+ */
+
 // 🔓 SECURITY DISABLED FOR DEVELOPMENT
 // Set DISABLE_SECURITY=true in .env to bypass all security checks
-const SECURITY_DISABLED = process.env.DISABLE_SECURITY === 'true' || process.env.NODE_ENV !== 'production';
+// NOTE: We do NOT auto-disable in non-production to prevent data leakage
+// between organizations. Explicit opt-in only.
+const SECURITY_DISABLED = process.env.DISABLE_SECURITY === 'true';
 
 const Organization = require('../models/Organization');
 
@@ -13,32 +33,47 @@ const organizationIsolation = async (req, res, next) => {
     // 🔓 BYPASS: Skip organization isolation if security is disabled
     if (SECURITY_DISABLED) {
         console.warn('⚠️  [DEV] Organization isolation bypassed');
-        // Try to find first organization or create minimal object
+        // CRITICAL: Use user's organizationId, not first org found
+        // This prevents data leakage between organizations
         try {
-            const org = await Organization.findOne().lean();
+            const userOrgId = req.user?.organizationId;
+            if (!userOrgId) {
+                console.error('[OrganizationIsolation] Missing organizationId in req.user:', {
+                    userId: req.user?._id,
+                    userEmail: req.user?.email
+                });
+                return res.status(400).json({ 
+                    message: 'User organization context required',
+                    code: 'ORG_CONTEXT_MISSING'
+                });
+            }
+            
+            const org = await Organization.findById(userOrgId).lean();
             if (org) {
                 req.organization = org;
+                console.log('[OrganizationIsolation] Using organization:', {
+                    orgId: org._id,
+                    orgName: org.name,
+                    userEmail: req.user?.email
+                });
+                return next();
             } else {
-                const mongoose = require('mongoose');
-                req.organization = {
-                    _id: new mongoose.Types.ObjectId(),
-                    isActive: true,
-                    subscription: { status: 'active', tier: 'enterprise' },
-                    limits: {},
-                    hasFeature: () => true // Always allow all features
-                };
+                console.error('[OrganizationIsolation] Organization not found:', {
+                    orgId: userOrgId,
+                    userEmail: req.user?.email
+                });
+                return res.status(404).json({ 
+                    message: 'Organization not found',
+                    code: 'ORG_NOT_FOUND'
+                });
             }
         } catch (error) {
-            const mongoose = require('mongoose');
-            req.organization = {
-                _id: req.user?.organizationId || new mongoose.Types.ObjectId(),
-                isActive: true,
-                subscription: { status: 'active', tier: 'enterprise' },
-                limits: {},
-                hasFeature: () => true
-            };
+            console.error('[OrganizationIsolation] Error in bypass:', error);
+            return res.status(500).json({ 
+                message: 'Error loading organization context',
+                code: 'ORG_LOAD_ERROR'
+            });
         }
-        return next();
     }
     
     try {

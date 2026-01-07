@@ -1,6 +1,41 @@
+/**
+ * ============================================================================
+ * PLATFORM CORE: User Management Controller
+ * ============================================================================
+ * 
+ * This controller handles app-agnostic user management:
+ * - User CRUD operations
+ * - User profile management
+ * - Password management
+ * - User assignment queries
+ * 
+ * See PLATFORM_CORE_ANALYSIS.md for details.
+ * ============================================================================
+ */
+
 const User = require('../models/User');
+const Organization = require('../models/Organization');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
+const { APP_KEYS } = require('../constants/appKeys');
+const { mapLegacyRoleToCRM } = require('../constants/appRoles');
+const { 
+    getDefaultRoleForApp, 
+    validateAppRole, 
+    getAppConfig, 
+    getRolesForApp, 
+    validateUserTypeForApp,
+    isAppEnabledForOrg
+} = require('../utils/appAccessUtils');
+const { 
+    canAddUserToApp, 
+    incrementSeat,
+    decrementSeat,
+    getSeatLimit,
+    getSeatsUsed,
+    getOrgSubscription,
+    isSubscriptionUsable
+} = require('../utils/subscriptionUtils');
 
 // --- Get all users in the organization ---
 exports.getUsers = async (req, res) => {
@@ -60,6 +95,99 @@ exports.getUsers = async (req, res) => {
         res.status(500).json({ 
             success: false,
             message: 'Server error fetching users' 
+        });
+    }
+};
+
+// --- Get add user capabilities (what apps & roles can be assigned) ---
+exports.getAddCapabilities = async (req, res) => {
+    try {
+        // Requester must be CRM ADMIN (owner or admin)
+        const user = req.user;
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: 'Authentication required'
+            });
+        }
+
+        // Check if user is owner or admin (CRM ADMIN)
+        const isCRMAdmin = user.isOwner || String(user.role || '').toLowerCase() === 'admin';
+        if (!isCRMAdmin) {
+            return res.status(403).json({
+                success: false,
+                message: 'Only CRM administrators can add users',
+                code: 'INSUFFICIENT_PERMISSIONS'
+            });
+        }
+
+        // Get organization with enabledApps
+        const organization = await Organization.findById(user.organizationId);
+        if (!organization) {
+            return res.status(404).json({
+                success: false,
+                message: 'Organization not found'
+            });
+        }
+
+        // Build capabilities from enabledApps and appRegistry
+        const capabilities = [];
+        const enabledApps = organization.enabledApps || [];
+
+        for (const enabledApp of enabledApps) {
+            // Handle both object format {appKey, status} and legacy string format
+            const appKey = typeof enabledApp === 'object' ? enabledApp.appKey : enabledApp;
+            const status = typeof enabledApp === 'object' ? enabledApp.status : 'ACTIVE';
+
+            // Only include ACTIVE apps
+            if (status !== 'ACTIVE') {
+                continue;
+            }
+
+            // Get app config from registry
+            const appConfig = getAppConfig(appKey);
+            if (!appConfig) {
+                // App not in registry - skip it
+                continue;
+            }
+
+            // Get roles for this app
+            const roles = getRolesForApp(appKey);
+            const defaultRole = getDefaultRoleForApp(appKey);
+
+            // Get seat usage info for PER_USER apps
+            const seatLimit = await getSeatLimit(organization._id, appKey);
+            const seatsUsed = await getSeatsUsed(organization._id, appKey);
+            const canAdd = await canAddUserToApp(organization._id, appKey);
+
+            // Build capability entry
+            capabilities.push({
+                appKey: appKey,
+                roles: roles,
+                defaultRole: defaultRole,
+                userTypesAllowed: appConfig.userTypesAllowed || [],
+                seatInfo: {
+                    limit: seatLimit,
+                    used: seatsUsed,
+                    available: seatLimit === null ? null : Math.max(0, seatLimit - seatsUsed),
+                    canAdd: canAdd.allowed,
+                    reason: canAdd.reason || null
+                }
+            });
+        }
+
+        res.json({
+            success: true,
+            data: {
+                apps: capabilities
+            }
+        });
+    } catch (error) {
+        console.error('Get add capabilities error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error fetching add capabilities',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -186,21 +314,72 @@ exports.getUser = async (req, res) => {
     }
 };
 
-// --- Invite/Create new user ---
+// --- Invite/Create new user (Unified Add User Flow) ---
 exports.inviteUser = async (req, res) => {
-    const { email, firstName, lastName, roleId, role, phoneNumber, password, sendEmail } = req.body;
+    const { 
+        email, 
+        firstName, 
+        lastName, 
+        roleId, // Legacy: backward compatibility
+        role, // Legacy: backward compatibility
+        phoneNumber, 
+        password, 
+        sendEmail,
+        // New unified format
+        userType,
+        appAccess,
+        name // Alternative to firstName/lastName
+    } = req.body;
 
     try {
+        // Requester must be CRM ADMIN (enforced by middleware, but check here for clarity)
+        const user = req.user;
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: 'Authentication required'
+            });
+        }
+
+        const isCRMAdmin = user.isOwner || String(user.role || '').toLowerCase() === 'admin';
+        if (!isCRMAdmin) {
+            return res.status(403).json({
+                success: false,
+                message: 'Only CRM administrators can add users',
+                code: 'INSUFFICIENT_PERMISSIONS'
+            });
+        }
+
         // Validate required fields
-        if (!email || !roleId) {
+        if (!email) {
             return res.status(400).json({ 
                 success: false,
-                message: 'Email and role are required' 
+                message: 'Email is required' 
+            });
+        }
+
+        // Determine if using new unified format or legacy format
+        const isUnifiedFormat = appAccess && Array.isArray(appAccess) && appAccess.length > 0;
+        const isLegacyFormat = roleId && !isUnifiedFormat;
+
+        if (!isUnifiedFormat && !isLegacyFormat) {
+            return res.status(400).json({
+                success: false,
+                message: 'Either appAccess array (unified format) or roleId (legacy format) is required',
+                code: 'MISSING_APP_ACCESS_OR_ROLE'
+            });
+        }
+
+        // Get organization for validation
+        const organization = req.organization || await Organization.findById(req.user.organizationId);
+        if (!organization) {
+            return res.status(404).json({
+                success: false,
+                message: 'Organization not found'
             });
         }
 
         // Check if organization has reached user limit
-        const organization = req.organization;
         const currentUserCount = await User.countDocuments({ 
             organizationId: organization._id,
             status: 'active'
@@ -227,15 +406,225 @@ exports.inviteUser = async (req, res) => {
             });
         }
 
-        // Fetch the Role document to get role details
-        const Role = require('../models/Role');
-        const roleDoc = await Role.findById(roleId);
-        
-        if (!roleDoc) {
-            return res.status(404).json({
-                success: false,
-                message: 'Role not found'
-            });
+        let finalAppAccess = [];
+        let finalUserType = userType || 'INTERNAL';
+        let roleDoc = null;
+        let legacyRole = null;
+        let isOwner = false;
+        let crmRoleKey = null;
+
+        // ============================================
+        // NEW UNIFIED FORMAT PROCESSING
+        // ============================================
+        if (isUnifiedFormat) {
+            // Validate unified format
+            const validationErrors = [];
+
+            // Validate at least one appAccess entry
+            if (appAccess.length === 0) {
+                validationErrors.push('At least one appAccess entry is required');
+            }
+
+            // Check for duplicate appKeys
+            const appKeys = appAccess.map(a => a.appKey);
+            const uniqueAppKeys = new Set(appKeys);
+            if (appKeys.length !== uniqueAppKeys.size) {
+                validationErrors.push('Duplicate appKey entries are not allowed');
+            }
+
+            // Validate each appAccess entry
+            for (let i = 0; i < appAccess.length; i++) {
+                const entry = appAccess[i];
+                const entryErrors = [];
+
+                // Validate appKey exists
+                if (!entry.appKey) {
+                    entryErrors.push('appKey is required');
+                } else {
+                    const appConfig = getAppConfig(entry.appKey);
+                    if (!appConfig) {
+                        entryErrors.push(`App ${entry.appKey} is not registered in the system`);
+                    } else {
+                        // Validate app is enabled for organization
+                        if (!isAppEnabledForOrg(organization, entry.appKey)) {
+                            entryErrors.push(`App ${entry.appKey} is not enabled for this organization`);
+                        }
+
+                        // Validate userType is allowed for this app
+                        if (finalUserType && !validateUserTypeForApp(finalUserType, entry.appKey)) {
+                            entryErrors.push(`UserType ${finalUserType} is not allowed for app ${entry.appKey}`);
+                        }
+
+                        // Validate roleKey
+                        let roleKey = entry.roleKey;
+                        if (!roleKey) {
+                            // Resolve default role if missing
+                            roleKey = getDefaultRoleForApp(entry.appKey);
+                            if (!roleKey) {
+                                entryErrors.push(`No roleKey provided and no default role found for app ${entry.appKey}`);
+                            }
+                        } else {
+                            // Validate roleKey is valid for app
+                            if (!validateAppRole(entry.appKey, roleKey)) {
+                                entryErrors.push(`Role ${roleKey} is not valid for app ${entry.appKey}`);
+                            }
+                        }
+
+                        // Build final appAccess entry
+                        if (entryErrors.length === 0) {
+                            finalAppAccess.push({
+                                appKey: entry.appKey,
+                                roleKey: roleKey,
+                                status: 'ACTIVE',
+                                addedAt: new Date()
+                            });
+                        } else {
+                            validationErrors.push(`appAccess[${i}]: ${entryErrors.join(', ')}`);
+                        }
+                    }
+                }
+            }
+
+            // Validate userType is provided
+            if (!finalUserType) {
+                validationErrors.push('userType is required');
+            }
+
+            // Reject if any validation errors
+            if (validationErrors.length > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Validation failed',
+                    errors: validationErrors,
+                    code: 'VALIDATION_ERROR'
+                });
+            }
+
+            // For backward compatibility, try to find CRM role for legacy roleId/role fields
+            // This allows UI to still send roleId for CRM while using unified format
+            if (roleId) {
+                const Role = require('../models/Role');
+                roleDoc = await Role.findById(roleId);
+                if (roleDoc) {
+                    legacyRole = roleDoc.name.toLowerCase();
+                    isOwner = roleDoc.name === 'Owner';
+                    crmRoleKey = isOwner ? 'ADMIN' : mapLegacyRoleToCRM(legacyRole);
+                    
+                    // Update CRM appAccess entry if it exists
+                    const crmIndex = finalAppAccess.findIndex(a => a.appKey === APP_KEYS.CRM);
+                    if (crmIndex >= 0) {
+                        finalAppAccess[crmIndex].roleKey = crmRoleKey;
+                    }
+                }
+            }
+        }
+        // ============================================
+        // LEGACY FORMAT PROCESSING (Backward Compatibility)
+        // ============================================
+        else if (isLegacyFormat) {
+            // Fetch the Role document to get role details
+            const Role = require('../models/Role');
+            roleDoc = await Role.findById(roleId);
+            
+            if (!roleDoc) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Role not found'
+                });
+            }
+
+            // Map role name to legacy role enum for backward compatibility
+            legacyRole = roleDoc.name.toLowerCase();
+            isOwner = roleDoc.name === 'Owner';
+            
+            // Map legacy role to CRM roleKey
+            crmRoleKey = isOwner ? 'ADMIN' : mapLegacyRoleToCRM(legacyRole);
+
+            // Validate CRM roleKey
+            if (!validateAppRole(APP_KEYS.CRM, crmRoleKey)) {
+                console.warn(`Invalid CRM roleKey ${crmRoleKey}, using default`);
+                const defaultRole = getDefaultRoleForApp(APP_KEYS.CRM);
+                crmRoleKey = defaultRole || 'USER';
+            }
+
+            // Validate CRM is enabled for organization
+            if (!isAppEnabledForOrg(organization, APP_KEYS.CRM)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'CRM app is not enabled for this organization',
+                    code: 'APP_NOT_ENABLED'
+                });
+            }
+
+            // Create appAccess from legacy format (CRM only)
+            finalAppAccess = [{
+                appKey: APP_KEYS.CRM,
+                roleKey: crmRoleKey,
+                status: 'ACTIVE',
+                addedAt: new Date()
+            }];
+
+            // Default to INTERNAL for legacy format
+            finalUserType = 'INTERNAL';
+        }
+
+        // ============================================
+        // SEAT ENFORCEMENT (CRITICAL - BEFORE USER CREATION)
+        // ============================================
+        // Validation Order (Strict):
+        // 1. App exists in appRegistry
+        // 2. App enabled for organization
+        // 3. App subscribed in OrganizationSubscription
+        // 4. Subscription status = ACTIVE or TRIAL
+        // 5. If billingType = PER_USER: seatsUsed < seatLimit
+        for (const appAccessEntry of finalAppAccess) {
+            const appKey = appAccessEntry.appKey;
+            
+            // Validate app exists in appRegistry (already validated above, but double-check)
+            const appConfig = getAppConfig(appKey);
+            if (!appConfig) {
+                return res.status(400).json({
+                    success: false,
+                    message: `App ${appKey} is not registered in the system`,
+                    code: 'APP_NOT_REGISTERED'
+                });
+            }
+
+            // Validate app is enabled for organization (already validated above, but double-check)
+            if (!isAppEnabledForOrg(organization, appKey)) {
+                return res.status(400).json({
+                    success: false,
+                    message: `App ${appKey} is not enabled for this organization`,
+                    code: 'APP_NOT_ENABLED'
+                });
+            }
+
+            // Check if user can be added to this app (includes subscription and seat checks)
+            // SUBSCRIPTION RULE: ACTIVE and TRIAL are usable, SUSPENDED/CANCELLED are blocked
+            const canAdd = await canAddUserToApp(organization._id, appKey);
+            if (!canAdd.allowed) {
+                // Determine error code and HTTP status based on reason
+                let errorCode = 'SEAT_LIMIT_EXCEEDED';
+                let httpStatus = 403;
+                
+                if (canAdd.reason && (canAdd.reason.includes('suspended') || canAdd.reason.includes('not active'))) {
+                    errorCode = 'SUBSCRIPTION_INACTIVE';
+                    httpStatus = 402; // Payment Required
+                } else if (canAdd.reason && canAdd.reason.includes('trial')) {
+                    errorCode = 'TRIAL_EXPIRED';
+                    httpStatus = 402; // Payment Required
+                } else if (canAdd.reason && canAdd.reason.includes('not subscribed')) {
+                    errorCode = 'SUBSCRIPTION_INACTIVE';
+                    httpStatus = 402; // Payment Required
+                }
+
+                return res.status(httpStatus).json({
+                    success: false,
+                    code: errorCode,
+                    message: canAdd.reason || `Cannot add user to ${appKey} app`,
+                    appKey: appKey
+                });
+            }
         }
 
         // Use provided password or generate temporary password
@@ -245,27 +634,37 @@ exports.inviteUser = async (req, res) => {
         // Create username from email
         const username = email.split('@')[0];
 
-        // Map role name to legacy role enum for backward compatibility
-        const legacyRole = roleDoc.name.toLowerCase();
+        // Handle name field (alternative to firstName/lastName)
+        let finalFirstName = firstName || '';
+        let finalLastName = lastName || '';
+        if (!finalFirstName && !finalLastName && name) {
+            const nameParts = name.trim().split(/\s+/);
+            finalFirstName = nameParts[0] || '';
+            finalLastName = nameParts.slice(1).join(' ') || '';
+        }
 
-        // Create new user
         const newUser = await User.create({
             organizationId: req.user.organizationId,
             username,
             email: email.toLowerCase(),
             password: hashedPassword,
-            firstName: firstName || '',
-            lastName: lastName || '',
+            firstName: finalFirstName,
+            lastName: finalLastName,
             phoneNumber,
-            roleId: roleId,
-            role: legacyRole, // Store legacy role for backward compatibility
-            isOwner: roleDoc.name === 'Owner',
-            status: 'active'
+            roleId: roleId || null, // May be null for unified format
+            role: legacyRole || null, // Store legacy role for backward compatibility
+            isOwner: isOwner,
+            status: 'active',
+            userType: finalUserType,
+            appAccess: finalAppAccess,
+            allowedApps: finalAppAccess.map(a => a.appKey) // Legacy field for backward compatibility
         });
 
-        // Set permissions based on the dynamic role's permissions
+        // Set permissions based on the dynamic role's permissions (if roleId provided)
         // Map the Role permissions to User permissions structure
-        newUser.permissions = {
+        // Only set permissions if we have a roleDoc (legacy format or unified with roleId)
+        if (roleDoc) {
+            newUser.permissions = {
             contacts: {
                 view: roleDoc.permissions.contacts.read,
                 create: roleDoc.permissions.contacts.create,
@@ -322,11 +721,24 @@ exports.inviteUser = async (req, res) => {
                 exportReports: roleDoc.permissions.reports.export || false
             }
         };
+        } else {
+            // For unified format without roleId, set minimal permissions
+            // Permissions will be derived from appAccess at runtime
+            newUser.permissions = {};
+        }
         
         await newUser.save();
         
-        // Increment the role's user count
-        await Role.findByIdAndUpdate(roleId, { $inc: { userCount: 1 } });
+        // Increment seat usage for each app (atomic operations)
+        for (const appAccessEntry of finalAppAccess) {
+            await incrementSeat(organization._id, appAccessEntry.appKey);
+        }
+        
+        // Increment the role's user count (if roleId provided)
+        if (roleId) {
+            const Role = require('../models/Role');
+            await Role.findByIdAndUpdate(roleId, { $inc: { userCount: 1 } });
+        }
 
         // TODO: Send invitation email with temporary password if sendEmail is true
         // For now, we'll return it in the response (ONLY FOR DEVELOPMENT)
@@ -342,6 +754,8 @@ exports.inviteUser = async (req, res) => {
                 email: newUser.email,
                 firstName: newUser.firstName,
                 lastName: newUser.lastName,
+                userType: newUser.userType,
+                appAccess: newUser.appAccess,
                 role: newUser.role,
                 roleId: newUser.roleId,
                 status: newUser.status,
@@ -544,6 +958,14 @@ exports.deleteUser = async (req, res) => {
                 message: 'Cannot delete the organization owner',
                 code: 'CANNOT_DELETE_OWNER'
             });
+        }
+
+        // Decrement seat usage for each app (atomic operations)
+        const appAccess = user.appAccess || [];
+        for (const appAccessEntry of appAccess) {
+            if (appAccessEntry.status === 'ACTIVE') {
+                await decrementSeat(user.organizationId, appAccessEntry.appKey);
+            }
         }
 
         // Decrement role's user count if roleId exists

@@ -7,6 +7,9 @@ const cors = require('cors');
 
 const app = express();
 
+// Server instance (will be set when server starts)
+let server = null;
+
 // Environment-aware configuration
 const isProduction = process.env.NODE_ENV === 'production';
 const PORT = process.env.PORT || 5000;
@@ -85,6 +88,13 @@ if (process.env.NODE_ENV === 'production') {
     app.use(csrfProtection);
 }
 
+// ============================================
+// APP CONTEXT RESOLUTION (After Auth, Before Permissions)
+// ============================================
+// Note: This middleware is applied at the router level in each route file
+// after protect() but before permission checks to ensure req.user exists.
+// See APP_CONTEXT_IMPLEMENTATION.md for details.
+
 // Routes
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
@@ -100,6 +110,12 @@ const healthRoutes = require('./routes/healthRoutes');
 const metricsRoutes = require('./routes/metricsRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const userPreferencesRoutes = require('./routes/userPreferencesRoutes');
+const notificationPreferenceRoutes = require('./routes/notificationPreferenceRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const notificationRuleRoutes = require('./routes/notificationRuleRoutes');
+const notificationHealthRoutes = require('./routes/notificationHealthRoutes');
+const notificationAnalyticsRoutes = require('./routes/notificationAnalyticsRoutes');
+const pushRoutes = require('./routes/pushRoutes');
 const peopleRoutes = require('./routes/peopleRoutes');
 const organizationV2Routes = require('./routes/organizationV2Routes');
 const moduleRoutes = require('./routes/moduleRoutes');
@@ -108,6 +124,11 @@ const formRoutes = require('./routes/formRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const itemRoutes = require('./routes/itemRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
+const portalRoutes = require('./routes/portalRoutes');
+const auditRoutes = require('./routes/auditRoutes');
+const auditExecutionRoutes = require('./routes/auditExecutionRoutes');
+const auditReadRoutes = require('./routes/auditReadRoutes');
+const digestRoutes = require('./routes/digestRoutes');
 
 // Route Linking
 app.use('/api/auth', authRoutes);
@@ -123,7 +144,13 @@ app.use('/api/demo', demoRoutes);
 app.use('/api/instances', instanceRoutes);
 app.use('/api/metrics', metricsRoutes);
 app.use('/api/admin', adminRoutes); // Admin-only cross-organization endpoints
+app.use('/api/admin/notifications', notificationAnalyticsRoutes); // Admin notification analytics
 app.use('/api/user-preferences', userPreferencesRoutes);
+app.use('/api/notification-preferences', notificationPreferenceRoutes);
+app.use('/api/notification-rules', notificationRuleRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/push', pushRoutes);
+app.use('/internal/notifications', notificationHealthRoutes); // Internal notification health endpoint
 app.use('/health', healthRoutes); // Public health check endpoint
 // New versioned endpoints (non-breaking)
 app.use('/api/people', peopleRoutes);
@@ -135,6 +162,17 @@ app.use('/api/forms', formRoutes.protected); // Protected form routes
 app.use('/api/reports', reportRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/upload', uploadRoutes);
+
+// Portal Application Routes (App #2)
+app.use('/portal', portalRoutes);
+
+// Audit Application Routes (App #3)
+app.use('/api/audit', auditRoutes);
+app.use('/api/audit/execute', auditExecutionRoutes);
+app.use('/api/audit/assignments', auditReadRoutes);
+
+// Digest Routes (for manual triggering/testing)
+app.use('/api/digest', digestRoutes);
 
 // Serve uploaded files (including reports)
 app.use('/api/uploads', express.static(path.join(__dirname, 'uploads'), {
@@ -210,8 +248,15 @@ mongoose.connect(masterUri)
       console.log('✅ Metrics collector started');
     }
     
-    // 3. Start Server after successful DB connection
-    app.listen(PORT, () => {
+    // 3. Start Scheduled Jobs (Notification Digests)
+    if (process.env.ENABLE_DIGEST_SCHEDULER !== 'false') {
+      const scheduledJobs = require('./services/scheduledJobs');
+      scheduledJobs.startScheduledJobs();
+      console.log('✅ Scheduled jobs started');
+    }
+    
+    // 4. Start Server after successful DB connection
+    server = app.listen(PORT, () => {
       console.log('');
       console.log('╔════════════════════════════════════════════════════════╗');
       console.log(`║  ✅ LiteDesk CRM Server Running Successfully!        ║`);
@@ -242,3 +287,62 @@ mongoose.connect(masterUri)
 app.get('/', (req, res) => {
   res.send('CRM API is operational.');
 });
+
+// Graceful shutdown handler
+const gracefulShutdown = async (signal) => {
+  console.log(`\n[server] Received ${signal}, starting graceful shutdown...`);
+  
+  // Shutdown SSE hub
+  try {
+    const notificationSSEHub = require('./services/notificationSSEHub');
+    console.log('[server] Shutting down notification SSE hub...');
+    notificationSSEHub.shutdown();
+  } catch (err) {
+    console.error('[server] Error shutting down SSE hub:', err.message);
+  }
+  
+  // Stop scheduled jobs
+  try {
+    const scheduledJobs = require('./services/scheduledJobs');
+    console.log('[server] Stopping scheduled jobs...');
+    scheduledJobs.stopScheduledJobs();
+  } catch (err) {
+    console.error('[server] Error stopping scheduled jobs:', err.message);
+  }
+  
+  // Close server
+  if (server) {
+    server.close(async () => {
+      console.log('[server] HTTP server closed');
+      
+      // Close MongoDB connection (Mongoose 7+ returns a Promise, no callback)
+      try {
+        await mongoose.connection.close();
+        console.log('[server] MongoDB connection closed');
+        console.log('[server] Graceful shutdown complete');
+        process.exit(0);
+      } catch (err) {
+        console.error('[server] Error closing MongoDB connection:', err.message);
+        process.exit(1);
+      }
+    });
+    
+    // Force close after 10 seconds
+    setTimeout(() => {
+      console.error('[server] Forced shutdown after timeout');
+      process.exit(1);
+    }, 10000);
+  } else {
+    try {
+      await mongoose.connection.close();
+      process.exit(0);
+    } catch (err) {
+      console.error('[server] Error closing MongoDB connection:', err.message);
+      process.exit(1);
+    }
+  }
+};
+
+// Handle shutdown signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

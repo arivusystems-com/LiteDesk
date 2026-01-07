@@ -1,0 +1,306 @@
+<template>
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+    <!-- Mobile Top Bar -->
+    <header class="sticky top-0 z-50 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 lg:hidden">
+      <div class="flex items-center justify-between px-4 h-14">
+        <div class="flex items-center gap-3">
+          <h1 class="text-lg font-semibold text-gray-900 dark:text-white truncate">
+            {{ organizationName }}
+          </h1>
+        </div>
+        <div class="flex items-center gap-2">
+          <!-- Notification bell (Mobile) -->
+          <NotificationBell
+            :show-count-on-desktop="false"
+            @toggle="notificationSheetOpen = true"
+          />
+          <!-- User Menu Button (Mobile) -->
+          <button
+            @click="showUserMenu = !showUserMenu"
+            class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            aria-label="User menu"
+          >
+            <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-medium">
+              {{ userInitials }}
+            </div>
+          </button>
+        </div>
+      </div>
+      
+      <!-- User Menu Dropdown (Mobile) -->
+      <div
+        v-if="showUserMenu"
+        class="absolute top-14 right-0 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50"
+      >
+        <div class="p-2 space-y-1">
+          <button
+            @click="toggleColorMode(colorMode === 'light' ? 'dark' : 'light'); showUserMenu = false"
+            class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg flex items-center"
+          >
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="colorMode === 'light' ? 'M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z' : 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z'" />
+            </svg>
+            {{ colorMode === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode' }}
+          </button>
+          <button
+            @click="handleLogout"
+            class="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg flex items-center"
+          >
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            Sign Out
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Desktop Top Bar -->
+    <header class="hidden lg:flex items-center justify-between h-16 px-6 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
+      <div class="flex items-center gap-4">
+        <h1 class="text-xl font-semibold text-gray-900 dark:text-white">
+          {{ organizationName }}
+        </h1>
+      </div>
+      <div class="flex items-center gap-4">
+        <!-- Notification bell (Desktop) -->
+        <NotificationBell @toggle="notificationDrawerOpen = true" />
+        <!-- User Menu (Desktop) -->
+        <div class="relative">
+          <button
+            @click="showUserMenu = !showUserMenu"
+            class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            aria-label="User menu"
+          >
+            <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-medium">
+              {{ userInitials }}
+            </div>
+            <span class="text-sm font-medium text-gray-700 dark:text-gray-300 hidden xl:block">
+              {{ userDisplayName }}
+            </span>
+          </button>
+          
+          <!-- User Menu Dropdown (Desktop) -->
+          <div
+            v-if="showUserMenu"
+            class="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50"
+          >
+            <div class="p-2 space-y-1">
+              <router-link
+                to="/portal/profile"
+                @click="showUserMenu = false"
+                class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+              >
+                Profile
+              </router-link>
+              <button
+                @click="toggleColorMode(colorMode === 'light' ? 'dark' : 'light'); showUserMenu = false"
+                class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg flex items-center"
+              >
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="colorMode === 'light' ? 'M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z' : 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z'" />
+                </svg>
+                {{ colorMode === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode' }}
+              </button>
+              <button
+                @click="handleLogout"
+                class="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg flex items-center"
+              >
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Desktop Sidebar -->
+    <aside class="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 lg:left-0 lg:pt-16 lg:z-30 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
+      <nav class="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
+        <router-link
+          v-for="item in navigation"
+          :key="item.name"
+          :to="item.href"
+          class="flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors min-h-[44px]"
+          :class="[
+            $route.path === item.href || $route.path.startsWith(item.href + '/')
+              ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+              : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+          ]"
+        >
+          <component :is="item.icon" class="w-5 h-5 mr-3" />
+          {{ item.name }}
+        </router-link>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 lg:pl-64 lg:pt-16 pb-20 lg:pb-0">
+      <div class="min-h-screen">
+        <RouterView />
+      </div>
+    </main>
+
+    <!-- Notification Drawer (Desktop) -->
+    <NotificationDrawer
+      :open="notificationDrawerOpen"
+      app-key="PORTAL"
+      @close="notificationDrawerOpen = false"
+    />
+
+    <!-- Notification Sheet (Mobile) -->
+    <NotificationSheet
+      :open="notificationSheetOpen"
+      app-key="PORTAL"
+      :mark-all-disabled="false"
+      @close="notificationSheetOpen = false"
+    />
+
+    <!-- Mobile Bottom Tab Navigation -->
+    <nav class="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 lg:hidden">
+      <div class="flex items-center justify-around h-16">
+        <router-link
+          to="/portal/dashboard"
+          class="flex flex-col items-center justify-center flex-1 min-h-[44px] transition-colors"
+          :class="[
+            $route.path === '/portal/dashboard' || $route.path.startsWith('/portal/dashboard/')
+              ? 'text-blue-600 dark:text-blue-400'
+              : 'text-gray-500 dark:text-gray-400'
+          ]"
+        >
+          <component :is="$route.path === '/portal/dashboard' ? HomeIconSolid : HomeIcon" class="w-6 h-6 mb-1" />
+          <span class="text-xs font-medium">Home</span>
+        </router-link>
+        <router-link
+          to="/portal/audits"
+          class="flex flex-col items-center justify-center flex-1 min-h-[44px] transition-colors"
+          :class="[
+            $route.path.startsWith('/portal/audits')
+              ? 'text-blue-600 dark:text-blue-400'
+              : 'text-gray-500 dark:text-gray-400'
+          ]"
+        >
+          <component :is="$route.path.startsWith('/portal/audits') ? DocumentTextIconSolid : DocumentTextIcon" class="w-6 h-6 mb-1" />
+          <span class="text-xs font-medium">Audits</span>
+        </router-link>
+        <router-link
+          to="/portal/actions"
+          class="flex flex-col items-center justify-center flex-1 min-h-[44px] transition-colors"
+          :class="[
+            $route.path.startsWith('/portal/actions')
+              ? 'text-blue-600 dark:text-blue-400'
+              : 'text-gray-500 dark:text-gray-400'
+          ]"
+        >
+          <component :is="$route.path.startsWith('/portal/actions') ? ClipboardDocumentCheckIconSolid : ClipboardDocumentCheckIcon" class="w-6 h-6 mb-1" />
+          <span class="text-xs font-medium">Actions</span>
+        </router-link>
+      </div>
+    </nav>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { RouterView, useRouter } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
+import { useColorMode } from '@/composables/useColorMode';
+import { 
+  HomeIcon, 
+  DocumentTextIcon, 
+  ClipboardDocumentCheckIcon,
+  UserIcon,
+  Cog6ToothIcon
+} from '@heroicons/vue/24/outline';
+import {
+  HomeIcon as HomeIconSolid,
+  DocumentTextIcon as DocumentTextIconSolid,
+  ClipboardDocumentCheckIcon as ClipboardDocumentCheckIconSolid,
+  UserIcon as UserIconSolid
+} from '@heroicons/vue/24/solid';
+import NotificationBell from '@/components/notifications/NotificationBell.vue';
+import NotificationDrawer from '@/components/notifications/NotificationDrawer.vue';
+import NotificationSheet from '@/components/notifications/NotificationSheet.vue';
+
+const router = useRouter();
+const authStore = useAuthStore();
+const { colorMode, toggleColorMode } = useColorMode();
+const showUserMenu = ref(false);
+const notificationDrawerOpen = ref(false);
+const notificationSheetOpen = ref(false);
+
+// Close menu when clicking outside
+const handleClickOutside = (event) => {
+  if (!event.target.closest('.relative')) {
+    showUserMenu.value = false;
+  }
+};
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside);
+});
+
+const organizationName = computed(() => {
+  return authStore.organization?.name || 'Portal';
+});
+
+const userDisplayName = computed(() => {
+  const user = authStore.user;
+  if (user?.firstName || user?.lastName) {
+    return `${user.firstName || ''} ${user.lastName || ''}`.trim();
+  }
+  return user?.email?.split('@')[0] || 'User';
+});
+
+const userInitials = computed(() => {
+  const user = authStore.user;
+  if (user?.firstName && user?.lastName) {
+    return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
+  }
+  if (user?.firstName) {
+    return user.firstName[0].toUpperCase();
+  }
+  if (user?.email) {
+    return user.email[0].toUpperCase();
+  }
+  return 'U';
+});
+
+const handleLogout = () => {
+  showUserMenu.value = false;
+  authStore.logout();
+  router.push('/login');
+};
+
+// Desktop navigation
+const navigation = [
+  {
+    name: 'Home',
+    href: '/portal/dashboard',
+    icon: HomeIcon
+  },
+  {
+    name: 'Audits',
+    href: '/portal/audits',
+    icon: DocumentTextIcon
+  },
+  {
+    name: 'Corrective Actions',
+    href: '/portal/actions',
+    icon: ClipboardDocumentCheckIcon
+  },
+  {
+    name: 'Settings',
+    href: '/portal/settings/notifications',
+    icon: Cog6ToothIcon
+  }
+];
+</script>
+

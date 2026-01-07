@@ -1,5 +1,7 @@
 const Task = require('../models/Task');
 const User = require('../models/User');
+const { emitNotification } = require('../services/notificationEngine');
+const domainEvents = require('../constants/domainEvents');
 
 // @desc    Create new task
 // @route   POST /api/tasks
@@ -60,6 +62,43 @@ const createTask = async (req, res) => {
       .populate('assignedTo', 'firstName lastName email avatar')
       .populate('assignedBy', 'firstName lastName')
       .populate('createdBy', 'firstName lastName');
+
+    // Emit domain events for task creation and assignment (non-blocking)
+    // Emit TASK_CREATED event
+    emitNotification({
+      eventType: domainEvents.TASK_CREATED,
+      entity: {
+        type: 'Task',
+        id: task._id.toString(),
+        title: task.title,
+        status: task.status,
+        priority: task.priority
+      },
+      organizationId: req.user.organizationId,
+      triggeredBy: req.user._id,
+      sourceAppKey: 'CRM'
+    }).catch(err => {
+      console.error('[taskController] Error emitting TASK_CREATED notification:', err);
+    });
+
+    // Emit TASK_ASSIGNED event if task is assigned
+    if (task.assignedTo) {
+      emitNotification({
+        eventType: domainEvents.TASK_ASSIGNED,
+        entity: {
+          type: 'Task',
+          id: task._id.toString(),
+          title: task.title,
+          status: task.status,
+          priority: task.priority
+        },
+        organizationId: req.user.organizationId,
+        triggeredBy: req.user._id,
+        sourceAppKey: 'CRM'
+      }).catch(err => {
+        console.error('[taskController] Error emitting TASK_ASSIGNED notification:', err);
+      });
+    }
 
     res.status(201).json({
       success: true,
@@ -254,12 +293,56 @@ const updateTask = async (req, res) => {
       }
     });
 
+    const oldStatus = task.status;
+    const oldAssignedTo = task.assignedTo ? task.assignedTo.toString() : null;
+    
     await task.save();
 
     const updatedTask = await Task.findById(task._id)
       .populate('assignedTo', 'firstName lastName email avatar')
       .populate('assignedBy', 'firstName lastName')
       .populate('createdBy', 'firstName lastName');
+
+    // Emit domain events for task updates (non-blocking)
+    const newAssignedTo = task.assignedTo ? task.assignedTo.toString() : null;
+    
+    // Emit TASK_ASSIGNED if assignment changed
+    if (newAssignedTo && newAssignedTo !== oldAssignedTo) {
+      emitNotification({
+        eventType: domainEvents.TASK_ASSIGNED,
+        entity: {
+          type: 'Task',
+          id: task._id.toString(),
+          title: task.title,
+          status: task.status,
+          priority: task.priority
+        },
+        organizationId: req.user.organizationId,
+        triggeredBy: req.user._id,
+        sourceAppKey: 'CRM'
+      }).catch(err => {
+        console.error('[taskController] Error emitting TASK_ASSIGNED notification:', err);
+      });
+    }
+
+    // Emit TASK_STATUS_CHANGED if status changed
+    if (task.status && task.status !== oldStatus) {
+      emitNotification({
+        eventType: domainEvents.TASK_STATUS_CHANGED,
+        entity: {
+          type: 'Task',
+          id: task._id.toString(),
+          title: task.title,
+          status: task.status,
+          priority: task.priority
+        },
+        organizationId: req.user.organizationId,
+        triggeredBy: req.user._id,
+        sourceAppKey: 'CRM'
+      }).catch(err => {
+        console.error('[taskController] Error emitting TASK_STATUS_CHANGED notification:', err);
+      });
+    }
 
     res.status(200).json({
       success: true,

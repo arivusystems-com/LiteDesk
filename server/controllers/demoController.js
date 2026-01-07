@@ -76,6 +76,12 @@ exports.submitDemoRequest = async (req, res) => {
                 currency: 'USD'
             },
             enabledModules: ['contacts', 'deals'], // Limited modules for prospects
+            // New organizations start with CRM enabled only
+            enabledApps: [{
+                appKey: 'CRM',
+                status: 'ACTIVE',
+                enabledAt: new Date()
+            }],
             
             // CRM fields (for tracking as prospect)
             types: [], // Empty types for prospects
@@ -97,29 +103,29 @@ exports.submitDemoRequest = async (req, res) => {
             // Continue even if role creation fails
         }
         
-        // Step 1.6: Initialize People and Organizations Module Definitions with dependencies
-        console.log('🔍 Initializing module definitions...');
+        // Step 1.6: Initialize CRM modules for the organization
+        // Using CRM app initializer to keep initialization centralized
+        console.log('🔍 Initializing CRM modules...');
         try {
-            await updatePeopleModuleFields(organization._id);
-            console.log('✅ People module definition initialized with dependencies');
+            const crmInitializer = require('../services/crmAppInitializer');
+            const initResult = await crmInitializer.initializeCRM(organization._id);
+            if (initResult.success) {
+                console.log('✅ CRM modules initialized:', initResult.initialized.join(', '));
+            } else {
+                console.warn('⚠️  CRM initialization completed with errors:', initResult.errors);
+            }
         } catch (moduleError) {
-            console.warn('⚠️  Failed to initialize People module:', moduleError.message);
+            console.warn('⚠️  Failed to initialize CRM modules:', moduleError.message);
             // Continue even if module initialization fails - can be run manually later
         }
         
+        // Initialize Organizations module (if needed)
         try {
             await updateOrganizationsModuleFields(organization._id);
             console.log('✅ Organizations module definition initialized with dependencies');
         } catch (moduleError) {
             console.warn('⚠️  Failed to initialize Organizations module:', moduleError.message);
             // Continue even if module initialization fails - can be run manually later
-        }
-
-        try {
-            await updateDealsModuleFields(organization._id);
-            console.log('✅ Deals module definition initialized with new standardized fields');
-        } catch (moduleError) {
-            console.warn('⚠️  Failed to initialize Deals module:', moduleError.message);
         }
         
         // Step 2: Create People for the requester

@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import LandingPage from '@/views/LandingPage.vue'
+import auditRoutes from './audit.routes'
+import portalRoutes from './portal.routes'
 
 const routes = [
   {
@@ -29,6 +31,24 @@ const routes = [
     name: 'settings',
     component: () => import('@/views/Settings.vue'),
     meta: { requiresAuth: true, hideShell: true } // render without main nav/topbar
+  },
+  {
+    path: '/settings/notifications',
+    name: 'notification-preferences',
+    component: () => import('@/views/settings/NotificationPreferences.vue'),
+    meta: { requiresAuth: true, hideShell: true }
+  },
+  {
+    path: '/settings/notifications/rules',
+    name: 'notification-rules',
+    component: () => import('@/views/settings/NotificationRules.vue'),
+    meta: { requiresAuth: true, hideShell: true }
+  },
+  {
+    path: '/settings/notifications/health',
+    name: 'notification-health',
+    component: () => import('@/views/settings/NotificationHealth.vue'),
+    meta: { requiresAuth: true, hideShell: true, requiresAdmin: true }
   },
   {
     path: '/demo-requests',
@@ -196,13 +216,47 @@ const routes = [
     name: 'responses',
     component: () => import('@/views/Responses.vue'),
     meta: { requiresAuth: true, requiresPermission: { module: 'forms', action: 'view' } }
-  }
+  },
+  // Audit App routes
+  ...auditRoutes,
+  // Portal App routes
+  ...portalRoutes
 ]
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes
 })
+
+// Helper function to determine the correct dashboard based on user's app access
+const getDefaultRoute = (authStore) => {
+  if (!authStore.isAuthenticated) {
+    return { name: 'landing' };
+  }
+  
+  const allowedApps = authStore.user?.allowedApps || [];
+  console.log('getDefaultRoute check:', {
+    allowedApps,
+    hasAudit: allowedApps.includes('AUDIT'),
+    hasCrm: allowedApps.includes('CRM'),
+    user: authStore.user
+  });
+  
+  // Priority: AUDIT > PORTAL > CRM
+  if (allowedApps.includes('AUDIT')) {
+    console.log('Default route: audit-dashboard');
+    return { name: 'audit-dashboard' };
+  }
+  
+  if (allowedApps.includes('PORTAL')) {
+    console.log('Default route: portal-dashboard');
+    return { name: 'portal-dashboard' };
+  }
+  
+  // Default to CRM dashboard
+  console.log('Default route: dashboard');
+  return { name: 'dashboard' };
+};
 
 // Add debug logging and permission checks
 router.beforeEach((to, from, next) => {
@@ -211,7 +265,8 @@ router.beforeEach((to, from, next) => {
     to: to.path,
     isAuthenticated: authStore.isAuthenticated,
     user: authStore.user,
-    permissions: authStore.user?.permissions
+    permissions: authStore.user?.permissions,
+    allowedApps: authStore.user?.allowedApps
   })
 
   // Check authentication
@@ -224,23 +279,120 @@ router.beforeEach((to, from, next) => {
   // Redirect authenticated users from landing page
   if (to.name === 'landing' && authStore.isAuthenticated) {
     console.log('Redirecting: Already authenticated')
-    next({ name: 'dashboard' })
+    next(getDefaultRoute(authStore))
     return
   }
   
   // Redirect authenticated users from login page (prevents going back to login)
   if (to.name === 'login' && authStore.isAuthenticated) {
     console.log('Redirecting: Already authenticated, cannot access login')
-    next({ name: 'dashboard' })
+    next(getDefaultRoute(authStore))
     return
+  }
+  
+  // Block audit-only and portal-only users from accessing CRM module routes
+  if (to.meta.requiresAuth && !to.meta.requiresAuditApp && !to.meta.requiresPortalApp && to.meta.requiresPermission) {
+    const allowedApps = authStore.user?.allowedApps || ['CRM'];
+    const hasCrmAccess = allowedApps.includes('CRM');
+    const hasOnlyAuditAccess = allowedApps.includes('AUDIT') && !hasCrmAccess;
+    const hasOnlyPortalAccess = allowedApps.includes('PORTAL') && !hasCrmAccess && !allowedApps.includes('AUDIT');
+    
+    // CRM modules that should be blocked for audit-only and portal-only users
+    const crmModules = ['people', 'contacts', 'deals', 'tasks', 'events', 'forms', 'items', 'organizations', 'imports'];
+    const { module } = to.meta.requiresPermission;
+    const normalizedModule = module === 'people' ? 'contacts' : module;
+    
+    // If user only has AUDIT access, block CRM module routes
+    if (hasOnlyAuditAccess && crmModules.includes(normalizedModule)) {
+      console.log('Blocked: CRM route accessed by audit-only user', { route: to.path, module })
+      alert('You do not have access to CRM features. Redirecting to Audit App.')
+      next({ name: 'audit-dashboard' })
+      return
+    }
+    
+    // If user only has PORTAL access, block CRM module routes
+    if (hasOnlyPortalAccess && crmModules.includes(normalizedModule)) {
+      console.log('Blocked: CRM route accessed by portal-only user', { route: to.path, module })
+      alert('You do not have access to CRM features. Redirecting to Portal.')
+      next({ name: 'portal-dashboard' })
+      return
+    }
+  }
+  
+  // Also block direct access to CRM dashboard for audit-only and portal-only users
+  if (to.name === 'dashboard') {
+    const allowedApps = authStore.user?.allowedApps || ['CRM'];
+    const hasCrmAccess = allowedApps.includes('CRM');
+    const hasOnlyAuditAccess = allowedApps.includes('AUDIT') && !hasCrmAccess;
+    const hasOnlyPortalAccess = allowedApps.includes('PORTAL') && !hasCrmAccess && !allowedApps.includes('AUDIT');
+    
+    if (hasOnlyAuditAccess) {
+      console.log('Blocked: CRM dashboard accessed by audit-only user')
+      next({ name: 'audit-dashboard' })
+      return
+    }
+    
+    if (hasOnlyPortalAccess) {
+      console.log('Blocked: CRM dashboard accessed by portal-only user')
+      next({ name: 'portal-dashboard' })
+      return
+    }
   }
   
   // Check if route requires master organization
   if (to.meta.requiresMasterOrganization && !authStore.isMasterOrganization) {
     console.log('Blocked: Master organization required')
     alert('This feature is only available to the application owner.')
-    next({ name: 'dashboard' })
+    next(getDefaultRoute(authStore))
     return
+  }
+  
+  // Check if route requires admin (Phase 15)
+  if (to.meta.requiresAdmin && !authStore.isAdminLike) {
+    console.log('Blocked: Admin access required')
+    alert('This feature is only available to administrators.')
+    next(getDefaultRoute(authStore))
+    return
+  }
+  
+  // Check audit app access if required
+  if (to.meta.requiresAuditApp) {
+    const allowedApps = authStore.user?.allowedApps || [];
+    const hasAuditAccess = allowedApps.includes('AUDIT');
+    
+    console.log('Audit app access check:', {
+      hasAuditAccess,
+      allowedApps,
+      user: authStore.user,
+      route: to.path
+    })
+    
+    if (!hasAuditAccess) {
+      console.log('Blocked: AUDIT app access required')
+      alert('You do not have access to the Audit App. Please contact your administrator.')
+      next(getDefaultRoute(authStore))
+      return
+    }
+  }
+  
+  // Check portal app access if required
+  if (to.meta.requiresPortalApp) {
+    const allowedApps = authStore.user?.allowedApps || [];
+    const hasPortalAccess = allowedApps.includes('PORTAL');
+    
+    console.log('Portal app access check:', {
+      hasPortalAccess,
+      allowedApps,
+      user: authStore.user,
+      route: to.path
+    })
+    
+    if (!hasPortalAccess) {
+      console.log('Blocked: PORTAL app access required')
+      alert('You do not have access to the Portal. Please contact your administrator.')
+      next(getDefaultRoute(authStore))
+      return
+    }
   }
   
   // Check permissions if required
@@ -258,19 +410,13 @@ router.beforeEach((to, from, next) => {
     if (!hasPermission) {
       console.log('Blocked: Insufficient permissions')
       alert(`You don't have permission to access ${module}. Please contact your administrator.`)
-      next({ name: 'dashboard' })
+      next(getDefaultRoute(authStore))
       return
     }
   }
   
-  // Ensure dashboard tab exists when navigating to dashboard
-  if (to.name === 'dashboard' && authStore.isAuthenticated) {
-    // Import useTabs dynamically to avoid circular dependency
-    import('@/composables/useTabs.js').then(({ useTabs }) => {
-      const { initTabs } = useTabs()
-      initTabs()
-    })
-  }
+  // Note: Tab initialization is handled in App.vue onMounted after storage is configured.
+  // Do not call initTabs() here as it requires instanceId + userId context.
   
   console.log('Allowed: Normal navigation')
   next()

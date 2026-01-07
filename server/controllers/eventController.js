@@ -6,6 +6,7 @@ const User = require('../models/User');
 const geoValidationService = require('../services/geoValidationService');
 const ModuleDefinition = require('../models/ModuleDefinition');
 const { getFieldDependencyState } = require('../utils/dependencyEvaluation');
+const { emitAuditAssigned } = require('../services/auditNotificationService');
 
 const AUDIT_EVENT_TYPES = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
 
@@ -400,15 +401,10 @@ exports.createEvent = async (req, res) => {
         };
 
         // Internal Audit: relatedToId is locked to the current user's organization
+        // On creation, always set to user's organization (no validation needed)
         if (eventData.eventType === 'Internal Audit') {
-            const desired = String(req.user.organizationId);
-            if (req.body.relatedToId && String(req.body.relatedToId) !== desired) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Internal Audit organization is locked and cannot be changed.',
-                    code: 'INTERNAL_AUDIT_ORG_LOCKED'
-                });
-            }
+            // Always set to user's organization for Internal Audit
+            // If a different org was provided, we'll override it silently on creation
             eventData.relatedToId = req.user.organizationId;
         }
         
@@ -544,6 +540,13 @@ exports.createEvent = async (req, res) => {
         await event.save();
         
         console.log('Event saved successfully with ID:', event._id, 'eventId:', event.eventId);
+
+        // Fire-and-forget domain event for audit assignment (non-blocking)
+        emitAuditAssigned({
+            eventId: event._id,
+            organizationId: req.user.organizationId,
+            triggeredBy: req.user._id
+        });
         
         const populatedEvent = await Event.findById(event._id)
             .populate('eventOwnerId', 'firstName lastName email')
@@ -638,13 +641,18 @@ exports.updateEvent = async (req, res) => {
         const incomingEventType = req.body.eventType || currentEvent.eventType;
         if (incomingEventType === 'Internal Audit') {
             const desired = String(req.user.organizationId);
-            if (req.body.relatedToId && String(req.body.relatedToId) !== desired) {
+            const provided = req.body.relatedToId ? String(req.body.relatedToId).trim() : null;
+            
+            // Only error if a different organization ID was explicitly provided and it's not empty
+            // Allow null, undefined, empty string, or matching org ID
+            if (provided && provided !== '' && provided !== 'null' && provided !== 'undefined' && provided !== desired) {
                 return res.status(400).json({
                     success: false,
                     message: 'Internal Audit organization is locked and cannot be changed.',
                     code: 'INTERNAL_AUDIT_ORG_LOCKED'
                 });
             }
+            // Always set to user's organization for Internal Audit
             req.body.relatedToId = req.user.organizationId;
         }
         
@@ -1431,6 +1439,7 @@ exports.checkIn = async (req, res) => {
         
         // Status remains 'Planned' during execution (system-controlled)
         // Update audit state for audit events
+        const previousAuditState = event.auditState;
         if (event.auditState && ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(event.eventType)) {
             event.auditState = 'checked_in';
         }
@@ -1442,6 +1451,28 @@ exports.checkIn = async (req, res) => {
         
         event.modifiedBy = req.user._id;
         await event.save();
+        
+        // Sync to Audit App (explicit call for semantic action)
+        if (['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(event.eventType)) {
+            try {
+                const auditSyncService = require('../services/auditSyncService');
+                await auditSyncService.syncAuditAssignmentFromEvent(event);
+                await auditSyncService.syncAuditTimelineFromEvent(event, {
+                    action: 'CHECK_IN',
+                    fromState: previousAuditState || 'Ready to start',
+                    toState: 'checked_in',
+                    actorId: req.user._id,
+                    timestamp: new Date(),
+                    meta: {
+                        location: location,
+                        orgIndex: orgIndex
+                    }
+                });
+            } catch (syncError) {
+                // Never throw - log and continue
+                console.error('[checkIn] Sync error (non-blocking):', syncError.message);
+            }
+        }
         
         // Create tracking entry
         await EventTracking.create({
@@ -1935,6 +1966,7 @@ exports.submitAudit = async (req, res) => {
             }
         }
         
+        const previousAuditState = 'checked_in';
         event.addAuditEntry('status_changed', req.user._id, 'checked_in', event.auditState, {
             formResponseId: formResponseId,
             orgIndex: orgIndex,
@@ -1944,6 +1976,28 @@ exports.submitAudit = async (req, res) => {
         
         event.modifiedBy = req.user._id;
         await event.save();
+        
+        // Sync to Audit App (explicit call for semantic action)
+        try {
+            const auditSyncService = require('../services/auditSyncService');
+            await auditSyncService.syncAuditAssignmentFromEvent(event);
+            await auditSyncService.syncAuditTimelineFromEvent(event, {
+                action: 'SUBMIT',
+                fromState: previousAuditState,
+                toState: event.auditState,
+                actorId: req.user._id,
+                timestamp: new Date(),
+                meta: {
+                    formResponseId: formResponseId,
+                    orgIndex: orgIndex,
+                    hasFailures: hasFailures,
+                    autoCheckedOut: true
+                }
+            });
+        } catch (syncError) {
+            // Never throw - log and continue
+            console.error('[submitAudit] Sync error (non-blocking):', syncError.message);
+        }
         
         res.status(200).json({
             success: true,
@@ -2029,6 +2083,26 @@ exports.approveAudit = async (req, res) => {
         event.completedAt = new Date();
         
         await event.save();
+        
+        // Sync to Audit App (explicit call for semantic action)
+        try {
+            const auditSyncService = require('../services/auditSyncService');
+            await auditSyncService.syncAuditAssignmentFromEvent(event);
+            await auditSyncService.syncAuditTimelineFromEvent(event, {
+                action: 'APPROVE',
+                fromState: previousState,
+                toState: 'closed',
+                actorId: req.user._id,
+                timestamp: new Date(),
+                meta: {
+                    approvedBy: req.user._id,
+                    completedAt: event.completedAt
+                }
+            });
+        } catch (syncError) {
+            // Never throw - log and continue
+            console.error('[approveAudit] Sync error (non-blocking):', syncError.message);
+        }
         
         // Make all form responses read-only by marking them as approved and closed
         for (const response of eventResponses) {
@@ -2151,6 +2225,27 @@ exports.rejectAudit = async (req, res) => {
         event.auditState = 'rejected';
         event.modifiedBy = req.user._id;
         await event.save();
+        
+        // Sync to Audit App (explicit call for semantic action)
+        try {
+            const auditSyncService = require('../services/auditSyncService');
+            await auditSyncService.syncAuditAssignmentFromEvent(event);
+            await auditSyncService.syncAuditTimelineFromEvent(event, {
+                action: 'REJECT',
+                fromState: previousState,
+                toState: 'rejected',
+                actorId: req.user._id,
+                timestamp: new Date(),
+                meta: {
+                    rejectedBy: req.user._id,
+                    reason: reason || 'No reason provided',
+                    reopenedCorrectiveActions: reopenedCount
+                }
+            });
+        } catch (syncError) {
+            // Never throw - log and continue
+            console.error('[rejectAudit] Sync error (non-blocking):', syncError.message);
+        }
         
         // Add audit entry
         event.addAuditEntry('status_changed', req.user._id, previousState, 'rejected', {

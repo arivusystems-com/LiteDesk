@@ -40,9 +40,32 @@ exports.create = async (req, res) => {
 };
 
 // List (CRM organizations only)
+// CRITICAL: Filter by tenant organization context to prevent data leakage
+// CRM organizations created by users from tenant org A should only be visible to users from tenant org A
 exports.list = async (req, res) => {
   try {
-    const query = { isTenant: false }; // Only CRM organizations
+    const User = require('../models/User');
+    const tenantOrganizationId = req.user?.organizationId;
+    
+    if (!tenantOrganizationId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Organization context required' 
+      });
+    }
+
+    // Get all users from this tenant organization
+    const tenantUserIds = await User.find({ organizationId: tenantOrganizationId })
+      .select('_id')
+      .lean();
+    const userIds = tenantUserIds.map(u => u._id);
+
+    // Build query: CRM organizations created by users from this tenant organization
+    const query = { 
+      isTenant: false, // Only CRM organizations
+      createdBy: { $in: userIds } // Only CRM orgs created by users from this tenant
+    };
+    
     if (req.query.type) query.types = req.query.type;
     if (req.query.name) query.name = new RegExp(req.query.name, 'i');
 
@@ -59,14 +82,36 @@ exports.list = async (req, res) => {
     const total = await Organization.countDocuments(query);
     res.json({ success: true, data, meta: { page, limit, total } });
   } catch (error) {
+    console.error('Error listing CRM organizations:', error);
     res.status(500).json({ success: false, message: 'Error fetching organizations', error: error.message });
   }
 };
 
-// Get by ID (CRM organization)
+// Get by ID (CRM organization, filtered by tenant context)
 exports.getById = async (req, res) => {
   try {
-    const org = await Organization.findOne({ _id: req.params.id, isTenant: false })
+    const User = require('../models/User');
+    const tenantOrganizationId = req.user?.organizationId;
+    
+    if (!tenantOrganizationId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Organization context required' 
+      });
+    }
+
+    // Get all users from this tenant organization
+    const tenantUserIds = await User.find({ organizationId: tenantOrganizationId })
+      .select('_id')
+      .lean();
+    const userIds = tenantUserIds.map(u => u._id);
+
+    // Only allow access to CRM organizations created by users from this tenant
+    const org = await Organization.findOne({ 
+      _id: req.params.id, 
+      isTenant: false,
+      createdBy: { $in: userIds } // CRITICAL: Filter by tenant context
+    })
       .populate('createdBy', 'firstName lastName email avatar username')
       .populate('assignedTo', 'firstName lastName email avatar username');
     if (!org) return res.status(404).json({ success: false, message: 'Not found' });
@@ -76,11 +121,32 @@ exports.getById = async (req, res) => {
   }
 };
 
-// Update (CRM organization)
+// Update (CRM organization, filtered by tenant context)
 exports.update = async (req, res) => {
   try {
+    const User = require('../models/User');
+    const tenantOrganizationId = req.user?.organizationId;
+    
+    if (!tenantOrganizationId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Organization context required' 
+      });
+    }
+
+    // Get all users from this tenant organization
+    const tenantUserIds = await User.find({ organizationId: tenantOrganizationId })
+      .select('_id')
+      .lean();
+    const userIds = tenantUserIds.map(u => u._id);
+
+    // Only allow update of CRM organizations created by users from this tenant
     const updated = await Organization.findOneAndUpdate(
-      { _id: req.params.id, isTenant: false }, 
+      { 
+        _id: req.params.id, 
+        isTenant: false,
+        createdBy: { $in: userIds } // CRITICAL: Filter by tenant context
+      }, 
       req.body, 
       { new: true }
     )
@@ -93,10 +159,31 @@ exports.update = async (req, res) => {
   }
 };
 
-// Delete (CRM organization only - tenants cannot be deleted this way)
+// Delete (CRM organization only - tenants cannot be deleted this way, filtered by tenant context)
 exports.remove = async (req, res) => {
   try {
-    const deleted = await Organization.findOneAndDelete({ _id: req.params.id, isTenant: false });
+    const User = require('../models/User');
+    const tenantOrganizationId = req.user?.organizationId;
+    
+    if (!tenantOrganizationId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Organization context required' 
+      });
+    }
+
+    // Get all users from this tenant organization
+    const tenantUserIds = await User.find({ organizationId: tenantOrganizationId })
+      .select('_id')
+      .lean();
+    const userIds = tenantUserIds.map(u => u._id);
+
+    // Only allow deletion of CRM organizations created by users from this tenant
+    const deleted = await Organization.findOneAndDelete({ 
+      _id: req.params.id, 
+      isTenant: false,
+      createdBy: { $in: userIds } // CRITICAL: Filter by tenant context
+    });
     if (!deleted) return res.status(404).json({ success: false, message: 'Not found' });
     res.json({ success: true, data: deleted._id });
   } catch (error) {
@@ -104,10 +191,31 @@ exports.remove = async (req, res) => {
   }
 };
 
-// Get activity logs for an organization
+// Get activity logs for an organization (filtered by tenant context)
 exports.getActivityLogs = async (req, res) => {
   try {
-    const org = await Organization.findOne({ _id: req.params.id, isTenant: false }).select('activityLogs');
+    const User = require('../models/User');
+    const tenantOrganizationId = req.user?.organizationId;
+    
+    if (!tenantOrganizationId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Organization context required' 
+      });
+    }
+
+    // Get all users from this tenant organization
+    const tenantUserIds = await User.find({ organizationId: tenantOrganizationId })
+      .select('_id')
+      .lean();
+    const userIds = tenantUserIds.map(u => u._id);
+
+    // Only allow access to activity logs of CRM organizations created by users from this tenant
+    const org = await Organization.findOne({ 
+      _id: req.params.id, 
+      isTenant: false,
+      createdBy: { $in: userIds } // CRITICAL: Filter by tenant context
+    }).select('activityLogs');
     
     if (!org) {
       return res.status(404).json({
@@ -135,7 +243,7 @@ exports.getActivityLogs = async (req, res) => {
   }
 };
 
-// Add activity log to an organization
+// Add activity log to an organization (filtered by tenant context)
 exports.addActivityLog = async (req, res) => {
   try {
     const { user, action, details } = req.body;
@@ -147,8 +255,29 @@ exports.addActivityLog = async (req, res) => {
       });
     }
     
+    const User = require('../models/User');
+    const tenantOrganizationId = req.user?.organizationId;
+    
+    if (!tenantOrganizationId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Organization context required' 
+      });
+    }
+
+    // Get all users from this tenant organization
+    const tenantUserIds = await User.find({ organizationId: tenantOrganizationId })
+      .select('_id')
+      .lean();
+    const userIds = tenantUserIds.map(u => u._id);
+    
+    // Only allow adding activity logs to CRM organizations created by users from this tenant
     const org = await Organization.findOneAndUpdate(
-      { _id: req.params.id, isTenant: false },
+      { 
+        _id: req.params.id, 
+        isTenant: false,
+        createdBy: { $in: userIds } // CRITICAL: Filter by tenant context
+      },
       {
         $push: {
           activityLogs: {

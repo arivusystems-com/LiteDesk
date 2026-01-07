@@ -566,5 +566,21 @@ FormResponseSchema.pre('save', function(next) {
 FormResponseSchema.set('toJSON', { virtuals: true });
 FormResponseSchema.set('toObject', { virtuals: true });
 
+// ===== AUDIT APP SYNC HOOKS =====
+// Post-save hook: Sync execution context when form response is submitted
+FormResponseSchema.post('save', async function (doc) {
+    try {
+        // Only sync if submitted
+        if (doc.executionStatus === 'Submitted') {
+            // Sync AuditExecutionContext (non-blocking)
+            const auditSyncService = require('../services/auditSyncService');
+            await auditSyncService.syncAuditExecutionContextFromFormResponse(doc);
+        }
+    } catch (error) {
+        // Never throw - log and continue (don't block CRM execution)
+        console.error('[FormResponse Model] Error in post-save sync hook:', error.message);
+    }
+});
+
 module.exports = mongoose.model('FormResponse', FormResponseSchema);
 

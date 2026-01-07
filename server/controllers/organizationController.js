@@ -1,5 +1,25 @@
+/**
+ * ============================================================================
+ * PLATFORM CORE: Organization Management Controller
+ * ============================================================================
+ * 
+ * This controller handles app-agnostic organization management:
+ * - Organization CRUD
+ * - Subscription management
+ * - Organization settings
+ * - Usage statistics
+ * 
+ * ⚠️ VIOLATION: Handles both tenant organization (Platform Core) and
+ *    CRM organization entity (CRM App) in same controller.
+ * 
+ * See PLATFORM_CORE_ANALYSIS.md for details.
+ * ============================================================================
+ */
+
 const Organization = require('../models/Organization');
 const User = require('../models/User');
+const { getAppConfig, isAppEnabledForOrg } = require('../utils/appAccessUtils');
+const { ensureSubscriptionForApp } = require('../services/subscriptionBootstrapService');
 
 // --- Get organization details ---
 exports.getOrganization = async (req, res) => {
@@ -255,6 +275,239 @@ exports.getStats = async (req, res) => {
         res.status(500).json({ 
             success: false,
             message: 'Server error fetching statistics' 
+        });
+    }
+};
+
+// --- Enable app for organization (Admin only) ---
+exports.enableApp = async (req, res) => {
+    try {
+        const { appKey } = req.body;
+        const organizationId = req.params.id || req.user.organizationId;
+
+        // Validate appKey provided
+        if (!appKey) {
+            return res.status(400).json({
+                success: false,
+                message: 'appKey is required',
+                code: 'APP_KEY_REQUIRED'
+            });
+        }
+
+        // Validate user is CRM ADMIN (has CRM appAccess with ADMIN role or isOwner)
+        const user = req.user;
+        const hasCrmAccess = user.appAccess?.some(
+            access => access.appKey === 'CRM' && access.status === 'ACTIVE'
+        ) || user.allowedApps?.includes('CRM');
+        
+        const isAdmin = user.isOwner || String(user.role || '').toLowerCase() === 'admin';
+        
+        if (!hasCrmAccess || !isAdmin) {
+            return res.status(403).json({
+                success: false,
+                message: 'Only CRM administrators can enable/disable apps',
+                code: 'ADMIN_REQUIRED'
+            });
+        }
+
+        // Validate app exists in registry
+        const appConfig = getAppConfig(appKey);
+        if (!appConfig) {
+            return res.status(400).json({
+                success: false,
+                message: `App ${appKey} is not registered in the system`,
+                code: 'INVALID_APP'
+            });
+        }
+
+        // Get organization
+        const organization = await Organization.findById(organizationId);
+        if (!organization) {
+            return res.status(404).json({
+                success: false,
+                message: 'Organization not found',
+                code: 'ORGANIZATION_NOT_FOUND'
+            });
+        }
+
+        // Check if app is already enabled
+        if (isAppEnabledForOrg(organization, appKey)) {
+            return res.status(400).json({
+                success: false,
+                message: `App ${appKey} is already enabled for this organization`,
+                code: 'APP_ALREADY_ENABLED'
+            });
+        }
+
+        // Add app to enabledApps
+        if (!organization.enabledApps) {
+            organization.enabledApps = [];
+        }
+
+        // Remove any existing entry for this app (in case it's SUSPENDED)
+        organization.enabledApps = organization.enabledApps.filter(
+            app => typeof app === 'object' ? app.appKey !== appKey : app !== appKey
+        );
+
+        // Add new entry
+        organization.enabledApps.push({
+            appKey: appKey,
+            status: 'ACTIVE',
+            enabledAt: new Date()
+        });
+
+        await organization.save();
+
+        // Bootstrap trial subscription if needed (after app is enabled)
+        try {
+            await ensureSubscriptionForApp({
+                organizationId: organization._id,
+                appKey: appKey,
+                initiatedByUserId: req.user._id
+            });
+        } catch (bootstrapError) {
+            // Log but don't fail the enable operation
+            console.error('[EnableApp] Subscription bootstrap failed (non-fatal)', {
+                orgId: organization._id,
+                appKey: appKey,
+                error: bootstrapError.message
+            });
+        }
+
+        res.json({
+            success: true,
+            message: `App ${appKey} enabled successfully`,
+            data: {
+                enabledApps: organization.enabledApps
+            }
+        });
+
+    } catch (error) {
+        console.error('Enable app error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error enabling app',
+            error: error.message
+        });
+    }
+};
+
+// --- Disable app for organization (Admin only) ---
+exports.disableApp = async (req, res) => {
+    try {
+        const { appKey } = req.body;
+        const organizationId = req.params.id || req.user.organizationId;
+
+        // Validate appKey provided
+        if (!appKey) {
+            return res.status(400).json({
+                success: false,
+                message: 'appKey is required',
+                code: 'APP_KEY_REQUIRED'
+            });
+        }
+
+        // Validate user is CRM ADMIN (has CRM appAccess with ADMIN role or isOwner)
+        const user = req.user;
+        const hasCrmAccess = user.appAccess?.some(
+            access => access.appKey === 'CRM' && access.status === 'ACTIVE'
+        ) || user.allowedApps?.includes('CRM');
+        
+        const isAdmin = user.isOwner || String(user.role || '').toLowerCase() === 'admin';
+        
+        if (!hasCrmAccess || !isAdmin) {
+            return res.status(403).json({
+                success: false,
+                message: 'Only CRM administrators can enable/disable apps',
+                code: 'ADMIN_REQUIRED'
+            });
+        }
+
+        // Validate app exists in registry
+        const appConfig = getAppConfig(appKey);
+        if (!appConfig) {
+            return res.status(400).json({
+                success: false,
+                message: `App ${appKey} is not registered in the system`,
+                code: 'INVALID_APP'
+            });
+        }
+
+        // Prevent disabling CRM (critical app)
+        if (appKey === 'CRM') {
+            return res.status(400).json({
+                success: false,
+                message: 'CRM cannot be disabled',
+                code: 'CRM_CANNOT_BE_DISABLED'
+            });
+        }
+
+        // Get organization
+        const organization = await Organization.findById(organizationId);
+        if (!organization) {
+            return res.status(404).json({
+                success: false,
+                message: 'Organization not found',
+                code: 'ORGANIZATION_NOT_FOUND'
+            });
+        }
+
+        // Check if app is enabled
+        if (!isAppEnabledForOrg(organization, appKey)) {
+            return res.status(400).json({
+                success: false,
+                message: `App ${appKey} is not enabled for this organization`,
+                code: 'APP_NOT_ENABLED'
+            });
+        }
+
+        // Update app status to SUSPENDED (don't remove, just suspend)
+        if (!organization.enabledApps) {
+            organization.enabledApps = [];
+        }
+
+        // Update existing entry or add as SUSPENDED
+        const appIndex = organization.enabledApps.findIndex(
+            app => (typeof app === 'object' ? app.appKey === appKey : app === appKey)
+        );
+
+        if (appIndex >= 0) {
+            // Update existing entry
+            if (typeof organization.enabledApps[appIndex] === 'object') {
+                organization.enabledApps[appIndex].status = 'SUSPENDED';
+            } else {
+                // Convert string to object
+                organization.enabledApps[appIndex] = {
+                    appKey: appKey,
+                    status: 'SUSPENDED',
+                    enabledAt: new Date()
+                };
+            }
+        } else {
+            // Add as SUSPENDED (shouldn't happen, but handle gracefully)
+            organization.enabledApps.push({
+                appKey: appKey,
+                status: 'SUSPENDED',
+                enabledAt: new Date()
+            });
+        }
+
+        await organization.save();
+
+        res.json({
+            success: true,
+            message: `App ${appKey} disabled successfully`,
+            data: {
+                enabledApps: organization.enabledApps
+            }
+        });
+
+    } catch (error) {
+        console.error('Disable app error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error disabling app',
+            error: error.message
         });
     }
 };

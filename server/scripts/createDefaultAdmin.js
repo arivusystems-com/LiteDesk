@@ -97,7 +97,13 @@ const masterUri = `${baseUri}/${masterDbName}${connectionQuery}`;
                 'users',
                 'demo_requests',
                 'instances'
-            ]
+            ],
+            // Master organization starts with CRM enabled
+            enabledApps: [{
+                appKey: 'CRM',
+                status: 'ACTIVE',
+                enabledAt: new Date()
+            }]
         });
 
         await organization.save();
@@ -125,6 +131,15 @@ const masterUri = `${baseUri}/${masterDbName}${connectionQuery}`;
 
         // Create Admin User
         console.log('\n👤 Creating Admin User...');
+        const { APP_KEYS } = require('../constants/appKeys');
+        const { validateAppRole } = require('../utils/appAccessUtils');
+        
+        // Ensure owner has CRM: ADMIN access
+        const crmRoleKey = 'ADMIN';
+        if (!validateAppRole(APP_KEYS.CRM, crmRoleKey)) {
+            throw new Error(`Invalid CRM roleKey: ${crmRoleKey}`);
+        }
+
         const adminUser = new User({
             username: DEFAULT_ADMIN.username,
             email: DEFAULT_ADMIN.email,
@@ -134,7 +149,15 @@ const masterUri = `${baseUri}/${masterDbName}${connectionQuery}`;
             organizationId: organization._id,
             role: 'owner',
             isOwner: true,
-            status: 'active'
+            status: 'active',
+            userType: 'INTERNAL',
+            appAccess: [{
+                appKey: APP_KEYS.CRM,
+                roleKey: crmRoleKey, // Owner must have CRM: ADMIN
+                status: 'ACTIVE',
+                addedAt: new Date()
+            }],
+            allowedApps: [APP_KEYS.CRM] // Legacy field for backward compatibility
         });
 
         // Set all permissions to true for owner

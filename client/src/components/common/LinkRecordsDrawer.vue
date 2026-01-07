@@ -158,8 +158,9 @@ const handleDialogClose = () => {
 };
 
 const endpointForModule = (moduleKey) => {
+  // Always use tenant-scoped endpoints for data isolation
   if (moduleKey === 'organizations' || moduleKey === 'organization') {
-    return isAdmin.value ? '/admin/organizations/all' : '/v2/organization';
+    return '/v2/organization';
   }
   return `/${moduleKey}`;
 };

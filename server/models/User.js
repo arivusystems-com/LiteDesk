@@ -1,3 +1,22 @@
+/**
+ * ============================================================================
+ * PLATFORM CORE: User Identity Model
+ * ============================================================================
+ * 
+ * This model represents user identity and profile (app-agnostic):
+ * - User profile (firstName, lastName, email, phoneNumber, avatar)
+ * - User status (active, inactive, suspended)
+ * - Organization reference (multi-tenancy)
+ * - Role and permissions
+ * 
+ * ⚠️ VIOLATION: Permissions structure is CRM-module-specific
+ *    (contacts, deals, tasks, events, forms, items, reports)
+ *    Should be generic capability-based permissions.
+ * 
+ * See PLATFORM_CORE_ANALYSIS.md for details.
+ * ============================================================================
+ */
+
 const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema({
@@ -109,6 +128,52 @@ const UserSchema = new mongoose.Schema({
         type: Boolean, 
         default: false 
     },  // First user who created the organization
+    
+    // Platform User Type
+    // INTERNAL: employees of the organization
+    // EXTERNAL: auditors, customers, vendors
+    // SYSTEM: future automation (no UI usage yet)
+    userType: {
+        type: String,
+        enum: ['INTERNAL', 'EXTERNAL', 'SYSTEM'],
+        default: 'INTERNAL'
+    },
+    
+    // App-Based Access (Core Change)
+    // A user has access to an app only if an entry exists in this array
+    // No implicit app access - this is the single source of truth
+    // Roles are scoped to appKey - no global roles
+    appAccess: [{
+        appKey: {
+            type: String,
+            enum: ['CRM', 'AUDIT', 'PORTAL'],
+            required: true
+        },
+        roleKey: {
+            type: String,
+            required: true
+        },
+        status: {
+            type: String,
+            enum: ['ACTIVE', 'DISABLED'],
+            default: 'ACTIVE'
+        },
+        addedAt: {
+            type: Date,
+            default: Date.now
+        }
+    }],
+    
+    // Legacy App Entitlements (kept for backward compatibility during migration)
+    // Defines which applications this user can access
+    // - ['CRM']: CRM-only users (default for existing users)
+    // - ['PORTAL']: Portal-only users
+    // - ['CRM', 'PORTAL']: Multi-app users
+    allowedApps: {
+        type: [String],
+        enum: ['CRM', 'PORTAL', 'AUDIT', 'LMS'],
+        default: ['CRM'] // Default existing users to CRM access
+    },
     
     // Status
     status: { 

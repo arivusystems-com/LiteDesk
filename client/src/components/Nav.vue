@@ -2,6 +2,8 @@
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';
+import NotificationBell from '@/components/notifications/NotificationBell.vue';
+import NotificationDrawer from '@/components/notifications/NotificationDrawer.vue';
 import { computed, ref, watch } from 'vue';
 import { useColorMode } from '@/composables/useColorMode';
 import { Dialog, DialogPanel, TransitionChild, TransitionRoot, Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
@@ -37,6 +39,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue']);
 
 const route = useRoute();
+const showDrawer = ref(false);
 const isCollapsed = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value)
@@ -82,16 +85,26 @@ watch(() => route.path, () => {
 const navigation = computed(() => {
   const nav = [];
   
-  // Dashboard - always visible
-  nav.push({ 
-    name: 'Dashboard', 
-    href: '/dashboard', 
-    icon: HomeIcon,
-    current: route.path === '/dashboard'
-  });
+  // Check user's app access
+  const allowedApps = authStore.user?.allowedApps || [];
+  const hasCrmAccess = allowedApps.includes('CRM');
+  const hasAuditAccess = allowedApps.includes('AUDIT');
   
-  // People - check permission (uses 'contacts' permission module)
-  if (authStore.can('people', 'view') || authStore.can('contacts', 'view')) {
+  // Only show CRM modules if user has CRM access
+  // Audit-only users should not see CRM navigation
+  
+  // Dashboard - only show CRM dashboard if user has CRM access
+  if (hasCrmAccess) {
+    nav.push({ 
+      name: 'Dashboard', 
+      href: '/dashboard', 
+      icon: HomeIcon,
+      current: route.path === '/dashboard'
+    });
+  }
+  
+  // People - check permission (uses 'contacts' permission module) - CRM only
+  if (hasCrmAccess && (authStore.can('people', 'view') || authStore.can('contacts', 'view'))) {
     nav.push({ 
       name: 'People', 
       href: '/people', 
@@ -100,8 +113,8 @@ const navigation = computed(() => {
     });
   }
   
-  // Organizations - check permission
-  if (authStore.can('organizations', 'view')) {
+  // Organizations - check permission - CRM only
+  if (hasCrmAccess && authStore.can('organizations', 'view')) {
     nav.push({ 
       name: 'Organizations', 
       href: '/organizations', 
@@ -110,8 +123,8 @@ const navigation = computed(() => {
     });
   }
   
-  // Deals - check permission
-  if (authStore.can('deals', 'view')) {
+  // Deals - check permission - CRM only
+  if (hasCrmAccess && authStore.can('deals', 'view')) {
     nav.push({ 
       name: 'Deals', 
       href: '/deals', 
@@ -120,8 +133,8 @@ const navigation = computed(() => {
     });
   }
   
-  // Tasks - check permission
-  if (authStore.can('tasks', 'view')) {
+  // Tasks - check permission - CRM only
+  if (hasCrmAccess && authStore.can('tasks', 'view')) {
     nav.push({ 
       name: 'Tasks', 
       href: '/tasks', 
@@ -130,8 +143,8 @@ const navigation = computed(() => {
     });
   }
   
-      // Events - check permission
-      if (authStore.can('events', 'view')) {
+      // Events - check permission - CRM only
+      if (hasCrmAccess && authStore.can('events', 'view')) {
         nav.push({
           name: 'Events',
           href: '/events',
@@ -140,8 +153,8 @@ const navigation = computed(() => {
         });
       }
   
-  // Items - check permission
-  if (authStore.can('items', 'view')) {
+  // Items - check permission - CRM only
+  if (hasCrmAccess && authStore.can('items', 'view')) {
     nav.push({ 
       name: 'Items', 
       href: '/items', 
@@ -150,8 +163,8 @@ const navigation = computed(() => {
     });
   }
   
-  // Forms - check permission
-  if (authStore.can('forms', 'view')) {
+  // Forms - check permission - CRM only
+  if (hasCrmAccess && authStore.can('forms', 'view')) {
     nav.push({ 
       name: 'Forms', 
       href: '/forms', 
@@ -167,8 +180,8 @@ const navigation = computed(() => {
     });
   }
   
-  // Imports - check permission
-  if (authStore.can('imports', 'view')) {
+  // Imports - check permission - CRM only
+  if (hasCrmAccess && authStore.can('imports', 'view')) {
     nav.push({ 
       name: 'Imports', 
       href: '/imports', 
@@ -202,6 +215,17 @@ const { colorMode, toggleColorMode, clearStoredMode } = useColorMode();
 const authStore = useAuthStore();
 const router = useRouter();
 const { openTab } = useTabs();
+
+const handleNotificationClick = () => {
+  const width = window.innerWidth || 0;
+  if (width >= 1024) {
+    // Desktop/tablet: open in-app drawer
+    showDrawer.value = true;
+  } else {
+    // Mobile/tablet: open global CRM sheet via app-level listener
+    window.dispatchEvent(new CustomEvent('crm-open-notifications'));
+  }
+};
 
 // Handle navigation click - open in tab instead of direct navigation
 const handleNavClick = (item, event) => {
@@ -248,7 +272,7 @@ const userMenuItems = computed(() => [
     { name: 'Your Profile', action: () => router.push('/profile') },
     { name: 'Settings', action: () => window.open('/settings', '_blank') },
     { 
-        name: `Mode: ${colorMode.value === 'light' ? '🌙 Light' : '☀️ Dark'}`, 
+        name: colorMode.value === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode', 
         action: toggleColorModeFromMenu, 
         isModeToggle: true 
     },
@@ -499,8 +523,8 @@ const logoSrc = computed(() => {
           </div>
         </transition>
 
-        <!-- Notifications - Always in same position, just changes appearance -->
-        <button
+        <!-- Notifications - Always in same position, behavior varies by viewport -->
+        <div
           :class="[
             'w-full rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-600 dark:text-gray-400 transition-colors duration-200',
             'flex items-center py-2.5 px-3'
@@ -509,7 +533,7 @@ const logoSrc = computed(() => {
         >
           <!-- Icon container with fixed width -->
           <div :class="['flex items-center justify-center flex-shrink-0', shouldShowExpanded ? 'w-6' : 'w-full']">
-            <BellIcon class="w-6 h-6" />
+            <NotificationBell @toggle="handleNotificationClick" />
           </div>
           
           <!-- Label -->
@@ -523,7 +547,7 @@ const logoSrc = computed(() => {
           >
             <span v-if="shouldShowExpanded" class="ml-3 text-sm whitespace-nowrap overflow-hidden">Notifications</span>
           </transition>
-        </button>
+        </div>
 
         <!-- User Menu - Always in same position -->
         <Menu as="div" class="relative">
@@ -618,9 +642,11 @@ const logoSrc = computed(() => {
       </button>
       <div class="flex-1 text-sm/6 font-semibold text-gray-900 dark:text-white">Dashboard</div>
       <div class="flex items-center space-x-2">
-        <button class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 text-gray-600 dark:text-white">
-          <BellIcon class="w-6 h-6" />
-        </button>
+        <!-- Mobile header notification bell -->
+        <NotificationBell
+          :show-count-on-desktop="false"
+          @toggle="handleNotificationClick"
+        />
         
         <!-- User Profile Dropdown -->
         <Menu as="div" class="relative">
@@ -666,4 +692,9 @@ const logoSrc = computed(() => {
       </div>
     </div>
   </div>
+  <NotificationDrawer
+    :open="showDrawer"
+    app-key="CRM"
+    @close="showDrawer = false"
+  />
 </template>

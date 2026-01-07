@@ -1,3 +1,20 @@
+/**
+ * ============================================================================
+ * PLATFORM CORE: People (Contacts) Management Controller
+ * ============================================================================
+ * 
+ * This controller handles app-agnostic people/contact management:
+ * - People CRUD operations
+ * - Notes management
+ * - Activity log management
+ * 
+ * ⚠️ VIOLATION: Contains CRM-specific logic for Lead/Contact types
+ *    and CRM-specific status fields.
+ * 
+ * See PLATFORM_CORE_ANALYSIS.md for details.
+ * ============================================================================
+ */
+
 const People = require('../models/People');
 
 // Create People
@@ -104,27 +121,120 @@ exports.create = async (req, res) => {
 // List People with org isolation and basic filters
 exports.list = async (req, res) => {
   try {
-    const query = { organizationId: req.user.organizationId };
+    // CRITICAL: Ensure organizationId is set and log for debugging
+    const userOrgId = req.user?.organizationId;
+    if (!userOrgId) {
+      console.error('[PeopleController] Missing organizationId in req.user:', {
+        userId: req.user?._id,
+        userEmail: req.user?.email,
+        hasUser: !!req.user
+      });
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Organization context required' 
+      });
+    }
+
+    // CRITICAL: Ensure organizationId is a proper ObjectId
+    const mongoose = require('mongoose');
+    const orgIdObjectId = mongoose.Types.ObjectId.isValid(userOrgId) 
+      ? new mongoose.Types.ObjectId(userOrgId) 
+      : userOrgId;
+    
+    const query = { organizationId: orgIdObjectId };
+    
+    // Debug logging
+    console.log('[PeopleController] Filtering by organizationId:', {
+      organizationId: String(userOrgId),
+      organizationIdType: typeof userOrgId,
+      orgIdObjectId: String(orgIdObjectId),
+      userEmail: req.user?.email,
+      queryKeys: Object.keys(query),
+      query: JSON.stringify(query)
+    });
+    
     if (req.query.type) query.type = req.query.type;
     if (req.query.email) query.email = req.query.email;
-    if (req.query.organization) query.organization = req.query.organization;
+    if (req.query.organization) query.organization = req.query.organization; // This is CRM organization, not tenant
 
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
 
+    // Handle sorting
+    const sortBy = req.query.sortBy || 'createdAt';
+    const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder;
+
     const User = require('../models/User');
+    
+    // CRITICAL: Double-check the query before executing
+    console.log('[PeopleController] Executing query:', JSON.stringify(query, null, 2));
+    
     const data = await People.find(query)
       .populate('assignedTo', 'firstName lastName email avatar')
       .populate('createdBy', 'firstName lastName email avatar username')
       .populate('lead_owner', 'firstName lastName email avatar username')
       .populate('organization', 'name')
-      .sort({ createdAt: -1 })
+      .sort(sortOptions)
       .limit(limit)
       .skip(skip);
     const total = await People.countDocuments(query);
-    res.json({ success: true, data, meta: { page, limit, total } });
+    
+    // Debug: Check if any records have wrong organizationId
+    if (data.length > 0) {
+      const wrongOrgRecords = data.filter(record => {
+        const recordOrgId = record.organizationId?._id || record.organizationId;
+        return String(recordOrgId) !== String(userOrgId);
+      });
+      
+      if (wrongOrgRecords.length > 0) {
+        console.error('[PeopleController] CRITICAL: Found records with wrong organizationId:', {
+          expectedOrgId: String(userOrgId),
+          userEmail: req.user?.email,
+          wrongRecordsCount: wrongOrgRecords.length,
+          wrongRecords: wrongOrgRecords.map(r => ({
+            id: r._id,
+            name: `${r.first_name} ${r.last_name}`,
+            actualOrgId: String(r.organizationId?._id || r.organizationId),
+            expectedOrgId: String(userOrgId)
+          }))
+        });
+      } else {
+        console.log('[PeopleController] ✅ All records have correct organizationId:', {
+          recordCount: data.length,
+          organizationId: String(userOrgId)
+        });
+      }
+      
+      // Also log the first few records to verify
+      console.log('[PeopleController] Sample records organizationId:', 
+        data.slice(0, 3).map(r => ({
+          name: `${r.first_name} ${r.last_name}`,
+          orgId: String(r.organizationId?._id || r.organizationId)
+        }))
+      );
+    }
+    
+    // CRITICAL: Filter out any records that somehow have wrong organizationId
+    // This is a safety net in case the query didn't work correctly
+    const filteredData = data.filter(record => {
+      const recordOrgId = record.organizationId?._id || record.organizationId;
+      return String(recordOrgId) === String(userOrgId);
+    });
+    
+    if (filteredData.length !== data.length) {
+      console.error('[PeopleController] CRITICAL: Filtered out records with wrong organizationId:', {
+        before: data.length,
+        after: filteredData.length,
+        removed: data.length - filteredData.length
+      });
+    }
+    
+    res.json({ success: true, data: filteredData, meta: { page, limit, total: filteredData.length } });
   } catch (error) {
+    console.error('Error in people list:', error);
     res.status(500).json({ success: false, message: 'Error fetching records', error: error.message });
   }
 };

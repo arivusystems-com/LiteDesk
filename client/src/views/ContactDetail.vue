@@ -468,10 +468,8 @@ const fetchContact = async () => {
   error.value = null;
   
   try {
-    const isAdmin = authStore.isOwner || authStore.userRole === 'admin';
-    const endpoint = isAdmin 
-      ? `/admin/contacts/${route.params.id}`
-      : `/people/${route.params.id}`;
+    // Always use tenant-scoped endpoint for data isolation
+    const endpoint = `/people/${route.params.id}`;
     
     const data = await apiClient(endpoint, {
       method: 'GET'

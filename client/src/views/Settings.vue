@@ -102,7 +102,7 @@
 </template>
 
 <script setup>
-import { ref, computed, h, watch } from 'vue';
+import { ref, computed, h, watch, defineAsyncComponent } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useColorMode } from '@/composables/useColorMode';
@@ -111,6 +111,12 @@ import UserManagement from '@/components/settings/UserManagement.vue';
 import RolesPermissions from '@/components/settings/RolesPermissions.vue';
 import ModulesAndFields from '@/components/settings/ModulesAndFields.vue';
 import GroupsSettings from '@/components/settings/GroupsSettings.vue';
+import AppManagement from '@/components/settings/AppManagement.vue';
+
+// Lazy load NotificationPreferences to avoid circular dependency issues
+const NotificationPreferences = defineAsyncComponent(() => 
+  import('@/views/settings/NotificationPreferences.vue')
+);
 
 const authStore = useAuthStore();
 const { colorMode, toggleColorMode } = useColorMode();
@@ -208,21 +214,51 @@ const GroupsIcon = () => h('svg', {
   })
 ]);
 
+const AppsIcon = () => h('svg', {
+  fill: 'none',
+  stroke: 'currentColor',
+  viewBox: '0 0 24 24',
+  xmlns: 'http://www.w3.org/2000/svg'
+}, [
+  h('path', {
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    'stroke-width': '2',
+    d: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10'
+  })
+]);
+
+const BellIcon = () => h('svg', {
+  fill: 'none',
+  stroke: 'currentColor',
+  viewBox: '0 0 24 24',
+  xmlns: 'http://www.w3.org/2000/svg'
+}, [
+  h('path', {
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    'stroke-width': '2',
+    d: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9'
+  })
+]);
+
 const tabs = computed(() => {
   const allTabs = [
     { id: 'users', name: 'User Management', icon: UsersIcon, component: UserManagement },
     { id: 'roles', name: 'Roles & Permissions', icon: SecurityIcon, component: RolesPermissions },
     { id: 'groups', name: 'Groups & Teams', icon: GroupsIcon, component: GroupsSettings },
+    { id: 'apps', name: 'App Management', icon: AppsIcon, component: AppManagement },
     { id: 'modules', name: 'Modules & Fields', icon: CRMIcon, component: ModulesAndFields },
+    { id: 'notifications', name: 'Notifications', icon: BellIcon, component: NotificationPreferences },
     { id: 'organization', name: 'Organization', icon: OrganizationIcon, component: 'div' },
     { id: 'security', name: 'Security', icon: SecurityIcon, component: 'div' },
     { id: 'crm', name: 'CRM Settings', icon: CRMIcon, component: 'div' }
   ];
 
-  // Only show User Management, Groups, and Roles to admins and owners (case-insensitive)
+  // Only show User Management, Groups, Roles, and Apps to admins and owners (case-insensitive)
   const role = (authStore.user?.role || '').toLowerCase();
   if (role !== 'admin' && role !== 'owner') {
-    return allTabs.filter(tab => tab.id !== 'users' && tab.id !== 'groups' && tab.id !== 'roles');
+    return allTabs.filter(tab => tab.id !== 'users' && tab.id !== 'groups' && tab.id !== 'roles' && tab.id !== 'apps');
   }
 
   return allTabs;

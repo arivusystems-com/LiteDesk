@@ -55,7 +55,8 @@ const fetchOrganization = async () => {
   loading.value = true;
   error.value = null;
   try {
-    const data = await apiClient(`/admin/organizations/${route.params.id}`, {
+    // Note: apiClient already prepends /api, so we use /v2/organization
+    const data = await apiClient(`/v2/organization/${route.params.id}`, {
       method: 'GET'
     });
     
@@ -83,7 +84,8 @@ const handleUpdate = async (updateData) => {
     }
     
     // Persist to server
-    const response = await apiClient.put(`/admin/organizations/${route.params.id}`, {
+    // Note: apiClient already prepends /api, so we use /v2/organization
+    const response = await apiClient.put(`/v2/organization/${route.params.id}`, {
       [updateData.field]: updateData.value
     });
     
@@ -113,7 +115,8 @@ const deleteOrganization = async () => {
   deleting.value = true;
   
   try {
-    await apiClient.delete(`/admin/organizations/${route.params.id}`);
+    // Note: apiClient already prepends /api, so we use /v2/organization
+    await apiClient.delete(`/v2/organization/${route.params.id}`);
     
     // Close the modal
     showDeleteModal.value = false;

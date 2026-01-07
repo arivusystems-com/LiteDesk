@@ -618,4 +618,23 @@ eventSchema.methods.addAuditEntry = function(action, actorUserId, from, to, meta
   });
 };
 
+// ===== AUDIT APP SYNC HOOKS =====
+// Post-save hook: Sync to Audit App when audit event is created or updated
+eventSchema.post('save', async function (doc) {
+    try {
+        // Only sync audit event types
+        const AUDIT_EVENT_TYPES = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
+        if (!AUDIT_EVENT_TYPES.includes(doc.eventType)) {
+            return;
+        }
+        
+        // Sync AuditAssignment (non-blocking)
+        const auditSyncService = require('../services/auditSyncService');
+        await auditSyncService.syncAuditAssignmentFromEvent(doc);
+    } catch (error) {
+        // Never throw - log and continue (don't block CRM execution)
+        console.error('[Event Model] Error in post-save sync hook:', error.message);
+    }
+});
+
 module.exports = mongoose.model('Event', eventSchema);

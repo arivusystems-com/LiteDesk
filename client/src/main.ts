@@ -16,5 +16,21 @@ app.use(router)
 const { colorMode } = useColorMode()
 console.log('Initial color mode:', colorMode.value)
 
+// Register service worker for PWA (audit app only)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    // Only register for audit routes
+    if (window.location.pathname.startsWith('/audit/')) {
+      navigator.serviceWorker.register('/service-worker.js', { scope: '/audit/' })
+        .then((registration) => {
+          console.log('[SW] Service Worker registered:', registration.scope);
+        })
+        .catch((error) => {
+          console.error('[SW] Service Worker registration failed:', error);
+        });
+    }
+  });
+}
+
 app.mount('#app')
 

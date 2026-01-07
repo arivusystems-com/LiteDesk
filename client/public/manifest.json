@@ -1,0 +1,14 @@
+{
+  "name": "LiteDesk Audit App",
+  "short_name": "Audit App",
+  "description": "Mobile-first audit execution workspace for field auditors",
+  "start_url": "/audit/dashboard",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": [],
+  "scope": "/audit/",
+  "categories": ["business", "productivity"]
+}
+

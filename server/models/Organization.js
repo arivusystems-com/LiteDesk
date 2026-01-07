@@ -1,7 +1,36 @@
+/**
+ * ============================================================================
+ * PLATFORM CORE: Organization Model (Dual-Purpose)
+ * ============================================================================
+ * 
+ * This model serves TWO purposes:
+ * 
+ * 1. PLATFORM CORE (Tenant Organization):
+ *    - Tenant/workspace management
+ *    - Subscription and billing
+ *    - Feature access flags (enabledModules)
+ *    - Usage limits
+ *    - Organization settings
+ * 
+ * 2. CRM APP (CRM Organization Entity):
+ *    - Customer/Partner/Vendor records
+ *    - CRM-specific fields (types, status, tiers, etc.)
+ * 
+ * ⚠️ VIOLATION: Single model for both tenant and CRM entity
+ *    Should be split into TenantOrganization (Platform Core) and
+ *    CRMOrganization (CRM App).
+ * 
+ * ⚠️ VIOLATION: enabledModules contains CRM-specific module names
+ *    Should use generic app/feature identifiers.
+ * 
+ * See PLATFORM_CORE_ANALYSIS.md for details.
+ * ============================================================================
+ */
+
 const mongoose = require('mongoose');
 
 const OrganizationSchema = new mongoose.Schema({
-    // ===== TENANT/SUBSCRIPTION FIELDS =====
+    // ===== TENANT/SUBSCRIPTION FIELDS (PLATFORM CORE) =====
     // Basic Information
     name: { 
         type: String, 
@@ -73,10 +102,47 @@ const OrganizationSchema = new mongoose.Schema({
         }
     },
     
-    // Enabled Modules (only for tenant organizations)
+    // Enabled Apps (app-level enablement for tenant organizations)
+    // Controls which applications are available to the organization
+    // This is the single source of truth for organization app subscriptions
+    // - 'CRM': Customer Relationship Management application
+    // - 'PORTAL': Customer/Partner portal application
+    // - 'AUDIT': Audit management application
+    // - 'LMS': Learning Management System application
+    enabledApps: [
+        {
+            appKey: { 
+                type: String, 
+                required: true,
+                enum: ['CRM', 'PORTAL', 'AUDIT', 'LMS']
+            },
+            status: { 
+                type: String, 
+                enum: ['ACTIVE', 'SUSPENDED'], 
+                default: 'ACTIVE' 
+            },
+            enabledAt: { 
+                type: Date, 
+                default: Date.now 
+            }
+        }
+    ],
+    
+    // Legacy: Enabled Modules (CRM-specific, deprecated)
+    // Kept for backward compatibility - will be migrated to enabledApps
+    // @deprecated Use enabledApps instead
     enabledModules: {
         type: [String],
         default: ['contacts', 'deals', 'tasks', 'events']
+    },
+    
+    // CRM Initialization Status (multi-pod safe)
+    // Tracks whether CRM modules have been initialized for this organization
+    // Used as source of truth for lazy CRM initialization across multiple pods
+    crmInitialized: {
+        type: Boolean,
+        default: false,
+        index: true // Index for fast lookups
     },
     
     // Organization Settings (only for tenant organizations)
@@ -301,10 +367,42 @@ OrganizationSchema.methods.getTrialDaysRemaining = function() {
     return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 };
 
+// Helper method to check if an app is enabled (tenant only)
+// Supports both new object structure and legacy string array for backward compatibility
+OrganizationSchema.methods.hasApp = function(appKey) {
+    if (!this.isTenant) return false;
+    if (!this.enabledApps || this.enabledApps.length === 0) return false;
+    
+    // Check if enabledApps is array of objects (new structure)
+    if (typeof this.enabledApps[0] === 'object' && this.enabledApps[0] !== null) {
+        return this.enabledApps.some(
+            app => app.appKey === appKey && app.status === 'ACTIVE'
+        );
+    }
+    
+    // Legacy: array of strings
+    return this.enabledApps.includes(appKey);
+};
+
 // Helper method to check if a feature is enabled (tenant only)
+// Backward compatibility: For CRM module names, checks if CRM app is enabled
+// @deprecated For CRM module names, use hasApp('CRM') instead
 OrganizationSchema.methods.hasFeature = function(featureName) {
     if (!this.isTenant) return false;
-    return this.enabledModules.includes(featureName);
+    
+    // If enabledApps exists and is populated, use app-aware logic
+    if (this.enabledApps && this.enabledApps.length > 0) {
+        // Map CRM module names to CRM app
+        const crmModules = ['contacts', 'deals', 'tasks', 'events', 'people', 'organizations', 'projects', 'items', 'documents', 'transactions', 'forms', 'processes', 'reports'];
+        if (crmModules.includes(featureName)) {
+            return this.hasApp('CRM');
+        }
+        // For non-CRM features, fall back to enabledModules for backward compatibility
+        return this.enabledModules && this.enabledModules.includes(featureName);
+    }
+    
+    // Fallback to legacy enabledModules
+    return this.enabledModules && this.enabledModules.includes(featureName);
 };
 
 // Helper method to update limits based on tier (tenant only)

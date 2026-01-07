@@ -1,19 +1,55 @@
 /**
- * Permission-based Access Control Middleware
- * Checks if user has specific permissions to perform actions
+ * ============================================================================
+ * PLATFORM CORE: Permission-based Access Control Middleware (App-Aware)
+ * ============================================================================
  * 
- * 🔓 SECURITY DISABLED FOR DEVELOPMENT
- * Set DISABLE_SECURITY=true in .env to bypass all permission checks
+ * This middleware provides app-aware permission checking:
+ * - Permission verification scoped by appKey
+ * - Role-based access control
+ * - Ownership filtering
+ * - Prevents CRM module access from non-CRM apps
+ * 
+ * App-Aware Behavior:
+ * - CRM modules (contacts, deals, tasks, etc.) are only accessible from CRM app
+ * - Non-CRM apps should use app-specific permissions (future)
+ * - Existing permissions are treated as CRM-scoped for backward compatibility
+ * 
+ * ✅ FIXED: Permission checks are now app-aware
+ *    CRM modules are blocked from non-CRM apps
+ *    Platform core does not assume CRM modules
+ * 
+ * See PLATFORM_CORE_ANALYSIS.md and APP_AWARE_PERMISSIONS.md for details.
+ * ============================================================================
  */
 
 // 🔓 SECURITY DISABLED: Bypass all permission checks
 const SECURITY_DISABLED = process.env.DISABLE_SECURITY === 'true' || process.env.NODE_ENV !== 'production';
 
 const securityLogger = require('./securityLoggingMiddleware');
+const { APP_KEYS } = require('../constants/appKeys');
+
+// CRM-specific modules that should only be accessible from CRM app
+const CRM_MODULES = [
+    'contacts', 'people', 'deals', 'tasks', 'events', 'forms', 'items',
+    'organizations', 'projects', 'reports', 'imports', 'settings'
+];
 
 /**
- * Check if user has permission to perform an action on a module
+ * Check if a module is CRM-specific
+ */
+function isCRMModule(module) {
+    const normalizedModule = module === 'people' ? 'contacts' : module;
+    return CRM_MODULES.includes(normalizedModule);
+}
+
+/**
+ * Check if user has permission to perform an action on a module (app-aware)
  * Usage: checkPermission('contacts', 'create')
+ * 
+ * App-Aware Behavior:
+ * - CRM modules are only accessible from CRM app
+ * - Non-CRM apps cannot access CRM modules
+ * - Existing permissions are treated as CRM-scoped
  */
 const checkPermission = (module, action) => {
     return async (req, res, next) => {
@@ -30,20 +66,45 @@ const checkPermission = (module, action) => {
                 return res.status(401).json({ message: 'Authentication required' });
             }
 
-            // Owner always has all permissions
-            if (user.isOwner) {
+            // Owner always has all permissions (but still subject to app context)
+            // For CRM modules, owner can access from any app (backward compatibility)
+            if (user.isOwner && (!isCRMModule(module) || req.appKey === APP_KEYS.CRM || !req.appKey)) {
                 return next();
             }
 
             // Normalize module aliases (people -> contacts)
             const normalizedModule = module === 'people' ? 'contacts' : module;
             
+            // APP-AWARE CHECK: CRM modules are only accessible from CRM app
+            if (isCRMModule(normalizedModule)) {
+                // If requesting CRM module but not from CRM app, deny access
+                if (req.appKey && req.appKey !== APP_KEYS.CRM) {
+                    securityLogger.logPermissionDenial(req, normalizedModule, action);
+                    
+                    return res.status(403).json({ 
+                        message: `CRM modules are only accessible from the CRM application`,
+                        code: 'CRM_MODULE_NOT_ACCESSIBLE',
+                        module: normalizedModule,
+                        action: action,
+                        currentApp: req.appKey,
+                        requiredApp: APP_KEYS.CRM
+                    });
+                }
+                
+                // If no appKey is set, treat as CRM (backward compatibility)
+                // This allows existing routes without app context to work
+            }
+            
             // Admins have full access to settings area (UI configuration, modules & fields, etc.)
+            // But only from CRM app (settings is a CRM module)
             if (normalizedModule === 'settings' && String(user.role || '').toLowerCase() === 'admin') {
-                return next();
+                if (!req.appKey || req.appKey === APP_KEYS.CRM) {
+                    return next();
+                }
             }
             
             // Check if user has the specific permission
+            // Existing permissions are treated as CRM-scoped (backward compatibility)
             let hasPermission = user.permissions?.[normalizedModule]?.[action];
             
             // For settings module, also check customizeFields as equivalent to edit
@@ -58,7 +119,8 @@ const checkPermission = (module, action) => {
                 return res.status(403).json({ 
                     message: `You don't have permission to ${action} ${module}`,
                     code: 'INSUFFICIENT_PERMISSIONS',
-                    requiredPermission: { module: normalizedModule, action }
+                    requiredPermission: { module: normalizedModule, action },
+                    appKey: req.appKey || APP_KEYS.CRM // Include app context
                 });
             }
 
@@ -215,8 +277,12 @@ const canManageRoles = () => {
 };
 
 /**
- * Middleware to filter data based on viewAll permission
+ * Middleware to filter data based on viewAll permission (app-aware)
  * If user doesn't have viewAll, they can only see their own data
+ * 
+ * App-Aware Behavior:
+ * - CRM modules only filter from CRM app
+ * - Non-CRM apps should use app-specific filtering (future)
  */
 const filterByOwnership = (module) => {
     return async (req, res, next) => {
@@ -235,7 +301,23 @@ const filterByOwnership = (module) => {
             }
 
             const normalizedModule = module === 'people' ? 'contacts' : module;
+            
+            // APP-AWARE CHECK: CRM modules only filter from CRM app
+            if (isCRMModule(normalizedModule)) {
+                if (req.appKey && req.appKey !== APP_KEYS.CRM) {
+                    // Non-CRM app trying to filter CRM module - deny
+                    return res.status(403).json({ 
+                        message: `CRM modules are only accessible from the CRM application`,
+                        code: 'CRM_MODULE_NOT_ACCESSIBLE',
+                        module: normalizedModule,
+                        currentApp: req.appKey,
+                        requiredApp: APP_KEYS.CRM
+                    });
+                }
+            }
+            
             // Owner and users with viewAll can see everything
+            // For CRM modules, check CRM-scoped permissions (backward compatibility)
             if (user.isOwner || user.permissions?.[normalizedModule]?.viewAll) {
                 req.viewAll = true;
                 return next();

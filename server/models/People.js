@@ -1,3 +1,25 @@
+/**
+ * ============================================================================
+ * PLATFORM CORE: People (Contacts) Model
+ * ============================================================================
+ * 
+ * This model represents people/contacts (app-agnostic):
+ * - Basic contact information (name, email, phone)
+ * - Organization reference (multi-tenancy)
+ * - Assignment tracking
+ * - Activity logs (generic audit trail)
+ * - Notes (generic notes system)
+ * 
+ * ⚠️ VIOLATION: Contains CRM-specific fields
+ *    - Lead/Contact type distinction
+ *    - Lead-specific fields (lead_status, lead_score, qualification_date)
+ *    - Contact-specific fields (contact_status, role, birthday)
+ *    Platform Core should have generic People model.
+ * 
+ * See PLATFORM_CORE_ANALYSIS.md for details.
+ * ============================================================================
+ */
+
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 

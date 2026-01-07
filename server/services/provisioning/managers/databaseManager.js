@@ -238,6 +238,9 @@ class DatabaseManager {
       const hashedPassword = await bcrypt.hash(ownerData.password, 10);
       
       // Create owner user
+      // Import app keys and utilities
+      const { APP_KEYS } = require('../../../constants/appKeys');
+      
       const user = {
         username: ownerData.name || ownerData.email.split('@')[0],
         email: ownerData.email,
@@ -248,6 +251,14 @@ class DatabaseManager {
         role: 'owner',
         isOwner: true,
         status: 'active',
+        userType: 'INTERNAL', // Platform user type
+        appAccess: [{
+          appKey: APP_KEYS.CRM,
+          roleKey: 'ADMIN', // Owner must have CRM: ADMIN
+          status: 'ACTIVE',
+          addedAt: new Date()
+        }],
+        allowedApps: [APP_KEYS.CRM], // Legacy field for backward compatibility
         permissions: this.getOwnerPermissions(),
         createdAt: new Date(),
         updatedAt: new Date()
