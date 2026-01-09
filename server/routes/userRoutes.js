@@ -3,10 +3,6 @@ const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
 const { organizationIsolation, checkTrialStatus } = require('../middleware/organizationMiddleware');
 const { canManageUsers } = require('../middleware/permissionMiddleware');
-const { resolveAppContext } = require('../middleware/resolveAppContextMiddleware');
-const { requireAppEntitlement } = require('../middleware/requireAppEntitlementMiddleware');
-const { lazySalesInitialization } = require('../middleware/lazySalesInitializationMiddleware');
-const { requireSalesApp } = require('../middleware/requireSalesAppMiddleware');
 const {
     getUsers,
     getUsersForAssignment,
@@ -33,13 +29,10 @@ router.get('/profile', getProfile);
 router.put('/profile', updateProfile);
 router.put('/profile/password', changePassword);
 
-// Apply app context and entitlement checks to remaining routes
-router.use(resolveAppContext); // After auth, resolve appKey from URL
-router.use(requireAppEntitlement); // Check user's app entitlements
-
-// Apply CRM-specific middleware to remaining routes
-router.use(lazySalesInitialization); // Lazy initialize CRM if needed
-router.use(requireSalesApp); // Enforce CRM-only access for user management routes
+// --- User Management Routes (Platform-level, app-agnostic) ---
+// User management is platform-level, NOT app-specific
+// These routes do NOT require app context, app entitlement, or app-specific initialization
+// They are accessible from Settings → Users & Access
 
 // --- Public user list for assignments (any authenticated user can see org users) ---
 // IMPORTANT: Must be before /:id route to avoid route conflict

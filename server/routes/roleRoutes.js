@@ -3,10 +3,6 @@ const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
 const { organizationIsolation, checkTrialStatus } = require('../middleware/organizationMiddleware');
 const { canManageRoles } = require('../middleware/permissionMiddleware');
-const { resolveAppContext } = require('../middleware/resolveAppContextMiddleware');
-const { requireAppEntitlement } = require('../middleware/requireAppEntitlementMiddleware');
-const { lazySalesInitialization } = require('../middleware/lazySalesInitializationMiddleware');
-const { requireSalesApp } = require('../middleware/requireSalesAppMiddleware');
 const {
     getRoles,
     getRole,
@@ -19,11 +15,9 @@ const {
 } = require('../controllers/roleController');
 
 // Apply auth and organization middleware to all routes
+// Roles & Permissions is platform-level, NOT app-specific
+// These routes do NOT require app context, app entitlement, or app-specific initialization
 router.use(protect);
-router.use(resolveAppContext); // After auth, resolve appKey from URL
-router.use(requireAppEntitlement); // Check user's app entitlements
-router.use(lazySalesInitialization); // Lazy initialize CRM if needed
-router.use(requireSalesApp); // Enforce Sales-only access
 router.use(organizationIsolation);
 router.use(checkTrialStatus);
 

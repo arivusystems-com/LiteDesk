@@ -1,19 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
-const { organizationIsolation } = require('../middleware/organizationMiddleware');
-const { resolveAppContext } = require('../middleware/resolveAppContextMiddleware');
-const { requireAppEntitlement } = require('../middleware/requireAppEntitlementMiddleware');
-const { lazySalesInitialization } = require('../middleware/lazySalesInitializationMiddleware');
-const { requireSalesApp } = require('../middleware/requireSalesAppMiddleware');
+const { organizationIsolation, checkTrialStatus } = require('../middleware/organizationMiddleware');
 const controller = require('../controllers/groupController');
 
+// Apply auth and organization middleware to all routes
+// Groups & Teams is platform-level, NOT app-specific
+// These routes do NOT require app context, app entitlement, or app-specific initialization
 router.use(protect);
-router.use(resolveAppContext); // After auth, resolve appKey from URL
-router.use(requireAppEntitlement); // Check user's app entitlements
-router.use(lazySalesInitialization); // Lazy initialize CRM if needed
-router.use(requireSalesApp); // Enforce CRM-only access
 router.use(organizationIsolation);
+router.use(checkTrialStatus);
 
 router.post('/', controller.create);
 router.get('/', controller.list);
