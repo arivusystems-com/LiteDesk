@@ -118,7 +118,7 @@ async function verifyUsers() {
                 // Special check for owners
                 if (user.isOwner) {
                     const hasCRMAdmin = user.appAccess.some(
-                        a => a.appKey === APP_KEYS.CRM && a.roleKey === 'ADMIN' && a.status === 'ACTIVE'
+                        a => a.appKey === APP_KEYS.SALES && a.roleKey === 'ADMIN' && a.status === 'ACTIVE'
                     );
                     if (!hasCRMAdmin) {
                         console.log(`   ❌ ERROR: Owner must have CRM: ADMIN access`);

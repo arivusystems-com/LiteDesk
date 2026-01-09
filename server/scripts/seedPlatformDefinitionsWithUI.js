@@ -1,0 +1,661 @@
+#!/usr/bin/env node
+
+/**
+ * Seed Platform App & Module Definitions with UI Metadata (Phase 0D)
+ * 
+ * This script seeds the platform-level metadata for apps and modules,
+ * including UI composition metadata for dynamic UI rendering.
+ * 
+ * This is PLATFORM metadata, not tenant data.
+ * 
+ * Run this once when setting up the platform or after schema changes.
+ * 
+ * Usage: node scripts/seedPlatformDefinitionsWithUI.js
+ */
+
+// Load environment variables
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
+const mongoose = require('mongoose');
+const AppDefinition = require('../models/AppDefinition');
+const ModuleDefinition = require('../models/ModuleDefinition');
+const getMasterDatabaseUri = require('../utils/getMasterDatabaseUri');
+
+// Platform App Definitions with UI Metadata (Phase 0D)
+const APP_DEFINITIONS = [
+  {
+    appKey: 'sales',
+    name: 'Sales',
+    description: 'Sales application for managing contacts, pipeline entities, and sales pipeline',
+    icon: '💼',
+    category: 'BUSINESS',
+    owner: 'PLATFORM',
+    enabled: true,
+    order: 1,
+    capabilities: {
+      usesPeople: true,
+      usesOrganization: true,
+      usesTransactions: true,
+      usesAutomation: true
+    },
+    settingsSchema: null,
+    // Phase 0D: UI Metadata
+    ui: {
+      sidebarOrder: 1,
+      icon: '💼',
+      defaultRoute: '/dashboard',
+      showInAppSwitcher: true
+    }
+  },
+  {
+    appKey: 'sales',
+    name: 'Sales',
+    description: 'Sales application for managing sales pipeline, opportunities, and customer relationships',
+    icon: '💰',
+    category: 'BUSINESS',
+    owner: 'PLATFORM',
+    enabled: true,
+    order: 2,
+    capabilities: {
+      usesPeople: true,
+      usesOrganization: true,
+      usesTransactions: true,
+      usesAutomation: true
+    },
+    settingsSchema: null,
+    // Phase 2D: UI Metadata
+    ui: {
+      sidebarOrder: 2,
+      icon: '💰',
+      defaultRoute: '/sales/people',
+      showInAppSwitcher: true
+    }
+  },
+  {
+    appKey: 'helpdesk',
+    name: 'Helpdesk',
+    description: 'Helpdesk application for managing support cases and customer service',
+    icon: '🎧',
+    category: 'BUSINESS',
+    owner: 'PLATFORM',
+    enabled: true,
+    order: 3,
+    capabilities: {
+      usesPeople: true,
+      usesOrganization: true,
+      usesTransactions: false,
+      usesAutomation: true
+    },
+    settingsSchema: null,
+    // Phase 2D: UI Metadata
+    ui: {
+      sidebarOrder: 3,
+      icon: '🎧',
+      defaultRoute: '/helpdesk/cases',
+      showInAppSwitcher: true
+    }
+  },
+  {
+    appKey: 'projects',
+    name: 'Projects',
+    description: 'Projects application for managing projects, tasks, and operations',
+    icon: '📁',
+    category: 'BUSINESS',
+    owner: 'PLATFORM',
+    enabled: true,
+    order: 4,
+    capabilities: {
+      usesPeople: true,
+      usesOrganization: true,
+      usesTransactions: false,
+      usesAutomation: true
+    },
+    settingsSchema: null,
+    // Phase 2D: UI Metadata
+    ui: {
+      sidebarOrder: 4,
+      icon: '📁',
+      defaultRoute: '/projects/projects',
+      showInAppSwitcher: true
+    }
+  },
+  {
+    appKey: 'audit',
+    name: 'Audit',
+    description: 'Audit management application for managing audit visits, findings, and corrective actions',
+    icon: '📋',
+    category: 'BUSINESS',
+    owner: 'PLATFORM',
+    enabled: true,
+    order: 5,
+    capabilities: {
+      usesPeople: false,
+      usesOrganization: true,
+      usesTransactions: false,
+      usesAutomation: true
+    },
+    settingsSchema: null,
+    // Phase 2D: UI Metadata - Updated defaultRoute
+    ui: {
+      sidebarOrder: 5,
+      icon: '📋',
+      defaultRoute: '/audit/dashboard',
+      showInAppSwitcher: true
+    }
+  },
+  {
+    appKey: 'portal',
+    name: 'Portal',
+    description: 'Customer/Partner self-service portal',
+    icon: '🌐',
+    category: 'BUSINESS',
+    owner: 'PLATFORM',
+    enabled: true,
+    order: 6,
+    capabilities: {
+      usesPeople: true,
+      usesOrganization: false,
+      usesTransactions: false,
+      usesAutomation: false
+    },
+    settingsSchema: null,
+    // Phase 2D: UI Metadata - Updated defaultRoute
+    ui: {
+      sidebarOrder: 6,
+      icon: '🌐',
+      defaultRoute: '/portal/dashboard',
+      showInAppSwitcher: true
+    }
+  },
+  {
+    appKey: 'control_plane',
+    name: 'Control Plane',
+    description: 'Platform control plane for system administration (internal only)',
+    icon: '⚙️',
+    category: 'SYSTEM',
+    owner: 'PLATFORM',
+    enabled: true,
+    order: 999,
+    capabilities: {
+      usesPeople: false,
+      usesOrganization: false,
+      usesTransactions: false,
+      usesAutomation: false
+    },
+    settingsSchema: null,
+    // Phase 2D: UI Metadata - Must remain hidden from tenants
+    ui: {
+      sidebarOrder: 999,
+      icon: '⚙️',
+      defaultRoute: '/control-plane',
+      showInAppSwitcher: false  // Never visible to tenants
+    }
+  }
+];
+
+// Platform Module Definitions with UI Metadata (Phase 0D)
+const MODULE_DEFINITIONS = [
+  // ===== SALES APP MODULES =====
+  {
+    moduleKey: 'people',
+    appKey: 'sales',
+    label: 'Person',
+    pluralLabel: 'People',
+    entityType: 'CORE',
+    primaryField: 'name',
+    peopleConstraints: {
+      allowedTypes: ['Lead', 'Contact'],
+      required: false
+    },
+    organizationConstraints: {
+      required: false
+    },
+    lifecycle: {
+      statusField: 'status',
+      allowedStatuses: ['Lead', 'Contact']
+    },
+    supports: {
+      ownership: true,
+      assignment: true,
+      comments: true,
+      attachments: true,
+      automation: true
+    },
+    permissions: {
+      create: true,
+      edit: true,
+      delete: false,
+      view: true
+    },
+    // Phase 0D: UI Metadata
+    ui: {
+      routeBase: '/people',
+      icon: '👥',
+      showInSidebar: true,
+      sidebarOrder: 1,
+      createLabel: 'Create Person',
+      listLabel: 'All People'
+    }
+  },
+  {
+    moduleKey: 'organizations',
+    appKey: 'sales',
+    label: 'Organization',
+    pluralLabel: 'Organizations',
+    entityType: 'CORE',
+    primaryField: 'name',
+    peopleConstraints: {
+      allowedTypes: [],
+      required: false
+    },
+    organizationConstraints: {
+      required: false
+    },
+    lifecycle: null,
+    supports: {
+      ownership: true,
+      assignment: true,
+      comments: true,
+      attachments: true,
+      automation: true
+    },
+    permissions: {
+      create: true,
+      edit: true,
+      delete: false,
+      view: true
+    },
+    // Phase 0D: UI Metadata
+    ui: {
+      routeBase: '/organizations',
+      icon: '🏢',
+      showInSidebar: true,
+      sidebarOrder: 2,
+      createLabel: 'Create Organization',
+      listLabel: 'All Organizations'
+    }
+  },
+  {
+    moduleKey: 'deals',
+    appKey: 'sales',
+    label: 'Deal',
+    pluralLabel: 'Deals',
+    entityType: 'TRANSACTION',
+    primaryField: 'name',
+    peopleConstraints: {
+      allowedTypes: ['Contact'],
+      required: false
+    },
+    organizationConstraints: {
+      required: false
+    },
+    lifecycle: {
+      statusField: 'stage',
+      allowedStatuses: ['Qualification', 'Proposal', 'Negotiation', 'Contract Sent', 'Closed Won', 'Closed Lost', 'Lead', 'Qualified']
+    },
+    supports: {
+      ownership: true,
+      assignment: true,
+      comments: true,
+      attachments: true,
+      automation: true
+    },
+    permissions: {
+      create: true,
+      edit: true,
+      delete: false,
+      view: true
+    },
+    // Phase 0D: UI Metadata
+    ui: {
+      routeBase: '/deals',
+      icon: '💼',
+      showInSidebar: true,
+      sidebarOrder: 3,
+      createLabel: 'Create Deal',
+      listLabel: 'All Deals'
+    }
+  },
+  {
+    moduleKey: 'tasks',
+    appKey: 'sales',
+    label: 'Task',
+    pluralLabel: 'Tasks',
+    entityType: 'ACTIVITY',
+    primaryField: 'title',
+    peopleConstraints: {
+      allowedTypes: ['Contact'],
+      required: false
+    },
+    organizationConstraints: {
+      required: false
+    },
+    lifecycle: {
+      statusField: 'status',
+      allowedStatuses: ['Not Started', 'In Progress', 'Completed', 'Cancelled']
+    },
+    supports: {
+      ownership: true,
+      assignment: true,
+      comments: true,
+      attachments: true,
+      automation: true
+    },
+    permissions: {
+      create: true,
+      edit: true,
+      delete: true,
+      view: true
+    },
+    // Phase 0D: UI Metadata
+    ui: {
+      routeBase: '/tasks',
+      icon: '✅',
+      showInSidebar: true,
+      sidebarOrder: 4,
+      createLabel: 'Create Task',
+      listLabel: 'All Tasks'
+    }
+  },
+  {
+    moduleKey: 'events',
+    appKey: 'sales',
+    label: 'Event',
+    pluralLabel: 'Events',
+    entityType: 'ACTIVITY',
+    primaryField: 'eventName',
+    peopleConstraints: {
+      allowedTypes: ['Contact'],
+      required: false
+    },
+    organizationConstraints: {
+      required: false
+    },
+    lifecycle: {
+      statusField: 'status',
+      allowedStatuses: ['Planned', 'Completed', 'Cancelled']
+    },
+    supports: {
+      ownership: true,
+      assignment: true,
+      comments: true,
+      attachments: true,
+      automation: true
+    },
+    permissions: {
+      create: true,
+      edit: true,
+      delete: true,
+      view: true
+    },
+    // Phase 0D: UI Metadata
+    ui: {
+      routeBase: '/events',
+      icon: '📅',
+      showInSidebar: true,
+      sidebarOrder: 5,
+      createLabel: 'Create Event',
+      listLabel: 'All Events'
+    }
+  },
+  {
+    moduleKey: 'items',
+    appKey: 'sales',
+    label: 'Item',
+    pluralLabel: 'Items',
+    entityType: 'CORE',
+    primaryField: 'name',
+    peopleConstraints: {
+      allowedTypes: [],
+      required: false
+    },
+    organizationConstraints: {
+      required: false
+    },
+    lifecycle: null,
+    supports: {
+      ownership: false,
+      assignment: false,
+      comments: true,
+      attachments: true,
+      automation: false
+    },
+    permissions: {
+      create: true,
+      edit: true,
+      delete: false,
+      view: true
+    },
+    // Phase 0D: UI Metadata
+    ui: {
+      routeBase: '/items',
+      icon: '📦',
+      showInSidebar: true,
+      sidebarOrder: 6,
+      createLabel: 'Create Item',
+      listLabel: 'All Items'
+    }
+  },
+  {
+    moduleKey: 'forms',
+    appKey: 'sales',
+    label: 'Form',
+    pluralLabel: 'Forms',
+    entityType: 'CORE',
+    primaryField: 'name',
+    peopleConstraints: {
+      allowedTypes: [],
+      required: false
+    },
+    organizationConstraints: {
+      required: false
+    },
+    lifecycle: null,
+    supports: {
+      ownership: true,
+      assignment: false,
+      comments: false,
+      attachments: false,
+      automation: true
+    },
+    permissions: {
+      create: true,
+      edit: true,
+      delete: false,
+      view: true
+    },
+    // Phase 0D: UI Metadata
+    ui: {
+      routeBase: '/forms',
+      icon: '📝',
+      showInSidebar: true,
+      sidebarOrder: 7,
+      createLabel: 'Create Form',
+      listLabel: 'All Forms'
+    }
+  },
+  {
+    moduleKey: 'imports',
+    appKey: 'sales',
+    label: 'Import',
+    pluralLabel: 'Imports',
+    entityType: 'CORE',
+    primaryField: 'fileName',
+    peopleConstraints: {
+      allowedTypes: [],
+      required: false
+    },
+    organizationConstraints: {
+      required: false
+    },
+    lifecycle: {
+      statusField: 'status',
+      allowedStatuses: ['processing', 'completed', 'failed', 'partial']
+    },
+    supports: {
+      ownership: false,
+      assignment: false,
+      comments: false,
+      attachments: false,
+      automation: false
+    },
+    permissions: {
+      create: true,
+      edit: false,
+      delete: false,
+      view: true
+    },
+    // Phase 0D: UI Metadata
+    ui: {
+      routeBase: '/imports',
+      icon: '📥',
+      showInSidebar: true,
+      sidebarOrder: 8,
+      createLabel: 'New Import',
+      listLabel: 'Import History'
+    }
+  },
+  // Phase 0I.1: Responses as Execution Domain (Sales-owned)
+  {
+    moduleKey: 'responses',
+    appKey: 'sales',
+    label: 'Response',
+    pluralLabel: 'Responses',
+    entityType: 'TRANSACTION',
+    primaryField: 'responseId',
+    peopleConstraints: {
+      allowedTypes: [],
+      required: false
+    },
+    organizationConstraints: {
+      required: false
+    },
+    lifecycle: {
+      statusField: 'reviewStatus',
+      allowedStatuses: ['Pending Corrective Action', 'Needs Auditor Review', 'Approved', 'Rejected', 'Closed'],
+      executionDriven: true,
+      immutableAfter: 'executionStatus:Submitted'
+    },
+    supports: {
+      ownership: false,
+      assignment: false,
+      comments: false,
+      attachments: true,
+      automation: true,
+      correctiveActions: true,
+      approvalFlow: true,
+      auditReview: true,
+      reporting: true
+    },
+    permissions: {
+      create: true,
+      edit: true,
+      delete: false,
+      view: true,
+      execution: true,
+      review: true,
+      approve: true
+    },
+    // Phase 0I.1: UI Metadata
+    ui: {
+      routeBase: '/responses',
+      icon: '📋',
+      showInSidebar: true,
+      sidebarOrder: 7.5,
+      showAsTabUnder: ['forms'],
+      createLabel: 'New Response',
+      listLabel: 'All Responses'
+    }
+  }
+];
+
+async function seedPlatformDefinitionsWithUI() {
+  try {
+    console.log('🚀 Seeding Platform App & Module Definitions with UI Metadata (Phase 0D)...\n');
+
+    // Get master database URI (always uses litedesk_master)
+    const masterUri = getMasterDatabaseUri();
+    console.log('🔗 Connecting to MongoDB master database (litedesk_master)...');
+    await mongoose.connect(masterUri);
+    console.log('✅ Connected to MongoDB master database (litedesk_master)\n');
+
+    // Seed Apps
+    console.log('📦 Seeding App Definitions...');
+    let appsCreated = 0;
+    let appsUpdated = 0;
+
+    for (const appData of APP_DEFINITIONS) {
+      const existingApp = await AppDefinition.findOne({ appKey: appData.appKey });
+      
+      if (existingApp) {
+        // Update existing app, preserving any custom fields
+        await AppDefinition.updateOne(
+          { appKey: appData.appKey },
+          { $set: appData }
+        );
+        appsUpdated++;
+        console.log(`  ✅ Updated app: ${appData.appKey} (${appData.name})`);
+      } else {
+        await AppDefinition.create(appData);
+        appsCreated++;
+        console.log(`  ✅ Created app: ${appData.appKey} (${appData.name})`);
+      }
+    }
+
+    console.log(`\n📊 Apps: ${appsCreated} created, ${appsUpdated} updated\n`);
+
+    // Seed Modules
+    console.log('📦 Seeding Module Definitions...');
+    let modulesCreated = 0;
+    let modulesUpdated = 0;
+
+    for (const moduleData of MODULE_DEFINITIONS) {
+      const existingModule = await ModuleDefinition.findOne({
+        appKey: moduleData.appKey,
+        moduleKey: moduleData.moduleKey
+      });
+      
+      if (existingModule) {
+        // Update existing module, preserving any custom fields
+        await ModuleDefinition.updateOne(
+          { appKey: moduleData.appKey, moduleKey: moduleData.moduleKey },
+          { $set: moduleData }
+        );
+        modulesUpdated++;
+        console.log(`  ✅ Updated module: ${moduleData.appKey}.${moduleData.moduleKey} (${moduleData.label})`);
+      } else {
+        await ModuleDefinition.create(moduleData);
+        modulesCreated++;
+        console.log(`  ✅ Created module: ${moduleData.appKey}.${moduleData.moduleKey} (${moduleData.label})`);
+      }
+    }
+
+    console.log(`\n📊 Modules: ${modulesCreated} created, ${modulesUpdated} updated\n`);
+
+    // Summary
+    console.log('✅ Platform definitions with UI metadata seeded successfully!');
+    console.log(`\n📈 Summary:`);
+    console.log(`   - Apps: ${appsCreated + appsUpdated} total`);
+    console.log(`   - Modules: ${modulesCreated + modulesUpdated} total`);
+    console.log(`\n💡 Next Steps:`);
+    console.log(`   1. Ensure organizations have enabledApps set (default: ['SALES'])`);
+    console.log(`   2. Create TenantModuleConfiguration records for enabled modules`);
+    console.log(`   3. Test UI composition by logging in and checking /api/ui/sidebar\n`);
+
+    await mongoose.connection.close();
+    console.log('🔌 Disconnected from MongoDB');
+    process.exit(0);
+
+  } catch (error) {
+    console.error('❌ Error seeding platform definitions:', error);
+    await mongoose.connection.close();
+    process.exit(1);
+  }
+}
+
+// Run if called directly
+if (require.main === module) {
+  seedPlatformDefinitionsWithUI();
+}
+
+module.exports = seedPlatformDefinitionsWithUI;
+

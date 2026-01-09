@@ -48,7 +48,7 @@
                   <p class="text-sm font-medium text-gray-900 dark:text-white">{{ authStore.user?.username || 'User' }}</p>
                   <p class="text-xs text-gray-500 dark:text-gray-400">{{ authStore.userRole || 'Auditor' }}</p>
                 </div>
-                <MenuItem v-if="hasCrmAccess" v-slot="{ active }">
+                <MenuItem v-if="hasSalesAccess" v-slot="{ active }">
                   <button
                     @click="router.push('/settings')"
                     :class="[
@@ -103,12 +103,58 @@
       </div>
     </header>
 
-    <!-- Desktop Sidebar -->
-    <aside class="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
-      <div class="flex items-center h-14 px-6 border-b border-gray-200 dark:border-gray-700">
-        <h1 class="text-lg font-semibold text-gray-900 dark:text-white">Audit</h1>
+    <!-- Desktop Sidebar - Phase 2D: Use shared SidebarRenderer -->
+    <aside 
+      @mouseenter="handleMouseEnter"
+      @mouseleave="handleMouseLeave"
+      :class="[
+        'hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:z-40',
+        'bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700',
+        'transition-all duration-300 ease-in-out',
+        shouldShowExpanded ? 'lg:w-64' : 'lg:w-20'
+      ]"
+    >
+      <!-- Logo Section -->
+      <div class="flex items-center justify-between h-14 px-4 border-b border-gray-200 dark:border-gray-700">
+        <transition
+          enter-active-class="transition-all duration-300"
+          enter-from-class="opacity-0 w-0"
+          enter-to-class="opacity-100 w-auto"
+          leave-active-class="transition-all duration-300"
+          leave-from-class="opacity-100 w-auto"
+          leave-to-class="opacity-0 w-0"
+        >
+          <img 
+            v-if="shouldShowExpanded"
+            class="h-8 w-auto transition-all duration-300" 
+            :src="logoSrc" 
+            alt="LiteDesk Logo" 
+          />
+        </transition>
+        
+        <!-- Collapse/Expand Button -->
+        <button
+          @click="toggleSidebar"
+          class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-600 dark:text-white transition-all duration-300 flex-shrink-0"
+          :class="{ 'mx-auto': !shouldShowExpanded }"
+        >
+          <ChevronLeftIcon v-if="shouldShowExpanded" class="w-5 h-5 transition-transform duration-300" />
+          <ChevronRightIcon v-else class="w-5 h-5 transition-transform duration-300" />
+        </button>
       </div>
-      <nav class="flex-1 px-4 py-4 space-y-1">
+      
+      <!-- App Switcher -->
+      <div v-if="useDynamicUI && shouldShowExpanded" class="px-2 py-2 border-b border-gray-200 dark:border-gray-700">
+        <AppSwitcher />
+      </div>
+      
+      <!-- Navigation - Phase 2D: Use SidebarRenderer -->
+      <SidebarRenderer 
+        v-if="useDynamicUI"
+        :should-show-expanded="shouldShowExpanded"
+      />
+      <nav v-else class="flex-1 px-4 py-4 space-y-1">
+        <!-- Fallback to hardcoded navigation if dynamic UI not available -->
         <router-link
           v-for="item in navigation"
           :key="item.name"
@@ -158,7 +204,7 @@
             <MenuItems
               class="absolute bottom-full mb-2 w-48 rounded-lg shadow-xl py-1 bg-white dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/10 left-0 z-50"
             >
-              <MenuItem v-if="hasCrmAccess" v-slot="{ active }">
+              <MenuItem v-if="hasSalesAccess" v-slot="{ active }">
                 <button
                   @click="router.push('/settings')"
                   :class="[
@@ -221,7 +267,13 @@
             </svg>
           </button>
         </div>
-        <nav class="px-4 py-4 space-y-1">
+        <!-- Phase 2D: Use SidebarRenderer for mobile drawer -->
+        <SidebarRenderer 
+          v-if="useDynamicUI"
+          :should-show-expanded="true"
+        />
+        <nav v-else class="px-4 py-4 space-y-1">
+          <!-- Fallback to hardcoded navigation -->
           <router-link
             v-for="item in navigation"
             :key="item.name"
@@ -244,8 +296,13 @@
       </div>
     </div>
 
-    <!-- Main Content -->
-    <main class="flex-1 lg:pl-64">
+    <!-- Main Content - Phase 2D: Dynamic margin based on sidebar state -->
+    <main 
+      :class="[
+        'flex-1 transition-all duration-300',
+        shouldShowExpanded ? 'lg:pl-64' : 'lg:pl-20'
+      ]"
+    >
       <div class="min-h-screen">
         <RouterView />
       </div>
@@ -265,24 +322,74 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
-import { RouterView, RouterLink, useRouter } from 'vue-router';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import { RouterView, RouterLink, useRouter, useRoute } from 'vue-router';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue';
 import { useAuthStore } from '@/stores/auth';
+import { useAppShellStore } from '@/stores/appShell';
 import { useColorMode } from '@/composables/useColorMode';
 import SyncDrawer from '@/components/audit/SyncDrawer.vue';
 import { getPendingCount } from '@/services/offlineQueue.js';
 import NotificationBell from '@/components/notifications/NotificationBell.vue';
 import NotificationSheet from '@/components/notifications/NotificationSheet.vue';
+import AppSwitcher from '@/components/AppSwitcher.vue';
+import SidebarRenderer from '@/components/SidebarRenderer.vue';
+import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/vue/24/outline';
 
+const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+const appShellStore = useAppShellStore();
 const { colorMode, toggleColorMode } = useColorMode();
 
 const drawerOpen = ref(false);
 const syncDrawerOpen = ref(false);
 const pendingCount = ref(0);
 const notificationSheetOpen = ref(false);
+
+// Phase 2D: Sidebar state (same as Nav.vue)
+const isCollapsed = ref(
+  localStorage.getItem('litedesk-sidebar-collapsed') === 'true'
+);
+const isHovering = ref(false);
+
+// Computed to determine if sidebar should show expanded
+const shouldShowExpanded = computed(() => {
+  return !isCollapsed.value || isHovering.value;
+});
+
+const toggleSidebar = () => {
+  isCollapsed.value = !isCollapsed.value;
+  localStorage.setItem('litedesk-sidebar-collapsed', isCollapsed.value.toString());
+  window.dispatchEvent(new CustomEvent('sidebar-toggle', { 
+    detail: { collapsed: isCollapsed.value } 
+  }));
+};
+
+const handleMouseEnter = () => {
+  if (isCollapsed.value) {
+    isHovering.value = true;
+  }
+};
+
+const handleMouseLeave = () => {
+  isHovering.value = false;
+};
+
+// Phase 2D: Check if dynamic UI is available
+const useDynamicUI = computed(() => appShellStore.isLoaded && appShellStore.availableApps.length > 0);
+
+onMounted(async () => {
+  // Phase 2D: Load UI metadata if not already loaded (App.vue also does this, but safe to check)
+  if (!appShellStore.isLoaded && authStore.isAuthenticated) {
+    await appShellStore.loadUIMetadata();
+  }
+  
+  // Load pending count
+  updatePendingCount();
+  const interval = setInterval(updatePendingCount, 5000);
+  onBeforeUnmount(() => clearInterval(interval));
+});
 
 const handleLogout = () => {
   authStore.logout();
@@ -299,9 +406,18 @@ const colorModeLabel = computed(() => {
   return colorMode.value === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode';
 });
 
-// Check if user has CRM access (for Settings link)
-const hasCrmAccess = computed(() => {
-  return authStore.hasAppAccess('CRM');
+// Phase 2D: Logo source (same as Nav.vue)
+const logoSrc = computed(() => {
+  if (colorMode.value === 'dark' || (colorMode.value === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    return '/public/assets/nurtura_logo_white.svg';
+  } else {
+    return '/public/assets/nurtura_logo_plain.svg';
+  }
+});
+
+// Check if user has Sales access (for Settings link)
+const hasSalesAccess = computed(() => {
+  return authStore.hasAppAccess('SALES');
 });
 
 const updatePendingCount = async () => {

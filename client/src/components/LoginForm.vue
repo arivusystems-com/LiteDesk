@@ -18,22 +18,9 @@ const handleLogin = async () => {
         // Wait a tick to ensure user data is fully set
         await new Promise(resolve => setTimeout(resolve, 100));
         
-        // Determine correct dashboard based on user's app access
-        const allowedApps = authStore.user?.allowedApps || ['CRM'];
-        console.log('Login redirect check:', {
-            allowedApps,
-            user: authStore.user,
-            hasAudit: allowedApps.includes('AUDIT'),
-            hasCrm: allowedApps.includes('CRM')
-        });
-        
-        if (allowedApps.includes('AUDIT')) {
-            console.log('Redirecting to audit dashboard');
-            router.push('/audit/dashboard');
-        } else {
-            console.log('Redirecting to CRM dashboard');
-            router.push('/dashboard');
-        }
+        // Phase 1G: Redirect to platform landing after login
+        console.log('Redirecting to platform landing');
+        router.push('/platform');
     }
 };
 </script>

@@ -27,10 +27,75 @@ export const useAuthStore = defineStore('auth', {
         subscriptionTier: (state) => state.organization?.subscription?.tier || 'trial',
         enabledModules: (state) => state.organization?.enabledModules || [],
         isMasterOrganization: (state) => state.organization?.name === 'LiteDesk Master',
+        isPlatformAdmin: (state) => {
+            // Check if user is platform admin (Phase 0H)
+            if (state.user?.isPlatformAdmin === true) return true;
+            // Check if user has LiteDesk internal email
+            const email = state.user?.email || '';
+            const internalDomains = ['litedesk.com', 'litedesk.io'];
+            return internalDomains.some(domain => email.toLowerCase().includes(`@${domain}`));
+        },
         hasAppAccess: (state) => {
             return (appKey) => {
-                if (!state.user?.allowedApps) return false;
-                return state.user.allowedApps.includes(appKey);
+                const appKeyUpper = appKey.toUpperCase();
+                
+                // For owners: check if app is enabled for the organization
+                // This aligns with unified access resolution where owners have access to all enabled apps
+                // (especially for internal instances where owners can access and execute all apps)
+                if (state.user?.isOwner) {
+                    if (state.organization?.enabledApps) {
+                        const enabledApps = state.organization.enabledApps;
+                        // Handle both array of strings and array of objects with appKey property
+                        const appKeys = enabledApps.map(app => {
+                            if (typeof app === 'string') {
+                                return app.toUpperCase();
+                            }
+                            // Handle object format: { appKey: 'SALES', status: 'ACTIVE' }
+                            if (app && typeof app === 'object') {
+                                const key = app.appKey || app;
+                                // Only include if status is ACTIVE (if status field exists)
+                                if (app.status && app.status !== 'ACTIVE') {
+                                    return null;
+                                }
+                                return typeof key === 'string' ? key.toUpperCase() : key;
+                            }
+                            return null;
+                        }).filter(key => key !== null);
+                        
+                        if (appKeys.includes(appKeyUpper)) {
+                            console.log(`[hasAppAccess] Owner access granted via enabledApps: ${appKeyUpper}`, {
+                                enabledAppKeys: appKeys,
+                                checking: appKeyUpper
+                            });
+                            return true;
+                        } else {
+                            console.warn(`[hasAppAccess] Owner but app ${appKeyUpper} not in enabledApps:`, {
+                                enabledAppKeys: appKeys,
+                                checking: appKeyUpper,
+                                enabledApps: enabledApps
+                            });
+                        }
+                    } else {
+                        console.warn(`[hasAppAccess] Owner but no enabledApps in organization:`, {
+                            hasOrganization: !!state.organization,
+                            organization: state.organization
+                        });
+                    }
+                }
+                
+                // For non-owners or if owner check didn't match: check explicit appAccess/allowedApps
+                const allowedApps = state.user?.allowedApps || [];
+                const hasAccess = allowedApps.map(app => 
+                    typeof app === 'string' ? app.toUpperCase() : app
+                ).includes(appKeyUpper);
+                
+                console.log(`[hasAppAccess] Final check for ${appKeyUpper}:`, {
+                    isOwner: state.user?.isOwner,
+                    allowedApps: allowedApps,
+                    hasAccess: hasAccess
+                });
+                
+                return hasAccess;
             };
         },
     },
@@ -45,8 +110,8 @@ export const useAuthStore = defineStore('auth', {
                         .filter(access => access.status === 'ACTIVE')
                         .map(access => access.appKey);
                 } else {
-                    // Default to CRM for backward compatibility
-                    allowedApps = ['CRM'];
+                    // Default to Sales for backward compatibility
+                    allowedApps = ['SALES'];
                 }
             }
             
@@ -77,6 +142,12 @@ export const useAuthStore = defineStore('auth', {
             // Legacy cleanup (older builds stored auth under 'auth')
             localStorage.removeItem('auth');
             this.error = null;
+            
+            // Phase 0D: Clear UI metadata on logout
+            import('@/stores/appShell').then(({ useAppShellStore }) => {
+                const appShellStore = useAppShellStore();
+                appShellStore.clear();
+            });
             
             // Clear offline data (IndexedDB) on logout
             import('@/services/offlineDb.js').then(({ clearAllData }) => {
@@ -111,6 +182,15 @@ export const useAuthStore = defineStore('auth', {
                 if (!response.ok) throw new Error(data.message || `HTTP ${response.status}`);
 
                 this.setUser(data);
+                
+                // Phase 0D: Load UI metadata after successful login
+                import('@/stores/appShell').then(({ useAppShellStore }) => {
+                    const appShellStore = useAppShellStore();
+                    appShellStore.loadUIMetadata().catch(err => {
+                        console.error('[Auth] Error loading UI metadata:', err);
+                    });
+                });
+                
                 return true;
             } catch (err) {
                 console.error('Auth error:', err);
@@ -291,9 +371,16 @@ export const useAuthStore = defineStore('auth', {
                             ...incoming,
                             permissions: ensuredPermissions,
                             token: token,
-                            allowedApps: incoming.allowedApps || existingAllowedApps || ['CRM'] // Preserve or default
+                            allowedApps: incoming.allowedApps || existingAllowedApps || ['SALES'] // Preserve or default
                         };
                         localStorage.setItem('user', JSON.stringify(this.user));
+                        
+                        // Update organization if included in response (for enabledApps)
+                        if (incoming.organizationId && typeof incoming.organizationId === 'object') {
+                            this.organization = incoming.organizationId;
+                            localStorage.setItem('organization', JSON.stringify(this.organization));
+                        }
+                        
                         console.log('User permissions refreshed successfully');
                         return true;
                     }

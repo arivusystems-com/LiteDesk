@@ -114,7 +114,7 @@ const OrganizationSchema = new mongoose.Schema({
             appKey: { 
                 type: String, 
                 required: true,
-                enum: ['CRM', 'PORTAL', 'AUDIT', 'LMS']
+                enum: ['CRM', 'SALES', 'HELPDESK', 'PROJECTS', 'PORTAL', 'AUDIT', 'LMS']
             },
             status: { 
                 type: String, 

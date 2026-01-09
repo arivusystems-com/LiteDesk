@@ -1,366 +1,234 @@
+/**
+ * ============================================================================
+ * PLATFORM CORE: Module Definition Model (Platform Metadata)
+ * ============================================================================
+ * 
+ * This model defines platform-level metadata about modules:
+ * - What modules belong to each app
+ * - Module behavior (people/org usage, lifecycle, permissions, automation)
+ * - Module capabilities and constraints
+ * 
+ * ⚠️ This is PLATFORM metadata, NOT tenant data
+ * ⚠️ No business logic, no UI, no automation
+ * ⚠️ Required for multi-app architecture
+ * 
+ * NOTE: This replaces the previous tenant-specific ModuleDefinition.
+ * Tenant-specific module configurations (fields, pipelines) should use
+ * a separate model (e.g., TenantModuleConfiguration).
+ * 
+ * See PLATFORM_ARCHITECTURE.md for details.
+ * ============================================================================
+ */
+
 const mongoose = require('mongoose');
 
-const PlaybookConditionSchema = new mongoose.Schema({
-    field: { type: String, trim: true, default: '' },
-    operator: {
-        type: String,
-        enum: ['equals', 'not_equals', 'in', 'not_in', 'exists', 'gt', 'gte', 'lt', 'lte', 'contains'],
-        default: 'equals'
-    },
-    value: { type: mongoose.Schema.Types.Mixed }
-}, { _id: false });
-
-const PlaybookAssignmentSchema = new mongoose.Schema({
-    type: {
-        type: String,
-        enum: ['deal_owner', 'stage_owner', 'specific_user', 'role', 'team'],
-        default: 'deal_owner'
-    },
-    targetId: { type: mongoose.Schema.Types.ObjectId, default: null },
-    targetType: { type: String, trim: true, default: '' },
-    targetName: { type: String, trim: true, default: '' }
-}, { _id: false });
-
-const PlaybookTriggerSchema = new mongoose.Schema({
-    type: {
-        type: String,
-        enum: ['stage_entry', 'after_action', 'time_delay', 'custom'],
-        default: 'stage_entry'
-    },
-    sourceActionKey: { type: String, trim: true, lowercase: true, default: '' },
-    delay: {
-        type: new mongoose.Schema({
-            amount: { type: Number, min: 0, default: 0 },
-            unit: { type: String, enum: ['minutes', 'hours', 'days'], default: 'days' }
-        }, { _id: false }),
-        default: null
-    },
-    conditions: { type: [PlaybookConditionSchema], default: [] },
-    description: { type: String, trim: true, default: '' }
-}, { _id: false });
-
-const PlaybookAlertSchema = new mongoose.Schema({
-    type: { type: String, enum: ['in_app', 'email', 'sms'], default: 'in_app' },
-    offset: {
-        type: new mongoose.Schema({
-            amount: { type: Number, min: 0, default: 0 },
-            unit: { type: String, enum: ['minutes', 'hours', 'days'], default: 'hours' }
-        }, { _id: false }),
-        default: null
-    },
-    recipients: { type: [String], default: [] },
-    message: { type: String, trim: true, default: '' }
-}, { _id: false });
-
-const PlaybookResourceSchema = new mongoose.Schema({
-    name: { type: String, trim: true, default: '' },
-    type: { type: String, enum: ['document', 'link', 'form', 'template', 'other'], default: 'document' },
-    url: { type: String, trim: true, default: '' },
-    description: { type: String, trim: true, default: '' }
-}, { _id: false });
-
-const PlaybookActionSchema = new mongoose.Schema({
-    key: { type: String, trim: true, lowercase: true },
-    title: { type: String, required: true, trim: true },
-    description: { type: String, trim: true, default: '' },
-    actionType: {
-        type: String,
-        enum: ['task', 'event', 'alert', 'document', 'call', 'meeting', 'email', 'approval', 'other'],
-        default: 'task'
-    },
-    dueInDays: { type: Number, min: 0, default: 0 },
-    assignment: { type: PlaybookAssignmentSchema, default: () => ({ type: 'deal_owner' }) },
-    required: { type: Boolean, default: true },
-    dependencies: { type: [String], default: [] },
-    autoCreate: { type: Boolean, default: true },
-    trigger: { type: PlaybookTriggerSchema, default: () => ({ type: 'stage_entry', conditions: [] }) },
-    alerts: { type: [PlaybookAlertSchema], default: [] },
-    resources: { type: [PlaybookResourceSchema], default: [] },
-    metadata: { type: mongoose.Schema.Types.Mixed, default: {} }
-}, { _id: false });
-
-const PlaybookExitCriteriaSchema = new mongoose.Schema({
-    type: {
-        type: String,
-        enum: ['manual', 'all_actions_completed', 'any_action_completed', 'custom'],
-        default: 'manual'
-    },
-    customDescription: { type: String, trim: true, default: '' },
-    nextStageKey: { type: String, trim: true, lowercase: true, default: '' },
-    conditions: { type: [PlaybookConditionSchema], default: [] }
-}, { _id: false });
-
-const StagePlaybookSchema = new mongoose.Schema({
-    enabled: { type: Boolean, default: false },
-    mode: { type: String, enum: ['sequential', 'non_sequential'], default: 'sequential' },
-    autoAdvance: { type: Boolean, default: false },
-    notes: { type: String, trim: true, default: '' },
-    actions: { type: [PlaybookActionSchema], default: [] },
-    exitCriteria: { type: PlaybookExitCriteriaSchema, default: () => ({ type: 'manual', conditions: [] }) }
-}, { _id: false });
-
-const PipelineStageSchema = new mongoose.Schema({
-    key: { type: String, trim: true, lowercase: true },
-    name: { type: String, required: true, trim: true },
-    description: { type: String, trim: true, default: '' },
-    probability: { type: Number, min: 0, max: 100, default: 0 },
-    status: { type: String, enum: ['open', 'won', 'lost', 'stalled'], default: 'open' },
-    order: { type: Number, default: 0 },
-    isClosedWon: { type: Boolean, default: false },
-    isClosedLost: { type: Boolean, default: false },
-    playbook: { type: StagePlaybookSchema, default: () => ({}) }
-}, { _id: false });
-
-const PipelineSchema = new mongoose.Schema({
-    key: { type: String, required: true, trim: true, lowercase: true },
-    name: { type: String, required: true, trim: true },
-    description: { type: String, trim: true, default: '' },
-    color: { type: String, trim: true, default: '#2563EB' },
-    isDefault: { type: Boolean, default: false },
-    order: { type: Number, default: 0 },
-    stages: {
-        type: [PipelineStageSchema],
-        default: []
-    },
-    createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now }
-}, { _id: false });
-
 const ModuleDefinitionSchema = new mongoose.Schema({
-    organizationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
-    key: { type: String, required: true, trim: true, lowercase: true },
-    name: { type: String, required: true, trim: true },
-    type: { type: String, enum: ['system', 'custom'], default: 'custom', index: true },
-    enabled: { type: Boolean, default: true },
-    fields: {
-        type: [
-            new mongoose.Schema({
-                key: { type: String, required: true, trim: true, lowercase: true },
-                label: { type: String, required: true, trim: true },
-                dataType: { type: String, enum: ['Text','Text-Area','Rich Text','Integer','Decimal','Currency','Date','Date-Time','Picklist','Multi-Picklist','Checkbox','Radio Button','Email','Phone','URL','Auto-Number','Lookup (Relationship)','Formula','Rollup Summary'], required: true },
-                required: { type: Boolean, default: false },
-                keyField: { type: Boolean, default: false },
-                // Options can be strings (backward compatibility) or objects with value and color
-                options: {
-                    type: [
-                        {
-                            type: new mongoose.Schema({
-                                value: { type: String, required: true, trim: true },
-                                color: { type: String, default: '#3B82F6', trim: true } // Default blue color
-                            }, { _id: false })
-                        },
-                        String // Support old format for backward compatibility
-                    ],
-                    default: []
-                },
-                defaultValue: { type: mongoose.Schema.Types.Mixed, default: null },
-                placeholder: { type: String, default: '' },
-                index: { type: Boolean, default: false },
-                visibility: {
-                    list: { type: Boolean, default: true },
-                    detail: { type: Boolean, default: true }
-                },
-                order: { type: Number, default: 0 },
-                // Field type-specific settings
-                numberSettings: {
-                    type: new mongoose.Schema({
-                        min: { type: Number, default: null },
-                        max: { type: Number, default: null },
-                        decimalPlaces: { type: Number, min: 0, max: 10, default: 2 },
-                        currencySymbol: { type: String, default: '$' }
-                    }, { _id: false }),
-                    default: null
-                },
-                textSettings: {
-                    type: new mongoose.Schema({
-                        maxLength: { type: Number, min: 1, default: null },
-                        rows: { type: Number, min: 1, max: 20, default: 4 }
-                    }, { _id: false }),
-                    default: null
-                },
-                dateSettings: {
-                    type: new mongoose.Schema({
-                        format: { type: String, default: 'YYYY-MM-DD' },
-                        timeFormat: { type: String, enum: ['12h', '24h'], default: '24h' }
-                    }, { _id: false }),
-                    default: null
-                },
-                formulaSettings: {
-                    type: new mongoose.Schema({
-                        expression: { type: String, default: '' },
-                        returnType: { type: String, enum: ['Text', 'Number', 'Date', 'Checkbox'], default: 'Text' }
-                    }, { _id: false }),
-                    default: null
-                },
-                lookupSettings: {
-                    type: new mongoose.Schema({
-                        targetModule: { type: String, default: '' },
-                        displayField: { type: String, default: '' }
-                    }, { _id: false }),
-                    default: null
-                },
-                validations: {
-                    type: [new mongoose.Schema({
-                        name: { type: String, trim: true, default: '' },
-                        type: { type: String, enum: ['regex','length','range','picklist_single','picklist_multi','email'], default: 'regex' },
-                        // regex
-                        pattern: { type: String, default: '' },
-                        // length
-                        minLength: { type: Number, min: 0 },
-                        maxLength: { type: Number, min: 0 },
-                        // range (numbers)
-                        min: { type: Number },
-                        max: { type: Number },
-                        // picklist
-                        allowedValues: { type: [String], default: [] },
-                        // error message
-                        message: { type: String, default: '' }
-                    }, { _id: false })],
-                    default: []
-                },
-                dependencyLogic: { type: String, enum: ['AND','OR'], default: 'AND' },
-                dependencies: {
-                    type: [
-                        // Support unified dependency structure (new format)
-                        new mongoose.Schema({
-                            name: { type: String, trim: true, default: '' },
-                            type: { type: String, enum: ['visibility','readonly','required','picklist','popup','label','lookup','setValue'], required: false },
-                            // For popup type: fields to show in the popup modal
-                            popupFields: { type: [String], default: [] },
-                            // For label type: override label when conditions satisfied
-                            labelValue: { type: String, trim: true, default: '' },
-                            // For lookup type: pass query params to lookup endpoint (e.g., /users/list) when conditions satisfied
-                            // Supports templating on frontend via "$field:<fieldKey>" values.
-                            lookupQuery: { type: mongoose.Schema.Types.Mixed, default: null },
-                            // For setValue type: force the field's value (UI-level enforcement)
-                            // Supports templating on frontend via "$field:<fieldKey>" and "$currentUser.organizationId"
-                            setValue: { type: mongoose.Schema.Types.Mixed, default: null },
-                            logic: { type: String, enum: ['AND','OR'], default: 'AND' },
-                            // For backward compatibility and simple dependencies
-                            fieldKey: { type: String, trim: true },
-                            operator: { type: String, enum: ['equals','not_equals','in','not_in','exists','gt','lt','gte','lte','contains'], default: 'equals' },
-                            value: { type: mongoose.Schema.Types.Mixed },
-                            // Multiple conditions support
-                            conditions: {
-                                type: [new mongoose.Schema({
-                                    fieldKey: { type: String, trim: true, required: true },
-                                    operator: { type: String, enum: ['equals','not_equals','in','not_in','exists','gt','lt','gte','lte','contains'], default: 'equals' },
-                                    value: { type: mongoose.Schema.Types.Mixed }
-                                }, { _id: false })],
-                                default: []
-                            },
-                            // For picklist type, specify allowed options when conditions satisfied
-                            allowedOptions: { type: [String], default: [] }
-                        }, { _id: false })
-                    ],
-                    default: []
-                },
-                // For enum/multienum fields: filter allowed options based on another field's value
-                picklistDependencies: {
-                    type: [new mongoose.Schema({
-                        sourceFieldKey: { type: String, trim: true },
-                        mappings: {
-                            type: [new mongoose.Schema({
-                                whenValue: { type: mongoose.Schema.Types.Mixed },
-                                allowedOptions: { type: [String], default: [] }
-                            }, { _id: false })],
-                            default: []
-                        }
-                    }, { _id: false })],
-                    default: []
-                },
-                // Unified advanced dependency rules to drive visibility, read-only and picklist updates
-                advancedDependencies: {
-                    type: [new mongoose.Schema({
-                        name: { type: String, trim: true, default: '' },
-                        type: { type: String, enum: ['visibility','readonly','picklist','popup'], required: true },
-                        logic: { type: String, enum: ['AND','OR'], default: 'AND' },
-                        conditions: {
-                            type: [new mongoose.Schema({
-                                fieldKey: { type: String, trim: true, required: true },
-                                operator: { type: String, enum: ['equals','not_equals','in','not_in','exists','gt','lt','gte','lte','contains'], default: 'equals' },
-                                value: { type: mongoose.Schema.Types.Mixed }
-                            }, { _id: false })],
-                            default: []
-                        },
-                        // effect fields
-                        // for picklist type, specify allowed options when conditions satisfied
-                        allowedOptions: { type: [String], default: [] }
-                    }, { _id: false })],
-                    default: []
-                }
-            }, { _id: false })
-        ],
-        default: []
-    },
-    pipelineSettings: {
-        type: [PipelineSchema],
-        default: []
-    }
-}, {
-    // Relationships: module-level relationships to other modules
-    relationships: {
-        type: [new mongoose.Schema({
-            name: { type: String, required: true, trim: true },
-            type: { type: String, enum: ['one_to_one','one_to_many','many_to_many','lookup'], required: true },
-            targetModuleKey: { type: String, required: true, trim: true, lowercase: true },
-            // storage mapping
-            localField: { type: String, trim: true }, // e.g., organizationId
-            foreignField: { type: String, trim: true }, // e.g., _id or backref
-            // inverse/backref (optional)
-            inverseName: { type: String, trim: true },
-            inverseField: { type: String, trim: true },
-            // constraints/behavior
-            required: { type: Boolean, default: false },
-            unique: { type: Boolean, default: false },
-            index: { type: Boolean, default: true },
-            cascadeDelete: { type: Boolean, default: false },
-            // UI hints
-            label: { type: String, trim: true },
-        }, { _id: false })],
-        default: []
-    },
-    // Notification rule eligibility (Phase 16: User-Defined Notification Rules)
-    notifications: {
-        ruleEligible: { type: Boolean, default: false },
-        supportedEvents: {
-            type: [String],
-            enum: ['ASSIGNED', 'CREATED', 'STATUS_CHANGED', 'DUE_SOON'],
-            default: []
-        },
-        supportedConditions: {
-            type: [String],
-            enum: ['assignedTo', 'priority', 'status'],
-            default: []
-        }
-    },
-    // Quick Create layout: list of field keys to include (respects main field order)
-    quickCreate: { type: [String], default: [] },
-    // Visual quick create layout (12-column grid)
-    quickCreateLayout: {
-        type: new mongoose.Schema({
-            version: { type: Number, default: 1 },
-            rows: {
-                type: [new mongoose.Schema({
-                    cols: {
-                        type: [new mongoose.Schema({
-                            span: { type: Number, min: 1, max: 12, default: 12 },
-                            fieldKey: { type: String, trim: true, default: '' },
-                            widget: { type: String, trim: true, default: 'input' },
-                            props: { type: mongoose.Schema.Types.Mixed, default: {} }
-                        }, { _id: false })],
-                        default: []
-                    }
-                }, { _id: false })],
-                default: []
-            }
-        }, { _id: false }),
-        default: { version: 1, rows: [] }
-    }
-}, { timestamps: true });
+  moduleKey: {
+    type: String,
+    required: true,
+    trim: true,
+    lowercase: true
+  },
 
-ModuleDefinitionSchema.index({ organizationId: 1, key: 1 }, { unique: true });
+  appKey: {
+    type: String,
+    required: true,
+    trim: true,
+    lowercase: true
+  },
+
+  label: {
+    type: String,
+    required: true,
+    trim: true
+  },
+
+  pluralLabel: {
+    type: String,
+    required: true,
+    trim: true
+  },
+
+  entityType: {
+    type: String,
+    enum: ['CORE', 'TRANSACTION', 'ACTIVITY'],
+    required: true
+  },
+
+  primaryField: {
+    type: String,
+    default: 'name'
+  },
+
+  peopleConstraints: {
+    allowedTypes: {
+      type: [String], // Lead, Contact
+      default: []
+    },
+    required: {
+      type: Boolean,
+      default: false
+    }
+  },
+
+  organizationConstraints: {
+    required: {
+      type: Boolean,
+      default: false
+    }
+  },
+
+  lifecycle: {
+    statusField: {
+      type: String,
+      trim: true
+    },
+    allowedStatuses: {
+      type: [String],
+      default: []
+    },
+    // Phase 0I.1: Execution domain metadata
+    executionDriven: {
+      type: Boolean,
+      default: false
+    },
+    immutableAfter: {
+      type: String,
+      trim: true
+      // e.g., "executionStatus:Submitted"
+    }
+  },
+
+  supports: {
+    ownership: { 
+      type: Boolean, 
+      default: true 
+    },
+    assignment: { 
+      type: Boolean, 
+      default: true 
+    },
+    comments: { 
+      type: Boolean, 
+      default: true 
+    },
+    attachments: { 
+      type: Boolean, 
+      default: true 
+    },
+    automation: { 
+      type: Boolean, 
+      default: true 
+    },
+    // Phase 0I.1: Execution domain capabilities
+    correctiveActions: {
+      type: Boolean,
+      default: false
+    },
+    approvalFlow: {
+      type: Boolean,
+      default: false
+    },
+    auditReview: {
+      type: Boolean,
+      default: false
+    },
+    reporting: {
+      type: Boolean,
+      default: false
+    }
+  },
+
+  permissions: {
+    create: { 
+      type: Boolean, 
+      default: true 
+    },
+    edit: { 
+      type: Boolean, 
+      default: true 
+    },
+    delete: { 
+      type: Boolean, 
+      default: false 
+    },
+    view: { 
+      type: Boolean, 
+      default: true 
+    },
+    // Phase 0I.1: Execution domain permissions
+    execution: {
+      type: Boolean,
+      default: false
+    },
+    review: {
+      type: Boolean,
+      default: false
+    },
+    approve: {
+      type: Boolean,
+      default: false
+    }
+  },
+
+  // Phase 0D: UI Composition Metadata
+  ui: {
+    routeBase: {
+      type: String,
+      trim: true
+      // e.g., "/sales/deals" or "/people"
+    },
+    icon: {
+      type: String,
+      trim: true
+    },
+    showInSidebar: {
+      type: Boolean,
+      default: true
+    },
+    sidebarOrder: {
+      type: Number,
+      default: 0
+    },
+    createLabel: {
+      type: String,
+      trim: true
+      // e.g., "Create Deal"
+    },
+    listLabel: {
+      type: String,
+      trim: true
+      // e.g., "All Deals"
+    },
+    // Phase 0I.1: Tab display metadata
+    showAsTabUnder: {
+      type: [String],
+      default: []
+      // e.g., ['forms'] - shows Responses tab under Forms
+    }
+  },
+
+  // Phase 2A.1: Projection Metadata (Optional)
+  // Declares that this module is a projection of a platform-owned primitive
+  projection: {
+    enabled: {
+      type: Boolean,
+      default: false
+    },
+    basePrimitive: {
+      type: String,
+      trim: true,
+      lowercase: true
+      // e.g., 'people', 'organizations', 'events', 'forms'
+      // References the base primitive module key
+    }
+  }
+}, { 
+  timestamps: true 
+});
+
+// Compound unique index for appKey + moduleKey
+ModuleDefinitionSchema.index({ appKey: 1, moduleKey: 1 }, { unique: true });
+ModuleDefinitionSchema.index({ appKey: 1 });
 
 module.exports = mongoose.model('ModuleDefinition', ModuleDefinitionSchema);
-
-

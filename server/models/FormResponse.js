@@ -135,6 +135,30 @@ const correctiveActionSchema = new Schema({
     }
 }, { _id: false });
 
+/**
+ * ============================================================================
+ * Form Response Model - Execution Domain
+ * ============================================================================
+ * 
+ * Execution lifecycle:
+ * executionStatus: Not Started → In Progress → Submitted
+ *
+ * Review lifecycle (only after Submitted):
+ * reviewStatus computed via computeReviewStatus():
+ * - Pending Corrective Action
+ * - Needs Auditor Review
+ * - Approved
+ * - Rejected
+ * - Closed
+ *
+ * NOTE:
+ * - CRM is the sole authority for state transitions
+ * - Audit App and Portal consume this state read-only
+ * - Response lifecycle logic lives only inside FormResponse model
+ * - No logic duplication - all state transitions handled here
+ * ============================================================================
+ */
+
 // Form Response Schema Definition
 const FormResponseSchema = new Schema({
     // 🏢 ORGANIZATION REFERENCE (Multi-tenancy)
@@ -286,6 +310,12 @@ const FormResponseSchema = new Schema({
 
     // ✅ CORRECTIVE ACTIONS
     // **********************************
+    // Phase 0I.1: Portal Access Clarification
+    // Portal App:
+    // - Does NOT access responses directly
+    // - Corrective Actions derive state from FormResponse.reviewStatus
+    // - No Response CRUD in Portal
+    // - Portal interacts with correctiveActions array only
     correctiveActions: [correctiveActionSchema],
 
     // 📄 FINAL REPORT

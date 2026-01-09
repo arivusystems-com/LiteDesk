@@ -22,6 +22,24 @@ module.exports = {
     defaultRole: 'USER'
   },
 
+  SALES: {
+    roles: ['ADMIN', 'MANAGER', 'USER'],
+    userTypesAllowed: ['INTERNAL'],
+    defaultRole: 'USER'
+  },
+
+  HELPDESK: {
+    roles: ['ADMIN', 'MANAGER', 'USER', 'AGENT'],
+    userTypesAllowed: ['INTERNAL'],
+    defaultRole: 'AGENT'
+  },
+
+  PROJECTS: {
+    roles: ['ADMIN', 'MANAGER', 'USER'],
+    userTypesAllowed: ['INTERNAL'],
+    defaultRole: 'USER'
+  },
+
   AUDIT: {
     roles: ['AUDITOR'],
     userTypesAllowed: ['INTERNAL', 'EXTERNAL'],

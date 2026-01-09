@@ -8,19 +8,51 @@
  * - Notes management
  * - Activity log management
  * 
- * ⚠️ VIOLATION: Contains CRM-specific logic for Lead/Contact types
- *    and CRM-specific status fields.
+ * ⚠️ VIOLATION: Contains Sales-specific logic for Lead/Contact types
+ *    and Sales-specific status fields.
  * 
  * See PLATFORM_CORE_ANALYSIS.md for details.
  * ============================================================================
  */
 
 const People = require('../models/People');
+const { applyProjectionFilter } = require('../utils/appProjectionQuery');
+const { getProjection } = require('../utils/moduleProjectionResolver');
+const { resolveCreateType, getTypeFieldName } = require('../utils/appProjectionCreateResolver');
 
 // Create People
 exports.create = async (req, res) => {
   try {
     const User = require('../models/User');
+    
+    // Phase 2A.3: Projection-aware create type resolution
+    // SAFETY: Projection-aware create logic — non-blocking fallback
+    const appKey = req.appKey || 'SALES'; // From resolveAppContext middleware
+    const moduleKey = 'people';
+    const typeFieldName = getTypeFieldName(moduleKey);
+    
+    if (typeFieldName) {
+      const explicitType = req.body.hasOwnProperty(typeFieldName) ? req.body[typeFieldName] : null;
+      const resolved = resolveCreateType({
+        appKey,
+        moduleKey,
+        explicitType: explicitType,
+        fallbackType: null // Model will use its default if needed
+      });
+
+      if (resolved.allowed === false) {
+        return res.status(400).json({
+          success: false,
+          message: resolved.message || 'This record type is not allowed in this app.',
+          code: resolved.reason
+        });
+      }
+
+      // Set resolved type in body (applies default if no explicit type provided)
+      if (resolved.type !== null && resolved.type !== undefined) {
+        req.body[typeFieldName] = resolved.type;
+      }
+    }
     
     // Get user name for activity log
     const user = await User.findById(req.user._id).select('firstName lastName username');
@@ -141,7 +173,7 @@ exports.list = async (req, res) => {
       ? new mongoose.Types.ObjectId(userOrgId) 
       : userOrgId;
     
-    const query = { organizationId: orgIdObjectId };
+    let query = { organizationId: orgIdObjectId };
     
     // Debug logging
     console.log('[PeopleController] Filtering by organizationId:', {
@@ -155,7 +187,20 @@ exports.list = async (req, res) => {
     
     if (req.query.type) query.type = req.query.type;
     if (req.query.email) query.email = req.query.email;
-    if (req.query.organization) query.organization = req.query.organization; // This is CRM organization, not tenant
+    if (req.query.organization) query.organization = req.query.organization; // This is Sales organization, not tenant
+
+    // Phase 2A.2: Apply projection filter (read-time filtering only)
+    // SAFETY: Projection filtering is read-only.
+    // SAFETY: No record ownership or permissions are enforced here.
+    const appKey = req.appKey || 'SALES'; // From resolveAppContext middleware
+    const moduleKey = 'people';
+    const projectionMeta = getProjection(appKey, moduleKey);
+    query = applyProjectionFilter({
+      appKey,
+      moduleKey,
+      baseQuery: query,
+      projectionMeta
+    });
 
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
@@ -181,6 +226,45 @@ exports.list = async (req, res) => {
       .limit(limit)
       .skip(skip);
     const total = await People.countDocuments(query);
+    
+    // Calculate statistics with projection filter applied
+    // Use the same query so stats match the filtered results
+    const statistics = await People.aggregate([
+      { $match: query },
+      {
+        $group: {
+          _id: null,
+          totalContacts: { $sum: 1 },
+          leadContacts: { $sum: { $cond: [{ $eq: ['$type', 'Lead'] }, 1, 0] } },
+          customerContacts: { $sum: { $cond: [{ $eq: ['$type', 'Contact'] }, 1, 0] } }
+        }
+      }
+    ]);
+    
+    // Get new contacts this week
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const newThisWeek = await People.countDocuments({
+      ...query,
+      createdAt: { $gte: oneWeekAgo }
+    });
+    
+    // Get new customers this week
+    const newCustomers = await People.countDocuments({
+      ...query,
+      type: 'Contact',
+      createdAt: { $gte: oneWeekAgo }
+    });
+    
+    // Calculate conversion rate (customers / total * 100)
+    const statsData = statistics[0] || {
+      totalContacts: 0,
+      leadContacts: 0,
+      customerContacts: 0
+    };
+    const conversionRate = statsData.totalContacts > 0
+      ? Math.round((statsData.customerContacts / statsData.totalContacts) * 100)
+      : 0;
     
     // Debug: Check if any records have wrong organizationId
     if (data.length > 0) {
@@ -232,7 +316,19 @@ exports.list = async (req, res) => {
       });
     }
     
-    res.json({ success: true, data: filteredData, meta: { page, limit, total: filteredData.length } });
+    res.json({ 
+      success: true, 
+      data: filteredData, 
+      meta: { page, limit, total: filteredData.length },
+      statistics: {
+        totalContacts: statsData.totalContacts,
+        leadContacts: statsData.leadContacts,
+        customerContacts: statsData.customerContacts,
+        newThisWeek: newThisWeek,
+        newCustomers: newCustomers,
+        conversionRate: conversionRate
+      }
+    });
   } catch (error) {
     console.error('Error in people list:', error);
     res.status(500).json({ success: false, message: 'Error fetching records', error: error.message });

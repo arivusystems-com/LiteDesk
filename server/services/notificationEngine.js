@@ -126,7 +126,7 @@ async function emitNotification({ eventType, entity, organizationId, triggeredBy
   let recipients = [];
   try {
     // Handle appKey: '*' in rules - resolve to actual appKey from sourceAppKey or rule
-    const resolvedAppKey = rule.appKey === '*' ? (sourceAppKey || 'CRM') : rule.appKey;
+    const resolvedAppKey = rule.appKey === '*' ? (sourceAppKey || 'SALES') : rule.appKey;
     recipients = await resolveRecipients(rule.recipients, { 
       entity, 
       organizationId, 
@@ -148,7 +148,7 @@ async function emitNotification({ eventType, entity, organizationId, triggeredBy
 
   // Bootstrap and fetch preferences for recipients for this app
   // Handle appKey: '*' in rules - resolve to actual appKey
-  const resolvedAppKey = rule.appKey === '*' ? (sourceAppKey || 'CRM') : rule.appKey;
+    const resolvedAppKey = rule.appKey === '*' ? (sourceAppKey || 'SALES') : rule.appKey;
   const prefsByUserId = {};
   try {
     await Promise.all(recipients.map(r => ensureDefaultPreferences(r.userId, resolvedAppKey)));

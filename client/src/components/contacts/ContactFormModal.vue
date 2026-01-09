@@ -16,6 +16,28 @@
 
         <!-- Dynamic Form -->
         <form @submit.prevent="handleSubmit" class="p-6 space-y-6">
+          <!-- Phase 2B: Type selector (only if multiple types allowed) -->
+          <div v-if="!isEditing && showTypeSelector && isPlatformOwned" class="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Record type <span class="text-gray-500 dark:text-gray-400 text-xs">(based on app configuration)</span>
+            </label>
+            <select
+              v-model="form.type"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+            >
+              <option v-for="type in allowedTypes" :key="type.projectionType" :value="type.modelValue">
+                {{ type.modelValue }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Phase 2B: Helper text when selector is hidden -->
+          <div v-if="!isEditing && hideTypeSelector && isPlatformOwned && defaultType" class="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+            <p class="text-sm text-gray-600 dark:text-gray-400">
+              This app creates {{ defaultType.modelValue }}s by default
+            </p>
+          </div>
+
           <DynamicForm
             module-key="people"
             :form-data="form"
@@ -52,6 +74,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import apiClient from '@/utils/apiClient';
 import DynamicForm from '@/components/common/DynamicForm.vue';
 import { useAuthStore } from '@/stores/auth';
+import { useProjectionCreate } from '@/composables/useProjectionCreate';
 
 const props = defineProps({
   contact: {
@@ -68,6 +91,20 @@ const saving = ref(false);
 const moduleDefinition = ref(null);
 const form = ref({});
 const formErrors = ref({});
+
+// Phase 2B: Projection-aware create form
+const {
+  loading: projectionLoading,
+  allowedTypes,
+  defaultType,
+  isPlatformOwned,
+  isReadOnly,
+  showTypeSelector,
+  hideTypeSelector,
+  load: loadProjection,
+  resolveInitialCreatePayload,
+  isTypeAllowed
+} = useProjectionCreate('people');
 
 // Initialize form with default values from field definitions
 const initializeForm = (module) => {
@@ -136,10 +173,16 @@ const initializeForm = (module) => {
       newFormData.createdBy = authStore.user._id;
       console.log('👤 Set createdBy to current user:', authStore.user._id);
     }
-    form.value = newFormData;
+    
+    // Phase 2B: Apply projection defaults
+    const payloadWithDefaults = resolveInitialCreatePayload(newFormData);
+    form.value = payloadWithDefaults;
+    
     console.log('📝 Form initialized (new):', {
       keys: Object.keys(form.value),
-      createdBy: form.value.createdBy
+      createdBy: form.value.createdBy,
+      type: form.value.type,
+      hasProjection: !!defaultType.value
     });
   }
 };
@@ -171,6 +214,16 @@ const handleSubmit = async (event) => {
       data: currentFormData
     });
     
+    // Phase 2B: Validate type against projection metadata
+    if (!isEditing.value && isPlatformOwned.value && currentFormData.type) {
+      if (!isTypeAllowed(currentFormData.type)) {
+        formErrors.value.type = `Type "${currentFormData.type}" is not allowed in this app`;
+        console.warn(`❌ Invalid type: ${currentFormData.type}`);
+        saving.value = false;
+        return;
+      }
+    }
+
     // Validate required fields (exclude system fields that are auto-set by backend)
     const systemFieldKeys = ['organizationid', 'createdby', 'createdat', 'updatedat', '_id', '__v', 'activitylogs'];
     const requiredFields = (moduleDefinition.value?.fields || [])
@@ -203,6 +256,11 @@ const handleSubmit = async (event) => {
     delete submitData.updatedAt;
     delete submitData._id;
     delete submitData.__v;
+    
+    // Phase 2B: Ensure type is set correctly (use default if not set and platform-owned)
+    if (!isEditing.value && isPlatformOwned.value && !submitData.type && defaultType.value) {
+      submitData.type = defaultType.value.modelValue;
+    }
     
     // Handle organization field - ensure it's an ObjectId string, not an object
     if (submitData.organization && typeof submitData.organization === 'object') {
@@ -262,6 +320,13 @@ const handleSubmit = async (event) => {
     saving.value = false;
   }
 };
+
+// Phase 2B: Load projection metadata on mount
+onMounted(async () => {
+  if (!isEditing.value) {
+    await loadProjection();
+  }
+});
 
 // Form will be initialized when DynamicForm emits ready event
 </script>

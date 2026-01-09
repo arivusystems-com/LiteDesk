@@ -5,8 +5,8 @@ const { organizationIsolation, checkTrialStatus } = require('../middleware/organ
 const { canManageUsers } = require('../middleware/permissionMiddleware');
 const { resolveAppContext } = require('../middleware/resolveAppContextMiddleware');
 const { requireAppEntitlement } = require('../middleware/requireAppEntitlementMiddleware');
-const { lazyCRMInitialization } = require('../middleware/lazyCRMInitializationMiddleware');
-const { requireCRMApp } = require('../middleware/requireCRMAppMiddleware');
+const { lazySalesInitialization } = require('../middleware/lazySalesInitializationMiddleware');
+const { requireSalesApp } = require('../middleware/requireSalesAppMiddleware');
 const {
     getUsers,
     getUsersForAssignment,
@@ -38,8 +38,8 @@ router.use(resolveAppContext); // After auth, resolve appKey from URL
 router.use(requireAppEntitlement); // Check user's app entitlements
 
 // Apply CRM-specific middleware to remaining routes
-router.use(lazyCRMInitialization); // Lazy initialize CRM if needed
-router.use(requireCRMApp); // Enforce CRM-only access for user management routes
+router.use(lazySalesInitialization); // Lazy initialize CRM if needed
+router.use(requireSalesApp); // Enforce CRM-only access for user management routes
 
 // --- Public user list for assignments (any authenticated user can see org users) ---
 // IMPORTANT: Must be before /:id route to avoid route conflict

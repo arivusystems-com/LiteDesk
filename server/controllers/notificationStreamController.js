@@ -2,7 +2,7 @@ const notificationSSEHub = require('../services/notificationSSEHub');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-const APP_KEYS = ['CRM', 'AUDIT', 'PORTAL'];
+const APP_KEYS = ['SALES', 'AUDIT', 'PORTAL'];
 
 function normalizeAppKey(req) {
   const fromQuery = req.query.appKey;
@@ -74,7 +74,7 @@ async function validateTokenFromQuery(req) {
 }
 
 /**
- * GET /api/notifications/stream?appKey=CRM|AUDIT|PORTAL&token=<bearer_token>
+ * GET /api/notifications/stream?appKey=SALES|AUDIT|PORTAL&token=<bearer_token>
  * 
  * Server-Sent Events endpoint for real-time notification delivery.
  * 

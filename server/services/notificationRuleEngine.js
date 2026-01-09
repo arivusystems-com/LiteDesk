@@ -239,7 +239,7 @@ async function evaluateRules({ eventType, entity, organizationId, triggeredBy, s
       } else if (moduleKey === 'corrective_action') {
         appKey = 'PORTAL';
       } else {
-        appKey = 'CRM';
+        appKey = 'SALES';
       }
     }
 

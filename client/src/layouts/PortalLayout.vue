@@ -117,28 +117,84 @@
       </div>
     </header>
 
-    <!-- Desktop Sidebar -->
-    <aside class="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 lg:left-0 lg:pt-16 lg:z-30 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
-      <nav class="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
-        <router-link
-          v-for="item in navigation"
-          :key="item.name"
-          :to="item.href"
-          class="flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors min-h-[44px]"
-          :class="[
-            $route.path === item.href || $route.path.startsWith(item.href + '/')
-              ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-              : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-          ]"
+    <!-- Desktop Sidebar - Phase 2D: Use shared SidebarRenderer -->
+    <aside 
+      @mouseenter="handleMouseEnter"
+      @mouseleave="handleMouseLeave"
+      :class="[
+        'hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:pt-16 lg:z-30',
+        'bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700',
+        'transition-all duration-300 ease-in-out',
+        shouldShowExpanded ? 'lg:w-64' : 'lg:w-20'
+      ]"
+    >
+      <!-- Logo Section (above top bar) -->
+      <div class="absolute top-0 left-0 right-0 h-16 flex items-center justify-between px-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <transition
+          enter-active-class="transition-all duration-300"
+          enter-from-class="opacity-0 w-0"
+          enter-to-class="opacity-100 w-auto"
+          leave-active-class="transition-all duration-300"
+          leave-from-class="opacity-100 w-auto"
+          leave-to-class="opacity-0 w-0"
         >
-          <component :is="item.icon" class="w-5 h-5 mr-3" />
-          {{ item.name }}
-        </router-link>
-      </nav>
+          <img 
+            v-if="shouldShowExpanded"
+            class="h-8 w-auto transition-all duration-300" 
+            :src="logoSrc" 
+            alt="LiteDesk Logo" 
+          />
+        </transition>
+        
+        <!-- Collapse/Expand Button -->
+        <button
+          @click="toggleSidebar"
+          class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-600 dark:text-white transition-all duration-300 flex-shrink-0"
+          :class="{ 'mx-auto': !shouldShowExpanded }"
+        >
+          <ChevronLeftIcon v-if="shouldShowExpanded" class="w-5 h-5 transition-transform duration-300" />
+          <ChevronRightIcon v-else class="w-5 h-5 transition-transform duration-300" />
+        </button>
+      </div>
+      
+      <!-- Navigation - Phase 2D: Use SidebarRenderer -->
+      <div class="flex-1 pt-16 overflow-y-auto">
+        <!-- App Switcher -->
+        <div v-if="useDynamicUI && shouldShowExpanded" class="px-2 py-2 border-b border-gray-200 dark:border-gray-700">
+          <AppSwitcher />
+        </div>
+        
+        <SidebarRenderer 
+          v-if="useDynamicUI"
+          :should-show-expanded="shouldShowExpanded"
+        />
+        <nav v-else class="px-4 py-4 space-y-1">
+          <!-- Fallback to hardcoded navigation if dynamic UI not available -->
+          <router-link
+            v-for="item in navigation"
+            :key="item.name"
+            :to="item.href"
+            class="flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors min-h-[44px]"
+            :class="[
+              $route.path === item.href || $route.path.startsWith(item.href + '/')
+                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+            ]"
+          >
+            <component :is="item.icon" class="w-5 h-5 mr-3" />
+            {{ item.name }}
+          </router-link>
+        </nav>
+      </div>
     </aside>
 
-    <!-- Main Content -->
-    <main class="flex-1 lg:pl-64 lg:pt-16 pb-20 lg:pb-0">
+    <!-- Main Content - Phase 2D: Dynamic margin based on sidebar state -->
+    <main 
+      :class="[
+        'flex-1 transition-all duration-300 lg:pt-16 pb-20 lg:pb-0',
+        shouldShowExpanded ? 'lg:pl-64' : 'lg:pl-20'
+      ]"
+    >
       <div class="min-h-screen">
         <RouterView />
       </div>
@@ -204,16 +260,19 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { RouterView, useRouter } from 'vue-router';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { RouterView, useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useAppShellStore } from '@/stores/appShell';
 import { useColorMode } from '@/composables/useColorMode';
 import { 
   HomeIcon, 
   DocumentTextIcon, 
   ClipboardDocumentCheckIcon,
   UserIcon,
-  Cog6ToothIcon
+  Cog6ToothIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon
 } from '@heroicons/vue/24/outline';
 import {
   HomeIcon as HomeIconSolid,
@@ -224,13 +283,56 @@ import {
 import NotificationBell from '@/components/notifications/NotificationBell.vue';
 import NotificationDrawer from '@/components/notifications/NotificationDrawer.vue';
 import NotificationSheet from '@/components/notifications/NotificationSheet.vue';
+import AppSwitcher from '@/components/AppSwitcher.vue';
+import SidebarRenderer from '@/components/SidebarRenderer.vue';
 
+const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+const appShellStore = useAppShellStore();
 const { colorMode, toggleColorMode } = useColorMode();
 const showUserMenu = ref(false);
 const notificationDrawerOpen = ref(false);
 const notificationSheetOpen = ref(false);
+
+// Phase 2D: Sidebar state (same as Nav.vue)
+const isCollapsed = ref(
+  localStorage.getItem('litedesk-sidebar-collapsed') === 'true'
+);
+const isHovering = ref(false);
+
+// Computed to determine if sidebar should show expanded
+const shouldShowExpanded = computed(() => {
+  return !isCollapsed.value || isHovering.value;
+});
+
+const toggleSidebar = () => {
+  isCollapsed.value = !isCollapsed.value;
+  localStorage.setItem('litedesk-sidebar-collapsed', isCollapsed.value.toString());
+  window.dispatchEvent(new CustomEvent('sidebar-toggle', { 
+    detail: { collapsed: isCollapsed.value } 
+  }));
+};
+
+const handleMouseEnter = () => {
+  if (isCollapsed.value) {
+    isHovering.value = true;
+  }
+};
+
+const handleMouseLeave = () => {
+  isHovering.value = false;
+};
+
+// Phase 2D: Check if dynamic UI is available
+const useDynamicUI = computed(() => appShellStore.isLoaded && appShellStore.availableApps.length > 0);
+
+onMounted(async () => {
+  // Phase 2D: Load UI metadata if not already loaded (App.vue also does this, but safe to check)
+  if (!appShellStore.isLoaded && authStore.isAuthenticated) {
+    await appShellStore.loadUIMetadata();
+  }
+});
 
 // Close menu when clicking outside
 const handleClickOutside = (event) => {
@@ -278,6 +380,15 @@ const handleLogout = () => {
   authStore.logout();
   router.push('/login');
 };
+
+// Phase 2D: Logo source (same as Nav.vue)
+const logoSrc = computed(() => {
+  if (colorMode.value === 'dark' || (colorMode.value === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    return '/public/assets/nurtura_logo_white.svg';
+  } else {
+    return '/public/assets/nurtura_logo_plain.svg';
+  }
+});
 
 // Desktop navigation
 const navigation = [

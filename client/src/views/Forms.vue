@@ -226,8 +226,12 @@
               v-for="type in typeOptions"
               :key="type.value"
               @click="startFormWithType(type.value)"
-              class="group text-left rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition p-4 flex items-start gap-3"
+              class="group relative text-left rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition p-4 flex items-start gap-3"
             >
+              <!-- Phase 2B: Show default indicator -->
+              <span v-if="defaultType && type.value === defaultType.modelValue" class="absolute top-2 right-2 text-xs px-2 py-1 bg-brand-100 dark:bg-brand-900 text-brand-700 dark:text-brand-300 rounded">
+                Default
+              </span>
               <div
                 class="w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0"
                 :class="type.badge"
@@ -262,6 +266,7 @@ import BadgeCell from '@/components/common/table/BadgeCell.vue';
 import Avatar from '@/components/common/Avatar.vue';
 import UniversalImportModal from '@/components/import/UniversalImportModal.vue';
 import { XMarkIcon, ClipboardDocumentCheckIcon, ChatBubbleLeftRightIcon, HandThumbUpIcon } from '@heroicons/vue/24/outline';
+import { useProjectionCreate } from '@/composables/useProjectionCreate';
 
 const router = useRouter();
 const route = useRoute();
@@ -273,9 +278,22 @@ const forms = ref([]);
 const loading = ref(false);
 const showImportModal = ref(false);
 const showTypePicker = ref(false);
-const typeOptions = [
+
+// Phase 2B: Projection-aware form creation
+const {
+  allowedTypes,
+  defaultType,
+  isPlatformOwned,
+  showTypeSelector,
+  hideTypeSelector,
+  load: loadProjection
+} = useProjectionCreate('forms');
+
+// Base type options (will be filtered by projection)
+const baseTypeOptions = [
   {
     value: 'Audit',
+    projectionType: 'AUDIT',
     label: 'Audit',
     subtitle: 'Checklists & compliance',
     description: 'Structured audits with scoring, evidence capture, and approvals.',
@@ -284,6 +302,7 @@ const typeOptions = [
   },
   {
     value: 'Survey',
+    projectionType: 'SURVEY',
     label: 'Survey',
     subtitle: 'Customer & employee insights',
     description: 'Multi-question surveys with logic, branching, and scoring.',
@@ -292,6 +311,7 @@ const typeOptions = [
   },
   {
     value: 'Feedback',
+    projectionType: 'FEEDBACK',
     label: 'Feedback',
     subtitle: 'NPS / CSAT / CES',
     description: 'Quick feedback with ratings, comments, and optional follow-up.',
@@ -299,6 +319,19 @@ const typeOptions = [
     icon: HandThumbUpIcon
   }
 ];
+
+// Phase 2B: Filter type options based on projection metadata
+const typeOptions = computed(() => {
+  if (!isPlatformOwned.value || !allowedTypes.value || allowedTypes.value.length === 0) {
+    return baseTypeOptions; // Show all if no projection
+  }
+  
+  // Filter to only show allowed types
+  const allowedProjectionTypes = allowedTypes.value.map(t => t.projectionType.toUpperCase());
+  return baseTypeOptions.filter(option => 
+    allowedProjectionTypes.includes(option.projectionType.toUpperCase())
+  );
+});
 const searchQuery = ref('');
 const sortField = ref('createdAt');
 const sortOrder = ref('desc');
@@ -406,7 +439,16 @@ const handleSort = ({ key, order }) => {
   fetchForms();
 };
 
-const openCreateForm = () => {
+const openCreateForm = async () => {
+  // Phase 2B: Load projection metadata before showing type picker
+  await loadProjection();
+  
+  // If only one type allowed and default exists, skip picker
+  if (hideTypeSelector.value && defaultType.value) {
+    startFormWithType(defaultType.value.modelValue);
+    return;
+  }
+  
   showTypePicker.value = true;
 };
 

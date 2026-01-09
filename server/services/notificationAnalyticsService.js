@@ -17,7 +17,7 @@ const NOTIFICATION_DEBUG = process.env.NOTIFICATION_DEBUG === 'true';
  * 
  * @param {Object} params
  * @param {string} params.organizationId - Organization ID
- * @param {string} params.appKey - App key (CRM/AUDIT/PORTAL)
+ * @param {string} params.appKey - App key (SALES/AUDIT/PORTAL)
  * @param {Object} params.range - Time range { start, end } (default: last 7 days)
  */
 async function getDeliveryStats({ organizationId, appKey, range = null }) {

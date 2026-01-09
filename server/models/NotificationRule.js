@@ -28,7 +28,7 @@ const notificationRuleSchema = new Schema({
   appKey: {
     type: String,
     required: true,
-    enum: ['CRM', 'AUDIT', 'PORTAL'],
+    enum: ['SALES', 'AUDIT', 'PORTAL'],
     index: true
   },
 

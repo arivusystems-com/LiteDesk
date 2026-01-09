@@ -10,7 +10,7 @@
  * - Usage statistics
  * 
  * ⚠️ VIOLATION: Handles both tenant organization (Platform Core) and
- *    CRM organization entity (CRM App) in same controller.
+ *    Sales organization entity (Sales App) in same controller.
  * 
  * See PLATFORM_CORE_ANALYSIS.md for details.
  * ============================================================================
@@ -65,7 +65,7 @@ exports.updateOrganization = async (req, res) => {
             });
         }
 
-        // Update organization (unified model handles both tenant and CRM fields)
+        // Update organization (unified model handles both tenant and Sales fields)
         const { name, settings } = req.body;
         if (name) organization.name = name;
         if (settings) organization.settings = { ...organization.settings, ...settings };
@@ -294,18 +294,18 @@ exports.enableApp = async (req, res) => {
             });
         }
 
-        // Validate user is CRM ADMIN (has CRM appAccess with ADMIN role or isOwner)
+        // Validate user is Sales ADMIN (has Sales appAccess with ADMIN role or isOwner)
         const user = req.user;
-        const hasCrmAccess = user.appAccess?.some(
-            access => access.appKey === 'CRM' && access.status === 'ACTIVE'
-        ) || user.allowedApps?.includes('CRM');
+        const hasSalesAccess = user.appAccess?.some(
+            access => access.appKey === 'SALES' && access.status === 'ACTIVE'
+        ) || user.allowedApps?.includes('SALES');
         
         const isAdmin = user.isOwner || String(user.role || '').toLowerCase() === 'admin';
         
-        if (!hasCrmAccess || !isAdmin) {
+        if (!hasSalesAccess || !isAdmin) {
             return res.status(403).json({
                 success: false,
-                message: 'Only CRM administrators can enable/disable apps',
+                message: 'Only Sales administrators can enable/disable apps',
                 code: 'ADMIN_REQUIRED'
             });
         }
@@ -407,18 +407,18 @@ exports.disableApp = async (req, res) => {
             });
         }
 
-        // Validate user is CRM ADMIN (has CRM appAccess with ADMIN role or isOwner)
+        // Validate user is Sales ADMIN (has Sales appAccess with ADMIN role or isOwner)
         const user = req.user;
-        const hasCrmAccess = user.appAccess?.some(
-            access => access.appKey === 'CRM' && access.status === 'ACTIVE'
-        ) || user.allowedApps?.includes('CRM');
+        const hasSalesAccess = user.appAccess?.some(
+            access => access.appKey === 'SALES' && access.status === 'ACTIVE'
+        ) || user.allowedApps?.includes('SALES');
         
         const isAdmin = user.isOwner || String(user.role || '').toLowerCase() === 'admin';
         
-        if (!hasCrmAccess || !isAdmin) {
+        if (!hasSalesAccess || !isAdmin) {
             return res.status(403).json({
                 success: false,
-                message: 'Only CRM administrators can enable/disable apps',
+                message: 'Only Sales administrators can enable/disable apps',
                 code: 'ADMIN_REQUIRED'
             });
         }
@@ -433,12 +433,12 @@ exports.disableApp = async (req, res) => {
             });
         }
 
-        // Prevent disabling CRM (critical app)
-        if (appKey === 'CRM') {
+        // Prevent disabling Sales (critical app)
+        if (appKey === 'SALES') {
             return res.status(400).json({
                 success: false,
-                message: 'CRM cannot be disabled',
-                code: 'CRM_CANNOT_BE_DISABLED'
+                message: 'Sales cannot be disabled',
+                code: 'Sales_CANNOT_BE_DISABLED'
             });
         }
 

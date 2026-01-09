@@ -2,12 +2,45 @@ const Task = require('../models/Task');
 const User = require('../models/User');
 const { emitNotification } = require('../services/notificationEngine');
 const domainEvents = require('../constants/domainEvents');
+const { applyProjectionFilter } = require('../utils/appProjectionQuery');
+const { getProjection } = require('../utils/moduleProjectionResolver');
+const { resolveCreateType, getTypeFieldName } = require('../utils/appProjectionCreateResolver');
 
 // @desc    Create new task
 // @route   POST /api/tasks
 // @access  Private
 const createTask = async (req, res) => {
   try {
+    // Phase 2A.3: Projection-aware create type resolution
+    // SAFETY: Projection-aware create logic — non-blocking fallback
+    // Note: Tasks don't currently have a type field, but we handle it gracefully
+    const appKey = req.appKey || 'SALES'; // From resolveAppContext middleware
+    const moduleKey = 'tasks';
+    const typeFieldName = getTypeFieldName(moduleKey);
+    
+    if (typeFieldName && req.body.hasOwnProperty(typeFieldName)) {
+      const resolved = resolveCreateType({
+        appKey,
+        moduleKey,
+        explicitType: req.body[typeFieldName],
+        fallbackType: null
+      });
+
+      if (resolved.allowed === false) {
+        return res.status(400).json({
+          success: false,
+          message: resolved.message || 'This task type is not allowed in this app.',
+          code: resolved.reason
+        });
+      }
+
+      // Set resolved type in body if available
+      if (resolved.type !== null) {
+        req.body[typeFieldName] = resolved.type;
+      }
+    }
+    // If typeFieldName is null (Tasks don't have type), skip silently
+
     const {
       title,
       description,
@@ -76,7 +109,7 @@ const createTask = async (req, res) => {
       },
       organizationId: req.user.organizationId,
       triggeredBy: req.user._id,
-      sourceAppKey: 'CRM'
+      sourceAppKey: 'SALES'
     }).catch(err => {
       console.error('[taskController] Error emitting TASK_CREATED notification:', err);
     });
@@ -94,7 +127,7 @@ const createTask = async (req, res) => {
         },
         organizationId: req.user.organizationId,
         triggeredBy: req.user._id,
-        sourceAppKey: 'CRM'
+        sourceAppKey: 'SALES'
       }).catch(err => {
         console.error('[taskController] Error emitting TASK_ASSIGNED notification:', err);
       });
@@ -136,7 +169,7 @@ const getTasks = async (req, res) => {
     } = req.query;
 
     // Build query
-    const query = { organizationId: req.user.organizationId };
+    let query = { organizationId: req.user.organizationId };
 
     // Filters
     if (status) query.status = status;
@@ -173,6 +206,19 @@ const getTasks = async (req, res) => {
         { tags: { $regex: search, $options: 'i' } }
       ];
     }
+
+    // Phase 2A.2: Apply projection filter (read-time filtering only)
+    // SAFETY: Projection filtering is read-only.
+    // SAFETY: No record ownership or permissions are enforced here.
+    const appKey = req.appKey || 'SALES'; // From resolveAppContext middleware
+    const moduleKey = 'tasks';
+    const projectionMeta = getProjection(appKey, moduleKey);
+    query = applyProjectionFilter({
+      appKey,
+      moduleKey,
+      baseQuery: query,
+      projectionMeta
+    });
 
     // Pagination
     const skip = (page - 1) * limit;
@@ -319,7 +365,7 @@ const updateTask = async (req, res) => {
         },
         organizationId: req.user.organizationId,
         triggeredBy: req.user._id,
-        sourceAppKey: 'CRM'
+        sourceAppKey: 'SALES'
       }).catch(err => {
         console.error('[taskController] Error emitting TASK_ASSIGNED notification:', err);
       });
@@ -338,7 +384,7 @@ const updateTask = async (req, res) => {
         },
         organizationId: req.user.organizationId,
         triggeredBy: req.user._id,
-        sourceAppKey: 'CRM'
+        sourceAppKey: 'SALES'
       }).catch(err => {
         console.error('[taskController] Error emitting TASK_STATUS_CHANGED notification:', err);
       });

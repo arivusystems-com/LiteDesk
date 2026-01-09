@@ -8,7 +8,7 @@
  * 
  * Usage:
  *   const { APP_KEYS } = require('./constants/appKeys');
- *   if (req.appKey === APP_KEYS.CRM) { ... }
+ *   if (req.appKey === APP_KEYS.SALES) { ... }
  * 
  * ============================================================================
  */
@@ -16,22 +16,24 @@
 /**
  * Application Keys Enum
  * 
- * - CRM: Customer Relationship Management application
+ * - SALES: Sales application (formerly CRM)
  * - PORTAL: Customer/Partner portal application
  * - AUDIT: Audit management application
  * - LMS: Learning Management System application
+ * - CONTROL_PLANE: Platform internal operations (non-tenant, non-billable)
  */
 const APP_KEYS = {
-    CRM: 'CRM',
+    SALES: 'SALES',
     PORTAL: 'PORTAL',
     AUDIT: 'AUDIT',
-    LMS: 'LMS'
+    LMS: 'LMS',
+    CONTROL_PLANE: 'CONTROL_PLANE'
 };
 
 /**
  * Default application key (used when appKey cannot be resolved from URL)
  */
-const DEFAULT_APP_KEY = APP_KEYS.CRM;
+const DEFAULT_APP_KEY = APP_KEYS.SALES;
 
 /**
  * Valid app keys array (for validation)

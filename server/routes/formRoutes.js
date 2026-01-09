@@ -42,8 +42,8 @@ const { checkPermission } = require('../middleware/permissionMiddleware');
 const { uploadMultiple } = require('../middleware/uploadMiddleware');
 const { resolveAppContext } = require('../middleware/resolveAppContextMiddleware');
 const { requireAppEntitlement } = require('../middleware/requireAppEntitlementMiddleware');
-const { lazyCRMInitialization } = require('../middleware/lazyCRMInitializationMiddleware');
-const { requireCRMApp } = require('../middleware/requireCRMAppMiddleware');
+const { lazySalesInitialization } = require('../middleware/lazySalesInitializationMiddleware');
+const { requireSalesApp } = require('../middleware/requireSalesAppMiddleware');
 
 const router = express.Router();
 
@@ -63,8 +63,8 @@ const protectedRouter = express.Router();
 protectedRouter.use(protect);
 protectedRouter.use(resolveAppContext); // After auth, resolve appKey from URL
 protectedRouter.use(requireAppEntitlement); // Check user's app entitlements
-protectedRouter.use(lazyCRMInitialization); // Lazy initialize CRM if needed
-protectedRouter.use(requireCRMApp); // Enforce CRM-only access
+protectedRouter.use(lazySalesInitialization); // Lazy initialize CRM if needed
+protectedRouter.use(requireSalesApp); // Enforce CRM-only access
 protectedRouter.use(organizationIsolation);
 protectedRouter.use(checkTrialStatus);
 protectedRouter.use(checkFeatureAccess('forms'));

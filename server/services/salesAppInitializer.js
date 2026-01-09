@@ -1,19 +1,19 @@
 /**
  * ============================================================================
- * CRM Application Initializer
+ * Sales Application Initializer
  * ============================================================================
  * 
- * Initializes CRM-specific modules and configurations for an organization.
- * This should be called when CRM app is enabled for an organization, not during registration.
+ * Initializes Sales-specific modules and configurations for an organization.
+ * This should be called when Sales app is enabled for an organization, not during registration.
  * 
  * Responsibilities:
  * - Initialize People module definition with dependencies
- * - Initialize Deals module definition with standardized fields
- * - Any other CRM-specific initialization
+ * - Initialize Pipeline Entity module definition with standardized fields
+ * - Any other Sales-specific initialization
  * 
  * Usage:
- *   const crmInitializer = require('./services/crmAppInitializer');
- *   await crmInitializer.initializeCRM(organizationId);
+ *   const salesInitializer = require('./services/salesAppInitializer');
+ *   await salesInitializer.initializeSales(organizationId);
  * 
  * ============================================================================
  */
@@ -22,12 +22,12 @@ const updatePeopleModuleFields = require('../scripts/updatePeopleModuleFields');
 const updateDealsModuleFields = require('../scripts/updateDealsModuleFields');
 
 /**
- * Initialize CRM application for an organization
+ * Initialize Sales application for an organization
  * 
- * @param {ObjectId|String} organizationId - Organization ID to initialize CRM for
+ * @param {ObjectId|String} organizationId - Organization ID to initialize Sales for
  * @returns {Promise<Object>} - Initialization result
  */
-async function initializeCRM(organizationId) {
+async function initializeSales(organizationId) {
     const results = {
         organizationId,
         success: true,
@@ -36,46 +36,46 @@ async function initializeCRM(organizationId) {
     };
 
     try {
-        console.log(`[CRMInitializer] Initializing CRM for organization: ${organizationId}`);
+        console.log(`[SalesInitializer] Initializing Sales for organization: ${organizationId}`);
 
         // Initialize People Module Definition with dependencies
         try {
             await updatePeopleModuleFields(organizationId);
             results.initialized.push('People module');
-            console.log(`[CRMInitializer] ✅ People module initialized for organization: ${organizationId}`);
+            console.log(`[SalesInitializer] ✅ People module initialized for organization: ${organizationId}`);
         } catch (moduleError) {
             results.errors.push({
                 module: 'People',
                 error: moduleError.message
             });
-            console.error(`[CRMInitializer] ❌ Failed to initialize People module:`, moduleError.message);
+            console.error(`[SalesInitializer] ❌ Failed to initialize People module:`, moduleError.message);
             // Continue with other initializations even if one fails
         }
 
-        // Initialize Deals Module Definition with standardized fields
+        // Initialize Pipeline Entity Module Definition with standardized fields
         try {
             await updateDealsModuleFields(organizationId);
-            results.initialized.push('Deals module');
-            console.log(`[CRMInitializer] ✅ Deals module initialized for organization: ${organizationId}`);
+            results.initialized.push('Pipeline Entity module');
+            console.log(`[SalesInitializer] ✅ Pipeline Entity module initialized for organization: ${organizationId}`);
         } catch (moduleError) {
             results.errors.push({
-                module: 'Deals',
+                module: 'Pipeline Entity',
                 error: moduleError.message
             });
-            console.error(`[CRMInitializer] ❌ Failed to initialize Deals module:`, moduleError.message);
+            console.error(`[SalesInitializer] ❌ Failed to initialize Pipeline Entity module:`, moduleError.message);
             // Continue with other initializations even if one fails
         }
 
         if (results.errors.length > 0) {
             results.success = false;
-            console.warn(`[CRMInitializer] ⚠️  CRM initialization completed with errors for organization: ${organizationId}`);
+            console.warn(`[SalesInitializer] ⚠️  Sales initialization completed with errors for organization: ${organizationId}`);
         } else {
-            console.log(`[CRMInitializer] ✅ CRM initialization completed successfully for organization: ${organizationId}`);
+            console.log(`[SalesInitializer] ✅ Sales initialization completed successfully for organization: ${organizationId}`);
         }
 
         return results;
     } catch (error) {
-        console.error(`[CRMInitializer] ❌ Fatal error during CRM initialization:`, error);
+        console.error(`[SalesInitializer] ❌ Fatal error during Sales initialization:`, error);
         results.success = false;
         results.errors.push({
             module: 'General',
@@ -86,12 +86,12 @@ async function initializeCRM(organizationId) {
 }
 
 /**
- * Check if CRM is already initialized for an organization
+ * Check if Sales is already initialized for an organization
  * 
  * @param {ObjectId|String} organizationId - Organization ID to check
- * @returns {Promise<Boolean>} - True if CRM modules exist
+ * @returns {Promise<Boolean>} - True if Sales modules exist
  */
-async function isCRMInitialized(organizationId) {
+async function isSalesInitialized(organizationId) {
     try {
         const ModuleDefinition = require('../models/ModuleDefinition');
         
@@ -107,13 +107,13 @@ async function isCRMInitialized(organizationId) {
 
         return !!(peopleModule && dealsModule);
     } catch (error) {
-        console.error(`[CRMInitializer] Error checking CRM initialization status:`, error);
+        console.error(`[SalesInitializer] Error checking Sales initialization status:`, error);
         return false;
     }
 }
 
 module.exports = {
-    initializeCRM,
-    isCRMInitialized
+    initializeSales,
+    isSalesInitialized
 };
 

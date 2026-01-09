@@ -129,6 +129,9 @@ const auditRoutes = require('./routes/auditRoutes');
 const auditExecutionRoutes = require('./routes/auditExecutionRoutes');
 const auditReadRoutes = require('./routes/auditReadRoutes');
 const digestRoutes = require('./routes/digestRoutes');
+const uiCompositionRoutes = require('./routes/uiCompositionRoutes');
+const relationshipRoutes = require('./routes/relationshipRoutes');
+const responseRoutes = require('./routes/responseRoutes');
 
 // Route Linking
 app.use('/api/auth', authRoutes);
@@ -140,6 +143,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/csv', csvRoutes);
 app.use('/api/imports', require('./routes/importHistoryRoutes'));
+app.use('/api/execution', require('./routes/executionRoutes'));
 app.use('/api/demo', demoRoutes);
 app.use('/api/instances', instanceRoutes);
 app.use('/api/metrics', metricsRoutes);
@@ -173,6 +177,15 @@ app.use('/api/audit/assignments', auditReadRoutes);
 
 // Digest Routes (for manual triggering/testing)
 app.use('/api/digest', digestRoutes);
+
+// UI Composition Routes (Phase 0D)
+app.use('/api/ui', uiCompositionRoutes);
+
+// Relationship Routes (Phase 0E)
+app.use('/api/relationships', relationshipRoutes);
+
+// Response Detail Routes (Phase 0I.2 - Read-Only)
+app.use('/api/responses', responseRoutes);
 
 // Serve uploaded files (including reports)
 app.use('/api/uploads', express.static(path.join(__dirname, 'uploads'), {

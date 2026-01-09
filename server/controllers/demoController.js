@@ -34,7 +34,7 @@ exports.submitDemoRequest = async (req, res) => {
         }
         
         // Step 1: Create Organization for the prospect company
-        // Single organization table handles both tenant and CRM fields
+        // Single organization table handles both tenant and Sales fields
         console.log('📋 Creating organization for:', companyName);
         
         // Generate unique slug to avoid conflicts
@@ -51,7 +51,7 @@ exports.submitDemoRequest = async (req, res) => {
             counter++;
         }
         
-        // Create single organization with both tenant and CRM fields
+        // Create single organization with both tenant and Sales fields
         const organization = await Organization.create({
             name: companyName,
             slug: slug,
@@ -76,16 +76,16 @@ exports.submitDemoRequest = async (req, res) => {
                 currency: 'USD'
             },
             enabledModules: ['contacts', 'deals'], // Limited modules for prospects
-            // New organizations start with CRM enabled only
+            // New organizations start with Sales enabled only
             enabledApps: [{
-                appKey: 'CRM',
+                appKey: 'SALES',
                 status: 'ACTIVE',
                 enabledAt: new Date()
             }],
             
-            // CRM fields (for tracking as prospect)
+            // Sales fields (for tracking as prospect)
             types: [], // Empty types for prospects
-            customerStatus: 'Prospect', // CRM status field
+            customerStatus: 'Prospect', // Sales status field
             
             // Flag: Not a tenant yet (will be set to true on conversion)
             isTenant: false
@@ -103,19 +103,19 @@ exports.submitDemoRequest = async (req, res) => {
             // Continue even if role creation fails
         }
         
-        // Step 1.6: Initialize CRM modules for the organization
-        // Using CRM app initializer to keep initialization centralized
-        console.log('🔍 Initializing CRM modules...');
+        // Step 1.6: Initialize Sales modules for the organization
+        // Using Sales app initializer to keep initialization centralized
+        console.log('🔍 Initializing Sales modules...');
         try {
-            const crmInitializer = require('../services/crmAppInitializer');
-            const initResult = await crmInitializer.initializeCRM(organization._id);
+            const salesInitializer = require('../services/salesAppInitializer');
+            const initResult = await salesInitializer.initializeSales(organization._id);
             if (initResult.success) {
-                console.log('✅ CRM modules initialized:', initResult.initialized.join(', '));
+                console.log('✅ Sales modules initialized:', initResult.initialized.join(', '));
             } else {
-                console.warn('⚠️  CRM initialization completed with errors:', initResult.errors);
+                console.warn('⚠️  Sales initialization completed with errors:', initResult.errors);
             }
         } catch (moduleError) {
-            console.warn('⚠️  Failed to initialize CRM modules:', moduleError.message);
+            console.warn('⚠️  Failed to initialize Sales modules:', moduleError.message);
             // Continue even if module initialization fails - can be run manually later
         }
         
@@ -144,7 +144,7 @@ exports.submitDemoRequest = async (req, res) => {
         console.log('👤 Creating person for:', contactName);
         const person = await People.create({
             organizationId: organization._id,  // Organization reference
-            organization: organization._id,  // CRM organization link (same organization)
+            organization: organization._id,  // Sales organization link (same organization)
             createdBy: masterAdmin._id,
             assignedTo: masterAdmin._id,
             type: 'Lead',
@@ -397,7 +397,7 @@ exports.convertToOrganization = async (req, res) => {
             demoRequest.organizationId,
             {
                 isTenant: true, // Mark as tenant organization
-                customerStatus: 'Active', // Update CRM status
+                customerStatus: 'Active', // Update Sales status
                 // Update subscription tier and status
                 'subscription.tier': tier,
                 'subscription.status': tier === 'trial' ? 'trial' : 'active',

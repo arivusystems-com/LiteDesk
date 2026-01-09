@@ -4,8 +4,8 @@ const { protect } = require('../middleware/authMiddleware');
 const { organizationIsolation } = require('../middleware/organizationMiddleware');
 const { resolveAppContext } = require('../middleware/resolveAppContextMiddleware');
 const { requireAppEntitlement } = require('../middleware/requireAppEntitlementMiddleware');
-const { requireCRMApp } = require('../middleware/requireCRMAppMiddleware');
-const { lazyCRMInitialization } = require('../middleware/lazyCRMInitializationMiddleware');
+const { requireSalesApp } = require('../middleware/requireSalesAppMiddleware');
+const { lazySalesInitialization } = require('../middleware/lazySalesInitializationMiddleware');
 const {
   listRules,
   createRule,
@@ -19,8 +19,8 @@ const {
 router.use(protect);
 router.use(resolveAppContext);
 router.use(requireAppEntitlement); // Check user's app entitlements
-router.use(lazyCRMInitialization); // Lazy initialize CRM if needed
-router.use(requireCRMApp); // Enforce CRM-only access
+router.use(lazySalesInitialization); // Lazy initialize CRM if needed
+router.use(requireSalesApp); // Enforce CRM-only access
 router.use(organizationIsolation);
 
 router.get('/', listRules);

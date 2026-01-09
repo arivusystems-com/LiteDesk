@@ -7,6 +7,9 @@ const geoValidationService = require('../services/geoValidationService');
 const ModuleDefinition = require('../models/ModuleDefinition');
 const { getFieldDependencyState } = require('../utils/dependencyEvaluation');
 const { emitAuditAssigned } = require('../services/auditNotificationService');
+const { applyProjectionFilter } = require('../utils/appProjectionQuery');
+const { getProjection } = require('../utils/moduleProjectionResolver');
+const { resolveCreateType, getTypeFieldName } = require('../utils/appProjectionCreateResolver');
 
 const AUDIT_EVENT_TYPES = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
 
@@ -213,7 +216,7 @@ exports.getEvents = async (req, res) => {
             sortOrder = 'asc'
         } = req.query;
         
-        const query = { organizationId: req.user.organizationId };
+        let query = { organizationId: req.user.organizationId };
         
         // Date range filter
         if (startDateTime || endDateTime) {
@@ -283,6 +286,33 @@ exports.getEvents = async (req, res) => {
                 query.$or = searchConditions;
             }
         }
+        
+        // Phase 2A.2: Apply projection filter (read-time filtering only)
+        // SAFETY: Projection filtering is read-only.
+        // SAFETY: No record ownership or permissions are enforced here.
+        const appKey = req.appKey || 'SALES'; // From resolveAppContext middleware
+        const moduleKey = 'events';
+        const projectionMeta = getProjection(appKey, moduleKey);
+        
+        // Debug logging
+        console.log('[eventController] Before projection filter:', {
+          appKey,
+          moduleKey,
+          hasProjection: !!projectionMeta,
+          queryBefore: JSON.stringify(query)
+        });
+        
+        query = applyProjectionFilter({
+            appKey,
+            moduleKey,
+            baseQuery: query,
+            projectionMeta
+        });
+        
+        // Debug logging
+        console.log('[eventController] After projection filter:', {
+          queryAfter: JSON.stringify(query)
+        });
         
         // Sort order
         const sortOptions = {};
@@ -372,6 +402,40 @@ exports.getEventById = async (req, res) => {
 exports.createEvent = async (req, res) => {
     try {
         console.log('Creating event with data:', JSON.stringify(req.body, null, 2));
+        
+        // Phase 2A.3: Projection-aware create type resolution
+        // SAFETY: Projection-aware create logic — non-blocking fallback
+        // Note: Event model uses 'eventType' field with specific enum values that may not map cleanly to projection types
+        // For now, we validate if eventType is provided, but don't override it
+        // as the model has specific enum values that may not match projection metadata exactly
+        const appKey = req.appKey || 'SALES'; // From resolveAppContext middleware
+        const moduleKey = 'events';
+        const typeFieldName = getTypeFieldName(moduleKey);
+        
+        if (typeFieldName && req.body.hasOwnProperty(typeFieldName)) {
+            const explicitType = req.body[typeFieldName];
+            const resolved = resolveCreateType({
+                appKey,
+                moduleKey,
+                explicitType: explicitType,
+                fallbackType: null // Model will use its default if needed
+            });
+
+            // Note: For events, we're lenient because eventType enum values may not match projection types exactly
+            // If resolution fails, we'll let the model validation handle it
+            // Only block if explicitly not allowed (resolution returned allowed: false)
+            if (resolved.allowed === false) {
+                return res.status(400).json({
+                    success: false,
+                    message: resolved.message || 'This event type is not allowed in this app.',
+                    code: resolved.reason
+                });
+            }
+
+            // If resolved type is provided and different, update it
+            // However, for events this is complex due to enum value differences, so we skip auto-mapping for now
+            // The model validation will handle enum value correctness
+        }
         
         // ===== STRIP STATUS FROM CLIENT REQUESTS =====
         // Status is system-controlled and cannot be set by clients

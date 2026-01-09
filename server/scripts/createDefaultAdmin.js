@@ -136,7 +136,7 @@ const masterUri = `${baseUri}/${masterDbName}${connectionQuery}`;
         
         // Ensure owner has CRM: ADMIN access
         const crmRoleKey = 'ADMIN';
-        if (!validateAppRole(APP_KEYS.CRM, crmRoleKey)) {
+        if (!validateAppRole(APP_KEYS.SALES, crmRoleKey)) {
             throw new Error(`Invalid CRM roleKey: ${crmRoleKey}`);
         }
 
@@ -152,12 +152,12 @@ const masterUri = `${baseUri}/${masterDbName}${connectionQuery}`;
             status: 'active',
             userType: 'INTERNAL',
             appAccess: [{
-                appKey: APP_KEYS.CRM,
+                appKey: APP_KEYS.SALES,
                 roleKey: crmRoleKey, // Owner must have CRM: ADMIN
                 status: 'ACTIVE',
                 addedAt: new Date()
             }],
-            allowedApps: [APP_KEYS.CRM] // Legacy field for backward compatibility
+            allowedApps: [APP_KEYS.SALES] // Legacy field for backward compatibility
         });
 
         // Set all permissions to true for owner

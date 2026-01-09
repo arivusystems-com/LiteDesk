@@ -1,9 +1,12 @@
 <script setup>
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useAppShellStore } from '@/stores/appShell';
 import { useTabs } from '@/composables/useTabs';
 import NotificationBell from '@/components/notifications/NotificationBell.vue';
 import NotificationDrawer from '@/components/notifications/NotificationDrawer.vue';
+import AppSwitcher from '@/components/AppSwitcher.vue';
+import SidebarRenderer from '@/components/SidebarRenderer.vue';
 import { computed, ref, watch } from 'vue';
 import { useColorMode } from '@/composables/useColorMode';
 import { Dialog, DialogPanel, TransitionChild, TransitionRoot, Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
@@ -87,14 +90,14 @@ const navigation = computed(() => {
   
   // Check user's app access
   const allowedApps = authStore.user?.allowedApps || [];
-  const hasCrmAccess = allowedApps.includes('CRM');
+  const hasSalesAccess = allowedApps.includes('SALES');
   const hasAuditAccess = allowedApps.includes('AUDIT');
   
-  // Only show CRM modules if user has CRM access
-  // Audit-only users should not see CRM navigation
+  // Only show Sales modules if user has Sales access
+  // Audit-only users should not see Sales navigation
   
-  // Dashboard - only show CRM dashboard if user has CRM access
-  if (hasCrmAccess) {
+  // Dashboard - only show Sales dashboard if user has Sales access
+  if (hasSalesAccess) {
     nav.push({ 
       name: 'Dashboard', 
       href: '/dashboard', 
@@ -103,8 +106,8 @@ const navigation = computed(() => {
     });
   }
   
-  // People - check permission (uses 'contacts' permission module) - CRM only
-  if (hasCrmAccess && (authStore.can('people', 'view') || authStore.can('contacts', 'view'))) {
+  // People - check permission (uses 'contacts' permission module) - Sales only
+  if (hasSalesAccess && (authStore.can('people', 'view') || authStore.can('contacts', 'view'))) {
     nav.push({ 
       name: 'People', 
       href: '/people', 
@@ -113,8 +116,8 @@ const navigation = computed(() => {
     });
   }
   
-  // Organizations - check permission - CRM only
-  if (hasCrmAccess && authStore.can('organizations', 'view')) {
+  // Organizations - check permission - Sales only
+  if (hasSalesAccess && authStore.can('organizations', 'view')) {
     nav.push({ 
       name: 'Organizations', 
       href: '/organizations', 
@@ -123,8 +126,8 @@ const navigation = computed(() => {
     });
   }
   
-  // Deals - check permission - CRM only
-  if (hasCrmAccess && authStore.can('deals', 'view')) {
+  // Deals - check permission - Sales only
+  if (hasSalesAccess && authStore.can('deals', 'view')) {
     nav.push({ 
       name: 'Deals', 
       href: '/deals', 
@@ -133,8 +136,8 @@ const navigation = computed(() => {
     });
   }
   
-  // Tasks - check permission - CRM only
-  if (hasCrmAccess && authStore.can('tasks', 'view')) {
+  // Tasks - check permission - Sales only
+  if (hasSalesAccess && authStore.can('tasks', 'view')) {
     nav.push({ 
       name: 'Tasks', 
       href: '/tasks', 
@@ -143,8 +146,8 @@ const navigation = computed(() => {
     });
   }
   
-      // Events - check permission - CRM only
-      if (hasCrmAccess && authStore.can('events', 'view')) {
+      // Events - check permission - Sales only
+      if (hasSalesAccess && authStore.can('events', 'view')) {
         nav.push({
           name: 'Events',
           href: '/events',
@@ -153,8 +156,8 @@ const navigation = computed(() => {
         });
       }
   
-  // Items - check permission - CRM only
-  if (hasCrmAccess && authStore.can('items', 'view')) {
+  // Items - check permission - Sales only
+  if (hasSalesAccess && authStore.can('items', 'view')) {
     nav.push({ 
       name: 'Items', 
       href: '/items', 
@@ -163,8 +166,8 @@ const navigation = computed(() => {
     });
   }
   
-  // Forms - check permission - CRM only
-  if (hasCrmAccess && authStore.can('forms', 'view')) {
+  // Forms - check permission - Sales only
+  if (hasSalesAccess && authStore.can('forms', 'view')) {
     nav.push({ 
       name: 'Forms', 
       href: '/forms', 
@@ -180,8 +183,8 @@ const navigation = computed(() => {
     });
   }
   
-  // Imports - check permission - CRM only
-  if (hasCrmAccess && authStore.can('imports', 'view')) {
+  // Imports - check permission - Sales only
+  if (hasSalesAccess && authStore.can('imports', 'view')) {
     nav.push({ 
       name: 'Imports', 
       href: '/imports', 
@@ -213,8 +216,12 @@ const navigation = computed(() => {
 
 const { colorMode, toggleColorMode, clearStoredMode } = useColorMode();
 const authStore = useAuthStore();
+const appShellStore = useAppShellStore();
 const router = useRouter();
 const { openTab } = useTabs();
+
+// Phase 0D: Check if dynamic UI is available
+const useDynamicUI = computed(() => appShellStore.isLoaded && appShellStore.availableApps.length > 0);
 
 const handleNotificationClick = () => {
   const width = window.innerWidth || 0;
@@ -223,7 +230,7 @@ const handleNotificationClick = () => {
     showDrawer.value = true;
   } else {
     // Mobile/tablet: open global CRM sheet via app-level listener
-    window.dispatchEvent(new CustomEvent('crm-open-notifications'));
+    window.dispatchEvent(new CustomEvent('sales-open-notifications'));
   }
 };
 
@@ -448,8 +455,18 @@ const logoSrc = computed(() => {
         </button>
       </div>
 
+      <!-- App Switcher (Phase 0D) - Show if multiple apps available -->
+      <div v-if="useDynamicUI && shouldShowExpanded" class="px-2 py-2 border-b border-gray-200 dark:border-white/10">
+        <AppSwitcher />
+      </div>
+
       <!-- Navigation Links -->
-      <nav class="flex-1 overflow-y-auto py-4 px-2">
+      <!-- Phase 0D: Use dynamic sidebar renderer if available, otherwise fall back to hardcoded navigation -->
+      <SidebarRenderer 
+        v-if="useDynamicUI"
+        :should-show-expanded="shouldShowExpanded"
+      />
+      <nav v-else class="flex-1 overflow-y-auto py-4 px-2">
         <div class="space-y-1">
           <a
             v-for="item in navigation"
@@ -694,7 +711,7 @@ const logoSrc = computed(() => {
   </div>
   <NotificationDrawer
     :open="showDrawer"
-    app-key="CRM"
+    app-key="SALES"
     @close="showDrawer = false"
   />
 </template>

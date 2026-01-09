@@ -16,7 +16,7 @@ const ModuleDefinition = require('../models/ModuleDefinition');
  * TASK, AUDIT, and CORRECTIVE_ACTION rules.
  */
 const LEGACY_RULES = {
-  CRM: {
+  SALES: {
     TASK: ['ASSIGNED', 'STATUS_CHANGED'],
     AUDIT: ['STATUS_CHANGED']
   },
@@ -75,7 +75,7 @@ function getDefaultNotificationMetadata(moduleKey) {
  * Check if a module supports notification rules and the given event type.
  * 
  * @param {String} organizationId - Organization ID
- * @param {String} appKey - App key ('CRM', 'AUDIT', 'PORTAL')
+ * @param {String} appKey - App key ('Sales', 'AUDIT', 'PORTAL')
  * @param {String} moduleKey - Module key (e.g., 'tasks', 'deals', 'contacts')
  * @param {String} eventType - Event type ('ASSIGNED', 'CREATED', 'STATUS_CHANGED', 'DUE_SOON')
  * @returns {Promise<Object>} { valid: boolean, message?: string, module?: Object }
@@ -85,8 +85,8 @@ async function validateModuleRule(organizationId, appKey, moduleKey, eventType) 
     // Normalize moduleKey to lowercase for consistency
     const normalizedModuleKey = (moduleKey || '').toLowerCase().trim();
     
-    // For CRM apps, check ModuleDefinition or system defaults
-    if (appKey === 'CRM') {
+    // For Sales apps, check ModuleDefinition or system defaults
+    if (appKey === 'SALES') {
       // Try to find module in database (try both original and normalized key)
       let module = await ModuleDefinition.findOne({
         organizationId,
@@ -138,7 +138,7 @@ async function validateModuleRule(organizationId, appKey, moduleKey, eventType) 
       return { valid: true, module: module || { key: moduleKey, notifications: notificationMetadata } };
     }
 
-    // For non-CRM apps (AUDIT, PORTAL), use legacy validation
+    // For non-Sales apps (AUDIT, PORTAL), use legacy validation
     // This maintains backward compatibility
     const legacyAppRules = LEGACY_RULES[appKey];
     if (!legacyAppRules) {
@@ -178,7 +178,7 @@ async function validateModuleRule(organizationId, appKey, moduleKey, eventType) 
  * @returns {Promise<String[]>} Array of supported condition keys
  */
 async function getSupportedConditions(organizationId, appKey, moduleKey) {
-  if (appKey === 'CRM') {
+  if (appKey === 'Sales') {
     // Normalize moduleKey to lowercase
     const normalizedModuleKey = (moduleKey || '').toLowerCase().trim();
     

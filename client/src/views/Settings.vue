@@ -107,16 +107,9 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useColorMode } from '@/composables/useColorMode';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
-import UserManagement from '@/components/settings/UserManagement.vue';
-import RolesPermissions from '@/components/settings/RolesPermissions.vue';
-import ModulesAndFields from '@/components/settings/ModulesAndFields.vue';
-import GroupsSettings from '@/components/settings/GroupsSettings.vue';
-import AppManagement from '@/components/settings/AppManagement.vue';
-
-// Lazy load NotificationPreferences to avoid circular dependency issues
-const NotificationPreferences = defineAsyncComponent(() => 
-  import('@/views/settings/NotificationPreferences.vue')
-);
+import PlatformSettings from '@/components/settings/PlatformSettings.vue';
+import UsersAccessSettings from '@/components/settings/UsersAccessSettings.vue';
+import AppsSettings from '@/components/settings/AppsSettings.vue';
 
 const authStore = useAuthStore();
 const { colorMode, toggleColorMode } = useColorMode();
@@ -124,7 +117,7 @@ const { colorMode, toggleColorMode } = useColorMode();
 const SETTINGS_TAB_KEY = 'litedesk-settings-active-tab';
 const route = useRoute();
 const router = useRouter();
-const activeTab = ref('users');
+const activeTab = ref('platform');
 
 // Collapsible left rail behavior (mirrors main nav)
 const isCollapsed = ref(localStorage.getItem('litedesk-settings-collapsed') === 'true');
@@ -152,7 +145,7 @@ const UsersIcon = () => h('svg', {
   })
 ]);
 
-const OrganizationIcon = () => h('svg', {
+const PlatformIcon = () => h('svg', {
   fill: 'none',
   stroke: 'currentColor',
   viewBox: '0 0 24 24',
@@ -243,25 +236,11 @@ const BellIcon = () => h('svg', {
 ]);
 
 const tabs = computed(() => {
-  const allTabs = [
-    { id: 'users', name: 'User Management', icon: UsersIcon, component: UserManagement },
-    { id: 'roles', name: 'Roles & Permissions', icon: SecurityIcon, component: RolesPermissions },
-    { id: 'groups', name: 'Groups & Teams', icon: GroupsIcon, component: GroupsSettings },
-    { id: 'apps', name: 'App Management', icon: AppsIcon, component: AppManagement },
-    { id: 'modules', name: 'Modules & Fields', icon: CRMIcon, component: ModulesAndFields },
-    { id: 'notifications', name: 'Notifications', icon: BellIcon, component: NotificationPreferences },
-    { id: 'organization', name: 'Organization', icon: OrganizationIcon, component: 'div' },
-    { id: 'security', name: 'Security', icon: SecurityIcon, component: 'div' },
-    { id: 'crm', name: 'CRM Settings', icon: CRMIcon, component: 'div' }
+  return [
+    { id: 'platform', name: 'Platform', icon: PlatformIcon, component: PlatformSettings },
+    { id: 'users-access', name: 'Users & Access', icon: UsersIcon, component: UsersAccessSettings },
+    { id: 'apps', name: 'Apps', icon: AppsIcon, component: AppsSettings }
   ];
-
-  // Only show User Management, Groups, Roles, and Apps to admins and owners (case-insensitive)
-  const role = (authStore.user?.role || '').toLowerCase();
-  if (role !== 'admin' && role !== 'owner') {
-    return allTabs.filter(tab => tab.id !== 'users' && tab.id !== 'groups' && tab.id !== 'roles' && tab.id !== 'apps');
-  }
-
-  return allTabs;
 });
 // User dropdown actions
 const toggleColorModeFromMenu = () => {
@@ -313,7 +292,7 @@ const restoreInitialTab = () => {
   // Ensure the stored tab is valid given current permissions
   const validIds = new Set(tabs.value.map(t => t.id));
   if (!validIds.has(activeTab.value)) {
-    activeTab.value = tabs.value[0]?.id || 'users';
+    activeTab.value = tabs.value[0]?.id || 'platform';
   }
 };
 
@@ -327,7 +306,7 @@ watch(activeTab, (v) => {
 watch(tabs, (list) => {
   const validIds = new Set(list.map(t => t.id));
   if (!validIds.has(activeTab.value)) {
-    activeTab.value = list[0]?.id || 'users';
+    activeTab.value = list[0]?.id || 'platform';
   }
 });
 </script>

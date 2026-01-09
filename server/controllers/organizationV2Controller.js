@@ -1,6 +1,8 @@
 const Organization = require('../models/Organization');
+const { applyProjectionFilter } = require('../utils/appProjectionQuery');
+const { getProjection } = require('../utils/moduleProjectionResolver');
 
-// Create (CRM organization)
+// Create (Sales organization)
 exports.create = async (req, res) => {
   try {
     const User = require('../models/User');
@@ -20,7 +22,7 @@ exports.create = async (req, res) => {
       createdBy: req.user?._id || null,
       // Default assignedTo to creator if not provided (similar to tasks)
       assignedTo: req.body.assignedTo || req.user?._id || null,
-      // Mark as CRM organization (not tenant)
+      // Mark as Sales organization (not tenant)
       isTenant: false,
       // Add initial activity log for record creation
       activityLogs: [{
@@ -39,9 +41,9 @@ exports.create = async (req, res) => {
   }
 };
 
-// List (CRM organizations only)
+// List (Sales organizations only)
 // CRITICAL: Filter by tenant organization context to prevent data leakage
-// CRM organizations created by users from tenant org A should only be visible to users from tenant org A
+// Sales organizations created by users from tenant org A should only be visible to users from tenant org A
 exports.list = async (req, res) => {
   try {
     const User = require('../models/User');
@@ -60,14 +62,47 @@ exports.list = async (req, res) => {
       .lean();
     const userIds = tenantUserIds.map(u => u._id);
 
-    // Build query: CRM organizations created by users from this tenant organization
-    const query = { 
-      isTenant: false, // Only CRM organizations
-      createdBy: { $in: userIds } // Only CRM orgs created by users from this tenant
+    // Build query: Sales organizations created by users from this tenant organization
+    let query = { 
+      isTenant: false, // Only Sales organizations
+      createdBy: { $in: userIds } // Only Sales orgs created by users from this tenant
     };
     
-    if (req.query.type) query.types = req.query.type;
+    // Note: Organizations use 'types' array field, not 'type'
+    // For query params, we'll filter on the types array
+    if (req.query.type) {
+      // Convert single type to array format for types field
+      query.types = req.query.type;
+    }
     if (req.query.name) query.name = new RegExp(req.query.name, 'i');
+
+    // Phase 2A.2: Apply projection filter (read-time filtering only)
+    // SAFETY: Projection filtering is read-only.
+    // SAFETY: No record ownership or permissions are enforced here.
+    const appKey = req.appKey || 'SALES'; // From resolveAppContext middleware
+    const moduleKey = 'organizations';
+    const projectionMeta = getProjection(appKey, moduleKey);
+    
+    // Debug logging
+    console.log('[organizationV2Controller] Before projection filter:', {
+      appKey,
+      moduleKey,
+      hasProjection: !!projectionMeta,
+      queryBefore: JSON.stringify(query),
+      userIds: userIds.length
+    });
+    
+    query = applyProjectionFilter({
+      appKey,
+      moduleKey,
+      baseQuery: query,
+      projectionMeta
+    });
+    
+    // Debug logging
+    console.log('[organizationV2Controller] After projection filter:', {
+      queryAfter: JSON.stringify(query)
+    });
 
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
@@ -82,12 +117,12 @@ exports.list = async (req, res) => {
     const total = await Organization.countDocuments(query);
     res.json({ success: true, data, meta: { page, limit, total } });
   } catch (error) {
-    console.error('Error listing CRM organizations:', error);
+    console.error('Error listing Sales organizations:', error);
     res.status(500).json({ success: false, message: 'Error fetching organizations', error: error.message });
   }
 };
 
-// Get by ID (CRM organization, filtered by tenant context)
+// Get by ID (Sales organization, filtered by tenant context)
 exports.getById = async (req, res) => {
   try {
     const User = require('../models/User');
@@ -106,7 +141,7 @@ exports.getById = async (req, res) => {
       .lean();
     const userIds = tenantUserIds.map(u => u._id);
 
-    // Only allow access to CRM organizations created by users from this tenant
+    // Only allow access to Sales organizations created by users from this tenant
     const org = await Organization.findOne({ 
       _id: req.params.id, 
       isTenant: false,
@@ -121,7 +156,7 @@ exports.getById = async (req, res) => {
   }
 };
 
-// Update (CRM organization, filtered by tenant context)
+// Update (Sales organization, filtered by tenant context)
 exports.update = async (req, res) => {
   try {
     const User = require('../models/User');
@@ -140,7 +175,7 @@ exports.update = async (req, res) => {
       .lean();
     const userIds = tenantUserIds.map(u => u._id);
 
-    // Only allow update of CRM organizations created by users from this tenant
+    // Only allow update of Sales organizations created by users from this tenant
     const updated = await Organization.findOneAndUpdate(
       { 
         _id: req.params.id, 
@@ -159,7 +194,7 @@ exports.update = async (req, res) => {
   }
 };
 
-// Delete (CRM organization only - tenants cannot be deleted this way, filtered by tenant context)
+// Delete (Sales organization only - tenants cannot be deleted this way, filtered by tenant context)
 exports.remove = async (req, res) => {
   try {
     const User = require('../models/User');
@@ -178,7 +213,7 @@ exports.remove = async (req, res) => {
       .lean();
     const userIds = tenantUserIds.map(u => u._id);
 
-    // Only allow deletion of CRM organizations created by users from this tenant
+    // Only allow deletion of Sales organizations created by users from this tenant
     const deleted = await Organization.findOneAndDelete({ 
       _id: req.params.id, 
       isTenant: false,
@@ -210,7 +245,7 @@ exports.getActivityLogs = async (req, res) => {
       .lean();
     const userIds = tenantUserIds.map(u => u._id);
 
-    // Only allow access to activity logs of CRM organizations created by users from this tenant
+    // Only allow access to activity logs of Sales organizations created by users from this tenant
     const org = await Organization.findOne({ 
       _id: req.params.id, 
       isTenant: false,
@@ -271,7 +306,7 @@ exports.addActivityLog = async (req, res) => {
       .lean();
     const userIds = tenantUserIds.map(u => u._id);
     
-    // Only allow adding activity logs to CRM organizations created by users from this tenant
+    // Only allow adding activity logs to Sales organizations created by users from this tenant
     const org = await Organization.findOneAndUpdate(
       { 
         _id: req.params.id, 

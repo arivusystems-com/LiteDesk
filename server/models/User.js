@@ -143,10 +143,11 @@ const UserSchema = new mongoose.Schema({
     // A user has access to an app only if an entry exists in this array
     // No implicit app access - this is the single source of truth
     // Roles are scoped to appKey - no global roles
+    // Phase 2D: Added SALES, HELPDESK, PROJECTS
     appAccess: [{
         appKey: {
             type: String,
-            enum: ['CRM', 'AUDIT', 'PORTAL'],
+            enum: ['CRM', 'SALES', 'HELPDESK', 'PROJECTS', 'AUDIT', 'PORTAL'],
             required: true
         },
         roleKey: {
@@ -169,9 +170,10 @@ const UserSchema = new mongoose.Schema({
     // - ['CRM']: CRM-only users (default for existing users)
     // - ['PORTAL']: Portal-only users
     // - ['CRM', 'PORTAL']: Multi-app users
+    // Phase 2D: Added SALES, HELPDESK, PROJECTS
     allowedApps: {
         type: [String],
-        enum: ['CRM', 'PORTAL', 'AUDIT', 'LMS'],
+        enum: ['CRM', 'SALES', 'HELPDESK', 'PROJECTS', 'PORTAL', 'AUDIT', 'LMS'],
         default: ['CRM'] // Default existing users to CRM access
     },
     

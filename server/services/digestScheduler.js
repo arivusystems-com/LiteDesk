@@ -260,8 +260,8 @@ function getUserAppKeys(user) {
     return user.allowedApps;
   }
 
-  // Default to CRM if nothing specified
-  return ['CRM'];
+  // Default to Sales if nothing specified
+  return ['SALES'];
 }
 
 module.exports = {

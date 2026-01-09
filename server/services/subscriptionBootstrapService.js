@@ -9,7 +9,7 @@
  * - Only creates subscription if one does not exist
  * - Never creates duplicate subscriptions
  * - Safe to retry
- * - CRM excluded (already provisioned at org creation)
+ * - Sales excluded (already provisioned at org creation)
  * - Never throws (logs errors instead)
  * 
  * ============================================================================
@@ -26,15 +26,15 @@ const { APP_KEYS } = require('../constants/appKeys');
  * 
  * @param {Object} params
  * @param {string|ObjectId} params.organizationId - Organization ID
- * @param {string} params.appKey - App key (CRM, AUDIT, PORTAL)
+ * @param {string} params.appKey - App key (SALES, AUDIT, PORTAL)
  * @param {string|ObjectId} params.initiatedByUserId - User ID who initiated the action
  * @returns {Promise<{created: boolean, subscription: Object|null}>}
  */
 async function ensureSubscriptionForApp({ organizationId, appKey, initiatedByUserId }) {
     try {
-        // Safeguard 1: Skip CRM (already provisioned at org creation)
-        if (appKey === APP_KEYS.CRM) {
-            console.info('[SubscriptionBootstrap] Skipping CRM - already provisioned', {
+        // Safeguard 1: Skip Sales (already provisioned at org creation)
+        if (appKey === APP_KEYS.SALES) {
+            console.info('[SubscriptionBootstrap] Skipping Sales - already provisioned', {
                 orgId: organizationId,
                 appKey
             });
