@@ -78,7 +78,7 @@
       <!-- Empty State -->
       <div v-else class="text-center py-8">
         <UsersIcon class="mx-auto h-10 w-10 text-gray-400 dark:text-gray-600 mb-2" />
-        <p class="text-sm text-gray-500 dark:text-gray-400">No contacts found</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">No contacts linked yet. Link contacts to this organization to see them here.</p>
         <button
           @click="$emit('create-contact')"
           class="mt-2 rounded-md bg-white dark:bg-gray-800 px-3 py-1.5 text-xs font-semibold text-gray-900 dark:text-white shadow-xs ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"

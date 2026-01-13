@@ -26,6 +26,7 @@ const {
   getSidebar,
   getRoutes,
   getModulesForApp,
+  getEntityModules,
   getProjectionMetadata,
   getAllAppDefinitions
 } = require('../controllers/uiCompositionController');
@@ -39,6 +40,7 @@ router.get('/apps', getApps);
 router.get('/sidebar', getSidebar);
 router.get('/routes', getRoutes);
 router.get('/apps/:appKey/modules', getModulesForApp);
+router.get('/entities', getEntityModules); // Platform/entity modules (navigationEntity: true)
 // Phase 2B: Projection metadata for create forms
 router.get('/projection/:appKey/:moduleKey', getProjectionMetadata);
 // Phase 2F: App definitions for marketplace discovery

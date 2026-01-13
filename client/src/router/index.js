@@ -20,26 +20,45 @@ const routes = [
   // Phase 1G: Platform Landing (Tenant Home)
   {
     path: '/platform',
+    redirect: '/platform/home'
+  },
+  {
+    path: '/platform/home',
     name: 'platform-home',
     component: () => import('@/views/platform/PlatformHome.vue'),
-    meta: { requiresAuth: true, hideShell: true }
+    meta: { requiresAuth: true }
   },
   // Phase 2F: App Registry (Marketplace-Ready)
   {
     path: '/platform/apps',
     name: 'platform-app-registry',
     component: () => import('@/views/platform/AppRegistry.vue'),
-    meta: { requiresAuth: true, hideShell: true }
+    meta: { requiresAuth: true }
   },
   {
     path: '/demo',
     name: 'demo',
     component: () => import('@/views/Demo.vue')
   },
+  // Phase 1B: Generic App Dashboard (registry-driven)
+  // Note: More specific route (/dashboard/:appKey) must come BEFORE less specific (/dashboard)
+  // to ensure proper route matching
+  {
+    path: '/dashboard/:appKey',
+    name: 'app-dashboard',
+    component: () => import('@/components/dashboard/AppDashboard.vue'),
+    props: (route) => ({ 
+      appKey: route.params.appKey.toUpperCase() // Convert to uppercase (SALES, HELPDESK, etc.)
+    }),
+    meta: { requiresAuth: true }
+  },
   {
     path: '/dashboard',
     name: 'dashboard',
-    component: () => import('@/views/Dashboard.vue'),
+    component: () => import('@/components/dashboard/AppDashboard.vue'),
+    props: (route) => ({ 
+      appKey: route.query.appKey || 'SALES' // Get appKey from query param, default to SALES
+    }),
     meta: { requiresAuth: true }
   },
   {
@@ -122,6 +141,8 @@ const routes = [
   // Backward-compat redirects
   { path: '/contacts', redirect: { name: 'people' } },
   { path: '/contacts/:id', redirect: to => ({ name: 'person-detail', params: { id: to.params.id } }) },
+  { path: '/sales/people', redirect: { name: 'people' } },
+  { path: '/sales/people/:id', redirect: to => ({ name: 'person-detail', params: { id: to.params.id } }) },
   {
     path: '/deals',
     name: 'deals',

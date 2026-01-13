@@ -1,5 +1,12 @@
 <template>
   <div class="mx-auto">
+    <!-- Entity Description -->
+    <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+      <p class="text-sm text-gray-700 dark:text-gray-300">
+        <strong>Forms</strong> are shared across all apps. They can be used for data collection, surveys, audits, and feedback that can be linked to records throughout the platform.
+      </p>
+    </div>
+
     <ListView
       title="Forms"
       description="Create and manage forms, surveys, audits, and feedback"
@@ -51,7 +58,7 @@
       table-id="forms-table"
       row-key="_id"
       empty-title="No forms yet"
-      empty-message="Create your first form to get started"
+      empty-message="Forms let you collect information from customers and team members. Create your first form to start gathering responses."
       @create="openCreateForm"
       @import="showImportModal = true"
       @export="exportForms"

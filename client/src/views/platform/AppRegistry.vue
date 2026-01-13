@@ -245,7 +245,7 @@ function getDefaultRouteForApp(appKey) {
   const upperKey = appKey?.toUpperCase();
   switch (upperKey) {
     case 'SALES':
-      return '/sales/people';
+      return '/dashboard';
     case 'HELPDESK':
       return '/helpdesk/cases';
     case 'PROJECTS':

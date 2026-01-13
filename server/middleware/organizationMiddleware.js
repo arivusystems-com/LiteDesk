@@ -9,8 +9,10 @@
  * - Feature/module access control
  * - Usage limit checking
  * 
- * ⚠️ VIOLATION: Feature access checks CRM-specific feature names
- *    Should use generic app/feature identifiers.
+ * ✅ FIXED: Feature access uses app-aware hasFeature() method
+ *    - hasFeature() maps CRM module names to CRM app enablement
+ *    - For non-CRM features, falls back to enabledModules (backward compat)
+ *    - Use hasApp() for app-level checks, hasFeature() for module/feature checks
  * 
  * See PLATFORM_CORE_ANALYSIS.md for details.
  * ============================================================================

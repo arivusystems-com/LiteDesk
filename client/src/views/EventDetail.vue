@@ -83,7 +83,7 @@
       <ExecutionActionBar
         v-if="recordContext && recordContext.executionCapabilities"
         :execution-capabilities="recordContext.executionCapabilities || []"
-        app-key="SALES"
+        app-key="PLATFORM"
         :executing="executing"
         :executing-capability-key="executingCapabilityKey"
         @action="handleExecutionAction"
@@ -277,7 +277,7 @@
           <div v-if="event" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Related Records</h3>
             <RelatedRecordsPanel
-              app-key="SALES"
+              app-key="PLATFORM"
               module-key="events"
               :record-id="event._id || event.eventId || route.params.id"
               :read-only="true"

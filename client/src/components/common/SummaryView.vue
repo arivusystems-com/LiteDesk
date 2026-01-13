@@ -1661,7 +1661,8 @@ import BadgeCell from '@/components/common/table/BadgeCell.vue';
 import DateCell from '@/components/common/table/DateCell.vue';
 import Avatar from '@/components/common/Avatar.vue';
 import { getFieldDependencyState, evaluateDependency } from '@/utils/dependencyEvaluation';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
+import { getCurrentContext, filterFieldsByContext } from '@/utils/fieldContextFilter';
 import {
   MagnifyingGlassIcon,
   HeartIcon,
@@ -1719,9 +1720,13 @@ const record = toRef(props, 'record');
 // Get openTab from useTabs
 const { openTab } = useTabs();
 
-// Initialize router and auth store
+// Initialize router, route, and auth store
 const router = useRouter();
+const route = useRoute();
 const authStore = useAuthStore();
+
+// Get current context from route
+const currentContext = computed(() => getCurrentContext(route.path));
 
 // Force recompute trigger (similar to TabBar viewportWidth)
 const recomputeTrigger = ref(0);
@@ -1941,9 +1946,12 @@ const getFieldState = (field) => {
 const getFieldsWithDefinitions = computed(() => {
   if (!props.record || !moduleDefinition.value?.fields) return [];
   
+  // Filter fields by context first
+  const contextFilteredFields = filterFieldsByContext(moduleDefinition.value.fields, currentContext.value);
+  
   // Create a map of field keys to field definitions
   const fieldMap = new Map();
-  moduleDefinition.value.fields.forEach(field => {
+  contextFilteredFields.forEach(field => {
     if (field.key) {
       const keyLower = field.key.toLowerCase();
       fieldMap.set(keyLower, field);
@@ -5222,7 +5230,9 @@ const isEditableField = (key) => {
 // Fetch module definition
 const fetchModuleDefinition = async () => {
   try {
-    const response = await apiClient.get('/modules');
+    // Pass current context to API
+    const context = currentContext.value;
+    const response = await apiClient.get(`/modules${context ? `?context=${context}` : ''}`);
     const modules = response.data || [];
     
     // Create a map of all module definitions by key

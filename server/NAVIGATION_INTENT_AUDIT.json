@@ -1,0 +1,201 @@
+{
+  "auditDate": "2026-01-12T15:36:14.626Z",
+  "summary": {
+    "totalModules": 11,
+    "totalErrors": 0,
+    "totalWarnings": 0,
+    "byClassification": {
+      "APP_OWNED": 5,
+      "ENTITY": 6
+    }
+  },
+  "modules": [
+    {
+      "moduleKey": "people",
+      "appKey": "platform",
+      "label": "People",
+      "route": "/people",
+      "classification": "ENTITY",
+      "navVisible": true,
+      "rationale": "Shared system primitive. Appears in Entities section, excluded from Apps section.",
+      "flags": {
+        "navigationCore": false,
+        "navigationEntity": true,
+        "excludeFromApps": true,
+        "showInSidebar": true
+      },
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "moduleKey": "organizations",
+      "appKey": "platform",
+      "label": "Organization",
+      "route": "/organizations",
+      "classification": "ENTITY",
+      "navVisible": true,
+      "rationale": "Shared system primitive. Appears in Entities section, excluded from Apps section.",
+      "flags": {
+        "navigationCore": false,
+        "navigationEntity": true,
+        "excludeFromApps": true,
+        "showInSidebar": true
+      },
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "moduleKey": "tasks",
+      "appKey": "platform",
+      "label": "Task",
+      "route": "/tasks",
+      "classification": "ENTITY",
+      "navVisible": true,
+      "rationale": "Shared system primitive. Appears in Entities section, excluded from Apps section.",
+      "flags": {
+        "navigationCore": false,
+        "navigationEntity": true,
+        "excludeFromApps": true,
+        "showInSidebar": true
+      },
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "moduleKey": "events",
+      "appKey": "platform",
+      "label": "Event",
+      "route": "/events",
+      "classification": "ENTITY",
+      "navVisible": true,
+      "rationale": "Shared system primitive. Appears in Entities section, excluded from Apps section.",
+      "flags": {
+        "navigationCore": false,
+        "navigationEntity": true,
+        "excludeFromApps": true,
+        "showInSidebar": true
+      },
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "moduleKey": "items",
+      "appKey": "platform",
+      "label": "Item",
+      "route": "/items",
+      "classification": "ENTITY",
+      "navVisible": true,
+      "rationale": "Shared system primitive. Appears in Entities section, excluded from Apps section.",
+      "flags": {
+        "navigationCore": false,
+        "navigationEntity": true,
+        "excludeFromApps": true,
+        "showInSidebar": true
+      },
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "moduleKey": "forms",
+      "appKey": "platform",
+      "label": "Form",
+      "route": "/forms",
+      "classification": "ENTITY",
+      "navVisible": true,
+      "rationale": "Shared system primitive. Appears in Entities section, excluded from Apps section.",
+      "flags": {
+        "navigationCore": false,
+        "navigationEntity": true,
+        "excludeFromApps": true,
+        "showInSidebar": true
+      },
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "moduleKey": "audits",
+      "appKey": "audit",
+      "label": "Audit Visit",
+      "route": "/audits",
+      "classification": "APP_OWNED",
+      "navVisible": true,
+      "rationale": "App-owned module. Appears in Apps section under its app.",
+      "flags": {
+        "navigationCore": false,
+        "navigationEntity": false,
+        "excludeFromApps": false,
+        "showInSidebar": true
+      },
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "moduleKey": "projects",
+      "appKey": "projects",
+      "label": "Project",
+      "route": "/projects",
+      "classification": "APP_OWNED",
+      "navVisible": true,
+      "rationale": "App-owned module. Appears in Apps section under its app.",
+      "flags": {
+        "navigationCore": false,
+        "navigationEntity": false,
+        "excludeFromApps": false,
+        "showInSidebar": true
+      },
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "moduleKey": "deals",
+      "appKey": "sales",
+      "label": "Deal",
+      "route": "/deals",
+      "classification": "APP_OWNED",
+      "navVisible": true,
+      "rationale": "App-owned module. Appears in Apps section under its app.",
+      "flags": {
+        "navigationCore": false,
+        "navigationEntity": false,
+        "excludeFromApps": false,
+        "showInSidebar": true
+      },
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "moduleKey": "responses",
+      "appKey": "sales",
+      "label": "Response",
+      "route": "/responses",
+      "classification": "APP_OWNED",
+      "navVisible": true,
+      "rationale": "App-owned module. Appears in Apps section under its app.",
+      "flags": {
+        "navigationCore": false,
+        "navigationEntity": false,
+        "excludeFromApps": false,
+        "showInSidebar": true
+      },
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "moduleKey": "imports",
+      "appKey": "sales",
+      "label": "Import",
+      "route": "/imports",
+      "classification": "APP_OWNED",
+      "navVisible": true,
+      "rationale": "App-owned module. Appears in Apps section under its app.",
+      "flags": {
+        "navigationCore": false,
+        "navigationEntity": false,
+        "excludeFromApps": false,
+        "showInSidebar": true
+      },
+      "errors": [],
+      "warnings": []
+    }
+  ]
+}

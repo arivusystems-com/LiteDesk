@@ -205,6 +205,25 @@ const ModuleDefinitionSchema = new mongoose.Schema({
       type: [String],
       default: []
       // e.g., ['forms'] - shows Responses tab under Forms
+    },
+    // Navigation Intent Flags (for four-section sidebar)
+    navigationCore: {
+      type: Boolean,
+      default: false
+      // If true, place in Core section (personal/attention layer)
+      // Cannot be set with appKey
+    },
+    navigationEntity: {
+      type: Boolean,
+      default: false
+      // If true, place in Entities section (shared system primitives)
+      // Cannot be set with appKey
+    },
+    excludeFromApps: {
+      type: Boolean,
+      default: false
+      // If true, hard stop - never appear in Apps section
+      // Typically used with navigationEntity for core entities
     }
   },
 

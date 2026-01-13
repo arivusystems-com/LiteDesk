@@ -29,16 +29,18 @@ const { colorMode } = useColorMode();
 
 // Check authentication status to conditionally show the navigation bar
 const isAuthenticated = computed(() => authStore.isAuthenticated);
-// Hide CRM shell for audit and portal routes (they have their own layout) or routes with hideShell meta
+// Hide shell only for auth routes and routes with explicit hideShell meta
+// Platform routes (/platform/*) should show the shell
 const hideShell = computed(() => {
   // Check route meta first
   if (route.meta.hideShell) return true;
-  // Phase 1G: Hide shell for platform landing
-  if (route.path === '/platform') return true;
-  // Also hide for audit routes (they use AuditLayout)
+  // Hide for auth routes only
+  if (route.path.startsWith('/login') || route.path.startsWith('/auth/')) return true;
+  // Hide for audit routes (they use AuditLayout)
   if (route.path.startsWith('/audit/')) return true;
-  // Also hide for portal routes (they use PortalLayout)
+  // Hide for portal routes (they use PortalLayout)
   if (route.path.startsWith('/portal/')) return true;
+  // Platform routes show the shell
   return false;
 });
 const isPublicRoute = computed(() => route.meta.requiresAuth === false);
@@ -196,7 +198,18 @@ onMounted(async () => {
       if (instanceId && userId) {
         configureTabsStorage({ instanceId, userId });
         // Initialize tabs system after storage is configured
+        // This creates the home tab synchronously
         initTabs();
+        
+        // Ensure tabs are created and visible before setting up route watcher
+        // Use nextTick to ensure reactive updates are processed
+        await nextTick();
+        
+        // Log tabs state for debugging
+        console.log('📊 [App] After initTabs, checking tabs state...');
+        const { tabs: tabsRef } = useTabs();
+        console.log('📊 [App] Tabs count:', tabsRef.value.length);
+        console.log('📊 [App] Tabs:', tabsRef.value.map(t => ({ id: t.id, title: t.title, path: t.path })));
 
         // Setup route watcher for browser navigation (pass route from setup context)
         setupRouteWatcher(route);
@@ -232,14 +245,33 @@ onBeforeUnmount(() => {
   window.removeEventListener('sales-open-notifications', handleSalesOpenNotifications);
 });
 
-// Clear in-memory tabs on logout/auth reset (SPA user switch)
+// Watch for authentication changes to initialize tabs
 watch(
   () => authStore.isAuthenticated,
-  (isAuthed, wasAuthed) => {
+  async (isAuthed, wasAuthed) => {
     if (wasAuthed && !isAuthed) {
+      // User logged out - clear tabs
       resetTabsState();
+    } else if (!wasAuthed && isAuthed) {
+      // User just logged in - initialize tabs
+      console.log('🔄 [App] User authenticated, initializing tabs...');
+      const instanceId = authStore.organization?._id || authStore.organization?.instanceId;
+      const userId = authStore.user?._id;
+      
+      if (instanceId && userId) {
+        configureTabsStorage({ instanceId, userId });
+        initTabs();
+        await nextTick();
+        
+        // Setup route watcher
+        const { setupRouteWatcher } = useTabs();
+        setupRouteWatcher(route);
+        
+        console.log('✅ [App] Tabs initialized after login');
+      }
     }
-  }
+  },
+  { immediate: false }
 );
 
 // Enable automatic permission sync every 2 minutes for real-time updates

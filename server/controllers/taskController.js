@@ -311,6 +311,45 @@ const updateTask = async (req, res) => {
       });
     }
 
+    // Validate field-level write access
+    const ModuleDefinition = require('../models/ModuleDefinition');
+    const { validateFieldWrite } = require('../utils/fieldAccessControl');
+    
+    const moduleDef = await ModuleDefinition.findOne({
+      organizationId: req.user.organizationId,
+      key: 'tasks'
+    });
+    
+    if (moduleDef && Array.isArray(moduleDef.fields)) {
+      const fieldViolations = [];
+      
+      // Validate each field being updated
+      for (const [fieldKey, fieldValue] of Object.entries(req.body)) {
+        // Skip system fields and metadata
+        if (['_id', '__v', 'organizationId', 'createdAt', 'updatedAt', 'createdBy'].includes(fieldKey)) {
+          continue;
+        }
+        
+        const validation = validateFieldWrite(fieldKey, moduleDef.fields, req.user, 'tasks');
+        if (!validation.allowed) {
+          fieldViolations.push({
+            field: fieldKey,
+            reason: validation.reason
+          });
+        }
+      }
+      
+      // If any field violations, reject the entire update
+      if (fieldViolations.length > 0) {
+        return res.status(403).json({
+          success: false,
+          message: 'Field access denied',
+          code: 'FIELD_ACCESS_DENIED',
+          violations: fieldViolations
+        });
+      }
+    }
+
     // Validate assignedTo if being updated
     if (req.body.assignedTo && req.body.assignedTo !== task.assignedTo.toString()) {
       const assignee = await User.findOne({

@@ -33,7 +33,7 @@
                         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
                       </div>
                       <div v-else>
-                        <div v-if="visibleItems.length === 0" class="text-center text-sm text-gray-500 dark:text-gray-400 py-8">No records found</div>
+                        <div v-if="visibleItems.length === 0" class="text-center text-sm text-gray-500 dark:text-gray-400 py-8">No matching records found. Try adjusting your search or filters.</div>
                         <ul class="divide-y divide-gray-200 dark:divide-gray-700">
                           <li 
                             v-for="item in visibleItems" 

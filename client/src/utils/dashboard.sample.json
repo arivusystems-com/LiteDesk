@@ -1,0 +1,416 @@
+{
+  "description": "Sample dashboard JSON demonstrating the standard dashboard structure",
+  "samples": {
+    "sales": {
+      "appKey": "SALES",
+      "title": "Sales",
+      "description": "Manage your sales pipeline, contacts, and deals",
+      "actions": [
+        {
+          "key": "create-contact",
+          "label": "Add Contact",
+          "type": "create",
+          "route": "/contacts/new",
+          "permission": "contacts.create",
+          "icon": "user-plus",
+          "variant": "primary",
+          "order": 1
+        },
+        {
+          "key": "create-deal",
+          "label": "New Deal",
+          "type": "create",
+          "route": "/deals/new",
+          "permission": "deals.create",
+          "icon": "briefcase",
+          "variant": "primary",
+          "order": 2
+        },
+        {
+          "key": "import",
+          "label": "Import Data",
+          "type": "import",
+          "route": "/imports",
+          "permission": "imports.view",
+          "icon": "arrow-down-tray",
+          "variant": "outline",
+          "order": 3
+        }
+      ],
+      "kpis": [
+        {
+          "key": "total-deals",
+          "label": "Total Deals",
+          "value": 124,
+          "previousValue": 118,
+          "change": {
+            "value": 5.08,
+            "type": "increase",
+            "period": "vs last month"
+          },
+          "timeScope": "this_month",
+          "permission": "deals.view",
+          "icon": "briefcase",
+          "variant": "default",
+          "linkTo": "/deals",
+          "order": 1
+        },
+        {
+          "key": "pipeline-value",
+          "label": "Pipeline Value",
+          "value": "$2.4M",
+          "previousValue": "$2.1M",
+          "change": {
+            "value": 14.3,
+            "type": "increase",
+            "period": "vs last month"
+          },
+          "timeScope": "this_month",
+          "permission": "deals.view",
+          "icon": "chart-bar",
+          "variant": "success",
+          "linkTo": "/deals",
+          "order": 2
+        },
+        {
+          "key": "win-rate",
+          "label": "Win Rate",
+          "value": "68%",
+          "previousValue": "65%",
+          "change": {
+            "value": 3,
+            "type": "increase",
+            "period": "vs last month"
+          },
+          "timeScope": "this_month",
+          "permission": "deals.view",
+          "icon": "trophy",
+          "variant": "success",
+          "order": 3
+        },
+        {
+          "key": "avg-deal-size",
+          "label": "Avg Deal Size",
+          "value": "$19.4K",
+          "previousValue": "$18.2K",
+          "change": {
+            "value": 6.6,
+            "type": "increase",
+            "period": "vs last month"
+          },
+          "timeScope": "this_month",
+          "permission": "deals.view",
+          "icon": "currency-dollar",
+          "variant": "default",
+          "order": 4
+        },
+        {
+          "key": "new-contacts",
+          "label": "New Contacts",
+          "value": 47,
+          "previousValue": 42,
+          "change": {
+            "value": 11.9,
+            "type": "increase",
+            "period": "vs last month"
+          },
+          "timeScope": "this_month",
+          "permission": "contacts.view",
+          "icon": "users",
+          "variant": "info",
+          "linkTo": "/contacts",
+          "order": 5
+        },
+        {
+          "key": "active-tasks",
+          "label": "Active Tasks",
+          "value": 23,
+          "previousValue": 28,
+          "change": {
+            "value": -17.9,
+            "type": "decrease",
+            "period": "vs last week"
+          },
+          "timeScope": "this_week",
+          "permission": "tasks.view",
+          "icon": "check-circle",
+          "variant": "warning",
+          "linkTo": "/tasks",
+          "order": 6
+        }
+      ],
+      "modules": [
+        {
+          "moduleKey": "contacts",
+          "label": "Contacts",
+          "route": "/contacts",
+          "description": "Manage your contacts and leads",
+          "permission": "contacts.view",
+          "icon": "users",
+          "count": 1247,
+          "order": 1
+        },
+        {
+          "moduleKey": "deals",
+          "label": "Deals",
+          "route": "/deals",
+          "description": "Track your sales pipeline",
+          "permission": "deals.view",
+          "icon": "briefcase",
+          "count": 124,
+          "order": 2
+        },
+        {
+          "moduleKey": "tasks",
+          "label": "Tasks",
+          "route": "/tasks",
+          "description": "Manage your tasks and activities",
+          "permission": "tasks.view",
+          "icon": "check-circle",
+          "count": 23,
+          "order": 3
+        },
+        {
+          "moduleKey": "events",
+          "label": "Events",
+          "route": "/events",
+          "description": "Calendar and scheduled events",
+          "permission": "events.view",
+          "icon": "calendar",
+          "order": 4
+        }
+      ],
+      "widgets": [
+        {
+          "key": "recent-activity",
+          "type": "activity",
+          "title": "Recent Activity",
+          "permission": "activity.view",
+          "order": 1,
+          "data": {
+            "items": [
+              {
+                "id": "1",
+                "type": "deal_created",
+                "message": "New deal created: Acme Corp - $50K",
+                "timestamp": "2025-01-15T10:30:00Z",
+                "entity": {
+                  "type": "deal",
+                  "id": "123",
+                  "name": "Acme Corp",
+                  "route": "/deals/123"
+                },
+                "user": {
+                  "id": "user1",
+                  "name": "John Doe",
+                  "avatar": "/avatars/user1.jpg"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "key": "recommendations",
+          "type": "recommendations",
+          "title": "Recommendations",
+          "permission": "recommendations.view",
+          "order": 2,
+          "data": {
+            "items": [
+              {
+                "id": "1",
+                "type": "tip",
+                "title": "Follow up on open deals",
+                "message": "You have 5 deals that haven't been updated in over 7 days",
+                "actionLink": "/deals?filter=stale",
+                "actionLabel": "View Deals"
+              }
+            ]
+          }
+        }
+      ],
+      "emptyState": null
+    },
+    "helpdesk": {
+      "appKey": "HELPDESK",
+      "title": "Helpdesk",
+      "description": "Manage support tickets and customer service",
+      "actions": [
+        {
+          "key": "create-ticket",
+          "label": "New Ticket",
+          "type": "create",
+          "route": "/helpdesk/tickets/new",
+          "permission": "tickets.create",
+          "icon": "plus",
+          "variant": "primary",
+          "order": 1
+        },
+        {
+          "key": "configure",
+          "label": "Configure",
+          "type": "configure",
+          "route": "/helpdesk/settings",
+          "permission": "helpdesk.configure",
+          "icon": "cog",
+          "variant": "outline",
+          "order": 2
+        }
+      ],
+      "kpis": [
+        {
+          "key": "open-tickets",
+          "label": "Open Tickets",
+          "value": 42,
+          "previousValue": 38,
+          "change": {
+            "value": 10.5,
+            "type": "increase",
+            "period": "vs last week"
+          },
+          "timeScope": "this_week",
+          "permission": "tickets.view",
+          "icon": "ticket",
+          "variant": "warning",
+          "linkTo": "/helpdesk/tickets?status=open",
+          "order": 1
+        },
+        {
+          "key": "avg-response-time",
+          "label": "Avg Response Time",
+          "value": "2.4h",
+          "previousValue": "2.8h",
+          "change": {
+            "value": -14.3,
+            "type": "decrease",
+            "period": "vs last week"
+          },
+          "timeScope": "this_week",
+          "permission": "tickets.view",
+          "icon": "clock",
+          "variant": "success",
+          "order": 2
+        },
+        {
+          "key": "satisfaction-score",
+          "label": "Satisfaction Score",
+          "value": "4.7/5",
+          "previousValue": "4.6/5",
+          "change": {
+            "value": 2.2,
+            "type": "increase",
+            "period": "vs last month"
+          },
+          "timeScope": "this_month",
+          "permission": "tickets.view",
+          "icon": "star",
+          "variant": "success",
+          "order": 3
+        },
+        {
+          "key": "resolved-today",
+          "label": "Resolved Today",
+          "value": 18,
+          "previousValue": 15,
+          "change": {
+            "value": 20,
+            "type": "increase",
+            "period": "vs yesterday"
+          },
+          "timeScope": "today",
+          "permission": "tickets.view",
+          "icon": "check-circle",
+          "variant": "success",
+          "order": 4
+        }
+      ],
+      "modules": [
+        {
+          "moduleKey": "tickets",
+          "label": "Tickets",
+          "route": "/helpdesk/tickets",
+          "description": "View and manage support tickets",
+          "permission": "tickets.view",
+          "icon": "ticket",
+          "count": 42,
+          "order": 1
+        },
+        {
+          "moduleKey": "knowledge-base",
+          "label": "Knowledge Base",
+          "route": "/helpdesk/kb",
+          "description": "Articles and documentation",
+          "permission": "kb.view",
+          "icon": "book",
+          "order": 2
+        }
+      ],
+      "widgets": [
+        {
+          "key": "recent-tickets",
+          "type": "activity",
+          "title": "Recent Tickets",
+          "permission": "tickets.view",
+          "order": 1,
+          "data": {
+            "items": [
+              {
+                "id": "1",
+                "type": "ticket_created",
+                "message": "New ticket: Login issue",
+                "timestamp": "2025-01-15T09:15:00Z",
+                "entity": {
+                  "type": "ticket",
+                  "id": "456",
+                  "name": "Login issue",
+                  "route": "/helpdesk/tickets/456"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "key": "alerts",
+          "type": "alerts",
+          "title": "Alerts",
+          "permission": "alerts.view",
+          "order": 2,
+          "data": {
+            "items": [
+              {
+                "id": "1",
+                "type": "warning",
+                "title": "High ticket volume",
+                "message": "You have 15 tickets pending response",
+                "actionLink": "/helpdesk/tickets?status=pending",
+                "actionLabel": "View Tickets",
+                "timestamp": "2025-01-15T08:00:00Z"
+              }
+            ]
+          }
+        }
+      ],
+      "emptyState": {
+        "type": "NO_DATA",
+        "title": "No tickets yet",
+        "description": "You haven't received any helpdesk tickets yet.",
+        "primaryAction": {
+          "label": "Create a test ticket",
+          "route": "/helpdesk/tickets/new",
+          "permission": "tickets.create"
+        },
+        "secondaryAction": {
+          "label": "Configure helpdesk",
+          "route": "/helpdesk/settings"
+        }
+      }
+    }
+  },
+  "notes": [
+    "All dashboards follow the same structure: Header, KPIs, Modules, Widgets",
+    "KPIs are time-scoped and permission-aware",
+    "Module links align with sidebar structure (same moduleKey and route)",
+    "Actions are permission-filtered",
+    "Widgets are optional and can be activity, insights, alerts, or recommendations"
+  ]
+}

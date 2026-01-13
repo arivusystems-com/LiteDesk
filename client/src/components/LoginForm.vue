@@ -20,7 +20,7 @@ const handleLogin = async () => {
         
         // Phase 1G: Redirect to platform landing after login
         console.log('Redirecting to platform landing');
-        router.push('/platform');
+        router.push('/platform/home');
     }
 };
 </script>

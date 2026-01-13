@@ -22,7 +22,7 @@
       </template>
       <template v-else>
         <div>
-          <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Modules &amp; Fields</h2>
+          <h2 class="text-2xl font-bold text-gray-900 dark:text-white">{{ title }}</h2>
           <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">Manage modules and configure fields</p>
         </div>
         <button @click="openCreateModal" class="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 text-sm font-medium transition-colors">
@@ -101,7 +101,7 @@
         <div class="p-3 border-b border-gray-200 dark:border-white/10 flex items-center justify-between gap-2">
           <div class="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate flex-1 min-w-0">{{ selectedModule?.name }}</div>
           <button 
-            v-if="selectedModule" 
+            v-if="selectedModule && !props.hideFieldCreation" 
             @click="openAddField" 
             class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 text-xs font-medium transition-colors flex-shrink-0 whitespace-nowrap"
           >
@@ -170,7 +170,7 @@
           </div>
           <div class="flex items-center gap-2">
             <button v-if="selectedModule && isDirty" @click="saveModule" :disabled="isSaving" class="px-3 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors shadow-md">Save changes</button>
-            <button v-if="currentField && canDeleteField" @click="removeField(selectedFieldIdx)" class="px-3 py-2 bg-red-500 hover:bg-red-600 text-white dark:bg-red-600 dark:hover:bg-red-700 rounded-lg text-sm font-medium transition-colors shadow-sm">Delete Field</button>
+            <button v-if="currentField && canDeleteField && !props.hideFieldCreation" @click="removeField(selectedFieldIdx)" class="px-3 py-2 bg-red-500 hover:bg-red-600 text-white dark:bg-red-600 dark:hover:bg-red-700 rounded-lg text-sm font-medium transition-colors shadow-sm">Delete Field</button>
           </div>
         </div>
 
@@ -204,7 +204,7 @@
                 </div>
                 <div>
                   <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Key</label>
-                  <input v-model="currentField.key" :disabled="isSystemField(currentField) || isCoreField(currentField, selectedModule?.key) || currentField.dataType === 'Auto-Number'" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10" />
+                  <input v-model="currentField.key" :disabled="!canRenameField(currentField) || isSystemField(currentField) || isCoreField(currentField, selectedModule?.key) || currentField.dataType === 'Auto-Number'" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10" />
                   <p v-if="currentField.dataType === 'Auto-Number'" class="mt-1 text-xs text-gray-500 dark:text-gray-400">Auto-Number fields cannot have custom keys</p>
                   <p v-if="isSystemField(currentField)" class="mt-1 text-xs text-gray-500 dark:text-gray-400">System fields cannot have their keys modified</p>
                   <p v-if="isCoreField(currentField, selectedModule?.key) && !isSystemField(currentField)" class="mt-1 text-xs text-gray-500 dark:text-gray-400">Core fields cannot have their keys modified</p>
@@ -212,7 +212,7 @@
                 </div>
                 <div>
                   <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Type</label>
-                  <select v-model="currentField.dataType" :disabled="isSystemField(currentField) || isCoreField(currentField, selectedModule?.key)" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10">
+                  <select v-model="currentField.dataType" :disabled="!canChangeFieldType(currentField) || isSystemField(currentField) || isCoreField(currentField, selectedModule?.key)" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10">
                     <option v-for="t in fieldTypes" :key="t" :value="t">{{ t }}</option>
                   </select>
                   <p v-if="isCoreField(currentField, selectedModule?.key)" class="mt-1 text-xs text-gray-500 dark:text-gray-400">Core fields cannot have their type changed</p>
@@ -2394,11 +2394,35 @@
 </template>
 
 <script setup>
-  import { ref, onMounted, computed, watch, reactive, nextTick } from 'vue';
+import { ref, onMounted, computed, watch, reactive, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import apiClient from '@/utils/apiClient';
 import ModuleFormModal from './ModuleFormModal.vue';
 import { ArrowsUpDownIcon } from '@heroicons/vue/24/outline';
+
+const props = defineProps({
+  moduleFilter: {
+    type: Function,
+    default: null
+  },
+  contextFilter: {
+    type: Function,
+    default: null
+  },
+  hideFieldCreation: {
+    type: Boolean,
+    default: false
+  },
+  excludedTabs: {
+    type: Array,
+    default: () => []
+  },
+  title: {
+    type: String,
+    default: 'Modules & Fields'
+  }
+});
 
 const authStore = useAuthStore();
 const route = useRoute();
@@ -2427,7 +2451,14 @@ const filterSystemFields = (fields) => {
   });
 };
 // Filter modules for display - exclude 'users' from main list (it's only for lookups)
-const displayModules = computed(() => modules.value.filter(m => m.key !== 'users'));
+// Also apply optional moduleFilter prop if provided
+const displayModules = computed(() => {
+  let filtered = modules.value.filter(m => m.key !== 'users');
+  if (props.moduleFilter) {
+    filtered = filtered.filter(props.moduleFilter);
+  }
+  return filtered;
+});
 const optionsBuffer = ref('');
 const allowedValuesBuffers = ref({});
 const fieldTypes = [
@@ -2480,8 +2511,13 @@ const topTabs = computed(() => {
     return tabs.filter(tab => tab.id !== 'quick');
   }
   if (moduleKey === 'deals') {
-    tabs.push({ id: 'pipeline', name: 'Pipeline Settings' });
-    tabs.push({ id: 'playbooks', name: 'Playbook Configuration' });
+    // Only add pipeline/playbooks tabs if they're not excluded
+    if (!props.excludedTabs.includes('pipeline')) {
+      tabs.push({ id: 'pipeline', name: 'Pipeline Settings' });
+    }
+    if (!props.excludedTabs.includes('playbooks')) {
+      tabs.push({ id: 'playbooks', name: 'Playbook Configuration' });
+    }
   }
   return tabs;
 });
@@ -3473,6 +3509,16 @@ const filteredFields = computed(() => {
     return keyLower !== 'activitylogs';
   });
   
+  // Apply context filter if provided (e.g., for Sales → People)
+  if (props.contextFilter) {
+    console.log('[ModulesAndFields] Applying context filter. Fields before:', fields.length);
+    const beforeCount = fields.length;
+    fields = fields.filter(props.contextFilter);
+    console.log('[ModulesAndFields] Fields after context filter:', fields.length, 'excluded:', beforeCount - fields.length);
+  } else {
+    console.log('[ModulesAndFields] No context filter provided');
+  }
+  
   // For forms module, ensure 'name' field is always at the top
   if (selectedModule.value?.key === 'forms') {
     fields = fields.sort((a, b) => {
@@ -3598,10 +3644,29 @@ function normalizeFormsFields(fields, moduleKey) {
   return fields;
 }
 
+// Check if a field can be renamed (key changed) based on ownership
+function canRenameField(field) {
+  if (!field) return false;
+  const owner = field?.owner || 'platform'; // Default to platform if not set
+  // Only org-owned fields can be renamed
+  return owner === 'org';
+}
+
+// Check if a field can have its type changed based on ownership
+function canChangeFieldType(field) {
+  if (!field) return false;
+  const owner = field?.owner || 'platform'; // Default to platform if not set
+  // Platform fields cannot have type changed, app and org fields can
+  return owner !== 'platform';
+}
+
 // Check if a field can be deleted
 const canDeleteField = computed(() => {
   if (!currentField.value || !selectedModule.value) return false;
-  return !isSystemField(currentField.value) && !isCoreField(currentField.value, selectedModule.value.key);
+  const owner = currentField.value?.owner || 'platform'; // Default to platform if not set
+  // Only org-owned fields can be deleted by org admins
+  // Also check legacy system/core field checks for backward compatibility
+  return owner === 'org' && !isSystemField(currentField.value) && !isCoreField(currentField.value, selectedModule.value.key);
 });
 
 // Load settings from currentField
@@ -3732,8 +3797,8 @@ function removeOption(index) {
 const fetchModules = async () => {
   loading.value = true;
   try {
-    const res = await fetch('/api/modules', { headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authStore.user?.token}` } });
-    const data = await res.json();
+    // Use apiClient.get() for GET requests
+    const data = await apiClient.get('/modules');
     if (data.success) {
       modules.value = data.data;
       // Initialize from URL first
@@ -4087,9 +4152,8 @@ const handleModuleSaved = async (savedModule) => {
 const deleteModule = async (mod) => {
   if (!confirm(`Delete module "${mod.name}"?`)) return;
   try {
-    const res = await fetch(`/api/modules/${mod._id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${authStore.user?.token}` } });
-    const data = await res.json();
-    if (!res.ok || !data.success) return alert(data.message || 'Failed to delete module');
+    const data = await apiClient.delete(`/modules/${mod._id}`);
+    if (!data.success) return alert(data.message || 'Failed to delete module');
     await fetchModules();
     if (modules.value.length) selectModule(modules.value[0]); else selectedModuleId.value = null;
   } catch (e) {
@@ -4098,7 +4162,19 @@ const deleteModule = async (mod) => {
 };
 
 const openAddField = () => {
-  const newField = { key: '', label: '', dataType: 'Text', required: false, options: [], defaultValue: null, index: false, visibility: { list: true, detail: true }, order: editFields.value.length };
+  const newField = { 
+    key: '', 
+    label: '', 
+    dataType: 'Text', 
+    required: false, 
+    options: [], 
+    defaultValue: null, 
+    index: false, 
+    visibility: { list: true, detail: true }, 
+    order: editFields.value.length,
+    owner: 'org',      // Org-created fields
+    context: 'global' // Default context
+  };
   editFields.value.push(newField);
   selectedFieldIdx.value = editFields.value.length - 1;
   syncOptionsBuffer();
@@ -4136,13 +4212,26 @@ const removeField = (idx) => {
   const field = editFields.value[idx];
   const mod = selectedModule.value;
   
-  // Prevent deletion of system fields
+  // Check ownership-based deletion rules
+  const owner = field?.owner || 'platform'; // Default to platform if not set
+  
+  if (owner === 'platform') {
+    alert('Platform fields cannot be deleted.');
+    return;
+  }
+  
+  if (owner === 'app') {
+    alert('App-managed fields cannot be deleted by organization users.');
+    return;
+  }
+  
+  // Prevent deletion of system fields (legacy check)
   if (isSystemField(field)) {
     alert('System fields cannot be deleted.');
     return;
   }
   
-  // Prevent deletion of core fields
+  // Prevent deletion of core fields (legacy check)
   if (isCoreField(field, mod?.key)) {
     alert('Core fields cannot be deleted. These fields are essential for the module functionality.');
     return;
@@ -4233,7 +4322,13 @@ const saveModule = async () => {
     });
     const data = await res.json();
     if (!res.ok || !data.success) {
-      alert(data.message || 'Failed to save');
+      // Show detailed error message for field mutation violations
+      if (data.code === 'FIELD_MUTATION_NOT_ALLOWED' && data.violations && data.violations.length > 0) {
+        const violationMessages = data.violations.map(v => `• ${v.field}: ${v.reason}`).join('\n');
+        alert(`${data.message}\n\nViolations:\n${violationMessages}`);
+      } else {
+        alert(data.message || 'Failed to save');
+      }
       return;
     }
     await fetchModules();

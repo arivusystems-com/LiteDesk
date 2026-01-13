@@ -1,5 +1,12 @@
 <template>
   <div class="mx-auto">
+    <!-- Entity Description -->
+    <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+      <p class="text-sm text-gray-700 dark:text-gray-300">
+        <strong>Tasks</strong> are shared across all apps. They can be linked to deals, tickets, audits, and other records to track work and follow-ups.
+      </p>
+    </div>
+
     <ListView
       title="Tasks"
       description="Manage your tasks and to-dos"
@@ -52,7 +59,7 @@
       table-id="tasks-table"
       row-key="_id"
       empty-title="No tasks yet"
-      empty-message="Create your first task to get started"
+      empty-message="Tasks appear here when you're assigned work across Sales or Helpdesk. You can also create standalone tasks to track your own work."
       @create="openCreateModal"
       @import="showImportModal = true"
       @export="exportTasks"

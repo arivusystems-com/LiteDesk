@@ -10,11 +10,15 @@
  * - Activity logs (generic audit trail)
  * - Notes (generic notes system)
  * 
- * ⚠️ VIOLATION: Contains CRM-specific fields
- *    - Lead/Contact type distinction
+ * ⚠️ ARCHITECTURAL NOTE: Contains CRM-specific fields
+ *    - Lead/Contact type distinction (type: 'Lead' | 'Contact')
  *    - Lead-specific fields (lead_status, lead_score, qualification_date)
  *    - Contact-specific fields (contact_status, role, birthday)
- *    Platform Core should have generic People model.
+ *    
+ *    These fields are used by the CRM app but don't break platform core
+ *    since they're optional. For pure platform core usage, ignore CRM fields.
+ *    Future: Could split into People (platform core) + CRMContact (CRM app)
+ *            if stricter separation is needed.
  * 
  * See PLATFORM_CORE_ANALYSIS.md for details.
  * ============================================================================
@@ -34,6 +38,7 @@ const PeopleSchema = new Schema({
 
   // Core
   source: { type: String, trim: true },
+  // ⚠️ CRM-SPECIFIC: Lead/Contact distinction (used by CRM app)
   type: { type: String, enum: ['Lead', 'Contact'], required: true },
 
   first_name: { type: String, trim: true },
@@ -56,6 +61,7 @@ const PeopleSchema = new Schema({
   tags: [{ type: String, trim: true }],
   do_not_contact: { type: Boolean, default: false },
 
+  // ⚠️ CRM-SPECIFIC: Lead-specific fields (used by CRM app)
   // Lead-specific
   lead_status: {
     type: String,
@@ -69,6 +75,7 @@ const PeopleSchema = new Schema({
   qualification_notes: { type: String, trim: true },
   estimated_value: { type: Number, min: 0 },
 
+  // ⚠️ CRM-SPECIFIC: Contact-specific fields (used by CRM app)
   // Contact-specific
   contact_status: {
     type: String,
@@ -91,11 +98,14 @@ const PeopleSchema = new Schema({
     created_at: { type: Date, default: Date.now }
   }],
   
-  // Activity Logs
+  // Activity Logs (Generic audit trail - app-agnostic structure)
+  // ⚠️ NOTE: The action field is a generic string, but action values may be app-specific
+  //    CRM app may use values like "lead_status_changed", "contact_created", etc.
+  //    Other apps can use their own action types. The structure itself is app-agnostic.
   activityLogs: [{
     user: { type: String, required: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User' },
-    action: { type: String, required: true },
+    action: { type: String, required: true }, // Generic action type (values are app-specific)
     details: { type: Schema.Types.Mixed },
     timestamp: { type: Date, default: Date.now, required: true }
   }]

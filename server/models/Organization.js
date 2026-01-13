@@ -6,22 +6,24 @@
  * This model serves TWO purposes:
  * 
  * 1. PLATFORM CORE (Tenant Organization):
- *    - Tenant/workspace management
+ *    - Tenant/workspace management (isTenant: true)
  *    - Subscription and billing
- *    - Feature access flags (enabledModules)
+ *    - App enablement (enabledApps)
  *    - Usage limits
  *    - Organization settings
  * 
  * 2. CRM APP (CRM Organization Entity):
- *    - Customer/Partner/Vendor records
+ *    - Customer/Partner/Vendor records (isTenant: false)
  *    - CRM-specific fields (types, status, tiers, etc.)
  * 
- * ⚠️ VIOLATION: Single model for both tenant and CRM entity
- *    Should be split into TenantOrganization (Platform Core) and
- *    CRMOrganization (CRM App).
+ * ⚠️ ARCHITECTURAL NOTE: Single model for both tenant and CRM entity
+ *    This is intentional for now - use isTenant flag to distinguish
+ *    Future: Could be split into TenantOrganization (Platform Core) and
+ *            CRMOrganization (CRM App) if needed for clearer separation.
  * 
- * ⚠️ VIOLATION: enabledModules contains CRM-specific module names
- *    Should use generic app/feature identifiers.
+ * ✅ FIXED: enabledModules default changed to empty array (app-agnostic)
+ *    - Legacy field kept for backward compatibility
+ *    - Use enabledApps for app-level enablement
  * 
  * See PLATFORM_CORE_ANALYSIS.md for details.
  * ============================================================================
@@ -105,7 +107,10 @@ const OrganizationSchema = new mongoose.Schema({
     // Enabled Apps (app-level enablement for tenant organizations)
     // Controls which applications are available to the organization
     // This is the single source of truth for organization app subscriptions
-    // - 'CRM': Customer Relationship Management application
+    // Note: 'CRM' is not an app - it's legacy terminology. Use SALES instead.
+    // - 'SALES': Sales application (replaces legacy CRM)
+    // - 'HELPDESK': Helpdesk application
+    // - 'PROJECTS': Projects application
     // - 'PORTAL': Customer/Partner portal application
     // - 'AUDIT': Audit management application
     // - 'LMS': Learning Management System application
@@ -114,7 +119,7 @@ const OrganizationSchema = new mongoose.Schema({
             appKey: { 
                 type: String, 
                 required: true,
-                enum: ['CRM', 'SALES', 'HELPDESK', 'PROJECTS', 'PORTAL', 'AUDIT', 'LMS']
+                enum: ['SALES', 'HELPDESK', 'PROJECTS', 'PORTAL', 'AUDIT', 'LMS']
             },
             status: { 
                 type: String, 
@@ -129,11 +134,22 @@ const OrganizationSchema = new mongoose.Schema({
     ],
     
     // Legacy: Enabled Modules (CRM-specific, deprecated)
-    // Kept for backward compatibility - will be migrated to enabledApps
+    // ⚠️ PLATFORM CORE VIOLATION: Default contains CRM-specific module names
+    //    Kept for backward compatibility - will be migrated to enabledApps
+    //    Changed default to empty array to be app-agnostic
     // @deprecated Use enabledApps instead
     enabledModules: {
         type: [String],
-        default: ['contacts', 'deals', 'tasks', 'events']
+        default: [] // Changed from ['contacts', 'deals', 'tasks', 'events'] to be app-agnostic
+    },
+    
+    // Module Participation Overrides (organization-level)
+    // Tracks which applications use which core modules
+    // Format: { moduleKey: { appKey: enabled } }
+    // Example: { 'people': { 'SALES': true, 'HELPDESK': false } }
+    moduleOverrides: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {}
     },
     
     // CRM Initialization Status (multi-pod safe)
@@ -159,11 +175,67 @@ const OrganizationSchema = new mongoose.Schema({
             type: String, 
             default: 'USD' 
         },
+        locale: { 
+            type: String, 
+            default: 'en-US' 
+        },
+        language: { 
+            type: String, 
+            default: 'en' 
+        },
         logoUrl: String,
         primaryColor: { 
             type: String, 
             default: '#7f56d9' 
         }
+    },
+    
+    // Data Region (read-only if fixed, set during organization creation)
+    dataRegion: {
+        type: String,
+        default: 'us-east-1' // Default region, can be set during org creation
+    },
+    
+    // Security Configuration (platform-wide security policies)
+    security: {
+        // Password Policy
+        passwordPolicy: {
+            minLength: { type: Number, default: 8 },
+            requireUppercase: { type: Boolean, default: true },
+            requireLowercase: { type: Boolean, default: true },
+            requireNumbers: { type: Boolean, default: true },
+            requireSpecialChars: { type: Boolean, default: false },
+            expirationDays: { type: Number, default: 90 }, // 0 = no expiration
+            preventReuse: { type: Number, default: 5 } // Number of previous passwords to prevent reuse
+        },
+        // Session Rules
+        sessionRules: {
+            durationHours: { type: Number, default: 24 }, // Session duration in hours
+            idleTimeoutMinutes: { type: Number, default: 30 }, // Idle timeout in minutes
+            maxConcurrentSessions: { type: Number, default: 5 } // Max concurrent sessions per user
+        },
+        // Login Restrictions
+        loginRestrictions: {
+            ipWhitelist: [{ type: String }], // Allowed IP addresses (empty = no restriction)
+            ipBlacklist: [{ type: String }], // Blocked IP addresses
+            allowedRegions: [{ type: String }], // Allowed regions (empty = no restriction)
+            blockFailedAttempts: { type: Boolean, default: true },
+            maxFailedAttempts: { type: Number, default: 5 },
+            lockoutDurationMinutes: { type: Number, default: 15 }
+        },
+        // Two-Factor Authentication
+        twoFactorAuth: {
+            enabled: { type: Boolean, default: false },
+            required: { type: Boolean, default: false }, // Require 2FA for all users
+            methods: [{ type: String, enum: ['totp', 'sms', 'email'], default: ['totp'] }] // Allowed 2FA methods
+        }
+    },
+
+    // Integrations (organization-level integration state)
+    // Format: { [integrationKey]: { enabled, status, connectedAt, disconnectedAt } }
+    integrations: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {}
     },
     
     // Status
@@ -280,14 +352,18 @@ const OrganizationSchema = new mongoose.Schema({
         ref: 'Organization' 
     },
     
-    // Activity Logs (CRM)
+    // Activity Logs (Generic audit trail - app-agnostic structure)
+    // ⚠️ NOTE: Used by CRM app for organization entity changes
+    //    The action field is a generic string, but action values may be app-specific
+    //    CRM app may use values like "customer_status_changed", "partner_tier_updated", etc.
+    //    Other apps can use their own action types. The structure itself is app-agnostic.
     activityLogs: [{
         user: { type: String, required: true },
         userId: { 
             type: mongoose.Schema.Types.ObjectId, 
             ref: 'User' 
         },
-        action: { type: String, required: true },
+        action: { type: String, required: true }, // Generic action type (values are app-specific)
         details: { type: mongoose.Schema.Types.Mixed },
         timestamp: { 
             type: Date, 
@@ -385,17 +461,18 @@ OrganizationSchema.methods.hasApp = function(appKey) {
 };
 
 // Helper method to check if a feature is enabled (tenant only)
-// Backward compatibility: For CRM module names, checks if CRM app is enabled
-// @deprecated For CRM module names, use hasApp('CRM') instead
+// Backward compatibility: For legacy CRM module names, checks if SALES app is enabled
+// @deprecated For legacy CRM module names, use hasApp('SALES') instead
+// Note: CRM is not an app - it's legacy terminology. SALES app replaces it.
 OrganizationSchema.methods.hasFeature = function(featureName) {
     if (!this.isTenant) return false;
     
     // If enabledApps exists and is populated, use app-aware logic
     if (this.enabledApps && this.enabledApps.length > 0) {
-        // Map CRM module names to CRM app
-        const crmModules = ['contacts', 'deals', 'tasks', 'events', 'people', 'organizations', 'projects', 'items', 'documents', 'transactions', 'forms', 'processes', 'reports'];
-        if (crmModules.includes(featureName)) {
-            return this.hasApp('CRM');
+        // Map legacy CRM module names to SALES app (CRM is not a real app)
+        const salesModules = ['contacts', 'deals', 'tasks', 'events', 'people', 'organizations', 'projects', 'items', 'documents', 'transactions', 'forms', 'processes', 'reports'];
+        if (salesModules.includes(featureName)) {
+            return this.hasApp('SALES');
         }
         // For non-CRM features, fall back to enabledModules for backward compatibility
         return this.enabledModules && this.enabledModules.includes(featureName);

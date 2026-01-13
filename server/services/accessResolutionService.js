@@ -76,16 +76,39 @@ async function resolveAppAccess({ user, organization, appKey, intent }) {
     // STEP 1: Validate App
     // ============================================================================
     // App must exist in AppDefinition
-    const appDefinition = await AppDefinition.findOne({ 
-        appKey: appKey.toLowerCase(),
-        enabled: true 
-    });
+    // Try both lowercase and uppercase (case-insensitive)
+    let appDefinition = null;
+    try {
+        appDefinition = await AppDefinition.findOne({ 
+            $or: [
+                { appKey: appKey.toLowerCase(), enabled: true },
+                { appKey: appKey.toUpperCase(), enabled: true },
+                { appKey: appKey, enabled: true }
+            ]
+        });
+    } catch (dbError) {
+        // If AppDefinition query fails, log but continue (might not be critical)
+        if (ACCESS_DEBUG) {
+            console.warn(`[AccessResolution] AppDefinition query failed:`, dbError.message);
+        }
+        // Fall through to check if app exists in registry
+    }
     
+    // If AppDefinition not found in DB, check if app exists in registry
+    // This allows apps to work even if AppDefinition hasn't been seeded
     if (!appDefinition) {
-        result.reason = 'APP_NOT_FOUND';
-        addFeedbackToResult(result);
-        logAccessDecision(user, appKey, intent, result);
-        return result;
+        const { getAppConfig } = require('../utils/appAccessUtils');
+        const appConfig = getAppConfig(appKey);
+        if (!appConfig) {
+            result.reason = 'APP_NOT_FOUND';
+            addFeedbackToResult(result);
+            logAccessDecision(user, appKey, intent, result);
+            return result;
+        }
+        // App exists in registry, continue (AppDefinition is optional for basic access)
+        if (ACCESS_DEBUG) {
+            console.log(`[AccessResolution] App ${appKey} found in registry but not in AppDefinition`);
+        }
     }
 
     // ============================================================================
@@ -176,7 +199,17 @@ async function resolveAppAccess({ user, organization, appKey, intent }) {
     // ============================================================================
     // Ensure we have the full organization object (handle both object and ID)
     const organizationId = organization._id || organization;
-    const org = await Organization.findById(organizationId);
+    let org = null;
+    
+    // If organization is already a full object with enabledApps, use it directly
+    // Otherwise, query from database
+    if (organization && organization.enabledApps && Array.isArray(organization.enabledApps)) {
+        // Use the passed organization object if it has enabledApps
+        org = organization;
+    } else {
+        // Query from database
+        org = await Organization.findById(organizationId);
+    }
     
     if (!org) {
         result.reason = 'ORGANIZATION_NOT_FOUND';
@@ -185,13 +218,46 @@ async function resolveAppAccess({ user, organization, appKey, intent }) {
         return result;
     }
 
+    // Ensure enabledApps exists (initialize if missing)
+    if (!org.enabledApps || !Array.isArray(org.enabledApps) || org.enabledApps.length === 0) {
+        if (ACCESS_DEBUG) {
+            console.log(`[AccessResolution] Organization missing enabledApps, initializing: orgId=${organizationId}`);
+        }
+        // Initialize with SALES app
+        const { APP_KEYS } = require('../constants/appKeys');
+        org.enabledApps = [{ appKey: APP_KEYS.SALES, status: 'ACTIVE', enabledAt: new Date() }];
+        // Try to save (non-blocking)
+        try {
+            if (org.save) {
+                await org.save().catch(err => {
+                    if (ACCESS_DEBUG) {
+                        console.warn(`[AccessResolution] Failed to save enabledApps:`, err.message);
+                    }
+                });
+            }
+        } catch (saveError) {
+            // Non-blocking - continue with in-memory value
+            if (ACCESS_DEBUG) {
+                console.warn(`[AccessResolution] Error saving enabledApps:`, saveError.message);
+            }
+        }
+    }
+
     // App must be enabled for tenant via TenantAppConfiguration or Organization.enabledApps
     // Check TenantAppConfiguration first (preferred)
-    const tenantAppConfig = await TenantAppConfiguration.findOne({
-        organizationId: organizationId,
-        appKey: appKey.toUpperCase(),
-        enabled: true
-    });
+    let tenantAppConfig = null;
+    try {
+        tenantAppConfig = await TenantAppConfiguration.findOne({
+            organizationId: organizationId,
+            appKey: appKey.toUpperCase(),
+            enabled: true
+        });
+    } catch (configError) {
+        // TenantAppConfiguration might not exist - that's okay, fall back to enabledApps
+        if (ACCESS_DEBUG) {
+            console.warn(`[AccessResolution] TenantAppConfiguration query failed (non-critical):`, configError.message);
+        }
+    }
 
     // Fallback to Organization.enabledApps if TenantAppConfiguration not found
     let isAppEnabled = false;

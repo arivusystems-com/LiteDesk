@@ -600,11 +600,11 @@ const props = defineProps({
   },
   emptyTitle: {
     type: String,
-    default: 'No data found'
+    default: 'No items yet'
   },
   emptyMessage: {
     type: String,
-    default: 'Get started by adding your first item'
+    default: 'Items will appear here as you add them.'
   },
   loadingText: {
     type: String,

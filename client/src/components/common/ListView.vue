@@ -1585,7 +1585,7 @@ watch(() => props.data, (newVal) => {
 const resourceName = computed(() => (typeof props.title === 'string' ? props.title.toLowerCase() : 'records'));
 
 const emptyStateTitle = computed(() =>
-  hasActiveFilters.value ? `No ${props.title} Found` : props.emptyTitle
+  hasActiveFilters.value ? `No ${props.title.toLowerCase()} match your filters` : props.emptyTitle
 );
 
 const emptyStateMessage = computed(() => {

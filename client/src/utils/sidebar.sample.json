@@ -1,0 +1,119 @@
+{
+  "description": "Sample sidebar output JSON demonstrating the three-section structure",
+  "sample": {
+    "core": [
+      {
+        "key": "dashboard",
+        "label": "Dashboard",
+        "route": "/dashboard",
+        "icon": "home",
+        "order": 1
+      }
+    ],
+    "domain": [
+      {
+        "appKey": "SALES",
+        "label": "Sales",
+        "dashboardRoute": "/sales",
+        "icon": "briefcase",
+        "order": 1,
+        "expanded": true,
+        "children": [
+          {
+            "moduleKey": "contacts",
+            "label": "Contacts",
+            "route": "/contacts",
+            "permission": "contacts.view",
+            "icon": "users",
+            "order": 1
+          },
+          {
+            "moduleKey": "deals",
+            "label": "Deals",
+            "route": "/deals",
+            "permission": "deals.view",
+            "icon": "briefcase",
+            "order": 2
+          },
+          {
+            "moduleKey": "tasks",
+            "label": "Tasks",
+            "route": "/tasks",
+            "permission": "tasks.view",
+            "icon": "check-circle",
+            "order": 3
+          },
+          {
+            "moduleKey": "events",
+            "label": "Events",
+            "route": "/events",
+            "permission": "events.view",
+            "icon": "calendar",
+            "order": 4
+          }
+        ]
+      },
+      {
+        "appKey": "HELPDESK",
+        "label": "Helpdesk",
+        "dashboardRoute": "/helpdesk",
+        "icon": "support",
+        "order": 2,
+        "expanded": true,
+        "children": [
+          {
+            "moduleKey": "tickets",
+            "label": "Tickets",
+            "route": "/helpdesk/tickets",
+            "permission": "tickets.view",
+            "icon": "ticket",
+            "order": 1
+          },
+          {
+            "moduleKey": "knowledge-base",
+            "label": "Knowledge Base",
+            "route": "/helpdesk/kb",
+            "permission": "kb.view",
+            "icon": "book",
+            "order": 2
+          }
+        ]
+      }
+    ],
+    "platform": [
+      {
+        "key": "settings",
+        "label": "Settings",
+        "route": "/settings",
+        "permission": "settings.view",
+        "icon": "cog",
+        "order": 1
+      },
+      {
+        "key": "apps",
+        "label": "Apps",
+        "route": "/settings/apps",
+        "permission": "apps.view",
+        "icon": "squares",
+        "order": 2
+      },
+      {
+        "key": "users",
+        "label": "Users",
+        "route": "/settings/users",
+        "permission": "users.view",
+        "icon": "users",
+        "order": 3
+      }
+    ]
+  },
+  "notes": [
+    "Core section: Global, non-collapsible items (e.g., Dashboard)",
+    "Domain section: Apps with modules (e.g., Sales with Contacts, Deals, etc.)",
+    "Platform section: Governance items (Settings, Apps, Users)",
+    "Domain headers are first-class items that can navigate to dashboardRoute",
+    "Modules are leaf nodes with no nesting beyond one level",
+    "All items respect permissions - filtered based on userPermissions"
+  ]
+}
+

@@ -9,9 +9,11 @@
  * - Organization reference (multi-tenancy)
  * - Role and permissions
  * 
- * ⚠️ VIOLATION: Permissions structure is CRM-module-specific
- *    (contacts, deals, tasks, events, forms, items, reports)
- *    Should be generic capability-based permissions.
+ * ✅ FIXED: Permissions structure marked as legacy/CRM-specific
+ *    - User.permissions field is kept for backward compatibility
+ *    - Permissions should be managed via Role.appPermissions (app-aware)
+ *    - Login flow syncs permissions from role to user for backward compatibility
+ *    - For new apps, use Role.appPermissions instead
  * 
  * See PLATFORM_CORE_ANALYSIS.md for details.
  * ============================================================================
@@ -65,6 +67,10 @@ const UserSchema = new mongoose.Schema({
     },
     
     // Granular Permissions (can be customized per user)
+    // ⚠️ LEGACY/CRM-SPECIFIC: This structure is CRM-module-specific
+    //    Permissions should be managed via Role.appPermissions (app-aware)
+    //    This field is kept for backward compatibility and synced from role on login
+    //    @deprecated Use Role.appPermissions instead for app-agnostic permissions
     permissions: {
         contacts: {
             view: { type: Boolean, default: true },

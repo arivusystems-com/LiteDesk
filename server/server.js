@@ -132,6 +132,7 @@ const digestRoutes = require('./routes/digestRoutes');
 const uiCompositionRoutes = require('./routes/uiCompositionRoutes');
 const relationshipRoutes = require('./routes/relationshipRoutes');
 const responseRoutes = require('./routes/responseRoutes');
+const settingsRoutes = require('./routes/settingsRoutes');
 
 // Route Linking
 app.use('/api/auth', authRoutes);
@@ -144,6 +145,7 @@ app.use('/api/events', eventRoutes);
 app.use('/api/csv', csvRoutes);
 app.use('/api/imports', require('./routes/importHistoryRoutes'));
 app.use('/api/execution', require('./routes/executionRoutes'));
+app.use('/api/search', require('./routes/searchRoutes'));
 app.use('/api/demo', demoRoutes);
 app.use('/api/instances', instanceRoutes);
 app.use('/api/metrics', metricsRoutes);
@@ -186,6 +188,9 @@ app.use('/api/relationships', relationshipRoutes);
 
 // Response Detail Routes (Phase 0I.2 - Read-Only)
 app.use('/api/responses', responseRoutes);
+
+// Settings Routes
+app.use('/api/settings', settingsRoutes);
 
 // Serve uploaded files (including reports)
 app.use('/api/uploads', express.static(path.join(__dirname, 'uploads'), {

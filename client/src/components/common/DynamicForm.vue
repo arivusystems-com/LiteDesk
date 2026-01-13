@@ -60,6 +60,8 @@ import DynamicFormField from './DynamicFormField.vue';
 import apiClient from '@/utils/apiClient';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
 import { useAuthStore } from '@/stores/auth';
+import { useRoute } from 'vue-router';
+import { getCurrentContext, filterFieldsByContext } from '@/utils/fieldContextFilter';
 
 const props = defineProps({
   moduleKey: {
@@ -84,6 +86,10 @@ const loading = ref(true);
 const localFormData = ref({ ...props.formData });
 const error = ref(null);
 const authStore = useAuthStore();
+const route = useRoute();
+
+// Get current context from route
+const currentContext = computed(() => getCurrentContext(route.path));
 
 // Field rendering helpers - case-insensitive lookup
 const fieldMap = computed(() => {
@@ -121,7 +127,8 @@ const useAdvancedLayout = computed(() => {
 const orderedFields = computed(() => {
   if (!moduleDefinition.value) return [];
   const quickCreate = moduleDefinition.value.quickCreate || [];
-  const allFields = moduleDefinition.value.fields || [];
+  // Filter fields by context first
+  const allFields = filterFieldsByContext(moduleDefinition.value.fields || [], currentContext.value);
   
     // Exclude system fields and hidden fields
     // assignedTo should be visible in Quick Create forms (admin can assign)
@@ -404,7 +411,9 @@ const fetchModule = async () => {
   loading.value = true;
   error.value = null;
   try {
-    const data = await apiClient.get('/modules');
+    // Pass current context to API
+    const context = currentContext.value;
+    const data = await apiClient.get(`/modules${context ? `?context=${context}` : ''}`);
     if (data.success) {
       const targetModule = data.data.find(m => m.key === props.moduleKey);
       if (targetModule) {

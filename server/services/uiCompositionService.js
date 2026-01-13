@@ -181,7 +181,14 @@ class UICompositionService {
                        moduleDef.ui?.sidebarOrder ?? 
                        0,
           createLabel: moduleDef.ui?.createLabel || `Create ${moduleDef.label}`,
-          listLabel: moduleDef.ui?.listLabel || `All ${moduleDef.pluralLabel}`
+          listLabel: moduleDef.ui?.listLabel || `All ${moduleDef.pluralLabel}`,
+          // Navigation intent flags (for four-section sidebar)
+          navigationCore: moduleDef.ui?.navigationCore || false,
+          navigationEntity: moduleDef.ui?.navigationEntity || false,
+          excludeFromApps: moduleDef.ui?.excludeFromApps || false,
+          // Legacy flags for backward compatibility
+          system: moduleDef.system || false,
+          coreEntity: moduleDef.coreEntity || false
         };
 
         uiModules.push(uiModule);

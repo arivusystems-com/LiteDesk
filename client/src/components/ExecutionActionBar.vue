@@ -54,7 +54,7 @@
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import {
-  PaperPlaneIcon,
+  ArrowUpIcon,
   CheckCircleIcon,
   XCircleIcon,
   LockClosedIcon,
@@ -63,7 +63,7 @@ import {
   InformationCircleIcon
 } from '@heroicons/vue/24/outline';
 import {
-  PaperPlaneIcon as PaperPlaneIconSolid,
+  ArrowUpIcon as ArrowUpIconSolid,
   CheckCircleIcon as CheckCircleIconSolid,
   XCircleIcon as XCircleIconSolid,
   LockClosedIcon as LockClosedIconSolid,
@@ -95,7 +95,7 @@ const route = useRoute();
 
 // Icon mapping
 const iconMap = {
-  'paper-plane': PaperPlaneIcon,
+  'paper-plane': ArrowUpIcon, // Using ArrowUpIcon as replacement for PaperPlaneIcon (not available in heroicons v2)
   'check-circle': CheckCircleIcon,
   'x-circle': XCircleIcon,
   'lock-closed': LockClosedIcon,

@@ -1,9 +1,18 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useTabs } from '@/composables/useTabs';
 import { XMarkIcon } from '@heroicons/vue/20/solid';
 
 const { tabs, activeTabId, switchToTab, closeTab, closeOtherTabs, closeAllTabs } = useTabs();
+
+// Create a computed to ensure reactivity in template
+// Force reactivity by watching the ref directly
+const tabsArray = computed(() => {
+  // tabs is a ref, so access .value
+  // Force dependency tracking by accessing .value
+  const tabsValue = tabs.value || [];
+  return tabsValue;
+});
 
 // Get sidebar state from parent (App.vue passes it via provide/inject or we calculate it)
 const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1920);
@@ -29,7 +38,7 @@ const tabBarWidth = computed(() => {
     sidebarCollapsed,
     sidebarWidth,
     tabBarWidth: calculatedWidth,
-    totalTabs: tabs.value.length
+    totalTabs: tabsArray.value.length
   });
   
   return calculatedWidth;
@@ -164,11 +173,11 @@ const handleContextMenuAction = (action) => {
 };
 
 const closeTabsToRight = (tabId) => {
-  const index = tabs.value.findIndex(tab => tab.id === tabId);
+  const index = tabsArray.value.findIndex(tab => tab.id === tabId);
   if (index === -1) return;
   
   // Get tabs to the right that are closable
-  const tabsToClose = tabs.value.slice(index + 1).filter(tab => tab.closable);
+  const tabsToClose = tabsArray.value.slice(index + 1).filter(tab => tab.closable);
   tabsToClose.forEach(tab => closeTab(tab.id));
 };
 
@@ -207,10 +216,21 @@ onMounted(() => {
   
   // Set initial viewport width
   viewportWidth.value = window.innerWidth;
-  console.log('📐 TabBar mounted');
-  nextTick(() => {
-    updateTabBarOffset();
-  });
+  console.log('📐 TabBar mounted, tabs count:', tabsArray.value.length);
+  
+  // Force a check - if tabs aren't initialized yet, wait a bit
+  if (tabsArray.value.length === 0) {
+    console.log('⚠️ [TabBar] No tabs on mount, waiting for initialization...');
+    // Wait a bit for initTabs to complete
+    setTimeout(() => {
+      console.log('🔍 [TabBar] After timeout, tabs count:', tabsArray.value.length);
+      updateTabBarOffset();
+    }, 100);
+  } else {
+    nextTick(() => {
+      updateTabBarOffset();
+    });
+  }
 });
 
 onUnmounted(() => {
@@ -234,9 +254,10 @@ onUnmounted(() => {
   >
     <div class="flex items-center h-12 overflow-x-hidden" :style="{ width: '100%', maxWidth: '100%' }">
       <!-- Tabs - Chrome style shrinking with aggressive overflow prevention -->
-      <div
-        v-for="tab in tabs"
-        :key="tab.id"
+      <template v-if="tabsArray.length > 0">
+        <div
+          v-for="tab in tabsArray"
+          :key="tab.id"
         draggable="true"
         @dragstart="handleDragStart($event, tab.id)"
         @dragend="handleDragEnd"
@@ -299,6 +320,7 @@ onUnmounted(() => {
           <XMarkIcon class="w-4 h-4 text-gray-500 dark:text-gray-400 flex-shrink-0" />
         </button>
       </div>
+      </template>
     </div>
     
     <!-- Context Menu -->

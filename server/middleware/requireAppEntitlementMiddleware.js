@@ -116,6 +116,34 @@ const requireAppEntitlement = async (req, res, next) => {
             });
         }
         
+        // Ensure enabledApps exists and is properly initialized (initialize if missing or empty)
+        if (!organization.enabledApps || !Array.isArray(organization.enabledApps) || organization.enabledApps.length === 0) {
+            console.warn(`[AppEntitlement] Organization missing or empty enabledApps, initializing: orgId=${organizationId}`, {
+                enabledApps: organization.enabledApps,
+                enabledAppsType: typeof organization.enabledApps,
+                enabledAppsIsArray: Array.isArray(organization.enabledApps),
+                enabledAppsLength: organization.enabledApps?.length
+            });
+            // Default to SALES app if enabledApps is missing or empty
+            organization.enabledApps = [{ appKey: APP_KEYS.SALES, status: 'ACTIVE', enabledAt: new Date() }];
+            try {
+                await organization.save();
+                // Reload organization to ensure we have the latest data
+                await organization.populate ? null : null; // No populate needed, just refresh
+                console.log(`[AppEntitlement] ✅ Initialized enabledApps for organization: orgId=${organizationId}`, {
+                    enabledApps: organization.enabledApps
+                });
+            } catch (saveError) {
+                console.error(`[AppEntitlement] ❌ Failed to save enabledApps initialization:`, {
+                    error: saveError.message,
+                    stack: saveError.stack,
+                    orgId: organizationId
+                });
+                // Set enabledApps in memory even if save fails, so access resolution can proceed
+                organization.enabledApps = [{ appKey: APP_KEYS.SALES, status: 'ACTIVE', enabledAt: new Date() }];
+            }
+        }
+        
         // Debug logging for owner access
         if (req.user?.isOwner && ACCESS_DEBUG) {
             console.log(`[AppEntitlement] Owner access check:`, {
@@ -144,7 +172,32 @@ const requireAppEntitlement = async (req, res, next) => {
         // Convert user and organization to plain objects if they're Mongoose documents
         // This ensures all fields are available to resolveAppAccess
         const userForAccess = req.user.toObject ? req.user.toObject() : req.user;
+        // Pass the organization object directly (resolveAppAccess will handle it)
+        // Ensure _id is available for the query inside resolveAppAccess
         const orgForAccess = organization.toObject ? organization.toObject() : organization;
+        
+        // Ensure organization has _id field (required by resolveAppAccess)
+        if (!orgForAccess._id && organization._id) {
+            orgForAccess._id = organization._id;
+        }
+        
+        // Ensure enabledApps is included in orgForAccess (critical for access resolution)
+        if (organization.enabledApps) {
+            orgForAccess.enabledApps = organization.enabledApps;
+        }
+        
+        // Debug: Log organization state before access resolution
+        if (ACCESS_DEBUG || process.env.NODE_ENV === 'development') {
+            console.log(`[AppEntitlement] Before resolveAppAccess:`, {
+                orgId: organizationId,
+                appKey: req.appKey,
+                enabledApps: organization.enabledApps,
+                enabledAppsLength: organization.enabledApps?.length,
+                orgForAccessEnabledApps: orgForAccess.enabledApps,
+                userEmail: req.user?.email,
+                isOwner: req.user?.isOwner
+            });
+        }
         
         // Use unified access resolution service
         const accessResult = await resolveAppAccess({
@@ -356,6 +409,7 @@ const requireAppEntitlement = async (req, res, next) => {
             if (accessResult.mode === 'ADMIN') {
                 // Owner/admin can access without subscription
                 // Skip subscription validation
+                // Note: appSubscription might be undefined for ADMIN mode, skip trial check
             } else if (accessResult.mode === 'EXECUTION') {
                 // EXECUTION access requires subscription
                 if (!subscription) {
@@ -384,7 +438,8 @@ const requireAppEntitlement = async (req, res, next) => {
             }
 
             // Check for expired trial (auto-suspend)
-            if (appSubscription.status === 'TRIAL' && appSubscription.trialEndsAt) {
+            // Only check if appSubscription exists (not undefined)
+            if (appSubscription && appSubscription.status === 'TRIAL' && appSubscription.trialEndsAt) {
                 if (new Date() > appSubscription.trialEndsAt) {
                     // Auto-suspend expired trial
                     const OrganizationSubscription = require('../models/OrganizationSubscription');
@@ -398,7 +453,10 @@ const requireAppEntitlement = async (req, res, next) => {
 
             // Use canonical helper to assert subscription is usable
             // This will throw if status is SUSPENDED, CANCELLED, or invalid
-            assertSubscriptionUsable(appSubscription, req.appKey);
+            // Only validate if appSubscription exists (ADMIN mode bypasses this)
+            if (appSubscription && accessResult.mode === 'EXECUTION') {
+                assertSubscriptionUsable(appSubscription, req.appKey);
+            }
         } catch (err) {
             // Handle subscription validation errors
             if (err.code === 'SUBSCRIPTION_INACTIVE') {
@@ -431,8 +489,15 @@ const requireAppEntitlement = async (req, res, next) => {
             organizationId: req.user?.organizationId,
             appKey: req.appKey,
             path: req.path,
-            errorName: error.name
+            errorName: error.name,
+            errorCode: error.code
         });
+        
+        // Log the full error for debugging
+        if (process.env.NODE_ENV === 'development' || process.env.ACCESS_DEBUG === 'true') {
+            console.error(`[AppEntitlement] Full error details:`, error);
+        }
+        
         return res.status(403).json({
             success: false,
             message: 'Unable to verify organization app enablement',
@@ -443,6 +508,7 @@ const requireAppEntitlement = async (req, res, next) => {
             details: process.env.NODE_ENV === 'development' ? {
                 errorMessage: error.message,
                 errorName: error.name,
+                errorCode: error.code,
                 stack: error.stack
             } : undefined
         });

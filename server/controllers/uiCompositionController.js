@@ -148,6 +148,37 @@ exports.getModulesForApp = async (req, res) => {
 };
 
 /**
+ * Get platform/entity modules (modules with navigationEntity: true)
+ * GET /api/ui/entities
+ * These are core entities shared across apps (People, Organizations, Tasks, Forms, Items, Events)
+ */
+exports.getEntityModules = async (req, res) => {
+  try {
+    const organizationId = req.user.organizationId;
+    
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Organization ID required'
+      });
+    }
+
+    const modules = await uiCompositionService.getUIModulesForApp(organizationId, 'platform');
+
+    res.json({
+      success: true,
+      data: modules
+    });
+  } catch (error) {
+    console.error('[UIComposition] Error getting entity modules:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching entity modules'
+    });
+  }
+};
+
+/**
  * Phase 2B: Get projection metadata for create forms
  * GET /api/ui/projection/:appKey/:moduleKey
  */

@@ -226,6 +226,46 @@ exports.updateDeal = async (req, res) => {
         delete req.body.organizationId;
         req.body.modifiedBy = req.user._id;
         
+        // Validate field-level write access
+        const ModuleDefinition = require('../models/ModuleDefinition');
+        const { validateFieldWrite } = require('../utils/fieldAccessControl');
+        
+        const moduleDef = await ModuleDefinition.findOne({
+            organizationId: req.user.organizationId,
+            key: 'deals'
+        });
+        
+        if (moduleDef && Array.isArray(moduleDef.fields)) {
+            const fieldViolations = [];
+            const fieldsToUpdate = { ...req.body };
+            
+            // Validate each field being updated
+            for (const [fieldKey, fieldValue] of Object.entries(fieldsToUpdate)) {
+                // Skip system fields and metadata
+                if (['_id', '__v', 'organizationId', 'createdAt', 'updatedAt', 'modifiedBy'].includes(fieldKey)) {
+                    continue;
+                }
+                
+                const validation = validateFieldWrite(fieldKey, moduleDef.fields, req.user, 'deals');
+                if (!validation.allowed) {
+                    fieldViolations.push({
+                        field: fieldKey,
+                        reason: validation.reason
+                    });
+                }
+            }
+            
+            // If any field violations, reject the entire update
+            if (fieldViolations.length > 0) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Field access denied',
+                    code: 'FIELD_ACCESS_DENIED',
+                    violations: fieldViolations
+                });
+            }
+        }
+        
         const updatedDeal = await Deal.findOneAndUpdate(
             { 
                 _id: req.params.id, 

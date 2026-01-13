@@ -197,8 +197,8 @@ const MODULE_DEFINITIONS = [
   // ===== SALES APP MODULES =====
   {
     moduleKey: 'people',
-    appKey: 'sales',
-    label: 'Person',
+    appKey: 'platform', // Core entity - shared across apps
+    label: 'People',
     pluralLabel: 'People',
     entityType: 'CORE',
     primaryField: 'name',
@@ -232,13 +232,16 @@ const MODULE_DEFINITIONS = [
       icon: '👥',
       showInSidebar: true,
       sidebarOrder: 1,
-      createLabel: 'Create Person',
-      listLabel: 'All People'
+      createLabel: 'Create Person', // Keep singular for create action
+      listLabel: 'All People',
+      // Navigation intent: Entities section (shared system primitives)
+      navigationEntity: true,
+      excludeFromApps: true
     }
   },
   {
     moduleKey: 'organizations',
-    appKey: 'sales',
+    appKey: 'platform', // Core entity - shared across apps
     label: 'Organization',
     pluralLabel: 'Organizations',
     entityType: 'CORE',
@@ -271,7 +274,10 @@ const MODULE_DEFINITIONS = [
       showInSidebar: true,
       sidebarOrder: 2,
       createLabel: 'Create Organization',
-      listLabel: 'All Organizations'
+      listLabel: 'All Organizations',
+      // Navigation intent: Entities section (shared system primitives)
+      navigationEntity: true,
+      excludeFromApps: true
     }
   },
   {
@@ -317,7 +323,7 @@ const MODULE_DEFINITIONS = [
   },
   {
     moduleKey: 'tasks',
-    appKey: 'sales',
+    appKey: 'platform', // Core entity - shared across apps
     label: 'Task',
     pluralLabel: 'Tasks',
     entityType: 'ACTIVITY',
@@ -353,12 +359,15 @@ const MODULE_DEFINITIONS = [
       showInSidebar: true,
       sidebarOrder: 4,
       createLabel: 'Create Task',
-      listLabel: 'All Tasks'
+      listLabel: 'All Tasks',
+      // Navigation intent: Entities section (shared system primitives)
+      navigationEntity: true,
+      excludeFromApps: true
     }
   },
   {
     moduleKey: 'events',
-    appKey: 'sales',
+    appKey: 'platform', // Core entity - shared across apps
     label: 'Event',
     pluralLabel: 'Events',
     entityType: 'ACTIVITY',
@@ -394,12 +403,15 @@ const MODULE_DEFINITIONS = [
       showInSidebar: true,
       sidebarOrder: 5,
       createLabel: 'Create Event',
-      listLabel: 'All Events'
+      listLabel: 'All Events',
+      // Navigation intent: Entities section (shared system primitives)
+      navigationEntity: true,
+      excludeFromApps: true
     }
   },
   {
     moduleKey: 'items',
-    appKey: 'sales',
+    appKey: 'platform', // Core entity - shared across apps
     label: 'Item',
     pluralLabel: 'Items',
     entityType: 'CORE',
@@ -432,12 +444,15 @@ const MODULE_DEFINITIONS = [
       showInSidebar: true,
       sidebarOrder: 6,
       createLabel: 'Create Item',
-      listLabel: 'All Items'
+      listLabel: 'All Items',
+      // Navigation intent: Entities section (shared system primitives)
+      navigationEntity: true,
+      excludeFromApps: true
     }
   },
   {
     moduleKey: 'forms',
-    appKey: 'sales',
+    appKey: 'platform', // Core entity - shared across apps
     label: 'Form',
     pluralLabel: 'Forms',
     entityType: 'CORE',
@@ -470,7 +485,10 @@ const MODULE_DEFINITIONS = [
       showInSidebar: true,
       sidebarOrder: 7,
       createLabel: 'Create Form',
-      listLabel: 'All Forms'
+      listLabel: 'All Forms',
+      // Navigation intent: Entities section (shared system primitives)
+      navigationEntity: true,
+      excludeFromApps: true
     }
   },
   {

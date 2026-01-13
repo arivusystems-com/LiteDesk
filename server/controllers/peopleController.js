@@ -362,6 +362,45 @@ exports.update = async (req, res) => {
       console.warn(`Attempt to modify createdBy field blocked for People record ${req.params.id}`);
     }
     
+    // Validate field-level write access
+    const ModuleDefinition = require('../models/ModuleDefinition');
+    const { validateFieldWrite } = require('../utils/fieldAccessControl');
+    
+    const moduleDef = await ModuleDefinition.findOne({
+      organizationId: req.user.organizationId,
+      key: 'people'
+    });
+    
+    if (moduleDef && Array.isArray(moduleDef.fields)) {
+      const fieldViolations = [];
+      
+      // Validate each field being updated
+      for (const [fieldKey, fieldValue] of Object.entries(updateData)) {
+        // Skip system fields and metadata
+        if (['_id', '__v', 'organizationId', 'createdAt', 'updatedAt', 'createdBy'].includes(fieldKey)) {
+          continue;
+        }
+        
+        const validation = validateFieldWrite(fieldKey, moduleDef.fields, req.user, 'people');
+        if (!validation.allowed) {
+          fieldViolations.push({
+            field: fieldKey,
+            reason: validation.reason
+          });
+        }
+      }
+      
+      // If any field violations, reject the entire update
+      if (fieldViolations.length > 0) {
+        return res.status(403).json({
+          success: false,
+          message: 'Field access denied',
+          code: 'FIELD_ACCESS_DENIED',
+          violations: fieldViolations
+        });
+      }
+    }
+    
     // Ensure organization field is properly formatted (ObjectId string or null)
     if (updateData.organization !== undefined) {
       if (updateData.organization === null || updateData.organization === '') {

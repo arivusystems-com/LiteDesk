@@ -75,11 +75,13 @@ import { ChevronDownIcon, CheckIcon } from '@heroicons/vue/24/outline';
 import { useAppShellStore } from '@/stores/appShell';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'vue-router';
+import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
 
 const appShellStore = useAppShellStore();
 const authStore = useAuthStore();
 const router = useRouter();
+const { openTab } = useTabs();
 
 // Fetch apps directly from API (not from store which uses sidebar endpoint)
 const apps = computed(() => appShellStore.availableApps);
@@ -125,7 +127,17 @@ const handleAppSwitch = (appKey) => {
   // Set active app
   appShellStore.setActiveApp(appKey);
   
-  // Navigate to app's default route
+  // For Sales app, always navigate to dashboard first
+  if (appKey === 'SALES') {
+    // Always open dashboard for Sales app to ensure it's shown by default
+    openTab('/dashboard', {
+      title: 'Dashboard',
+      closable: false // Dashboard tab should not be closable
+    });
+    return;
+  }
+  
+  // For other apps, navigate to their default route
   let targetRoute = app?.defaultRoute;
   
   // Normalize old/invalid routes
@@ -135,22 +147,20 @@ const handleAppSwitch = (appKey) => {
     console.warn(`[AppSwitcher] Normalized invalid route /portal/me to /portal/dashboard`);
   }
   
-  if (targetRoute) {
-    router.push(targetRoute);
-  } else {
+  if (!targetRoute) {
     // Fallback routes if defaultRoute is not set (Phase 2D)
     const fallbackRoutes = {
-      'SALES': '/dashboard',
-      'SALES': '/sales/people',
       'HELPDESK': '/helpdesk/cases',
       'PROJECTS': '/projects/projects',
       'AUDIT': '/audit/dashboard',
       'PORTAL': '/portal/dashboard'
     };
-    const fallbackRoute = fallbackRoutes[appKey] || '/dashboard';
-    console.warn(`[AppSwitcher] No defaultRoute for ${appKey}, using fallback: ${fallbackRoute}`);
-    router.push(fallbackRoute);
+    targetRoute = fallbackRoutes[appKey] || '/dashboard';
+    console.warn(`[AppSwitcher] No defaultRoute for ${appKey}, using fallback: ${targetRoute}`);
   }
+  
+  // For other apps (Audit, Portal), use router.push as they have their own layouts
+  router.push(targetRoute);
 };
 
 // Load apps from /api/ui/apps on mount if not already loaded

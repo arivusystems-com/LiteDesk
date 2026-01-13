@@ -97,6 +97,9 @@ exports.registerUser = async (req, res) => {
                 maxDeals: 50,
                 maxStorageGB: 1
             },
+            // ⚠️ BACKWARD COMPATIBILITY: Explicitly set CRM modules for new registrations
+            //    Schema default is empty array (app-agnostic), but we set CRM modules here
+            //    for backward compatibility with existing CRM functionality
             enabledModules: ['contacts', 'deals', 'tasks', 'events'],
             // New organizations start with Sales enabled only
             enabledApps: [{

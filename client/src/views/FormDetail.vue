@@ -22,7 +22,7 @@
       <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Related Records</h3>
         <RelatedRecordsPanel
-          app-key="SALES"
+          app-key="PLATFORM"
           module-key="forms"
           :record-id="form._id || route.params.id"
           :read-only="true"

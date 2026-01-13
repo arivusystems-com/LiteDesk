@@ -1,0 +1,440 @@
+{
+  "description": "Sample module list definitions demonstrating the standard list structure",
+  "samples": {
+    "salesLeads": {
+      "moduleKey": "contacts",
+      "appKey": "SALES",
+      "title": "Contacts",
+      "layout": "TABLE",
+      "columns": [
+        {
+          "key": "name",
+          "label": "Name",
+          "dataType": "text",
+          "sortable": true,
+          "filterable": true,
+          "visibility": "ENABLED",
+          "fieldPath": "name",
+          "order": 1
+        },
+        {
+          "key": "email",
+          "label": "Email",
+          "dataType": "text",
+          "sortable": true,
+          "filterable": true,
+          "visibility": "ENABLED",
+          "fieldPath": "email",
+          "order": 2
+        },
+        {
+          "key": "phone",
+          "label": "Phone",
+          "dataType": "text",
+          "sortable": false,
+          "filterable": true,
+          "visibility": "ENABLED",
+          "fieldPath": "phone",
+          "order": 3
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "dataType": "status",
+          "sortable": true,
+          "filterable": true,
+          "visibility": "ENABLED",
+          "fieldPath": "status",
+          "order": 4
+        },
+        {
+          "key": "assignedTo",
+          "label": "Assigned To",
+          "dataType": "user",
+          "sortable": true,
+          "filterable": true,
+          "permission": "contacts.viewAll",
+          "visibility": "ENABLED",
+          "fieldPath": "assignedTo",
+          "order": 5
+        },
+        {
+          "key": "createdAt",
+          "label": "Created",
+          "dataType": "date",
+          "sortable": true,
+          "filterable": false,
+          "visibility": "ENABLED",
+          "fieldPath": "createdAt",
+          "order": 6
+        }
+      ],
+      "primaryActions": [
+        {
+          "key": "create",
+          "label": "Add Contact",
+          "type": "create",
+          "route": "/contacts/new",
+          "permission": "contacts.create",
+          "visibility": "ENABLED",
+          "icon": "plus",
+          "variant": "primary",
+          "order": 1
+        },
+        {
+          "key": "import",
+          "label": "Import",
+          "type": "import",
+          "route": "/imports?type=contacts",
+          "permission": "imports.view",
+          "visibility": "ENABLED",
+          "icon": "arrow-down-tray",
+          "variant": "outline",
+          "order": 2
+        }
+      ],
+      "bulkActions": [
+        {
+          "key": "delete",
+          "label": "Delete",
+          "type": "delete",
+          "permission": "contacts.delete",
+          "visibility": "ENABLED",
+          "icon": "trash",
+          "variant": "danger",
+          "bulk": true,
+          "order": 1
+        },
+        {
+          "key": "assign",
+          "label": "Assign",
+          "type": "assign",
+          "permission": "contacts.edit",
+          "visibility": "ENABLED",
+          "icon": "user",
+          "variant": "secondary",
+          "bulk": true,
+          "order": 2
+        },
+        {
+          "key": "export",
+          "label": "Export",
+          "type": "export",
+          "permission": "contacts.export",
+          "visibility": "ENABLED",
+          "icon": "arrow-up-tray",
+          "variant": "secondary",
+          "bulk": true,
+          "order": 3
+        }
+      ],
+      "rowActions": [
+        {
+          "key": "view",
+          "label": "View",
+          "type": "view",
+          "route": "/contacts/:id",
+          "visibility": "ENABLED",
+          "icon": "eye",
+          "variant": "secondary",
+          "order": 1
+        },
+        {
+          "key": "edit",
+          "label": "Edit",
+          "type": "edit",
+          "route": "/contacts/:id/edit",
+          "permission": "contacts.edit",
+          "visibility": "ENABLED",
+          "icon": "pencil",
+          "variant": "secondary",
+          "order": 2
+        },
+        {
+          "key": "delete",
+          "label": "Delete",
+          "type": "delete",
+          "permission": "contacts.delete",
+          "visibility": "ENABLED",
+          "icon": "trash",
+          "variant": "danger",
+          "order": 3
+        }
+      ],
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "type": "multiselect",
+          "fieldPath": "status",
+          "visibility": "ENABLED",
+          "options": [
+            { "value": "lead", "label": "Lead" },
+            { "value": "contact", "label": "Contact" },
+            { "value": "customer", "label": "Customer" }
+          ],
+          "order": 1
+        },
+        {
+          "key": "assignedTo",
+          "label": "Assigned To",
+          "type": "user",
+          "fieldPath": "assignedTo",
+          "permission": "contacts.viewAll",
+          "visibility": "ENABLED",
+          "order": 2
+        },
+        {
+          "key": "createdAt",
+          "label": "Created Date",
+          "type": "daterange",
+          "fieldPath": "createdAt",
+          "visibility": "ENABLED",
+          "order": 3
+        }
+      ],
+      "emptyState": {
+        "type": "NO_DATA",
+        "title": "No contacts found",
+        "description": "Get started by creating your first contact.",
+        "primaryAction": {
+          "label": "Create contact",
+          "route": "/contacts/new"
+        }
+      },
+      "defaultSort": {
+        "column": "createdAt",
+        "order": "desc"
+      },
+      "pagination": {
+        "pageSize": 25,
+        "pageSizeOptions": [10, 25, 50, 100]
+      }
+    },
+    "helpdeskTickets": {
+      "moduleKey": "tickets",
+      "appKey": "HELPDESK",
+      "title": "Tickets",
+      "layout": "BOARD",
+      "columns": [
+        {
+          "key": "id",
+          "label": "Ticket #",
+          "dataType": "text",
+          "sortable": true,
+          "filterable": false,
+          "visibility": "ENABLED",
+          "fieldPath": "ticketNumber",
+          "order": 1
+        },
+        {
+          "key": "subject",
+          "label": "Subject",
+          "dataType": "text",
+          "sortable": true,
+          "filterable": true,
+          "visibility": "ENABLED",
+          "fieldPath": "subject",
+          "order": 2
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "dataType": "status",
+          "sortable": true,
+          "filterable": true,
+          "visibility": "ENABLED",
+          "fieldPath": "status",
+          "order": 3
+        },
+        {
+          "key": "priority",
+          "label": "Priority",
+          "dataType": "status",
+          "sortable": true,
+          "filterable": true,
+          "visibility": "ENABLED",
+          "fieldPath": "priority",
+          "order": 4
+        },
+        {
+          "key": "assignedTo",
+          "label": "Assigned To",
+          "dataType": "user",
+          "sortable": true,
+          "filterable": true,
+          "visibility": "ENABLED",
+          "fieldPath": "assignedTo",
+          "order": 5
+        },
+        {
+          "key": "createdAt",
+          "label": "Created",
+          "dataType": "datetime",
+          "sortable": true,
+          "filterable": false,
+          "visibility": "ENABLED",
+          "fieldPath": "createdAt",
+          "order": 6
+        }
+      ],
+      "primaryActions": [
+        {
+          "key": "create",
+          "label": "New Ticket",
+          "type": "create",
+          "route": "/helpdesk/tickets/new",
+          "permission": "tickets.create",
+          "visibility": "ENABLED",
+          "icon": "plus",
+          "variant": "primary",
+          "order": 1
+        }
+      ],
+      "bulkActions": [
+        {
+          "key": "assign",
+          "label": "Assign",
+          "type": "assign",
+          "permission": "tickets.edit",
+          "visibility": "ENABLED",
+          "icon": "user",
+          "variant": "secondary",
+          "bulk": true,
+          "order": 1
+        },
+        {
+          "key": "close",
+          "label": "Close",
+          "type": "custom",
+          "permission": "tickets.edit",
+          "visibility": "ENABLED",
+          "icon": "check",
+          "variant": "secondary",
+          "bulk": true,
+          "order": 2
+        }
+      ],
+      "rowActions": [
+        {
+          "key": "view",
+          "label": "View",
+          "type": "view",
+          "route": "/helpdesk/tickets/:id",
+          "visibility": "ENABLED",
+          "icon": "eye",
+          "variant": "secondary",
+          "order": 1
+        },
+        {
+          "key": "edit",
+          "label": "Edit",
+          "type": "edit",
+          "route": "/helpdesk/tickets/:id/edit",
+          "permission": "tickets.edit",
+          "visibility": "ENABLED",
+          "icon": "pencil",
+          "variant": "secondary",
+          "order": 2
+        }
+      ],
+      "filters": [
+        {
+          "key": "status",
+          "label": "Status",
+          "type": "multiselect",
+          "fieldPath": "status",
+          "visibility": "ENABLED",
+          "options": [
+            { "value": "open", "label": "Open" },
+            { "value": "in_progress", "label": "In Progress" },
+            { "value": "resolved", "label": "Resolved" },
+            { "value": "closed", "label": "Closed" }
+          ],
+          "order": 1
+        },
+        {
+          "key": "priority",
+          "label": "Priority",
+          "type": "select",
+          "fieldPath": "priority",
+          "visibility": "ENABLED",
+          "options": [
+            { "value": "low", "label": "Low" },
+            { "value": "medium", "label": "Medium" },
+            { "value": "high", "label": "High" },
+            { "value": "urgent", "label": "Urgent" }
+          ],
+          "order": 2
+        }
+      ],
+      "emptyState": {
+        "type": "NO_DATA",
+        "title": "No tickets found",
+        "description": "Get started by creating your first ticket.",
+        "primaryAction": {
+          "label": "Create ticket",
+          "route": "/helpdesk/tickets/new"
+        }
+      },
+      "defaultSort": {
+        "column": "createdAt",
+        "order": "desc"
+      },
+      "pagination": {
+        "pageSize": 25,
+        "pageSizeOptions": [10, 25, 50, 100]
+      }
+    },
+    "readOnlyUser": {
+      "moduleKey": "contacts",
+      "appKey": "SALES",
+      "title": "Contacts",
+      "layout": "TABLE",
+      "columns": [
+        {
+          "key": "name",
+          "label": "Name",
+          "dataType": "text",
+          "sortable": true,
+          "visibility": "ENABLED",
+          "order": 1
+        },
+        {
+          "key": "email",
+          "label": "Email",
+          "dataType": "text",
+          "sortable": true,
+          "visibility": "ENABLED",
+          "order": 2
+        }
+      ],
+      "primaryActions": [],
+      "bulkActions": [],
+      "rowActions": [
+        {
+          "key": "view",
+          "label": "View",
+          "type": "view",
+          "route": "/contacts/:id",
+          "visibility": "ENABLED",
+          "order": 1
+        }
+      ],
+      "emptyState": {
+        "type": "NO_ACCESS",
+        "title": "No Access",
+        "description": "You don't have permission to view contacts. Please contact your administrator."
+      },
+      "note": "Read-only user has limited columns and no create/edit actions"
+    }
+  },
+  "notes": [
+    "All list pages follow the same structure: columns, actions, filters, empty state",
+    "Columns are permission-aware (hidden ≠ removed from definition)",
+    "Actions are permission-filtered (HIDDEN excluded)",
+    "Empty states are automatically determined based on permissions and configuration",
+    "Adding a new module requires zero list UI changes"
+  ]
+}
+

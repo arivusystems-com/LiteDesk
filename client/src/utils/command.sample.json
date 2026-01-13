@@ -1,0 +1,277 @@
+{
+  "description": "Sample command palette output JSON demonstrating commands derived from sidebar and dashboard",
+  "samples": {
+    "salesUser": {
+      "commands": [
+        {
+          "id": "core-dashboard",
+          "label": "Dashboard",
+          "description": "Navigate to Dashboard",
+          "icon": "home",
+          "route": "/dashboard",
+          "scope": "GLOBAL",
+          "visibility": "ENABLED",
+          "category": "navigation",
+          "keywords": ["dashboard", "home"],
+          "order": 1
+        },
+        {
+          "id": "domain-SALES",
+          "label": "Sales",
+          "description": "Open Sales dashboard",
+          "icon": "briefcase",
+          "route": "/sales",
+          "scope": "APP",
+          "visibility": "ENABLED",
+          "category": "apps",
+          "appKey": "SALES",
+          "keywords": ["sales", "SALES", "dashboard"],
+          "order": 1
+        },
+        {
+          "id": "module-SALES-contacts",
+          "label": "Contacts",
+          "description": "Open Contacts in Sales",
+          "icon": "users",
+          "route": "/contacts",
+          "scope": "MODULE",
+          "permission": "contacts.view",
+          "visibility": "ENABLED",
+          "category": "modules",
+          "appKey": "SALES",
+          "moduleKey": "contacts",
+          "keywords": ["contacts", "people", "sales"],
+          "order": 1
+        },
+        {
+          "id": "module-SALES-deals",
+          "label": "Deals",
+          "description": "Open Deals in Sales",
+          "icon": "briefcase",
+          "route": "/deals",
+          "scope": "MODULE",
+          "permission": "deals.view",
+          "visibility": "ENABLED",
+          "category": "modules",
+          "appKey": "SALES",
+          "moduleKey": "deals",
+          "keywords": ["deals", "opportunities", "pipeline", "sales"],
+          "order": 2
+        },
+        {
+          "id": "action-SALES-create-contact",
+          "label": "Add Contact",
+          "description": "Create new add contact",
+          "icon": "user-plus",
+          "route": "/contacts/new",
+          "scope": "APP",
+          "permission": "contacts.create",
+          "visibility": "ENABLED",
+          "category": "actions",
+          "appKey": "SALES",
+          "keywords": ["add contact", "create-contact", "create", "contacts", "sales"],
+          "order": 1
+        },
+        {
+          "id": "action-SALES-create-deal",
+          "label": "New Deal",
+          "description": "Create new new deal",
+          "icon": "briefcase",
+          "route": "/deals/new",
+          "scope": "APP",
+          "permission": "deals.create",
+          "visibility": "ENABLED",
+          "category": "actions",
+          "appKey": "SALES",
+          "keywords": ["new deal", "create-deal", "create", "deals", "sales"],
+          "order": 2
+        },
+        {
+          "id": "platform-settings",
+          "label": "Settings",
+          "description": "Navigate to Settings",
+          "icon": "cog",
+          "route": "/settings",
+          "scope": "GLOBAL",
+          "permission": "settings.view",
+          "visibility": "ENABLED",
+          "category": "settings",
+          "keywords": ["settings", "configuration", "preferences"],
+          "order": 1
+        }
+      ],
+      "commandsByCategory": {
+        "navigation": [
+          {
+            "id": "core-dashboard",
+            "label": "Dashboard",
+            "category": "navigation",
+            "scope": "GLOBAL"
+          }
+        ],
+        "actions": [
+          {
+            "id": "action-SALES-create-contact",
+            "label": "Add Contact",
+            "category": "actions",
+            "scope": "APP"
+          },
+          {
+            "id": "action-SALES-create-deal",
+            "label": "New Deal",
+            "category": "actions",
+            "scope": "APP"
+          }
+        ],
+        "modules": [
+          {
+            "id": "module-SALES-contacts",
+            "label": "Contacts",
+            "category": "modules",
+            "scope": "MODULE"
+          },
+          {
+            "id": "module-SALES-deals",
+            "label": "Deals",
+            "category": "modules",
+            "scope": "MODULE"
+          }
+        ],
+        "apps": [
+          {
+            "id": "domain-SALES",
+            "label": "Sales",
+            "category": "apps",
+            "scope": "APP"
+          }
+        ],
+        "settings": [
+          {
+            "id": "platform-settings",
+            "label": "Settings",
+            "category": "settings",
+            "scope": "GLOBAL"
+          }
+        ],
+        "system": []
+      },
+      "commandsByScope": {
+        "GLOBAL": [
+          {
+            "id": "core-dashboard",
+            "label": "Dashboard",
+            "scope": "GLOBAL"
+          },
+          {
+            "id": "platform-settings",
+            "label": "Settings",
+            "scope": "GLOBAL"
+          }
+        ],
+        "APP": [
+          {
+            "id": "domain-SALES",
+            "label": "Sales",
+            "scope": "APP"
+          },
+          {
+            "id": "action-SALES-create-contact",
+            "label": "Add Contact",
+            "scope": "APP"
+          },
+          {
+            "id": "action-SALES-create-deal",
+            "label": "New Deal",
+            "scope": "APP"
+          }
+        ],
+        "MODULE": [
+          {
+            "id": "module-SALES-contacts",
+            "label": "Contacts",
+            "scope": "MODULE"
+          },
+          {
+            "id": "module-SALES-deals",
+            "label": "Deals",
+            "scope": "MODULE"
+          }
+        ]
+      }
+    },
+    "readOnlyUser": {
+      "commands": [
+        {
+          "id": "core-dashboard",
+          "label": "Dashboard",
+          "description": "Navigate to Dashboard",
+          "icon": "home",
+          "route": "/dashboard",
+          "scope": "GLOBAL",
+          "visibility": "ENABLED",
+          "category": "navigation",
+          "order": 1
+        },
+        {
+          "id": "module-SALES-contacts",
+          "label": "Contacts",
+          "description": "Open Contacts in Sales",
+          "icon": "users",
+          "route": "/contacts",
+          "scope": "MODULE",
+          "permission": "contacts.view",
+          "visibility": "ENABLED",
+          "category": "modules",
+          "appKey": "SALES",
+          "moduleKey": "contacts",
+          "order": 1
+        }
+      ],
+      "note": "Read-only user has fewer commands - no create actions, only view permissions"
+    },
+    "multiAppUser": {
+      "commands": [
+        {
+          "id": "domain-SALES",
+          "label": "Sales",
+          "description": "Open Sales dashboard",
+          "scope": "APP",
+          "category": "apps",
+          "appKey": "SALES"
+        },
+        {
+          "id": "domain-HELPDESK",
+          "label": "Helpdesk",
+          "description": "Open Helpdesk dashboard",
+          "scope": "APP",
+          "category": "apps",
+          "appKey": "HELPDESK"
+        },
+        {
+          "id": "module-SALES-contacts",
+          "label": "Contacts",
+          "scope": "MODULE",
+          "category": "modules",
+          "appKey": "SALES"
+        },
+        {
+          "id": "module-HELPDESK-tickets",
+          "label": "Tickets",
+          "scope": "MODULE",
+          "category": "modules",
+          "appKey": "HELPDESK"
+        }
+      ],
+      "note": "User with access to multiple apps sees commands from all apps"
+    }
+  },
+  "notes": [
+    "All commands are derived from sidebar and dashboard structures",
+    "No duplicate definitions - commands come from existing navigation",
+    "Commands are permission-filtered (HIDDEN commands excluded)",
+    "Commands include keywords for search matching",
+    "Commands grouped by category and scope for organization",
+    "Adding an app/module automatically adds commands (no manual registration)"
+  ]
+}
+
