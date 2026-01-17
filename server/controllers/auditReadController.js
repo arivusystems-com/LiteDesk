@@ -10,11 +10,11 @@
  * - No workflow logic
  * 
  * Core Principles:
- * - CRM remains single source of truth
+ * - SALES remains single source of truth
  * - Ownership-based access only (eventOwnerId === req.user._id)
  * - Use Audit App models only
- * - Reference CRM models via IDs
- * - No CRM permissions required
+ * - Reference SALES models via IDs
+ * - No SALES permissions required
  * 
  * See AUDIT_READ_APIS.md for API documentation.
  * ============================================================================

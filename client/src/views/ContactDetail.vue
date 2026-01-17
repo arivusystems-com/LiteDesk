@@ -68,7 +68,20 @@
                 {{ contact.first_name }} {{ contact.last_name }}
               </h1>
               <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">{{ contact.job_title || 'No title' }}</p>
+              <!-- Phase 2C: Projection-aware type badge -->
               <span 
+                v-if="projectionTypeLabel"
+                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                :class="projectionTypeBadgeClass"
+              >
+                {{ projectionTypeLabel }}
+                <span v-if="projectionAppLabel" class="ml-1 text-xs opacity-75">
+                  ({{ projectionAppLabel }})
+                </span>
+              </span>
+              <!-- Fallback to lifecycle_stage if no projection -->
+              <span 
+                v-else
                 class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
                 :class="{
                   'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300': contact.lifecycle_stage === 'Lead',
@@ -251,6 +264,18 @@
             ref="tasksWidgetRef"
           />
 
+          <!-- Related Records (Platform-Level) -->
+          <div v-if="contact._id" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <h3 class="text-base font-bold text-gray-900 dark:text-white mb-4">Related Records</h3>
+            <RelatedRecordsRenderer
+              app-key="SALES"
+              module-key="contacts"
+              :record-id="contact._id"
+              @required-relationship-unsatisfied="handleRequiredUnsatisfied"
+              @required-relationship-satisfied="handleRequiredSatisfied"
+            />
+          </div>
+
           <!-- Old Relations Widget - Grid Layout (HIDDEN, keeping for reference) -->
           <div v-if="false" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
             <h3 class="text-base font-bold text-gray-900 dark:text-white mb-3">Relations</h3>
@@ -432,17 +457,22 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import RelatedEventsWidget from '@/components/events/RelatedEventsWidget.vue';
 import RelatedDealsWidget from '@/components/deals/RelatedDealsWidget.vue';
-import RelatedTasksWidget from '@/components/tasks/RelatedTasksWidget.vue>';
+import RelatedTasksWidget from '@/components/tasks/RelatedTasksWidget.vue';
 import RelatedOrganizationWidget from '@/components/organizations/RelatedOrganizationWidget.vue';
+import RelatedRecordsRenderer from '@/components/relationships/RelatedRecordsRenderer.vue';
 import { useAuthStore } from '@/stores/auth';
 import Avatar from '@/components/common/Avatar.vue';
+import { useRecordContext } from '@/composables/useRecordContext';
+import { getProjectionTypeLabel, getProjectionTypeBadgeClass, getAppLabel } from '@/utils/projectionLabels';
+import { useRecordContext } from '@/composables/useRecordContext';
+import { getProjectionTypeLabel, getProjectionTypeBadgeClass, getAppLabel } from '@/utils/projectionLabels';
 
 const route = useRoute();
 const router = useRouter();
@@ -462,6 +492,29 @@ const eventsWidgetRef = ref(null);
 const eventToEdit = ref(null);
 const dealsWidgetRef = ref(null);
 const tasksWidgetRef = ref(null);
+
+// Phase 2C: Get record context for projection metadata
+const { context: recordContext, load: loadRecordContext } = useRecordContext('SALES', 'people', () => route.params.id);
+
+// Phase 2C: Computed projection type label and badge
+const projectionTypeLabel = computed(() => {
+  if (!recordContext.value?.record?.projection?.currentType) return null;
+  const currentType = recordContext.value.record.projection.currentType;
+  const appKey = recordContext.value.record.projection.appKey || 'SALES';
+  return getProjectionTypeLabel(currentType, appKey);
+});
+
+const projectionTypeBadgeClass = computed(() => {
+  if (!recordContext.value?.record?.projection?.currentType) return '';
+  const currentType = recordContext.value.record.projection.currentType;
+  const appKey = recordContext.value.record.projection.appKey || 'SALES';
+  return getProjectionTypeBadgeClass(currentType, appKey);
+});
+
+const projectionAppLabel = computed(() => {
+  if (!recordContext.value?.record?.projection?.appKey) return null;
+  return getAppLabel(recordContext.value.record.projection.appKey);
+});
 
 const fetchContact = async () => {
   loading.value = true;
@@ -641,7 +694,11 @@ const viewTask = (taskId) => {
   });
 };
 
-onMounted(() => {
-  fetchContact();
+onMounted(async () => {
+  await fetchContact();
+  // Phase 2C: Load record context for projection metadata
+  if (route.params.id) {
+    await loadRecordContext();
+  }
 });
 </script>

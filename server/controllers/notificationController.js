@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const Notification = require('../models/Notification');
 
-const APP_KEYS = ['CRM', 'AUDIT', 'PORTAL'];
+const APP_KEYS = ['SALES', 'AUDIT', 'PORTAL'];
 
 function normalizeAppKey(req) {
   const fromQuery = req.query.appKey;

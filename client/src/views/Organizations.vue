@@ -1,5 +1,12 @@
 <template>
   <div class="mx-auto">
+    <!-- Entity Description -->
+    <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+      <p class="text-sm text-gray-700 dark:text-gray-300">
+        <strong>Organizations</strong> are shared across all apps. They represent companies, accounts, and customers that can be linked to people, deals, tickets, and other records.
+      </p>
+    </div>
+
     <ListView
       title="Organizations"
       description="Manage all customer organizations"
@@ -54,8 +61,8 @@
       ]"
       table-id="organizations-table"
       row-key="_id"
-      empty-title="No organizations found"
-      empty-message="Get started by creating your first organization"
+      empty-title="No organizations yet"
+      empty-message="Organizations are companies and accounts you work with. They're added automatically when you create deals or tickets, or you can add them directly here."
         :show-import="false"
         @create="openCreateModal"
         @export="exportOrganizations"

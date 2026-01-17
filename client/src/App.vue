@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router';
 
 import { useAuthStore } from '@/stores/auth';
+import { useAppShellStore } from '@/stores/appShell';
 import { usePermissionSync } from '@/composables/usePermissionSync';
 import { configureTabsStorage, resetTabsState, useTabs } from '@/composables/useTabs';
 import { useColorMode } from '@/composables/useColorMode';
@@ -11,10 +12,13 @@ import LandingPage from '@/views/LandingPage.vue'
 import Dashboard from '@/views/Dashboard.vue'
 import Nav from '@/components/Nav.vue';
 import TabBar from '@/components/TabBar.vue';
+import PlatformShell from '@/components/PlatformShell.vue';
 import NotificationContainer from '@/components/NotificationContainer.vue';
 import NotificationSheet from '@/components/notifications/NotificationSheet.vue';
+import { initializeDynamicRoutes } from '@/router';
 
 const authStore = useAuthStore();
+const appShellStore = useAppShellStore();
 const router = useRouter();
 const route = useRoute();
 const { initTabs, setupRouteWatcher } = useTabs();
@@ -25,14 +29,18 @@ const { colorMode } = useColorMode();
 
 // Check authentication status to conditionally show the navigation bar
 const isAuthenticated = computed(() => authStore.isAuthenticated);
-// Hide CRM shell for audit and portal routes (they have their own layout) or routes with hideShell meta
+// Hide shell only for auth routes and routes with explicit hideShell meta
+// Platform routes (/platform/*) should show the shell
 const hideShell = computed(() => {
   // Check route meta first
   if (route.meta.hideShell) return true;
-  // Also hide for audit routes (they use AuditLayout)
+  // Hide for auth routes only
+  if (route.path.startsWith('/login') || route.path.startsWith('/auth/')) return true;
+  // Hide for audit routes (they use AuditLayout)
   if (route.path.startsWith('/audit/')) return true;
-  // Also hide for portal routes (they use PortalLayout)
+  // Hide for portal routes (they use PortalLayout)
   if (route.path.startsWith('/portal/')) return true;
+  // Platform routes show the shell
   return false;
 });
 const isPublicRoute = computed(() => route.meta.requiresAuth === false);
@@ -42,12 +50,12 @@ const EXTRA_OFFSET_LIGHT = '2rem';
 const EXTRA_OFFSET_LARGE = '2rem';
 const contentWrapperRef = ref(null);
 const tableStickyOffset = ref(`calc(${DEFAULT_CONTENT_OFFSET}px + ${EXTRA_OFFSET_LIGHT})`);
-const crmNotificationSheetOpen = ref(false);
+const salesNotificationSheetOpen = ref(false);
 
-const handleCrmOpenNotifications = () => {
+const handleSalesOpenNotifications = () => {
   if (!authStore.isAuthenticated) return;
   if (window.innerWidth < 1024) {
-    crmNotificationSheetOpen.value = true;
+    salesNotificationSheetOpen.value = true;
   }
 };
 
@@ -132,11 +140,50 @@ const handleStorageEvent = (e) => {
   }
 };
 
+// Phase 2D: Detect active app from route path
+const detectActiveAppFromRoute = (path) => {
+  if (path.startsWith('/audit/')) return 'AUDIT';
+  if (path.startsWith('/portal/')) return 'PORTAL';
+  if (path.startsWith('/sales/')) return 'SALES';
+  if (path.startsWith('/helpdesk/')) return 'HELPDESK';
+  if (path.startsWith('/projects/')) return 'PROJECTS';
+  if (path.startsWith('/dashboard') || path.startsWith('/people') || path.startsWith('/organizations') || path.startsWith('/deals') || path.startsWith('/tasks') || path.startsWith('/events') || path.startsWith('/items') || path.startsWith('/forms') || path.startsWith('/imports')) return 'SALES';
+  return 'SALES'; // Default to Sales
+};
+
+// Phase 2D: Watch route changes and update activeApp
+watch(() => route.path, async (newPath) => {
+  if (authStore.isAuthenticated && appShellStore.isLoaded) {
+    const detectedApp = detectActiveAppFromRoute(newPath);
+    if (appShellStore.activeApp !== detectedApp) {
+      console.log(`[App] Route changed to ${newPath}, setting activeApp to ${detectedApp}`);
+      appShellStore.setActiveApp(detectedApp);
+    }
+  }
+}, { immediate: true });
+
 // Refresh permissions on app mount (page refresh)
 onMounted(async () => {
   if (authStore.isAuthenticated) {
     console.log('Auto-refreshing permissions on page load...');
     await authStore.refreshUser();
+    
+    // Phase 1A: Load UI metadata for dynamic composition
+    if (!appShellStore.isLoaded) {
+      console.log('Loading UI metadata...');
+      await appShellStore.loadUIMetadata();
+      
+      // Phase 1A: Initialize dynamic routes after UI metadata is loaded
+      console.log('Initializing dynamic routes...');
+      await initializeDynamicRoutes();
+    }
+    
+    // Phase 2D: Set initial activeApp based on current route
+    const detectedApp = detectActiveAppFromRoute(route.path);
+    if (detectedApp && appShellStore.activeApp !== detectedApp) {
+      console.log(`[App] Initial route: ${route.path}, setting activeApp to ${detectedApp}`);
+      appShellStore.setActiveApp(detectedApp);
+    }
 
     // Only initialize tabs system for CRM routes (not audit or portal apps)
     // Audit and Portal apps have their own layouts and don't use the tabs system
@@ -151,7 +198,18 @@ onMounted(async () => {
       if (instanceId && userId) {
         configureTabsStorage({ instanceId, userId });
         // Initialize tabs system after storage is configured
+        // This creates the home tab synchronously
         initTabs();
+        
+        // Ensure tabs are created and visible before setting up route watcher
+        // Use nextTick to ensure reactive updates are processed
+        await nextTick();
+        
+        // Log tabs state for debugging
+        console.log('📊 [App] After initTabs, checking tabs state...');
+        const { tabs: tabsRef } = useTabs();
+        console.log('📊 [App] Tabs count:', tabsRef.value.length);
+        console.log('📊 [App] Tabs:', tabsRef.value.map(t => ({ id: t.id, title: t.title, path: t.path })));
 
         // Setup route watcher for browser navigation (pass route from setup context)
         setupRouteWatcher(route);
@@ -174,27 +232,46 @@ onMounted(async () => {
   queueContentOffsetUpdate();
   window.addEventListener('resize', handleResize, { passive: true });
   window.addEventListener('storage', handleStorageEvent);
-  window.addEventListener('crm-open-notifications', handleCrmOpenNotifications);
+  window.addEventListener('sales-open-notifications', handleSalesOpenNotifications);
 });
 
-watch(crmNotificationSheetOpen, (val) => {
-  console.log('[App] crmNotificationSheetOpen changed:', val);
+watch(salesNotificationSheetOpen, (val) => {
+  console.log('[App] salesNotificationSheetOpen changed:', val);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize);
   window.removeEventListener('storage', handleStorageEvent);
-  window.removeEventListener('crm-open-notifications', handleCrmOpenNotifications);
+  window.removeEventListener('sales-open-notifications', handleSalesOpenNotifications);
 });
 
-// Clear in-memory tabs on logout/auth reset (SPA user switch)
+// Watch for authentication changes to initialize tabs
 watch(
   () => authStore.isAuthenticated,
-  (isAuthed, wasAuthed) => {
+  async (isAuthed, wasAuthed) => {
     if (wasAuthed && !isAuthed) {
+      // User logged out - clear tabs
       resetTabsState();
+    } else if (!wasAuthed && isAuthed) {
+      // User just logged in - initialize tabs
+      console.log('🔄 [App] User authenticated, initializing tabs...');
+      const instanceId = authStore.organization?._id || authStore.organization?.instanceId;
+      const userId = authStore.user?._id;
+      
+      if (instanceId && userId) {
+        configureTabsStorage({ instanceId, userId });
+        initTabs();
+        await nextTick();
+        
+        // Setup route watcher
+        const { setupRouteWatcher } = useTabs();
+        setupRouteWatcher(route);
+        
+        console.log('✅ [App] Tabs initialized after login');
+      }
     }
-  }
+  },
+  { immediate: false }
 );
 
 // Enable automatic permission sync every 2 minutes for real-time updates
@@ -216,36 +293,8 @@ usePermissionSync(2);
       </div>
     </div>
 
-    <!-- Default shell with Sidebar/Tabbar -->
-    <div v-else class="min-h-screen bg-gray-100/70 dark:bg-gray-900 flex overflow-x-hidden">
-      <!-- Sidebar Navigation - v-model binds collapsed state -->
-      <Nav v-model="sidebarCollapsed" />
-      
-      <!-- Main Content Area - Dynamic margin based on sidebar state -->
-      <main 
-        :class="[
-          'flex-1 flex flex-col transition-all duration-300 min-h-screen overflow-x-hidden',
-          sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
-        ]"
-      >
-        <!-- Tab Bar - Hidden on mobile, visible on tablet and up -->
-        <TabBar class="hidden md:block" />
-        
-        <!-- Content wrapper with padding -->
-        <div
-          ref="contentWrapperRef"
-          class="flex-1 p-4 lg:p-6 overflow-y-auto overflow-x-hidden mt-16 md:mt-30 lg:mt-14"
-          :style="{ '--table-sticky-offset': tableStickyOffset }"
-        >
-          <!-- Keep-alive caches component instances to prevent remounting on tab switch -->
-          <RouterView v-slot="{ Component }">
-            <keep-alive :max="10">
-              <component :is="Component" :key="$route.fullPath" />
-            </keep-alive>
-          </RouterView>
-        </div>
-      </main>
-    </div>
+    <!-- Phase 1A: Platform Shell with dynamic UI composition -->
+    <PlatformShell v-else />
   </div>
 
   <!-- Landing Page (no sidebar) -->
@@ -256,12 +305,12 @@ usePermissionSync(2);
   <!-- Global Notification Container -->
   <NotificationContainer />
 
-  <!-- CRM Notification Sheet (mobile) -->
+  <!-- Sales Notification Sheet (mobile) -->
   <NotificationSheet
-    :open="crmNotificationSheetOpen"
-    app-key="CRM"
+    :open="salesNotificationSheetOpen"
+    app-key="SALES"
     :mark-all-disabled="false"
-    @close="crmNotificationSheetOpen = false"
+    @close="salesNotificationSheetOpen = false"
   />
 </template>
 

@@ -124,6 +124,15 @@
                 <span>{{ role.userCount || 0 }} Users</span>
               </button>
               <button
+                @click.stop="viewRolePermissions(role)"
+                class="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-xs transition-colors inline-flex items-center justify-center gap-2"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>Permissions</span>
+              </button>
+              <button
                 v-if="!role.isSystemRole"
                 @click.stop="deleteRole(role)"
                 class="px-3 py-2 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg font-medium text-xs transition-colors"
@@ -134,6 +143,99 @@
                 </svg>
               </button>
             </div>
+          </div>
+        </div>
+
+        <!-- Permission breakdown -->
+        <div v-if="selectedRoleForView" class="mt-8 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Permissions for</p>
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                {{ selectedRoleForView.name }}
+                <span v-if="selectedRoleForView.isSystemRole" class="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded text-xs font-medium">
+                  System
+                </span>
+              </h3>
+            </div>
+            <button
+              class="text-sm text-brand-600 dark:text-brand-400 hover:underline"
+              @click="selectedRoleForView = null"
+            >
+              Clear
+            </button>
+          </div>
+
+          <!-- Platform permissions -->
+          <div class="mb-6">
+            <div class="flex items-center gap-2 mb-2">
+              <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Platform Permissions</h4>
+              <span class="text-xs text-gray-500">Organization-wide controls</span>
+            </div>
+            <div v-if="selectedRolePermissions.platform.length" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div
+                v-for="perm in selectedRolePermissions.platform"
+                :key="`platform-${perm.name}`"
+                class="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60"
+              >
+                <p class="font-medium text-gray-900 dark:text-white">{{ perm.name }}</p>
+                <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">{{ perm.actions.join(', ') || 'Read-only' }}</p>
+              </div>
+            </div>
+            <p v-else class="text-sm text-gray-500 dark:text-gray-400">No platform permissions assigned.</p>
+          </div>
+
+          <!-- Application permissions -->
+          <div class="mb-6">
+            <div class="flex items-center gap-2 mb-2">
+              <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Application Permissions</h4>
+              <span class="text-xs text-gray-500">Scoped per application</span>
+            </div>
+            <div v-if="Object.keys(selectedRolePermissions.apps).length" class="space-y-3">
+              <div
+                v-for="(perms, appKey) in selectedRolePermissions.apps"
+                :key="`app-${appKey}`"
+                class="border border-gray-200 dark:border-gray-700 rounded-lg"
+              >
+                <div class="px-4 py-2 bg-gray-50 dark:bg-gray-800/60 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ appKey }}</span>
+                    <span class="text-xs text-gray-500">App-scoped</span>
+                  </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 p-4">
+                  <div
+                    v-for="perm in perms"
+                    :key="`perm-${appKey}-${perm.name}`"
+                    class="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40"
+                  >
+                    <p class="font-medium text-gray-900 dark:text-white">{{ perm.name }}</p>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">{{ perm.actions.join(', ') || 'Read-only' }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p v-else class="text-sm text-gray-500 dark:text-gray-400">No application permissions assigned.</p>
+          </div>
+
+          <!-- Legacy / deprecated -->
+          <div>
+            <div class="flex items-center gap-2 mb-2">
+              <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Legacy Permissions</h4>
+              <span class="text-xs text-amber-600 dark:text-amber-400">Deprecated - avoid using</span>
+            </div>
+            <div v-if="selectedRolePermissions.legacy.length" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div
+                v-for="perm in selectedRolePermissions.legacy"
+                :key="`legacy-${perm.name}`"
+                class="p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20"
+              >
+                <p class="font-medium text-amber-800 dark:text-amber-200">{{ perm.name }}</p>
+                <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">{{ perm.actions.join(', ') || 'Legacy scope' }}</p>
+                <p class="text-xs text-amber-600 dark:text-amber-400 mt-2">Deprecated: migrate to app-scoped permissions.</p>
+              </div>
+            </div>
+            <p v-else class="text-sm text-gray-500 dark:text-gray-400">No legacy permissions present.</p>
           </div>
         </div>
       </div>
@@ -174,7 +276,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, computed } from 'vue';
 import apiClient from '@/utils/apiClient';
 import RoleFormModal from './RoleFormModal.vue';
 import OrganizationHierarchy from './OrganizationHierarchy.vue';
@@ -191,11 +293,80 @@ const showUsersModal = ref(false);
 const selectedRoleForUsers = ref(null);
 const showEditUserModal = ref(false);
 const selectedUserToEdit = ref(null);
+const selectedRoleForView = ref(null); // role currently being inspected for permissions
 
 const tabs = [
   { id: 'roles', name: 'Roles Management' },
   { id: 'hierarchy', name: 'Organization Hierarchy' }
 ];
+
+// Helpers
+const toTitleCase = (str = '') => {
+  return str
+    .replace(/[_-]/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+const normalizeActions = (actionsObj = {}) => {
+  return Object.entries(actionsObj)
+    .filter(([, allowed]) => allowed === true)
+    .map(([action]) => action);
+};
+
+const groupPermissions = (role) => {
+  const result = {
+    platform: [],
+    apps: {},
+    legacy: []
+  };
+
+  if (!role?.permissions || typeof role.permissions !== 'object') return result;
+
+  for (const [key, value] of Object.entries(role.permissions)) {
+    const actions = Array.isArray(value) ? value : normalizeActions(value || {});
+    const lowerKey = key.toLowerCase();
+    const isLegacy = lowerKey.includes('legacy') || lowerKey.startsWith('crm');
+
+    if (isLegacy) {
+      result.legacy.push({
+        name: toTitleCase(key.replace(/legacy[:.]?/i, '').replace(/^crm[:.]?/i, '')),
+        actions
+      });
+      continue;
+    }
+
+    if (key.startsWith('platform:') || key.startsWith('platform.')) {
+      result.platform.push({
+        name: toTitleCase(key.replace(/^platform[:.]?/, '')),
+        actions
+      });
+      continue;
+    }
+
+    // Expect app-scoped keys like "SALES:people" or "HELPDESK.tickets"
+    const separator = key.includes(':') ? ':' : key.includes('.') ? '.' : null;
+    const [appKeyRaw, moduleRaw] = separator ? key.split(separator) : [null, key];
+    const appKey = appKeyRaw ? appKeyRaw.toUpperCase() : 'APP';
+    const moduleName = toTitleCase(moduleRaw || key);
+
+    if (!result.apps[appKey]) result.apps[appKey] = [];
+    result.apps[appKey].push({
+      name: moduleName,
+      actions
+    });
+  }
+
+  // Sort for stable display
+  result.platform.sort((a, b) => a.name.localeCompare(b.name));
+  Object.keys(result.apps).forEach((app) => {
+    result.apps[app].sort((a, b) => a.name.localeCompare(b.name));
+  });
+  result.legacy.sort((a, b) => a.name.localeCompare(b.name));
+
+  return result;
+};
+
+const selectedRolePermissions = computed(() => groupPermissions(selectedRoleForView.value));
 
 // Fetch roles
 const fetchRoles = async () => {
@@ -276,6 +447,10 @@ const viewRoleUsers = (role) => {
   console.log('Opening users modal for role:', role.name);
   selectedRoleForUsers.value = role;
   showUsersModal.value = true;
+};
+
+const viewRolePermissions = (role) => {
+  selectedRoleForView.value = role;
 };
 
 // Handle edit user from role users modal

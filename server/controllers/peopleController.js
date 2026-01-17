@@ -8,19 +8,62 @@
  * - Notes management
  * - Activity log management
  * 
- * ⚠️ VIOLATION: Contains CRM-specific logic for Lead/Contact types
- *    and CRM-specific status fields.
+ * ✅ FIXED: Person creation is now identity-only and app-agnostic.
+ *    Participation fields (type, lead_status, contact_status, etc.) are
+ *    stripped from creation payloads and must be set via Attach-to-App.
  * 
  * See PLATFORM_CORE_ANALYSIS.md for details.
  * ============================================================================
  */
 
 const People = require('../models/People');
+const { applyProjectionFilter } = require('../utils/appProjectionQuery');
+const { getProjection } = require('../utils/moduleProjectionResolver');
+
+/**
+ * Get list of Sales participation fields that should not be set during Person creation
+ * These fields are set via Attach-to-App, not during identity creation
+ */
+function getSalesParticipationFields() {
+  return [
+    'type',              // State field - Lead/Contact distinction
+    'lead_status',       // State field - Lead workflow status
+    'contact_status',    // State field - Contact workflow status
+    'lead_owner',        // Detail field - Lead owner
+    'lead_score',        // Detail field - Lead scoring
+    'interest_products', // Detail field - Products of interest
+    'qualification_date', // Detail field - Qualification date
+    'qualification_notes', // Detail field - Qualification notes
+    'estimated_value',   // Detail field - Estimated deal value
+    'role',              // Detail field - Contact role
+    'birthday',          // Detail field - Birthday
+    'preferred_contact_method' // Detail field - Contact preference
+  ];
+}
 
 // Create People
 exports.create = async (req, res) => {
   try {
     const User = require('../models/User');
+    
+    // GUARDRAIL: Strip Sales participation fields from creation payload
+    // Person creation is identity-only and app-agnostic
+    // Participation fields are set via Attach-to-App, not during creation
+    const participationFields = getSalesParticipationFields();
+    const strippedBody = { ...req.body };
+    const detectedParticipationFields = [];
+    
+    for (const field of participationFields) {
+      if (strippedBody.hasOwnProperty(field)) {
+        detectedParticipationFields.push(field);
+        delete strippedBody[field];
+      }
+    }
+    
+    // Log warning if participation fields were detected (for legacy callers)
+    if (detectedParticipationFields.length > 0) {
+      console.warn(`[PeopleController] ⚠️ Participation fields detected in Person creation payload and stripped: ${detectedParticipationFields.join(', ')}. Person creation is identity-only. Use Attach-to-App to set participation fields.`);
+    }
     
     // Get user name for activity log
     const user = await User.findById(req.user._id).select('firstName lastName username');
@@ -29,7 +72,7 @@ exports.create = async (req, res) => {
       : 'System';
     
     const body = {
-      ...req.body,
+      ...strippedBody, // Use stripped body (no participation fields)
       organizationId: req.user.organizationId,
       createdBy: req.user._id,
       // Add initial activity log for record creation
@@ -141,7 +184,7 @@ exports.list = async (req, res) => {
       ? new mongoose.Types.ObjectId(userOrgId) 
       : userOrgId;
     
-    const query = { organizationId: orgIdObjectId };
+    let query = { organizationId: orgIdObjectId };
     
     // Debug logging
     console.log('[PeopleController] Filtering by organizationId:', {
@@ -153,24 +196,153 @@ exports.list = async (req, res) => {
       query: JSON.stringify(query)
     });
     
-    if (req.query.type) query.type = req.query.type;
+    // Determine appKey once at the start - check query param first, then middleware
+    const appKey = req.query.appKey || req.appKey || 'SALES';
+    const moduleKey = 'people';
+    
+    // Debug logging
+    console.log('[PeopleController] appKey determination:', {
+      queryAppKey: req.query.appKey,
+      middlewareAppKey: req.appKey,
+      finalAppKey: appKey
+    });
+    
+    // Only apply type filter if explicitly requested (not for PLATFORM appKey)
+    // This ensures identity-only people (without type) are included
+    if (req.query.type && appKey !== 'PLATFORM') {
+      query.type = req.query.type;
+    }
     if (req.query.email) query.email = req.query.email;
-    if (req.query.organization) query.organization = req.query.organization; // This is CRM organization, not tenant
+    if (req.query.organization) query.organization = req.query.organization; // This is Sales organization, not tenant
+    
+    // Search functionality - search across name, email, phone fields
+    // Store search condition separately - will be combined after projection filter
+    let searchCondition = null;
+    if (req.query.search && req.query.search.trim()) {
+      const searchRegex = new RegExp(req.query.search.trim(), 'i');
+      searchCondition = {
+        $or: [
+          { first_name: searchRegex },
+          { last_name: searchRegex },
+          { email: searchRegex },
+          { phone: searchRegex },
+          { mobile: searchRegex }
+        ]
+      };
+    }
+
+    // Phase 2A.2: Apply projection filter (read-time filtering only)
+    // SAFETY: Projection filtering is read-only.
+    // SAFETY: No record ownership or permissions are enforced here.
+    // CRITICAL: For PLATFORM appKey, skip projection filtering to show ALL people
+    // including those without app participation (identity-only records)
+    // Skip projection filtering for PLATFORM appKey to ensure all people are visible
+    if (appKey !== 'PLATFORM') {
+      const projectionMeta = getProjection(appKey, moduleKey);
+      query = applyProjectionFilter({
+        appKey,
+        moduleKey,
+        baseQuery: query,
+        projectionMeta
+      });
+    } else {
+      // For PLATFORM appKey, explicitly ensure we're not filtering by type
+      // This is a safety check to ensure identity-only records are included
+      // Explicitly ensure query doesn't exclude records without type field
+      // Remove any existing type filter that might have been added earlier
+      if (query.type && typeof query.type === 'object' && query.type.$exists === false) {
+        // Type filter is checking for non-existence - this is fine
+      } else if (query.type && query.type !== null) {
+        // If there's a type filter that's not checking for null/existence, remove it
+        // unless it was explicitly requested in query params (which we already handled above)
+        // Since we only set query.type above if req.query.type exists, we should be safe
+        // But let's be extra safe and ensure no type filter exists for PLATFORM
+        if (!req.query.type) {
+          // No explicit type filter requested, ensure we don't filter by type
+          // The query should already not have type filter at this point, but double-check
+          delete query.type;
+        }
+      }
+      console.log('[PeopleController] PLATFORM appKey detected - skipping projection filter to show all people');
+    }
+    
+    // Apply search condition after projection filter
+    // If projection filter added $or, combine with $and; otherwise just add search $or
+    if (searchCondition) {
+      if (query.$or) {
+        // Projection filter added $or, combine with $and
+        query = {
+          ...query,
+          $and: [
+            { $or: query.$or },
+            searchCondition
+          ]
+        };
+        delete query.$or;
+      } else {
+        // No existing $or, just add search $or
+        query.$or = searchCondition.$or;
+      }
+    }
 
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
 
-    // Handle sorting
+    // Handle sorting - default to newest first (desc) so new records appear on first page
     const sortBy = req.query.sortBy || 'createdAt';
+    // If no explicit sortOrder provided, default to descending (newest first)
+    // Only use 'asc' if explicitly requested
     const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder;
 
     const User = require('../models/User');
     
+    // CRITICAL: Final safety check for PLATFORM appKey - ensure no type filtering
+    if (appKey === 'PLATFORM' && !req.query.type) {
+      // Explicitly remove any type filter to ensure all records are included
+      if (query.type && typeof query.type !== 'object') {
+        // Remove direct type filter (like { type: 'Lead' })
+        delete query.type;
+        console.log('[PeopleController] Removed type filter for PLATFORM appKey');
+      }
+      // Also check for type in $or conditions from projection filter (shouldn't exist for PLATFORM, but be safe)
+      if (query.$or) {
+        // Check if any $or condition filters by type in a way that excludes null/missing
+        // This shouldn't happen since we skip projection filter for PLATFORM, but check anyway
+        const hasRestrictiveTypeFilter = query.$or.some(condition => 
+          condition.type && 
+          typeof condition.type === 'object' && 
+          condition.type.$in && 
+          !condition.type.$in.includes(null) &&
+          !condition.type.$exists
+        );
+        if (hasRestrictiveTypeFilter) {
+          console.warn('[PeopleController] Warning: Found restrictive type filter in $or for PLATFORM appKey');
+        }
+      }
+    }
+    
     // CRITICAL: Double-check the query before executing
-    console.log('[PeopleController] Executing query:', JSON.stringify(query, null, 2));
+    console.log('[PeopleController] Final query before execution:', {
+      appKey: appKey,
+      queryAppKey: req.query.appKey,
+      middlewareAppKey: req.appKey,
+      hasProjectionFilter: appKey !== 'PLATFORM',
+      hasSearch: !!searchCondition,
+      hasTypeFilter: !!query.type,
+      queryString: JSON.stringify(query, null, 2),
+      queryKeys: Object.keys(query)
+    });
+    
+    // Execute query with detailed logging
+    console.log('[PeopleController] Executing find query:', {
+      query: JSON.stringify(query),
+      sortOptions: sortOptions,
+      limit: limit,
+      skip: skip
+    });
     
     const data = await People.find(query)
       .populate('assignedTo', 'firstName lastName email avatar')
@@ -180,7 +352,70 @@ exports.list = async (req, res) => {
       .sort(sortOptions)
       .limit(limit)
       .skip(skip);
+    
     const total = await People.countDocuments(query);
+    
+    // Log types distribution to see if records without type are in results
+    const typesInResults = {};
+    data.forEach(r => {
+      const type = r.type || 'NO_TYPE';
+      typesInResults[type] = (typesInResults[type] || 0) + 1;
+    });
+    
+    console.log('[PeopleController] Query results:', {
+      returnedCount: data.length,
+      page: page,
+      limit: limit,
+      total: total,
+      typesDistribution: typesInResults,
+      sampleIds: data.slice(0, 5).map(r => ({ 
+        id: r._id, 
+        name: `${r.first_name} ${r.last_name}`, 
+        type: r.type || 'NO_TYPE',
+        createdAt: r.createdAt
+      }))
+    });
+    
+    console.log('[PeopleController] Total count:', total);
+    
+    // Calculate statistics with projection filter applied
+    // Use the same query so stats match the filtered results
+    const statistics = await People.aggregate([
+      { $match: query },
+      {
+        $group: {
+          _id: null,
+          totalContacts: { $sum: 1 },
+          leadContacts: { $sum: { $cond: [{ $eq: ['$type', 'Lead'] }, 1, 0] } },
+          customerContacts: { $sum: { $cond: [{ $eq: ['$type', 'Contact'] }, 1, 0] } }
+        }
+      }
+    ]);
+    
+    // Get new contacts this week
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const newThisWeek = await People.countDocuments({
+      ...query,
+      createdAt: { $gte: oneWeekAgo }
+    });
+    
+    // Get new customers this week
+    const newCustomers = await People.countDocuments({
+      ...query,
+      type: 'Contact',
+      createdAt: { $gte: oneWeekAgo }
+    });
+    
+    // Calculate conversion rate (customers / total * 100)
+    const statsData = statistics[0] || {
+      totalContacts: 0,
+      leadContacts: 0,
+      customerContacts: 0
+    };
+    const conversionRate = statsData.totalContacts > 0
+      ? Math.round((statsData.customerContacts / statsData.totalContacts) * 100)
+      : 0;
     
     // Debug: Check if any records have wrong organizationId
     if (data.length > 0) {
@@ -232,7 +467,25 @@ exports.list = async (req, res) => {
       });
     }
     
-    res.json({ success: true, data: filteredData, meta: { page, limit, total: filteredData.length } });
+    res.json({ 
+      success: true, 
+      data: filteredData, 
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalRecords: total,
+        limit: limit
+      },
+      meta: { page, limit, total: total },
+      statistics: {
+        totalContacts: statsData.totalContacts,
+        leadContacts: statsData.leadContacts,
+        customerContacts: statsData.customerContacts,
+        newThisWeek: newThisWeek,
+        newCustomers: newCustomers,
+        conversionRate: conversionRate
+      }
+    });
   } catch (error) {
     console.error('Error in people list:', error);
     res.status(500).json({ success: false, message: 'Error fetching records', error: error.message });
@@ -264,6 +517,45 @@ exports.update = async (req, res) => {
     // If someone tried to change createdBy, log a warning (but don't fail the request)
     if (createdBy !== undefined) {
       console.warn(`Attempt to modify createdBy field blocked for People record ${req.params.id}`);
+    }
+    
+    // Validate field-level write access
+    const ModuleDefinition = require('../models/ModuleDefinition');
+    const { validateFieldWrite } = require('../utils/fieldAccessControl');
+    
+    const moduleDef = await ModuleDefinition.findOne({
+      organizationId: req.user.organizationId,
+      key: 'people'
+    });
+    
+    if (moduleDef && Array.isArray(moduleDef.fields)) {
+      const fieldViolations = [];
+      
+      // Validate each field being updated
+      for (const [fieldKey, fieldValue] of Object.entries(updateData)) {
+        // Skip system fields and metadata
+        if (['_id', '__v', 'organizationId', 'createdAt', 'updatedAt', 'createdBy'].includes(fieldKey)) {
+          continue;
+        }
+        
+        const validation = validateFieldWrite(fieldKey, moduleDef.fields, req.user, 'people');
+        if (!validation.allowed) {
+          fieldViolations.push({
+            field: fieldKey,
+            reason: validation.reason
+          });
+        }
+      }
+      
+      // If any field violations, reject the entire update
+      if (fieldViolations.length > 0) {
+        return res.status(403).json({
+          success: false,
+          message: 'Field access denied',
+          code: 'FIELD_ACCESS_DENIED',
+          violations: fieldViolations
+        });
+      }
     }
     
     // Ensure organization field is properly formatted (ObjectId string or null)

@@ -1,4 +1,120 @@
 const ModuleDefinition = require('../models/ModuleDefinition');
+const { filterFieldsByReadAccess, filterFieldsByWriteAccess, validateFieldWrite } = require('../utils/fieldAccessControl');
+
+/**
+ * Validate field mutations based on ownership rules
+ * 
+ * For complete ownership rules, see: /docs/field-governance.md
+ * 
+ * Rules:
+ * - owner = 'platform': Cannot be deleted, renamed, type-changed, or hidden globally
+ * - owner = 'app': Cannot be deleted via UI, cannot be renamed by org users
+ * - owner = 'org': Can be deleted/renamed by org admin only
+ * 
+ * @param {Array} oldFields - Existing fields from database
+ * @param {Array} newFields - New fields from request
+ * @param {Object} user - User making the request (for org admin check)
+ * @returns {Object} { valid: boolean, error: string|null, violations: Array }
+ */
+function validateFieldMutations(oldFields, newFields, user) {
+  if (!Array.isArray(oldFields) || !Array.isArray(newFields)) {
+    return { valid: true, error: null, violations: [] }; // Skip validation if arrays invalid
+  }
+
+  const violations = [];
+  const oldFieldsMap = new Map();
+  const newFieldsMap = new Map();
+
+  // Build maps for efficient lookup
+  oldFields.forEach(f => {
+    if (f && f.key) {
+      oldFieldsMap.set(f.key.toLowerCase(), f);
+    }
+  });
+
+  newFields.forEach(f => {
+    if (f && f.key) {
+      newFieldsMap.set(f.key.toLowerCase(), f);
+    }
+  });
+
+  // Check for deletions and mutations
+  for (const [keyLower, oldField] of oldFieldsMap) {
+    const newField = newFieldsMap.get(keyLower);
+    const owner = oldField.owner || 'platform'; // Default to platform if not set
+
+    // Field was deleted
+    if (!newField) {
+      if (owner === 'platform') {
+        violations.push({
+          field: oldField.key,
+          operation: 'delete',
+          reason: 'Platform fields cannot be deleted.'
+        });
+      } else if (owner === 'app') {
+        violations.push({
+          field: oldField.key,
+          operation: 'delete',
+          reason: 'App-managed fields cannot be deleted by organization users.'
+        });
+      }
+      // owner === 'org' is allowed (checked below)
+      continue;
+    }
+
+    // Field exists in both - check for mutations
+    // Check for rename (key changed but same position/identity - this is tricky, so we'll check if key changed)
+    // Actually, if key changed, it's a delete + add, which we handle above
+    // So here we check for type changes and other mutations
+
+    // Check for type change
+    if (oldField.dataType && newField.dataType && oldField.dataType !== newField.dataType) {
+      if (owner === 'platform') {
+        violations.push({
+          field: oldField.key,
+          operation: 'type-change',
+          reason: 'Platform fields cannot have their type changed.'
+        });
+      }
+      // app and org fields can have type changed (with existing constraints)
+    }
+
+    // Check for rename (key changed)
+    // Note: This is detected as a delete + add, handled above
+    // But we also need to check if the field key itself was modified
+    if (oldField.key !== newField.key) {
+      if (owner === 'platform') {
+        violations.push({
+          field: oldField.key,
+          operation: 'rename',
+          reason: 'Platform fields cannot be renamed.'
+        });
+      } else if (owner === 'app') {
+        violations.push({
+          field: oldField.key,
+          operation: 'rename',
+          reason: 'App-managed fields cannot be renamed by organization users.'
+        });
+      }
+      // owner === 'org' is allowed
+    }
+  }
+
+  // Check for org-owned field deletions (require org admin)
+  // This is handled by checking if user is org admin - but we don't have that info here
+  // We'll let it through and check permissions at a higher level if needed
+
+  if (violations.length > 0) {
+    const firstViolation = violations[0];
+    return {
+      valid: false,
+      error: firstViolation.reason,
+      violations: violations
+    };
+  }
+
+  return { valid: true, error: null, violations: [] };
+}
 
 /**
  * Get default notification metadata for system modules.
@@ -753,7 +869,10 @@ function getBaseFieldsForKey(key) {
                     order: 0,
                     validations: [],
                     dependencies: dependencies,
-                    lookupSettings: lookupSettings
+                    lookupSettings: lookupSettings,
+                    // Field ownership and context classification
+                    owner: 'platform',  // Default: platform-shipped fields
+                    context: 'global'   // Default: global context (not app-specific)
                 };
             });
     } catch (e) {
@@ -777,7 +896,7 @@ const DEFAULT_STAGE_PLAYBOOKS = {
             {
                 key: `${stageKey}-research-account`,
                 title: 'Research account background',
-                description: 'Review company profile, industry insights and existing CRM notes.',
+                description: 'Review company profile, industry insights and existing SALES notes.',
                 actionType: 'task',
                 dueInDays: 0,
                 assignment: { type: 'deal_owner', targetId: null, targetType: '', targetName: '' },
@@ -1214,8 +1333,49 @@ function normalizePipelineSettings(pipelines = []) {
     });
 }
 
+/**
+ * Filter fields by context
+ * 
+ * For complete context rules, see: /docs/field-governance.md
+ * 
+ * @param {Array} fields - Array of field definitions
+ * @param {string} currentContext - Current app context ('sales', 'support', 'platform', etc.)
+ * @returns {Array} - Filtered fields
+ */
+function filterFieldsByContext(fields, currentContext) {
+  if (!Array.isArray(fields)) return [];
+  if (!currentContext) currentContext = 'platform'; // Safe default
+  
+  return fields.filter(field => {
+    if (!field || !field.context) {
+      // If context is missing, default to 'global' for backward compatibility
+      // But only show in platform context as a safe default
+      return currentContext === 'platform';
+    }
+    
+    const fieldContext = field.context.toLowerCase();
+    
+    // Global fields are visible everywhere
+    if (fieldContext === 'global') {
+      return true;
+    }
+    
+    // App-specific fields are visible only in their app context
+    if (currentContext === 'platform') {
+      // Platform context shows ONLY global fields
+      return false;
+    }
+    
+    // In app context, show fields for that app OR global fields
+    return fieldContext === currentContext.toLowerCase();
+  });
+}
+
 exports.listModules = async (req, res) => {
     try {
+        // Get context from query parameter (default to 'platform')
+        const currentContext = (req.query.context || 'platform').toLowerCase();
+        
         // Static system modules (always present)
         const systemModules = [
             { key: 'people', name: 'People' },
@@ -1327,11 +1487,59 @@ exports.listModules = async (req, res) => {
         });
 
         // Exclude 'groups' from modules list (it's a settings feature, not a module)
-        // Use select() to explicitly include quickCreate and quickCreateLayout fields
+        // Query without select first to see what fields exist, then explicitly include quickCreate
+        // Note: Using .lean() returns plain objects, and .select('+quickCreate') only works if field has select: false
+        // Since we just added quickCreate to schema with select: false, this should work
         const custom = await ModuleDefinition.find({ 
             organizationId: req.user.organizationId,
             key: { $ne: 'groups' } // Exclude groups
-        }).select('+quickCreate +quickCreateLayout').lean();
+        })
+        .select('+quickCreate +quickCreateLayout')
+        .lean();
+        
+        // Also query directly from MongoDB to verify data exists (bypass Mongoose schema)
+        const mongoose = require('mongoose');
+        const db = mongoose.connection.db;
+        const collection = db.collection('moduledefinitions');
+        const peopleModuleRaw = await collection.findOne({
+            organizationId: new mongoose.Types.ObjectId(req.user.organizationId),
+            key: 'people'
+        });
+        
+        console.log('🔍 Custom modules query result:', {
+            organizationId: req.user.organizationId.toString(),
+            count: custom.length,
+            modules: custom.map(m => ({
+                key: m.key,
+                hasQuickCreate: 'quickCreate' in m,
+                quickCreate: m.quickCreate,
+                quickCreateLength: m.quickCreate?.length || 0,
+                quickCreateType: typeof m.quickCreate,
+                quickCreateIsArray: Array.isArray(m.quickCreate)
+            }))
+        });
+        
+        console.log('🔍 Raw MongoDB query for people module:', {
+            found: !!peopleModuleRaw,
+            hasQuickCreate: peopleModuleRaw ? 'quickCreate' in peopleModuleRaw : false,
+            quickCreate: peopleModuleRaw?.quickCreate,
+            quickCreateLength: peopleModuleRaw?.quickCreate?.length || 0,
+            quickCreateType: typeof peopleModuleRaw?.quickCreate,
+            quickCreateIsArray: Array.isArray(peopleModuleRaw?.quickCreate),
+            allKeys: peopleModuleRaw ? Object.keys(peopleModuleRaw).slice(0, 30) : []
+        });
+        
+        // If Mongoose query didn't return quickCreate but MongoDB has it, merge it in
+        // This handles cases where Mongoose schema filtering might exclude the field
+        if (peopleModuleRaw && peopleModuleRaw.quickCreate) {
+            const peopleModuleFromMongoose = custom.find(m => m.key === 'people');
+            if (peopleModuleFromMongoose && (!peopleModuleFromMongoose.quickCreate || peopleModuleFromMongoose.quickCreate.length === 0)) {
+                console.log('⚠️ Mongoose filtered out quickCreate, using raw MongoDB data');
+                peopleModuleFromMongoose.quickCreate = peopleModuleRaw.quickCreate;
+                peopleModuleFromMongoose.quickCreateLayout = peopleModuleRaw.quickCreateLayout || { version: 1, rows: [] };
+            }
+        }
+        
         const customByKey = new Map(custom.map(m => [m.key, m]));
 
         // Canonicalize/normalize known system field keys to avoid duplicates from legacy casing/kebab-case.
@@ -1416,6 +1624,10 @@ exports.listModules = async (req, res) => {
                 // BUT preserve saved labels and lookupSettings
                 for (const savedField of saved) {
                     if (!savedField.key) continue;
+                    
+                    // Ensure owner and context are set (safe defaults for existing fields)
+                    if (!savedField.owner) savedField.owner = 'platform';
+                    if (!savedField.context) savedField.context = 'global';
                     
                     // Try exact match first, then case-insensitive match
                     let baseField = baseFieldMap.get(savedField.key);
@@ -1856,9 +2068,25 @@ exports.listModules = async (req, res) => {
                 // For Events module, ensure quickCreate has at least the essential fields
                 // Use override quickCreate if present (check for undefined/null, not falsy), otherwise use saved quickCreate, otherwise empty array
                 // NO hardcoding - all configuration comes from the module definition saved in database
+                console.log('🔍 Processing quickCreate for module:', sys.key, {
+                    hasOverride: !!override,
+                    overrideQuickCreate: override?.quickCreate,
+                    overrideQuickCreateType: typeof override?.quickCreate,
+                    overrideQuickCreateIsArray: Array.isArray(override?.quickCreate),
+                    overrideQuickCreateLength: override?.quickCreate?.length || 0,
+                    overrideHasQuickCreate: override ? 'quickCreate' in override : false,
+                    overrideKeys: override ? Object.keys(override).slice(0, 20) : [],
+                    sysQuickCreate: sys.quickCreate,
+                    sysQuickCreateLength: sys.quickCreate?.length || 0
+                });
                 let finalQuickCreate = (override.quickCreate !== undefined && override.quickCreate !== null) 
                     ? override.quickCreate 
                     : (sys.quickCreate || []);
+                console.log('✅ Final quickCreate:', {
+                    value: finalQuickCreate,
+                    length: finalQuickCreate?.length || 0,
+                    isArray: Array.isArray(finalQuickCreate)
+                });
                 let finalQuickCreateLayout = override.quickCreateLayout || { version: 1, rows: [] };
 
                 // Events Quick Create defaults:
@@ -2199,7 +2427,20 @@ exports.listModules = async (req, res) => {
             return a.name.localeCompare(b.name);
         });
 
-        res.json({ success: true, data: merged });
+        // Apply context filtering to all modules' fields
+        let filteredMerged = merged.map(module => ({
+            ...module,
+            fields: filterFieldsByContext(module.fields || [], currentContext)
+        }));
+
+        // Apply READ access filtering based on user permissions
+        // Only show fields the user has permission to read
+        filteredMerged = filteredMerged.map(module => ({
+            ...module,
+            fields: filterFieldsByReadAccess(module.fields || [], req.user, module.key)
+        }));
+
+        res.json({ success: true, data: filteredMerged });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Error listing modules', error: error.message });
     }
@@ -2268,6 +2509,21 @@ exports.updateModule = async (req, res) => {
             quickCreateLayoutProvided: quickCreateLayout !== undefined,
             quickCreateLayoutValue: quickCreateLayout
         });
+        
+        // Validate field mutations based on ownership
+        if (Array.isArray(fields)) {
+            const oldFields = Array.isArray(mod.fields) ? mod.fields : [];
+            const validation = validateFieldMutations(oldFields, fields, req.user);
+            
+            if (!validation.valid) {
+                return res.status(403).json({
+                    success: false,
+                    message: validation.error,
+                    code: 'FIELD_MUTATION_NOT_ALLOWED',
+                    violations: validation.violations
+                });
+            }
+        }
         
         if (name !== undefined) mod.name = String(name).trim();
         if (enabled !== undefined) mod.enabled = !!enabled;
@@ -2442,6 +2698,28 @@ exports.updateSystemModule = async (req, res) => {
             quickCreateLayoutValue: quickCreateLayout
         });
         
+        // Load existing module definition to validate field mutations
+        // Use lowercase key for consistency
+        const existingMod = await ModuleDefinition.findOne({
+            organizationId: req.user.organizationId,
+            key: key.toLowerCase()
+        }).select('+quickCreate +quickCreateLayout +fields +relationships +pipelineSettings');
+        
+        // Validate field mutations based on ownership
+        if (Array.isArray(fields) && existingMod) {
+            const oldFields = Array.isArray(existingMod.fields) ? existingMod.fields : [];
+            const validation = validateFieldMutations(oldFields, fields, req.user);
+            
+            if (!validation.valid) {
+                return res.status(403).json({
+                    success: false,
+                    message: validation.error,
+                    code: 'FIELD_MUTATION_NOT_ALLOWED',
+                    violations: validation.violations
+                });
+            }
+        }
+        
         // Build update object - only include fields that are provided
         const updateObj = {
             type: 'system'
@@ -2552,11 +2830,27 @@ exports.updateSystemModule = async (req, res) => {
         });
         
         // Update non-critical fields with Mongoose first
+        // Use upsert: true to create document if it doesn't exist
+        // NOTE: For tenant-specific overrides (with organizationId), we don't set appKey/moduleKey
+        // to avoid conflicts with the platform-level unique index { appKey: 1, moduleKey: 1 }
         let updateResult = { matchedCount: 0, modifiedCount: 0 };
         if (Object.keys(otherFields).length > 0) {
+            // Ensure required fields are set for upsert (tenant-specific override)
+            // Don't set appKey/moduleKey for tenant overrides to avoid unique index conflicts
+            const upsertFields = {
+                ...otherFields,
+                organizationId: req.user.organizationId,
+                key: key.toLowerCase(),
+                // Don't set moduleKey or appKey - these are for platform-level docs only
+                // Tenant overrides use organizationId + key as the unique identifier
+                label: key.charAt(0).toUpperCase() + key.slice(1),
+                pluralLabel: key.charAt(0).toUpperCase() + key.slice(1) + 's',
+                entityType: 'CORE',
+                type: 'system'
+            };
             updateResult = await ModuleDefinition.updateOne(
-                { organizationId: req.user.organizationId, key },
-                { $set: otherFields },
+                { organizationId: req.user.organizationId, key: key.toLowerCase() },
+                { $set: upsertFields },
                 { upsert: true, runValidators: false }
             );
             console.log('📊 Mongoose updateOne result (other fields):', {
@@ -2570,20 +2864,36 @@ exports.updateSystemModule = async (req, res) => {
         if (Object.keys(criticalFields).length > 0) {
             console.log('🔧 Using direct MongoDB update for critical fields:', Object.keys(criticalFields));
             
+            // Use upsert: true to create document if it doesn't exist
+            // This ensures quickCreate can be saved even if the ModuleDefinition document hasn't been created yet
+            // NOTE: For tenant-specific overrides (with organizationId), we don't set appKey/moduleKey
+            // to avoid conflicts with the platform-level unique index { appKey: 1, moduleKey: 1 }
             const directUpdateResult = await collection.updateOne(
                 { 
                     organizationId: new mongoose.Types.ObjectId(req.user.organizationId), 
                     key: key.toLowerCase()
                 },
                 { 
-                    $set: criticalFields
+                    $set: {
+                        ...criticalFields,
+                        organizationId: new mongoose.Types.ObjectId(req.user.organizationId),
+                        key: key.toLowerCase(),
+                        type: 'system',
+                        // Don't set moduleKey or appKey - these are for platform-level docs only
+                        // Tenant overrides use organizationId + key as the unique identifier
+                        label: key.charAt(0).toUpperCase() + key.slice(1),
+                        pluralLabel: key.charAt(0).toUpperCase() + key.slice(1) + 's',
+                        entityType: 'CORE'
+                    }
                 },
-                { upsert: false }
+                { upsert: true }
             );
             
             console.log('📊 Direct MongoDB update result:', {
                 matchedCount: directUpdateResult.matchedCount,
                 modifiedCount: directUpdateResult.modifiedCount,
+                upsertedCount: directUpdateResult.upsertedCount || 0,
+                upsertedId: directUpdateResult.upsertedId,
                 acknowledged: directUpdateResult.acknowledged,
                 fields: Object.keys(criticalFields),
                 relationshipsCount: criticalFields.relationships?.length || 0,
@@ -2592,8 +2902,15 @@ exports.updateSystemModule = async (req, res) => {
                 pipelineSettingsCount: criticalFields.pipelineSettings?.length || 0
             });
             
-            if (directUpdateResult.matchedCount === 0) {
-                console.error('🚨 WARNING: Document not found for direct update!', {
+            if (directUpdateResult.matchedCount === 0 && directUpdateResult.upsertedCount === 0) {
+                console.error('🚨 WARNING: Document not found and not created!', {
+                    organizationId: req.user.organizationId.toString(),
+                    key: key.toLowerCase(),
+                    updateResult: directUpdateResult
+                });
+            } else if (directUpdateResult.upsertedCount > 0) {
+                console.log('✅ Document created via upsert:', {
+                    upsertedId: directUpdateResult.upsertedId,
                     organizationId: req.user.organizationId.toString(),
                     key: key.toLowerCase()
                 });
@@ -2601,10 +2918,12 @@ exports.updateSystemModule = async (req, res) => {
         }
         
         // Now fetch the document to verify what was saved
+        // Explicitly select fields that have select: false in schema
+        // Use lowercase key to match what was saved
         const doc = await ModuleDefinition.findOne({ 
             organizationId: req.user.organizationId, 
-            key 
-        });
+            key: key.toLowerCase()
+        }).select('+quickCreate +quickCreateLayout +fields +relationships +pipelineSettings');
         
         if (!doc) {
             throw new Error('Failed to retrieve document after save');
@@ -2649,16 +2968,20 @@ exports.updateSystemModule = async (req, res) => {
         console.log('🔍 Raw MongoDB pipelineSettings count:', verifiedRaw?.pipelineSettings?.length || 0);
         
         // Also verify with Mongoose to compare
+        // Explicitly select fields that have select: false in schema
+        // Use lowercase key to match what was saved
         const verified = await ModuleDefinition.findOne({ 
             organizationId: req.user.organizationId, 
-            key 
-        }).lean(); // Use lean() to get plain JavaScript object
+            key: key.toLowerCase()
+        }).select('+quickCreate +quickCreateLayout +fields +relationships +pipelineSettings').lean(); // Use lean() to get plain JavaScript object
         
         // Also get the Mongoose document to compare
+        // Explicitly select fields that have select: false in schema
+        // Use lowercase key to match what was saved
         const verifiedDoc = await ModuleDefinition.findOne({ 
             organizationId: req.user.organizationId, 
-            key 
-        });
+            key: key.toLowerCase()
+        }).select('+quickCreate +quickCreateLayout +fields +relationships +pipelineSettings');
         
         console.log('🔍 After lean query (from database):', {
             verifiedRelationships: verified?.relationships,

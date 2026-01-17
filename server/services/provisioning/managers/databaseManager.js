@@ -253,12 +253,12 @@ class DatabaseManager {
         status: 'active',
         userType: 'INTERNAL', // Platform user type
         appAccess: [{
-          appKey: APP_KEYS.CRM,
-          roleKey: 'ADMIN', // Owner must have CRM: ADMIN
+          appKey: APP_KEYS.SALES,
+          roleKey: 'ADMIN', // Owner must have Sales: ADMIN
           status: 'ACTIVE',
           addedAt: new Date()
         }],
-        allowedApps: [APP_KEYS.CRM], // Legacy field for backward compatibility
+        allowedApps: [APP_KEYS.SALES], // Legacy field for backward compatibility
         permissions: this.getOwnerPermissions(),
         createdAt: new Date(),
         updatedAt: new Date()

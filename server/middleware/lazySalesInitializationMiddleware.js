@@ -1,9 +1,9 @@
 /**
  * ============================================================================
- * Lazy CRM Initialization Middleware (Multi-Pod Safe)
+ * Lazy Sales Initialization Middleware (Multi-Pod Safe)
  * ============================================================================
  * 
- * Initializes CRM modules on first CRM access for an organization.
+ * Initializes Sales modules on first Sales access for an organization.
  * 
  * Behavior:
  * - Checks organization.crmInitialized as source of truth
@@ -13,9 +13,9 @@
  * - Returns 503 Service Unavailable if initialization fails
  * 
  * Middleware Chain Position:
- * - Runs AFTER requireAppEntitlement (user is entitled to CRM)
- * - Runs BEFORE requireCRMApp (app context is CRM)
- * - Runs BEFORE CRM business logic
+ * - Runs AFTER requireAppEntitlement (user is entitled to Sales)
+ * - Runs BEFORE requireSalesApp (app context is Sales)
+ * - Runs BEFORE Sales business logic
  * 
  * Idempotency (Multi-Pod Safe):
  * - Uses organization.crmInitialized as persistent source of truth
@@ -26,9 +26,10 @@
  * ============================================================================
  */
 
-const crmInitializer = require('../services/crmAppInitializer');
+const salesInitializer = require('../services/salesAppInitializer');
 const Organization = require('../models/Organization');
 const { APP_KEYS } = require('../constants/appKeys');
+const { resolveAppAccess } = require('../services/accessResolutionService');
 
 // In-memory lock to prevent concurrent initialization for the same organization
 // OPTIMIZATION ONLY: Not relied on for correctness across pods
@@ -36,15 +37,15 @@ const { APP_KEYS } = require('../constants/appKeys');
 const initializationLocks = new Map();
 
 /**
- * Lazy CRM Initialization Middleware (Multi-Pod Safe)
+ * Lazy Sales Initialization Middleware (Multi-Pod Safe)
  * 
  * Checks organization.crmInitialized as source of truth.
- * Atomically initializes CRM if needed, preventing double initialization across pods.
+ * Atomically initializes Sales if needed, preventing double initialization across pods.
  * Returns 503 if initialization fails.
  */
-const lazyCRMInitialization = async (req, res, next) => {
-    // Only run for CRM app context
-    if (req.appKey !== 'CRM') {
+const lazySalesInitialization = async (req, res, next) => {
+    // Only run for Sales app context
+    if (req.appKey !== 'SALES') {
         return next();
     }
 
@@ -55,7 +56,7 @@ const lazyCRMInitialization = async (req, res, next) => {
     if (!organizationId) {
         // Organization context not available yet, skip initialization
         // This should not happen in normal flow, but fail gracefully
-        console.warn('[LazyCRMInit] Organization ID not available, skipping CRM initialization check');
+        console.warn('[LazySalesInit] Organization ID not available, skipping Sales initialization check');
         return next();
     }
 
@@ -63,11 +64,11 @@ const lazyCRMInitialization = async (req, res, next) => {
 
     try {
         // STEP 1: Check persistent source of truth (organization.crmInitialized)
-        // Also check enabledApps to ensure CRM is enabled
-        const organization = await Organization.findById(organizationId).select('crmInitialized enabledApps');
+        // Use access resolution service to verify Sales access
+        const organization = await Organization.findById(organizationId);
         
         if (!organization) {
-            console.error(`[LazyCRMInit] Organization not found: ${orgIdString}`);
+            console.error(`[LazySalesInit] Organization not found: ${orgIdString}`);
             return res.status(404).json({
                 success: false,
                 message: 'Organization not found',
@@ -75,30 +76,34 @@ const lazyCRMInitialization = async (req, res, next) => {
             });
         }
 
-        // Check if CRM app is enabled for the organization
-        // Backward compatibility: If enabledApps is missing/undefined/null, treat as CRM enabled
-        // This handles legacy organizations that don't have enabledApps field persisted
-        // Empty array [] is treated as explicit (no apps enabled)
-        const enabledApps = organization.enabledApps;
+        // Use unified access resolution service to check Sales access
+        // Intent: VIEW (just checking if user can see/enter Sales)
+        const accessResult = await resolveAppAccess({
+            user: req.user,
+            organization: organization,
+            appKey: APP_KEYS.SALES,
+            intent: 'VIEW'
+        });
         
-        let isCRMEnabled = false;
-        
-        // Backward compatibility: If enabledApps is missing/undefined/null, default to CRM enabled
-        if (enabledApps === undefined || enabledApps === null) {
-            isCRMEnabled = true; // Legacy orgs: default to CRM enabled
-        } else {
-            // Use appAccessUtils to check if CRM is enabled (handles both object and string formats)
-            const { isAppEnabledForOrg } = require('../utils/appAccessUtils');
-            isCRMEnabled = isAppEnabledForOrg(organization, APP_KEYS.CRM);
-        }
-        
-        if (!isCRMEnabled) {
-            // CRM app is not enabled for this organization
+        if (!accessResult.allowed) {
+            // Sales app is not accessible (not enabled or user has no access)
+            let enabledAppKeys = [];
+            if (organization.enabledApps && organization.enabledApps.length > 0) {
+                if (typeof organization.enabledApps[0] === 'object') {
+                    enabledAppKeys = organization.enabledApps
+                        .filter(app => app.status === 'ACTIVE')
+                        .map(app => app.appKey);
+                } else {
+                    enabledAppKeys = organization.enabledApps;
+                }
+            }
+            
             return res.status(403).json({
                 success: false,
-                message: 'CRM application is not enabled for your organization',
-                code: 'CRM_APP_NOT_ENABLED',
-                enabledApps: effectiveEnabledApps
+                message: 'Sales application is not enabled for your organization',
+                code: 'SALES_APP_NOT_ENABLED',
+                enabledApps: enabledAppKeys,
+                reason: accessResult.reason
             });
         }
 
@@ -107,17 +112,17 @@ const lazyCRMInitialization = async (req, res, next) => {
             return next();
         }
 
-        // Backward compatibility: Check if CRM modules already exist (existing orgs)
+        // Backward compatibility: Check if Sales modules already exist (existing orgs)
         // If modules exist but flag is false, set flag to true and continue
-        const hasExistingCRM = await crmInitializer.isCRMInitialized(organizationId);
-        if (hasExistingCRM) {
-            // CRM already initialized (existing org), just set the flag
+        const hasExistingSales = await salesInitializer.isSalesInitialized(organizationId);
+        if (hasExistingSales) {
+            // Sales already initialized (existing org), just set the flag
             await Organization.findByIdAndUpdate(
                 organizationId,
                 { $set: { crmInitialized: true } },
                 { runValidators: false }
             );
-            console.log(`[LazyCRMInit] Detected existing CRM modules for org: ${orgIdString}, set crmInitialized flag`);
+            console.log(`[LazySalesInit] Detected existing Sales modules for org: ${orgIdString}, set crmInitialized flag`);
             return next();
         }
 
@@ -127,7 +132,7 @@ const lazyCRMInitialization = async (req, res, next) => {
         if (initPromise) {
             // Initialization already in progress (same pod)
             // Wait for it to complete
-            console.log(`[LazyCRMInit] Waiting for ongoing CRM initialization for org: ${orgIdString}`);
+            console.log(`[LazySalesInit] Waiting for ongoing Sales initialization for org: ${orgIdString}`);
             try {
                 const success = await initPromise;
                 if (success) {
@@ -136,18 +141,18 @@ const lazyCRMInitialization = async (req, res, next) => {
                     // Initialization failed
                     return res.status(503).json({
                         success: false,
-                        message: 'CRM is initializing. Please retry.',
-                        code: 'CRM_INITIALIZATION_IN_PROGRESS',
+                        message: 'Sales is initializing. Please retry.',
+                        code: 'SALES_INITIALIZATION_IN_PROGRESS',
                         retryAfter: 5 // seconds
                     });
                 }
             } catch (error) {
                 // Initialization failed
-                console.error(`[LazyCRMInit] Initialization failed for org: ${orgIdString}:`, error.message);
+                console.error(`[LazySalesInit] Initialization failed for org: ${orgIdString}:`, error.message);
                 return res.status(503).json({
                     success: false,
-                    message: 'CRM is initializing. Please retry.',
-                    code: 'CRM_INITIALIZATION_FAILED',
+                    message: 'Sales is initializing. Please retry.',
+                    code: 'SALES_INITIALIZATION_FAILED',
                     retryAfter: 5
                 });
             }
@@ -176,11 +181,11 @@ const lazyCRMInitialization = async (req, res, next) => {
             const updatedOrg = await Organization.findById(organizationId).select('crmInitialized');
             if (updatedOrg && updatedOrg.crmInitialized) {
                 // Already initialized by another pod
-                console.log(`[LazyCRMInit] CRM already initialized by another pod for org: ${orgIdString}`);
+                console.log(`[LazySalesInit] Sales already initialized by another pod for org: ${orgIdString}`);
                 return next();
             }
             // Another pod is initializing, wait a bit and retry
-            console.log(`[LazyCRMInit] Another pod is initializing CRM for org: ${orgIdString}, waiting...`);
+            console.log(`[LazySalesInit] Another pod is initializing Sales for org: ${orgIdString}, waiting...`);
             await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
             
             // Check again
@@ -192,19 +197,19 @@ const lazyCRMInitialization = async (req, res, next) => {
             // Still not initialized, return 503
             return res.status(503).json({
                 success: false,
-                message: 'CRM is initializing. Please retry.',
-                code: 'CRM_INITIALIZATION_IN_PROGRESS',
+                message: 'Sales is initializing. Please retry.',
+                code: 'SALES_INITIALIZATION_IN_PROGRESS',
                 retryAfter: 5
             });
         }
 
         // STEP 4: This pod claimed initialization - proceed
-        console.log(`[LazyCRMInit] Starting CRM initialization for org: ${orgIdString} (claimed by this pod)`);
+        console.log(`[LazySalesInit] Starting Sales initialization for org: ${orgIdString} (claimed by this pod)`);
         
         // Create initialization promise and store in lock map (optimization)
         initPromise = (async () => {
             try {
-                const result = await crmInitializer.initializeCRM(organizationId);
+                const result = await salesInitializer.initializeSales(organizationId);
                 
                 if (result.success) {
                     // Atomically set crmInitialized = true after successful initialization
@@ -213,11 +218,11 @@ const lazyCRMInitialization = async (req, res, next) => {
                         { $set: { crmInitialized: true } },
                         { runValidators: false }
                     );
-                    console.log(`[LazyCRMInit] ✅ CRM initialized successfully for org: ${orgIdString}`);
+                    console.log(`[LazySalesInit] ✅ Sales initialized successfully for org: ${orgIdString}`);
                     return true;
                 } else {
                     // Initialization failed - log but don't set flag
-                    console.error(`[LazyCRMInit] ❌ CRM initialization failed for org: ${orgIdString}:`, result.errors);
+                    console.error(`[LazySalesInit] ❌ Sales initialization failed for org: ${orgIdString}:`, result.errors);
                     // Reset the flag so it can be retried
                     await Organization.findByIdAndUpdate(
                         organizationId,
@@ -227,7 +232,7 @@ const lazyCRMInitialization = async (req, res, next) => {
                     return false;
                 }
             } catch (error) {
-                console.error(`[LazyCRMInit] ❌ CRM initialization failed for org: ${orgIdString}:`, error.message);
+                console.error(`[LazySalesInit] ❌ Sales initialization failed for org: ${orgIdString}:`, error.message);
                 // Reset the flag so it can be retried
                 await Organization.findByIdAndUpdate(
                     organizationId,
@@ -254,35 +259,35 @@ const lazyCRMInitialization = async (req, res, next) => {
             } else {
                 return res.status(503).json({
                     success: false,
-                    message: 'CRM is initializing. Please retry.',
-                    code: 'CRM_INITIALIZATION_FAILED',
+                    message: 'Sales is initializing. Please retry.',
+                    code: 'SALES_INITIALIZATION_FAILED',
                     retryAfter: 5
                 });
             }
         } catch (error) {
             // Initialization failed
-            console.error(`[LazyCRMInit] Initialization error for org: ${orgIdString}:`, error.message);
+            console.error(`[LazySalesInit] Initialization error for org: ${orgIdString}:`, error.message);
             return res.status(503).json({
                 success: false,
-                message: 'CRM is initializing. Please retry.',
-                code: 'CRM_INITIALIZATION_FAILED',
+                message: 'Sales is initializing. Please retry.',
+                code: 'SALES_INITIALIZATION_FAILED',
                 retryAfter: 5
             });
         }
 
     } catch (error) {
         // Unexpected error during initialization check
-        console.error(`[LazyCRMInit] Unexpected error during CRM initialization check for org: ${orgIdString}:`, error);
+        console.error(`[LazySalesInit] Unexpected error during Sales initialization check for org: ${orgIdString}:`, error);
         return res.status(503).json({
             success: false,
-            message: 'CRM is initializing. Please retry.',
-            code: 'CRM_INITIALIZATION_ERROR',
+            message: 'Sales is initializing. Please retry.',
+            code: 'SALES_INITIALIZATION_ERROR',
             retryAfter: 5
         });
     }
 };
 
 module.exports = {
-    lazyCRMInitialization
+    lazySalesInitialization
 };
 

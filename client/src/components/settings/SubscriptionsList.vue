@@ -1,0 +1,205 @@
+<template>
+  <div class="space-y-6">
+    <!-- Header -->
+    <div>
+      <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Subscriptions</h2>
+      <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+        Manage your application subscriptions, usage, and limits
+      </p>
+    </div>
+
+    <!-- Loading State -->
+    <div v-if="loading" class="flex items-center justify-center py-12">
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+    </div>
+
+    <!-- Error State -->
+    <div v-else-if="error" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+      <div class="flex items-center gap-2">
+        <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <p class="text-sm text-red-800 dark:text-red-300">
+          {{ error.message || 'Failed to load subscriptions' }}
+        </p>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div v-else-if="!loading && !error && subscriptions.length === 0" class="text-center py-12 bg-gray-50 dark:bg-gray-800 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700">
+      <svg class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">No Subscriptions</h3>
+      <p class="text-sm text-gray-600 dark:text-gray-400">No active subscriptions found.</p>
+    </div>
+
+    <!-- Subscriptions List -->
+    <div v-else class="space-y-4">
+      <div
+        v-for="subscription in subscriptions"
+        :key="subscription.appKey"
+        @click="viewSubscriptionDetail(subscription.appKey)"
+        class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md hover:border-brand-500 dark:hover:border-brand-400 transition-all cursor-pointer group"
+      >
+        <!-- Subscription Header -->
+        <div class="flex items-start justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <!-- App Icon -->
+            <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 group-hover:bg-brand-100 dark:group-hover:bg-brand-900/30 transition-colors">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+
+            <!-- App Name and Description -->
+            <div>
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ subscription.appName }}
+              </h3>
+              <p v-if="subscription.description" class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                {{ subscription.description }}
+              </p>
+            </div>
+          </div>
+
+          <!-- Plan Badge -->
+          <div class="flex items-center gap-2">
+            <span
+              :class="[
+                'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium',
+                getPlanBadgeClass(subscription.plan)
+              ]"
+            >
+              {{ subscription.plan }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Usage and Limits -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <!-- Users -->
+          <div v-if="subscription.usage?.users">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-medium text-gray-600 dark:text-gray-400">Users</span>
+              <span class="text-xs text-gray-500 dark:text-gray-500">
+                {{ subscription.usage.users.current }} / {{ subscription.usage.users.limit }}
+              </span>
+            </div>
+            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div
+                class="bg-brand-600 h-2 rounded-full transition-all"
+                :style="{ width: `${Math.min(100, (subscription.usage.users.current / subscription.usage.users.limit) * 100)}%` }"
+              ></div>
+            </div>
+          </div>
+
+          <!-- Contacts -->
+          <div v-if="subscription.usage?.contacts">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-medium text-gray-600 dark:text-gray-400">Contacts</span>
+              <span class="text-xs text-gray-500 dark:text-gray-500">
+                {{ subscription.usage.contacts.current }} / {{ subscription.usage.contacts.limit }}
+              </span>
+            </div>
+            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div
+                class="bg-brand-600 h-2 rounded-full transition-all"
+                :style="{ width: `${Math.min(100, (subscription.usage.contacts.current / subscription.usage.contacts.limit) * 100)}%` }"
+              ></div>
+            </div>
+          </div>
+
+          <!-- Storage -->
+          <div v-if="subscription.limits?.storage !== undefined">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-medium text-gray-600 dark:text-gray-400">Storage</span>
+              <span class="text-xs text-gray-500 dark:text-gray-500">
+                {{ subscription.limits.storage }} GB
+              </span>
+            </div>
+            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div
+                class="bg-brand-600 h-2 rounded-full transition-all"
+                :style="{ width: '0%' }"
+              ></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Upgrade CTA (only for eligible apps) -->
+        <div v-if="subscription.canUpgrade" class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <button
+            @click.stop="handleUpgrade(subscription.appKey)"
+            class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/20 border border-brand-300 dark:border-brand-700 rounded-lg hover:bg-brand-100 dark:hover:bg-brand-900/30 transition-colors"
+          >
+            <span>Upgrade {{ subscription.appName }}</span>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import apiClient from '@/utils/apiClient';
+
+const router = useRouter();
+const subscriptions = ref([]);
+const loading = ref(true);
+const error = ref(null);
+
+const fetchSubscriptions = async () => {
+  loading.value = true;
+  error.value = null;
+
+  try {
+    const data = await apiClient('/settings/subscriptions', {
+      method: 'GET'
+    });
+
+    if (data && data.subscriptions) {
+      subscriptions.value = data.subscriptions;
+    } else {
+      subscriptions.value = [];
+    }
+  } catch (err) {
+    console.error('Failed to fetch subscriptions:', err);
+    error.value = err;
+    subscriptions.value = [];
+  } finally {
+    loading.value = false;
+  }
+};
+
+const viewSubscriptionDetail = (appKey) => {
+  router.push({ path: '/settings', query: { tab: 'subscriptions', appKey: appKey } });
+};
+
+const handleUpgrade = (appKey) => {
+  // Navigate to subscription detail for upgrade
+  viewSubscriptionDetail(appKey);
+};
+
+const getPlanBadgeClass = (plan) => {
+  const classes = {
+    'Trial': 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300',
+    'Paid': 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300',
+    'Active': 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300',
+    'Suspended': 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300',
+    'Not Subscribed': 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400',
+    'DISABLED': 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+  };
+  return classes[plan] || classes['Not Subscribed'];
+};
+
+onMounted(() => {
+  fetchSubscriptions();
+});
+</script>
+

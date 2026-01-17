@@ -9,8 +9,8 @@
  * - Password hashing and verification
  * - Token generation
  * 
- * ✅ FIXED: Registration no longer initializes CRM-specific modules.
- *    CRM initialization has been moved to crmAppInitializer service.
+ * ✅ FIXED: Registration no longer initializes Sales-specific modules.
+ *    Sales initialization has been moved to salesAppInitializer service.
  *    Registration is now app-agnostic.
  * 
  * See PLATFORM_CORE_ANALYSIS.md and REGISTRATION_REFACTORING.md for details.
@@ -97,10 +97,13 @@ exports.registerUser = async (req, res) => {
                 maxDeals: 50,
                 maxStorageGB: 1
             },
+            // ⚠️ BACKWARD COMPATIBILITY: Explicitly set SALES modules for new registrations
+            //    Schema default is empty array (app-agnostic), but we set SALES modules here
+            //    for backward compatibility with existing SALES functionality
             enabledModules: ['contacts', 'deals', 'tasks', 'events'],
-            // New organizations start with CRM enabled only
+            // New organizations start with Sales enabled only
             enabledApps: [{
-                appKey: 'CRM',
+                appKey: 'SALES',
                 status: 'ACTIVE',
                 enabledAt: new Date()
             }]
@@ -126,9 +129,9 @@ exports.registerUser = async (req, res) => {
         }
         console.log('\n');
 
-        // NOTE: CRM module initialization (People, Deals) has been moved to crmAppInitializer
-        // This keeps registration app-agnostic. CRM initialization should be called separately
-        // when CRM app is enabled for the organization.
+        // NOTE: Sales module initialization (People, Pipeline Entity) has been moved to salesAppInitializer
+        // This keeps registration app-agnostic. Sales initialization should be called separately
+        // when Sales app is enabled for the organization.
 
         // 2. Hash Password
         console.log('🔍 Step 4: Hashing password...');
@@ -150,12 +153,12 @@ exports.registerUser = async (req, res) => {
             status: 'active',
             userType: 'INTERNAL', // Platform user type
             appAccess: [{
-                appKey: APP_KEYS.CRM,
-                roleKey: 'ADMIN', // Organization owner must have CRM: ADMIN
+                appKey: APP_KEYS.SALES,
+                roleKey: 'ADMIN', // Organization owner must have Sales: ADMIN
                 status: 'ACTIVE',
                 addedAt: new Date()
             }],
-            allowedApps: [APP_KEYS.CRM] // Legacy field for backward compatibility
+            allowedApps: [APP_KEYS.SALES] // Legacy field for backward compatibility
         });
         console.log('✅ ✅ ✅ USER CREATED SUCCESSFULLY! ✅ ✅ ✅');
         console.log('   ID:', user._id);
@@ -187,7 +190,7 @@ exports.registerUser = async (req, res) => {
                 industry: organization.industry,
                 subscription: organization.subscription,
                 limits: organization.limits,
-                enabledApps: organization.enabledApps || [APP_KEYS.CRM], // App-level enablement
+                enabledApps: organization.enabledApps || [APP_KEYS.SALES], // App-level enablement
                 enabledModules: organization.enabledModules // Legacy: kept for backward compatibility
             },
             token: generateToken(user._id),
@@ -235,7 +238,7 @@ exports.loginUser = async (req, res) => {
         
         // 1. Find User by Email (check master database first)
         const user = await User.findOne({ email: email.toLowerCase() })
-            .populate('organizationId', 'name industry subscription limits enabledModules settings isActive database')
+            .populate('organizationId', 'name industry subscription limits enabledApps enabledModules settings isActive database')
             .populate('roleId', 'name description color icon level permissions');
 
         if (!user) {
@@ -476,8 +479,8 @@ exports.loginUser = async (req, res) => {
                     .filter(access => access.status === 'ACTIVE')
                     .map(access => access.appKey);
             } else {
-                // Default to CRM if nothing is set
-                allowedApps = ['CRM'];
+                // Default to Sales if nothing is set
+                allowedApps = ['SALES'];
             }
         }
 
@@ -496,6 +499,7 @@ exports.loginUser = async (req, res) => {
                 industry: user.organizationId.industry,
                 subscription: user.organizationId.subscription,
                 limits: user.organizationId.limits,
+                enabledApps: user.organizationId.enabledApps || [], // App-level enablement (required for owner access check)
                 enabledModules: user.organizationId.enabledModules,
                 settings: user.organizationId.settings,
                 database: user.organizationId.database ? {

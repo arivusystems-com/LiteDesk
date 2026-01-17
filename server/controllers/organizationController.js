@@ -10,7 +10,7 @@
  * - Usage statistics
  * 
  * ⚠️ VIOLATION: Handles both tenant organization (Platform Core) and
- *    CRM organization entity (CRM App) in same controller.
+ *    Sales organization entity (Sales App) in same controller.
  * 
  * See PLATFORM_CORE_ANALYSIS.md for details.
  * ============================================================================
@@ -18,6 +18,7 @@
 
 const Organization = require('../models/Organization');
 const User = require('../models/User');
+const ModuleDefinition = require('../models/ModuleDefinition');
 const { getAppConfig, isAppEnabledForOrg } = require('../utils/appAccessUtils');
 const { ensureSubscriptionForApp } = require('../services/subscriptionBootstrapService');
 
@@ -65,7 +66,7 @@ exports.updateOrganization = async (req, res) => {
             });
         }
 
-        // Update organization (unified model handles both tenant and CRM fields)
+        // Update organization (unified model handles both tenant and Sales fields)
         const { name, settings } = req.body;
         if (name) organization.name = name;
         if (settings) organization.settings = { ...organization.settings, ...settings };
@@ -294,18 +295,18 @@ exports.enableApp = async (req, res) => {
             });
         }
 
-        // Validate user is CRM ADMIN (has CRM appAccess with ADMIN role or isOwner)
+        // Validate user is Sales ADMIN (has Sales appAccess with ADMIN role or isOwner)
         const user = req.user;
-        const hasCrmAccess = user.appAccess?.some(
-            access => access.appKey === 'CRM' && access.status === 'ACTIVE'
-        ) || user.allowedApps?.includes('CRM');
+        const hasSalesAccess = user.appAccess?.some(
+            access => access.appKey === 'SALES' && access.status === 'ACTIVE'
+        ) || user.allowedApps?.includes('SALES');
         
         const isAdmin = user.isOwner || String(user.role || '').toLowerCase() === 'admin';
         
-        if (!hasCrmAccess || !isAdmin) {
+        if (!hasSalesAccess || !isAdmin) {
             return res.status(403).json({
                 success: false,
-                message: 'Only CRM administrators can enable/disable apps',
+                message: 'Only Sales administrators can enable/disable apps',
                 code: 'ADMIN_REQUIRED'
             });
         }
@@ -407,18 +408,18 @@ exports.disableApp = async (req, res) => {
             });
         }
 
-        // Validate user is CRM ADMIN (has CRM appAccess with ADMIN role or isOwner)
+        // Validate user is Sales ADMIN (has Sales appAccess with ADMIN role or isOwner)
         const user = req.user;
-        const hasCrmAccess = user.appAccess?.some(
-            access => access.appKey === 'CRM' && access.status === 'ACTIVE'
-        ) || user.allowedApps?.includes('CRM');
+        const hasSalesAccess = user.appAccess?.some(
+            access => access.appKey === 'SALES' && access.status === 'ACTIVE'
+        ) || user.allowedApps?.includes('SALES');
         
         const isAdmin = user.isOwner || String(user.role || '').toLowerCase() === 'admin';
         
-        if (!hasCrmAccess || !isAdmin) {
+        if (!hasSalesAccess || !isAdmin) {
             return res.status(403).json({
                 success: false,
-                message: 'Only CRM administrators can enable/disable apps',
+                message: 'Only Sales administrators can enable/disable apps',
                 code: 'ADMIN_REQUIRED'
             });
         }
@@ -433,12 +434,12 @@ exports.disableApp = async (req, res) => {
             });
         }
 
-        // Prevent disabling CRM (critical app)
-        if (appKey === 'CRM') {
+        // Prevent disabling Sales (critical app)
+        if (appKey === 'SALES') {
             return res.status(400).json({
                 success: false,
-                message: 'CRM cannot be disabled',
-                code: 'CRM_CANNOT_BE_DISABLED'
+                message: 'Sales cannot be disabled',
+                code: 'Sales_CANNOT_BE_DISABLED'
             });
         }
 
@@ -494,11 +495,138 @@ exports.disableApp = async (req, res) => {
 
         await organization.save();
 
+        // Clean up app-owned fields from module definitions
+        // For complete uninstall rules, see: /docs/field-governance.md
+        // Only remove fields where owner = 'app' AND context = <app>
+        // Preserve org-owned and platform-owned fields
+        const appContext = appKey.toLowerCase(); // Normalize app key to lowercase for context matching
+        let fieldsRemoved = 0;
+        let modulesUpdated = 0;
+
+        try {
+            // Find all module definitions for this organization
+            const moduleDefinitions = await ModuleDefinition.find({
+                organizationId: organizationId
+            });
+
+            for (const moduleDef of moduleDefinitions) {
+                let moduleChanged = false;
+                
+                // First, identify which field keys will be removed (before filtering)
+                const removedFieldKeys = new Set();
+                if (Array.isArray(moduleDef.fields) && moduleDef.fields.length > 0) {
+                    moduleDef.fields.forEach(field => {
+                        if (field && field.key) {
+                            const fieldOwner = (field.owner || 'platform').toLowerCase();
+                            const fieldContext = (field.context || 'global').toLowerCase();
+                            if (fieldOwner === 'app' && fieldContext === appContext) {
+                                removedFieldKeys.add(field.key.toLowerCase());
+                            }
+                        }
+                    });
+                }
+                
+                // Filter out app-owned fields with matching context
+                if (Array.isArray(moduleDef.fields) && moduleDef.fields.length > 0) {
+                    const fieldsBefore = moduleDef.fields.length;
+                    const filteredFields = moduleDef.fields.filter(field => {
+                        if (!field) return true; // Preserve null/undefined fields
+                        
+                        const fieldOwner = (field.owner || 'platform').toLowerCase();
+                        const fieldContext = (field.context || 'global').toLowerCase();
+                        
+                        // NEVER remove platform or org-owned fields
+                        if (fieldOwner === 'platform' || fieldOwner === 'org') {
+                            return true; // Keep the field
+                        }
+                        
+                        // Only remove app-owned fields with matching context
+                        if (fieldOwner === 'app' && fieldContext === appContext) {
+                            return false; // Remove this field
+                        }
+                        
+                        // Keep all other fields (app-owned with different context, or missing owner/context)
+                        return true;
+                    });
+
+                    // Only update if fields were actually removed
+                    if (filteredFields.length < fieldsBefore) {
+                        moduleDef.fields = filteredFields;
+                        fieldsRemoved += (fieldsBefore - filteredFields.length);
+                        moduleChanged = true;
+                    }
+                }
+
+                // Also clean up quickCreate array - remove app-owned field keys
+                if (removedFieldKeys.size > 0 && Array.isArray(moduleDef.quickCreate) && moduleDef.quickCreate.length > 0) {
+                    const quickCreateBefore = moduleDef.quickCreate.length;
+                    moduleDef.quickCreate = moduleDef.quickCreate.filter(key => {
+                        if (!key) return true;
+                        return !removedFieldKeys.has(String(key).toLowerCase());
+                    });
+                    
+                    if (moduleDef.quickCreate.length < quickCreateBefore) {
+                        moduleChanged = true;
+                    }
+                }
+
+                // Clean up quickCreateLayout - remove app-owned field references
+                if (removedFieldKeys.size > 0 && 
+                    moduleDef.quickCreateLayout && 
+                    moduleDef.quickCreateLayout.rows && 
+                    Array.isArray(moduleDef.quickCreateLayout.rows)) {
+                    
+                    let layoutChanged = false;
+                    const cleanedRows = moduleDef.quickCreateLayout.rows.map(row => {
+                        if (!row || !Array.isArray(row.cols)) return row;
+                        
+                        const cleanedCols = row.cols.filter(col => {
+                            if (!col || !col.fieldKey) return true;
+                            return !removedFieldKeys.has(String(col.fieldKey).toLowerCase());
+                        });
+                        
+                        if (cleanedCols.length !== row.cols.length) {
+                            layoutChanged = true;
+                        }
+                        
+                        return {
+                            ...row,
+                            cols: cleanedCols
+                        };
+                    }).filter(row => !row.cols || row.cols.length > 0); // Remove empty rows
+                    
+                    if (layoutChanged) {
+                        moduleDef.quickCreateLayout = {
+                            ...moduleDef.quickCreateLayout,
+                            rows: cleanedRows
+                        };
+                        moduleChanged = true;
+                    }
+                }
+
+                // Save module if any changes were made
+                if (moduleChanged) {
+                    await moduleDef.save();
+                    modulesUpdated += 1;
+                }
+            }
+
+            console.log(`✅ App uninstall cleanup: Removed ${fieldsRemoved} app-owned fields from ${modulesUpdated} modules`);
+        } catch (cleanupError) {
+            // Log error but don't fail the uninstall - app is already disabled
+            console.error('⚠️  Error during app uninstall cleanup:', cleanupError);
+            // Continue with response - app is disabled even if cleanup partially failed
+        }
+
         res.json({
             success: true,
             message: `App ${appKey} disabled successfully`,
             data: {
-                enabledApps: organization.enabledApps
+                enabledApps: organization.enabledApps,
+                cleanup: {
+                    fieldsRemoved: fieldsRemoved,
+                    modulesUpdated: modulesUpdated
+                }
             }
         });
 

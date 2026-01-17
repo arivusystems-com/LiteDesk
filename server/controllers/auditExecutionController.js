@@ -29,8 +29,8 @@ const AuditAssignment = require('../models/AuditAssignment');
 const AuditExecutionContext = require('../models/AuditExecutionContext');
 const FormResponse = require('../models/FormResponse');
 
-// Import CRM controller functions
-const crmEventController = require('./eventController');
+// Import SALES controller functions
+const salesEventController = require('./eventController');
 
 /**
  * Helper: Validate event ownership (MANDATORY for all execution endpoints)
@@ -169,15 +169,15 @@ exports.checkInAudit = async (req, res) => {
             });
         }
         
-        // Create a proxy request object for CRM controller
-        // Use event._id or eventId (CRM handles both)
+        // Create a proxy request object for SALES controller
+        // Use event._id or eventId (SALES handles both)
         const proxyReq = {
             ...req,
             params: { id: event._id.toString() },
             body: { location }
         };
         
-        // Create a proxy response object to capture CRM response
+        // Create a proxy response object to capture SALES response
         let crmResponse = null;
         let crmResponseStatus = 200;
         const proxyRes = {
@@ -191,10 +191,10 @@ exports.checkInAudit = async (req, res) => {
             }
         };
         
-        // Call CRM checkIn function
-        await crmEventController.checkIn(proxyReq, proxyRes);
+        // Call SALES checkIn function
+        await salesEventController.checkIn(proxyReq, proxyRes);
         
-        // If CRM call failed, return error
+        // If SALES call failed, return error
         if (crmResponseStatus !== 200 || !crmResponse?.success) {
             return res.status(crmResponseStatus).json(crmResponse || {
                 success: false,
@@ -290,15 +290,15 @@ exports.submitAudit = async (req, res) => {
             });
         }
         
-        // Create proxy request for CRM controller
-        // Use event._id (CRM handles both _id and eventId)
+        // Create proxy request for SALES controller
+        // Use event._id (SALES handles both _id and eventId)
         const proxyReq = {
             ...req,
             params: { id: event._id.toString() },
             body: { formResponseId, orgIndex }
         };
         
-        // Create proxy response to capture CRM response
+        // Create proxy response to capture SALES response
         let crmResponse = null;
         let crmResponseStatus = 200;
         const proxyRes = {
@@ -312,10 +312,10 @@ exports.submitAudit = async (req, res) => {
             }
         };
         
-        // Call CRM submitAudit function
-        await crmEventController.submitAudit(proxyReq, proxyRes);
+        // Call SALES submitAudit function
+        await salesEventController.submitAudit(proxyReq, proxyRes);
         
-        // If CRM call failed, return error
+        // If SALES call failed, return error
         if (crmResponseStatus !== 200 || !crmResponse?.success) {
             return res.status(crmResponseStatus).json(crmResponse || {
                 success: false,
@@ -336,7 +336,7 @@ exports.submitAudit = async (req, res) => {
             }
         }
         
-        // Update assignment auditState (sync from CRM)
+        // Update assignment auditState (sync from SALES)
         if (assignment && crmResponse.data) {
             assignment.auditState = crmResponse.data.auditState || event.auditState;
             await assignment.save();
@@ -411,14 +411,14 @@ exports.approveAudit = async (req, res) => {
             });
         }
         
-        // Create proxy request for CRM controller
-        // Use event._id (CRM handles both _id and eventId)
+        // Create proxy request for SALES controller
+        // Use event._id (SALES handles both _id and eventId)
         const proxyReq = {
             ...req,
             params: { id: event._id.toString() }
         };
         
-        // Create proxy response to capture CRM response
+        // Create proxy response to capture SALES response
         let crmResponse = null;
         let crmResponseStatus = 200;
         const proxyRes = {
@@ -432,10 +432,10 @@ exports.approveAudit = async (req, res) => {
             }
         };
         
-        // Call CRM approveAudit function
-        await crmEventController.approveAudit(proxyReq, proxyRes);
+        // Call SALES approveAudit function
+        await salesEventController.approveAudit(proxyReq, proxyRes);
         
-        // If CRM call failed, return error
+        // If SALES call failed, return error
         if (crmResponseStatus !== 200 || !crmResponse?.success) {
             return res.status(crmResponseStatus).json(crmResponse || {
                 success: false,
@@ -537,7 +537,7 @@ exports.rejectAudit = async (req, res) => {
             body: { reason }
         };
         
-        // Create proxy response to capture CRM response
+        // Create proxy response to capture SALES response
         let crmResponse = null;
         let crmResponseStatus = 200;
         const proxyRes = {
@@ -551,10 +551,10 @@ exports.rejectAudit = async (req, res) => {
             }
         };
         
-        // Call CRM rejectAudit function
-        await crmEventController.rejectAudit(proxyReq, proxyRes);
+        // Call SALES rejectAudit function
+        await salesEventController.rejectAudit(proxyReq, proxyRes);
         
-        // If CRM call failed, return error
+        // If SALES call failed, return error
         if (crmResponseStatus !== 200 || !crmResponse?.success) {
             return res.status(crmResponseStatus).json(crmResponse || {
                 success: false,

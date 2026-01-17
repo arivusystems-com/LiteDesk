@@ -7,16 +7,16 @@
  * - Permission verification scoped by appKey
  * - Role-based access control
  * - Ownership filtering
- * - Prevents CRM module access from non-CRM apps
+ * - Prevents Sales module access from non-Sales apps
  * 
  * App-Aware Behavior:
- * - CRM modules (contacts, deals, tasks, etc.) are only accessible from CRM app
- * - Non-CRM apps should use app-specific permissions (future)
- * - Existing permissions are treated as CRM-scoped for backward compatibility
+ * - Sales modules (contacts, deals, tasks, etc.) are only accessible from Sales app
+ * - Non-Sales apps should use app-specific permissions (future)
+ * - Existing permissions are treated as Sales-scoped for backward compatibility
  * 
  * ✅ FIXED: Permission checks are now app-aware
- *    CRM modules are blocked from non-CRM apps
- *    Platform core does not assume CRM modules
+ *    Sales modules are blocked from non-Sales apps
+ *    Platform core does not assume Sales modules
  * 
  * See PLATFORM_CORE_ANALYSIS.md and APP_AWARE_PERMISSIONS.md for details.
  * ============================================================================
@@ -28,18 +28,18 @@ const SECURITY_DISABLED = process.env.DISABLE_SECURITY === 'true' || process.env
 const securityLogger = require('./securityLoggingMiddleware');
 const { APP_KEYS } = require('../constants/appKeys');
 
-// CRM-specific modules that should only be accessible from CRM app
-const CRM_MODULES = [
+// Sales-specific modules that should only be accessible from Sales app
+const SALES_MODULES = [
     'contacts', 'people', 'deals', 'tasks', 'events', 'forms', 'items',
     'organizations', 'projects', 'reports', 'imports', 'settings'
 ];
 
 /**
- * Check if a module is CRM-specific
+ * Check if a module is Sales-specific
  */
-function isCRMModule(module) {
+function isSalesModule(module) {
     const normalizedModule = module === 'people' ? 'contacts' : module;
-    return CRM_MODULES.includes(normalizedModule);
+    return SALES_MODULES.includes(normalizedModule);
 }
 
 /**
@@ -67,44 +67,44 @@ const checkPermission = (module, action) => {
             }
 
             // Owner always has all permissions (but still subject to app context)
-            // For CRM modules, owner can access from any app (backward compatibility)
-            if (user.isOwner && (!isCRMModule(module) || req.appKey === APP_KEYS.CRM || !req.appKey)) {
+            // For Sales modules, owner can access from any app (backward compatibility)
+            if (user.isOwner && (!isSalesModule(module) || req.appKey === APP_KEYS.SALES || !req.appKey)) {
                 return next();
             }
 
             // Normalize module aliases (people -> contacts)
             const normalizedModule = module === 'people' ? 'contacts' : module;
             
-            // APP-AWARE CHECK: CRM modules are only accessible from CRM app
-            if (isCRMModule(normalizedModule)) {
-                // If requesting CRM module but not from CRM app, deny access
-                if (req.appKey && req.appKey !== APP_KEYS.CRM) {
+            // APP-AWARE CHECK: Sales modules are only accessible from Sales app
+            if (isSalesModule(normalizedModule)) {
+                // If requesting Sales module but not from Sales app, deny access
+                if (req.appKey && req.appKey !== APP_KEYS.SALES) {
                     securityLogger.logPermissionDenial(req, normalizedModule, action);
                     
                     return res.status(403).json({ 
-                        message: `CRM modules are only accessible from the CRM application`,
-                        code: 'CRM_MODULE_NOT_ACCESSIBLE',
+                        message: `Sales modules are only accessible from the Sales application`,
+                        code: 'SALES_MODULE_NOT_ACCESSIBLE',
                         module: normalizedModule,
                         action: action,
                         currentApp: req.appKey,
-                        requiredApp: APP_KEYS.CRM
+                        requiredApp: APP_KEYS.SALES
                     });
                 }
                 
-                // If no appKey is set, treat as CRM (backward compatibility)
+                // If no appKey is set, treat as Sales (backward compatibility)
                 // This allows existing routes without app context to work
             }
             
             // Admins have full access to settings area (UI configuration, modules & fields, etc.)
-            // But only from CRM app (settings is a CRM module)
+            // But only from Sales app (settings is a Sales module)
             if (normalizedModule === 'settings' && String(user.role || '').toLowerCase() === 'admin') {
-                if (!req.appKey || req.appKey === APP_KEYS.CRM) {
+                if (!req.appKey || req.appKey === APP_KEYS.SALES) {
                     return next();
                 }
             }
             
             // Check if user has the specific permission
-            // Existing permissions are treated as CRM-scoped (backward compatibility)
+            // Existing permissions are treated as Sales-scoped (backward compatibility)
             let hasPermission = user.permissions?.[normalizedModule]?.[action];
             
             // For settings module, also check customizeFields as equivalent to edit
@@ -120,7 +120,7 @@ const checkPermission = (module, action) => {
                     message: `You don't have permission to ${action} ${module}`,
                     code: 'INSUFFICIENT_PERMISSIONS',
                     requiredPermission: { module: normalizedModule, action },
-                    appKey: req.appKey || APP_KEYS.CRM // Include app context
+                    appKey: req.appKey || APP_KEYS.SALES // Include app context
                 });
             }
 
@@ -281,8 +281,8 @@ const canManageRoles = () => {
  * If user doesn't have viewAll, they can only see their own data
  * 
  * App-Aware Behavior:
- * - CRM modules only filter from CRM app
- * - Non-CRM apps should use app-specific filtering (future)
+ * - Sales modules only filter from Sales app
+ * - Non-Sales apps should use app-specific filtering (future)
  */
 const filterByOwnership = (module) => {
     return async (req, res, next) => {
@@ -302,22 +302,22 @@ const filterByOwnership = (module) => {
 
             const normalizedModule = module === 'people' ? 'contacts' : module;
             
-            // APP-AWARE CHECK: CRM modules only filter from CRM app
-            if (isCRMModule(normalizedModule)) {
-                if (req.appKey && req.appKey !== APP_KEYS.CRM) {
-                    // Non-CRM app trying to filter CRM module - deny
+            // APP-AWARE CHECK: Sales modules only filter from Sales app
+            if (isSalesModule(normalizedModule)) {
+                if (req.appKey && req.appKey !== APP_KEYS.SALES) {
+                    // Non-Sales app trying to filter Sales module - deny
                     return res.status(403).json({ 
-                        message: `CRM modules are only accessible from the CRM application`,
-                        code: 'CRM_MODULE_NOT_ACCESSIBLE',
+                        message: `Sales modules are only accessible from the Sales application`,
+                        code: 'SALES_MODULE_NOT_ACCESSIBLE',
                         module: normalizedModule,
                         currentApp: req.appKey,
-                        requiredApp: APP_KEYS.CRM
+                        requiredApp: APP_KEYS.SALES
                     });
                 }
             }
             
             // Owner and users with viewAll can see everything
-            // For CRM modules, check CRM-scoped permissions (backward compatibility)
+            // For Sales modules, check Sales-scoped permissions (backward compatibility)
             if (user.isOwner || user.permissions?.[normalizedModule]?.viewAll) {
                 req.viewAll = true;
                 return next();

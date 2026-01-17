@@ -5,6 +5,9 @@ const Event = require('../models/Event');
 const User = require('../models/User');
 const Organization = require('../models/Organization');
 const mongoose = require('mongoose');
+const { applyProjectionFilter } = require('../utils/appProjectionQuery');
+const { getProjection } = require('../utils/moduleProjectionResolver');
+const { resolveCreateType, getTypeFieldName } = require('../utils/appProjectionCreateResolver');
 
 // Helper function to clean responseTemplate.activeTemplateId
 // Converts string "default" to null since schema expects ObjectId or null
@@ -20,6 +23,35 @@ const cleanResponseTemplateActiveId = (payload) => {
 // @access  Private
 exports.createForm = async (req, res) => {
     try {
+        // Phase 2A.3: Projection-aware create type resolution
+        // SAFETY: Projection-aware create logic — non-blocking fallback
+        const appKey = req.appKey || 'SALES'; // From resolveAppContext middleware
+        const moduleKey = 'forms';
+        const typeFieldName = getTypeFieldName(moduleKey);
+        
+        if (typeFieldName) {
+            const explicitType = req.body.hasOwnProperty(typeFieldName) ? req.body[typeFieldName] : null;
+            const resolved = resolveCreateType({
+                appKey,
+                moduleKey,
+                explicitType: explicitType,
+                fallbackType: null // Model will use its default if needed
+            });
+
+            if (resolved.allowed === false) {
+                return res.status(400).json({
+                    success: false,
+                    message: resolved.message || 'This form type is not allowed in this app.',
+                    code: resolved.reason
+                });
+            }
+
+            // Set resolved type in body (applies default if no explicit type provided)
+            if (resolved.type !== null && resolved.type !== undefined) {
+                req.body[typeFieldName] = resolved.type;
+            }
+        }
+
         const payload = {
             ...req.body,
             organizationId: req.user.organizationId,
@@ -99,7 +131,7 @@ exports.createForm = async (req, res) => {
 // @access  Private
 exports.getForms = async (req, res) => {
     try {
-        const query = { organizationId: req.user.organizationId };
+        let query = { organizationId: req.user.organizationId };
         
         // Get pagination params
         const page = parseInt(req.query.page) || 1;
@@ -129,6 +161,33 @@ exports.getForms = async (req, res) => {
                 { formId: searchRegex }
             ];
         }
+        
+        // Phase 2A.2: Apply projection filter (read-time filtering only)
+        // SAFETY: Projection filtering is read-only.
+        // SAFETY: No record ownership or permissions are enforced here.
+        const appKey = req.appKey || 'SALES'; // From resolveAppContext middleware
+        const moduleKey = 'forms';
+        const projectionMeta = getProjection(appKey, moduleKey);
+        
+        // Debug logging
+        console.log('[formController] Before projection filter:', {
+          appKey,
+          moduleKey,
+          hasProjection: !!projectionMeta,
+          queryBefore: JSON.stringify(query)
+        });
+        
+        query = applyProjectionFilter({
+            appKey,
+            moduleKey,
+            baseQuery: query,
+            projectionMeta
+        });
+        
+        // Debug logging
+        console.log('[formController] After projection filter:', {
+          queryAfter: JSON.stringify(query)
+        });
         
         // Sorting
         const sortBy = req.query.sortBy || 'createdAt';

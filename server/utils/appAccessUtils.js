@@ -106,15 +106,26 @@ function isAppEnabledForOrg(organization, appKey) {
     return false;
   }
   
+  // Backward compatibility: CRM and SALES are equivalent
+  // If checking for SALES, also accept CRM (and vice versa)
+  const equivalentKeys = [];
+  if (appKey === 'SALES' || appKey === 'sales') {
+    equivalentKeys.push('SALES', 'CRM', 'sales', 'crm');
+  } else if (appKey === 'CRM' || appKey === 'crm') {
+    equivalentKeys.push('SALES', 'CRM', 'sales', 'crm');
+  } else {
+    equivalentKeys.push(appKey, appKey.toUpperCase(), appKey.toLowerCase());
+  }
+  
   // Check if enabledApps is array of objects (new structure)
   if (organization.enabledApps.length > 0 && typeof organization.enabledApps[0] === 'object' && organization.enabledApps[0] !== null) {
     return organization.enabledApps.some(
-      app => app.appKey === appKey && app.status === 'ACTIVE'
+      app => equivalentKeys.includes(app.appKey) && app.status === 'ACTIVE'
     );
   }
   
   // Legacy: array of strings
-  return organization.enabledApps.includes(appKey);
+  return organization.enabledApps.some(enabledApp => equivalentKeys.includes(enabledApp));
 }
 
 /**

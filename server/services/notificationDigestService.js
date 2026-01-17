@@ -15,7 +15,7 @@ function debugLog(event, data) {
  * 
  * @param {ObjectId} userId - User ID
  * @param {ObjectId} organizationId - Organization ID
- * @param {String} appKey - App key (CRM, AUDIT, PORTAL)
+ * @param {String} appKey - App key (Sales, AUDIT, PORTAL)
  * @param {Date} sinceDate - Start of time window
  * @returns {Object|null} Digest summary or null if no content
  */
@@ -86,8 +86,8 @@ function groupByCategory(notifications, appKey) {
  * Categorize event type into semantic groups.
  */
 function categorizeEvent(eventType, appKey) {
-  // CRM categories
-  if (appKey === 'CRM') {
+  // Sales categories
+  if (appKey === 'SALES') {
     if (eventType === domainEvents.AUDIT_ASSIGNED || 
         eventType === domainEvents.AUDIT_SUBMITTED ||
         eventType === domainEvents.AUDIT_APPROVED ||
@@ -154,8 +154,8 @@ function generateSummary(items, appKey) {
   const parts = [];
   let title = '';
 
-  if (appKey === 'CRM') {
-    title = 'Your daily CRM summary';
+  if (appKey === 'SALES') {
+    title = 'Your daily Sales summary';
     const audits = items.find(i => i.type === 'AUDITS');
     const corrective = items.find(i => i.type === 'CORRECTIVE_ACTIONS');
     const subscriptions = items.find(i => i.type === 'SUBSCRIPTIONS');

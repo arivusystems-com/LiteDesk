@@ -3,7 +3,7 @@ const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
 const { organizationIsolation } = require('../middleware/organizationMiddleware');
 const { resolveAppContext } = require('../middleware/resolveAppContextMiddleware');
-const { lazyCRMInitialization } = require('../middleware/lazyCRMInitializationMiddleware');
+const { lazySalesInitialization } = require('../middleware/lazySalesInitializationMiddleware');
 const { getPreferences, updatePreferences } = require('../controllers/notificationPreferenceController');
 
 // Auth + app context + org isolation for notification preferences
@@ -11,7 +11,7 @@ const { getPreferences, updatePreferences } = require('../controllers/notificati
 // regardless of app entitlement. The appKey is used for filtering, not access control.
 router.use(protect);
 router.use(resolveAppContext);
-router.use(lazyCRMInitialization);
+router.use(lazySalesInitialization);
 router.use(organizationIsolation);
 
 router.get('/', getPreferences);

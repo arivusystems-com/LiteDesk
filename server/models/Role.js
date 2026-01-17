@@ -9,13 +9,13 @@
  * - User-role assignment
  * 
  * App-Aware Structure:
- * - appPermissions: App-scoped permissions (new, for multi-app support)
- * - permissions: Legacy CRM-scoped permissions (backward compatibility)
+ * - appPermissions: App-scoped permissions (new, for multi-app support) ✅
+ * - permissions: Legacy CRM-scoped permissions (backward compatibility) ⚠️
  * 
  * ✅ FIXED: Permissions are now app-aware
  *    - appPermissions field supports multi-app permissions
- *    - Legacy permissions treated as CRM-scoped
- *    - Platform core does not assume CRM modules
+ *    - Legacy permissions field marked as deprecated/CRM-specific
+ *    - Platform core uses appPermissions for app-agnostic permissions
  * 
  * See PLATFORM_CORE_ANALYSIS.md and APP_AWARE_PERMISSIONS.md for details.
  * ============================================================================
@@ -55,7 +55,7 @@ const roleSchema = new mongoose.Schema({
     
     // App-Scoped Permissions (new structure for multi-app support)
     // Format: { appKey: { module: { action: boolean } } }
-    // Example: { CRM: { contacts: { create: true, read: true } }, PORTAL: { profile: { read: true } } }
+    // Example: { SALES: { contacts: { create: true, read: true } }, PORTAL: { profile: { read: true } } }
     appPermissions: {
         type: Map,
         of: mongoose.Schema.Types.Mixed,
@@ -63,8 +63,10 @@ const roleSchema = new mongoose.Schema({
     },
     
     // Legacy: Module Permissions - CRUD for each module (CRM-specific)
-    // Kept for backward compatibility - treated as CRM-app scoped
-    // @deprecated Use appPermissions instead
+    // ⚠️ PLATFORM CORE VIOLATION: This structure is CRM-module-specific
+    //    Kept for backward compatibility - treated as CRM-app scoped
+    //    New apps should use appPermissions instead
+    // @deprecated Use appPermissions instead for app-agnostic permissions
     permissions: {
         // Contacts Module
         contacts: {
@@ -253,7 +255,7 @@ roleSchema.methods.hasPermission = function(module, action, appKey = null) {
         }
     }
     
-    // Fallback to legacy permissions (treated as CRM-scoped)
+    // Fallback to legacy permissions (treated as SALES-scoped)
     // This ensures backward compatibility with existing roles
     if (this.permissions && this.permissions[module]) {
         return this.permissions[module][action] === true;
@@ -263,7 +265,7 @@ roleSchema.methods.hasPermission = function(module, action, appKey = null) {
 };
 
 // Instance method to check if role has permission for a specific app
-// @param {string} appKey - App key (e.g., 'CRM', 'PORTAL')
+// @param {string} appKey - App key (e.g., 'SALES', 'PORTAL')
 // @param {string} module - Module name
 // @param {string} action - Action name
 roleSchema.methods.hasAppPermission = function(appKey, module, action) {

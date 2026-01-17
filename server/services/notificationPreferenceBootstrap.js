@@ -1,7 +1,7 @@
 const NotificationPreference = require('../models/NotificationPreference');
 const domainEvents = require('../constants/domainEvents');
 
-const APP_KEYS = ['CRM', 'AUDIT', 'PORTAL'];
+const APP_KEYS = ['SALES', 'AUDIT', 'PORTAL'];
 const ALL_EVENTS = Object.values(domainEvents);
 
 /**
@@ -25,8 +25,8 @@ function buildDefaultMap(appKey) {
     defaults[evt] = createEventPref(false, false);
   });
 
-  // CRM defaults: push enabled, whatsapp/sms unavailable
-  if (appKey === 'CRM') {
+  // Sales defaults: push enabled, whatsapp/sms unavailable
+  if (appKey === 'SALES') {
     ALL_EVENTS.forEach(evt => {
       defaults[evt] = createEventPref(true, false, true, true, false, false, false, false);
     });
@@ -59,7 +59,7 @@ function buildDefaultMap(appKey) {
   }
 
   // Digest defaults
-  if (appKey === 'CRM') {
+  if (appKey === 'SALES') {
     defaults[domainEvents.DIGEST_DAILY] = createEventPref(true, true, false, false, false, false, false, false);
     defaults[domainEvents.DIGEST_WEEKLY] = createEventPref(false, true, false, false, false, false, false, false);
   }

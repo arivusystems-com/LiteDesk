@@ -51,8 +51,25 @@
 
             <!-- Event Type -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Event Type <span class="text-red-500">*</span></label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Event Type <span class="text-red-500">*</span>
+                <span v-if="showTypeSelector && isPlatformOwned" class="text-gray-500 dark:text-gray-400 text-xs ml-2">(based on app configuration)</span>
+              </label>
+              <!-- Phase 2B: Show filtered options based on projection metadata -->
               <select
+                v-if="showTypeSelector && isPlatformOwned && !isEditing"
+                v-model="form.eventType"
+                @change="onEventTypeChange"
+                required
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              >
+                <option v-for="type in allowedTypes" :key="type.projectionType" :value="type.modelValue">
+                  {{ type.modelValue }}
+                </option>
+              </select>
+              <!-- Fallback to all options if no projection or editing -->
+              <select
+                v-else
                 v-model="form.eventType"
                 @change="onEventTypeChange"
                 required
@@ -64,6 +81,10 @@
                 <option value="External Audit Beat">External Audit Beat</option>
                 <option value="Field Sales Beat">Field Sales Beat</option>
               </select>
+              <!-- Phase 2B: Helper text when selector is hidden -->
+              <p v-if="hideTypeSelector && isPlatformOwned && defaultType && !isEditing" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                This app creates {{ defaultType.modelValue }}s by default
+              </p>
             </div>
 
             <!-- Event Owner -->
@@ -426,6 +447,7 @@ import apiClient from '@/utils/apiClient';
 import dateUtils from '@/utils/dateUtils';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
 import { useAuthStore } from '@/stores/auth';
+import { useProjectionCreate } from '@/composables/useProjectionCreate';
 
 const props = defineProps({
   isOpen: {
@@ -449,6 +471,20 @@ const organizations = ref([]);
 const auditForms = ref([]);
 const loadingForms = ref(false);
 const eventsModuleDefinition = ref(null);
+
+// Phase 2B: Projection-aware create form
+const {
+  loading: projectionLoading,
+  allowedTypes,
+  defaultType,
+  isPlatformOwned,
+  isReadOnly,
+  showTypeSelector,
+  hideTypeSelector,
+  load: loadProjection,
+  resolveInitialCreatePayload,
+  isTypeAllowed
+} = useProjectionCreate('events');
 
 const colorOptions = [
   '#3B82F6', // Blue
@@ -654,11 +690,20 @@ const fetchEventsModuleDefinition = async () => {
 };
 
 // Fetch users when component mounts
-onMounted(() => {
+onMounted(async () => {
   fetchUsers();
   fetchOrganizations();
   fetchEventsModuleDefinition();
   // Forms will be fetched by the watch or when modal opens
+  
+  // Phase 2B: Load projection metadata
+  if (!isEditing.value) {
+    await loadProjection();
+    // Apply projection defaults after loading
+    if (defaultType.value && !form.value.eventType) {
+      form.value.eventType = defaultType.value.modelValue;
+    }
+  }
 });
 
 // Methods for dynamic fields
@@ -816,6 +861,14 @@ watch(() => props.isOpen, (newVal) => {
   } else if (newVal) {
     // Create mode - reset form
     resetForm();
+    // Phase 2B: Load projection metadata for create mode
+    nextTick(async () => {
+      await loadProjection();
+      // Apply projection defaults after loading
+      if (defaultType.value && !form.value.eventType) {
+        form.value.eventType = defaultType.value.modelValue;
+      }
+    });
   }
 });
 
@@ -835,7 +888,8 @@ const resetForm = () => {
   const now = new Date();
   const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
   
-  form.value = {
+  // Phase 2B: Apply projection defaults
+  const baseForm = {
     eventName: '',
     notes: '',
     eventType: 'Meeting / Appointment',
@@ -870,6 +924,9 @@ const resetForm = () => {
     visibility: 'Internal',
     attachments: [],
   };
+  
+  // Phase 2B: Apply projection defaults
+  form.value = resolveInitialCreatePayload(baseForm);
 };
 
 
@@ -906,6 +963,15 @@ const handleSubmit = async (e) => {
   }
   
   console.log('[EventFormModal] ✅ Proceeding with validation...');
+  
+  // Phase 2B: Validate type against projection metadata
+  if (!isEditing.value && isPlatformOwned.value && form.value.eventType) {
+    if (!isTypeAllowed(form.value.eventType)) {
+      alert(`Event type "${form.value.eventType}" is not allowed in this app`);
+      saving.value = false;
+      return;
+    }
+  }
   
   // Validate required fields
   if (!form.value.eventName || !form.value.eventName.trim()) {

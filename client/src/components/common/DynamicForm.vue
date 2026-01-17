@@ -60,6 +60,8 @@ import DynamicFormField from './DynamicFormField.vue';
 import apiClient from '@/utils/apiClient';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
 import { useAuthStore } from '@/stores/auth';
+import { useRoute } from 'vue-router';
+import { getCurrentContext, filterFieldsByContext } from '@/utils/fieldContextFilter';
 
 const props = defineProps({
   moduleKey: {
@@ -74,6 +76,18 @@ const props = defineProps({
   errors: {
     type: Object,
     default: () => ({})
+  },
+  excludeFields: {
+    type: Array,
+    default: () => [] // Fields to exclude from the form
+  },
+  showAllFields: {
+    type: Boolean,
+    default: false // If true, show all fields instead of just quickCreate fields
+  },
+  quickCreateMode: {
+    type: Boolean,
+    default: false // If true, strictly respect quickCreate config (no fallback to required fields)
   }
 });
 
@@ -84,6 +98,10 @@ const loading = ref(true);
 const localFormData = ref({ ...props.formData });
 const error = ref(null);
 const authStore = useAuthStore();
+const route = useRoute();
+
+// Get current context from route
+const currentContext = computed(() => getCurrentContext(route.path));
 
 // Field rendering helpers - case-insensitive lookup
 const fieldMap = computed(() => {
@@ -121,7 +139,8 @@ const useAdvancedLayout = computed(() => {
 const orderedFields = computed(() => {
   if (!moduleDefinition.value) return [];
   const quickCreate = moduleDefinition.value.quickCreate || [];
-  const allFields = moduleDefinition.value.fields || [];
+  // Filter fields by context first
+  const allFields = filterFieldsByContext(moduleDefinition.value.fields || [], currentContext.value);
   
     // Exclude system fields and hidden fields
     // assignedTo should be visible in Quick Create forms (admin can assign)
@@ -148,6 +167,38 @@ const orderedFields = computed(() => {
     }
   }
   
+  // If showAllFields is true (edit mode), show all fields instead of just quickCreate
+  if (props.showAllFields) {
+    const ordered = [];
+    const seen = new Set();
+    
+    // Add all fields (excluding system fields and excluded fields)
+    for (const field of allFields) {
+      const fieldKeyLower = field.key?.toLowerCase();
+      const isSystem = systemFieldKeys.includes(fieldKeyLower);
+      const isExcluded = props.excludeFields.some(excluded => excluded.toLowerCase() === fieldKeyLower);
+      
+      // Check dependency-based visibility
+      let isVisible = true;
+      if (field.dependencies && Array.isArray(field.dependencies) && field.dependencies.length > 0) {
+        const depState = getFieldDependencyState(field, currentFormData, allFields);
+        isVisible = depState.visible !== false;
+      }
+      
+      if (!isSystem && !isExcluded && isVisible && !seen.has(fieldKeyLower)) {
+        ordered.push(field);
+        seen.add(fieldKeyLower);
+      }
+    }
+    
+    // Sort by field.order if available
+    return ordered.sort((a, b) => {
+      const orderA = a.order ?? 999;
+      const orderB = b.order ?? 999;
+      return orderA - orderB;
+    });
+  }
+  
   // Get fields in quickCreate order, respecting main field order
   const ordered = [];
   const seen = new Set(); // Use Set with lowercase keys for case-insensitive deduplication
@@ -157,7 +208,10 @@ const orderedFields = computed(() => {
     quickCreateLength: quickCreate.length,
     fieldMapByKeySize: fieldMapByKey.size,
     systemFieldKeys: systemFieldKeys,
-    currentFormData: currentFormData
+    currentFormData: currentFormData,
+    moduleKey: props.moduleKey,
+    allFieldKeys: Array.from(fieldMapByKey.keys()).slice(0, 30),
+    quickCreateKeys: quickCreate.slice(0, 10)
   });
   
   // First, add fields from quickCreate array in the exact order they appear
@@ -177,14 +231,38 @@ const orderedFields = computed(() => {
       const camelCaseKeyLower = camelCaseKey.toLowerCase();
       field = fieldMapByKey.get(camelCaseKeyLower);
       
+      // Also try snake_case to camelCase conversion (first_name -> firstName)
+      if (!field && key.includes('_')) {
+        const camelFromSnake = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+        const camelFromSnakeLower = camelFromSnake.toLowerCase();
+        field = fieldMapByKey.get(camelFromSnakeLower);
+        if (field) {
+          console.log(`✅ Normalized snake_case field key "${key}" to "${field.key}"`);
+        }
+      }
+      
+      // Also try camelCase to snake_case conversion (firstName -> first_name)
+      if (!field && /[A-Z]/.test(key)) {
+        const snakeFromCamel = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+        field = fieldMapByKey.get(snakeFromCamel);
+        if (field) {
+          console.log(`✅ Normalized camelCase field key "${key}" to "${field.key}"`);
+        }
+      }
+      
       if (field) {
-        console.log(`✅ Normalized field key "${key}" to "${field.key}"`);
+        if (!camelCaseKeyLower) {
+          console.log(`✅ Found field "${key}" after normalization`);
+        }
       } else {
         console.warn(`⚠️  Field "${key}" (${keyLower}) from quickCreate not found in module fields`, {
-          availableKeys: Array.from(fieldMapByKey.keys()).slice(0, 20),
+          availableKeys: Array.from(fieldMapByKey.keys()).slice(0, 30),
           keyLower: keyLower,
           camelCaseAttempt: camelCaseKey,
-          moduleKey: props.moduleKey
+          snakeCaseAttempt: key.includes('_') ? key.replace(/_([a-z])/g, (g) => g[1].toUpperCase()).toLowerCase() : null,
+          camelToSnakeAttempt: /[A-Z]/.test(key) ? key.replace(/([A-Z])/g, '_$1').toLowerCase() : null,
+          moduleKey: props.moduleKey,
+          quickCreateArray: quickCreate
         });
         continue;
       }
@@ -231,8 +309,9 @@ const orderedFields = computed(() => {
   });
   
   // Also include required fields that might not be in quickCreate (but not system fields)
-  // Only if quickCreate array is empty - otherwise trust the admin's configuration
-  if (quickCreate.length === 0) {
+  // Only if quickCreate array is empty AND we're NOT in strict quickCreateMode
+  // In quickCreateMode, we strictly respect the admin's configuration (even if empty)
+  if (quickCreate.length === 0 && !props.quickCreateMode) {
     for (const field of allFields) {
       const fieldKeyLower = field.key?.toLowerCase();
       const isSystem = systemFieldKeys.includes(fieldKeyLower);
@@ -305,6 +384,15 @@ const getFieldComponent = (field) => {
 
 const shouldShowField = (field) => {
   if (!field || !field.key) return false;
+  
+  // Exclude fields specified in excludeFields prop
+  if (props.excludeFields && props.excludeFields.length > 0) {
+    const keyLower = field.key.toLowerCase();
+    if (props.excludeFields.some(excluded => excluded.toLowerCase() === keyLower)) {
+      return false;
+    }
+  }
+  
   // Exclude system fields - assignedTo should be visible in Quick Create, createdby should not
   // Note: createdby is excluded from Quick Create (set by backend automatically)
   // Note: status is system-controlled for Events (not user-editable)
@@ -404,31 +492,68 @@ const fetchModule = async () => {
   loading.value = true;
   error.value = null;
   try {
-    const data = await apiClient.get('/modules');
+    // Pass current context to API
+    const context = currentContext.value;
+    const data = await apiClient.get(`/modules${context ? `?context=${context}` : ''}`);
+    const peopleModuleRaw = data.data?.find(m => m.key === 'people');
+    console.log('🔍 Raw API response for modules:', {
+      success: data.success,
+      dataLength: data.data?.length || 0,
+      peopleModule: peopleModuleRaw,
+      peopleModuleQuickCreate: peopleModuleRaw?.quickCreate,
+      peopleModuleQuickCreateLength: peopleModuleRaw?.quickCreate?.length || 0,
+      peopleModuleQuickCreateType: typeof peopleModuleRaw?.quickCreate,
+      peopleModuleQuickCreateIsArray: Array.isArray(peopleModuleRaw?.quickCreate),
+      peopleModuleHasQuickCreate: 'quickCreate' in (peopleModuleRaw || {}),
+      peopleModuleKeys: peopleModuleRaw ? Object.keys(peopleModuleRaw).slice(0, 20) : [],
+      allModuleKeys: data.data?.map(m => m.key) || []
+    });
     if (data.success) {
       const targetModule = data.data.find(m => m.key === props.moduleKey);
+      console.log('🎯 Found target module:', {
+        key: targetModule?.key,
+        hasQuickCreate: 'quickCreate' in (targetModule || {}),
+        quickCreateValue: targetModule?.quickCreate,
+        quickCreateLength: targetModule?.quickCreate?.length || 0
+      });
       if (targetModule) {
         // Ensure quickCreate and quickCreateLayout are always present
         if (!targetModule.quickCreate) targetModule.quickCreate = [];
         if (!targetModule.quickCreateLayout) targetModule.quickCreateLayout = { version: 1, rows: [] };
         
-        console.log('Module loaded:', {
+        console.log('📦 Module loaded:', {
           key: targetModule.key,
           quickCreate: targetModule.quickCreate,
           quickCreateLayout: targetModule.quickCreateLayout,
           quickCreateLength: targetModule.quickCreate?.length || 0,
           quickCreateLayoutRows: targetModule.quickCreateLayout?.rows?.length || 0,
           fieldsCount: targetModule.fields?.length || 0,
-          fields: targetModule.fields?.map(f => ({ key: f.key, label: f.label })) || []
+          fields: targetModule.fields?.map(f => ({ key: f.key, label: f.label, required: f.required })) || [],
+          quickCreateMode: props.quickCreateMode,
+          showAllFields: props.showAllFields,
+          hasQuickCreateProp: 'quickCreate' in targetModule,
+          quickCreateType: typeof targetModule.quickCreate,
+          quickCreateIsArray: Array.isArray(targetModule.quickCreate),
+          rawModuleData: JSON.stringify({
+            quickCreate: targetModule.quickCreate,
+            quickCreateLayout: targetModule.quickCreateLayout
+          })
         });
         
         // Debug: Log fields in Quick Create config
         if (targetModule.quickCreate && targetModule.quickCreate.length > 0) {
-          console.log('Fields in quickCreate config:', targetModule.quickCreate);
-          console.log('Matching fields:', targetModule.quickCreate.map(key => {
+          console.log('✅ Fields in quickCreate config:', targetModule.quickCreate);
+          console.log('✅ Matching fields:', targetModule.quickCreate.map(key => {
             const field = targetModule.fields?.find(f => f.key === key);
             return field ? { key: field.key, label: field.label, found: true } : { key, found: false };
           }));
+        } else {
+          console.warn('⚠️ quickCreate array is empty or missing!', {
+            hasQuickCreate: !!targetModule.quickCreate,
+            quickCreateValue: targetModule.quickCreate,
+            quickCreateMode: props.quickCreateMode,
+            willFallback: !props.quickCreateMode
+          });
         }
         
         moduleDefinition.value = targetModule;

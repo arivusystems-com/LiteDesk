@@ -66,7 +66,7 @@ class NotificationSSEHub {
    * @param {Object} res - Express response object (SSE stream)
    * @param {string} userId - User ID
    * @param {string} organizationId - Organization ID
-   * @param {string} appKey - App key (CRM | AUDIT | PORTAL)
+   * @param {string} appKey - App key (SALES | AUDIT | PORTAL)
    * @returns {string} connectionId
    */
   subscribe(res, userId, organizationId, appKey) {

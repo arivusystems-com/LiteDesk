@@ -1,5 +1,12 @@
 <template>
   <div class="mx-auto">
+    <!-- Entity Description -->
+    <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+      <p class="text-sm text-gray-700 dark:text-gray-300">
+        <strong>Items</strong> are shared across all apps. They represent products, services, and inventory that can be used in deals, quotes, and other records.
+      </p>
+    </div>
+
     <ListView
       title="Items"
       description="Manage products, services, and inventory"
@@ -23,7 +30,7 @@
       table-id="items-table"
       row-key="_id"
       empty-title="No items yet"
-      empty-message="Create your first item to get started"
+      empty-message="Items are products and services you sell. Add them here to use in deals, quotes, and invoices across all apps."
       @create="openCreateModal"
       @import="showImportModal = true"
       @export="exportItems"

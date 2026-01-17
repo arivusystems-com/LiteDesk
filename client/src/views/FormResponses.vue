@@ -22,7 +22,7 @@
       table-id="form-responses-table"
       row-key="_id"
       empty-title="No responses yet"
-      empty-message="This form hasn't received any responses yet"
+      empty-message="Responses will appear here once people start filling out this form. Share the form link to start collecting information."
       :show-create="false"
       :show-import="false"
       :show-export="true"

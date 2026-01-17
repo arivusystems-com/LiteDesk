@@ -1,30 +1,45 @@
 <template>
-  <SummaryView
-    :record="formattedForm"
-    :record-type="'forms'"
-    :loading="loading"
-    :error="error"
-    :stats="formStats"
-    @close="goBack"
-    @update="handleUpdate"
-    @edit="editForm"
-    @delete="showDeleteModal = true"
-    @duplicate="duplicateForm"
-    @add-relation="handleAddRelation"
-    @open-related-record="handleOpenRelatedRecord"
-    @record-updated="handleRecordUpdated"
-    ref="summaryViewRef"
-  />
+  <div>
+    <SummaryView
+      :record="formattedForm"
+      :record-type="'forms'"
+      :loading="loading"
+      :error="error"
+      :stats="formStats"
+      @close="goBack"
+      @update="handleUpdate"
+      @edit="editForm"
+      @delete="showDeleteModal = true"
+      @duplicate="duplicateForm"
+      @add-relation="handleAddRelation"
+      @open-related-record="handleOpenRelatedRecord"
+      @record-updated="handleRecordUpdated"
+      ref="summaryViewRef"
+    />
 
-  <!-- Delete Confirmation Modal -->
-  <DeleteConfirmationModal
-    :show="showDeleteModal"
-    :record-name="form?.name || ''"
-    record-type="forms"
-    :deleting="deleting"
-    @close="showDeleteModal = false"
-    @confirm="deleteForm"
-  />
+    <!-- Related Records Panel (Phase 0F.1: Show Responses) -->
+    <div v-if="form && !loading && !error" class="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-6">
+      <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Related Records</h3>
+        <RelatedRecordsPanel
+          app-key="PLATFORM"
+          module-key="forms"
+          :record-id="form._id || route.params.id"
+          :read-only="true"
+        />
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <DeleteConfirmationModal
+      :show="showDeleteModal"
+      :record-name="form?.name || ''"
+      record-type="forms"
+      :deleting="deleting"
+      @close="showDeleteModal = false"
+      @confirm="deleteForm"
+    />
+  </div>
 </template>
 
 <script setup>
@@ -34,6 +49,9 @@ import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
 import SummaryView from '@/components/common/SummaryView.vue';
 import DeleteConfirmationModal from '@/components/common/DeleteConfirmationModal.vue';
+import RelatedRecordsPanel from '@/components/relationships/RelatedRecordsPanel.vue';
+import { useRecordContext } from '@/composables/useRecordContext';
+import { getProjectionTypeLabel, getAppLabel } from '@/utils/projectionLabels';
 
 const route = useRoute();
 const router = useRouter();
@@ -46,6 +64,22 @@ const error = ref(null);
 const summaryViewRef = ref(null);
 const showDeleteModal = ref(false);
 const deleting = ref(false);
+
+// Phase 2C: Get record context for projection metadata
+const { context: recordContext, load: loadRecordContext } = useRecordContext('SALES', 'forms', () => route.params.id);
+
+// Phase 2C: Computed projection type label
+const projectionTypeLabel = computed(() => {
+  if (!recordContext.value?.record?.projection?.currentType) return null;
+  const currentType = recordContext.value.record.projection.currentType;
+  const appKey = recordContext.value.record.projection.appKey || 'SALES';
+  return getProjectionTypeLabel(currentType, appKey);
+});
+
+const projectionAppLabel = computed(() => {
+  if (!recordContext.value?.record?.projection?.appKey) return null;
+  return getAppLabel(recordContext.value.record.projection.appKey);
+});
 
 // Computed property to format form data for SummaryView
 const formattedForm = computed(() => {
@@ -73,11 +107,16 @@ const formattedForm = computed(() => {
     });
   }
   
+  // Phase 2C: Use projection type label if available, otherwise fallback to formType
+  const typeLabel = projectionTypeLabel.value 
+    ? (projectionAppLabel.value ? `${projectionTypeLabel.value} (${projectionAppLabel.value})` : projectionTypeLabel.value)
+    : (form.value.formType || 'Form');
+  
   // Format for SummaryView - it expects a 'name' field and 'subtitle' field
   return {
     ...form.value,
     name: form.value.name || 'Untitled Form',
-    subtitle: form.value.description || `${form.value.formType || 'Form'} • ${form.value.status || 'Draft'}`,
+    subtitle: form.value.description || `${typeLabel} • ${form.value.status || 'Draft'}`,
     // Add computed fields that might be useful
     _sectionsCount: sectionsCount,
     _totalQuestions: totalQuestions,
@@ -281,5 +320,9 @@ const handleRecordUpdated = (updatedRecord) => {
 onMounted(async () => {
   await fetchForm();
   await fetchAnalytics();
+  // Phase 2C: Load record context for projection metadata
+  if (route.params.id) {
+    await loadRecordContext();
+  }
 });
 </script>

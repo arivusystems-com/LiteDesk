@@ -259,6 +259,17 @@
             />
           </div>
 
+          <!-- Related Records Panel (Phase 1B: Read-only visibility) -->
+          <div v-if="deal._id" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <h3 class="text-base font-bold text-gray-900 dark:text-white mb-4">Related Records</h3>
+            <RelatedRecordsPanel
+              app-key="SALES"
+              module-key="deals"
+              :record-id="deal._id"
+              :read-only="true"
+            />
+          </div>
+
           <!-- Activity Timeline -->
           <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
             <div class="flex items-center justify-between mb-3">
@@ -357,6 +368,7 @@ import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import RelatedEventsWidget from '@/components/events/RelatedEventsWidget.vue';
+import RelatedRecordsPanel from '@/components/relationships/RelatedRecordsPanel.vue';
 import Avatar from '@/components/common/Avatar.vue';
 
 const route = useRoute();

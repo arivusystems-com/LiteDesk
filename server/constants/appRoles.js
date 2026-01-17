@@ -12,10 +12,10 @@
  */
 
 /**
- * CRM Application Roles
- * Used for CRM app access control
+ * SALES Application Roles
+ * Used for SALES app access control
  */
-const CRM_ROLES = ['ADMIN', 'MANAGER', 'USER'];
+const SALES_ROLES = ['ADMIN', 'MANAGER', 'USER'];
 
 /**
  * Audit Application Roles
@@ -31,12 +31,12 @@ const PORTAL_ROLES = ['CUSTOMER', 'VIEWER'];
 
 /**
  * Get valid roles for an app
- * @param {string} appKey - The app key (CRM, AUDIT, PORTAL)
+ * @param {string} appKey - The app key (SALES, AUDIT, PORTAL)
  * @returns {string[]} - Array of valid role keys for the app
  */
 function getRolesForApp(appKey) {
     const roleMap = {
-        'CRM': CRM_ROLES,
+        'SALES': SALES_ROLES,
         'AUDIT': AUDIT_ROLES,
         'PORTAL': PORTAL_ROLES
     };
@@ -55,12 +55,12 @@ function isValidRoleForApp(appKey, roleKey) {
 }
 
 /**
- * Map legacy role string to CRM roleKey
+ * Map legacy role string to SALES roleKey
  * Used for backward compatibility when migrating from legacy role system
  * @param {string} legacyRole - Legacy role ('owner', 'admin', 'manager', 'user', 'viewer')
- * @returns {string} - CRM roleKey ('ADMIN', 'MANAGER', 'USER')
+ * @returns {string} - SALES roleKey ('ADMIN', 'MANAGER', 'USER')
  */
-function mapLegacyRoleToCRM(legacyRole) {
+function mapLegacyRoleToSales(legacyRole) {
     const roleMap = {
         'owner': 'ADMIN',
         'admin': 'ADMIN',
@@ -72,11 +72,13 @@ function mapLegacyRoleToCRM(legacyRole) {
 }
 
 module.exports = {
-    CRM_ROLES,
+    SALES_ROLES,
+    CRM_ROLES: SALES_ROLES, // Backward compatibility alias
     AUDIT_ROLES,
     PORTAL_ROLES,
     getRolesForApp,
     isValidRoleForApp,
-    mapLegacyRoleToCRM
+    mapLegacyRoleToSales,
+    mapLegacyRoleToCRM: mapLegacyRoleToSales // Backward compatibility alias
 };
 

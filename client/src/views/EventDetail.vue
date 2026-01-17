@@ -79,6 +79,17 @@
         </div>
       </div>
 
+      <!-- Execution Action Bar -->
+      <ExecutionActionBar
+        v-if="recordContext && recordContext.executionCapabilities"
+        :execution-capabilities="recordContext.executionCapabilities || []"
+        app-key="PLATFORM"
+        :executing="executing"
+        :executing-capability-key="executingCapabilityKey"
+        @action="handleExecutionAction"
+        class="mb-4"
+      />
+
       <!-- Main Content Grid -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <!-- Left Column - Event Info -->
@@ -96,7 +107,21 @@
               <span v-if="event.auditState" :class="getAuditStateBadgeClass(event.auditState)" class="capitalize">
                 {{ formatAuditState(event.auditState) }}
               </span>
-              <span v-if="event.eventType || event.type" class="px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded text-xs font-medium">
+              <!-- Phase 2C: Projection-aware type badge -->
+              <span 
+                v-if="projectionTypeLabel"
+                :class="projectionTypeBadgeClass"
+              >
+                {{ projectionTypeLabel }}
+                <span v-if="projectionAppLabel" class="ml-1 text-xs opacity-75">
+                  ({{ projectionAppLabel }})
+                </span>
+              </span>
+              <!-- Fallback to eventType if no projection -->
+              <span 
+                v-else-if="event.eventType || event.type" 
+                class="px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded text-xs font-medium"
+              >
                 {{ event.eventType || event.type }}
               </span>
             </div>
@@ -246,6 +271,17 @@
               </svg>
               View Corrective Actions
             </button>
+          </div>
+
+          <!-- Related Records Panel (Phase 0F.1: Show Responses) -->
+          <div v-if="event" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Related Records</h3>
+            <RelatedRecordsPanel
+              app-key="PLATFORM"
+              module-key="events"
+              :record-id="event._id || event.eventId || route.params.id"
+              :read-only="true"
+            />
           </div>
 
           <!-- Notes Card -->
@@ -471,6 +507,11 @@ import dateUtils from '@/utils/dateUtils';
 import { useAuthStore } from '@/stores/auth';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import EventExecution from '@/components/events/EventExecution.vue';
+import RelatedRecordsPanel from '@/components/relationships/RelatedRecordsPanel.vue';
+import ExecutionActionBar from '@/components/ExecutionActionBar.vue';
+import { useRecordContext } from '@/composables/useRecordContext';
+import { useNotifications } from '@/composables/useNotifications';
+import { getProjectionTypeLabel, getProjectionTypeBadgeClass, getAppLabel } from '@/utils/projectionLabels';
 
 const route = useRoute();
 const router = useRouter();
@@ -481,6 +522,36 @@ const error = ref(null);
 const showNoteForm = ref(false);
 const newNote = ref('');
 const showEditModal = ref(false);
+
+// Phase 1F: Execution state
+const executing = ref(false);
+const executingCapabilityKey = ref(null);
+
+// Phase 1F: Notifications
+const { success: showSuccess, error: showError } = useNotifications();
+
+// Record context for execution capabilities and projection metadata
+const { context: recordContext, load: loadRecordContext } = useRecordContext('SALES', 'events', () => route.params.id);
+
+// Phase 2C: Computed projection type label and badge
+const projectionTypeLabel = computed(() => {
+  if (!recordContext.value?.record?.projection?.currentType) return null;
+  const currentType = recordContext.value.record.projection.currentType;
+  const appKey = recordContext.value.record.projection.appKey || 'SALES';
+  return getProjectionTypeLabel(currentType, appKey);
+});
+
+const projectionTypeBadgeClass = computed(() => {
+  if (!recordContext.value?.record?.projection?.currentType) return '';
+  const currentType = recordContext.value.record.projection.currentType;
+  const appKey = recordContext.value.record.projection.appKey || 'SALES';
+  return getProjectionTypeBadgeClass(currentType, appKey);
+});
+
+const projectionAppLabel = computed(() => {
+  if (!recordContext.value?.record?.projection?.appKey) return null;
+  return getAppLabel(recordContext.value.record.projection.appKey);
+});
 
 // Check if event is locked for editing (checked in for audit events)
 const isEventLocked = computed(() => {
@@ -907,8 +978,81 @@ const getStatusBadgeClass = (status) => {
 };
 
 
-onMounted(() => {
-  fetchEvent();
+// Phase 1F: Handle execution action with UX polish
+const handleExecutionAction = async (actionData) => {
+  try {
+    const { capabilityKey, capability } = actionData;
+    
+    // Phase 1F: Set executing state
+    executing.value = true;
+    executingCapabilityKey.value = capabilityKey;
+    
+    // Show confirmation if required
+    if (capability?.uiHints?.confirmationRequired) {
+      const confirmed = confirm(`Are you sure you want to ${capability.uiHints.label.toLowerCase()}?`);
+      if (!confirmed) {
+        executing.value = false;
+        executingCapabilityKey.value = null;
+        return;
+      }
+    }
+
+    // Phase 1F: Optimistic UI lock - disable interactions
+    // (No optimistic state mutation, just visual lock)
+
+    // Prepare params based on action type
+    const params = {};
+    if (capabilityKey === 'AUDIT_CHECK_IN' && actionData.location) {
+      params.location = actionData.location;
+    }
+    if (capabilityKey === 'AUDIT_SUBMIT') {
+      params.formResponseId = actionData.formResponseId;
+      params.orgIndex = actionData.orgIndex;
+    }
+    if (capabilityKey === 'AUDIT_REJECT') {
+      params.reason = actionData.reason;
+    }
+
+    // Execute action via execution API
+    const response = await apiClient.post('/execution/execute', {
+      capabilityKey,
+      recordId: route.params.id,
+      params
+    });
+
+    if (response.success) {
+      // Phase 1F: Refresh record context after success (backend is source of truth)
+      await fetchEvent();
+      await loadRecordContext();
+      
+      // Phase 1F: Show success toast
+      if (!response.duplicate) {
+        showSuccess(response.message || 'Action completed successfully');
+      }
+    } else {
+      // Phase 1F: Show mapped error feedback
+      const errorMessage = response.error?.message || response.message || 'Action failed';
+      showError(errorMessage);
+    }
+  } catch (err) {
+    console.error('[EventDetail] Execution error:', err);
+    
+    // Phase 1F: Show mapped error feedback
+    const errorMessage = err.error?.message || err.message || 'Failed to execute action';
+    showError(errorMessage);
+  } finally {
+    // Phase 1F: Clear executing state
+    executing.value = false;
+    executingCapabilityKey.value = null;
+  }
+};
+
+onMounted(async () => {
+  await fetchEvent();
+  // Load record context for execution capabilities (uses route.params.id from composable)
+  if (route.params.id) {
+    await loadRecordContext();
+  }
 });
 </script>
 

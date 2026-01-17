@@ -2,7 +2,7 @@ const PushSubscription = require('../models/PushSubscription');
 const pushService = require('../services/pushService');
 const NotificationPreference = require('../models/NotificationPreference');
 
-const APP_KEYS = ['CRM', 'AUDIT', 'PORTAL'];
+const APP_KEYS = ['SALES', 'AUDIT', 'PORTAL'];
 
 function normalizeAppKey(req) {
   const fromQuery = req.query.appKey;

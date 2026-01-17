@@ -21,11 +21,11 @@ const notificationSchema = new Schema({
   appKey: {
     type: String,
     required: true,
-    enum: ['CRM', 'AUDIT', 'PORTAL']
+    enum: ['SALES', 'AUDIT', 'PORTAL']
   },
   sourceAppKey: {
     type: String,
-    enum: ['CRM', 'AUDIT', 'PORTAL'],
+    enum: ['SALES', 'AUDIT', 'PORTAL'],
     default: null
   },
 

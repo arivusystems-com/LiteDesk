@@ -458,9 +458,20 @@ const importContacts = async (req, res) => {
           organizationId: req.user.organizationId
         };
 
+        // Get Sales participation fields that should be stripped
+        const { getSalesParticipationFields } = require('./peopleController');
+        const participationFields = getSalesParticipationFields();
+
         Object.keys(fieldMapping).forEach(csvField => {
           const contactField = fieldMapping[csvField];
           if (contactField && row[csvField]) {
+            // ⚠️ GUARDRAIL: Strip participation fields from CSV import
+            // Person creation is identity-only. Participation fields must be set via Attach-to-App.
+            if (participationFields.includes(contactField)) {
+              console.warn(`[CSVImport] ⚠️ Participation field "${contactField}" detected in CSV import and stripped. Use Attach-to-App to set participation fields.`);
+              return; // Skip this field
+            }
+            
             // Handle nested fields (e.g., 'address.street')
             if (contactField.includes('.')) {
               const [parent, child] = contactField.split('.');

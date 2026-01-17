@@ -33,12 +33,14 @@ const URL_NAMESPACE_MAP = {
     '/api/audit': APP_KEYS.AUDIT,  // Must come before /api
     '/api/portal': APP_KEYS.PORTAL, // Must come before /api
     '/api/lms': APP_KEYS.LMS,       // Must come before /api
-    '/app/crm': APP_KEYS.CRM,
+    '/api/control': APP_KEYS.CONTROL_PLANE, // Must come before /api
+    '/app/crm': APP_KEYS.SALES,
     '/portal': APP_KEYS.PORTAL,
     '/audit': APP_KEYS.AUDIT,
     '/lms': APP_KEYS.LMS,
+    '/control': APP_KEYS.CONTROL_PLANE,
     // Legacy support: /api routes default to CRM (must be last)
-    '/api': APP_KEYS.CRM
+    '/api': APP_KEYS.SALES
 };
 
 /**

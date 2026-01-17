@@ -5,16 +5,60 @@ const { organizationIsolation } = require('../middleware/organizationMiddleware'
 const { checkPermission } = require('../middleware/permissionMiddleware');
 const { resolveAppContext } = require('../middleware/resolveAppContextMiddleware');
 const { requireAppEntitlement } = require('../middleware/requireAppEntitlementMiddleware');
-const { lazyCRMInitialization } = require('../middleware/lazyCRMInitializationMiddleware');
-const { requireCRMApp } = require('../middleware/requireCRMAppMiddleware');
+const { lazySalesInitialization } = require('../middleware/lazySalesInitializationMiddleware');
+const { requireSalesApp } = require('../middleware/requireSalesAppMiddleware');
 const controller = require('../controllers/moduleController');
+
+// Core entities that are platform-owned (don't require Sales app)
+const CORE_ENTITIES = ['people', 'organizations', 'events', 'forms', 'tasks', 'items', 'reports'];
+
+// Helper to check if a module is a core entity
+function isCoreEntity(moduleKey) {
+  if (!moduleKey) return false;
+  return CORE_ENTITIES.includes(moduleKey.toLowerCase());
+}
+
+// Helper to extract module key from request
+function getModuleKeyFromRequest(req) {
+  // For PUT /system/:key routes
+  if (req.params.key) {
+    return req.params.key;
+  }
+  // For PUT /:id routes, we'd need to fetch the module to get its key
+  // But for now, we'll handle this in the route handler if needed
+  return null;
+}
 
 // Require auth and organization context
 router.use(protect);
 router.use(resolveAppContext); // After auth, resolve appKey from URL
-router.use(requireAppEntitlement); // Check user's app entitlements
-router.use(lazyCRMInitialization); // Lazy initialize CRM if needed
-router.use(requireCRMApp); // Enforce CRM-only access
+
+// Conditional middleware: Allow platform-level access for GET requests and core entity modifications
+// Require Sales app only for Sales-specific module modifications
+router.use((req, res, next) => {
+  if (req.method === 'GET') {
+    // For GET requests, allow platform-level access (Settings can view modules)
+    // Skip app entitlement, Sales app, and lazy initialization checks
+    // The settings.edit permission check is sufficient for viewing
+    return next();
+  }
+  
+  // For modifications (POST/PUT/DELETE), check if it's a core entity
+  const moduleKey = getModuleKeyFromRequest(req);
+  if (isCoreEntity(moduleKey)) {
+    // Core entities can be modified without Sales app (platform-level access)
+    // Skip app entitlement, Sales app, and lazy initialization checks
+    return next();
+  }
+  
+  // For Sales-specific modules (like Deals), require Sales app entitlement and initialization
+  return requireAppEntitlement(req, res, () => {
+    return lazySalesInitialization(req, res, () => {
+      return requireSalesApp(req, res, next);
+    });
+  });
+});
+
 router.use(organizationIsolation);
 
 // Settings permission (reuse settings.edit to manage modules)

@@ -2,7 +2,7 @@ const domainEvents = require('../constants/domainEvents');
 const NotificationPreference = require('../models/NotificationPreference');
 const { ensureDefaultPreferences, buildDefaultMap } = require('../services/notificationPreferenceBootstrap');
 
-const APP_KEYS = ['CRM', 'AUDIT', 'PORTAL'];
+const APP_KEYS = ['SALES', 'AUDIT', 'PORTAL'];
 const ALL_EVENTS = Object.values(domainEvents);
 
 function normalizeAppKey(req) {

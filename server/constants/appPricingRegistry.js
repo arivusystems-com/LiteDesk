@@ -20,11 +20,11 @@
  */
 
 module.exports = {
-    CRM: {
+    SALES: {
         billingType: 'PER_USER',
         defaultSeatLimit: null, // null = unlimited by default
         defaultPlan: 'BASIC',
-        trialDays: 14, // Not used for CRM (already provisioned)
+        trialDays: 14, // Not used for SALES (already provisioned)
         plans: {
             BASIC: {
                 seatLimit: 5

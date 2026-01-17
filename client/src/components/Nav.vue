@@ -1,11 +1,17 @@
 <script setup>
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useAppShellStore } from '@/stores/appShell';
 import { useTabs } from '@/composables/useTabs';
 import NotificationBell from '@/components/notifications/NotificationBell.vue';
 import NotificationDrawer from '@/components/notifications/NotificationDrawer.vue';
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
+import { buildSidebarFromRegistry } from '@/utils/buildSidebarFromRegistry';
+import { getAppRegistry } from '@/utils/getAppRegistry';
+import { createPermissionSnapshot } from '@/types/permission-snapshot.types';
+import { DEFAULT_CORE_ITEMS } from '@/utils/coreSidebarItems';
 import { useColorMode } from '@/composables/useColorMode';
+import GlobalSearch from '@/components/GlobalSearch.vue';
 import { Dialog, DialogPanel, TransitionChild, TransitionRoot, Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import { 
   Bars3Icon, 
@@ -25,7 +31,11 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ClipboardDocumentIcon,
-  CubeIcon
+  CubeIcon,
+  InboxIcon,
+  ChartBarIcon,
+  Cog6ToothIcon,
+  Squares2X2Icon
 } from '@heroicons/vue/24/outline'
 
 // Define props and emits
@@ -38,6 +48,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue']);
 
+const router = useRouter();
 const route = useRoute();
 const showDrawer = ref(false);
 const isCollapsed = computed({
@@ -81,140 +92,126 @@ watch(() => route.path, () => {
   sidebarOpen.value = false;
 });
 
-// --- Data for the Navigation Array with Icons ---
-const navigation = computed(() => {
-  const nav = [];
-  
-  // Check user's app access
-  const allowedApps = authStore.user?.allowedApps || [];
-  const hasCrmAccess = allowedApps.includes('CRM');
-  const hasAuditAccess = allowedApps.includes('AUDIT');
-  
-  // Only show CRM modules if user has CRM access
-  // Audit-only users should not see CRM navigation
-  
-  // Dashboard - only show CRM dashboard if user has CRM access
-  if (hasCrmAccess) {
-    nav.push({ 
-      name: 'Dashboard', 
-      href: '/dashboard', 
-      icon: HomeIcon,
-      current: route.path === '/dashboard'
-    });
-  }
-  
-  // People - check permission (uses 'contacts' permission module) - CRM only
-  if (hasCrmAccess && (authStore.can('people', 'view') || authStore.can('contacts', 'view'))) {
-    nav.push({ 
-      name: 'People', 
-      href: '/people', 
-      icon: UsersIcon,
-      current: route.path.startsWith('/people')
-    });
-  }
-  
-  // Organizations - check permission - CRM only
-  if (hasCrmAccess && authStore.can('organizations', 'view')) {
-    nav.push({ 
-      name: 'Organizations', 
-      href: '/organizations', 
-      icon: BuildingOfficeIcon,
-      current: route.path.startsWith('/organizations')
-    });
-  }
-  
-  // Deals - check permission - CRM only
-  if (hasCrmAccess && authStore.can('deals', 'view')) {
-    nav.push({ 
-      name: 'Deals', 
-      href: '/deals', 
-      icon: BriefcaseIcon,
-      current: route.path.startsWith('/deals')
-    });
-  }
-  
-  // Tasks - check permission - CRM only
-  if (hasCrmAccess && authStore.can('tasks', 'view')) {
-    nav.push({ 
-      name: 'Tasks', 
-      href: '/tasks', 
-      icon: CheckCircleIcon,
-      current: route.path.startsWith('/tasks')
-    });
-  }
-  
-      // Events - check permission - CRM only
-      if (hasCrmAccess && authStore.can('events', 'view')) {
-        nav.push({
-          name: 'Events',
-          href: '/events',
-          icon: CalendarIcon,
-          current: route.path.startsWith('/events') || route.path.startsWith('/calendar')
-        });
-      }
-  
-  // Items - check permission - CRM only
-  if (hasCrmAccess && authStore.can('items', 'view')) {
-    nav.push({ 
-      name: 'Items', 
-      href: '/items', 
-      icon: CubeIcon,
-      current: route.path.startsWith('/items')
-    });
-  }
-  
-  // Forms - check permission - CRM only
-  if (hasCrmAccess && authStore.can('forms', 'view')) {
-    nav.push({ 
-      name: 'Forms', 
-      href: '/forms', 
-      icon: ClipboardDocumentIcon,
-      current: route.path.startsWith('/forms') && route.path !== '/responses'
-    });
-    // Responses - show all form responses
-    nav.push({ 
-      name: 'Responses', 
-      href: '/responses', 
-      icon: ClipboardDocumentIcon,
-      current: route.path === '/responses'
-    });
-  }
-  
-  // Imports - check permission - CRM only
-  if (hasCrmAccess && authStore.can('imports', 'view')) {
-    nav.push({ 
-      name: 'Imports', 
-      href: '/imports', 
-      icon: ArrowDownTrayIcon,
-      current: route.path.startsWith('/imports')
-    });
-  }
-  
-  
-  // Admin-only links for Master Organization (LiteDesk Master) only
-  // Only application owner can see demo requests and instances
-  if (authStore.isMasterOrganization && (authStore.isOwner || authStore.userRole === 'admin')) {
-    nav.push({ 
-      name: 'Demo Requests', 
-      href: '/demo-requests', 
-      icon: RectangleStackIcon,
-      current: route.path.startsWith('/demo-requests')
-    });
-    nav.push({ 
-      name: 'Instances', 
-      href: '/instances', 
-      icon: ServerIcon,
-      current: route.path.startsWith('/instances')
-    });
-  }
-  
-  return nav;
-});
+// ============================================================================
+// PLATFORM UI: Sidebar from Registry (Phase 1A - Full Cutover)
+// ============================================================================
+// 
+// Removed:
+// - AppSwitcher component
+// - Per-app navigation logic
+// - Hardcoded module lists
+// - Inline permission checks
+//
+// Replaced with:
+// - buildSidebarFromRegistry(registry, permissionSnapshot)
+// - SidebarStructure rendering
+// ============================================================================
 
+// Initialize stores first (before any functions that use them)
 const { colorMode, toggleColorMode, clearStoredMode } = useColorMode();
 const authStore = useAuthStore();
-const router = useRouter();
 const { openTab } = useTabs();
+
+// Global search state
+const showGlobalSearch = ref(false);
+
+// App registry and sidebar structure
+const appRegistry = ref({});
+const sidebarStructure = ref(null);
+const loadingSidebar = ref(false);
+
+// Build sidebar from registry
+const buildSidebar = async () => {
+  if (!authStore.user || !authStore.isAuthenticated) {
+    sidebarStructure.value = null;
+    return;
+  }
+  
+  loadingSidebar.value = true;
+  try {
+    // Fetch app registry
+    const registry = await getAppRegistry();
+    
+    // Check if component is still mounted and user is still authenticated
+    if (!authStore.user || !authStore.isAuthenticated) {
+      return;
+    }
+    
+    appRegistry.value = registry;
+    
+    // Create permission snapshot
+    const snapshot = createPermissionSnapshot(authStore.user);
+    
+    // Build sidebar structure with core items
+    const structure = buildSidebarFromRegistry(registry, snapshot, DEFAULT_CORE_ITEMS);
+    
+    // Double-check before setting (component might have unmounted)
+    if (authStore.user && authStore.isAuthenticated) {
+      sidebarStructure.value = structure;
+    }
+  } catch (error) {
+    console.error('[Nav] Error building sidebar:', error);
+    // Only set to null if still authenticated (might have logged out)
+    if (authStore.isAuthenticated) {
+      sidebarStructure.value = null;
+    }
+  } finally {
+    if (authStore.isAuthenticated) {
+      loadingSidebar.value = false;
+    }
+  }
+};
+
+// Watch for user changes to rebuild sidebar
+watch(() => authStore.user, (newUser) => {
+  if (newUser && authStore.isAuthenticated) {
+    buildSidebar();
+  } else {
+    sidebarStructure.value = null;
+  }
+}, { immediate: true });
+
+// Watch for authentication changes
+watch(() => authStore.isAuthenticated, (isAuthenticated) => {
+  if (isAuthenticated && authStore.user) {
+    buildSidebar();
+  } else {
+    sidebarStructure.value = null;
+  }
+});
+
+// Global search handlers
+const openGlobalSearch = () => {
+  console.log('[Nav] Opening global search');
+  showGlobalSearch.value = true;
+};
+
+const closeGlobalSearch = () => {
+  console.log('[Nav] Closing global search');
+  showGlobalSearch.value = false;
+};
+
+// Keyboard shortcut handler for global search
+const handleGlobalSearchKeydown = (event) => {
+  // Cmd/Ctrl + K to open search
+  if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
+    event.preventDefault();
+    console.log('[Nav] Cmd/Ctrl+K pressed, opening search');
+    openGlobalSearch();
+  }
+};
+
+// Build sidebar on mount
+onMounted(() => {
+  if (authStore.user && authStore.isAuthenticated) {
+    buildSidebar();
+  }
+  window.addEventListener('keydown', handleGlobalSearchKeydown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleGlobalSearchKeydown);
+});
 
 const handleNotificationClick = () => {
   const width = window.innerWidth || 0;
@@ -223,12 +220,14 @@ const handleNotificationClick = () => {
     showDrawer.value = true;
   } else {
     // Mobile/tablet: open global CRM sheet via app-level listener
-    window.dispatchEvent(new CustomEvent('crm-open-notifications'));
+    window.dispatchEvent(new CustomEvent('sales-open-notifications'));
   }
 };
 
 // Handle navigation click - open in tab instead of direct navigation
-const handleNavClick = (item, event) => {
+const handleNavClick = (route, label, event, appKey = null) => {
+  console.log(`[Nav] handleNavClick called:`, { route, label, appKey, eventType: event?.type });
+  
   // Check if user wants to open in background
   const openInBackground = event && (
     event.button === 1 || // Middle mouse button
@@ -236,14 +235,103 @@ const handleNavClick = (item, event) => {
     event.ctrlKey         // Ctrl on Windows/Linux
   );
   
-  openTab(item.href, {
-    title: item.name,
+  // If this is a dashboard route and we have an appKey, ensure it's passed
+  let finalRoute = route;
+  if (appKey) {
+    // If route is /dashboard, convert to /dashboard/:appKey format
+    if (route === '/dashboard') {
+      finalRoute = `/dashboard/${appKey.toLowerCase()}`;
+      console.log(`[Nav] Converting dashboard route: ${route} → ${finalRoute} (appKey: ${appKey})`);
+    }
+    // If route is already /dashboard/:something, ensure it has the correct appKey
+    else if (route.startsWith('/dashboard/')) {
+      // Route already has appKey in path, use as-is
+      finalRoute = route;
+      console.log(`[Nav] Dashboard route already has appKey: ${route}`);
+    }
+    // For other routes (like /helpdesk/cases, /audit/dashboard), use as-is
+    // These routes should handle their own app context
+    else {
+      console.warn(`[Nav] App ${appKey} has non-dashboard route: ${route}. Expected /dashboard or /dashboard/:appKey`);
+    }
+  }
+  
+  console.log(`[Nav] Opening tab: ${finalRoute} (label: ${label}, appKey: ${appKey}, background: ${openInBackground})`);
+  openTab(finalRoute, {
+    title: label,
     background: openInBackground
-    // Note: Don't pass item.icon (it's a Vue component)
-    // Let useTabs.js auto-detect the emoji icon from the path
   });
 };
 
+// Check if a route is active
+const isRouteActive = (routePath) => {
+  if (routePath === '/dashboard') {
+    return route.path === '/dashboard';
+  }
+  return route.path.startsWith(routePath);
+};
+
+// Map icon identifiers (string or emoji) to heroicons components
+const getIconComponent = (iconId) => {
+  // Handle undefined/null/empty iconId
+  if (!iconId) {
+    return HomeIcon; // Default fallback
+  }
+  
+  // First, map emoji icons to string identifiers
+  const emojiToIconId = {
+    '👥': 'users',
+    '🏢': 'building',
+    '💼': 'briefcase',
+    '✅': 'check',
+    '📅': 'calendar',
+    '📁': 'folder',
+    '📦': 'items',
+    '📝': 'forms',
+    '📥': 'download',
+    '📋': 'clipboard',
+    '⚙️': 'cog',
+    '💰': 'briefcase', // Sales app
+    '🎧': 'briefcase', // Helpdesk app
+    '🌐': 'server', // Portal app
+    '📋': 'clipboard', // Audit app
+  };
+  
+  // Normalize iconId: if it's an emoji, convert to string identifier
+  const normalizedIconId = emojiToIconId[iconId] || iconId;
+  
+  // Map string identifiers to heroicons components
+  const iconMap = {
+    'home': HomeIcon,
+    'inbox': InboxIcon,
+    'chart-bar': ChartBarIcon,
+    'users': UsersIcon,
+    'building': BuildingOfficeIcon,
+    'briefcase': BriefcaseIcon,
+    'check': CheckCircleIcon,
+    'calendar': CalendarIcon,
+    'folder': FolderIcon,
+    'server': ServerIcon,
+    'clipboard': ClipboardDocumentIcon,
+    'cube': CubeIcon,
+    'download': ArrowDownTrayIcon,
+    'stack': RectangleStackIcon,
+    'cog': Cog6ToothIcon,
+    'squares': Squares2X2Icon,
+    'items': FolderIcon, // Items use folder icon
+    'forms': ClipboardDocumentIcon, // Forms use clipboard icon
+  };
+  
+  const icon = iconMap[normalizedIconId];
+  if (!icon) {
+    console.warn(`[Nav] Unknown icon identifier: "${iconId}" (normalized: "${normalizedIconId}"), defaulting to HomeIcon`);
+    return HomeIcon; // Default to HomeIcon if icon not found
+  }
+  
+  return icon;
+};
+
+// User info and handlers
 const userName = computed(() => authStore.user?.username || 'User');
 const userVertical = computed(() => authStore.user?.vertical || 'N/A');
 
@@ -321,32 +409,157 @@ const logoSrc = computed(() => {
                 <nav class="relative flex flex-1 flex-col">
                   <ul role="list" class="flex flex-1 flex-col gap-y-7">
                     <li>
-                      <ul role="list" class="-mx-2 space-y-1">
-                        <li v-for="item in navigation" :key="item.name">
+                      <!-- 1. Core Section (Personal / Attention Layer) -->
+                      <ul v-if="sidebarStructure?.core?.length" role="list" class="-mx-2 space-y-1 mb-4">
+                        <li v-for="item in (sidebarStructure?.core || [])" :key="item.key">
                           <a 
-                            :href="item.href" 
-                            @click.prevent="handleNavClick(item, $event)"
+                            :href="item.route" 
+                            @click.prevent="handleNavClick(item.route, item.label, $event)"
                             :class="[
-                              item.current 
+                              isRouteActive(item.route)
                                 ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' 
                                 : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white', 
                               'group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold'
                             ]"
                           >
                             <component 
-                              :is="item.icon" 
+                              :is="getIconComponent(item.icon)"
                               :class="[
-                                item.current 
+                                isRouteActive(item.route)
                                   ? 'text-gray-900 dark:text-white' 
                                   : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white', 
                                 'size-6 shrink-0'
                               ]" 
                               aria-hidden="true" 
                             />
-                            {{ item.name }}
+                            {{ item.label }}
                           </a>
                         </li>
                       </ul>
+                      
+                      <!-- 2. Entities Section (Shared System Primitives) -->
+                      <ul v-if="sidebarStructure?.entities?.length" role="list" class="-mx-2 space-y-1 mb-4">
+                        <li v-for="item in (sidebarStructure?.entities || [])" :key="item.key">
+                          <a 
+                            :href="item.route" 
+                            @click.prevent="handleNavClick(item.route, item.label, $event)"
+                            :class="[
+                              isRouteActive(item.route)
+                                ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' 
+                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white', 
+                              'group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold'
+                            ]"
+                          >
+                            <component 
+                              :is="getIconComponent(item.icon)"
+                              :class="[
+                                isRouteActive(item.route)
+                                  ? 'text-gray-900 dark:text-white' 
+                                  : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white', 
+                                'size-6 shrink-0'
+                              ]" 
+                              aria-hidden="true" 
+                            />
+                            {{ item.label }}
+                          </a>
+                        </li>
+                      </ul>
+                      
+                      <!-- 3. Apps Section (Domain Workflows) -->
+                      <template v-if="sidebarStructure?.apps?.length">
+                        <div v-for="domain in (sidebarStructure?.apps || [])" :key="domain.appKey" class="mb-4">
+                          <!-- App Header -->
+                          <a 
+                            :href="domain.dashboardRoute" 
+                            @click.prevent="handleNavClick(domain.dashboardRoute, domain.label, $event, domain.appKey)"
+                            @click.middle.prevent="handleNavClick(domain.dashboardRoute, domain.label, $event, domain.appKey)"
+                            :class="[
+                              isRouteActive(domain.dashboardRoute)
+                                ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' 
+                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white', 
+                              'group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold mb-1'
+                            ]"
+                          >
+                            <component 
+                              :is="getIconComponent(domain.icon)"
+                              :class="[
+                                isRouteActive(domain.dashboardRoute)
+                                  ? 'text-gray-900 dark:text-white' 
+                                  : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white', 
+                                'size-6 shrink-0'
+                              ]" 
+                              aria-hidden="true" 
+                            />
+                            {{ domain.label }}
+                          </a>
+                          
+                          <!-- App Modules -->
+                          <ul v-if="domain?.children?.length" role="list" class="ml-4 space-y-1">
+                            <li v-for="module in (domain?.children || [])" :key="module.moduleKey">
+                              <a 
+                                :href="module.route" 
+                                @click.prevent="handleNavClick(module.route, module.label, $event)"
+                                :class="[
+                                  isRouteActive(module.route)
+                                    ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' 
+                                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white', 
+                                  'group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold'
+                                ]"
+                              >
+                                <component 
+                                  :is="getIconComponent(module.icon)"
+                                  :class="[
+                                    isRouteActive(module.route)
+                                      ? 'text-gray-900 dark:text-white' 
+                                      : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white', 
+                                    'size-6 shrink-0'
+                                  ]" 
+                                  aria-hidden="true" 
+                                />
+                                {{ module.label }}
+                              </a>
+                            </li>
+                          </ul>
+                        </div>
+                      </template>
+                      
+                      <!-- 4. Platform Section (Governance) -->
+                      <ul v-if="sidebarStructure?.platform?.length" role="list" class="-mx-2 space-y-1 mt-4 border-t border-gray-200 dark:border-white/10 pt-4">
+                        <li v-for="item in (sidebarStructure?.platform || [])" :key="item.key">
+                          <a 
+                            :href="item.route" 
+                            @click.prevent="handleNavClick(item.route, item.label, $event)"
+                            :class="[
+                              isRouteActive(item.route)
+                                ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' 
+                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white', 
+                              'group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold'
+                            ]"
+                          >
+                            <component 
+                              :is="getIconComponent(item.icon)"
+                              :class="[
+                                isRouteActive(item.route)
+                                  ? 'text-gray-900 dark:text-white' 
+                                  : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white', 
+                                'size-6 shrink-0'
+                              ]" 
+                              aria-hidden="true" 
+                            />
+                            {{ item.label }}
+                          </a>
+                        </li>
+                      </ul>
+                      
+                      <!-- Loading State -->
+                      <div v-if="loadingSidebar" class="px-2 py-4 text-center text-sm text-gray-500">
+                        Loading...
+                      </div>
+                      
+                      <!-- Empty State -->
+                      <div v-if="!loadingSidebar && !sidebarStructure" class="px-2 py-4 text-center text-sm text-gray-500">
+                        No navigation available
+                      </div>
                     </li>
                   </ul>
                 </nav>
@@ -448,34 +661,29 @@ const logoSrc = computed(() => {
         </button>
       </div>
 
-      <!-- Navigation Links -->
+      <!-- Navigation Links - Built from SidebarStructure -->
       <nav class="flex-1 overflow-y-auto py-4 px-2">
-        <div class="space-y-1">
+        <!-- 1. Core Section (Personal / Attention Layer) -->
+        <div v-if="sidebarStructure?.core?.length" class="space-y-1 mb-4">
           <a
-            v-for="item in navigation"
-            :key="item.name"
-            :href="item.href"
-            @click.prevent="handleNavClick(item, $event)"
-            @auxclick.prevent="handleNavClick(item, $event)"
+            v-for="item in (sidebarStructure?.core || [])"
+            :key="item.key"
+            :href="item.route"
+            @click.prevent="handleNavClick(item.route, item.label, $event)"
+            @auxclick.prevent="handleNavClick(item.route, item.label, $event)"
             :class="[
               'flex items-center rounded-lg transition-colors duration-200',
               'hover:bg-gray-100 dark:hover:bg-white/5',
-              item.current
+              isRouteActive(item.route)
                 ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white font-semibold'
                 : 'text-gray-600 dark:text-gray-400',
               shouldShowExpanded ? 'px-3 py-2.5' : 'px-3 py-2.5'
             ]"
-            :title="!shouldShowExpanded ? item.name : ''"
+            :title="!shouldShowExpanded ? item.label : ''"
           >
-            <!-- Icon container with fixed width to prevent shifting -->
             <div :class="['flex items-center justify-center flex-shrink-0', shouldShowExpanded ? 'w-6' : 'w-full']">
-              <component 
-                :is="item.icon" 
-                class="w-6 h-6"
-              />
+              <component :is="getIconComponent(item.icon)" class="w-6 h-6" />
             </div>
-            
-            <!-- Label with smooth transition -->
             <transition
               enter-active-class="transition-all duration-300 ease-out"
               enter-from-class="opacity-0 max-w-0"
@@ -484,14 +692,166 @@ const logoSrc = computed(() => {
               leave-from-class="opacity-100 max-w-xs"
               leave-to-class="opacity-0 max-w-0"
             >
-              <span 
-                v-if="shouldShowExpanded" 
-                class="ml-3 text-sm font-medium whitespace-nowrap overflow-hidden"
-              >
-                {{ item.name }}
+              <span v-if="shouldShowExpanded" class="ml-3 text-sm font-medium whitespace-nowrap overflow-hidden">
+                {{ item.label }}
               </span>
             </transition>
           </a>
+        </div>
+        
+        <!-- 2. Entities Section (Shared System Primitives) -->
+        <div v-if="sidebarStructure?.entities?.length" class="space-y-1 mb-4">
+          <a
+            v-for="item in (sidebarStructure?.entities || [])"
+            :key="item.key"
+            :href="item.route"
+            @click.prevent="handleNavClick(item.route, item.label, $event)"
+            @auxclick.prevent="handleNavClick(item.route, item.label, $event)"
+            :class="[
+              'flex items-center rounded-lg transition-colors duration-200',
+              'hover:bg-gray-100 dark:hover:bg-white/5',
+              isRouteActive(item.route)
+                ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white font-semibold'
+                : 'text-gray-600 dark:text-gray-400',
+              shouldShowExpanded ? 'px-3 py-2.5' : 'px-3 py-2.5'
+            ]"
+            :title="!shouldShowExpanded ? item.label : ''"
+          >
+            <div :class="['flex items-center justify-center flex-shrink-0', shouldShowExpanded ? 'w-6' : 'w-full']">
+              <component :is="getIconComponent(item.icon)" class="w-6 h-6" />
+            </div>
+            <transition
+              enter-active-class="transition-all duration-300 ease-out"
+              enter-from-class="opacity-0 max-w-0"
+              enter-to-class="opacity-100 max-w-xs"
+              leave-active-class="transition-all duration-300 ease-in"
+              leave-from-class="opacity-100 max-w-xs"
+              leave-to-class="opacity-0 max-w-0"
+            >
+              <span v-if="shouldShowExpanded" class="ml-3 text-sm font-medium whitespace-nowrap overflow-hidden">
+                {{ item.label }}
+              </span>
+            </transition>
+          </a>
+        </div>
+        
+        <!-- 3. Apps Section (Domain Workflows) -->
+        <template v-if="sidebarStructure?.apps?.length">
+          <div v-for="domain in (sidebarStructure?.apps || [])" :key="domain.appKey" class="mb-4">
+            <!-- App Header -->
+            <a
+              :href="domain.dashboardRoute"
+              @click.prevent="handleNavClick(domain.dashboardRoute, domain.label, $event, domain.appKey)"
+              @auxclick.prevent="handleNavClick(domain.dashboardRoute, domain.label, $event, domain.appKey)"
+              :class="[
+                'flex items-center rounded-lg transition-colors duration-200',
+                'hover:bg-gray-100 dark:hover:bg-white/5',
+                isRouteActive(domain.dashboardRoute)
+                  ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white font-semibold'
+                  : 'text-gray-600 dark:text-gray-400',
+                shouldShowExpanded ? 'px-3 py-2.5' : 'px-3 py-2.5'
+              ]"
+              :title="!shouldShowExpanded ? domain.label : ''"
+            >
+              <div :class="['flex items-center justify-center flex-shrink-0', shouldShowExpanded ? 'w-6' : 'w-full']">
+                <component :is="getIconComponent(domain.icon)" class="w-6 h-6" />
+              </div>
+              <transition
+                enter-active-class="transition-all duration-300 ease-out"
+                enter-from-class="opacity-0 max-w-0"
+                enter-to-class="opacity-100 max-w-xs"
+                leave-active-class="transition-all duration-300 ease-in"
+                leave-from-class="opacity-100 max-w-xs"
+                leave-to-class="opacity-0 max-w-0"
+              >
+                <span v-if="shouldShowExpanded" class="ml-3 text-sm font-medium whitespace-nowrap overflow-hidden">
+                  {{ domain.label }}
+                </span>
+              </transition>
+            </a>
+            
+            <!-- App Modules -->
+            <div v-if="domain?.children?.length" class="ml-4 space-y-1 mt-1">
+              <a
+                v-for="module in (domain?.children || [])"
+                :key="module.moduleKey"
+                :href="module.route"
+                @click.prevent="handleNavClick(module.route, module.label, $event)"
+                @auxclick.prevent="handleNavClick(module.route, module.label, $event)"
+                :class="[
+                  'flex items-center rounded-lg transition-colors duration-200',
+                  'hover:bg-gray-100 dark:hover:bg-white/5',
+                  isRouteActive(module.route)
+                    ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white font-semibold'
+                    : 'text-gray-600 dark:text-gray-400',
+                  shouldShowExpanded ? 'px-3 py-2.5' : 'px-3 py-2.5'
+                ]"
+                :title="!shouldShowExpanded ? module.label : ''"
+              >
+                <div :class="['flex items-center justify-center flex-shrink-0', shouldShowExpanded ? 'w-6' : 'w-full']">
+                  <component :is="getIconComponent(module.icon)" class="w-6 h-6" />
+                </div>
+                <transition
+                  enter-active-class="transition-all duration-300 ease-out"
+                  enter-from-class="opacity-0 max-w-0"
+                  enter-to-class="opacity-100 max-w-xs"
+                  leave-active-class="transition-all duration-300 ease-in"
+                  leave-from-class="opacity-100 max-w-xs"
+                  leave-to-class="opacity-0 max-w-0"
+                >
+                  <span v-if="shouldShowExpanded" class="ml-3 text-sm font-medium whitespace-nowrap overflow-hidden">
+                    {{ module.label }}
+                  </span>
+                </transition>
+              </a>
+            </div>
+          </div>
+        </template>
+        
+        <!-- 4. Platform Section (Governance) -->
+        <div v-if="sidebarStructure?.platform?.length" class="space-y-1 mt-4 border-t border-gray-200 dark:border-white/10 pt-4">
+          <a
+            v-for="item in (sidebarStructure?.platform || [])"
+            :key="item.key"
+            :href="item.route"
+            @click.prevent="handleNavClick(item.route, item.label, $event)"
+            @auxclick.prevent="handleNavClick(item.route, item.label, $event)"
+            :class="[
+              'flex items-center rounded-lg transition-colors duration-200',
+              'hover:bg-gray-100 dark:hover:bg-white/5',
+              isRouteActive(item.route)
+                ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white font-semibold'
+                : 'text-gray-600 dark:text-gray-400',
+              shouldShowExpanded ? 'px-3 py-2.5' : 'px-3 py-2.5'
+            ]"
+            :title="!shouldShowExpanded ? item.label : ''"
+          >
+            <div :class="['flex items-center justify-center flex-shrink-0', shouldShowExpanded ? 'w-6' : 'w-full']">
+              <component :is="getIconComponent(item.icon)" class="w-6 h-6" />
+            </div>
+            <transition
+              enter-active-class="transition-all duration-300 ease-out"
+              enter-from-class="opacity-0 max-w-0"
+              enter-to-class="opacity-100 max-w-xs"
+              leave-active-class="transition-all duration-300 ease-in"
+              leave-from-class="opacity-100 max-w-xs"
+              leave-to-class="opacity-0 max-w-0"
+            >
+              <span v-if="shouldShowExpanded" class="ml-3 text-sm font-medium whitespace-nowrap overflow-hidden">
+                {{ item.label }}
+              </span>
+            </transition>
+          </a>
+        </div>
+        
+        <!-- Loading State -->
+        <div v-if="loadingSidebar" class="px-2 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+          Loading...
+        </div>
+        
+        <!-- Empty State -->
+        <div v-if="!loadingSidebar && !sidebarStructure" class="px-2 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+          No navigation available
         </div>
       </nav>
 
@@ -509,16 +869,21 @@ const logoSrc = computed(() => {
           <div v-if="shouldShowExpanded" class="overflow-hidden">
             <div class="relative">
               <MagnifyingGlassIcon class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search..."
-                class="w-full pl-9 pr-3 py-2 text-sm rounded-lg 
+              <button
+                @click="openGlobalSearch"
+                class="w-full relative flex items-center gap-2 px-3 py-2 text-sm rounded-lg 
                        bg-gray-50 dark:bg-white/5
-                       text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-400
+                       text-gray-500 dark:text-gray-400
                        border border-gray-200 dark:border-white/10
-                       focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-white/20
-                       transition-all duration-200"
-              />
+                       hover:bg-gray-100 dark:hover:bg-white/10
+                       transition-all duration-200 cursor-text text-left"
+              >
+                <MagnifyingGlassIcon class="w-4 h-4 flex-shrink-0" />
+                <span class="flex-1">Search...</span>
+                <kbd class="hidden sm:inline-flex items-center px-1.5 py-0.5 text-xs font-semibold text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded">
+                  ⌘K
+                </kbd>
+              </button>
             </div>
           </div>
         </transition>
@@ -694,7 +1059,14 @@ const logoSrc = computed(() => {
   </div>
   <NotificationDrawer
     :open="showDrawer"
-    app-key="CRM"
+    app-key="SALES"
     @close="showDrawer = false"
+  />
+  
+  <!-- Global Search Modal -->
+  <GlobalSearch
+    :is-open="showGlobalSearch"
+    @close="closeGlobalSearch"
+    @open="openGlobalSearch"
   />
 </template>

@@ -102,7 +102,7 @@ exports.getUsers = async (req, res) => {
 // --- Get add user capabilities (what apps & roles can be assigned) ---
 exports.getAddCapabilities = async (req, res) => {
     try {
-        // Requester must be CRM ADMIN (owner or admin)
+        // Requester must be Sales ADMIN (owner or admin)
         const user = req.user;
         if (!user) {
             return res.status(401).json({
@@ -111,12 +111,12 @@ exports.getAddCapabilities = async (req, res) => {
             });
         }
 
-        // Check if user is owner or admin (CRM ADMIN)
+        // Check if user is owner or admin (Sales ADMIN)
         const isCRMAdmin = user.isOwner || String(user.role || '').toLowerCase() === 'admin';
         if (!isCRMAdmin) {
             return res.status(403).json({
                 success: false,
-                message: 'Only CRM administrators can add users',
+                message: 'Only Sales administrators can add users',
                 code: 'INSUFFICIENT_PERMISSIONS'
             });
         }
@@ -332,7 +332,7 @@ exports.inviteUser = async (req, res) => {
     } = req.body;
 
     try {
-        // Requester must be CRM ADMIN (enforced by middleware, but check here for clarity)
+        // Requester must be Sales ADMIN (enforced by middleware, but check here for clarity)
         const user = req.user;
         if (!user) {
             return res.status(401).json({
@@ -345,7 +345,7 @@ exports.inviteUser = async (req, res) => {
         if (!isCRMAdmin) {
             return res.status(403).json({
                 success: false,
-                message: 'Only CRM administrators can add users',
+                message: 'Only Sales administrators can add users',
                 code: 'INSUFFICIENT_PERMISSIONS'
             });
         }
@@ -500,8 +500,8 @@ exports.inviteUser = async (req, res) => {
                 });
             }
 
-            // For backward compatibility, try to find CRM role for legacy roleId/role fields
-            // This allows UI to still send roleId for CRM while using unified format
+            // For backward compatibility, try to find Sales role for legacy roleId/role fields
+            // This allows UI to still send roleId for Sales while using unified format
             if (roleId) {
                 const Role = require('../models/Role');
                 roleDoc = await Role.findById(roleId);
@@ -510,8 +510,8 @@ exports.inviteUser = async (req, res) => {
                     isOwner = roleDoc.name === 'Owner';
                     crmRoleKey = isOwner ? 'ADMIN' : mapLegacyRoleToCRM(legacyRole);
                     
-                    // Update CRM appAccess entry if it exists
-                    const crmIndex = finalAppAccess.findIndex(a => a.appKey === APP_KEYS.CRM);
+                    // Update Sales appAccess entry if it exists
+                    const crmIndex = finalAppAccess.findIndex(a => a.appKey === APP_KEYS.SALES);
                     if (crmIndex >= 0) {
                         finalAppAccess[crmIndex].roleKey = crmRoleKey;
                     }
@@ -537,28 +537,28 @@ exports.inviteUser = async (req, res) => {
             legacyRole = roleDoc.name.toLowerCase();
             isOwner = roleDoc.name === 'Owner';
             
-            // Map legacy role to CRM roleKey
+            // Map legacy role to Sales roleKey
             crmRoleKey = isOwner ? 'ADMIN' : mapLegacyRoleToCRM(legacyRole);
 
-            // Validate CRM roleKey
-            if (!validateAppRole(APP_KEYS.CRM, crmRoleKey)) {
-                console.warn(`Invalid CRM roleKey ${crmRoleKey}, using default`);
-                const defaultRole = getDefaultRoleForApp(APP_KEYS.CRM);
+            // Validate Sales roleKey
+            if (!validateAppRole(APP_KEYS.SALES, crmRoleKey)) {
+                console.warn(`Invalid Sales roleKey ${crmRoleKey}, using default`);
+                const defaultRole = getDefaultRoleForApp(APP_KEYS.SALES);
                 crmRoleKey = defaultRole || 'USER';
             }
 
-            // Validate CRM is enabled for organization
-            if (!isAppEnabledForOrg(organization, APP_KEYS.CRM)) {
+            // Validate Sales is enabled for organization
+            if (!isAppEnabledForOrg(organization, APP_KEYS.SALES)) {
                 return res.status(400).json({
                     success: false,
-                    message: 'CRM app is not enabled for this organization',
+                    message: 'Sales app is not enabled for this organization',
                     code: 'APP_NOT_ENABLED'
                 });
             }
 
-            // Create appAccess from legacy format (CRM only)
+            // Create appAccess from legacy format (Sales only)
             finalAppAccess = [{
-                appKey: APP_KEYS.CRM,
+                appKey: APP_KEYS.SALES,
                 roleKey: crmRoleKey,
                 status: 'ACTIVE',
                 addedAt: new Date()
@@ -999,7 +999,7 @@ exports.getProfile = async (req, res) => {
     try {
         const user = await User.findById(req.user._id)
             .select('-password')
-            .populate('organizationId', 'name subscription limits enabledModules settings')
+            .populate('organizationId', 'name subscription limits enabledApps enabledModules settings')
             .populate('roleId', 'name description color icon level permissions');
 
         // If user has roleId, merge role permissions as baseline, overlay user's stored permissions (preserve overrides)

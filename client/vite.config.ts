@@ -30,25 +30,12 @@ export default defineConfig({
         // rewrite: (path) => path.replace(/^\/api/, '') // Removes /api prefix when sending to backend
       },
       // Proxy portal API endpoints only (not frontend routes like /portal/dashboard)
-      '/portal/me': {
+      // Match portal API endpoints: /portal/me, /portal/org, /portal/health, /portal/audits, /portal/actions, etc.
+      '^/portal/(me|org|health|audits|actions)': {
         target: process.env.VITE_API_URL || 'http://localhost:3000',
         changeOrigin: true,
-      },
-      '/portal/org': {
-        target: process.env.VITE_API_URL || 'http://localhost:3000',
-        changeOrigin: true,
-      },
-      '/portal/health': {
-        target: process.env.VITE_API_URL || 'http://localhost:3000',
-        changeOrigin: true,
-      },
-      '/portal/audits': {
-        target: process.env.VITE_API_URL || 'http://localhost:3000',
-        changeOrigin: true,
-      },
-      '/portal/actions': {
-        target: process.env.VITE_API_URL || 'http://localhost:3000',
-        changeOrigin: true,
+        // Vite proxy forwards headers by default, but we can be explicit
+        // Note: Authorization header should be forwarded automatically
       }
     }
   },

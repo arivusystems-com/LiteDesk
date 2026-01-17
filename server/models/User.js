@@ -9,9 +9,11 @@
  * - Organization reference (multi-tenancy)
  * - Role and permissions
  * 
- * ⚠️ VIOLATION: Permissions structure is CRM-module-specific
- *    (contacts, deals, tasks, events, forms, items, reports)
- *    Should be generic capability-based permissions.
+ * ✅ FIXED: Permissions structure marked as legacy/SALES-specific
+ *    - User.permissions field is kept for backward compatibility
+ *    - Permissions should be managed via Role.appPermissions (app-aware)
+ *    - Login flow syncs permissions from role to user for backward compatibility
+ *    - For new apps, use Role.appPermissions instead
  * 
  * See PLATFORM_CORE_ANALYSIS.md for details.
  * ============================================================================
@@ -65,6 +67,10 @@ const UserSchema = new mongoose.Schema({
     },
     
     // Granular Permissions (can be customized per user)
+    // ⚠️ LEGACY/CRM-SPECIFIC: This structure is CRM-module-specific
+    //    Permissions should be managed via Role.appPermissions (app-aware)
+    //    This field is kept for backward compatibility and synced from role on login
+    //    @deprecated Use Role.appPermissions instead for app-agnostic permissions
     permissions: {
         contacts: {
             view: { type: Boolean, default: true },
@@ -143,10 +149,11 @@ const UserSchema = new mongoose.Schema({
     // A user has access to an app only if an entry exists in this array
     // No implicit app access - this is the single source of truth
     // Roles are scoped to appKey - no global roles
+    // Phase 2D: Added SALES, HELPDESK, PROJECTS
     appAccess: [{
         appKey: {
             type: String,
-            enum: ['CRM', 'AUDIT', 'PORTAL'],
+            enum: ['SALES', 'HELPDESK', 'PROJECTS', 'AUDIT', 'PORTAL'],
             required: true
         },
         roleKey: {
@@ -166,13 +173,14 @@ const UserSchema = new mongoose.Schema({
     
     // Legacy App Entitlements (kept for backward compatibility during migration)
     // Defines which applications this user can access
-    // - ['CRM']: CRM-only users (default for existing users)
+    // - ['SALES']: SALES-only users (default for existing users)
     // - ['PORTAL']: Portal-only users
-    // - ['CRM', 'PORTAL']: Multi-app users
+    // - ['SALES', 'PORTAL']: Multi-app users
+    // Phase 2D: Added SALES, HELPDESK, PROJECTS
     allowedApps: {
         type: [String],
-        enum: ['CRM', 'PORTAL', 'AUDIT', 'LMS'],
-        default: ['CRM'] // Default existing users to CRM access
+        enum: ['SALES', 'HELPDESK', 'PROJECTS', 'PORTAL', 'AUDIT', 'LMS'],
+        default: ['SALES'] // Default existing users to SALES access
     },
     
     // Status

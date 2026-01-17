@@ -3,6 +3,8 @@ import { useAuthStore } from '@/stores/auth'
 import LandingPage from '@/views/LandingPage.vue'
 import auditRoutes from './audit.routes'
 import portalRoutes from './portal.routes'
+import { loadAndRegisterRoutes } from '@/utils/dynamicRouteLoader'
+import apiClient from '@/utils/apiClient'
 
 const routes = [
   {
@@ -15,15 +17,48 @@ const routes = [
     name: 'login',
     component: () => import('@/views/Login.vue')
   },
+  // Phase 1G: Platform Landing (Tenant Home)
+  {
+    path: '/platform',
+    redirect: '/platform/home'
+  },
+  {
+    path: '/platform/home',
+    name: 'platform-home',
+    component: () => import('@/views/platform/PlatformHome.vue'),
+    meta: { requiresAuth: true }
+  },
+  // Phase 2F: App Registry (Marketplace-Ready)
+  {
+    path: '/platform/apps',
+    name: 'platform-app-registry',
+    component: () => import('@/views/platform/AppRegistry.vue'),
+    meta: { requiresAuth: true }
+  },
   {
     path: '/demo',
     name: 'demo',
     component: () => import('@/views/Demo.vue')
   },
+  // Phase 1B: Generic App Dashboard (registry-driven)
+  // Note: More specific route (/dashboard/:appKey) must come BEFORE less specific (/dashboard)
+  // to ensure proper route matching
+  {
+    path: '/dashboard/:appKey',
+    name: 'app-dashboard',
+    component: () => import('@/components/dashboard/AppDashboard.vue'),
+    props: (route) => ({ 
+      appKey: route.params.appKey.toUpperCase() // Convert to uppercase (SALES, HELPDESK, etc.)
+    }),
+    meta: { requiresAuth: true }
+  },
   {
     path: '/dashboard',
     name: 'dashboard',
-    component: () => import('@/views/Dashboard.vue'),
+    component: () => import('@/components/dashboard/AppDashboard.vue'),
+    props: (route) => ({ 
+      appKey: route.query.appKey || 'SALES' // Get appKey from query param, default to SALES
+    }),
     meta: { requiresAuth: true }
   },
   {
@@ -62,6 +97,35 @@ const routes = [
     component: () => import('@/views/InstanceManagement.vue'),
     meta: { requiresAuth: true, requiresMasterOrganization: true }
   },
+  // Control Plane routes (Phase 0H)
+  {
+    path: '/control',
+    name: 'control-plane',
+    component: () => import('@/views/ControlPlane.vue'),
+    meta: { 
+      requiresAuth: true, 
+      requiresPlatformAdmin: true,
+      hideShell: false 
+    }
+  },
+  {
+    path: '/control/demo-requests',
+    name: 'control-demo-requests',
+    component: () => import('@/views/DemoRequests.vue'),
+    meta: { 
+      requiresAuth: true, 
+      requiresPlatformAdmin: true 
+    }
+  },
+  {
+    path: '/control/instances',
+    name: 'control-instances',
+    component: () => import('@/views/InstanceManagement.vue'),
+    meta: { 
+      requiresAuth: true, 
+      requiresPlatformAdmin: true 
+    }
+  },
   {
     path: '/people',
     name: 'people',
@@ -69,14 +133,22 @@ const routes = [
     meta: { requiresAuth: true, requiresPermission: { module: 'people', action: 'view' } }
   },
   {
+    path: '/people/create',
+    name: 'people-create',
+    component: () => import('@/views/PeopleCreate.vue'),
+    meta: { requiresAuth: true, requiresPermission: { module: 'people', action: 'create' } }
+  },
+  {
     path: '/people/:id',
     name: 'person-detail',
-    component: () => import('@/views/PeopleDetail.vue'),
+    component: () => import('@/views/PeopleSurface.vue'),
     meta: { requiresAuth: true, requiresPermission: { module: 'people', action: 'view' } }
   },
   // Backward-compat redirects
   { path: '/contacts', redirect: { name: 'people' } },
   { path: '/contacts/:id', redirect: to => ({ name: 'person-detail', params: { id: to.params.id } }) },
+  { path: '/sales/people', redirect: { name: 'people' } },
+  { path: '/sales/people/:id', redirect: to => ({ name: 'person-detail', params: { id: to.params.id } }) },
   {
     path: '/deals',
     name: 'deals',
@@ -217,6 +289,13 @@ const routes = [
     component: () => import('@/views/Responses.vue'),
     meta: { requiresAuth: true, requiresPermission: { module: 'forms', action: 'view' } }
   },
+  // Phase 0I.2: Response Detail (Read-Only)
+  {
+    path: '/responses/:id',
+    name: 'response-detail',
+    component: () => import('@/views/ResponseDetail.vue'),
+    meta: { requiresAuth: true, requiresPermission: { module: 'forms', action: 'view' } }
+  },
   // Audit App routes
   ...auditRoutes,
   // Portal App routes
@@ -234,28 +313,9 @@ const getDefaultRoute = (authStore) => {
     return { name: 'landing' };
   }
   
-  const allowedApps = authStore.user?.allowedApps || [];
-  console.log('getDefaultRoute check:', {
-    allowedApps,
-    hasAudit: allowedApps.includes('AUDIT'),
-    hasCrm: allowedApps.includes('CRM'),
-    user: authStore.user
-  });
-  
-  // Priority: AUDIT > PORTAL > CRM
-  if (allowedApps.includes('AUDIT')) {
-    console.log('Default route: audit-dashboard');
-    return { name: 'audit-dashboard' };
-  }
-  
-  if (allowedApps.includes('PORTAL')) {
-    console.log('Default route: portal-dashboard');
-    return { name: 'portal-dashboard' };
-  }
-  
-  // Default to CRM dashboard
-  console.log('Default route: dashboard');
-  return { name: 'dashboard' };
+  // Phase 1G: Default to platform landing
+  console.log('Default route: platform-home');
+  return { name: 'platform-home' };
 };
 
 // Add debug logging and permission checks
@@ -290,50 +350,79 @@ router.beforeEach((to, from, next) => {
     return
   }
   
-  // Block audit-only and portal-only users from accessing CRM module routes
-  if (to.meta.requiresAuth && !to.meta.requiresAuditApp && !to.meta.requiresPortalApp && to.meta.requiresPermission) {
-    const allowedApps = authStore.user?.allowedApps || ['CRM'];
-    const hasCrmAccess = allowedApps.includes('CRM');
-    const hasOnlyAuditAccess = allowedApps.includes('AUDIT') && !hasCrmAccess;
-    const hasOnlyPortalAccess = allowedApps.includes('PORTAL') && !hasCrmAccess && !allowedApps.includes('AUDIT');
+  // Phase 1G: Platform landing route guard
+  // /platform is accessible if:
+  // - User is authenticated
+  // - Instance is not TERMINATED (check organization status)
+  if (to.name === 'platform-home') {
+    if (!authStore.isAuthenticated) {
+      console.log('Blocked: Authentication required for platform landing')
+      next({ name: 'landing' })
+      return
+    }
     
-    // CRM modules that should be blocked for audit-only and portal-only users
-    const crmModules = ['people', 'contacts', 'deals', 'tasks', 'events', 'forms', 'items', 'organizations', 'imports'];
+    // Check if instance is terminated (via organization status)
+    const org = authStore.organization;
+    if (org && org.subscription?.status === 'terminated') {
+      console.log('Blocked: Instance is terminated')
+      alert('This instance has been terminated. Please contact support.')
+      next({ name: 'landing' })
+      return
+    }
+    
+    // Allow access
+    next()
+    return
+  }
+  
+  // Block audit-only and portal-only users from accessing Sales module routes
+  if (to.meta.requiresAuth && !to.meta.requiresAuditApp && !to.meta.requiresPortalApp && to.meta.requiresPermission) {
+    // Use hasAppAccess getter which checks enabledApps for owners
+    const hasSalesAccess = authStore.hasAppAccess('SALES');
+    const hasAuditAccess = authStore.hasAppAccess('AUDIT');
+    const hasPortalAccess = authStore.hasAppAccess('PORTAL');
+    const hasOnlyAuditAccess = hasAuditAccess && !hasSalesAccess;
+    const hasOnlyPortalAccess = hasPortalAccess && !hasSalesAccess && !hasAuditAccess;
+    
+    // Sales modules that should be blocked for audit-only and portal-only users
+    const salesModules = ['people', 'contacts', 'deals', 'tasks', 'events', 'forms', 'items', 'organizations', 'imports'];
     const { module } = to.meta.requiresPermission;
     const normalizedModule = module === 'people' ? 'contacts' : module;
     
-    // If user only has AUDIT access, block CRM module routes
-    if (hasOnlyAuditAccess && crmModules.includes(normalizedModule)) {
-      console.log('Blocked: CRM route accessed by audit-only user', { route: to.path, module })
-      alert('You do not have access to CRM features. Redirecting to Audit App.')
+    // If user only has AUDIT access, block Sales module routes
+    if (hasOnlyAuditAccess && salesModules.includes(normalizedModule)) {
+      console.log('Blocked: Sales route accessed by audit-only user', { route: to.path, module })
+      alert('You do not have access to Sales features. Redirecting to Audit App.')
       next({ name: 'audit-dashboard' })
       return
     }
     
-    // If user only has PORTAL access, block CRM module routes
-    if (hasOnlyPortalAccess && crmModules.includes(normalizedModule)) {
-      console.log('Blocked: CRM route accessed by portal-only user', { route: to.path, module })
-      alert('You do not have access to CRM features. Redirecting to Portal.')
+    // If user only has PORTAL access, block Sales module routes
+    if (hasOnlyPortalAccess && salesModules.includes(normalizedModule)) {
+      console.log('Blocked: Sales route accessed by portal-only user', { route: to.path, module })
+      alert('You do not have access to Sales features. Redirecting to Portal.')
       next({ name: 'portal-dashboard' })
       return
     }
   }
   
-  // Also block direct access to CRM dashboard for audit-only and portal-only users
+  // Also block direct access to Sales dashboard for audit-only and portal-only users
   if (to.name === 'dashboard') {
-    const allowedApps = authStore.user?.allowedApps || ['CRM'];
-    const hasCrmAccess = allowedApps.includes('CRM');
-    const hasOnlyAuditAccess = allowedApps.includes('AUDIT') && !hasCrmAccess;
-    const hasOnlyPortalAccess = allowedApps.includes('PORTAL') && !hasCrmAccess && !allowedApps.includes('AUDIT');
+    // Use hasAppAccess getter which checks enabledApps for owners
+    const hasSalesAccess = authStore.hasAppAccess('SALES');
+    const hasAuditAccess = authStore.hasAppAccess('AUDIT');
+    const hasPortalAccess = authStore.hasAppAccess('PORTAL');
+    const hasOnlyAuditAccess = hasAuditAccess && !hasSalesAccess;
+    const hasOnlyPortalAccess = hasPortalAccess && !hasSalesAccess && !hasAuditAccess;
     
     if (hasOnlyAuditAccess) {
-      console.log('Blocked: CRM dashboard accessed by audit-only user')
+      console.log('Blocked: Sales dashboard accessed by audit-only user')
       next({ name: 'audit-dashboard' })
       return
     }
     
     if (hasOnlyPortalAccess) {
-      console.log('Blocked: CRM dashboard accessed by portal-only user')
+      console.log('Blocked: Sales dashboard accessed by portal-only user')
       next({ name: 'portal-dashboard' })
       return
     }
@@ -343,6 +432,14 @@ router.beforeEach((to, from, next) => {
   if (to.meta.requiresMasterOrganization && !authStore.isMasterOrganization) {
     console.log('Blocked: Master organization required')
     alert('This feature is only available to the application owner.')
+    next(getDefaultRoute(authStore))
+    return
+  }
+  
+  // Check if route requires platform admin (Phase 0H - Control Plane)
+  if (to.meta.requiresPlatformAdmin && !authStore.isPlatformAdmin) {
+    console.log('Blocked: Platform admin access required')
+    alert('This feature is only available to platform administrators.')
     next(getDefaultRoute(authStore))
     return
   }
@@ -357,12 +454,13 @@ router.beforeEach((to, from, next) => {
   
   // Check audit app access if required
   if (to.meta.requiresAuditApp) {
-    const allowedApps = authStore.user?.allowedApps || [];
-    const hasAuditAccess = allowedApps.includes('AUDIT');
+    const hasAuditAccess = authStore.hasAppAccess('AUDIT');
     
     console.log('Audit app access check:', {
       hasAuditAccess,
-      allowedApps,
+      allowedApps: authStore.user?.allowedApps,
+      isOwner: authStore.isOwner,
+      enabledApps: authStore.organization?.enabledApps,
       user: authStore.user,
       route: to.path
     })
@@ -377,12 +475,13 @@ router.beforeEach((to, from, next) => {
   
   // Check portal app access if required
   if (to.meta.requiresPortalApp) {
-    const allowedApps = authStore.user?.allowedApps || [];
-    const hasPortalAccess = allowedApps.includes('PORTAL');
+    const hasPortalAccess = authStore.hasAppAccess('PORTAL');
     
     console.log('Portal app access check:', {
       hasPortalAccess,
-      allowedApps,
+      allowedApps: authStore.user?.allowedApps,
+      isOwner: authStore.isOwner,
+      enabledApps: authStore.organization?.enabledApps,
       user: authStore.user,
       route: to.path
     })
@@ -421,5 +520,18 @@ router.beforeEach((to, from, next) => {
   console.log('Allowed: Normal navigation')
   next()
 })
+
+// Phase 1A: Load and register dynamic routes after router is created
+// This will be called from App.vue after UI metadata is loaded
+export async function initializeDynamicRoutes() {
+  const authStore = useAuthStore();
+  if (authStore.isAuthenticated) {
+    try {
+      await loadAndRegisterRoutes(router, apiClient);
+    } catch (error) {
+      console.error('[Router] Error initializing dynamic routes:', error);
+    }
+  }
+}
 
 export default router

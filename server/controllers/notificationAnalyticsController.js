@@ -4,7 +4,7 @@ const notificationAnalyticsService = require('../services/notificationAnalyticsS
  * Notification Analytics Controller (Phase 15)
  * 
  * Admin-only read-only endpoints for notification analytics.
- * All endpoints require CRM ADMIN role and are organization-scoped.
+ * All endpoints require SALES ADMIN role and are organization-scoped.
  */
 
 /**

@@ -2,7 +2,7 @@ const NotificationRule = require('../models/NotificationRule');
 const { validateModuleRule, getSupportedConditions } = require('../constants/notificationRuleRegistry');
 const mongoose = require('mongoose');
 
-const APP_KEYS = ['CRM', 'AUDIT', 'PORTAL'];
+const APP_KEYS = ['SALES', 'AUDIT', 'PORTAL'];
 const EVENT_TYPES = ['ASSIGNED', 'CREATED', 'STATUS_CHANGED', 'DUE_SOON'];
 
 function normalizeAppKey(req) {

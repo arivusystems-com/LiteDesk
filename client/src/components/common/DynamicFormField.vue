@@ -200,7 +200,7 @@
               <!-- Options list (scrollable) -->
               <div class="max-h-60 overflow-auto py-1">
                 <div v-if="filteredSearchablePicklistOptions.length === 0" class="relative cursor-default select-none px-4 py-2 text-gray-700 dark:text-gray-300">
-                  No options found.
+                  No options available.
                 </div>
                 <ComboboxOption
                   v-for="(option, optIdx) in filteredSearchablePicklistOptions"
@@ -491,7 +491,7 @@
               <!-- Options list (scrollable) -->
               <div class="max-h-60 overflow-auto py-1">
                 <div v-if="filteredSearchableLookupOptions.length === 0" class="relative cursor-default select-none px-4 py-2 text-gray-700 dark:text-gray-300">
-                  No records found.
+                  No matching records found.
                 </div>
                 <ComboboxOption
                   v-for="item in filteredSearchableLookupOptions"

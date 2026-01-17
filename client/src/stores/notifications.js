@@ -18,7 +18,7 @@ export const useNotificationStore = defineStore('notifications', () => {
     const path = window.location.pathname || '';
     if (path.startsWith('/audit/')) return 'AUDIT';
     if (path.startsWith('/portal/')) return 'PORTAL';
-    return 'CRM';
+    return 'SALES';
   };
 
   const buildQuery = (params = {}) => {

@@ -103,6 +103,7 @@ const organizationRoutes = require('./routes/organizationRoutes');
 const dealRoutes = require('./routes/dealRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 const eventRoutes = require('./routes/eventRoutes');
+const schedulingRoutes = require('./routes/schedulingRoutes');
 const csvRoutes = require('./routes/csvRoutes');
 const demoRoutes = require('./routes/demoRoutes');
 const instanceRoutes = require('./routes/instanceRoutes');
@@ -117,6 +118,9 @@ const notificationHealthRoutes = require('./routes/notificationHealthRoutes');
 const notificationAnalyticsRoutes = require('./routes/notificationAnalyticsRoutes');
 const pushRoutes = require('./routes/pushRoutes');
 const peopleRoutes = require('./routes/peopleRoutes');
+const activityRoutes = require('./routes/activityRoutes');
+const notesRoutes = require('./routes/notesRoutes');
+const filesRoutes = require('./routes/filesRoutes');
 const organizationV2Routes = require('./routes/organizationV2Routes');
 const moduleRoutes = require('./routes/moduleRoutes');
 const groupRoutes = require('./routes/groupRoutes');
@@ -129,6 +133,10 @@ const auditRoutes = require('./routes/auditRoutes');
 const auditExecutionRoutes = require('./routes/auditExecutionRoutes');
 const auditReadRoutes = require('./routes/auditReadRoutes');
 const digestRoutes = require('./routes/digestRoutes');
+const uiCompositionRoutes = require('./routes/uiCompositionRoutes');
+const relationshipRoutes = require('./routes/relationshipRoutes');
+const responseRoutes = require('./routes/responseRoutes');
+const settingsRoutes = require('./routes/settingsRoutes');
 
 // Route Linking
 app.use('/api/auth', authRoutes);
@@ -138,8 +146,11 @@ app.use('/api/organization', organizationRoutes);
 app.use('/api/deals', dealRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/scheduling', schedulingRoutes);
 app.use('/api/csv', csvRoutes);
 app.use('/api/imports', require('./routes/importHistoryRoutes'));
+app.use('/api/execution', require('./routes/executionRoutes'));
+app.use('/api/search', require('./routes/searchRoutes'));
 app.use('/api/demo', demoRoutes);
 app.use('/api/instances', instanceRoutes);
 app.use('/api/metrics', metricsRoutes);
@@ -154,6 +165,9 @@ app.use('/internal/notifications', notificationHealthRoutes); // Internal notifi
 app.use('/health', healthRoutes); // Public health check endpoint
 // New versioned endpoints (non-breaking)
 app.use('/api/people', peopleRoutes);
+app.use('/api/activity', activityRoutes);
+app.use('/api/notes', notesRoutes);
+app.use('/api/files', filesRoutes);
 app.use('/api/v2/organization', organizationV2Routes);
 app.use('/api/modules', moduleRoutes);
 app.use('/api/groups', groupRoutes);
@@ -173,6 +187,18 @@ app.use('/api/audit/assignments', auditReadRoutes);
 
 // Digest Routes (for manual triggering/testing)
 app.use('/api/digest', digestRoutes);
+
+// UI Composition Routes (Phase 0D)
+app.use('/api/ui', uiCompositionRoutes);
+
+// Relationship Routes (Phase 0E)
+app.use('/api/relationships', relationshipRoutes);
+
+// Response Detail Routes (Phase 0I.2 - Read-Only)
+app.use('/api/responses', responseRoutes);
+
+// Settings Routes
+app.use('/api/settings', settingsRoutes);
 
 // Serve uploaded files (including reports)
 app.use('/api/uploads', express.static(path.join(__dirname, 'uploads'), {
