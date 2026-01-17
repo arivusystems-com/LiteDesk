@@ -604,7 +604,7 @@ const shouldShowEmptyState = computed(() => {
 });
 
 // Fetch data from API
-const fetchData = async (skipAutoSwitch = false) => {
+const fetchData = async () => {
   if (!listDefinition.value) return;
   
   dataLoading.value = true;
@@ -735,18 +735,6 @@ const fetchData = async (skipAutoSwitch = false) => {
 
       if (response.success) {
       let fetchedData = response.data || [];
-      
-      // For People module: If we have 0 results and are filtering by "unassigned",
-      // automatically switch to "All People" view to show all people instead of empty list
-      // Only do this once per fetch cycle to prevent infinite loops
-      if (!skipAutoSwitch && props.moduleKey === 'people' && fetchedData.length === 0 && filters.value.assignedTo === 'unassigned' && activeSavedViewId.value === 'unassigned') {
-        console.log('[ModuleList] No unassigned people found, switching to "All People" view');
-        activeSavedViewId.value = 'all';
-        filters.value = {};
-        // Re-fetch with cleared filters (skip auto-switch to prevent recursion)
-        await fetchData(true);
-        return;
-      }
       
       // Apply participation filtering client-side (People module only)
       // Participation filter format: "SALES:Lead", "SALES:Contact", "HELPDESK:Contact", etc.
