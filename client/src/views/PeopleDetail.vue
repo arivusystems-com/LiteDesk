@@ -140,41 +140,14 @@
         </div>
       </div>
 
-      <!-- App Participations Section (Platform-Mediated: Read-only governance) -->
-      <div v-if="profileData?.apps" class="mb-6 bg-white dark:bg-gray-800 rounded-lg shadow border-2 border-dashed border-gray-300 dark:border-gray-600 overflow-hidden">
-        <div class="px-6 py-4 bg-gray-50 dark:bg-gray-900 border-b-2 border-dashed border-gray-300 dark:border-gray-600">
-          <div class="flex items-center gap-2 mb-2">
-            <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Platform-Mediated</span>
-          </div>
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-            App Participations
-          </h2>
-          <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">
-            Apps where this person participates
-          </p>
-        </div>
-        <div class="px-6 py-4">
-          <div v-if="Object.keys(profileData.apps).length > 0" class="flex flex-wrap gap-2">
-            <div
-              v-for="(appSection, appKey) in profileData.apps"
-              :key="appKey"
-              class="inline-flex items-center gap-2 px-2 py-2 bg-secondary-50 dark:bg-secondary-900/20 border border-secondary-200 dark:border-secondary-800 rounded-lg"
-            >
-              <svg class="w-4 h-4 text-secondary-600 dark:text-secondary-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-              </svg>
-              <span class="text-sm font-medium text-secondary-800 dark:text-secondary-200">{{ appKey }}</span>
-              <span v-if="appSection.fields?.type" class="text-xs text-secondary-600 dark:text-secondary-400">
-                ({{ appSection.fields.type }})
-              </span>
-            </div>
-          </div>
-          
-          <p v-if="Object.keys(profileData.apps).length === 0" class="text-sm text-gray-500 dark:text-gray-400">
-            No app participations yet. Use "Attach to App" below to add this person to an app.
-          </p>
-        </div>
-      </div>
+      <!-- Participation Overview Panel -->
+      <ParticipationOverviewPanel
+        :person="profileData"
+        @edit="handleParticipationEdit"
+        @convert="handleParticipationConvert"
+        @detach="handleParticipationDetach"
+        @attach="handleParticipationAttach"
+      />
 
       <!-- Attach to App Section (App-owned: Action card) -->
       <div class="mb-6 bg-white dark:bg-gray-800 rounded-lg shadow border-2 border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -1009,6 +982,7 @@ import apiClient from '@/utils/apiClient';
 import ActivityTimeline from '@/components/ActivityTimeline.vue';
 import Notes from '@/components/Notes.vue';
 import Files from '@/components/Files.vue';
+import ParticipationOverviewPanel from '@/components/people/ParticipationOverviewPanel.vue';
 
 const route = useRoute();
 const authStore = useAuthStore();
@@ -1483,6 +1457,39 @@ watch(hasAvailableAttachIntents, (hasIntents) => {
     closeAttachModal();
   }
 });
+
+// Participation Overview Panel handlers
+const handleParticipationEdit = (appKey) => {
+  // Open edit mode for the app section
+  const appSection = profileData.value?.apps?.[appKey];
+  if (appSection) {
+    enterAppEditMode(appKey, appSection);
+  }
+};
+
+const handleParticipationConvert = (appKey) => {
+  // Show convert modal for Sales Lead to Contact
+  if (appKey === 'SALES') {
+    showConvertModal.value = true;
+  }
+};
+
+const handleParticipationDetach = (appKey) => {
+  // TODO: Implement detach functionality
+  // For now, just show a console log
+  console.log('[ParticipationOverviewPanel] Detach from', appKey);
+  // This should open a detach confirmation modal
+};
+
+const handleParticipationAttach = (appKey) => {
+  // Open attach modal with the app pre-selected
+  showAttachModal.value = true;
+  // Find the appropriate intent for this app
+  const intent = intentMappings.find(i => i.appKey === appKey);
+  if (intent) {
+    selectAttachIntent(intent);
+  }
+};
 
 // Convert Lead to Contact handler
 const handleConvertLeadToContact = async () => {

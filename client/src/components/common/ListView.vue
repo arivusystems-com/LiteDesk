@@ -724,22 +724,22 @@
                       <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3 px-6">
                         Shown ({{ shownFields.length }})
                       </h4>
-                      <div class="space-y-0 px-3">
-                        <div
-                          v-for="(field, index) in shownFields"
-                          :key="field.key"
-                          :draggable="!(props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name')"
-                          @dragstart="handleDragStart($event, index)"
-                          @dragover.prevent="handleDragOver"
-                          @dragenter.prevent="handleDragEnter($event, index)"
-                          @dragleave.prevent="handleDragLeave"
-                          @drop.prevent="handleDrop($event, index)"
-                          @dragend="handleDragEnd"
-                          :class="[
-                            'flex items-center gap-3 px-2 py-2 rounded-lg transition-colors cursor-move',
-                            dragOverIndex === index ? 'bg-indigo-50 dark:bg-indigo-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-                          ]"
-                        >
+                      <div class="space-y-1 px-3">
+                        <template v-for="(field, index) in shownFields" :key="field.key">
+                          <div
+                            :draggable="!(props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name') || field.locked === true"
+                            @dragstart="handleDragStart($event, index)"
+                            @dragover.prevent="handleDragOver"
+                            @dragenter.prevent="handleDragEnter($event, index)"
+                            @dragleave.prevent="handleDragLeave"
+                            @drop.prevent="handleDrop($event, index)"
+                            @dragend="handleDragEnd"
+                            :class="[
+                              'flex items-center gap-3 px-2 py-2 rounded-lg transition-colors cursor-move',
+                              dragOverIndex === index ? 'bg-indigo-50 dark:bg-indigo-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800',
+                              field.locked ? 'cursor-not-allowed opacity-70' : '' // Add class for locked fields
+                            ]"
+                          >
                           <!-- Grip handle icon (6 dots vertical) -->
                           <svg class="w-5 h-5 text-gray-400 flex-shrink-0 cursor-move" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <circle cx="9" cy="5" r="1.5" />
@@ -755,20 +755,22 @@
                           />
                           <span class="flex-1 text-sm text-gray-900 dark:text-white">{{ field.label }}</span>
                           <span v-if="props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name'" class="text-xs text-gray-500 dark:text-gray-400 mr-2">Required</span>
+                          <span v-if="field.locked" class="text-xs text-gray-500 dark:text-gray-400 mr-2">Locked</span>
                           <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
                             <input 
                               type="checkbox" 
                               :checked="field.visible"
                               @change="toggleFieldVisibility(field.key)"
-                              :disabled="props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name'"
-                              :class="['sr-only peer', props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name' ? 'cursor-not-allowed opacity-50' : '']"
+                              :disabled="(props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name') || field.locked"
+                              :class="['sr-only peer', (props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name') || field.locked ? 'cursor-not-allowed opacity-50' : '']"
                             >
                             <div :class="[
                               'w-9 h-5 bg-indigo-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-indigo-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600',
-                              props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name' ? 'opacity-50 cursor-not-allowed' : ''
+                              (props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name') || field.locked ? 'opacity-50 cursor-not-allowed' : ''
                             ]"></div>
                           </label>
-                        </div>
+                          </div>
+                        </template>
                       </div>
                     </div>
 
@@ -777,28 +779,32 @@
                       <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3 px-6">
                         Hidden
                       </h4>
-                      <div class="space-y-0 px-3">
-                        <div
-                          v-for="field in hiddenFields"
-                          :key="field.key"
-                          class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                        >
+                      <div class="space-y-1 px-3">
+                        <template v-for="field in hiddenFields" :key="field.key">
+                          <div
+                            class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                          >
                           <component
                             :is="getFieldIcon(field.dataType)"
                             class="w-4 h-4 text-gray-500 dark:text-gray-400 flex-shrink-0"
                           />
                           <span class="flex-1 text-sm text-gray-900 dark:text-white">{{ field.label }}</span>
+                          <span v-if="field.locked" class="text-xs text-gray-500 dark:text-gray-400 mr-2">Locked</span>
                           <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
                             <input 
                               type="checkbox" 
                               :checked="field.visible"
                               @change="toggleFieldVisibility(field.key)"
-                              :disabled="props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name'"
-                              :class="['sr-only peer', props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name' ? 'cursor-not-allowed opacity-50' : '']"
+                              :disabled="(props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name') || field.locked"
+                              :class="['sr-only peer', (props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name') || field.locked ? 'cursor-not-allowed opacity-50' : '']"
                             >
-                            <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                            <div :class="[
+                              'w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600',
+                              field.locked ? 'opacity-50 cursor-not-allowed' : ''
+                            ]"></div>
                           </label>
-                        </div>
+                            </div>
+                        </template>
                         <div v-if="hiddenFields.length === 0" class="text-sm text-gray-500 dark:text-gray-400 py-2 text-center">
                           No hidden fields
                         </div>
@@ -863,6 +869,7 @@ import { useBulkActions } from '@/composables/useBulkActions';
 import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
+import { getFieldMetadata, PEOPLE_FIELD_METADATA } from '@/platform/fields/peopleFieldModel';
 
 const authStore = useAuthStore();
 const { activeTabId } = useTabs();
@@ -1253,19 +1260,101 @@ const fetchFieldConfiguration = async () => {
 
 // Normalize column order - ensure 'name' field is at top for forms module
 const normalizeColumnOrder = (columns) => {
-  if (props.moduleKey !== 'forms' || !Array.isArray(columns)) {
-    return columns;
+  if (!Array.isArray(columns)) {
+    return [];
   }
-  
-  const nameFieldIndex = columns.findIndex(col => col.key?.toLowerCase() === 'name');
-  if (nameFieldIndex > 0) {
-    // Move name field to the top
-    const nameField = columns[nameFieldIndex];
-    columns.splice(nameFieldIndex, 1);
-    columns.unshift(nameField);
+
+  // Handle specific ordering for the 'people' module
+  if (props.moduleKey === 'people') {
+    const peopleSpecificOrder = ['name', 'organization', 'type', 'email', 'phone', 'assignedTo'];
+    const orderedColumns = [];
+    const processedKeys = new Set();
+
+    // Ensure 'name' is always first and locked
+    const nameColumn = columns.find(col => col.key === 'name');
+    if (nameColumn) {
+      orderedColumns.push({ ...nameColumn, locked: true });
+      processedKeys.add('name');
+    }
+
+    // Add other columns according to the peopleSpecificOrder
+    peopleSpecificOrder.forEach(key => {
+      if (!processedKeys.has(key)) {
+        const col = columns.find(c => c.key === key);
+        if (col) {
+          orderedColumns.push(col);
+          processedKeys.add(key);
+        }
+      }
+    });
+
+    // Add any remaining columns that were not explicitly ordered
+    columns.forEach(col => {
+      if (!processedKeys.has(col.key)) {
+        orderedColumns.push(col);
+      }
+    });
+
+    return orderedColumns;
+  }
+
+  // Default behavior: move 'name' to the top for non-forms modules if not explicitly handled
+  if (props.moduleKey !== 'forms') {
+    const nameFieldIndex = columns.findIndex(col => col.key?.toLowerCase() === 'name');
+    if (nameFieldIndex > 0) {
+      const nameField = columns[nameFieldIndex];
+      const reordered = [...columns];
+      reordered.splice(nameFieldIndex, 1);
+      reordered.unshift(nameField);
+      return reordered;
+    }
   }
   
   return columns;
+};
+
+const buildPeopleDefaultColumns = (allAvailableColumns) => {
+  const peopleSpecificOrder = ['name', 'organization', 'type', 'email', 'phone', 'assignedTo'];
+  const defaultVisibleKeys = new Set(peopleSpecificOrder);
+  const processedColumns = [];
+  const processedKeys = new Set();
+
+  // Ensure 'name' is always first and locked
+  const nameColumn = allAvailableColumns.find(col => col.key === 'name');
+  if (nameColumn) {
+    processedColumns.push({ ...nameColumn, visible: true, locked: true });
+    processedKeys.add('name');
+  }
+
+  // Add other default visible columns in the specified order
+  peopleSpecificOrder.forEach(key => {
+    if (!processedKeys.has(key)) {
+      const col = allAvailableColumns.find(c => c.key === key);
+      if (col) {
+        processedColumns.push({ ...col, visible: true });
+        processedKeys.add(key);
+      }
+    }
+  });
+
+  // Add all other eligible columns as hidden by default
+  allAvailableColumns.forEach(col => {
+    if (!processedKeys.has(col.key)) {
+      try {
+        const metadata = getFieldMetadata(col.key);
+        if (metadata.owner === 'system') {
+          // System fields are never visible and should not be added to the default list for selection
+          return;
+        }
+      } catch (error) {
+        // Field not in metadata - include it, but it will be hidden by default
+      }
+      processedColumns.push({ ...col, visible: false, locked: false });
+      processedKeys.add(col.key);
+    }
+  });
+
+  return processedColumns;
 };
 
 // Initialize visible columns from props.columns, saved settings, or backend configuration
@@ -1341,77 +1430,72 @@ const initializeColumns = async () => {
     
     visibleColumns.value = normalizeColumnOrder(orderedColumns);
   } else {
-    // No saved settings - fetch from backend configuration
+    // No saved settings - fetch backend configuration and/or use props.columns
     const moduleConfig = await fetchFieldConfiguration();
-    
-    if (moduleConfig && Array.isArray(moduleConfig.fields)) {
-      // Create a map of field visibility from backend
+    const backendFields = moduleConfig?.fields || [];
+
+    const allAvailableColumnsMap = new Map();
+    backendFields.forEach(field => allAvailableColumnsMap.set(field.key, {
+      key: field.key,
+      label: field.label || field.key,
+      dataType: field.dataType,
+      sortable: true, // Assume sortable by default from backend
+      showInTable: field.visibility?.list !== false,
+      // ... other properties you want to preserve from backend
+    }));
+    props.columns.forEach(col => {
+      if (!allAvailableColumnsMap.has(col.key)) {
+        allAvailableColumnsMap.set(col.key, {
+          key: col.key,
+          label: col.label || col.key,
+          dataType: col.dataType,
+          sortable: col.sortable !== false,
+          showInTable: col.showInTable !== false,
+          // ... other properties you want to preserve from props
+        });
+      }
+    });
+    const allAvailableColumns = Array.from(allAvailableColumnsMap.values());
+
+    if (props.moduleKey === 'people') {
+      // Use canonical defaults for People module
+      const defaultColumns = buildPeopleDefaultColumns(allAvailableColumns);
+      visibleColumns.value = normalizeColumnOrder(defaultColumns);
+      saveColumnSettings();
+    } else if (moduleConfig && Array.isArray(moduleConfig.fields)) {
+      // Existing logic for other modules with backend config
       const fieldVisibilityMap = new Map();
-      const backendFieldsMap = new Map();
       moduleConfig.fields.forEach(field => {
         if (field.key) {
           const isVisible = field.visibility?.list !== false; // Default to true if not set
           fieldVisibilityMap.set(field.key, isVisible);
-          backendFieldsMap.set(field.key, field);
         }
       });
-      
-      // Start with all fields from backend configuration
-      const initializedColumns = [];
-      const processedKeys = new Set();
-      
-      // First, add all backend fields
-      moduleConfig.fields.forEach(field => {
-        if (field.key) {
-          const propsCol = props.columns.find(c => c.key === field.key);
-          const isVisible = fieldVisibilityMap.get(field.key);
-          
-          initializedColumns.push({
-            key: field.key,
-            label: field.label || propsCol?.label || field.key,
-            visible: isVisible,
-            sortable: propsCol?.sortable !== false,
-            dataType: field.dataType || propsCol?.dataType || 'Text',
-            showInTable: isVisible
-          });
-          processedKeys.add(field.key);
-        }
-      });
-      
-      // Then add any fields from props.columns that aren't in backend
-      props.columns.forEach(col => {
-        if (!processedKeys.has(col.key)) {
-          initializedColumns.push({
-            key: col.key,
-            label: col.label || col.key,
-            visible: col.visibility?.list !== false,
-            sortable: col.sortable !== false,
-            dataType: col.dataType || 'Text',
-            showInTable: col.showInTable !== false
-          });
-        }
-      });
-      
+
+      const initializedColumns = allAvailableColumns.map(col => ({
+        key: col.key,
+        label: col.label || col.key,
+        visible: fieldVisibilityMap.get(col.key) || false, // Use backend visibility or default to hidden
+        sortable: col.sortable !== false,
+        dataType: col.dataType || 'Text',
+        showInTable: (fieldVisibilityMap.get(col.key) || false),
+        locked: col.key === 'name', // Default lock 'name' for non-people modules too
+      }));
       visibleColumns.value = normalizeColumnOrder(initializedColumns);
-      
-      // Save the initial state
       saveColumnSettings();
     } else {
-      // Fallback to props with visibility.list check
-      const mappedColumns = props.columns.map(col => {
-        const visibilityFromConfig = col.visibility?.list !== undefined ? col.visibility.list : undefined;
-        const visible = visibilityFromConfig !== undefined ? visibilityFromConfig : (col.visible !== false);
-        
-        return {
-          key: col.key,
-          label: col.label || col.key,
-          visible: visible,
-          sortable: col.sortable !== false,
-          dataType: col.dataType || 'Text',
-          showInTable: col.showInTable !== undefined ? col.showInTable : visible
-        };
-      });
+      // Fallback to props with visibility.list check (no backend config and not people module)
+      const mappedColumns = props.columns.map(col => ({
+        key: col.key,
+        label: col.label || col.key,
+        visible: col.visible !== false,
+        sortable: col.sortable !== false,
+        dataType: col.dataType || 'Text',
+        showInTable: col.showInTable !== false,
+        locked: col.key === 'name', // Default lock 'name'
+      }));
       visibleColumns.value = normalizeColumnOrder(mappedColumns);
+      saveColumnSettings();
     }
   }
 };
@@ -1429,13 +1513,46 @@ watch(() => props.columns, async () => {
     if (newColumns.length > 0) {
       // Add new columns to the end
       newColumns.forEach(col => {
+        let isVisible = col.visible !== false;
+        
+        // For People module, apply strict defaults to new columns
+        if (props.moduleKey === 'people') {
+          const peopleDefaultVisible = ['name', 'organization', 'type', 'email', 'phone', 'assignedTo'];
+          
+          // Start with all new fields hidden by default
+          isVisible = false;
+          
+          try {
+            const metadata = getFieldMetadata(col.key);
+            
+            // System fields: skip entirely (don't add to visibleColumns)
+            if (metadata.owner === 'system') {
+              return; // Skip this column
+            }
+            // Participation fields: hidden by default
+            else if (metadata.owner === 'participation') {
+              // Exception: 'type' field is in default list
+              isVisible = col.key === 'type' && peopleDefaultVisible.includes('type');
+            }
+            // Core fields: visible ONLY if in default list
+            else if (metadata.owner === 'core') {
+              isVisible = peopleDefaultVisible.includes(col.key);
+            }
+          } catch (error) {
+            // Field not in metadata - check if it's in default list
+            isVisible = peopleDefaultVisible.includes(col.key);
+          }
+        }
+        
         visibleColumns.value.push({
           key: col.key,
           label: col.label || col.key,
-          visible: col.visible !== false,
+          visible: isVisible,
           sortable: col.sortable !== false,
           dataType: col.dataType || 'Text',
-          showInTable: col.showInTable !== false
+          showInTable: isVisible,
+          // Lock 'name' column for People module
+          locked: props.moduleKey === 'people' && col.key === 'name'
         });
       });
       // Normalize order after adding new columns
@@ -1788,14 +1905,32 @@ const allFields = computed(() => {
   // Now update visibility from visibleColumns (source of truth)
   let fields = Array.from(allFieldsMap.values()).map(field => {
     const visibleCol = visibleColumns.value.find(vc => vc.key === field.key);
+    
+    // For People module, if field is not in visibleColumns, check if it's a system field
+    if (!visibleCol && props.moduleKey === 'people') {
+      try {
+        const metadata = getFieldMetadata(field.key);
+        if (metadata.owner === 'system') {
+          // Skip system fields - they shouldn't appear in Customize View
+          return null;
+        }
+      } catch (error) {
+        // Field not in metadata - include it but it will be hidden by default
+      }
+    }
+    
+    // IMPORTANT: Use visibleColumns as source of truth for visibility
+    // If field is not in visibleColumns, it defaults to hidden (false)
     const isVisible = visibleCol ? (visibleCol.visible === true) : false;
     
     return {
       ...field,
-      visible: isVisible,
-      showInTable: visibleCol ? (visibleCol.showInTable !== false) : field.showInTable
+      visible: isVisible, // This is the source of truth - defaults to false if not in visibleColumns
+      showInTable: visibleCol ? (visibleCol.showInTable !== false) : field.showInTable,
+      // Include locked property if present
+      locked: visibleCol?.locked || false
     };
-  });
+  }).filter(field => field !== null); // Filter out null fields (system fields)
   
   // Filter by search query
   if (fieldSearchQuery.value.trim()) {
@@ -1834,6 +1969,43 @@ const hiddenFields = computed(() => {
   return allFields.value.filter(field => !field.visible);
 });
 
+// Group fields for People module Customize View
+const getGroupLabel = (groupId) => {
+  if (!groupId) return null;
+  
+  if (groupId === 'core') {
+    return 'Core Fields';
+  } else if (groupId === 'participation-summary') {
+    return 'Participation';
+  } else if (groupId.startsWith('participation:')) {
+    const appKey = groupId.replace('participation:', '');
+    // Convert app key to display name
+    const appNames = {
+      'SALES': 'Sales',
+      'HELPDESK': 'Helpdesk',
+      'MARKETING': 'Marketing',
+      'AUDIT': 'Audit',
+      'PORTAL': 'Portal',
+      'PROJECTS': 'Projects'
+    };
+    return `Participation: ${appNames[appKey] || appKey}`;
+  } else if (groupId === 'system') {
+    return 'System Fields';
+  }
+  
+  return null;
+};
+
+// Group shown fields for People module
+const groupedShownFields = computed(() => {
+  return shownFields.value;
+});
+
+// Group hidden fields for People module
+const groupedHiddenFields = computed(() => {
+  return hiddenFields.value;
+});
+
 // Field icon mapping
 const getFieldIcon = (dataType) => {
   const iconMap = {
@@ -1861,11 +2033,37 @@ const getFieldIcon = (dataType) => {
 
 // Column settings
 const resetColumnSettings = () => {
-  // Reset to default visibility (all visible)
-  visibleColumns.value = visibleColumns.value.map(col => ({ ...col, visible: true }));
+  if (props.moduleKey === 'people') {
+    // For People module, use canonical defaults
+    const allAvailableColumnsMap = new Map();
+    // Populate allAvailableColumnsMap from props.columns (which includes all registered fields)
+    props.columns.forEach(col => {
+      allAvailableColumnsMap.set(col.key, {
+        key: col.key,
+        label: col.label || col.key,
+        dataType: col.dataType,
+        sortable: col.sortable !== false,
+        showInTable: col.showInTable !== false,
+      });
+    });
+    const allAvailableColumns = Array.from(allAvailableColumnsMap.values());
+    
+    const defaultColumns = buildPeopleDefaultColumns(allAvailableColumns);
+    visibleColumns.value = defaultColumns;
+    saveColumnSettings();
+  } else {
+    // For other modules, reset to all visible (existing behavior)
+    visibleColumns.value = props.columns.map(col => ({
+      ...col,
+      visible: true,
+      locked: col.key === 'name' // Only lock 'name' by default
+    }));
+    saveColumnSettings();
+  }
+  
   rowHeight.value = 'medium';
   
-  // Clear saved settings
+  // Clear saved settings (after applying new defaults)
   if (typeof window !== 'undefined') {
     localStorage.removeItem(columnsStorageKey.value);
     localStorage.removeItem(rowHeightStorageKey.value);
@@ -1876,14 +2074,21 @@ const resetColumnSettings = () => {
     localStorage.removeItem(`table-column-widths-${props.tableId}`);
   }
   
-  // Save the reset state
-  saveColumnSettings();
+  // Reinitialize columns after reset to ensure proper ordering and defaults
+  initializeColumns();
 };
 
 const toggleFieldVisibility = async (fieldKey) => {
+  let column = visibleColumns.value.find(col => col.key === fieldKey);
+  
+  // Check if field is locked (e.g., 'name' for People module)
+  if (column?.locked) {
+    // Locked columns cannot be hidden
+    return;
+  }
+  
   // Prevent hiding 'name' field for forms module
   if (props.moduleKey === 'forms' && fieldKey?.toLowerCase() === 'name') {
-    const column = visibleColumns.value.find(col => col.key === fieldKey);
     if (column && !column.visible) {
       // Allow showing it, but prevent hiding
       return;
@@ -1894,8 +2099,6 @@ const toggleFieldVisibility = async (fieldKey) => {
       return;
     }
   }
-  
-  let column = visibleColumns.value.find(col => col.key === fieldKey);
   
   // If field doesn't exist in visibleColumns, add it
   if (!column) {

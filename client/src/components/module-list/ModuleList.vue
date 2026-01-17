@@ -115,7 +115,7 @@ const data = ref([]);
 const statistics = ref({});
 const statsConfig = ref([]);
 const sortField = ref('');
-const sortOrder = ref('asc');
+const sortOrder = ref('desc'); // Default to newest first so new records appear on page 1
 const pagination = ref({
   currentPage: 1,
   totalPages: 1,
@@ -165,7 +165,13 @@ const buildList = async () => {
       // Initialize sort from definition
       if (definition?.defaultSort) {
         sortField.value = definition.defaultSort.column;
-        sortOrder.value = definition.defaultSort.order;
+        // For people module, prefer 'desc' (newest first) for better UX
+        // This ensures new identity-only records appear on page 1
+        if (props.moduleKey === 'people' && definition.defaultSort.column === 'createdAt') {
+          sortOrder.value = 'desc';
+        } else {
+          sortOrder.value = definition.defaultSort.order;
+        }
       }
       
       // Initialize pagination from definition
@@ -261,9 +267,16 @@ const fetchData = async () => {
       page: pagination.value.currentPage,
       limit: pagination.value.limit,
       sortBy: sortField.value || 'createdAt',
-      sortOrder: sortOrder.value || 'desc',
+      // Default to 'desc' (newest first) if no sort field is set
+      // This ensures new records appear on page 1 by default
+      sortOrder: sortField.value ? (sortOrder.value || 'desc') : 'desc',
       ...filters.value
     };
+
+    // Pass appKey as query parameter for backend filtering
+    if (props.appKey) {
+      params.appKey = props.appKey;
+    }
 
     if (searchQuery.value) {
       params.search = searchQuery.value;

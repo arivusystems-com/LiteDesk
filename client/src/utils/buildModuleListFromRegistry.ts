@@ -31,6 +31,7 @@ import type { AppRegistry } from '@/types/sidebar.types';
 import type { PermissionSnapshot } from '@/types/permission-snapshot.types';
 import { hasPermission as checkPermission } from '@/types/permission-snapshot.types';
 import { memoizeBuilder } from '@/utils/builderCache';
+import { getFieldMetadata, PEOPLE_FIELD_METADATA } from '@/platform/fields/peopleFieldModel';
 
 /**
  * Get fallback columns for common modules when list config is missing
@@ -144,11 +145,54 @@ function getPermissionOutcome(
 }
 
 /**
+ * Check if a field is eligible for table display based on field metadata
+ * For People module: filters system fields and enforces participation rules
+ */
+function isFieldTableEligible(
+  fieldKey: string,
+  moduleKey: string
+): boolean {
+  // Only apply People-specific filtering for people module
+  if (moduleKey !== 'people') {
+    return true; // For other modules, allow all fields
+  }
+
+  // Get field metadata (fail-safe: if field not in metadata, allow it)
+  const metadata = PEOPLE_FIELD_METADATA[fieldKey];
+  if (!metadata) {
+    // Field not in metadata - log warning but allow it (graceful degradation)
+    console.warn(`[buildModuleListFromRegistry] Field "${fieldKey}" not found in PEOPLE_FIELD_METADATA`);
+    return true;
+  }
+
+  // System fields never appear in table
+  if (metadata.owner === 'system') {
+    return false;
+  }
+
+  // Core identity fields - eligible if showInTable is true (already filtered by registry)
+  // We just need to ensure they're not system fields (already checked above)
+  if (metadata.owner === 'core') {
+    return true; // showInTable filtering happens in registry/field settings
+  }
+
+  // Participation fields - eligible if showInTable is true (already filtered by registry)
+  // We just need to ensure they're not system fields (already checked above)
+  // Note: Per-row participation checking happens at render time, not column filtering time
+  if (metadata.owner === 'participation') {
+    return true; // showInTable filtering happens in registry/field settings
+  }
+
+  return true;
+}
+
+/**
  * Build list columns from registry
  */
 function buildColumns(
   columns: NonNullable<AppRegistryModuleEntry['list']>['columns'] = [],
-  snapshot: PermissionSnapshot
+  snapshot: PermissionSnapshot,
+  moduleKey?: string
 ): ListColumn[] {
   if (!columns) return [];
   
@@ -164,7 +208,17 @@ function buildColumns(
       order: col.order ?? 999,
       fieldPath: col.fieldPath,
     }))
-    .filter((col) => col.visibility !== PermissionOutcome.HIDDEN)
+    .filter((col) => {
+      // Filter by permission visibility
+      if (col.visibility === PermissionOutcome.HIDDEN) {
+        return false;
+      }
+      // Filter by field eligibility (People-specific rules)
+      if (moduleKey && !isFieldTableEligible(col.key, moduleKey)) {
+        return false;
+      }
+      return true;
+    })
     .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
 }
 
@@ -421,7 +475,7 @@ export function buildModuleListFromRegistry(
           appKey,
           title: module.label,
           layout: 'TABLE',
-          columns: buildColumns(fallbackColumns, snapshot),
+          columns: buildColumns(fallbackColumns, snapshot, moduleKey),
           primaryActions: buildPrimaryActions(fallbackActions, snapshot),
           emptyState: {
             type: EmptyStateType.NO_DATA,
@@ -436,7 +490,7 @@ export function buildModuleListFromRegistry(
       }
       
       // Build list definition
-      const columns = buildColumns(listConfig.columns, snapshot);
+      const columns = buildColumns(listConfig.columns, snapshot, moduleKey);
       const primaryActions = buildPrimaryActions(listConfig.primaryActions, snapshot);
       const bulkActions = buildBulkActions(listConfig.bulkActions, snapshot);
       const rowActions = buildRowActions(listConfig.rowActions, snapshot);

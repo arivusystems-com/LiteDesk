@@ -196,37 +196,153 @@ exports.list = async (req, res) => {
       query: JSON.stringify(query)
     });
     
-    if (req.query.type) query.type = req.query.type;
+    // Determine appKey once at the start - check query param first, then middleware
+    const appKey = req.query.appKey || req.appKey || 'SALES';
+    const moduleKey = 'people';
+    
+    // Debug logging
+    console.log('[PeopleController] appKey determination:', {
+      queryAppKey: req.query.appKey,
+      middlewareAppKey: req.appKey,
+      finalAppKey: appKey
+    });
+    
+    // Only apply type filter if explicitly requested (not for PLATFORM appKey)
+    // This ensures identity-only people (without type) are included
+    if (req.query.type && appKey !== 'PLATFORM') {
+      query.type = req.query.type;
+    }
     if (req.query.email) query.email = req.query.email;
     if (req.query.organization) query.organization = req.query.organization; // This is Sales organization, not tenant
+    
+    // Search functionality - search across name, email, phone fields
+    // Store search condition separately - will be combined after projection filter
+    let searchCondition = null;
+    if (req.query.search && req.query.search.trim()) {
+      const searchRegex = new RegExp(req.query.search.trim(), 'i');
+      searchCondition = {
+        $or: [
+          { first_name: searchRegex },
+          { last_name: searchRegex },
+          { email: searchRegex },
+          { phone: searchRegex },
+          { mobile: searchRegex }
+        ]
+      };
+    }
 
     // Phase 2A.2: Apply projection filter (read-time filtering only)
     // SAFETY: Projection filtering is read-only.
     // SAFETY: No record ownership or permissions are enforced here.
-    const appKey = req.appKey || 'SALES'; // From resolveAppContext middleware
-    const moduleKey = 'people';
-    const projectionMeta = getProjection(appKey, moduleKey);
-    query = applyProjectionFilter({
-      appKey,
-      moduleKey,
-      baseQuery: query,
-      projectionMeta
-    });
+    // CRITICAL: For PLATFORM appKey, skip projection filtering to show ALL people
+    // including those without app participation (identity-only records)
+    // Skip projection filtering for PLATFORM appKey to ensure all people are visible
+    if (appKey !== 'PLATFORM') {
+      const projectionMeta = getProjection(appKey, moduleKey);
+      query = applyProjectionFilter({
+        appKey,
+        moduleKey,
+        baseQuery: query,
+        projectionMeta
+      });
+    } else {
+      // For PLATFORM appKey, explicitly ensure we're not filtering by type
+      // This is a safety check to ensure identity-only records are included
+      // Explicitly ensure query doesn't exclude records without type field
+      // Remove any existing type filter that might have been added earlier
+      if (query.type && typeof query.type === 'object' && query.type.$exists === false) {
+        // Type filter is checking for non-existence - this is fine
+      } else if (query.type && query.type !== null) {
+        // If there's a type filter that's not checking for null/existence, remove it
+        // unless it was explicitly requested in query params (which we already handled above)
+        // Since we only set query.type above if req.query.type exists, we should be safe
+        // But let's be extra safe and ensure no type filter exists for PLATFORM
+        if (!req.query.type) {
+          // No explicit type filter requested, ensure we don't filter by type
+          // The query should already not have type filter at this point, but double-check
+          delete query.type;
+        }
+      }
+      console.log('[PeopleController] PLATFORM appKey detected - skipping projection filter to show all people');
+    }
+    
+    // Apply search condition after projection filter
+    // If projection filter added $or, combine with $and; otherwise just add search $or
+    if (searchCondition) {
+      if (query.$or) {
+        // Projection filter added $or, combine with $and
+        query = {
+          ...query,
+          $and: [
+            { $or: query.$or },
+            searchCondition
+          ]
+        };
+        delete query.$or;
+      } else {
+        // No existing $or, just add search $or
+        query.$or = searchCondition.$or;
+      }
+    }
 
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
 
-    // Handle sorting
+    // Handle sorting - default to newest first (desc) so new records appear on first page
     const sortBy = req.query.sortBy || 'createdAt';
+    // If no explicit sortOrder provided, default to descending (newest first)
+    // Only use 'asc' if explicitly requested
     const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder;
 
     const User = require('../models/User');
     
+    // CRITICAL: Final safety check for PLATFORM appKey - ensure no type filtering
+    if (appKey === 'PLATFORM' && !req.query.type) {
+      // Explicitly remove any type filter to ensure all records are included
+      if (query.type && typeof query.type !== 'object') {
+        // Remove direct type filter (like { type: 'Lead' })
+        delete query.type;
+        console.log('[PeopleController] Removed type filter for PLATFORM appKey');
+      }
+      // Also check for type in $or conditions from projection filter (shouldn't exist for PLATFORM, but be safe)
+      if (query.$or) {
+        // Check if any $or condition filters by type in a way that excludes null/missing
+        // This shouldn't happen since we skip projection filter for PLATFORM, but check anyway
+        const hasRestrictiveTypeFilter = query.$or.some(condition => 
+          condition.type && 
+          typeof condition.type === 'object' && 
+          condition.type.$in && 
+          !condition.type.$in.includes(null) &&
+          !condition.type.$exists
+        );
+        if (hasRestrictiveTypeFilter) {
+          console.warn('[PeopleController] Warning: Found restrictive type filter in $or for PLATFORM appKey');
+        }
+      }
+    }
+    
     // CRITICAL: Double-check the query before executing
-    console.log('[PeopleController] Executing query:', JSON.stringify(query, null, 2));
+    console.log('[PeopleController] Final query before execution:', {
+      appKey: appKey,
+      queryAppKey: req.query.appKey,
+      middlewareAppKey: req.appKey,
+      hasProjectionFilter: appKey !== 'PLATFORM',
+      hasSearch: !!searchCondition,
+      hasTypeFilter: !!query.type,
+      queryString: JSON.stringify(query, null, 2),
+      queryKeys: Object.keys(query)
+    });
+    
+    // Execute query with detailed logging
+    console.log('[PeopleController] Executing find query:', {
+      query: JSON.stringify(query),
+      sortOptions: sortOptions,
+      limit: limit,
+      skip: skip
+    });
     
     const data = await People.find(query)
       .populate('assignedTo', 'firstName lastName email avatar')
@@ -236,7 +352,31 @@ exports.list = async (req, res) => {
       .sort(sortOptions)
       .limit(limit)
       .skip(skip);
+    
     const total = await People.countDocuments(query);
+    
+    // Log types distribution to see if records without type are in results
+    const typesInResults = {};
+    data.forEach(r => {
+      const type = r.type || 'NO_TYPE';
+      typesInResults[type] = (typesInResults[type] || 0) + 1;
+    });
+    
+    console.log('[PeopleController] Query results:', {
+      returnedCount: data.length,
+      page: page,
+      limit: limit,
+      total: total,
+      typesDistribution: typesInResults,
+      sampleIds: data.slice(0, 5).map(r => ({ 
+        id: r._id, 
+        name: `${r.first_name} ${r.last_name}`, 
+        type: r.type || 'NO_TYPE',
+        createdAt: r.createdAt
+      }))
+    });
+    
+    console.log('[PeopleController] Total count:', total);
     
     // Calculate statistics with projection filter applied
     // Use the same query so stats match the filtered results
@@ -330,7 +470,13 @@ exports.list = async (req, res) => {
     res.json({ 
       success: true, 
       data: filteredData, 
-      meta: { page, limit, total: filteredData.length },
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalRecords: total,
+        limit: limit
+      },
+      meta: { page, limit, total: total },
       statistics: {
         totalContacts: statsData.totalContacts,
         leadContacts: statsData.leadContacts,
