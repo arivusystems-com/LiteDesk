@@ -228,6 +228,21 @@ function resolvePeopleAppContext({
     ? intersect(uniqueRawCandidates, enabledAndAllowed)
     : [];
 
+  // Special case: If navigationIntent specifies an appKey (from person's participation),
+  // ensure it's included even if it wasn't in the initial intersection
+  // This handles cases where the person participates in an app that might not be
+  // in the enabled apps list or user access list
+  if (navigationIntent?.sourceAppKey) {
+    const participationAppKey = normalizeAppKey(navigationIntent.sourceAppKey);
+    if (participationAppKey && !viableCandidates.includes(participationAppKey)) {
+      // Add the participation app to viable candidates if it's in enabled apps
+      // This ensures we can prioritize it even if user access is restricted
+      if (enabled.includes(participationAppKey)) {
+        viableCandidates.push(participationAppKey);
+      }
+    }
+  }
+
   // If no explicit candidates made it through, fall back to all enabled+allowed apps
   if (!viableCandidates.length && enabledAndAllowed.length) {
     viableCandidates = enabledAndAllowed.slice();
@@ -250,7 +265,24 @@ function resolvePeopleAppContext({
 
   if (viableCandidates.length === 1) {
     // Single viable candidate → HIGH or MEDIUM depending on signal strength
-    finalAppKey = viableCandidates[0];
+    // BUT: If navigationIntent specifies a different app (from person's participation),
+    // prioritize that app if it's enabled (even if user doesn't have explicit access)
+    let candidateAppKey = viableCandidates[0];
+    
+    // Check if navigationIntent specifies a participation app that should take priority
+    if (navigationIntent?.sourceAppKey) {
+      const participationAppKey = normalizeAppKey(navigationIntent.sourceAppKey);
+      // If participation app is enabled, use it instead (person's actual participation trumps)
+      if (participationAppKey && enabled.includes(participationAppKey)) {
+        candidateAppKey = participationAppKey;
+        // Add to viable candidates if not already there
+        if (!viableCandidates.includes(participationAppKey)) {
+          viableCandidates.push(participationAppKey);
+        }
+      }
+    }
+    
+    finalAppKey = candidateAppKey;
 
     const strongSignals = [
       signals.fromRoutePrefix,
@@ -258,11 +290,11 @@ function resolvePeopleAppContext({
       signals.fromNavigationIntent
     ].filter(Boolean);
 
-    if (strongSignals.includes(finalAppKey)) {
+    if (strongSignals.includes(finalAppKey) || (navigationIntent?.sourceAppKey && normalizeAppKey(navigationIntent.sourceAppKey) === finalAppKey)) {
       confidence = 'HIGH';
       reason =
         `Resolved from strong signal(s): ` +
-        `${strongSignals.join(', ')}. ` +
+        `${strongSignals.filter(Boolean).join(', ') || 'person participation'}. ` +
         `Final appKey=${finalAppKey}.`;
     } else {
       confidence = 'MEDIUM';
@@ -272,16 +304,38 @@ function resolvePeopleAppContext({
     }
   } else if (viableCandidates.length > 1) {
     // Multiple viable candidates → ambiguous by definition
-    // Pick a deterministic appKey (first in sorted order) but flag ambiguity
+    // Prioritize navigationIntent appKey if present, otherwise pick first alphabetically
     const sorted = viableCandidates.slice().sort();
-    finalAppKey = sorted[0];
-    confidence = 'AMBIGUOUS';
-    isAmbiguous = true;
-    reason =
-      `Ambiguous People app context. Multiple viable apps: ` +
-      `${sorted.join(', ')}. ` +
-      `Selected ${finalAppKey} deterministically; caller MUST prompt user or ` +
-      `respect isAmbiguous=true before executing People actions.`;
+    
+    // If navigationIntent specifies an appKey and it's in viable candidates, prioritize it
+    if (navigationIntent?.sourceAppKey) {
+      const preferredAppKey = normalizeAppKey(navigationIntent.sourceAppKey);
+      if (preferredAppKey && viableCandidates.includes(preferredAppKey)) {
+        finalAppKey = preferredAppKey;
+        confidence = 'HIGH';
+        reason =
+          `Multiple viable apps: ${sorted.join(', ')}. ` +
+          `Prioritized ${finalAppKey} from navigationIntent (person's actual participation).`;
+      } else {
+        finalAppKey = sorted[0];
+        confidence = 'AMBIGUOUS';
+        isAmbiguous = true;
+        reason =
+          `Ambiguous People app context. Multiple viable apps: ` +
+          `${sorted.join(', ')}. ` +
+          `Selected ${finalAppKey} deterministically; caller MUST prompt user or ` +
+          `respect isAmbiguous=true before executing People actions.`;
+      }
+    } else {
+      finalAppKey = sorted[0];
+      confidence = 'AMBIGUOUS';
+      isAmbiguous = true;
+      reason =
+        `Ambiguous People app context. Multiple viable apps: ` +
+        `${sorted.join(', ')}. ` +
+        `Selected ${finalAppKey} deterministically; caller MUST prompt user or ` +
+        `respect isAmbiguous=true before executing People actions.`;
+    }
   } else {
     // Should not happen, but guard anyway: pick a deterministic default
     const allKnown = Object.values(APP_KEYS);

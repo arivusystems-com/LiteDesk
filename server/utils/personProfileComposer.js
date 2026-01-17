@@ -85,7 +85,7 @@ const APP_FIELD_KEYS_BY_APP = {
     // Lead/Contact type
     'type',
 
-    // Lead-specific (CRM-specific)
+    // Lead-specific (SALES-specific)
     'lead_status',
     'lead_owner',
     'lead_score',
@@ -94,7 +94,7 @@ const APP_FIELD_KEYS_BY_APP = {
     'qualification_notes',
     'estimated_value',
 
-    // Contact-specific (CRM-specific)
+    // Contact-specific (SALES-specific)
     'contact_status',
     'role',
     'birthday',
@@ -139,6 +139,90 @@ function pickFields(source, keys) {
   });
 
   return result;
+}
+
+/**
+ * Check if a person has participation in a given app.
+ * 
+ * A person has participation in an app if any app-specific field is set.
+ * For SALES app, specifically checks the 'type' field (Lead/Contact).
+ * 
+ * @param {Object} person - Person data (Mongoose document or plain object)
+ * @param {string} appKey - Normalized app key (e.g., 'SALES', 'HELPDESK')
+ * @returns {boolean} - True if person has participation in the app
+ */
+function hasAppParticipation(person, appKey) {
+  if (!person || !appKey) return false;
+  
+  const normalizedAppKey = normalizeAppKey(appKey);
+  if (!normalizedAppKey) return false;
+  
+  // Normalize person data to a plain object
+  const rawPerson =
+    person && typeof person.toObject === 'function'
+      ? person.toObject()
+      : person || {};
+  
+  // Get app-specific fields for this app
+  const appFieldKeys = APP_FIELD_KEYS_BY_APP[normalizedAppKey];
+  if (!appFieldKeys || !Array.isArray(appFieldKeys) || appFieldKeys.length === 0) {
+    // If no app-specific fields defined, person cannot have participation
+    return false;
+  }
+  
+  // For SALES app, 'type' field is the primary participation marker
+  // Check it first for SALES app
+  if (normalizedAppKey === APP_KEYS.SALES && rawPerson.type) {
+    return true;
+  }
+  
+  // Check if any app-specific field is set (not null, undefined, empty string, or empty array)
+  for (const fieldKey of appFieldKeys) {
+    const value = rawPerson[fieldKey];
+    
+    // Skip null, undefined, empty string
+    if (value === null || value === undefined || value === '') {
+      continue;
+    }
+    
+    // Skip empty arrays (empty arrays don't indicate participation)
+    if (Array.isArray(value) && value.length === 0) {
+      continue;
+    }
+    
+    // For SALES app, skip 'type' check here (already checked above)
+    // For other apps, any app-specific field being set indicates participation
+    if (normalizedAppKey === APP_KEYS.SALES && fieldKey === 'type') {
+      continue; // Already checked above
+    }
+    
+    // Field has a meaningful value - participation exists
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Get a human-readable app name from appKey.
+ * 
+ * @param {string} appKey - App key (e.g., 'SALES', 'HELPDESK')
+ * @returns {string} - Human-readable app name
+ */
+function getAppDisplayName(appKey) {
+  const normalizedAppKey = normalizeAppKey(appKey);
+  if (!normalizedAppKey) return appKey || 'Unknown App';
+  
+  // Map app keys to display names
+  const appNameMap = {
+    [APP_KEYS.SALES]: 'Sales',
+    'HELPDESK': 'Helpdesk',
+    'PROJECTS': 'Projects',
+    'AUDIT': 'Audit',
+    'PORTAL': 'Portal'
+  };
+  
+  return appNameMap[normalizedAppKey] || normalizedAppKey;
 }
 
 /**
@@ -239,16 +323,15 @@ function composePersonProfile({
 
     const fields = pickFields(rawPerson, fieldKeys);
 
-    // If there are no app-specific fields present on this person, skip section
-    if (Object.keys(fields).length === 0) {
-      return;
-    }
+    // Include app section even if no fields are present yet
+    // This allows users to add app-specific fields to a person that doesn't have any
+    // The section will show as empty but editable (if permissions allow)
 
     const perms = appPerms[appKey] || {};
 
     appsSections[appKey] = {
       appKey,
-      fields,
+      fields, // May be empty object if no fields are set yet
       canView: !!perms.canView,
       // App fields are editable only when:
       // - User has canEdit for that app
@@ -264,7 +347,11 @@ function composePersonProfile({
 }
 
 module.exports = {
-  composePersonProfile
+  composePersonProfile,
+  CORE_FIELD_KEYS,
+  APP_FIELD_KEYS_BY_APP,
+  hasAppParticipation,
+  getAppDisplayName
 };
 
 

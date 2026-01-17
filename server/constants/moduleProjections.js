@@ -27,7 +27,7 @@ module.exports = {
     baseModuleKey: 'people',
     types: ['LEAD', 'CONTACT', 'PARTNER'],
     apps: {
-      CRM: {
+      SALES: {
         allowedTypes: ['LEAD', 'CONTACT'],
         defaultType: 'LEAD',
         behaviors: {
@@ -56,7 +56,7 @@ module.exports = {
     baseModuleKey: 'organizations',
     types: ['CUSTOMER', 'PARTNER', 'VENDOR'],
     apps: {
-      CRM: {
+      SALES: {
         allowedTypes: ['CUSTOMER', 'PARTNER']
       },
       HELPDESK: {
@@ -78,7 +78,7 @@ module.exports = {
     baseModuleKey: 'events',
     types: ['MEETING', 'INTERNAL_AUDIT', 'EXTERNAL_AUDIT_SINGLE', 'EXTERNAL_AUDIT_BEAT', 'FIELD_SALES_BEAT'],
     apps: {
-      CRM: {
+      SALES: {
         allowedTypes: ['MEETING', 'INTERNAL_AUDIT', 'EXTERNAL_AUDIT_SINGLE', 'EXTERNAL_AUDIT_BEAT', 'FIELD_SALES_BEAT'],
         defaultType: 'MEETING'
       },
@@ -98,7 +98,7 @@ module.exports = {
     baseModuleKey: 'forms',
     types: ['SURVEY', 'AUDIT', 'FEEDBACK'],
     apps: {
-      CRM: {
+      SALES: {
         allowedTypes: ['SURVEY', 'AUDIT', 'FEEDBACK'],
         defaultType: 'SURVEY'
       },

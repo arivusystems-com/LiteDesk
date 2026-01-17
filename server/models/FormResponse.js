@@ -152,7 +152,7 @@ const correctiveActionSchema = new Schema({
  * - Closed
  *
  * NOTE:
- * - CRM is the sole authority for state transitions
+ * - SALES is the sole authority for state transitions
  * - Audit App and Portal consume this state read-only
  * - Response lifecycle logic lives only inside FormResponse model
  * - No logic duplication - all state transitions handled here

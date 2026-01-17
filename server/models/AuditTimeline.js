@@ -5,17 +5,17 @@
  * 
  * Purpose:
  * - Auditor-visible timeline of audit events
- * - Mirrors CRM audit trail
+ * - Mirrors SALES audit trail
  * - No write authority from Audit App
  * 
  * Rules:
- * - Populated via CRM hooks only
+ * - Populated via SALES hooks only
  * - Audit App never mutates this
  * - Read-only for Audit App users
- * - Source of truth remains in CRM Event.auditHistory
+ * - Source of truth remains in SALES Event.auditHistory
  * 
  * Data Ownership:
- * - Timeline entries: CRM → Audit App (read-only sync)
+ * - Timeline entries: SALES → Audit App (read-only sync)
  * - Audit App never creates/modifies timeline entries
  * 
  * See AUDIT_DOMAIN_MODEL.md for architecture details.
@@ -34,7 +34,7 @@ const auditTimelineSchema = new Schema({
     index: true
   },
 
-  // CRM Event reference (source of truth)
+  // SALES Event reference (source of truth)
   eventId: {
     type: Schema.Types.ObjectId,
     ref: 'Event',

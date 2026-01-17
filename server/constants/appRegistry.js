@@ -16,12 +16,6 @@
  */
 
 module.exports = {
-  CRM: {
-    roles: ['ADMIN', 'MANAGER', 'USER'],
-    userTypesAllowed: ['INTERNAL'],
-    defaultRole: 'USER'
-  },
-
   SALES: {
     roles: ['ADMIN', 'MANAGER', 'USER'],
     userTypesAllowed: ['INTERNAL'],

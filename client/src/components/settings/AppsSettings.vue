@@ -156,7 +156,6 @@ import { ref, computed, onMounted, watch, h } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import SalesSchema from './SalesSchema.vue';
-import SalesPeople from './SalesPeople.vue';
 import SalesPipelines from './SalesPipelines.vue';
 import SalesPlaybooks from './SalesPlaybooks.vue';
 
@@ -170,9 +169,6 @@ const SchemaIcon = () => h('svg', { class: 'w-6 h-6', fill: 'none', stroke: 'cur
   h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' })
 ]);
 
-const PeopleIcon = () => h('svg', { class: 'w-6 h-6', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
-  h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' })
-]);
 
 const PipelineIcon = () => h('svg', { class: 'w-6 h-6', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
   h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' })
@@ -213,27 +209,20 @@ const appDisplayName = computed(() => {
   return appNames[selectedApp.value.toLowerCase()] || capitalizeFirst(selectedApp.value);
 });
 
-// Sales app options
+// Sales app options (Sales-owned configuration only)
 const salesOptions = [
-  {
-    id: 'schema',
-    name: 'Schema',
-    description: 'Configure custom fields, modules, and data structure for Sales',
-    icon: SchemaIcon,
-    available: true
-  },
-  {
-    id: 'people',
-    name: 'People',
-    description: 'Manage people settings, contact types, and relationship mappings',
-    icon: PeopleIcon,
-    available: true
-  },
   {
     id: 'pipelines',
     name: 'Pipelines & Stages',
     description: 'Configure sales pipelines, deal stages, and workflow automation',
     icon: PipelineIcon,
+    available: true
+  },
+  {
+    id: 'schema',
+    name: 'Deal Schema',
+    description: 'Configure custom fields and data structure for Deals',
+    icon: SchemaIcon,
     available: true
   },
   {
@@ -246,9 +235,8 @@ const salesOptions = [
 ];
 
 const salesTabs = [
-  { id: 'schema', name: 'Schema', component: SalesSchema },
-  { id: 'people', name: 'People', component: SalesPeople },
   { id: 'pipelines', name: 'Pipelines & Stages', component: SalesPipelines },
+  { id: 'schema', name: 'Deal Schema', component: SalesSchema },
   { id: 'playbooks', name: 'Playbooks', component: SalesPlaybooks }
 ];
 
@@ -405,4 +393,15 @@ watch(() => route.query.app, (newApp) => {
     activeSalesTab.value = 'options';
   }
 });
+
+// Watch for config query parameter to navigate directly to a config option
+watch(() => route.query.config, (configId) => {
+  if (configId && isSalesApp.value && activeSalesTab.value === 'options') {
+    // Check if the config ID exists in salesOptions
+    const configExists = salesOptions.some(opt => opt.id === configId);
+    if (configExists) {
+      activeSalesTab.value = configId;
+    }
+  }
+}, { immediate: true });
 </script>

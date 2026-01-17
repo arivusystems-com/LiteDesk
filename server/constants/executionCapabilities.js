@@ -22,7 +22,7 @@
  * - Execution ownership is explicit
  * - Every action has exactly one execution owner app
  * - Discovery ≠ Execution
- * - CRM remains execution engine
+ * - SALES remains execution engine
  * - Audit App and Portal are never execution owners
  * 
  * ============================================================================
@@ -51,11 +51,11 @@ const EXECUTION_CAPABILITIES = {
     domain: 'RESPONSE',
     action: 'SUBMIT',
     
-    executionOwnerApp: 'CRM',
+    executionOwnerApp: 'SALES',
     executionType: 'USER',
     
-    discoverableBy: ['CRM', 'AUDIT', 'PORTAL', 'PROCESS_DESIGNER'],
-    executableBy: ['CRM'],
+    discoverableBy: ['SALES', 'AUDIT', 'PORTAL', 'PROCESS_DESIGNER'],
+    executableBy: ['SALES'],
     
     auditAppPolicy: 'READ_ONLY',
     portalPolicy: 'READ_ONLY',
@@ -76,11 +76,11 @@ const EXECUTION_CAPABILITIES = {
     domain: 'RESPONSE',
     action: 'APPROVE',
     
-    executionOwnerApp: 'CRM',
+    executionOwnerApp: 'SALES',
     executionType: 'AUTOMATION', // Can be automated by Process Designer
     
-    discoverableBy: ['CRM', 'AUDIT', 'PORTAL', 'PROCESS_DESIGNER'],
-    executableBy: ['CRM'],
+    discoverableBy: ['SALES', 'AUDIT', 'PORTAL', 'PROCESS_DESIGNER'],
+    executableBy: ['SALES'],
     
     auditAppPolicy: 'READ_ONLY',
     portalPolicy: 'READ_ONLY',
@@ -101,11 +101,11 @@ const EXECUTION_CAPABILITIES = {
     domain: 'RESPONSE',
     action: 'REJECT',
     
-    executionOwnerApp: 'CRM',
+    executionOwnerApp: 'SALES',
     executionType: 'AUTOMATION',
     
-    discoverableBy: ['CRM', 'AUDIT', 'PORTAL', 'PROCESS_DESIGNER'],
-    executableBy: ['CRM'],
+    discoverableBy: ['SALES', 'AUDIT', 'PORTAL', 'PROCESS_DESIGNER'],
+    executableBy: ['SALES'],
     
     auditAppPolicy: 'READ_ONLY',
     portalPolicy: 'READ_ONLY',
@@ -126,11 +126,11 @@ const EXECUTION_CAPABILITIES = {
     domain: 'RESPONSE',
     action: 'CLOSE',
     
-    executionOwnerApp: 'CRM',
+    executionOwnerApp: 'SALES',
     executionType: 'AUTOMATION',
     
-    discoverableBy: ['CRM', 'AUDIT', 'PORTAL', 'PROCESS_DESIGNER'],
-    executableBy: ['CRM'],
+    discoverableBy: ['SALES', 'AUDIT', 'PORTAL', 'PROCESS_DESIGNER'],
+    executableBy: ['SALES'],
     
     auditAppPolicy: 'READ_ONLY',
     portalPolicy: 'READ_ONLY',
@@ -155,11 +155,11 @@ const EXECUTION_CAPABILITIES = {
     domain: 'EVENT',
     action: 'CHECK_IN',
     
-    executionOwnerApp: 'CRM',
+    executionOwnerApp: 'SALES',
     executionType: 'USER',
     
-    discoverableBy: ['CRM', 'AUDIT', 'PROCESS_DESIGNER'],
-    executableBy: ['CRM'],
+    discoverableBy: ['SALES', 'AUDIT', 'PROCESS_DESIGNER'],
+    executableBy: ['SALES'],
     
     auditAppPolicy: 'READ_ONLY',
     portalPolicy: 'HIDDEN',
@@ -180,11 +180,11 @@ const EXECUTION_CAPABILITIES = {
     domain: 'EVENT',
     action: 'SUBMIT',
     
-    executionOwnerApp: 'CRM',
+    executionOwnerApp: 'SALES',
     executionType: 'USER',
     
-    discoverableBy: ['CRM', 'AUDIT', 'PROCESS_DESIGNER'],
-    executableBy: ['CRM'],
+    discoverableBy: ['SALES', 'AUDIT', 'PROCESS_DESIGNER'],
+    executableBy: ['SALES'],
     
     auditAppPolicy: 'READ_ONLY',
     portalPolicy: 'HIDDEN',
@@ -205,11 +205,11 @@ const EXECUTION_CAPABILITIES = {
     domain: 'EVENT',
     action: 'APPROVE',
     
-    executionOwnerApp: 'CRM',
+    executionOwnerApp: 'SALES',
     executionType: 'AUTOMATION',
     
-    discoverableBy: ['CRM', 'AUDIT', 'PROCESS_DESIGNER'],
-    executableBy: ['CRM'],
+    discoverableBy: ['SALES', 'AUDIT', 'PROCESS_DESIGNER'],
+    executableBy: ['SALES'],
     
     auditAppPolicy: 'READ_ONLY',
     portalPolicy: 'HIDDEN',
@@ -230,11 +230,11 @@ const EXECUTION_CAPABILITIES = {
     domain: 'EVENT',
     action: 'REJECT',
     
-    executionOwnerApp: 'CRM',
+    executionOwnerApp: 'SALES',
     executionType: 'AUTOMATION',
     
-    discoverableBy: ['CRM', 'AUDIT', 'PROCESS_DESIGNER'],
-    executableBy: ['CRM'],
+    discoverableBy: ['SALES', 'AUDIT', 'PROCESS_DESIGNER'],
+    executableBy: ['SALES'],
     
     auditAppPolicy: 'READ_ONLY',
     portalPolicy: 'HIDDEN',

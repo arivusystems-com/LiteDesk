@@ -8,8 +8,9 @@
  * - Notes management
  * - Activity log management
  * 
- * ⚠️ VIOLATION: Contains Sales-specific logic for Lead/Contact types
- *    and Sales-specific status fields.
+ * ✅ FIXED: Person creation is now identity-only and app-agnostic.
+ *    Participation fields (type, lead_status, contact_status, etc.) are
+ *    stripped from creation payloads and must be set via Attach-to-App.
  * 
  * See PLATFORM_CORE_ANALYSIS.md for details.
  * ============================================================================
@@ -18,40 +19,50 @@
 const People = require('../models/People');
 const { applyProjectionFilter } = require('../utils/appProjectionQuery');
 const { getProjection } = require('../utils/moduleProjectionResolver');
-const { resolveCreateType, getTypeFieldName } = require('../utils/appProjectionCreateResolver');
+
+/**
+ * Get list of Sales participation fields that should not be set during Person creation
+ * These fields are set via Attach-to-App, not during identity creation
+ */
+function getSalesParticipationFields() {
+  return [
+    'type',              // State field - Lead/Contact distinction
+    'lead_status',       // State field - Lead workflow status
+    'contact_status',    // State field - Contact workflow status
+    'lead_owner',        // Detail field - Lead owner
+    'lead_score',        // Detail field - Lead scoring
+    'interest_products', // Detail field - Products of interest
+    'qualification_date', // Detail field - Qualification date
+    'qualification_notes', // Detail field - Qualification notes
+    'estimated_value',   // Detail field - Estimated deal value
+    'role',              // Detail field - Contact role
+    'birthday',          // Detail field - Birthday
+    'preferred_contact_method' // Detail field - Contact preference
+  ];
+}
 
 // Create People
 exports.create = async (req, res) => {
   try {
     const User = require('../models/User');
     
-    // Phase 2A.3: Projection-aware create type resolution
-    // SAFETY: Projection-aware create logic — non-blocking fallback
-    const appKey = req.appKey || 'SALES'; // From resolveAppContext middleware
-    const moduleKey = 'people';
-    const typeFieldName = getTypeFieldName(moduleKey);
+    // GUARDRAIL: Strip Sales participation fields from creation payload
+    // Person creation is identity-only and app-agnostic
+    // Participation fields are set via Attach-to-App, not during creation
+    const participationFields = getSalesParticipationFields();
+    const strippedBody = { ...req.body };
+    const detectedParticipationFields = [];
     
-    if (typeFieldName) {
-      const explicitType = req.body.hasOwnProperty(typeFieldName) ? req.body[typeFieldName] : null;
-      const resolved = resolveCreateType({
-        appKey,
-        moduleKey,
-        explicitType: explicitType,
-        fallbackType: null // Model will use its default if needed
-      });
-
-      if (resolved.allowed === false) {
-        return res.status(400).json({
-          success: false,
-          message: resolved.message || 'This record type is not allowed in this app.',
-          code: resolved.reason
-        });
+    for (const field of participationFields) {
+      if (strippedBody.hasOwnProperty(field)) {
+        detectedParticipationFields.push(field);
+        delete strippedBody[field];
       }
-
-      // Set resolved type in body (applies default if no explicit type provided)
-      if (resolved.type !== null && resolved.type !== undefined) {
-        req.body[typeFieldName] = resolved.type;
-      }
+    }
+    
+    // Log warning if participation fields were detected (for legacy callers)
+    if (detectedParticipationFields.length > 0) {
+      console.warn(`[PeopleController] ⚠️ Participation fields detected in Person creation payload and stripped: ${detectedParticipationFields.join(', ')}. Person creation is identity-only. Use Attach-to-App to set participation fields.`);
     }
     
     // Get user name for activity log
@@ -61,7 +72,7 @@ exports.create = async (req, res) => {
       : 'System';
     
     const body = {
-      ...req.body,
+      ...strippedBody, // Use stripped body (no participation fields)
       organizationId: req.user.organizationId,
       createdBy: req.user._id,
       // Add initial activity log for record creation

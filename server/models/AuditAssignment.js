@@ -6,16 +6,16 @@
  * Purpose:
  * - Represents an audit assigned to an auditor
  * - Acts as index + access gate for Audit App
- * - Points to CRM Event (single source of truth)
+ * - Points to SALES Event (single source of truth)
  * 
  * Rules:
- * - eventId is mandatory (references CRM Event)
+ * - eventId is mandatory (references SALES Event)
  * - No workflow state stored independently
  * - auditState is synced from Event (read-only cache)
  * - auditType is copied snapshot for filtering
  * 
  * Data Ownership:
- * - auditState: CRM Event (source of truth)
+ * - auditState: SALES Event (source of truth)
  * - assignment: Audit App (this model)
  * 
  * See AUDIT_DOMAIN_MODEL.md for architecture details.
@@ -42,7 +42,7 @@ const auditAssignmentSchema = new Schema({
     index: true
   },
 
-  // CRM Event reference (single source of truth)
+  // SALES Event reference (single source of truth)
   eventId: {
     type: Schema.Types.ObjectId,
     ref: 'Event',

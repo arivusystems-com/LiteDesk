@@ -10,14 +10,14 @@
  * - Activity logs (generic audit trail)
  * - Notes (generic notes system)
  * 
- * ⚠️ ARCHITECTURAL NOTE: Contains CRM-specific fields
+ * ⚠️ ARCHITECTURAL NOTE: Contains SALES-specific fields
  *    - Lead/Contact type distinction (type: 'Lead' | 'Contact')
  *    - Lead-specific fields (lead_status, lead_score, qualification_date)
  *    - Contact-specific fields (contact_status, role, birthday)
  *    
- *    These fields are used by the CRM app but don't break platform core
- *    since they're optional. For pure platform core usage, ignore CRM fields.
- *    Future: Could split into People (platform core) + CRMContact (CRM app)
+ *    These fields are used by the SALES app but don't break platform core
+ *    since they're optional. For pure platform core usage, ignore SALES fields.
+ *    Future: Could split into People (platform core) + SalesContact (SALES app)
  *            if stricter separation is needed.
  * 
  * See PLATFORM_CORE_ANALYSIS.md for details.
@@ -33,15 +33,16 @@ const PeopleSchema = new Schema({
 
   // System fields
   createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  assignedTo: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  assignedTo: { type: Schema.Types.ObjectId, ref: 'User', required: false, index: true }, // Default: optional (can be configured by admin)
   legacyContactId: { type: Schema.Types.ObjectId, index: true },
 
   // Core
   source: { type: String, trim: true },
-  // ⚠️ CRM-SPECIFIC: Lead/Contact distinction (used by CRM app)
-  type: { type: String, enum: ['Lead', 'Contact'], required: true },
+  // ⚠️ SALES-SPECIFIC: Lead/Contact distinction (used by SALES app)
+  // NOTE: This field is optional - participation is set via Attach-to-App, not during creation
+  type: { type: String, enum: ['Lead', 'Contact'], required: false },
 
-  first_name: { type: String, trim: true },
+  first_name: { type: String, trim: true, required: true }, // Default: required (can be configured by admin)
   last_name: {
     type: String,
     trim: true,
@@ -56,12 +57,12 @@ const PeopleSchema = new Schema({
   phone: { type: String, trim: true },
   mobile: { type: String, trim: true },
 
-  organization: { type: Schema.Types.ObjectId, ref: 'Organization' }, // CRM Organization (company), not tenant Organization
+  organization: { type: Schema.Types.ObjectId, ref: 'Organization' }, // SALES Organization (company), not tenant Organization
 
   tags: [{ type: String, trim: true }],
   do_not_contact: { type: Boolean, default: false },
 
-  // ⚠️ CRM-SPECIFIC: Lead-specific fields (used by CRM app)
+  // ⚠️ SALES-SPECIFIC: Lead-specific fields (used by SALES app)
   // Lead-specific
   lead_status: {
     type: String,
@@ -75,7 +76,7 @@ const PeopleSchema = new Schema({
   qualification_notes: { type: String, trim: true },
   estimated_value: { type: Number, min: 0 },
 
-  // ⚠️ CRM-SPECIFIC: Contact-specific fields (used by CRM app)
+  // ⚠️ SALES-SPECIFIC: Contact-specific fields (used by SALES app)
   // Contact-specific
   contact_status: {
     type: String,
@@ -95,18 +96,32 @@ const PeopleSchema = new Schema({
   notes: [{
     text: { type: String, required: true },
     created_by: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    created_at: { type: Date, default: Date.now }
+    created_at: { type: Date, default: Date.now },
+    appContext: { type: String }, // App context (appKey) - optional for backward compatibility
+    updated_at: { type: Date, default: Date.now } // For future edit support
+  }],
+  
+  // Attachments (Files - app-aware, entity-attached)
+  attachments: [{
+    fileName: { type: String, required: true },
+    fileType: { type: String, required: true }, // MIME type
+    fileSize: { type: Number, required: true }, // Size in bytes
+    storagePath: { type: String, required: true }, // URL or path to file
+    uploaded_by: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    created_at: { type: Date, default: Date.now },
+    appContext: { type: String } // App context (appKey) - optional for backward compatibility
   }],
   
   // Activity Logs (Generic audit trail - app-agnostic structure)
   // ⚠️ NOTE: The action field is a generic string, but action values may be app-specific
-  //    CRM app may use values like "lead_status_changed", "contact_created", etc.
+  //    SALES app may use values like "lead_status_changed", "contact_created", etc.
   //    Other apps can use their own action types. The structure itself is app-agnostic.
   activityLogs: [{
     user: { type: String, required: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User' },
     action: { type: String, required: true }, // Generic action type (values are app-specific)
     details: { type: Schema.Types.Mixed },
+    appContext: { type: String }, // App context (appKey) - optional for backward compatibility
     timestamp: { type: Date, default: Date.now, required: true }
   }]
 }, {

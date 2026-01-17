@@ -14,7 +14,7 @@
  * Rules:
  * - One document per organization
  * - Apps are independent
- * - CRM always exists for legacy orgs
+ * - SALES always exists for legacy orgs
  * - Seat counts are derived, not guessed
  * 
  * ============================================================================

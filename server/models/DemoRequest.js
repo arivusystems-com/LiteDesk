@@ -53,7 +53,7 @@ const DemoRequestSchema = new mongoose.Schema({
     },
     notes: String,
     
-    // CRM Integration (Auto-created on submission)
+    // SALES Integration (Auto-created on submission)
     organizationId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Organization'

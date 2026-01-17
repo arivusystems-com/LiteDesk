@@ -48,7 +48,7 @@ const ExecutionLogSchema = new mongoose.Schema({
     index: true
   },
 
-  // App key (CRM, AUDIT, PORTAL, etc.)
+  // App key (SALES, AUDIT, PORTAL, etc.)
   appKey: {
     type: String,
     required: true,

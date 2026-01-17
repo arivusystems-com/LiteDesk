@@ -42,7 +42,7 @@ const TenantModuleConfigurationSchema = new mongoose.Schema({
     required: true,
     trim: true,
     uppercase: true,
-    enum: ['CRM', 'AUDIT', 'PORTAL', 'LMS'],
+    enum: ['SALES', 'AUDIT', 'PORTAL', 'LMS'],
     index: true
   },
 

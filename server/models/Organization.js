@@ -12,14 +12,14 @@
  *    - Usage limits
  *    - Organization settings
  * 
- * 2. CRM APP (CRM Organization Entity):
+ * 2. SALES APP (SALES Organization Entity):
  *    - Customer/Partner/Vendor records (isTenant: false)
- *    - CRM-specific fields (types, status, tiers, etc.)
+ *    - SALES-specific fields (types, status, tiers, etc.)
  * 
- * ⚠️ ARCHITECTURAL NOTE: Single model for both tenant and CRM entity
+ * ⚠️ ARCHITECTURAL NOTE: Single model for both tenant and SALES entity
  *    This is intentional for now - use isTenant flag to distinguish
  *    Future: Could be split into TenantOrganization (Platform Core) and
- *            CRMOrganization (CRM App) if needed for clearer separation.
+ *            SalesOrganization (SALES App) if needed for clearer separation.
  * 
  * ✅ FIXED: enabledModules default changed to empty array (app-agnostic)
  *    - Legacy field kept for backward compatibility
@@ -42,7 +42,7 @@ const OrganizationSchema = new mongoose.Schema({
     slug: { 
         type: String, 
         unique: true,
-        sparse: true, // Allow null/undefined for CRM organizations
+        sparse: true, // Allow null/undefined for SALES organizations
         lowercase: true
     },
     industry: { 
@@ -272,7 +272,7 @@ const OrganizationSchema = new mongoose.Schema({
     phone: { type: String, trim: true },
     address: { type: String, trim: true },
     
-    // Ownership/links (CRM)
+    // Ownership/links (SALES)
     createdBy: { 
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'User', 
@@ -355,7 +355,7 @@ const OrganizationSchema = new mongoose.Schema({
     // Activity Logs (Generic audit trail - app-agnostic structure)
     // ⚠️ NOTE: Used by CRM app for organization entity changes
     //    The action field is a generic string, but action values may be app-specific
-    //    CRM app may use values like "customer_status_changed", "partner_tier_updated", etc.
+    //    SALES app may use values like "customer_status_changed", "partner_tier_updated", etc.
     //    Other apps can use their own action types. The structure itself is app-agnostic.
     activityLogs: [{
         user: { type: String, required: true },
@@ -469,12 +469,12 @@ OrganizationSchema.methods.hasFeature = function(featureName) {
     
     // If enabledApps exists and is populated, use app-aware logic
     if (this.enabledApps && this.enabledApps.length > 0) {
-        // Map legacy CRM module names to SALES app (CRM is not a real app)
+        // Map legacy module names to SALES app
         const salesModules = ['contacts', 'deals', 'tasks', 'events', 'people', 'organizations', 'projects', 'items', 'documents', 'transactions', 'forms', 'processes', 'reports'];
         if (salesModules.includes(featureName)) {
             return this.hasApp('SALES');
         }
-        // For non-CRM features, fall back to enabledModules for backward compatibility
+        // For non-SALES features, fall back to enabledModules for backward compatibility
         return this.enabledModules && this.enabledModules.includes(featureName);
     }
     

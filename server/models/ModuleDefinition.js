@@ -241,13 +241,63 @@ const ModuleDefinitionSchema = new mongoose.Schema({
       // e.g., 'people', 'organizations', 'events', 'forms'
       // References the base primitive module key
     }
-  }
+  },
+
+  // Tenant-specific overrides (for organization-specific module configurations)
+  // These fields are used when organizationId is present (tenant override)
+  organizationId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Organization',
+    index: true,
+    sparse: true // Allow null for platform-level definitions
+  },
+  key: {
+    type: String,
+    trim: true,
+    lowercase: true,
+    index: true,
+    sparse: true // Allow null for platform-level definitions
+  },
+  type: {
+    type: String,
+    enum: ['system', 'custom'],
+    default: 'system'
+  },
+  enabled: {
+    type: Boolean,
+    default: true
+  },
+  name: String,
+  fields: [{
+    type: mongoose.Schema.Types.Mixed
+  }],
+  relationships: [{
+    type: mongoose.Schema.Types.Mixed
+  }],
+  quickCreate: {
+    type: [String],
+    default: [],
+    select: false // Excluded by default, use +quickCreate to include
+  },
+  quickCreateLayout: {
+    type: mongoose.Schema.Types.Mixed,
+    default: { version: 1, rows: [] },
+    select: false // Excluded by default, use +quickCreateLayout to include
+  },
+  pipelineSettings: [{
+    type: mongoose.Schema.Types.Mixed
+  }]
 }, { 
-  timestamps: true 
+  timestamps: true,
+  strict: false // Allow additional fields for tenant-specific overrides
 });
 
-// Compound unique index for appKey + moduleKey
+// Compound unique index for appKey + moduleKey (platform-level)
 ModuleDefinitionSchema.index({ appKey: 1, moduleKey: 1 }, { unique: true });
 ModuleDefinitionSchema.index({ appKey: 1 });
+
+// Indexes for tenant-specific overrides
+ModuleDefinitionSchema.index({ organizationId: 1, key: 1 }, { unique: true, sparse: true });
+ModuleDefinitionSchema.index({ organizationId: 1 });
 
 module.exports = mongoose.model('ModuleDefinition', ModuleDefinitionSchema);

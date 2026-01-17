@@ -632,7 +632,7 @@ eventSchema.post('save', async function (doc) {
         const auditSyncService = require('../services/auditSyncService');
         await auditSyncService.syncAuditAssignmentFromEvent(doc);
     } catch (error) {
-        // Never throw - log and continue (don't block CRM execution)
+        // Never throw - log and continue (don't block SALES execution)
         console.error('[Event Model] Error in post-save sync hook:', error.message);
     }
 });

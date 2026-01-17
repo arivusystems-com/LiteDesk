@@ -6,17 +6,17 @@
  * Purpose:
  * - Tracks execution session metadata for Audit App
  * - NOT a workflow engine
- * - NOT a replacement for CRM logic
+ * - NOT a replacement for SALES logic
  * - Used only for Audit App UX & tracking
  * 
  * Rules:
- * - Lifecycle mirrors CRM auditState
+ * - Lifecycle mirrors SALES auditState
  * - No state decisions allowed here
- * - All workflow logic remains in CRM
+ * - All workflow logic remains in SALES
  * - This is purely for execution tracking
  * 
  * Data Ownership:
- * - Execution state: CRM Event (source of truth)
+ * - Execution state: SALES Event (source of truth)
  * - Execution context: Audit App (this model)
  * 
  * See AUDIT_DOMAIN_MODEL.md for architecture details.
@@ -43,7 +43,7 @@ const auditExecutionContextSchema = new Schema({
     index: true
   },
 
-  // CRM references (source of truth)
+  // SALES references (source of truth)
   eventId: {
     type: Schema.Types.ObjectId,
     ref: 'Event',

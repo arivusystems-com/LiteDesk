@@ -896,7 +896,7 @@ const DEFAULT_STAGE_PLAYBOOKS = {
             {
                 key: `${stageKey}-research-account`,
                 title: 'Research account background',
-                description: 'Review company profile, industry insights and existing CRM notes.',
+                description: 'Review company profile, industry insights and existing SALES notes.',
                 actionType: 'task',
                 dueInDays: 0,
                 assignment: { type: 'deal_owner', targetId: null, targetType: '', targetName: '' },
@@ -1487,11 +1487,59 @@ exports.listModules = async (req, res) => {
         });
 
         // Exclude 'groups' from modules list (it's a settings feature, not a module)
-        // Use select() to explicitly include quickCreate and quickCreateLayout fields
+        // Query without select first to see what fields exist, then explicitly include quickCreate
+        // Note: Using .lean() returns plain objects, and .select('+quickCreate') only works if field has select: false
+        // Since we just added quickCreate to schema with select: false, this should work
         const custom = await ModuleDefinition.find({ 
             organizationId: req.user.organizationId,
             key: { $ne: 'groups' } // Exclude groups
-        }).select('+quickCreate +quickCreateLayout').lean();
+        })
+        .select('+quickCreate +quickCreateLayout')
+        .lean();
+        
+        // Also query directly from MongoDB to verify data exists (bypass Mongoose schema)
+        const mongoose = require('mongoose');
+        const db = mongoose.connection.db;
+        const collection = db.collection('moduledefinitions');
+        const peopleModuleRaw = await collection.findOne({
+            organizationId: new mongoose.Types.ObjectId(req.user.organizationId),
+            key: 'people'
+        });
+        
+        console.log('🔍 Custom modules query result:', {
+            organizationId: req.user.organizationId.toString(),
+            count: custom.length,
+            modules: custom.map(m => ({
+                key: m.key,
+                hasQuickCreate: 'quickCreate' in m,
+                quickCreate: m.quickCreate,
+                quickCreateLength: m.quickCreate?.length || 0,
+                quickCreateType: typeof m.quickCreate,
+                quickCreateIsArray: Array.isArray(m.quickCreate)
+            }))
+        });
+        
+        console.log('🔍 Raw MongoDB query for people module:', {
+            found: !!peopleModuleRaw,
+            hasQuickCreate: peopleModuleRaw ? 'quickCreate' in peopleModuleRaw : false,
+            quickCreate: peopleModuleRaw?.quickCreate,
+            quickCreateLength: peopleModuleRaw?.quickCreate?.length || 0,
+            quickCreateType: typeof peopleModuleRaw?.quickCreate,
+            quickCreateIsArray: Array.isArray(peopleModuleRaw?.quickCreate),
+            allKeys: peopleModuleRaw ? Object.keys(peopleModuleRaw).slice(0, 30) : []
+        });
+        
+        // If Mongoose query didn't return quickCreate but MongoDB has it, merge it in
+        // This handles cases where Mongoose schema filtering might exclude the field
+        if (peopleModuleRaw && peopleModuleRaw.quickCreate) {
+            const peopleModuleFromMongoose = custom.find(m => m.key === 'people');
+            if (peopleModuleFromMongoose && (!peopleModuleFromMongoose.quickCreate || peopleModuleFromMongoose.quickCreate.length === 0)) {
+                console.log('⚠️ Mongoose filtered out quickCreate, using raw MongoDB data');
+                peopleModuleFromMongoose.quickCreate = peopleModuleRaw.quickCreate;
+                peopleModuleFromMongoose.quickCreateLayout = peopleModuleRaw.quickCreateLayout || { version: 1, rows: [] };
+            }
+        }
+        
         const customByKey = new Map(custom.map(m => [m.key, m]));
 
         // Canonicalize/normalize known system field keys to avoid duplicates from legacy casing/kebab-case.
@@ -2020,9 +2068,25 @@ exports.listModules = async (req, res) => {
                 // For Events module, ensure quickCreate has at least the essential fields
                 // Use override quickCreate if present (check for undefined/null, not falsy), otherwise use saved quickCreate, otherwise empty array
                 // NO hardcoding - all configuration comes from the module definition saved in database
+                console.log('🔍 Processing quickCreate for module:', sys.key, {
+                    hasOverride: !!override,
+                    overrideQuickCreate: override?.quickCreate,
+                    overrideQuickCreateType: typeof override?.quickCreate,
+                    overrideQuickCreateIsArray: Array.isArray(override?.quickCreate),
+                    overrideQuickCreateLength: override?.quickCreate?.length || 0,
+                    overrideHasQuickCreate: override ? 'quickCreate' in override : false,
+                    overrideKeys: override ? Object.keys(override).slice(0, 20) : [],
+                    sysQuickCreate: sys.quickCreate,
+                    sysQuickCreateLength: sys.quickCreate?.length || 0
+                });
                 let finalQuickCreate = (override.quickCreate !== undefined && override.quickCreate !== null) 
                     ? override.quickCreate 
                     : (sys.quickCreate || []);
+                console.log('✅ Final quickCreate:', {
+                    value: finalQuickCreate,
+                    length: finalQuickCreate?.length || 0,
+                    isArray: Array.isArray(finalQuickCreate)
+                });
                 let finalQuickCreateLayout = override.quickCreateLayout || { version: 1, rows: [] };
 
                 // Events Quick Create defaults:
@@ -2635,10 +2699,11 @@ exports.updateSystemModule = async (req, res) => {
         });
         
         // Load existing module definition to validate field mutations
+        // Use lowercase key for consistency
         const existingMod = await ModuleDefinition.findOne({
             organizationId: req.user.organizationId,
             key: key.toLowerCase()
-        });
+        }).select('+quickCreate +quickCreateLayout +fields +relationships +pipelineSettings');
         
         // Validate field mutations based on ownership
         if (Array.isArray(fields) && existingMod) {
@@ -2765,11 +2830,27 @@ exports.updateSystemModule = async (req, res) => {
         });
         
         // Update non-critical fields with Mongoose first
+        // Use upsert: true to create document if it doesn't exist
+        // NOTE: For tenant-specific overrides (with organizationId), we don't set appKey/moduleKey
+        // to avoid conflicts with the platform-level unique index { appKey: 1, moduleKey: 1 }
         let updateResult = { matchedCount: 0, modifiedCount: 0 };
         if (Object.keys(otherFields).length > 0) {
+            // Ensure required fields are set for upsert (tenant-specific override)
+            // Don't set appKey/moduleKey for tenant overrides to avoid unique index conflicts
+            const upsertFields = {
+                ...otherFields,
+                organizationId: req.user.organizationId,
+                key: key.toLowerCase(),
+                // Don't set moduleKey or appKey - these are for platform-level docs only
+                // Tenant overrides use organizationId + key as the unique identifier
+                label: key.charAt(0).toUpperCase() + key.slice(1),
+                pluralLabel: key.charAt(0).toUpperCase() + key.slice(1) + 's',
+                entityType: 'CORE',
+                type: 'system'
+            };
             updateResult = await ModuleDefinition.updateOne(
-                { organizationId: req.user.organizationId, key },
-                { $set: otherFields },
+                { organizationId: req.user.organizationId, key: key.toLowerCase() },
+                { $set: upsertFields },
                 { upsert: true, runValidators: false }
             );
             console.log('📊 Mongoose updateOne result (other fields):', {
@@ -2783,20 +2864,36 @@ exports.updateSystemModule = async (req, res) => {
         if (Object.keys(criticalFields).length > 0) {
             console.log('🔧 Using direct MongoDB update for critical fields:', Object.keys(criticalFields));
             
+            // Use upsert: true to create document if it doesn't exist
+            // This ensures quickCreate can be saved even if the ModuleDefinition document hasn't been created yet
+            // NOTE: For tenant-specific overrides (with organizationId), we don't set appKey/moduleKey
+            // to avoid conflicts with the platform-level unique index { appKey: 1, moduleKey: 1 }
             const directUpdateResult = await collection.updateOne(
                 { 
                     organizationId: new mongoose.Types.ObjectId(req.user.organizationId), 
                     key: key.toLowerCase()
                 },
                 { 
-                    $set: criticalFields
+                    $set: {
+                        ...criticalFields,
+                        organizationId: new mongoose.Types.ObjectId(req.user.organizationId),
+                        key: key.toLowerCase(),
+                        type: 'system',
+                        // Don't set moduleKey or appKey - these are for platform-level docs only
+                        // Tenant overrides use organizationId + key as the unique identifier
+                        label: key.charAt(0).toUpperCase() + key.slice(1),
+                        pluralLabel: key.charAt(0).toUpperCase() + key.slice(1) + 's',
+                        entityType: 'CORE'
+                    }
                 },
-                { upsert: false }
+                { upsert: true }
             );
             
             console.log('📊 Direct MongoDB update result:', {
                 matchedCount: directUpdateResult.matchedCount,
                 modifiedCount: directUpdateResult.modifiedCount,
+                upsertedCount: directUpdateResult.upsertedCount || 0,
+                upsertedId: directUpdateResult.upsertedId,
                 acknowledged: directUpdateResult.acknowledged,
                 fields: Object.keys(criticalFields),
                 relationshipsCount: criticalFields.relationships?.length || 0,
@@ -2805,8 +2902,15 @@ exports.updateSystemModule = async (req, res) => {
                 pipelineSettingsCount: criticalFields.pipelineSettings?.length || 0
             });
             
-            if (directUpdateResult.matchedCount === 0) {
-                console.error('🚨 WARNING: Document not found for direct update!', {
+            if (directUpdateResult.matchedCount === 0 && directUpdateResult.upsertedCount === 0) {
+                console.error('🚨 WARNING: Document not found and not created!', {
+                    organizationId: req.user.organizationId.toString(),
+                    key: key.toLowerCase(),
+                    updateResult: directUpdateResult
+                });
+            } else if (directUpdateResult.upsertedCount > 0) {
+                console.log('✅ Document created via upsert:', {
+                    upsertedId: directUpdateResult.upsertedId,
                     organizationId: req.user.organizationId.toString(),
                     key: key.toLowerCase()
                 });
@@ -2814,10 +2918,12 @@ exports.updateSystemModule = async (req, res) => {
         }
         
         // Now fetch the document to verify what was saved
+        // Explicitly select fields that have select: false in schema
+        // Use lowercase key to match what was saved
         const doc = await ModuleDefinition.findOne({ 
             organizationId: req.user.organizationId, 
-            key 
-        });
+            key: key.toLowerCase()
+        }).select('+quickCreate +quickCreateLayout +fields +relationships +pipelineSettings');
         
         if (!doc) {
             throw new Error('Failed to retrieve document after save');
@@ -2862,16 +2968,20 @@ exports.updateSystemModule = async (req, res) => {
         console.log('🔍 Raw MongoDB pipelineSettings count:', verifiedRaw?.pipelineSettings?.length || 0);
         
         // Also verify with Mongoose to compare
+        // Explicitly select fields that have select: false in schema
+        // Use lowercase key to match what was saved
         const verified = await ModuleDefinition.findOne({ 
             organizationId: req.user.organizationId, 
-            key 
-        }).lean(); // Use lean() to get plain JavaScript object
+            key: key.toLowerCase()
+        }).select('+quickCreate +quickCreateLayout +fields +relationships +pipelineSettings').lean(); // Use lean() to get plain JavaScript object
         
         // Also get the Mongoose document to compare
+        // Explicitly select fields that have select: false in schema
+        // Use lowercase key to match what was saved
         const verifiedDoc = await ModuleDefinition.findOne({ 
             organizationId: req.user.organizationId, 
-            key 
-        });
+            key: key.toLowerCase()
+        }).select('+quickCreate +quickCreateLayout +fields +relationships +pipelineSettings');
         
         console.log('🔍 After lean query (from database):', {
             verifiedRelationships: verified?.relationships,

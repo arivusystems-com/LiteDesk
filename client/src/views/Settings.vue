@@ -3,9 +3,21 @@
       <div class="mx-auto sm:px-6 lg:px-4 py-6 h-screen box-border flex flex-col overflow-hidden">
       <!-- Header -->
       <div class="mb-6 flex items-center justify-between">
-        <div>
-          <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Settings</h1>
-          <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">Manage your account and organization settings</p>
+        <div class="flex items-center gap-4">
+          <!-- Back Button -->
+          <button
+            @click="goBack"
+            class="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+            title="Go back"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Settings</h1>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">Manage your account and organization settings</p>
+          </div>
         </div>
         <!-- User Menu (mode + sign out) -->
         <Menu as="div" class="relative">
@@ -155,6 +167,21 @@ const SETTINGS_TAB_KEY = 'litedesk-settings-active-tab';
 const route = useRoute();
 const router = useRouter();
 const activeTab = ref(route.query.tab || null);
+
+// Navigate back function
+const goBack = () => {
+  // Check if we can go back in history
+  // For new tabs, history.length might be 1, so check if there's a referrer
+  const hasHistory = window.history.length > 1 || document.referrer;
+  
+  if (hasHistory && window.history.length > 1) {
+    // Try to go back
+    router.go(-1);
+  } else {
+    // If no history (e.g., opened in new tab), go to platform home
+    router.push('/platform/home');
+  }
+};
 
 // Collapsible left rail behavior (mirrors main nav)
 const isCollapsed = ref(localStorage.getItem('litedesk-settings-collapsed') === 'true');

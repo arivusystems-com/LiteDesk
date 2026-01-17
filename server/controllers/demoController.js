@@ -142,18 +142,21 @@ exports.submitDemoRequest = async (req, res) => {
         console.log('✅ Using master admin:', masterAdmin.email);
         
         console.log('👤 Creating person for:', contactName);
+        // ⚠️ IMPORTANT: Person creation is identity-only and app-agnostic.
+        //    Participation fields (type, lead_score, etc.) are NOT set here.
+        //    They must be set via Attach-to-App flow.
         const person = await People.create({
             organizationId: organization._id,  // Organization reference
             organization: organization._id,  // Sales organization link (same organization)
             createdBy: masterAdmin._id,
             assignedTo: masterAdmin._id,
-            type: 'Lead',
+            // No type field - identity only, no Sales participation
             first_name: contactName.split(' ')[0] || contactName,
             last_name: contactName.split(' ').slice(1).join(' ') || '',
             email: email.toLowerCase(),
             phone: phone || '',
             source: 'Website - Demo Request',
-            lead_score: 50,
+            // No lead_score - participation field, not set on creation
             tags: ['demo-request', industry, companySize]
         });
         

@@ -70,6 +70,9 @@
                             :moduleKey="moduleKey"
                             :formData="formData"
                             :errors="errors"
+                            :excludeFields="excludeFields"
+                            :showAllFields="isEditing || !quickCreateMode"
+                            :quickCreateMode="quickCreateMode && !isEditing"
                             @update:formData="updateFormData"
                             @ready="onFormReady"
                           />
@@ -110,6 +113,7 @@ import { XMarkIcon } from '@heroicons/vue/24/outline';
 import DynamicForm from './DynamicForm.vue';
 import apiClient from '@/utils/apiClient';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
+import { useAuthStore } from '@/stores/auth';
 
 const props = defineProps({
   isOpen: {
@@ -135,11 +139,20 @@ const props = defineProps({
   record: {
     type: Object,
     default: null // If provided, this is edit mode
+  },
+  excludeFields: {
+    type: Array,
+    default: () => [] // Fields to exclude from the form (e.g., app-specific fields)
+  },
+  quickCreateMode: {
+    type: Boolean,
+    default: false // If true, only show fields configured in quickCreate settings
   }
 });
 
 const emit = defineEmits(['close', 'saved']);
 
+const authStore = useAuthStore();
 const isEditing = computed(() => !!props.record);
 
 // Module name mapping for titles
@@ -549,7 +562,7 @@ const handleSubmit = async () => {
       'people': '/people',
       'organizations': '/v2/organization',
       'deals': '/deals',
-      'tasks': '/tasks',
+      'tasks': '/scheduling',
       'events': '/events',
       'users': '/users'
     };
@@ -559,6 +572,63 @@ const handleSubmit = async () => {
     // Remove legacyOrganizationId if it's null to avoid unique index conflicts
     if (props.moduleKey === 'organizations' && (submitData.legacyOrganizationId === null || submitData.legacyOrganizationId === undefined)) {
       delete submitData.legacyOrganizationId;
+    }
+    
+    // For tasks using Scheduling API, inject required fields
+    if (props.moduleKey === 'tasks' && endpoint === '/scheduling') {
+      submitData.type = 'task';
+      
+      // For standalone tasks (no entityType/entityId provided), use Organization as default entity
+      // This allows tasks to be created without being attached to a specific Person/Deal/etc.
+      if (!submitData.entityType || !submitData.entityId) {
+        const organizationId = authStore.user?.organizationId;
+        if (organizationId) {
+          submitData.entityType = 'Organization';
+          submitData.entityId = organizationId;
+        }
+      }
+      
+      // Map assignedTo to ownerPersonId if needed (Scheduling uses ownerPersonId, not assignedTo)
+      // Note: This is a temporary mapping - the form should ideally use ownerPersonId directly
+      // For now, we assume assignedTo is a Person ID (not User ID)
+      if (submitData.assignedTo && !submitData.ownerPersonId) {
+        submitData.ownerPersonId = submitData.assignedTo;
+      }
+      // Remove assignedTo as Scheduling API doesn't use it
+      delete submitData.assignedTo;
+    }
+    
+    // For events using Scheduling API, inject required fields
+    if (props.moduleKey === 'events' && endpoint === '/scheduling') {
+      submitData.type = 'event';
+      
+      // For standalone events (no entityType/entityId provided), use Organization as default entity
+      if (!submitData.entityType || !submitData.entityId) {
+        const organizationId = authStore.user?.organizationId;
+        if (organizationId) {
+          submitData.entityType = 'Organization';
+          submitData.entityId = organizationId;
+        }
+      }
+      
+      // Map startDateTime to startDate (Scheduling uses startDate for events)
+      if (submitData.startDateTime && !submitData.startDate) {
+        submitData.startDate = submitData.startDateTime;
+        delete submitData.startDateTime;
+      }
+      
+      // Map endDateTime to dueDate (Scheduling uses dueDate as end date for events)
+      if (submitData.endDateTime && !submitData.dueDate) {
+        submitData.dueDate = submitData.endDateTime;
+        delete submitData.endDateTime;
+      }
+      
+      // Map assignedTo to ownerPersonId if needed
+      if (submitData.assignedTo && !submitData.ownerPersonId) {
+        submitData.ownerPersonId = submitData.assignedTo;
+      }
+      // Remove assignedTo as Scheduling API doesn't use it
+      delete submitData.assignedTo;
     }
     
     console.log('[CreateRecordDrawer] 📤 Making API call:', {

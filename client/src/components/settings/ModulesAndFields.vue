@@ -1,6 +1,6 @@
 <template>
-  <div class="p-6 h-full flex flex-col overflow-hidden">
-    <div class="mb-4 flex items-center justify-between gap-3">
+  <div class="p-6 flex flex-col" style="height: 100%; overflow: hidden;">
+    <div v-if="!props.hideHeader" class="mb-4 flex items-center justify-between gap-3">
       <template v-if="selectedModuleId">
         <div class="flex items-center gap-3">
           <button @click="clearSelection" class="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5" title="Back to modules">
@@ -66,7 +66,7 @@
     </div>
 
     <!-- If module selected: configuration area with top tabs -->
-    <div v-else class="flex-1 overflow-hidden flex flex-col gap-4">
+    <div v-else class="flex-1 overflow-hidden flex flex-col gap-4 min-h-0">
       <!-- Top tabs: Module details, Field Configurations, Relationship, Quick Create -->
       <div class="px-2">
         <div class="border-b border-gray-200 dark:border-gray-700">
@@ -95,26 +95,34 @@
       </div>
 
       <!-- Fields configuration: two-panel layout -->
-      <div v-if="activeTopTab === 'fields'" class="flex-1 overflow-hidden flex gap-4">
-      <!-- Left: Fields list -->
-      <aside class="w-96 flex-none bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
-        <div class="p-3 border-b border-gray-200 dark:border-white/10 flex items-center justify-between gap-2">
-          <div class="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate flex-1 min-w-0">{{ selectedModule?.name }}</div>
-          <button 
-            v-if="selectedModule && !props.hideFieldCreation" 
-            @click="openAddField" 
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 text-xs font-medium transition-colors flex-shrink-0 whitespace-nowrap"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-            </svg>
-            <span>Add Custom Field</span>
-          </button>
+      <div v-if="activeTopTab === 'fields'" class="flex-1 overflow-hidden flex flex-col gap-4 min-h-0">
+        <!-- Microcopy for People module -->
+        <div v-if="isPeopleModule" class="px-2 flex-shrink-0">
+          <p class="text-sm text-gray-600 dark:text-gray-400">
+            Configure how People fields are displayed. Field ownership and application scope are defined by the platform and apps.
+          </p>
         </div>
-        <div class="p-2 border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
-          <div class="text-xs text-gray-500 dark:text-gray-400">Fields</div>
-        </div>
-        <div class="p-2 border-b border-gray-200 dark:border-white/10 space-y-2">
+        
+        <div class="flex-1 overflow-hidden flex gap-4 min-h-0">
+        <!-- Left: Fields list -->
+        <aside class="w-96 flex-none bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col min-h-0">
+          <div class="p-3 border-b border-gray-200 dark:border-white/10 flex items-center justify-between gap-2 flex-shrink-0">
+            <div class="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate flex-1 min-w-0">{{ selectedModule?.name }}</div>
+            <button 
+              v-if="selectedModule && !props.hideFieldCreation && !isPeopleModule" 
+              @click="openAddField" 
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 text-xs font-medium transition-colors flex-shrink-0 whitespace-nowrap"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+              <span>Add Custom Field</span>
+            </button>
+          </div>
+          <div class="p-2 border-b border-gray-200 dark:border-white/10 flex items-center justify-between flex-shrink-0">
+            <div class="text-xs text-gray-500 dark:text-gray-400">Fields</div>
+          </div>
+        <div class="p-2 border-b border-gray-200 dark:border-white/10 space-y-2 flex-shrink-0">
           <input v-model="fieldSearch" placeholder="Search fields" class="w-full px-2 py-1 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-xs" />
           <!-- Show Tenant Fields Toggle (only for organizations module) -->
           <label v-if="selectedModule?.key === 'organizations'" class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer">
@@ -126,8 +134,96 @@
             <span>Show Tenant Fields</span>
           </label>
         </div>
-        <div class="flex-1 overflow-y-auto p-2">
-          <ul class="space-y-1">
+        <div class="p-2" style="flex: 1 1 0%; min-height: 0; overflow-y: auto; overflow-x: auto; -webkit-overflow-scrolling: touch;">
+          <!-- People module: Grouped by metadata -->
+          <template v-if="isPeopleModule">
+            <!-- Core Identity Fields -->
+            <div class="mb-4">
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Core Identity</div>
+              <ul class="space-y-1">
+                <li
+                  v-for="(fieldKey, idx) in groupedFields.coreIdentity"
+                  :key="fieldKey"
+                  class="group"
+                  :draggable="true"
+                  @dragstart="onDragStart(getFieldIndex(fieldKey))"
+                  @dragover.prevent="onDragOver(getFieldIndex(fieldKey))"
+                  @drop.prevent="onDrop(getFieldIndex(fieldKey))"
+                >
+                  <div :class="[
+                        'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
+                        getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
+                      ]">
+                    <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                      <span>{{ getFieldLabel(fieldKey) }}</span>
+                      <span class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <!-- App Participation Groups -->
+            <div v-for="(fields, appKey) in groupedFields.participation" :key="appKey" class="mb-4">
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">
+                {{ appKey === 'SALES' ? 'Sales Participation' : `${appKey} Participation` }}
+              </div>
+              <ul class="space-y-1">
+                <li
+                  v-for="fieldKey in fields"
+                  :key="fieldKey"
+                  class="group"
+                  :draggable="true"
+                  @dragstart="onDragStart(getFieldIndex(fieldKey))"
+                  @dragover.prevent="onDragOver(getFieldIndex(fieldKey))"
+                  @drop.prevent="onDrop(getFieldIndex(fieldKey))"
+                >
+                  <div :class="[
+                        'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
+                        getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
+                      ]">
+                    <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                      <span>{{ getFieldLabel(fieldKey) }}</span>
+                      <span class="px-1.5 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">{{ appKey }}</span>
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <!-- System Fields -->
+            <div class="mb-4">
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">System Fields</div>
+              <ul class="space-y-1">
+                <li
+                  v-for="fieldKey in groupedFields.system"
+                  :key="fieldKey"
+                  class="group"
+                >
+                  <div :class="[
+                        'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2 opacity-75',
+                        getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5'
+                      ]">
+                    <div class="mr-2 text-xs text-purple-600 dark:text-purple-400" title="System field">🔒</div>
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                      <span>{{ getFieldLabel(fieldKey) }}</span>
+                      <span class="px-1.5 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">System</span>
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </template>
+
+          <!-- Other modules: Original flat list -->
+          <ul v-else class="space-y-1">
             <li
               v-for="(f, idx) in filteredFields"
               :key="f.key || idx"
@@ -154,19 +250,37 @@
       </aside>
 
       <!-- Right: Field configuration -->
-      <section class="flex-1 min-w-0 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
-        <div class="p-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
+      <section class="flex-1 min-w-0 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col min-h-0">
+        <div class="p-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between flex-shrink-0">
           <div>
             <div class="flex items-center gap-2">
               <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ currentFieldTitle }}</h3>
-              <span v-if="isSystemField(currentField)" class="px-2 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">System</span>
-              <span v-else-if="isFixedPositionField(currentField, selectedModule?.key)" class="px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Fixed Position</span>
-              <span v-else-if="isCoreField(currentField, selectedModule?.key)" class="px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
+              <!-- People module: Use metadata-based badges -->
+              <template v-if="isPeopleModule && currentField?.key">
+                <span v-if="getPeopleFieldMetadata(currentField.key)?.owner === 'system'" class="px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">System</span>
+                <span v-else-if="getPeopleFieldMetadata(currentField.key)?.owner === 'core'" class="px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
+                <span v-else-if="getPeopleFieldMetadata(currentField.key)?.fieldScope" class="px-2 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">{{ getPeopleFieldMetadata(currentField.key)?.fieldScope }}</span>
+              </template>
+              <!-- Other modules: Legacy badges -->
+              <template v-else>
+                <span v-if="isSystemField(currentField)" class="px-2 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">System</span>
+                <span v-else-if="isFixedPositionField(currentField, selectedModule?.key)" class="px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Fixed Position</span>
+                <span v-else-if="isCoreField(currentField, selectedModule?.key)" class="px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
+              </template>
             </div>
             <p class="text-xs text-gray-500 dark:text-gray-400">Module: {{ selectedModule?.name }} • Key: {{ selectedModule?.key }}</p>
-            <p v-if="isSystemField(currentField)" class="mt-1 text-xs text-amber-600 dark:text-amber-400">This is a system field and cannot be modified</p>
-            <p v-else-if="isFixedPositionField(currentField, selectedModule?.key)" class="mt-1 text-xs text-amber-600 dark:text-amber-400">This field must always be at the top and visible in table and detail views</p>
-            <p v-else-if="isCoreField(currentField, selectedModule?.key)" class="mt-1 text-xs text-amber-600 dark:text-amber-400">This is a core field and cannot be deleted</p>
+            <!-- People module: Metadata-based messages -->
+            <template v-if="isPeopleModule && currentField?.key">
+              <p v-if="getPeopleFieldMetadata(currentField.key)?.owner === 'system'" class="mt-1 text-xs text-amber-600 dark:text-amber-400">This is a system field and cannot be modified</p>
+              <p v-else-if="getPeopleFieldMetadata(currentField.key)?.owner === 'core'" class="mt-1 text-xs text-blue-600 dark:text-blue-400">Core identity field. Ownership and scope are defined by the platform.</p>
+              <p v-else-if="getPeopleFieldMetadata(currentField.key)?.owner === 'participation'" class="mt-1 text-xs text-purple-600 dark:text-purple-400">Participation field for {{ getPeopleFieldMetadata(currentField.key)?.fieldScope }}. Ownership and scope are defined by the app.</p>
+            </template>
+            <!-- Other modules: Legacy messages -->
+            <template v-else>
+              <p v-if="isSystemField(currentField)" class="mt-1 text-xs text-amber-600 dark:text-amber-400">This is a system field and cannot be modified</p>
+              <p v-else-if="isFixedPositionField(currentField, selectedModule?.key)" class="mt-1 text-xs text-amber-600 dark:text-amber-400">This field must always be at the top and visible in table and detail views</p>
+              <p v-else-if="isCoreField(currentField, selectedModule?.key)" class="mt-1 text-xs text-amber-600 dark:text-amber-400">This is a core field and cannot be deleted</p>
+            </template>
           </div>
           <div class="flex items-center gap-2">
             <button v-if="selectedModule && isDirty" @click="saveModule" :disabled="isSaving" class="px-3 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors shadow-md">Save changes</button>
@@ -174,7 +288,7 @@
           </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-4" v-if="selectedModule">
+        <div class="p-4" style="flex: 1 1 0%; min-height: 0; overflow-y: auto; overflow-x: auto; -webkit-overflow-scrolling: touch;" v-if="selectedModule">
           <div v-if="currentField">
             <div class="border-b border-gray-200 dark:border-gray-700 mb-4">
               <nav class="-mb-px flex space-x-6">
@@ -200,37 +314,172 @@
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Label</label>
-                  <input v-model="currentField.label" :disabled="isSystemField(currentField)" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10" />
+                  <input 
+                    v-model="currentField.label" 
+                    :disabled="isSystemField(currentField) || (isPeopleModule && getPeopleFieldMetadata(currentField.key)?.owner === 'system')" 
+                    class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10" 
+                  />
+                  <p v-if="isPeopleModule && getPeopleFieldMetadata(currentField.key)?.owner === 'system'" class="mt-1 text-xs text-gray-500 dark:text-gray-400">System field labels cannot be modified</p>
                 </div>
                 <div>
                   <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Key</label>
-                  <input v-model="currentField.key" :disabled="!canRenameField(currentField) || isSystemField(currentField) || isCoreField(currentField, selectedModule?.key) || currentField.dataType === 'Auto-Number'" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10" />
+                  <input 
+                    v-model="currentField.key" 
+                    :disabled="!canRenameField(currentField) || isSystemField(currentField) || isCoreField(currentField, selectedModule?.key) || currentField.dataType === 'Auto-Number' || (isPeopleModule && (getPeopleFieldMetadata(currentField.key)?.owner === 'system' || getPeopleFieldMetadata(currentField.key)?.owner === 'core' || getPeopleFieldMetadata(currentField.key)?.owner === 'participation'))" 
+                    class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10" 
+                  />
                   <p v-if="currentField.dataType === 'Auto-Number'" class="mt-1 text-xs text-gray-500 dark:text-gray-400">Auto-Number fields cannot have custom keys</p>
-                  <p v-if="isSystemField(currentField)" class="mt-1 text-xs text-gray-500 dark:text-gray-400">System fields cannot have their keys modified</p>
-                  <p v-if="isCoreField(currentField, selectedModule?.key) && !isSystemField(currentField)" class="mt-1 text-xs text-gray-500 dark:text-gray-400">Core fields cannot have their keys modified</p>
-                  <p v-if="!isSystemField(currentField) && !isCoreField(currentField, selectedModule?.key) && currentField.dataType !== 'Auto-Number'" class="mt-1 text-xs text-gray-500 dark:text-gray-400">Auto-generated from label, duplicates are automatically handled</p>
+                  <p v-if="isSystemField(currentField) || (isPeopleModule && getPeopleFieldMetadata(currentField.key)?.owner === 'system')" class="mt-1 text-xs text-gray-500 dark:text-gray-400">System fields cannot have their keys modified</p>
+                  <p v-if="isPeopleModule && getPeopleFieldMetadata(currentField.key)?.owner === 'core'" class="mt-1 text-xs text-gray-500 dark:text-gray-400">Core identity fields cannot have their keys modified</p>
+                  <p v-if="isPeopleModule && getPeopleFieldMetadata(currentField.key)?.owner === 'participation'" class="mt-1 text-xs text-gray-500 dark:text-gray-400">Participation fields cannot have their keys modified</p>
+                  <p v-if="isCoreField(currentField, selectedModule?.key) && !isSystemField(currentField) && !isPeopleModule" class="mt-1 text-xs text-gray-500 dark:text-gray-400">Core fields cannot have their keys modified</p>
+                  <p v-if="!isSystemField(currentField) && !isCoreField(currentField, selectedModule?.key) && currentField.dataType !== 'Auto-Number' && !isPeopleModule" class="mt-1 text-xs text-gray-500 dark:text-gray-400">Auto-generated from label, duplicates are automatically handled</p>
                 </div>
                 <div>
                   <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Type</label>
-                  <select v-model="currentField.dataType" :disabled="!canChangeFieldType(currentField) || isSystemField(currentField) || isCoreField(currentField, selectedModule?.key)" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10">
+                  <select 
+                    v-model="currentField.dataType" 
+                    :disabled="!canChangeFieldType(currentField) || isSystemField(currentField) || isCoreField(currentField, selectedModule?.key) || (isPeopleModule && (getPeopleFieldMetadata(currentField.key)?.owner === 'system' || getPeopleFieldMetadata(currentField.key)?.owner === 'core'))" 
+                    class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10"
+                  >
                     <option v-for="t in fieldTypes" :key="t" :value="t">{{ t }}</option>
                   </select>
-                  <p v-if="isCoreField(currentField, selectedModule?.key)" class="mt-1 text-xs text-gray-500 dark:text-gray-400">Core fields cannot have their type changed</p>
+                  <p v-if="isPeopleModule && getPeopleFieldMetadata(currentField.key)?.owner === 'core'" class="mt-1 text-xs text-gray-500 dark:text-gray-400">Core identity fields cannot have their type changed</p>
+                  <p v-if="isPeopleModule && getPeopleFieldMetadata(currentField.key)?.owner === 'system'" class="mt-1 text-xs text-gray-500 dark:text-gray-400">System fields cannot have their type changed</p>
+                  <p v-if="isCoreField(currentField, selectedModule?.key) && !isPeopleModule" class="mt-1 text-xs text-gray-500 dark:text-gray-400">Core fields cannot have their type changed</p>
                 </div>
+                
+                <!-- Field Metadata (read-only) - People module only -->
+                <template v-if="isPeopleModule && currentField?.key">
+                  <div v-if="getPeopleFieldMetadata(currentField.key)" class="w-full mt-4 p-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg">
+                    <div class="space-y-2">
+                      <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Field Metadata</div>
+                      <div class="flex flex-wrap items-center gap-3">
+                        <!-- Owner -->
+                        <div class="flex items-center gap-2">
+                          <span class="text-xs text-gray-500 dark:text-gray-400">Owner:</span>
+                          <span class="px-2 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                            {{ formatOwnerDisplay(getPeopleFieldMetadata(currentField.key)) }}
+                          </span>
+                        </div>
+                        <!-- Intent -->
+                        <div class="flex items-center gap-2">
+                          <span class="text-xs text-gray-500 dark:text-gray-400">Intent:</span>
+                          <span class="px-2 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                            {{ formatIntentDisplay(getPeopleFieldMetadata(currentField.key)?.intent) }}
+                          </span>
+                        </div>
+                        <!-- Required for (only if present) -->
+                        <div v-if="getPeopleFieldMetadata(currentField.key)?.requiredFor?.length" class="flex items-center gap-2">
+                          <span class="text-xs text-gray-500 dark:text-gray-400">Required for:</span>
+                          <span class="px-2 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                            {{ formatRequiredForApps(getPeopleFieldMetadata(currentField.key)?.requiredFor) }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+                
                 <div class="flex items-center gap-6 mt-6 flex-wrap">
-                  <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" v-model="currentField.required" :disabled="isSystemField(currentField) || currentField.dataType === 'Auto-Number' || currentField.dataType === 'Formula' || currentField.dataType === 'Rollup Summary'" /> Required</label>
+                  <!-- Required in Form checkbox -->
+                  <template v-if="isParticipationStateField(currentField)">
+                    <!-- Locked indicator for participation state fields -->
+                    <div class="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400" title="This field is required by the application.">
+                      <svg class="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      <span>Required in Form</span>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div class="inline-flex items-center gap-2">
+                      <label class="inline-flex items-center gap-2 text-sm">
+                        <input 
+                          type="checkbox" 
+                          v-model="currentField.required" 
+                          :disabled="isSystemField(currentField) || currentField.dataType === 'Auto-Number' || currentField.dataType === 'Formula' || currentField.dataType === 'Rollup Summary'" 
+                        />
+                        Required in Form
+                      </label>
+                      <div class="group relative">
+                        <svg class="w-4 h-4 text-gray-400 dark:text-gray-500 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 p-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                          This controls form submission validation only. Application requirements are defined separately.
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+
+                  <!-- Key Field checkbox -->
                   <label class="inline-flex items-center gap-2 text-sm">
-                    <input type="checkbox" v-model="currentField.keyField" :disabled="isSystemField(currentField) || !canMarkAsKeyField" />
+                    <input 
+                      type="checkbox" 
+                      v-model="currentField.keyField" 
+                      :disabled="isSystemField(currentField) || !canMarkAsKeyField || isParticipationStateField(currentField)" 
+                    />
                     Key Field
                     <span v-if="keyFieldCount > 0" class="text-xs text-gray-500 dark:text-gray-400">({{ keyFieldCount }}/10)</span>
                   </label>
-                  <label class="inline-flex items-center gap-2 text-sm" title="Controls whether this field is visible in the table/list view. Users can still customize visibility in column settings.">
-                    <input type="checkbox" v-model="currentField.visibility.list" :disabled="isSystemField(currentField) || isFixedPositionField(currentField, selectedModule?.key)" />
-                    Show in Table
-                  </label>
-                  <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" v-model="currentField.visibility.detail" :disabled="isSystemField(currentField) || isFixedPositionField(currentField, selectedModule?.key)" /> Show in Detail</label>
-                  <p v-if="isFixedPositionField(currentField, selectedModule?.key)" class="mt-1 text-xs text-gray-500 dark:text-gray-400">This field must always be visible in table and detail views</p>
+
+                  <!-- People module: Metadata-based visibility guards -->
+                  <template v-if="isPeopleModule && currentField?.key">
+                    <!-- Participation state fields: Show locked indicators -->
+                    <template v-if="isParticipationStateField(currentField)">
+                      <div class="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                        <svg class="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        <span>Show in Table</span>
+                      </div>
+                      <div class="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                        <svg class="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        <span>Show in Detail</span>
+                      </div>
+                    </template>
+                    <!-- Other fields: Normal checkboxes -->
+                    <template v-else>
+                      <label class="inline-flex items-center gap-2 text-sm" title="Controls whether this field is visible in the table/list view. Users can still customize visibility in column settings.">
+                        <input 
+                          type="checkbox" 
+                          v-model="currentField.visibility.list" 
+                          :disabled="!canHideField(currentField) || getPeopleFieldMetadata(currentField.key)?.owner === 'system'" 
+                        />
+                        Show in Table
+                      </label>
+                      <label class="inline-flex items-center gap-2 text-sm">
+                        <input 
+                          type="checkbox" 
+                          v-model="currentField.visibility.detail" 
+                          :disabled="!canHideField(currentField) || getPeopleFieldMetadata(currentField.key)?.owner === 'system'" 
+                        />
+                        Show in Detail
+                      </label>
+                    </template>
+                    
+                    <!-- Helper text for participation state fields -->
+                    <p v-if="isParticipationStateField(currentField)" class="w-full mt-2 text-xs text-gray-600 dark:text-gray-400">
+                      State fields are required and always visible. This is defined by the application.
+                    </p>
+                    <p v-else-if="getPeopleFieldMetadata(currentField.key)?.owner === 'system'" class="w-full mt-2 text-xs text-gray-500 dark:text-gray-400">
+                      System fields are always visible
+                    </p>
+                  </template>
+                  <!-- Other modules: Legacy visibility controls -->
+                  <template v-else>
+                    <label class="inline-flex items-center gap-2 text-sm" title="Controls whether this field is visible in the table/list view. Users can still customize visibility in column settings.">
+                      <input type="checkbox" v-model="currentField.visibility.list" :disabled="isSystemField(currentField) || isFixedPositionField(currentField, selectedModule?.key)" />
+                      Show in Table
+                    </label>
+                    <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" v-model="currentField.visibility.detail" :disabled="isSystemField(currentField) || isFixedPositionField(currentField, selectedModule?.key)" /> Show in Detail</label>
+                    <p v-if="isFixedPositionField(currentField, selectedModule?.key)" class="w-full mt-2 text-xs text-gray-500 dark:text-gray-400">This field must always be visible in table and detail views</p>
+                  </template>
                 </div>
+                
                 <div>
                   <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Default Value</label>
                   <input v-model="currentField.defaultValue" :disabled="isSystemField(currentField) || currentField.dataType === 'Auto-Number' || currentField.dataType === 'Formula' || currentField.dataType === 'Rollup Summary'" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10" />
@@ -431,6 +680,20 @@
               </div>
             </div>
             <div v-if="activeSubTab === 'validations'" class="space-y-3">
+              <!-- Participation field info message -->
+              <div v-if="isPeopleModule && currentField?.key && getPeopleFieldMetadata(currentField.key)?.owner === 'participation'" class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <div class="flex items-start gap-3">
+                  <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <p class="text-sm text-blue-800 dark:text-blue-300">
+                      Validation rules for participation fields are defined by the application.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
               <div>
                 <!-- Empty State -->
                 <div v-if="!currentField.validations || currentField.validations.length === 0" class="flex flex-col items-center justify-center py-12 px-4 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
@@ -441,7 +704,14 @@
                   <p class="text-sm text-gray-600 dark:text-gray-400 text-center max-w-md mb-6">
                     Add validation conditions to ensure data integrity and enforce business rules for this field.
                   </p>
-                  <button @click="addValidation" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                  <button 
+                    @click="addValidation" 
+                    :disabled="isPeopleModule && currentField?.key && getPeopleFieldMetadata(currentField.key)?.owner === 'participation'"
+                    :class="[
+                      'px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2',
+                      isPeopleModule && currentField?.key && getPeopleFieldMetadata(currentField.key)?.owner === 'participation' ? 'opacity-50 cursor-not-allowed' : ''
+                    ]"
+                  >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                     </svg>
@@ -456,7 +726,11 @@
                       <!-- Delete button in top right corner -->
                       <button 
                         @click="removeValidation(vi)" 
-                        class="absolute -top-2 -right-2 p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all hover:scale-110 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-white/10 shadow-sm"
+                        :disabled="isValidationDisabled()"
+                        :class="[
+                          'absolute -top-2 -right-2 p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all hover:scale-110 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-white/10 shadow-sm',
+                          isValidationDisabled() ? 'opacity-50 cursor-not-allowed hover:text-gray-400 hover:bg-gray-50' : ''
+                        ]"
                         title="Remove validation"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
@@ -467,11 +741,20 @@
                       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
                           <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Validation Name</label>
-                          <input v-model="v.name" placeholder="e.g., Phone must be 10 digits" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10" />
+                          <input 
+                            v-model="v.name" 
+                            placeholder="e.g., Phone must be 10 digits" 
+                            :disabled="isValidationDisabled()"
+                            class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 disabled:opacity-50 disabled:cursor-not-allowed" 
+                          />
                         </div>
                         <div>
                           <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Type</label>
-                          <select v-model="v.type" class="w-full px-2 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10">
+                          <select 
+                            v-model="v.type" 
+                            :disabled="isValidationDisabled()"
+                            class="w-full px-2 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
                             <option value="regex">Regular Expression</option>
                             <option value="length">Length</option>
                             <option value="range">Range</option>
@@ -485,51 +768,102 @@
                       <!-- Type-specific fields -->
                       <div v-if="v.type === 'regex'">
                         <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Pattern</label>
-                        <input v-model="v.pattern" placeholder="Regex pattern" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10" />
+                        <input 
+                          v-model="v.pattern" 
+                          placeholder="Regex pattern" 
+                          :disabled="isValidationDisabled()"
+                          class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 disabled:opacity-50 disabled:cursor-not-allowed" 
+                        />
                       </div>
 
                       <div v-else-if="v.type === 'length'" class="grid grid-cols-2 gap-3">
                         <div>
                           <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Min Length</label>
-                          <input type="number" min="0" v-model.number="v.minLength" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10" />
+                          <input 
+                            type="number" 
+                            min="0" 
+                            v-model.number="v.minLength" 
+                            :disabled="isValidationDisabled()"
+                            class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 disabled:opacity-50 disabled:cursor-not-allowed" 
+                          />
                         </div>
                         <div>
                           <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Max Length</label>
-                          <input type="number" min="0" v-model.number="v.maxLength" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10" />
+                          <input 
+                            type="number" 
+                            min="0" 
+                            v-model.number="v.maxLength" 
+                            :disabled="isValidationDisabled()"
+                            class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 disabled:opacity-50 disabled:cursor-not-allowed" 
+                          />
                         </div>
                       </div>
 
                       <div v-else-if="v.type === 'range'" class="grid grid-cols-2 gap-3">
                         <div>
                           <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Min</label>
-                          <input type="number" v-model.number="v.min" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10" />
+                          <input 
+                            type="number" 
+                            v-model.number="v.min" 
+                            :disabled="isValidationDisabled()"
+                            class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 disabled:opacity-50 disabled:cursor-not-allowed" 
+                          />
                         </div>
                         <div>
                           <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Max</label>
-                          <input type="number" v-model.number="v.max" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10" />
+                          <input 
+                            type="number" 
+                            v-model.number="v.max" 
+                            :disabled="isValidationDisabled()"
+                            class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 disabled:opacity-50 disabled:cursor-not-allowed" 
+                          />
                         </div>
                       </div>
 
                       <div v-else-if="v.type === 'picklist_single'">
                         <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Allowed Values (comma separated)</label>
-                        <input v-model="allowedValuesBuffers[vi]" @change="applyAllowedValues(vi)" placeholder="e.g., New, Contacted, Qualified" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10" />
+                        <input 
+                          v-model="allowedValuesBuffers[vi]" 
+                          @change="applyAllowedValues(vi)" 
+                          placeholder="e.g., New, Contacted, Qualified" 
+                          :disabled="isValidationDisabled()"
+                          class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 disabled:opacity-50 disabled:cursor-not-allowed" 
+                        />
                       </div>
 
                       <div v-else-if="v.type === 'picklist_multi'">
                         <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Allowed Values (comma separated)</label>
-                        <input v-model="allowedValuesBuffers[vi]" @change="applyAllowedValues(vi)" placeholder="e.g., New, Contacted, Qualified" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10" />
+                        <input 
+                          v-model="allowedValuesBuffers[vi]" 
+                          @change="applyAllowedValues(vi)" 
+                          placeholder="e.g., New, Contacted, Qualified" 
+                          :disabled="isValidationDisabled()"
+                          class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 disabled:opacity-50 disabled:cursor-not-allowed" 
+                        />
                       </div>
 
                       <!-- Email has no extra inputs -->
 
                       <div>
                         <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Error Message</label>
-                        <input v-model="v.message" placeholder="Message to show when validation fails" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10" />
+                        <input 
+                          v-model="v.message" 
+                          placeholder="Message to show when validation fails" 
+                          :disabled="isValidationDisabled()"
+                          class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 disabled:opacity-50 disabled:cursor-not-allowed" 
+                        />
                       </div>
                     </div>
                   </div>
                   <div class="flex items-center gap-2 flex-wrap mt-4">
-                    <button @click="addValidation" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm hover:shadow-md">
+                    <button 
+                      @click="addValidation" 
+                      :disabled="isValidationDisabled()"
+                      :class="[
+                        'px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm hover:shadow-md',
+                        isValidationDisabled() ? 'opacity-50 cursor-not-allowed' : ''
+                      ]"
+                    >
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                       </svg>
@@ -1029,6 +1363,7 @@
           </div>
         </div>
       </section>
+        </div>
       </div>
 
       <!-- Other tabs: Module details, Relationship, Quick Create -->
@@ -1075,6 +1410,23 @@
         </div>
 
         <div class="p-4 overflow-y-auto" v-if="activeTopTab === 'details'">
+          <!-- Platform Ownership Info Box (for platform-owned modules) -->
+          <div v-if="selectedModule?.platformOwned || selectedModule?.type === 'system'" class="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <div class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <h3 class="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-1">
+                  Platform-Owned Capability
+                </h3>
+                <p class="text-sm text-blue-800 dark:text-blue-400">
+                  This is a shared platform capability owned by the platform. It cannot be deleted, renamed, or modified. Applications can use this capability, but they cannot change its core definition.
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Display Name</label>
@@ -1092,6 +1444,11 @@
               <input id="mod-enabled" type="checkbox" v-model="moduleEnabled" />
               <label for="mod-enabled" class="text-sm text-gray-700 dark:text-gray-300">Enabled</label>
             </div>
+          </div>
+          
+          <!-- Additional Details Content (for Core modules) -->
+          <div v-if="$slots['details-extra']" class="mt-6">
+            <slot name="details-extra" />
           </div>
         </div>
 
@@ -1873,23 +2230,117 @@
                 <div class="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">Field Palette</div>
               </div>
               <div class="p-2 max-h-[60vh] overflow-y-auto">
-                <!-- Simple mode: checkboxes -->
-                <ul class="space-y-1">
-                  <li
-                    v-for="f in editFields"
-                    :key="f.key"
-                    class="px-3 py-2 rounded flex items-center gap-2 cursor-pointer"
-                    :class="quickCreateSelected.has(f.key) ? 'bg-gray-100 dark:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/5'"
-                    @click="toggleQuickRow(f)"
-                    :title="f.required ? 'Required field is always included' : ''"
-                  >
-                    <input type="checkbox" :checked="quickCreateSelected.has(f.key)" :disabled="f.required" @change.stop="toggleQuickCreate(f.key, $event.target.checked)" />
-                    <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
-                  </li>
-                </ul>
+                <!-- Simple mode: checkboxes with grouped sections -->
+                <template v-if="isPeopleModule">
+                  <!-- Core Identity Fields -->
+                  <div v-if="quickCreateAvailableFields.some(f => getFieldMetadata(f.key)?.owner === 'core')" class="mb-4">
+                    <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Core Identity</div>
+                    <ul class="space-y-1">
+                      <li
+                        v-for="f in quickCreateAvailableFields.filter(f => getFieldMetadata(f.key)?.owner === 'core')"
+                        :key="f.key"
+                        class="px-3 py-2 rounded flex items-center gap-2 cursor-pointer"
+                        :class="quickCreateSelected.has(f.key) ? 'bg-gray-100 dark:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/5'"
+                        @click="toggleQuickRow(f)"
+                        :title="f.required ? 'Required field is always included' : ''"
+                      >
+                        <input type="checkbox" :checked="quickCreateSelected.has(f.key)" :disabled="f.required" @change.stop="toggleQuickCreate(f.key, $event.target.checked)" />
+                        <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
+                      </li>
+                    </ul>
+                  </div>
+                  
+                  <!-- Participation Fields -->
+                  <div v-if="quickCreateAvailableFields.some(f => getFieldMetadata(f.key)?.owner === 'participation')" class="mb-4">
+                    <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Participation</div>
+                    <ul class="space-y-1">
+                      <li
+                        v-for="f in quickCreateAvailableFields.filter(f => getFieldMetadata(f.key)?.owner === 'participation')"
+                        :key="f.key"
+                        class="px-3 py-2 rounded flex items-center gap-2 cursor-pointer"
+                        :class="quickCreateSelected.has(f.key) ? 'bg-gray-100 dark:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/5'"
+                        @click="toggleQuickRow(f)"
+                        :title="f.required ? 'Required field is always included' : ''"
+                      >
+                        <input type="checkbox" :checked="quickCreateSelected.has(f.key)" :disabled="f.required" @change.stop="toggleQuickCreate(f.key, $event.target.checked)" />
+                        <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
+                      </li>
+                    </ul>
+                  </div>
+                  
+                  <!-- System Fields -->
+                  <div v-if="quickCreateAvailableFields.some(f => getFieldMetadata(f.key)?.owner === 'system')" class="mb-4">
+                    <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">System</div>
+                    <ul class="space-y-1">
+                      <li
+                        v-for="f in quickCreateAvailableFields.filter(f => getFieldMetadata(f.key)?.owner === 'system')"
+                        :key="f.key"
+                        class="px-3 py-2 rounded flex items-center gap-2 cursor-pointer"
+                        :class="quickCreateSelected.has(f.key) ? 'bg-gray-100 dark:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/5'"
+                        @click="toggleQuickRow(f)"
+                        :title="f.required ? 'Required field is always included' : ''"
+                      >
+                        <input type="checkbox" :checked="quickCreateSelected.has(f.key)" :disabled="f.required" @change.stop="toggleQuickCreate(f.key, $event.target.checked)" />
+                        <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
+                      </li>
+                    </ul>
+                  </div>
+                  
+                  <!-- Info message if no fields -->
+                  <div v-if="quickCreateAvailableFields.length === 0" class="p-3 text-xs text-gray-500 dark:text-gray-400 text-center">
+                    No eligible fields available for Quick Create.
+                  </div>
+                </template>
+                
+                <!-- Other modules: grouped by regular and system fields -->
+                <template v-else>
+                  <!-- Regular Fields -->
+                  <div v-if="quickCreateAvailableFields.some(f => !isSystemField(f))" class="mb-4">
+                    <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Fields</div>
+                    <ul class="space-y-1">
+                      <li
+                        v-for="f in quickCreateAvailableFields.filter(f => !isSystemField(f))"
+                        :key="f.key"
+                        class="px-3 py-2 rounded flex items-center gap-2 cursor-pointer"
+                        :class="quickCreateSelected.has(f.key) ? 'bg-gray-100 dark:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/5'"
+                        @click="toggleQuickRow(f)"
+                        :title="f.required ? 'Required field is always included' : ''"
+                      >
+                        <input type="checkbox" :checked="quickCreateSelected.has(f.key)" :disabled="f.required" @change.stop="toggleQuickCreate(f.key, $event.target.checked)" />
+                        <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
+                      </li>
+                    </ul>
+                  </div>
+                  
+                  <!-- System Fields -->
+                  <div v-if="quickCreateAvailableFields.some(f => isSystemField(f))" class="mb-4">
+                    <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">System</div>
+                    <ul class="space-y-1">
+                      <li
+                        v-for="f in quickCreateAvailableFields.filter(f => isSystemField(f))"
+                        :key="f.key"
+                        class="px-3 py-2 rounded flex items-center gap-2 cursor-pointer"
+                        :class="quickCreateSelected.has(f.key) ? 'bg-gray-100 dark:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/5'"
+                        @click="toggleQuickRow(f)"
+                        :title="f.required ? 'Required field is always included' : ''"
+                      >
+                        <input type="checkbox" :checked="quickCreateSelected.has(f.key)" :disabled="f.required" @change.stop="toggleQuickCreate(f.key, $event.target.checked)" />
+                        <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
+                      </li>
+                    </ul>
+                  </div>
+                  
+                  <!-- Info message if no fields -->
+                  <div v-if="quickCreateAvailableFields.length === 0" class="p-3 text-xs text-gray-500 dark:text-gray-400 text-center">
+                    No fields available for Quick Create.
+                  </div>
+                </template>
               </div>
               <div class="p-3 border-t border-gray-200 dark:border-white/10">
-                <div class="text-xs text-gray-500 dark:text-gray-400">Select fields to include in Quick Create.</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">
+                  <span v-if="isPeopleModule">Select core identity fields to include in Quick Create.</span>
+                  <span v-else>Select fields to include in Quick Create.</span>
+                </div>
               </div>
             </aside>
             <!-- Right: Simple list -->
@@ -2400,6 +2851,15 @@ import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/utils/apiClient';
 import ModuleFormModal from './ModuleFormModal.vue';
 import { ArrowsUpDownIcon } from '@heroicons/vue/24/outline';
+import {
+  PEOPLE_FIELD_METADATA,
+  getFieldMetadata,
+  getCoreIdentityFields,
+  getParticipationFields,
+  getStateFields,
+  getDetailFields,
+  isSystemField as isSystemFieldFromModel
+} from '@/platform/fields/peopleFieldModel';
 
 const props = defineProps({
   moduleFilter: {
@@ -2421,6 +2881,10 @@ const props = defineProps({
   title: {
     type: String,
     default: 'Modules & Fields'
+  },
+  hideHeader: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -3558,6 +4022,261 @@ const filteredFields = computed(() => {
   return fields;
 });
 
+// Check if current module is People
+const isPeopleModule = computed(() => {
+  return selectedModule.value?.key?.toLowerCase() === 'people';
+});
+
+// Computed: Fields available for Quick Create (People module: only core identity fields)
+// Helper: Check if a field is eligible for Quick Create
+function isFieldEligibleForQuickCreate(fieldKey) {
+  try {
+    const metadata = getFieldMetadata(fieldKey);
+    
+    // Core identity fields: owner === 'core', intent === 'identity', editable === true
+    const isCoreIdentity = (
+      metadata.owner === 'core' &&
+      metadata.intent === 'identity' &&
+      metadata.editable === true
+    );
+    
+    // System fields with allowOnCreate: owner === 'system', editable === true, allowOnCreate === true
+    const isAllowedSystemField = (
+      metadata.owner === 'system' &&
+      metadata.editable === true &&
+      metadata.allowOnCreate === true
+    );
+    
+    return isCoreIdentity || isAllowedSystemField;
+  } catch (err) {
+    // Field not found in metadata - fail fast
+    throw new Error(
+      `Field "${fieldKey}" is not eligible for Quick Create. ` +
+      `Creation eligibility must be declared in peopleFieldModel.ts. ` +
+      `Error: ${err.message}`
+    );
+  }
+}
+
+const quickCreateAvailableFields = computed(() => {
+  // For People module, filter to only eligible fields and organize by type
+  if (isPeopleModule.value) {
+    const eligibleFields = editFields.value.filter(f => {
+      if (!f.key) return false;
+      
+      try {
+        // Validate eligibility (fail-fast)
+        return isFieldEligibleForQuickCreate(f.key);
+      } catch (err) {
+        // If metadata not found or field violates rules, exclude it and log error
+        console.error(`Skipping field "${f.key}" for Quick Create:`, err.message);
+        return false;
+      }
+    });
+    
+    // Group fields by owner type: core, participation, system
+    const coreFields = [];
+    const participationFields = [];
+    const systemFields = [];
+    
+    eligibleFields.forEach(field => {
+      try {
+        const metadata = getFieldMetadata(field.key);
+        if (metadata.owner === 'core') {
+          coreFields.push(field);
+        } else if (metadata.owner === 'participation') {
+          participationFields.push(field);
+        } else if (metadata.owner === 'system') {
+          systemFields.push(field);
+        }
+      } catch (err) {
+        // If metadata lookup fails, skip field
+        console.warn(`Could not determine owner for field "${field.key}"`);
+      }
+    });
+    
+    // Return in order: core, participation, system
+    return [...coreFields, ...participationFields, ...systemFields];
+  }
+  
+  // For other modules, organize by system vs regular fields
+  const regularFields = [];
+  const systemFields = [];
+  
+  editFields.value.forEach(field => {
+    if (isSystemField(field)) {
+      systemFields.push(field);
+    } else {
+      regularFields.push(field);
+    }
+  });
+  
+  // Return in order: regular fields first, then system fields
+  return [...regularFields, ...systemFields];
+});
+
+// Grouped fields for People module (derived from metadata)
+const groupedFields = computed(() => {
+  if (!isPeopleModule.value) {
+    return { coreIdentity: [], participation: {}, system: [] };
+  }
+
+  const coreIdentity = [];
+  const participation = {};
+  const system = [];
+
+  // Get all fields from editFields
+  const allFieldKeys = editFields.value.map(f => f.key).filter(Boolean);
+
+  for (const fieldKey of allFieldKeys) {
+    try {
+      const metadata = getFieldMetadata(fieldKey);
+      
+      if (metadata.owner === 'core' && metadata.intent === 'identity') {
+        coreIdentity.push(fieldKey);
+      } else if (metadata.owner === 'participation' && metadata.fieldScope) {
+        if (!participation[metadata.fieldScope]) {
+          participation[metadata.fieldScope] = [];
+        }
+        participation[metadata.fieldScope].push(fieldKey);
+      } else if (metadata.owner === 'system') {
+        system.push(fieldKey);
+      }
+    } catch (err) {
+      // Field not in metadata - fail fast in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error(`[People Field Model] Field "${fieldKey}" is missing from PEOPLE_FIELD_METADATA`, err);
+      }
+      // For now, treat as system field to prevent breaking
+      system.push(fieldKey);
+    }
+  }
+
+  return { coreIdentity, participation, system };
+});
+
+// Helper: Get field index by key
+function getFieldIndex(fieldKey) {
+  return editFields.value.findIndex(f => f.key === fieldKey);
+}
+
+// Helper: Select field by key
+function selectFieldByKey(fieldKey) {
+  const idx = getFieldIndex(fieldKey);
+  if (idx >= 0) {
+    selectField(idx);
+  }
+}
+
+// Helper: Get field label
+function getFieldLabel(fieldKey) {
+  const field = editFields.value.find(f => f.key === fieldKey);
+  return field?.label || fieldKey || 'Untitled field';
+}
+
+// Helper: Get field data type
+function getFieldDataType(fieldKey) {
+  const field = editFields.value.find(f => f.key === fieldKey);
+  return field?.dataType || '';
+}
+
+// Helper: Get People field metadata (safe, returns null if not found)
+function getPeopleFieldMetadata(fieldKey) {
+  if (!isPeopleModule.value || !fieldKey) return null;
+  try {
+    return getFieldMetadata(fieldKey);
+  } catch (err) {
+    return null;
+  }
+}
+
+// Helper: Format app keys to app names for display
+function formatRequiredForApps(appKeys) {
+  if (!appKeys || !Array.isArray(appKeys) || appKeys.length === 0) return '';
+  
+  const appNameMap = {
+    'SALES': 'Sales',
+    'HELPDESK': 'Help Desk',
+    'MARKETING': 'Marketing',
+    'SERVICE': 'Service',
+    'CORE': 'Platform'
+  };
+  
+  return appKeys.map(key => appNameMap[key] || key).join(', ');
+}
+
+// Helper: Format owner for display
+function formatOwnerDisplay(metadata) {
+  if (!metadata) return '';
+  
+  if (metadata.owner === 'core') {
+    return 'Core';
+  } else if (metadata.owner === 'system') {
+    return 'System';
+  } else if (metadata.owner === 'participation') {
+    // For participation fields, show the fieldScope (e.g., "Sales")
+    const appNameMap = {
+      'SALES': 'Sales',
+      'HELPDESK': 'Help Desk',
+      'MARKETING': 'Marketing',
+      'SERVICE': 'Service',
+      'CORE': 'Platform'
+    };
+    return appNameMap[metadata.fieldScope] || metadata.fieldScope || 'Participation';
+  }
+  
+  return metadata.owner || '';
+}
+
+// Helper: Format intent for display
+function formatIntentDisplay(intent) {
+  if (!intent) return '';
+  
+  const intentMap = {
+    'identity': 'Identity',
+    'state': 'State',
+    'detail': 'Detail',
+    'system': 'System'
+  };
+  
+  return intentMap[intent] || intent;
+}
+
+// Helper: Check if validation editing should be disabled (for participation fields)
+function isValidationDisabled() {
+  if (!isPeopleModule.value || !currentField.value?.key) return false;
+  const metadata = getPeopleFieldMetadata(currentField.value.key);
+  return metadata?.owner === 'participation';
+}
+
+// Helper: Check if field can be hidden (People module only)
+function canHideField(field) {
+  if (!isPeopleModule.value || !field?.key) return true; // Default behavior for non-People
+  
+  try {
+    const metadata = getFieldMetadata(field.key);
+    // Can hide: core fields OR participation detail fields
+    // Cannot hide: system fields OR participation state fields
+    if (metadata.owner === 'system') return false;
+    if (metadata.owner === 'participation' && metadata.intent === 'state') return false;
+    return true;
+  } catch (err) {
+    return true; // Default to allowing hide if metadata not found
+  }
+}
+
+// Helper: Check if field is a participation state field (locked by app)
+function isParticipationStateField(field) {
+  if (!isPeopleModule.value || !field?.key) return false;
+  
+  try {
+    const metadata = getFieldMetadata(field.key);
+    return metadata.owner === 'participation' && metadata.intent === 'state';
+  } catch (err) {
+    return false;
+  }
+}
+
 // Field type-specific settings
 const showAddOption = ref(false);
 const newOptionValue = ref('');
@@ -3578,6 +4297,20 @@ const lookupTargetFields = computed(() => {
 // Check if a field is a system field that cannot be modified
 function isSystemField(field) {
   if (!field || !field.key) return false;
+  
+  // For People module, use metadata
+  if (isPeopleModule.value) {
+    try {
+      const metadata = getFieldMetadata(field.key);
+      return metadata.owner === 'system';
+    } catch (err) {
+      // Field not in metadata - fallback to legacy check
+      const systemFieldKeys = ['createdby', 'organizationid', 'createdat', 'updatedat', 'activitylogs'];
+      return systemFieldKeys.includes((field.key || '').toLowerCase());
+    }
+  }
+  
+  // Legacy check for other modules
   const systemFieldKeys = ['createdby', 'organizationid', 'createdat', 'updatedat', 'activitylogs'];
   return systemFieldKeys.includes((field.key || '').toLowerCase());
 }
@@ -3817,8 +4550,65 @@ const fetchModules = async () => {
         let normalizedFields = filterSystemFields(uniqueFieldsByKey(sorted));
         normalizedFields = normalizeFormsFields(normalizedFields, initialMod.key);
         editFields.value = normalizedFields;
+        
+        // For People module: enforce default "Required in Form" flags when no saved Quick Create config exists
+        if (initialMod.key?.toLowerCase() === 'people') {
+          const hasQuickCreateConfig = initialMod.quickCreate && initialMod.quickCreate.length > 0;
+          
+          // Only apply defaults if no Quick Create config exists (fresh instance)
+          if (!hasQuickCreateConfig) {
+            // Set first_name as required
+            const firstNameField = editFields.value.find(f => f.key === 'first_name');
+            if (firstNameField) {
+              firstNameField.required = true;
+            }
+            
+            // Ensure all other eligible fields are optional
+            editFields.value.forEach(field => {
+              if (field.key && field.key !== 'first_name') {
+                try {
+                  if (isFieldEligibleForQuickCreate(field.key)) {
+                    field.required = false;
+                  }
+                } catch {
+                  // Field not eligible, leave as is
+                }
+              }
+            });
+          }
+        }
         // Select field by key if provided
-        const idx = fieldKey ? editFields.value.findIndex(f => f.key === fieldKey) : 0;
+        let idx = fieldKey ? editFields.value.findIndex(f => f.key === fieldKey) : -1;
+        if (idx < 0) {
+          // No fieldKey in URL: For People module, select first Core Identity field
+          if (initialMod.key?.toLowerCase() === 'people') {
+            const coreIdentityFields = getCoreIdentityFields();
+            if (coreIdentityFields.length > 0) {
+              idx = editFields.value.findIndex(f => f.key === coreIdentityFields[0]);
+            }
+            if (idx < 0) {
+              // Fallback to first Participation field
+              const participationFields = getParticipationFields('SALES');
+              if (participationFields.length > 0) {
+                idx = editFields.value.findIndex(f => f.key === participationFields[0]);
+              }
+            }
+            if (idx < 0) {
+              // Fallback to first non-system field
+              idx = editFields.value.findIndex(f => {
+                if (!f.key) return false;
+                try {
+                  const metadata = getFieldMetadata(f.key);
+                  return metadata.owner !== 'system';
+                } catch {
+                  return true;
+                }
+              });
+            }
+          }
+          // Default to 0 if still not found
+          idx = Math.max(0, idx);
+        }
         selectedFieldIdx.value = Math.max(0, idx);
         fieldSearch.value = '';
         syncOptionsBuffer();
@@ -3857,17 +4647,108 @@ const fetchModules = async () => {
         // Use quickCreate from module definition - NO hardcoding, all config comes from Settings UI
         let quickKeysInit = initialMod.quickCreate || [];
         
+        // For People module: enforce default configuration when no saved config exists
+        if (isPeopleModule.value) {
+          // If no saved config exists, initialize with default eligible fields and order
+          if (!quickKeysInit || quickKeysInit.length === 0) {
+            // Get all eligible fields from metadata (core identity + system fields with allowOnCreate)
+            const allEligibleKeysFromMetadata = [];
+            const allFieldKeys = Object.keys(PEOPLE_FIELD_METADATA);
+            
+            for (const key of allFieldKeys) {
+              try {
+                if (isFieldEligibleForQuickCreate(key)) {
+                  allEligibleKeysFromMetadata.push(key);
+                }
+              } catch (err) {
+                console.warn(`Skipping field "${key}" for default Quick Create:`, err.message);
+              }
+            }
+            
+            // Get fields that exist in editFields (module configuration)
+            const eligibleKeysInEditFields = editFields.value
+              .filter(f => f.key && isFieldEligibleForQuickCreate(f.key))
+              .map(f => f.key);
+            
+            // Combine: fields from editFields + eligible system fields from metadata (like assignedTo)
+            // This ensures system fields with allowOnCreate are included even if not in editFields yet
+            const allEligibleKeys = Array.from(new Set([
+              ...eligibleKeysInEditFields,
+              ...allEligibleKeysFromMetadata.filter(key => {
+                // Include system fields with allowOnCreate even if not in editFields
+                try {
+                  const metadata = getFieldMetadata(key);
+                  return metadata.owner === 'system' && metadata.allowOnCreate === true;
+                } catch {
+                  return false;
+                }
+              })
+            ]));
+            
+            // Default field order (only include fields that are eligible)
+            const defaultOrder = [
+              'first_name',
+              'last_name',
+              'email',
+              'phone',
+              'mobile',
+              'organization',
+              'do_not_contact',
+              'tags',
+              'assignedTo'
+            ];
+            
+            // Filter default order to only include eligible fields
+            const orderedDefaults = defaultOrder.filter(key => allEligibleKeys.includes(key));
+            
+            // Add any remaining eligible fields that aren't in the default order
+            const remainingFields = allEligibleKeys.filter(key => !orderedDefaults.includes(key));
+            
+            // Combine: ordered defaults first, then remaining fields
+            quickKeysInit = [...orderedDefaults, ...remainingFields];
+          } else {
+            // Config exists - filter to only eligible fields (preserve admin customizations)
+            quickKeysInit = quickKeysInit.filter(key => {
+              try {
+                return isFieldEligibleForQuickCreate(key);
+              } catch (err) {
+                console.warn(`Skipping ineligible field "${key}" from saved Quick Create config:`, err.message);
+                return false;
+              }
+            });
+          }
+        }
+        
         // fallback to locally stored quick selection if server returns empty (for other modules)
         if (!layoutKeysInit.length && !quickKeysInit.length) {
           try {
             const cached = JSON.parse(localStorage.getItem(`litedesk-modfields-quick-${initialMod.key}`) || '[]');
-            if (Array.isArray(cached) && cached.length) quickKeysInit = cached;
+            if (Array.isArray(cached) && cached.length) {
+              let cachedKeys = cached;
+              // For People module, filter cached keys too
+              if (isPeopleModule.value) {
+                const coreIdentityFieldKeys = getCoreIdentityFields();
+                cachedKeys = cached.filter(key => {
+                  if (!coreIdentityFieldKeys.includes(key)) return false;
+                  try {
+                    const metadata = getFieldMetadata(key);
+                    return metadata.owner === 'core' && 
+                           metadata.intent === 'identity' && 
+                           metadata.editable === true;
+                  } catch (err) {
+                    return false;
+                  }
+                });
+              }
+              if (cachedKeys.length) quickKeysInit = cachedKeys;
+            }
           } catch (e) {}
         }
         const useLayout = false; // Advanced mode hidden for now // (quickMode.value === 'advanced' && layoutKeysInit.length > 0);
         const baseKeys = useLayout ? layoutKeysInit : quickKeysInit;
         // Normalize baseKeys to match actual field keys in editFields (case-insensitive match)
         // This ensures keys like "event-type" or "eventType" both match the actual field key
+        // For People module, also allow system fields with allowOnCreate even if not in editFields
         const normalizedBaseKeys = baseKeys.map(key => {
           if (!key) return null;
           // Try exact match first
@@ -3880,29 +4761,96 @@ const fetchModules = async () => {
           const camelCaseKey = key.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
           field = editFields.value.find(f => f.key && f.key.toLowerCase() === camelCaseKey.toLowerCase());
           if (field) return field.key;
+          
+          // For People module: allow system fields with allowOnCreate even if not in editFields
+          if (isPeopleModule.value) {
+            try {
+              const metadata = getFieldMetadata(key);
+              if (metadata.owner === 'system' && metadata.allowOnCreate === true) {
+                // System field with allowOnCreate - allow it even if not in editFields
+                return key;
+              }
+            } catch (err) {
+              // Field not found in metadata - will be filtered out below
+            }
+          }
+          
           // If no match found, log warning and return null (will be filtered out)
           console.warn(`⚠️  Field key "${key}" from quickCreate not found in module fields. Available keys:`, editFields.value.map(f => f.key).slice(0, 10));
           return null;
         }).filter(key => key !== null);
-        // Always include required fields in Simple mode
-        const requiredKeys = editFields.value.filter(f => !!f.required && !!f.key).map(f => f.key);
-        const combined = quickMode.value === 'simple' ? Array.from(new Set([...normalizedBaseKeys, ...requiredKeys])) : normalizedBaseKeys;
-        quickCreateSelected.value = new Set(combined);
+        
+        // For People module, filter normalizedBaseKeys to only eligible fields (core identity + system fields with allowOnCreate)
+        let filteredBaseKeys = normalizedBaseKeys;
+        if (isPeopleModule.value) {
+          filteredBaseKeys = normalizedBaseKeys.filter(key => {
+            try {
+              return isFieldEligibleForQuickCreate(key);
+            } catch (err) {
+              console.warn(`Skipping field "${key}" from filteredBaseKeys:`, err.message);
+              return false;
+            }
+          });
+        }
+        
+        // Always include required fields in Simple mode (but filter for People module)
+        let requiredKeys = editFields.value.filter(f => !!f.required && !!f.key).map(f => f.key);
+        if (isPeopleModule.value) {
+          requiredKeys = requiredKeys.filter(key => {
+            try {
+              return isFieldEligibleForQuickCreate(key);
+            } catch (err) {
+              return false;
+            }
+          });
+        }
+        
+        const combined = quickMode.value === 'simple' ? Array.from(new Set([...filteredBaseKeys, ...requiredKeys])) : filteredBaseKeys;
+        
+        // For People module, ensure we only include eligible fields (core identity + system fields with allowOnCreate)
+        let finalCombined = combined;
+        if (isPeopleModule.value) {
+          finalCombined = combined.filter(key => {
+            try {
+              return isFieldEligibleForQuickCreate(key);
+            } catch (err) {
+              console.warn(`Skipping field "${key}" for Quick Create:`, err.message);
+              return false;
+            }
+          });
+        }
+        
+        quickCreateSelected.value = new Set(finalCombined);
         
         // Initialize field order from saved quickCreate array (preserves order)
         // If quickCreate has order, use it; otherwise use editFields order
-        if (normalizedBaseKeys.length > 0) {
-          quickCreateFieldOrder.value = normalizedBaseKeys;
-          // Add any required fields that aren't in the order yet
+        if (filteredBaseKeys.length > 0) {
+          // Filter quickCreateFieldOrder to only include eligible fields for People module
+          let fieldOrder = filteredBaseKeys;
+          if (isPeopleModule.value) {
+            fieldOrder = filteredBaseKeys.filter(key => {
+              try {
+                return isFieldEligibleForQuickCreate(key);
+              } catch (err) {
+                console.warn(`Skipping field "${key}" from Quick Create order:`, err.message);
+                return false;
+              }
+            });
+          }
+          quickCreateFieldOrder.value = fieldOrder;
+          // Add any required fields that aren't in the order yet (filtered for eligibility)
           requiredKeys.forEach(key => {
             if (!quickCreateFieldOrder.value.includes(key)) {
-              quickCreateFieldOrder.value.push(key);
+              if (!isPeopleModule.value || isFieldEligibleForQuickCreate(key)) {
+                quickCreateFieldOrder.value.push(key);
+              }
             }
           });
         } else {
-          // No saved order, initialize with editFields order
-          quickCreateFieldOrder.value = editFields.value
-            .filter(f => combined.includes(f.key))
+          // No saved order, initialize with editFields order (filtered for People module)
+          const fieldsToUse = isPeopleModule.value ? quickCreateAvailableFields.value : editFields.value;
+          quickCreateFieldOrder.value = fieldsToUse
+            .filter(f => finalCombined.includes(f.key))
             .map(f => f.key);
         }
         // capture snapshot after initializing state and all reactive updates settle
@@ -4022,12 +4970,78 @@ const selectModule = (mod, preferFieldKey = null) => {
   const sorted = initial.sort((a,b) => (a.order ?? 0) - (b.order ?? 0));
   let normalizedFields = filterSystemFields(uniqueFieldsByKey(sorted));
   normalizedFields = normalizeFormsFields(normalizedFields, mod.key);
+  
+  // People module: Validate all fields have metadata
+  if (mod.key?.toLowerCase() === 'people') {
+    const missingFields = [];
+    for (const field of normalizedFields) {
+      if (field.key) {
+        try {
+          getFieldMetadata(field.key);
+        } catch (err) {
+          missingFields.push(field.key);
+        }
+      }
+    }
+    if (missingFields.length > 0) {
+      console.error('[People Field Model] Fields missing from PEOPLE_FIELD_METADATA:', missingFields);
+      // Fail fast in development
+      if (process.env.NODE_ENV === 'development') {
+        throw new Error(`People fields missing metadata: ${missingFields.join(', ')}. All People fields must be classified in peopleFieldModel.ts`);
+      }
+    }
+  }
+  
   editFields.value = normalizedFields;
   if (preferFieldKey) {
     const idx = editFields.value.findIndex(f => f.key === preferFieldKey);
     selectedFieldIdx.value = idx >= 0 ? idx : 0;
   } else {
-    selectedFieldIdx.value = 0;
+    // For People module: Select first Core Identity field (better UX)
+    // Falls back to first Participation field, then first editable field, then 0
+    if (mod.key?.toLowerCase() === 'people') {
+      let firstFieldIdx = 0;
+      
+      // Try to find first Core Identity field
+      const coreIdentityFields = getCoreIdentityFields();
+      if (coreIdentityFields.length > 0) {
+        const firstCoreField = editFields.value.findIndex(f => f.key === coreIdentityFields[0]);
+        if (firstCoreField >= 0) {
+          firstFieldIdx = firstCoreField;
+        }
+      }
+      
+      // If no Core Identity field found, try first Participation field
+      if (firstFieldIdx === 0) {
+        const participationFields = getParticipationFields('SALES');
+        if (participationFields.length > 0) {
+          const firstParticipationField = editFields.value.findIndex(f => f.key === participationFields[0]);
+          if (firstParticipationField >= 0) {
+            firstFieldIdx = firstParticipationField;
+          }
+        }
+      }
+      
+      // If still 0, find first non-system field
+      if (firstFieldIdx === 0) {
+        const firstNonSystemIdx = editFields.value.findIndex(f => {
+          if (!f.key) return false;
+          try {
+            const metadata = getFieldMetadata(f.key);
+            return metadata.owner !== 'system';
+          } catch {
+            return true; // If metadata not found, allow it
+          }
+        });
+        if (firstNonSystemIdx >= 0) {
+          firstFieldIdx = firstNonSystemIdx;
+        }
+      }
+      
+      selectedFieldIdx.value = firstFieldIdx;
+    } else {
+      selectedFieldIdx.value = 0;
+    }
   }
   fieldSearch.value = '';
   syncOptionsBuffer();
@@ -4476,6 +5490,30 @@ watch(() => currentField.value?.label, () => {
   }
 });
 
+// Enforce required and visibility for participation state fields
+watch(() => currentField.value, (field) => {
+  if (!field || !isPeopleModule.value) return;
+  
+  if (isParticipationStateField(field)) {
+    // Force required to true
+    if (!field.required) {
+      field.required = true;
+    }
+    
+    // Force visibility to true
+    if (!field.visibility) {
+      field.visibility = { list: true, detail: true };
+    } else {
+      if (!field.visibility.list) {
+        field.visibility.list = true;
+      }
+      if (!field.visibility.detail) {
+        field.visibility.detail = true;
+      }
+    }
+  }
+}, { immediate: true, deep: true });
+
 // Watch field key to detect manual edits
 watch(() => currentField.value?.key, (newKey, oldKey) => {
   if (!currentField.value || isAutoGeneratingFieldKey.value) return;
@@ -4748,6 +5786,9 @@ function onQuickCreateDrop(idx) {
   quickCreateFieldOrder.value = currentOrder;
 }
 const orderedQuickCreate = computed(() => {
+  // For People module, filter to only core identity fields
+  const fieldsToProcess = isPeopleModule.value ? quickCreateAvailableFields.value : editFields.value;
+  
   // If we have a custom order, use it; otherwise fall back to editFields order
   if (quickCreateFieldOrder.value.length > 0) {
     const orderMap = new Map();
@@ -4757,19 +5798,19 @@ const orderedQuickCreate = computed(() => {
     const ordered = [];
     const seen = new Set();
     
-    // First, add fields in custom order
+    // First, add fields in custom order (filtered for People module)
     for (const key of quickCreateFieldOrder.value) {
       if (!quickCreateSelected.value.has(key)) continue;
       if (seen.has(key)) continue;
-      const f = editFields.value.find(x => x.key === key);
+      const f = fieldsToProcess.find(x => x.key === key);
       if (f) {
         ordered.push(f);
         seen.add(key);
       }
     }
     
-    // Then add any newly selected fields that aren't in the order yet
-    for (const f of editFields.value) {
+    // Then add any newly selected fields that aren't in the order yet (filtered for People module)
+    for (const f of fieldsToProcess) {
       const k = f.key;
       if (!k) continue;
       if (!quickCreateSelected.value.has(k)) continue;
@@ -4781,10 +5822,10 @@ const orderedQuickCreate = computed(() => {
     return ordered;
   }
   
-  // Fallback to original behavior: order by editFields
+  // Fallback to original behavior: order by editFields (filtered for People module)
   const seen = new Set();
   const out = [];
-  for (const f of editFields.value) {
+  for (const f of fieldsToProcess) {
     const k = f.key;
     if (!k) continue;
     if (!quickCreateSelected.value.has(k)) continue;
@@ -5440,6 +6481,35 @@ async function onDrop(idx) {
   dragStartIdx.value = null;
   dragOverIdx.value = null;
   if (from === null || to === null || from === to) return;
+  
+  // People module: Validate that fields are in the same group
+  if (isPeopleModule.value) {
+    const fromField = editFields.value[from];
+    const toField = editFields.value[to];
+    
+    if (fromField?.key && toField?.key) {
+      try {
+        const fromMetadata = getFieldMetadata(fromField.key);
+        const toMetadata = getFieldMetadata(toField.key);
+        
+        // Prevent cross-group moves
+        if (fromMetadata.owner !== toMetadata.owner) {
+          console.error('[People Field Model] Cannot move field across groups. From:', fromMetadata.owner, 'To:', toMetadata.owner);
+          return;
+        }
+        
+        // Prevent moving between different fieldScopes
+        if (fromMetadata.owner === 'participation' && fromMetadata.fieldScope !== toMetadata.fieldScope) {
+          console.error('[People Field Model] Cannot move field across app scopes. From:', fromMetadata.fieldScope, 'To:', toMetadata.fieldScope);
+          return;
+        }
+      } catch (err) {
+        console.error('[People Field Model] Failed to validate field move:', err);
+        return;
+      }
+    }
+  }
+  
   moveField(from, to - from);
   // Auto-save new order
   try {
@@ -5517,7 +6587,7 @@ async function saveQuickCreate() {
     // Also include any keys from quickCreateSelected that might not be in orderedQuickCreate
     // This handles cases where a field is selected but not yet in the order
     const selectedKeys = Array.from(quickCreateSelected.value);
-    const allKeys = quickMode.value === 'simple' 
+    let allKeys = quickMode.value === 'simple' 
       ? Array.from(new Set([...orderedKeys, ...selectedKeys])).filter(key => {
           // Verify the key exists in editFields
           const exists = editFields.value.some(f => f.key === key);
@@ -5533,6 +6603,71 @@ async function saveQuickCreate() {
           }
           return exists;
         });
+    
+    // For People module, filter to only eligible fields (core identity + system fields with allowOnCreate)
+    if (isPeopleModule.value) {
+      const coreIdentityFieldKeys = getCoreIdentityFields();
+      console.log('🔍 Filtering People module quickCreate fields:', {
+        allKeysBeforeFilter: allKeys,
+        allKeysCount: allKeys.length,
+        coreIdentityFieldKeys: coreIdentityFieldKeys,
+        coreIdentityFieldKeysCount: coreIdentityFieldKeys.length
+      });
+      
+      const beforeFilter = [...allKeys];
+      allKeys = allKeys.filter(key => {
+        // Use the same eligibility check as the UI (core identity OR system fields with allowOnCreate)
+        try {
+          const metadata = getFieldMetadata(key);
+          
+          // Core identity fields: owner === 'core', intent === 'identity', editable === true
+          const isCoreIdentity = (
+            metadata.owner === 'core' &&
+            metadata.intent === 'identity' &&
+            metadata.editable === true
+          );
+          
+          // System fields with allowOnCreate: owner === 'system', editable === true, allowOnCreate === true
+          const isAllowedSystemField = (
+            metadata.owner === 'system' &&
+            metadata.editable === true &&
+            metadata.allowOnCreate === true
+          );
+          
+          const isValid = isCoreIdentity || isAllowedSystemField;
+          
+          if (!isValid) {
+            console.warn(`⚠️  Key "${key}" is not eligible for Quick Create (must be core identity field OR system field with allowOnCreate)`, {
+              key,
+              metadata: {
+                owner: metadata.owner,
+                intent: metadata.intent,
+                editable: metadata.editable,
+                allowOnCreate: metadata.allowOnCreate
+              },
+              expected: [
+                { owner: 'core', intent: 'identity', editable: true },
+                { owner: 'system', editable: true, allowOnCreate: true }
+              ]
+            });
+          }
+          return isValid;
+        } catch (err) {
+          console.warn(`⚠️  Key "${key}" metadata not found, excluding from Quick Create`, {
+            key,
+            error: err.message
+          });
+          return false;
+        }
+      });
+      
+      console.log('🔍 People module quickCreate filter result:', {
+        beforeFilter: beforeFilter,
+        afterFilter: allKeys,
+        filteredOut: beforeFilter.filter(k => !allKeys.includes(k)),
+        finalCount: allKeys.length
+      });
+    }
     
     const payload = {
       quickCreate: allKeys,

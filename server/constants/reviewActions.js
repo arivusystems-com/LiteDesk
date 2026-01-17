@@ -13,13 +13,13 @@
  * 
  * Purpose:
  * - Teach the platform what review actions exist
- * - Declare who owns execution (CRM)
+ * - Declare who owns execution (SALES)
  * - Declare which apps can observe
  * - Enable Process Designer discovery (future)
  * - Enable UI rendering without guessing (future)
  * 
  * Rules:
- * - All actions are CRM-owned
+ * - All actions are SALES-owned
  * - Audit App and Portal are read-only
  * - Actions can only be executed from specific review states
  * - Process Designer can discover but not execute
@@ -34,7 +34,7 @@
  * during the review phase (after executionStatus = 'Submitted').
  * 
  * ⚠️ SAFETY: These are declarations only, not executable logic.
- * Any execution must occur via CRM execution controllers only.
+ * Any execution must occur via SALES execution controllers only.
  */
 const RESPONSE_REVIEW_ACTIONS = {
   APPROVE: {
@@ -48,9 +48,9 @@ const RESPONSE_REVIEW_ACTIONS = {
     // Whether ownership of the record is required
     requiresOwnership: true,
     // Which execution domain owns this action
-    executionDomain: 'CRM',
-    // Which apps can see this action (but CRM is the only executor)
-    exposedToApps: ['CRM'],
+    executionDomain: 'SALES',
+    // Which apps can see this action (but SALES is the only executor)
+    exposedToApps: ['SALES'],
     // Whether Process Designer can automate this action
     automationAllowed: true,
     // UI hints (for future use)

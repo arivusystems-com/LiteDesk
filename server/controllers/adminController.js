@@ -166,10 +166,10 @@ const getAllOrganizations = async (req, res) => {
                 .lean();
             const userIds = tenantUserIds.map(u => u._id);
             
-            // Only show CRM organizations created by users from this tenant
+            // Only show SALES organizations created by users from this tenant
             andConditions.push({
                 $or: [
-                    // CRM organizations created by tenant users
+                    // SALES organizations created by tenant users
                     { 
                         isTenant: false,
                         createdBy: { $in: userIds }
@@ -183,7 +183,7 @@ const getAllOrganizations = async (req, res) => {
             });
         }
         
-        // Show all organizations by default (both CRM and tenant)
+        // Show all organizations by default (both SALES and tenant)
         // Only filter out tenant organizations if explicitly requested
         // Note: You can add a query param ?excludeTenants=true to hide tenant orgs
         if (req.query.excludeTenants === 'true') {
@@ -378,7 +378,7 @@ const updateContactById = async (req, res) => {
 // @access  Private (Admin/Owner only)
 const getOrganizationById = async (req, res) => {
     try {
-        // Try CRM organization first
+        // Try SALES organization first
         let organization = await Organization.findOne({ _id: req.params.id, isTenant: false })
             .populate('createdBy', 'firstName lastName email avatar username')
             .populate('assignedTo', 'firstName lastName email avatar username')
@@ -443,7 +443,7 @@ const getOrganizationById = async (req, res) => {
 // @access  Private (Admin/Owner only)
 const updateOrganizationById = async (req, res) => {
     try {
-        // Try CRM organization first
+        // Try SALES organization first
         let organization = await Organization.findOneAndUpdate(
             { _id: req.params.id, isTenant: false },
             req.body,
@@ -620,7 +620,7 @@ const addContactActivityLog = async (req, res) => {
 // @access  Private (Admin/Owner only)
 const getOrganizationActivityLogs = async (req, res) => {
     try {
-        // Try CRM organization first
+        // Try SALES organization first
         let org = await Organization.findOne({ _id: req.params.id, isTenant: false }).select('activityLogs').lean();
         
         if (!org) {
@@ -710,7 +710,7 @@ const addOrganizationActivityLog = async (req, res) => {
             });
         }
         
-        // Try CRM organization first
+        // Try SALES organization first
         let org = await Organization.findOneAndUpdate(
             { _id: req.params.id, isTenant: false },
             {
@@ -804,7 +804,7 @@ const deleteContactById = async (req, res) => {
 // @access  Private (Admin/Owner only)
 const deleteOrganizationById = async (req, res) => {
     try {
-        // Try CRM organization first
+        // Try SALES organization first
         let org = await Organization.findOneAndDelete({ _id: req.params.id, isTenant: false });
         
         if (!org) {

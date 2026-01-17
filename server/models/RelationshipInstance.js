@@ -7,7 +7,7 @@
  * across modules and apps, without embedding foreign keys in schemas.
  * 
  * Key Features:
- * - Cross-app linking (e.g., CRM Deal ↔ Portal Order)
+ * - Cross-app linking (e.g., SALES Deal ↔ Portal Order)
  * - No schema changes to existing modules
  * - No foreign keys in record schemas
  * - Metadata-driven relationships

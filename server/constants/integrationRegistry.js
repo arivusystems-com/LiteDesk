@@ -12,7 +12,7 @@ module.exports = [
     apps: ['SALES', 'HELPDESK', 'PROJECTS', 'AUDIT', 'PORTAL'],
     category: 'Communication',
     dataSharedSummary: 'Email addresses, message content, and basic delivery status.',
-    dataSharedDetails: 'When enabled, the platform sends transactional and notification emails through this provider. Email addresses, email content, and basic delivery status are shared. No CRM records or attachments are deleted if the integration is disabled.',
+    dataSharedDetails: 'When enabled, the platform sends transactional and notification emails through this provider. Email addresses, email content, and basic delivery status are shared. No SALES records or attachments are deleted if the integration is disabled.',
     recommended: true
   },
   {

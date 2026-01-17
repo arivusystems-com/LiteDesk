@@ -17,12 +17,7 @@
       :columns="columns"
       :loading="loading"
       :statistics="statistics"
-      :stats-config="[
-        { name: 'Total Tasks', key: 'total', formatter: 'number' },
-        { name: 'Overdue', key: 'overdue', formatter: 'number' },
-        { name: 'Due Today', key: 'dueToday', formatter: 'number' },
-        { name: 'Completed', key: 'byStatus.completed', formatter: 'number' }
-      ]"
+      :stats-config="[]"
       :pagination="{ currentPage: pagination.currentPage, totalPages: pagination.totalPages, totalRecords: pagination.totalTasks, limit: pagination.tasksPerPage }"
       :sort-field="sortField"
       :sort-order="sortOrder"
@@ -31,21 +26,8 @@
           key: 'status',
           label: 'All Status',
           options: [
-            { value: 'todo', label: 'To Do' },
-            { value: 'in_progress', label: 'In Progress' },
-            { value: 'waiting', label: 'Waiting' },
-            { value: 'completed', label: 'Completed' },
-            { value: 'cancelled', label: 'Cancelled' }
-          ]
-        },
-        {
-          key: 'priority',
-          label: 'All Priorities',
-          options: [
-            { value: 'urgent', label: 'Urgent' },
-            { value: 'high', label: 'High' },
-            { value: 'medium', label: 'Medium' },
-            { value: 'low', label: 'Low' }
+            { value: 'open', label: 'Open' },
+            { value: 'completed', label: 'Completed' }
           ]
         },
         {
@@ -53,6 +35,17 @@
           label: 'All Assignees',
           options: [
             { value: 'me', label: 'My Tasks' }
+          ]
+        },
+        {
+          key: 'appContext',
+          label: 'All Apps',
+          options: [
+            { value: '', label: 'All Apps' },
+            { value: 'SALES', label: 'Sales' },
+            { value: 'PORTAL', label: 'Portal' },
+            { value: 'AUDIT', label: 'Audit' },
+            { value: 'LMS', label: 'LMS' }
           ]
         }
       ]"
@@ -88,15 +81,15 @@
         </div>
       </template>
 
-      <!-- Custom Priority Cell with Badge -->
-      <template #cell-priority="{ value }">
+      <!-- Custom App Context Cell with Badge -->
+      <template #cell-appContext="{ value }">
         <BadgeCell 
-          :value="value.charAt(0).toUpperCase() + value.slice(1)" 
+          :value="formatAppContext(value)" 
           :variant-map="{
-            'Urgent': 'danger',
-            'High': 'warning',
-            'Medium': 'info',
-            'Low': 'default'
+            'Sales': 'primary',
+            'Portal': 'info',
+            'Audit': 'warning',
+            'LMS': 'success'
           }"
         />
       </template>
@@ -106,28 +99,25 @@
         <BadgeCell 
           :value="formatStatus(value)" 
           :variant-map="{
-            'To Do': 'default',
-            'In Progress': 'info',
-            'Waiting': 'warning',
-            'Completed': 'success',
-            'Cancelled': 'danger'
+            'Open': 'default',
+            'Completed': 'success'
           }"
         />
       </template>
 
       <!-- Custom Assigned To Cell -->
       <template #cell-assignedTo="{ row }">
-        <div v-if="row.assignedTo" class="flex items-center gap-2">
+        <div v-if="row.assignedTo || row.ownerPersonId" class="flex items-center gap-2">
           <Avatar
             :user="{
-              firstName: row.assignedTo.firstName,
-              lastName: row.assignedTo.lastName,
-              avatar: row.assignedTo.avatar
+              firstName: row.assignedTo?.firstName || row.ownerPersonId?.first_name,
+              lastName: row.assignedTo?.lastName || row.ownerPersonId?.last_name,
+              avatar: row.assignedTo?.avatar
             }"
             size="sm"
           />
           <span class="text-sm text-gray-900 dark:text-white">
-            {{ row.assignedTo.firstName }} {{ row.assignedTo.lastName }}
+            {{ row.assignedTo?.firstName || row.ownerPersonId?.first_name }} {{ row.assignedTo?.lastName || row.ownerPersonId?.last_name }}
           </span>
         </div>
         <span v-else class="text-sm text-gray-500 dark:text-gray-400">Unassigned</span>
@@ -144,23 +134,6 @@
           <DateCell :value="row.dueDate" format="short" />
         </span>
         <span v-else class="text-sm text-gray-500 dark:text-gray-400">No due date</span>
-      </template>
-
-      <!-- Custom Tags Cell -->
-      <template #cell-tags="{ value }">
-        <div v-if="value && value.length > 0" class="flex flex-wrap gap-1">
-          <span 
-            v-for="tag in value.slice(0, 2)" 
-            :key="tag"
-            class="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-xs"
-          >
-            {{ tag }}
-          </span>
-          <span v-if="value.length > 2" class="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-xs">
-            +{{ value.length - 2 }}
-          </span>
-        </div>
-        <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
       </template>
 
     </ListView>
@@ -212,8 +185,8 @@ const selectedTask = ref(null);
 
 const filters = reactive({
   status: '',
-  priority: '',
-  assignedTo: ''
+  assignedTo: '',
+  appContext: '' // Default to empty = All Apps
 });
 
 const pagination = reactive({
@@ -242,7 +215,6 @@ const { bulkActions: baseMassActions } = useBulkActions('tasks');
 const hasActiveFilters = computed(() => {
   return searchQuery.value.trim() !== '' || 
          (filters?.status || '') !== '' || 
-         (filters?.priority || '') !== '' || 
          (filters?.assignedTo || '') !== '';
 });
 
@@ -265,7 +237,7 @@ const massActions = computed(() => {
 const columns = computed(() => {
   const allColumns = [
     { key: 'title', label: 'Task', sortable: true, minWidth: '250px' },
-    { key: 'priority', label: 'Priority', sortable: true, minWidth: '120px' },
+    { key: 'appContext', label: 'App', sortable: true, minWidth: '100px' },
     { key: 'status', label: 'Status', sortable: true, minWidth: '150px' },
     { 
       key: 'assignedTo', 
@@ -273,12 +245,16 @@ const columns = computed(() => {
       sortable: false,  // Server doesn't support sorting by populated field
       minWidth: '180px',
       sortValue: (row) => {
-        if (!row.assignedTo) return '';
-        return `${row.assignedTo.firstName || ''} ${row.assignedTo.lastName || ''}`.trim();
+        if (row.assignedTo) {
+          return `${row.assignedTo.firstName || ''} ${row.assignedTo.lastName || ''}`.trim();
+        }
+        if (row.ownerPersonId) {
+          return `${row.ownerPersonId.first_name || ''} ${row.ownerPersonId.last_name || ''}`.trim();
+        }
+        return '';
       }
     },
-    { key: 'dueDate', label: 'Due Date', sortable: true, minWidth: '140px' },
-    { key: 'tags', label: 'Tags', sortable: false, minWidth: '150px' }
+    { key: 'dueDate', label: 'Due Date', sortable: true, minWidth: '140px' }
   ];
   
   return allColumns;
@@ -325,28 +301,55 @@ const handleSort = ({ key, order }) => {
 const fetchTasks = async () => {
   try {
     loading.value = true;
+    
+    // Use Scheduling API to fetch tasks
+    // Aggregation: by default fetches across all apps
+    // Optional appContext filter narrows to specific app
     const params = {
-      page: pagination.currentPage,
-      limit: 20,
-      sortBy: sortField.value,
-      sortOrder: sortOrder.value,
-      ...filters
+      type: 'task'
     };
 
-    if (searchQuery.value) {
-      params.search = searchQuery.value;
+    // Add appContext filter if selected (empty string means "All Apps")
+    if (filters.appContext) {
+      params.appContext = filters.appContext;
     }
 
     console.log('Fetching tasks with params:', params);
-    const response = await apiClient.get('/tasks', { params });
+    const response = await apiClient.get('/scheduling', { params });
     console.log('Tasks response:', response);
 
-    if (response.success) {
-      tasks.value = response.data;
-      pagination.currentPage = response.pagination.currentPage;
-      pagination.totalPages = response.pagination.totalPages;
-      pagination.totalTasks = response.pagination.totalTasks;
-      console.log('Tasks loaded:', tasks.value.length);
+    if (response && response.success) {
+      // Map Scheduling items to task-like structure for UI compatibility
+      const items = Array.isArray(response.data) ? response.data : [];
+      console.log('Raw scheduling items:', items.length, items);
+      
+      tasks.value = items.map(item => {
+        // Handle ownerPersonId mapping (can be object or null)
+        let assignedTo = null;
+        if (item.ownerPersonId) {
+          if (typeof item.ownerPersonId === 'object' && item.ownerPersonId._id) {
+            assignedTo = {
+              firstName: item.ownerPersonId.first_name || '',
+              lastName: item.ownerPersonId.last_name || '',
+              _id: item.ownerPersonId._id
+            };
+          }
+        }
+        
+        return {
+          ...item,
+          assignedTo,
+          // Scheduling model doesn't have priority or tags - set defaults
+          priority: null,
+          tags: []
+        };
+      });
+      
+      // Note: Scheduling API returns flat list without pagination
+      // Set pagination values for UI compatibility
+      pagination.totalTasks = tasks.value.length;
+      pagination.totalPages = 1;
+      console.log('Tasks loaded:', tasks.value.length, tasks.value);
     } else {
       console.error('Response not successful:', response);
       tasks.value = [];
@@ -354,22 +357,19 @@ const fetchTasks = async () => {
   } catch (error) {
     console.error('Error fetching tasks:', error);
     console.error('Error details:', error.message, error.stack);
+    if (error.response) {
+      console.error('Error response:', error.response);
+    }
     tasks.value = [];
   } finally {
     loading.value = false;
   }
 };
 
-// Fetch statistics
+// Fetch statistics - not available for Scheduling API
 const fetchStatistics = async () => {
-  try {
-    const response = await apiClient.get('/tasks/stats/summary');
-    if (response.success) {
-      Object.assign(statistics, response.data);
-    }
-  } catch (error) {
-    console.error('Error fetching task statistics:', error);
-  }
+  // Statistics endpoint not available for Scheduling API
+  // Keep function for compatibility but no-op
 };
 
 // Debounced search
@@ -391,8 +391,8 @@ const handleSearchQueryUpdate = (query) => {
 // Clear filters
 const clearFilters = () => {
   filters.status = '';
-  filters.priority = '';
   filters.assignedTo = '';
+  filters.appContext = '';
   searchQuery.value = '';
   pagination.currentPage = 1;
   fetchTasks();
@@ -407,10 +407,12 @@ const changePage = (page) => {
 // Toggle task status (quick complete/incomplete)
 const toggleTaskStatus = async (task) => {
   try {
-    const newStatus = task.status === 'completed' ? 'todo' : 'completed';
-    await apiClient.patch(`/tasks/${task._id}/status`, { status: newStatus });
+    // Scheduling API uses 'open' and 'completed' status values
+    const newStatus = task.status === 'completed' ? 'open' : 'completed';
+    await apiClient.patch(`/scheduling/${task._id}/status`, { status: newStatus });
     await fetchTasks();
-    await fetchStatistics();
+    // Note: Statistics endpoint may not exist for Scheduling - skip for now
+    // await fetchStatistics();
   } catch (error) {
     console.error('Error toggling task status:', error);
   }
@@ -447,7 +449,6 @@ const handleTaskSave = async () => {
   // Reset to page 1 to see the new/updated task
   pagination.currentPage = 1;
   await fetchTasks();
-  await fetchStatistics();
 };
 
 const handleEdit = (task) => {
@@ -460,10 +461,9 @@ const handleDelete = async (row) => {
   const taskId = row._id || row;
   
   try {
-    await apiClient.delete(`/tasks/${taskId}`);
+    await apiClient.delete(`/scheduling/${taskId}`);
     closeDetailModal();
     await fetchTasks();
-    await fetchStatistics();
   } catch (error) {
     console.error('Error deleting task:', error);
   }
@@ -479,18 +479,16 @@ const handleBulkAction = async (actionId, selectedRows) => {
   
   try {
     if (actionId === 'bulk-delete' || actionId === 'delete') {
-      await Promise.all(taskIds.map(id => apiClient.delete(`/tasks/${id}`)));
+      await Promise.all(taskIds.map(id => apiClient.delete(`/scheduling/${id}`)));
       await fetchTasks();
-      await fetchStatistics();
       
     } else if (actionId === 'bulk-complete') {
       if (!confirm(`Mark ${selectedRows.length} tasks as complete?`)) return;
       
       await Promise.all(taskIds.map(id => 
-        apiClient.patch(`/tasks/${id}`, { status: 'completed' })
+        apiClient.patch(`/scheduling/${id}/status`, { status: 'completed' })
       ));
       await fetchTasks();
-      await fetchStatistics();
       
     } else if (actionId === 'bulk-export' || actionId === 'export') {
       exportTasksToCSV(selectedRows);
@@ -503,14 +501,19 @@ const handleBulkAction = async (actionId, selectedRows) => {
 
 const exportTasksToCSV = (tasksToExport) => {
   const csv = [
-    ['Title', 'Status', 'Priority', 'Due Date', 'Assigned To'].join(','),
-    ...tasksToExport.map(task => [
-      task.title,
-      task.status,
-      task.priority,
-      task.dueDate || '',
-      task.assignedTo ? `${task.assignedTo.firstName} ${task.assignedTo.lastName}` : ''
-    ].join(','))
+    ['Title', 'Status', 'Due Date', 'Assigned To'].join(','),
+    ...tasksToExport.map(task => {
+      const owner = task.assignedTo || task.ownerPersonId;
+      const ownerName = owner 
+        ? `${owner.firstName || owner.first_name || ''} ${owner.lastName || owner.last_name || ''}`.trim()
+        : '';
+      return [
+        task.title,
+        task.status,
+        task.dueDate || '',
+        ownerName
+      ].join(',');
+    })
   ].join('\n');
   
   const blob = new Blob([csv], { type: 'text/csv' });
@@ -522,21 +525,8 @@ const exportTasksToCSV = (tasksToExport) => {
   window.URL.revokeObjectURL(url);
 };
 
-const deleteTask = async (taskId) => {
-  if (!confirm('Are you sure you want to delete this task?')) return;
-  
-  try {
-    await apiClient.delete(`/tasks/${taskId}`);
-    await fetchTasks();
-    await fetchStatistics();
-  } catch (error) {
-    console.error('Error deleting task:', error);
-  }
-};
-
 const handleStatusChange = async () => {
   await fetchTasks();
-  await fetchStatistics();
   closeDetailModal();
 };
 
@@ -571,7 +561,6 @@ const exportTasks = async () => {
 const handleImportComplete = () => {
   showImportModal.value = false;
   fetchTasks();
-  fetchStatistics();
 };
 
 // Utility functions
@@ -585,7 +574,32 @@ const formatDate = (date) => {
 };
 
 const formatStatus = (status) => {
+  // Map Scheduling status values ('open', 'completed') to display format
+  const statusMap = {
+    'open': 'Open',
+    'completed': 'Completed'
+  };
+  if (statusMap[status]) {
+    return statusMap[status];
+  }
+  // Fallback for old status values if any
   return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+};
+
+const formatAppContext = (appContext) => {
+  // Map app context keys to display names
+  const appContextMap = {
+    'SALES': 'Sales',
+    'PORTAL': 'Portal',
+    'AUDIT': 'Audit',
+    'LMS': 'LMS',
+    'CONTROL_PLANE': 'Control Plane'
+  };
+  if (appContextMap[appContext]) {
+    return appContextMap[appContext];
+  }
+  // Fallback: return as-is if not in map
+  return appContext || 'Unknown';
 };
 
 // Initialize
@@ -624,7 +638,6 @@ onMounted(() => {
   }
   
   fetchTasks();
-  fetchStatistics();
 });
 </script>
 

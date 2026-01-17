@@ -20,7 +20,7 @@
  * - Organization isolation enforced
  * - Ownership-based authorization
  * - Customer-safe language only
- * - No CRM internals exposed
+ * - No SALES internals exposed
  * 
  * ============================================================================
  */

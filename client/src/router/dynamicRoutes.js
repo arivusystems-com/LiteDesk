@@ -25,7 +25,8 @@ const componentMap = {
   // CRM Modules
   people: () => import('@/views/People.vue'),
   contacts: () => import('@/views/People.vue'),
-  'person-detail': () => import('@/views/PeopleDetail.vue'),
+  'people-create': () => import('@/views/PeopleCreate.vue'),
+  'person-detail': () => import('@/views/PeopleSurface.vue'),
   organizations: () => import('@/views/Organizations.vue'),
   'organization-detail': () => import('@/views/OrganizationDetail.vue'),
   deals: () => import('@/views/Deals.vue'),

@@ -36,7 +36,7 @@ exports.getCoreModules = async (req, res) => {
         }
 
         // Get enabled apps for this organization
-        // Filter out 'CRM' as it's not a real app (legacy terminology)
+        // Filter out invalid app keys
         const VALID_APPS = ['SALES', 'HELPDESK', 'PROJECTS', 'PORTAL', 'AUDIT', 'LMS'];
         const enabledAppKeys = (organization.enabledApps || [])
             .filter(app => app.status === 'ACTIVE')
@@ -141,7 +141,7 @@ exports.getCoreModule = async (req, res) => {
         }
 
         // Get enabled apps
-        // Filter out 'CRM' as it's not a real app (legacy terminology)
+        // Filter out invalid app keys
         const VALID_APPS = ['SALES', 'HELPDESK', 'PROJECTS', 'PORTAL', 'AUDIT', 'LMS'];
         const enabledAppKeys = (organization.enabledApps || [])
             .filter(app => app.status === 'ACTIVE')
@@ -210,7 +210,7 @@ function getAppName(appKey) {
 
 // Helper function to get required modules for an app
 // In a full implementation, this would come from AppDefinition model
-// Note: CRM is not an app - these are the actual apps in the system
+// Note: These are the actual apps in the system
 function getRequiredModulesForApp(appKey) {
     const appKeyLower = appKey.toLowerCase();
     const requiredModulesMap = {

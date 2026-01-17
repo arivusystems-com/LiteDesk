@@ -133,9 +133,15 @@ const routes = [
     meta: { requiresAuth: true, requiresPermission: { module: 'people', action: 'view' } }
   },
   {
+    path: '/people/create',
+    name: 'people-create',
+    component: () => import('@/views/PeopleCreate.vue'),
+    meta: { requiresAuth: true, requiresPermission: { module: 'people', action: 'create' } }
+  },
+  {
     path: '/people/:id',
     name: 'person-detail',
-    component: () => import('@/views/PeopleDetail.vue'),
+    component: () => import('@/views/PeopleSurface.vue'),
     meta: { requiresAuth: true, requiresPermission: { module: 'people', action: 'view' } }
   },
   // Backward-compat redirects

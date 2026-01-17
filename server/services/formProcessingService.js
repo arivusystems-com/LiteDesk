@@ -546,11 +546,14 @@ async function createCorrectiveTask(form, formResponse, organizationId) {
 
 /**
  * Map form data to contact (for forms that create contacts)
+ * 
+ * ⚠️ IMPORTANT: Person creation is identity-only and app-agnostic.
+ *    Participation fields (type, lead_status, etc.) are NOT set here.
+ *    They must be set via Attach-to-App flow.
  */
 exports.mapFormDataToContact = (form, responseDetails) => {
     const contactData = {
-        type: 'Lead',
-        lead_status: 'New'
+        // No participation fields - identity only
     };
     
     // Map common fields

@@ -99,8 +99,11 @@ function resolvePeopleTypes({
   Object.entries(peopleProjection.apps).forEach(([rawAppKey, appConfig]) => {
     const appKey = rawAppKey.toUpperCase();
 
+    console.log(`[PeopleTypeResolver] Processing app: ${rawAppKey} -> ${appKey}`);
+
     // App must be enabled at org level
     if (!normalizedEnabledApps.includes(appKey)) {
+      console.log(`[PeopleTypeResolver] App ${appKey} not in enabledApps:`, normalizedEnabledApps);
       return;
     }
 
@@ -110,12 +113,14 @@ function resolvePeopleTypes({
         (k) => k.toUpperCase() === appKey
       );
       if (!normalizedRegistryKey) {
+        console.log(`[PeopleTypeResolver] App ${appKey} not in appRegistry`);
         return;
       }
     }
 
     const perms = userPermissions[appKey] || {};
     if (!perms.canViewPeople) {
+      console.log(`[PeopleTypeResolver] User cannot view People in ${appKey}`);
       // User cannot see People in this app → skip
       return;
     }
@@ -125,8 +130,11 @@ function resolvePeopleTypes({
       : [];
 
     if (!allowedTypes.length) {
+      console.log(`[PeopleTypeResolver] No allowedTypes for ${appKey}`);
       return;
     }
+
+    console.log(`[PeopleTypeResolver] Adding types for ${appKey}:`, allowedTypes);
 
     byApp[appKey] = {
       appKey,

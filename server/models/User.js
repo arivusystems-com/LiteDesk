@@ -9,7 +9,7 @@
  * - Organization reference (multi-tenancy)
  * - Role and permissions
  * 
- * ✅ FIXED: Permissions structure marked as legacy/CRM-specific
+ * ✅ FIXED: Permissions structure marked as legacy/SALES-specific
  *    - User.permissions field is kept for backward compatibility
  *    - Permissions should be managed via Role.appPermissions (app-aware)
  *    - Login flow syncs permissions from role to user for backward compatibility
@@ -153,7 +153,7 @@ const UserSchema = new mongoose.Schema({
     appAccess: [{
         appKey: {
             type: String,
-            enum: ['CRM', 'SALES', 'HELPDESK', 'PROJECTS', 'AUDIT', 'PORTAL'],
+            enum: ['SALES', 'HELPDESK', 'PROJECTS', 'AUDIT', 'PORTAL'],
             required: true
         },
         roleKey: {
@@ -173,14 +173,14 @@ const UserSchema = new mongoose.Schema({
     
     // Legacy App Entitlements (kept for backward compatibility during migration)
     // Defines which applications this user can access
-    // - ['CRM']: CRM-only users (default for existing users)
+    // - ['SALES']: SALES-only users (default for existing users)
     // - ['PORTAL']: Portal-only users
-    // - ['CRM', 'PORTAL']: Multi-app users
+    // - ['SALES', 'PORTAL']: Multi-app users
     // Phase 2D: Added SALES, HELPDESK, PROJECTS
     allowedApps: {
         type: [String],
-        enum: ['CRM', 'SALES', 'HELPDESK', 'PROJECTS', 'PORTAL', 'AUDIT', 'LMS'],
-        default: ['CRM'] // Default existing users to CRM access
+        enum: ['SALES', 'HELPDESK', 'PROJECTS', 'PORTAL', 'AUDIT', 'LMS'],
+        default: ['SALES'] // Default existing users to SALES access
     },
     
     // Status

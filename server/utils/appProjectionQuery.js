@@ -215,11 +215,18 @@ function applyProjectionFilter({ appKey, moduleKey, baseQuery = {}, projectionMe
       // OR filter only if type exists AND is in allowed list, otherwise show all
       
       // For forms and events, we'll be more permissive - only filter if explicitly provided
-      // For people, we're stricter since type is always required
+      // For people, we're permissive to include people without type (identity-only records)
+      // Type is NOT required - participation is set via Attach-to-App, not during creation
       if (moduleKey === 'people') {
-        // People: Type is required, so filter strictly
+        // People: Include people with allowed types OR people without type (identity-only)
+        // This allows newly created people (without participation) to be visible
         projectionFilter = {
-          [typeField]: { $in: modelAllowedTypes }
+          $or: [
+            { [typeField]: { $in: modelAllowedTypes } }, // Type is in allowed types
+            { [typeField]: { $exists: false } }, // Field doesn't exist (identity-only person)
+            { [typeField]: null }, // Field is null (identity-only person)
+            { [typeField]: '' } // Field is empty string (identity-only person)
+          ]
         };
       } else {
         // Forms and Events: More permissive for backward compatibility

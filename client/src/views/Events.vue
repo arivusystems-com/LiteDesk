@@ -73,6 +73,14 @@
       </div>
 
       <div class="flex flex-wrap gap-3">
+        <select v-model="filters.appContext" @change="applyFilters" class="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer text-sm">
+          <option value="">All Apps</option>
+          <option value="SALES">Sales</option>
+          <option value="PORTAL">Portal</option>
+          <option value="AUDIT">Audit</option>
+          <option value="LMS">LMS</option>
+        </select>
+
         <select v-model="filters.type" @change="applyFilters" class="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer text-sm">
           <option value="">All Types</option>
           <option value="meeting">Meeting</option>
@@ -82,13 +90,6 @@
           <option value="reminder">Reminder</option>
         </select>
 
-        <select v-model="filters.status" @change="applyFilters" class="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer text-sm">
-          <option value="">All Status</option>
-          <option value="scheduled">Scheduled</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-          <option value="postponed">Postponed</option>
-        </select>
 
         <select v-model="filters.timeRange" @change="applyFilters" class="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer text-sm">
           <option value="">All Time</option>
@@ -127,14 +128,103 @@
       </div>
     </div>
 
-    <!-- Event Form Drawer -->
-    <CreateRecordDrawer
-      :isOpen="showEventModal"
-      moduleKey="events"
-      :record="editingEvent"
-      @close="closeEventModal"
-      @saved="handleEventSaved"
-    />
+    <!-- Calendar Event Creation Modal -->
+    <div v-if="showEventModal" class="fixed inset-0 z-50 overflow-y-auto" @click.self="closeEventModal">
+      <div class="flex min-h-full items-center justify-center p-4">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="closeEventModal"></div>
+        
+        <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6" @click.stop>
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">New Event</h3>
+            <button
+              @click="closeEventModal"
+              class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <form @submit.prevent="handleCreateEvent" class="space-y-4">
+            <!-- Title -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Title <span class="text-red-500">*</span>
+              </label>
+              <input
+                v-model="eventForm.title"
+                type="text"
+                required
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                placeholder="Event title"
+              />
+            </div>
+
+            <!-- Start Date -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Start Date <span class="text-red-500">*</span>
+              </label>
+              <input
+                v-model="eventForm.startDate"
+                type="datetime-local"
+                required
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
+
+            <!-- End Date (optional) -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                End Date (optional)
+              </label>
+              <input
+                v-model="eventForm.dueDate"
+                type="datetime-local"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
+
+            <!-- Description (optional) -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Description (optional)
+              </label>
+              <textarea
+                v-model="eventForm.description"
+                rows="3"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                placeholder="Event description"
+              ></textarea>
+            </div>
+
+            <!-- Error message -->
+            <div v-if="eventFormError" class="text-sm text-red-600 dark:text-red-400">
+              {{ eventFormError }}
+            </div>
+
+            <!-- Actions -->
+            <div class="flex justify-end gap-3 pt-4">
+              <button
+                type="button"
+                @click="closeEventModal"
+                class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                :disabled="creatingEvent"
+                class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {{ creatingEvent ? 'Creating...' : 'Create Event' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -147,8 +237,8 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
 import apiClient from '@/utils/apiClient';
-import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import { useTabs } from '@/composables/useTabs';
+import { useAuthStore } from '@/stores/auth';
 
 const router = useRouter();
 const route = useRoute();
@@ -161,14 +251,24 @@ const events = ref([]);
 const stats = ref({});
 const loading = ref(false);
 const showEventModal = ref(false);
-const editingEvent = ref(null);
 const isDarkMode = ref(false);
+const authStore = useAuthStore();
+const creatingEvent = ref(false);
+const eventFormError = ref('');
+
+// Event creation form
+const eventForm = ref({
+  title: '',
+  startDate: '',
+  dueDate: '',
+  description: ''
+});
 
 // Search and filters
 const searchQuery = ref('');
 const filters = ref({
+  appContext: '', // Default to empty = All Apps
   type: '',
-  status: '',
   timeRange: ''
 });
 
@@ -182,14 +282,21 @@ const checkDarkMode = () => {
 // Check if any filters are active
 const hasActiveFilters = computed(() => {
   return searchQuery.value.trim() !== '' || 
+         filters.value.appContext !== '' ||
          filters.value.type !== '' || 
-         filters.value.status !== '' || 
          filters.value.timeRange !== '';
 });
 
 // Convert our events to FullCalendar format with filtering
 const calendarEvents = computed(() => {
   let filteredEvents = events.value;
+
+  // Apply appContext filter (cross-app aggregation)
+  if (filters.value.appContext) {
+    filteredEvents = filteredEvents.filter(event => 
+      event.appContext === filters.value.appContext
+    );
+  }
 
   // Apply search filter
   if (searchQuery.value.trim()) {
@@ -206,14 +313,6 @@ const calendarEvents = computed(() => {
     filteredEvents = filteredEvents.filter(event => 
       (event.eventType || event.type) === filters.value.type
     );
-  }
-
-  // Apply status filter
-  if (filters.value.status) {
-    filteredEvents = filteredEvents.filter(event => {
-      const eventStatus = event.status?.toLowerCase() || '';
-      return eventStatus === filters.value.status.toLowerCase();
-    });
   }
 
   // Apply time range filter
@@ -256,25 +355,41 @@ const calendarEvents = computed(() => {
     });
   }
 
-  const convertedEvents = filteredEvents.map(event => ({
-    id: event.eventId || event._id,
-    title: event.eventName || event.title,
-    start: event.startDateTime || event.startDate,
-    end: event.endDateTime || event.endDate,
-    backgroundColor: '#3b82f6', // Default color
-    borderColor: '#3b82f6',
-    textColor: '#ffffff',
-    extendedProps: {
-      eventId: event.eventId,
-      agendaNotes: event.agendaNotes || event.description,
-      location: event.location,
-      eventType: event.eventType || event.type,
-      status: event.status,
-      attendees: event.attendees,
-      tags: event.tags,
-      originalEvent: event
-    }
-  }));
+  // Helper function to format app context
+  const formatAppContext = (appContext) => {
+    const appContextMap = {
+      'SALES': 'Sales',
+      'PORTAL': 'Portal',
+      'AUDIT': 'Audit',
+      'LMS': 'LMS',
+      'CONTROL_PLANE': 'Control Plane'
+    };
+    return appContextMap[appContext] || appContext || '';
+  };
+
+  const convertedEvents = filteredEvents.map(event => {
+    const appLabel = event.appContext ? `[${formatAppContext(event.appContext)}] ` : '';
+    return {
+      id: event.eventId || event._id,
+      title: `${appLabel}${event.eventName || event.title}`, // Include app badge in title
+      start: event.startDateTime || event.startDate,
+      end: event.endDateTime || event.endDate,
+      backgroundColor: '#3b82f6', // Default color
+      borderColor: '#3b82f6',
+      textColor: '#ffffff',
+      extendedProps: {
+        eventId: event.eventId,
+        appContext: event.appContext,
+        agendaNotes: event.agendaNotes || event.description,
+        location: event.location,
+        eventType: event.eventType || event.type,
+        status: event.status,
+        attendees: event.attendees,
+        tags: event.tags,
+        originalEvent: event
+      }
+    };
+  });
   
   return convertedEvents;
 });
@@ -328,56 +443,113 @@ const fetchEvents = async () => {
   try {
     loading.value = true;
     
-    // Fetch all events (FullCalendar will handle filtering by view)
-    const response = await apiClient.get('/events', {
-      params: { 
-        limit: 500,
-        sortBy: 'startDateTime',
-        sortOrder: 'asc'
-      }
-    });
+    // Use Scheduling API to fetch events
+    // Aggregation: by default fetches across all apps
+    // Optional appContext filter narrows to specific app
+    const params = {
+      type: 'event'
+    };
     
-    if (response.success) {
-      events.value = response.data;
+    // Add appContext filter if selected (empty string means "All Apps")
+    if (filters.value.appContext) {
+      params.appContext = filters.value.appContext;
+    }
+    
+    console.log('Fetching events with params:', params);
+    const response = await apiClient.get('/scheduling', { params });
+    console.log('Events response:', response);
+    
+    if (response && response.success) {
+      // Map Scheduling items to event-like structure for UI compatibility
+      const items = Array.isArray(response.data) ? response.data : [];
+      console.log('Raw scheduling items:', items.length, items);
+      
+      events.value = items.map(item => {
+        // Map Scheduling fields to calendar event format
+        // Scheduling uses startDate, FullCalendar expects startDateTime
+        // Scheduling uses ownerPersonId, UI expects owner
+        // IMPORTANT: Preserve appContext for cross-app aggregation
+        return {
+          ...item,
+          // Map startDate to startDateTime for FullCalendar compatibility
+          startDateTime: item.startDate,
+          startDate: item.startDate,
+          // Map dueDate to endDateTime for FullCalendar (events use dueDate as end date)
+          endDateTime: item.dueDate,
+          endDate: item.dueDate,
+          // Map ownerPersonId to owner for UI compatibility
+          owner: item.ownerPersonId,
+          // Map title (Scheduling uses title, events may expect eventName)
+          eventName: item.title,
+          title: item.title,
+          // Preserve appContext for filtering and display
+          appContext: item.appContext
+        };
+      });
+      
       console.log('✅ Events loaded:', events.value.length, 'events');
     } else {
       console.error('❌ Events API failed:', response);
+      events.value = [];
     }
   } catch (error) {
     console.error('Error fetching events:', error);
+    if (error.response) {
+      console.error('Error response:', error.response);
+    }
+    events.value = [];
   } finally {
     loading.value = false;
   }
 };
 
 const fetchStats = async () => {
+  // Statistics endpoint not available for Scheduling API
+  // Keep function for compatibility but compute from events data
   try {
-    const response = await apiClient.get('/events/stats');
-    if (response.success) {
-      stats.value = response.data;
-    }
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay());
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    
+    stats.value = {
+      total: events.value.length,
+      today: events.value.filter(e => {
+        const eventDate = new Date(e.startDate || e.startDateTime);
+        return eventDate.toDateString() === today.toDateString();
+      }).length,
+      thisWeek: events.value.filter(e => {
+        const eventDate = new Date(e.startDate || e.startDateTime);
+        return eventDate >= startOfWeek && eventDate <= endOfWeek;
+      }).length,
+      upcoming: events.value.filter(e => {
+        const eventDate = new Date(e.startDate || e.startDateTime);
+        return eventDate >= today;
+      }).length,
+      byType: {}
+    };
   } catch (error) {
-    console.error('Error fetching stats:', error);
+    console.error('Error computing stats:', error);
   }
 };
 
 const handleEventClick = (info) => {
-  const eventId = info.event.id;
-  const eventTitle = info.event.title;
-  
-  // Open event detail in a new tab
-  openTab(`/events/${eventId}`, {
-    title: eventTitle,
-    icon: 'calendar',
-    params: { name: eventTitle }
-  });
+  // Calendar events are Scheduling events (type='event'), not workflow events
+  // Workflow events use /events route, but Scheduling events don't have a detail view
+  // Disable click navigation to avoid 404 errors when clicking calendar events
+  // Calendar events can be rescheduled via drag/drop, but don't have a detail page
+  console.log('Calendar event clicked:', info.event.title);
+  // Do nothing - calendar events don't have a detail view
 };
 
 const handleDateSelect = (selectInfo) => {
-  editingEvent.value = {
-    startDateTime: selectInfo.startStr,
-    endDateTime: selectInfo.endStr
-  };
+  // Pre-fill form with selected date/time
+  eventForm.value.startDate = selectInfo.startStr.slice(0, 16); // Format for datetime-local input
+  if (selectInfo.endStr) {
+    eventForm.value.dueDate = selectInfo.endStr.slice(0, 16);
+  }
   showEventModal.value = true;
   
   // Clear the selection
@@ -394,24 +566,18 @@ const handleEventDrop = async (info) => {
     const event = info.event;
     const eventId = event.id;
     
-    await apiClient.put(`/events/${eventId}`, {
-      startDateTime: event.start.toISOString(),
-      endDateTime: event.end ? event.end.toISOString() : event.start.toISOString()
+    // Use Scheduling API reschedule endpoint
+    // Note: reschedule endpoint only accepts startDate, not dueDate/endDate
+    await apiClient.patch(`/scheduling/${eventId}/reschedule`, {
+      startDate: event.start.toISOString()
     });
     
     await fetchEvents();
     await fetchStats();
   } catch (error) {
-    console.error('Error updating event:', error);
+    console.error('Error rescheduling event:', error);
     info.revert();
   }
-};
-
-const handleEventSaved = async () => {
-  // Refresh events and stats when a new event is saved
-  await fetchEvents();
-  await fetchStats();
-  closeEventModal();
 };
 
 // Function to refresh calendar data (can be called from other components)
@@ -425,27 +591,95 @@ const handleEventResize = async (info) => {
     const event = info.event;
     const eventId = event.id;
     
-    await apiClient.put(`/events/${eventId}`, {
-      startDateTime: event.start.toISOString(),
-      endDateTime: event.end ? event.end.toISOString() : event.start.toISOString()
+    // Use Scheduling API reschedule endpoint
+    // Note: reschedule endpoint only accepts startDate, not dueDate/endDate
+    await apiClient.patch(`/scheduling/${eventId}/reschedule`, {
+      startDate: event.start.toISOString()
     });
     
     await fetchEvents();
     await fetchStats();
   } catch (error) {
-    console.error('Error updating event:', error);
+    console.error('Error rescheduling event:', error);
     info.revert();
   }
 };
 
-const openEventModal = (event = null) => {
-  editingEvent.value = event;
+const openEventModal = () => {
+  // Reset form
+  eventForm.value = {
+    title: '',
+    startDate: '',
+    dueDate: '',
+    description: ''
+  };
+  eventFormError.value = '';
   showEventModal.value = true;
 };
 
 const closeEventModal = () => {
   showEventModal.value = false;
-  editingEvent.value = null;
+  eventForm.value = {
+    title: '',
+    startDate: '',
+    dueDate: '',
+    description: ''
+  };
+  eventFormError.value = '';
+};
+
+const handleCreateEvent = async () => {
+  try {
+    creatingEvent.value = true;
+    eventFormError.value = '';
+    
+    // Get organizationId for entityType/entityId (standalone events use Organization)
+    const organizationId = authStore.user?.organizationId;
+    if (!organizationId) {
+      eventFormError.value = 'Organization ID is required. Please refresh and try again.';
+      creatingEvent.value = false;
+      return;
+    }
+    
+    // Prepare payload for Scheduling API
+    const payload = {
+      type: 'event',
+      title: eventForm.value.title.trim(),
+      startDate: new Date(eventForm.value.startDate).toISOString(),
+      entityType: 'Organization',
+      entityId: organizationId
+    };
+    
+    // Add optional fields
+    if (eventForm.value.dueDate) {
+      payload.dueDate = new Date(eventForm.value.dueDate).toISOString();
+    }
+    
+    if (eventForm.value.description?.trim()) {
+      payload.description = eventForm.value.description.trim();
+    }
+    
+    // Create event via Scheduling API
+    const response = await apiClient.post('/scheduling', payload);
+    
+    if (response.success) {
+      // Refresh calendar
+      await fetchEvents();
+      await fetchStats();
+      closeEventModal();
+    } else {
+      eventFormError.value = response.message || 'Failed to create event. Please try again.';
+    }
+  } catch (error) {
+    console.error('Error creating event:', error);
+    if (error.response?.data?.message) {
+      eventFormError.value = error.response.data.message;
+    } else {
+      eventFormError.value = 'Error creating event. Please try again.';
+    }
+  } finally {
+    creatingEvent.value = false;
+  }
 };
 
 const navigateToOctober2025 = () => {
@@ -473,8 +707,8 @@ const applyFilters = () => {
 const clearFilters = () => {
   searchQuery.value = '';
   filters.value = {
+    appContext: '',
     type: '',
-    status: '',
     timeRange: ''
   };
 };

@@ -38,7 +38,7 @@ module.exports = {
   },
   [domainEvents.AUDIT_SUBMITTED]: {
     appKey: 'AUDIT',
-    recipients: ['CRM_ADMIN'],
+    recipients: ['SALES_ADMIN'],
     priority: 'NORMAL',
     defaultChannels: ['IN_APP', 'EMAIL'],
     channels: {
@@ -141,7 +141,7 @@ module.exports = {
     }
   },
   [domainEvents.USER_ADDED_TO_APP]: {
-    appKey: 'CRM',
+    appKey: 'SALES',
     recipients: ['USER_SELF'],
     priority: 'NORMAL',
     defaultChannels: ['IN_APP', 'EMAIL'],
@@ -154,7 +154,7 @@ module.exports = {
     }
   },
   [domainEvents.SYSTEM_TRIAL_EXPIRING]: {
-    appKey: 'CRM',
+    appKey: 'SALES',
     recipients: ['TRIAL_OWNER'],
     priority: 'HIGH',
     defaultChannels: ['IN_APP', 'EMAIL'],
@@ -167,8 +167,8 @@ module.exports = {
     }
   },
   [domainEvents.SYSTEM_SUBSCRIPTION_SUSPENDED]: {
-    appKey: 'CRM',
-    recipients: ['CRM_ADMIN'],
+    appKey: 'SALES',
+    recipients: ['SALES_ADMIN'],
     priority: 'HIGH',
     defaultChannels: ['IN_APP', 'EMAIL'],
     channels: {

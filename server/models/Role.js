@@ -55,7 +55,7 @@ const roleSchema = new mongoose.Schema({
     
     // App-Scoped Permissions (new structure for multi-app support)
     // Format: { appKey: { module: { action: boolean } } }
-    // Example: { CRM: { contacts: { create: true, read: true } }, PORTAL: { profile: { read: true } } }
+    // Example: { SALES: { contacts: { create: true, read: true } }, PORTAL: { profile: { read: true } } }
     appPermissions: {
         type: Map,
         of: mongoose.Schema.Types.Mixed,
@@ -255,7 +255,7 @@ roleSchema.methods.hasPermission = function(module, action, appKey = null) {
         }
     }
     
-    // Fallback to legacy permissions (treated as CRM-scoped)
+    // Fallback to legacy permissions (treated as SALES-scoped)
     // This ensures backward compatibility with existing roles
     if (this.permissions && this.permissions[module]) {
         return this.permissions[module][action] === true;
@@ -265,7 +265,7 @@ roleSchema.methods.hasPermission = function(module, action, appKey = null) {
 };
 
 // Instance method to check if role has permission for a specific app
-// @param {string} appKey - App key (e.g., 'CRM', 'PORTAL')
+// @param {string} appKey - App key (e.g., 'SALES', 'PORTAL')
 // @param {string} module - Module name
 // @param {string} action - Action name
 roleSchema.methods.hasAppPermission = function(appKey, module, action) {

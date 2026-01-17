@@ -109,8 +109,27 @@ const loadTabsFromStorage = () => {
     if (stored) {
       const parsed = JSON.parse(stored);
       console.log('🔄 [loadTabsFromStorage] Parsed tabs:', parsed.tabs?.length || 0);
-      tabs.value = parsed.tabs || [];
-      activeTabId.value = parsed.activeTabId || null;
+      let loadedTabs = parsed.tabs || [];
+      let loadedActiveTabId = parsed.activeTabId || null;
+      
+      // Filter out settings tabs (settings should not be stored as tabs)
+      const settingsTabsCount = loadedTabs.filter(tab => tab.path?.startsWith('/settings')).length;
+      if (settingsTabsCount > 0) {
+        console.log('🔄 [loadTabsFromStorage] Filtering out', settingsTabsCount, 'settings tab(s)');
+        loadedTabs = loadedTabs.filter(tab => !tab.path?.startsWith('/settings'));
+        
+        // If the active tab was a settings tab, clear it
+        if (loadedActiveTabId) {
+          const activeTab = parsed.tabs?.find(tab => tab.id === loadedActiveTabId);
+          if (activeTab && activeTab.path?.startsWith('/settings')) {
+            console.log('🔄 [loadTabsFromStorage] Active tab was settings, clearing it');
+            loadedActiveTabId = null;
+          }
+        }
+      }
+      
+      tabs.value = loadedTabs;
+      activeTabId.value = loadedActiveTabId;
       
       // Convert icon identifiers back to components
       tabs.value.forEach(tab => {
@@ -375,17 +394,9 @@ export function useTabs() {
           router = useRouter();
           console.log('[useTabs] Router lazy-loaded successfully');
         } else {
-          // Try to get router from the app instance
-          // Vue Router should be available globally
-          try {
-            // Import router from the app - this is a fallback
-            const { useRouter: getRouterFromVue } = require('vue-router');
-            router = getRouterFromVue();
-            console.log('[useTabs] Router loaded from Vue Router');
-          } catch (e2) {
-            console.error('[useTabs] Cannot get router:', e2);
+          // Cannot get router without Vue instance context
+          console.warn('[useTabs] Cannot get router: No Vue instance available');
             return null;
-          }
         }
       } catch (e) {
         console.error('[useTabs] Error getting router:', e);
@@ -580,9 +591,9 @@ export function useTabs() {
       return;
     }
     
-    // Skip audit routes - they don't use tabs (have their own layout)
-    if (route.path.startsWith('/audit/')) {
-      console.log('⏭️ Audit route detected, skipping tab watcher setup');
+    // Skip audit and settings routes - they don't use tabs (have their own layout)
+    if (route.path.startsWith('/audit/') || route.path.startsWith('/settings')) {
+      console.log('⏭️ Audit/Settings route detected, skipping tab watcher setup');
       return;
     }
     
@@ -597,30 +608,38 @@ export function useTabs() {
     const currentPath = route.path;
     
     // First, check if we have an active tab from storage - restore it
+    // Skip restoration if the active tab is a settings route (settings shouldn't be tabs)
     if (activeTabId.value) {
       const activeTab = tabs.value.find(tab => tab.id === activeTabId.value);
       if (activeTab) {
-        console.log('🔄 [setupRouteWatcher] Restoring active tab from storage:', activeTab.id, activeTab.path);
-        // Navigate to the active tab's path if we're not already there
-        if (currentPath !== activeTab.path) {
-          const currentRouter = getRouter();
-          if (currentRouter) {
-            isProgrammaticNavigation = true;
-            lastProgrammaticPath = activeTab.path;
-            currentRouter.replace(activeTab.path).then(() => {
-              setTimeout(() => {
-                isProgrammaticNavigation = false;
-                lastProgrammaticPath = null;
-              }, 100);
-            }).catch(() => {
-              setTimeout(() => {
-                isProgrammaticNavigation = false;
-                lastProgrammaticPath = null;
-              }, 100);
-            });
+        // Don't restore settings tabs - they should open in new tabs, not be restored
+        if (activeTab.path?.startsWith('/settings')) {
+          console.log('⏭️ [setupRouteWatcher] Skipping restoration of settings tab:', activeTab.id);
+          activeTabId.value = null;
+          // Continue to default navigation below
+        } else {
+          console.log('🔄 [setupRouteWatcher] Restoring active tab from storage:', activeTab.id, activeTab.path);
+          // Navigate to the active tab's path if we're not already there
+          if (currentPath !== activeTab.path) {
+            const currentRouter = getRouter();
+            if (currentRouter) {
+              isProgrammaticNavigation = true;
+              lastProgrammaticPath = activeTab.path;
+              currentRouter.replace(activeTab.path).then(() => {
+                setTimeout(() => {
+                  isProgrammaticNavigation = false;
+                  lastProgrammaticPath = null;
+                }, 100);
+              }).catch(() => {
+                setTimeout(() => {
+                  isProgrammaticNavigation = false;
+                  lastProgrammaticPath = null;
+                }, 100);
+              });
+            }
           }
+          return; // Don't continue with default home navigation
         }
-        return; // Don't continue with default home navigation
       } else {
         // Active tab ID exists but tab not found - clear it
         console.warn('⚠️ [setupRouteWatcher] Active tab ID not found in tabs, clearing:', activeTabId.value);
