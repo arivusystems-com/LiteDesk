@@ -260,22 +260,58 @@ watch(
     if (wasAuthed && !isAuthed) {
       // User logged out - clear tabs
       resetTabsState();
+      // Cleanup route watcher when logging out
+      if (typeof cleanupRouteWatcher === 'function') {
+        cleanupRouteWatcher();
+        cleanupRouteWatcher = null;
+      }
     } else if (!wasAuthed && isAuthed) {
-      // User just logged in - initialize tabs
+      // User just logged in - initialize tabs (same as onMounted logic)
       console.log('🔄 [App] User authenticated, initializing tabs...');
       const instanceId = authStore.organization?._id || authStore.organization?.instanceId;
       const userId = authStore.user?._id;
       
       if (instanceId && userId) {
-        configureTabsStorage({ instanceId, userId });
-        initTabs();
-        await nextTick();
+        // Cleanup any existing route watcher before setting up a new one
+        if (typeof cleanupRouteWatcher === 'function') {
+          cleanupRouteWatcher();
+          cleanupRouteWatcher = null;
+        }
         
-        // Setup route watcher
-        const { setupRouteWatcher } = useTabs();
-        setupRouteWatcher(route);
+        // Use the same initialization logic as onMounted
+        // Use 'route' from useRoute() (same as onMounted) instead of router.currentRoute.value
+        const isAuditRoute = route.path.startsWith('/audit/');
+        const isPortalRoute = route.path.startsWith('/portal/');
         
-        console.log('✅ [App] Tabs initialized after login');
+        if (!isAuditRoute && !isPortalRoute) {
+          configureTabsStorage({ instanceId, userId });
+          initTabs();
+          
+          // Wait for router to be ready and route to stabilize after login
+          await router.isReady();
+          await nextTick();
+          
+          // Log tabs state for debugging
+          console.log('📊 [App] After login - After initTabs, checking tabs state...');
+          const { tabs: tabsRef } = useTabs();
+          console.log('📊 [App] After login - Tabs count:', tabsRef.value.length);
+          console.log('📊 [App] After login - Tabs:', tabsRef.value.map(t => ({ id: t.id, title: t.title, path: t.path })));
+          console.log('📊 [App] After login - Current route:', route.path, route.fullPath);
+
+          // Setup route watcher for browser navigation (same as onMounted)
+          // Use 'route' from useRoute() just like onMounted does
+          // Store cleanup function to remove popstate listener on unmount
+          console.log('🔧 [App] After login - Setting up route watcher on route:', route.path);
+          cleanupRouteWatcher = setupRouteWatcher(route);
+          
+          if (typeof cleanupRouteWatcher === 'function') {
+            console.log('✅ [App] After login - Route watcher successfully set up');
+          } else {
+            console.warn('⚠️ [App] After login - setupRouteWatcher did not return cleanup function');
+          }
+        } else {
+          console.log('📋 [App] After login - Audit/Portal route detected, skipping tabs initialization');
+        }
       }
     }
   },
