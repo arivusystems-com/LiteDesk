@@ -36,6 +36,7 @@ import { useRoute } from 'vue-router';
 import Nav from '@/components/Nav.vue';
 import TabBar from '@/components/TabBar.vue';
 import { useAppShellStore } from '@/stores/appShell';
+import { useTabs } from '@/composables/useTabs';
 
 const route = useRoute();
 const appShellStore = useAppShellStore();

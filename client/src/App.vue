@@ -24,6 +24,9 @@ const route = useRoute();
 const { initTabs, setupRouteWatcher } = useTabs();
 const { warning } = useNotifications();
 
+// Store cleanup function for route watcher (popstate listener)
+let cleanupRouteWatcher = null;
+
 // Initialize color mode
 const { colorMode } = useColorMode();
 
@@ -212,7 +215,8 @@ onMounted(async () => {
         console.log('📊 [App] Tabs:', tabsRef.value.map(t => ({ id: t.id, title: t.title, path: t.path })));
 
         // Setup route watcher for browser navigation (pass route from setup context)
-        setupRouteWatcher(route);
+        // Store cleanup function to remove popstate listener on unmount
+        cleanupRouteWatcher = setupRouteWatcher(route);
       } else {
         console.error('[Tabs] Skipping tab initialization: missing instanceId or userId', {
           instanceId,
@@ -240,6 +244,10 @@ watch(salesNotificationSheetOpen, (val) => {
 });
 
 onBeforeUnmount(() => {
+  // Cleanup route watcher (removes popstate listener)
+  if (typeof cleanupRouteWatcher === 'function') {
+    cleanupRouteWatcher();
+  }
   window.removeEventListener('resize', handleResize);
   window.removeEventListener('storage', handleStorageEvent);
   window.removeEventListener('sales-open-notifications', handleSalesOpenNotifications);

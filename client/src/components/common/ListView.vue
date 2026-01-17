@@ -4,7 +4,84 @@
     <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-3">
-          <h1 class="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-white truncate">{{ title }}</h1>
+          <!-- View Selector Dropdown (People module only) -->
+          <Menu v-if="moduleKey === 'people' && savedViews && savedViews.length > 0" as="div" class="relative inline-block text-left">
+            <div>
+              <MenuButton class="inline-flex items-center gap-2 text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-white hover:text-gray-700 dark:hover:text-gray-200 transition-colors focus:outline-none">
+                <span>{{ activePeopleViewTitle }}</span>
+                <ChevronDownIcon class="h-5 w-5 text-gray-500 dark:text-gray-400" aria-hidden="true" />
+              </MenuButton>
+            </div>
+            <Transition
+              enter-active-class="transition ease-out duration-100"
+              enter-from-class="transform opacity-0 scale-95"
+              enter-to-class="transform opacity-100 scale-100"
+              leave-active-class="transition ease-in duration-75"
+              leave-from-class="transform opacity-100 scale-100"
+              leave-to-class="transform opacity-0 scale-95"
+            >
+              <MenuItems class="absolute left-0 z-50 mt-2 w-56 origin-top-left rounded-lg bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none">
+                <div class="py-1">
+                  <!-- System and Custom Views -->
+                  <MenuItem
+                    v-for="view in savedViews"
+                    :key="view.id"
+                    v-slot="{ active }"
+                  >
+                    <div class="group flex items-center justify-between">
+                    <button
+                      @click="handleSavedViewClick(view)"
+                      :class="[
+                        active ? 'bg-gray-100 dark:bg-gray-700' : '',
+                        activeSavedViewId === view.id ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100',
+                        'flex-1 block w-full text-left px-4 py-2 text-sm'
+                      ]"
+                    >
+                      {{ view.label }}
+                    </button>
+                      <!-- Edit/Delete actions for custom views only -->
+                      <div v-if="!isSystemView(view.id)" class="flex items-center gap-1 pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          @click.stop="handleEditView(view)"
+                          class="p-1 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                          title="Edit view"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+                          </svg>
+                        </button>
+                        <button
+                          @click.stop="handleDeleteView(view)"
+                          class="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                          title="Delete view"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </MenuItem>
+                  <!-- Divider -->
+                  <div class="border-t border-gray-200 dark:border-gray-700 my-1"></div>
+                  <!-- Save Current View -->
+                  <MenuItem v-slot="{ active }">
+                    <button
+                      @click="handleSaveCurrentView"
+                      :class="[
+                        active ? 'bg-gray-100 dark:bg-gray-700' : '',
+                        'block w-full text-left px-4 py-2 text-sm text-gray-900 dark:text-gray-100'
+                      ]"
+                    >
+                      Save current view…
+                    </button>
+                  </MenuItem>
+                </div>
+              </MenuItems>
+            </Transition>
+          </Menu>
+          <!-- Regular title (other modules) -->
+          <h1 v-else class="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-white truncate">{{ title }}</h1>
           
           <!-- Mobile Action Buttons with Stats Icon -->
           <div class="sm:hidden flex items-center gap-2 ml-auto">
@@ -76,25 +153,39 @@
 
     <!-- Statistics Cards -->
     <div v-if="statsConfig && statsConfig.length > 0 && showStats" class="mb-8">
-      <dl class="grid grid-cols-1 divide-gray-200 dark:divide-gray-700 overflow-hidden rounded-lg bg-white dark:bg-gray-800 shadow-sm md:grid-cols-4 md:divide-x md:divide-y-0">
-        <div v-for="item in computedStats" :key="item.name" class="px-4 py-5 sm:p-6">
+      <dl :class="[
+        'grid grid-cols-1 divide-gray-200 dark:divide-gray-700 overflow-hidden rounded-lg bg-white dark:bg-gray-800 shadow-sm md:divide-x md:divide-y-0',
+        moduleKey === 'people' ? 'md:grid-cols-5' : 'md:grid-cols-4'
+      ]">
+        <div 
+          v-for="item in computedStats" 
+          :key="item.name" 
+          class="px-4 py-5 sm:p-6"
+          :class="moduleKey === 'people' ? 'cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-700' : ''"
+          @click="moduleKey === 'people' ? handleStatClick(item) : null"
+        >
           <dt class="text-base font-normal text-gray-900 dark:text-gray-100">{{ item.name }}</dt>
-          <dd class="mt-1 flex items-baseline justify-between md:block lg:flex">
-            <div class="flex items-baseline text-2xl font-semibold text-indigo-600 dark:text-indigo-400">
+          <dd class="mt-1">
+            <div v-if="moduleKey === 'people'" class="text-2xl font-semibold text-indigo-600 dark:text-indigo-400">
               {{ item.stat }}
-              <span class="ml-2 text-sm font-medium text-gray-500 dark:text-gray-400">from {{ item.previousStat }}</span>
             </div>
+            <div v-else class="flex items-baseline justify-between md:block lg:flex">
+              <div class="flex items-baseline text-2xl font-semibold text-indigo-600 dark:text-indigo-400">
+                {{ item.stat }}
+                <span class="ml-2 text-sm font-medium text-gray-500 dark:text-gray-400">from {{ item.previousStat }}</span>
+              </div>
 
-            <div :class="[
-              item.changeType === 'increase' 
-                ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' 
-                : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300', 
-              'inline-flex items-baseline rounded-full px-2.5 py-0.5 text-sm font-medium md:mt-2 lg:mt-0'
-            ]">
-              <ArrowUpIcon v-if="item.changeType === 'increase'" class="mr-0.5 -ml-1 size-5 shrink-0 self-center text-green-500 dark:text-green-400" aria-hidden="true" />
-              <ArrowDownIcon v-else class="mr-0.5 -ml-1 size-5 shrink-0 self-center text-red-500 dark:text-red-400" aria-hidden="true" />
-              <span class="sr-only"> {{ item.changeType === 'increase' ? 'Increased' : 'Decreased' }} by </span>
-              {{ item.change }}
+              <div :class="[
+                item.changeType === 'increase' 
+                  ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' 
+                  : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300', 
+                'inline-flex items-baseline rounded-full px-2.5 py-0.5 text-sm font-medium md:mt-2 lg:mt-0'
+              ]">
+                <ArrowUpIcon v-if="item.changeType === 'increase'" class="mr-0.5 -ml-1 size-5 shrink-0 self-center text-green-500 dark:text-green-400" aria-hidden="true" />
+                <ArrowDownIcon v-else class="mr-0.5 -ml-1 size-5 shrink-0 self-center text-red-500 dark:text-red-400" aria-hidden="true" />
+                <span class="sr-only"> {{ item.changeType === 'increase' ? 'Increased' : 'Decreased' }} by </span>
+                {{ item.change }}
+              </div>
             </div>
           </dd>
         </div>
@@ -102,7 +193,7 @@
     </div>
 
     <!-- Search and Filters -->
-    <div class="flex flex-col gap-4 mb-4 relative z-20">
+    <div class="flex flex-col gap-4 mb-4 relative">
       <!-- Mobile, Tablet & Small Desktop: Search, Filters Button, Columns Button in a single row -->
       <div class="flex items-center gap-3 lg:hidden">
         <div class="flex-1 min-w-0">
@@ -320,7 +411,8 @@
                   leave-to-class="opacity-0"
                 >
                   <ListboxOptions
-                    class="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm min-w-[140px]"
+                    class="absolute mt-1 max-h-60 w-full overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm min-w-[140px]"
+                    style="z-index: 9999; position: absolute;"
                   >
                     <ListboxOption
                       :value="''"
@@ -398,31 +490,8 @@
       </div>
     </div>
 
-    <div class="mt-4 px-4 sm:px-6 lg:px-8">
-      <template v-if="showEmptyState">
-        <div class="rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-14 text-center shadow-sm dark:border-gray-700 dark:bg-gray-900">
-          <img
-            src="/assets/illustrations/mindfulness.svg"
-            alt="No records illustration"
-            class="mx-auto h-40 w-auto"
-          />
-          <h3 class="mt-6 text-lg font-semibold text-gray-900 dark:text-white">{{ emptyStateTitle }}</h3>
-          <p class="mt-3 text-sm text-gray-600 dark:text-gray-400">
-            {{ emptyStateMessage }}
-          </p>
-          <div v-if="canClearFilters" class="mt-6 flex justify-center">
-            <button
-              @click="clearFilters"
-              class="inline-flex items-center gap-2 rounded-lg bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-600 transition-colors hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50 cursor-pointer"
-            >
-              <XMarkIcon class="h-4 w-4" />
-              <span>Clear search & filters</span>
-            </button>
-          </div>
-        </div>
-      </template>
-      <template v-else>
-        <TableView
+    <div class="mt-4 px-4 sm:px-6 lg:px-8" style="isolation: auto;">
+      <TableView
           internal-scroll
           :data="data"
           :columns="computedColumns"
@@ -434,8 +503,8 @@
           :sort-order="sortOrder"
           :mass-actions="massActions"
           :row-key="rowKey"
-          :empty-title="emptyTitle"
-          :empty-message="emptyMessage"
+          :empty-title="emptyStateTitle"
+          :empty-message="emptyStateMessage"
           :table-id="tableId"
           :resizable-columns="resizableColumns"
           :row-height="rowHeight"
@@ -463,8 +532,31 @@
               @delete="handleDeleteClick(row)"
             />
           </template>
+          
+          <!-- Empty State Slot -->
+          <template #empty>
+            <div class="flex flex-col items-center justify-center py-12">
+              <img
+                src="/assets/illustrations/mindfulness.svg"
+                alt="No records illustration"
+                class="mx-auto h-40 w-auto"
+              />
+              <h3 class="mt-6 text-lg font-semibold text-gray-900 dark:text-white">{{ emptyStateTitle }}</h3>
+              <p class="mt-3 text-sm text-gray-600 dark:text-gray-400">
+                {{ emptyStateMessage }}
+              </p>
+              <div v-if="canClearFilters" class="mt-6 flex justify-center">
+                <button
+                  @click="clearFilters"
+                  class="inline-flex items-center gap-2 rounded-lg bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-600 transition-colors hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50 cursor-pointer"
+                >
+                  <XMarkIcon class="h-4 w-4" />
+                  <span>Clear search & filters</span>
+                </button>
+              </div>
+            </div>
+          </template>
         </TableView>
-      </template>
     </div>
 
     <!-- Delete Confirmation Modal -->
@@ -478,6 +570,118 @@
       @close="handleDeleteModalClose"
       @confirm="confirmDelete"
     />
+
+    <!-- Save/Edit View Modal (People module only) -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition ease-out duration-200"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition ease-in duration-150"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="moduleKey === 'people' && showSaveViewModal"
+          class="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+          @click.self="handleCloseSaveViewModal"
+        >
+          <div class="bg-white dark:bg-gray-900 rounded-xl w-full max-w-md shadow-2xl" @click.stop>
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+                {{ editingView ? 'Edit View' : 'Save Current View' }}
+              </h2>
+            </div>
+            <form @submit.prevent="handleSaveView" class="p-6 space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  View Name <span class="text-red-500">*</span>
+                </label>
+                <input
+                  v-model="viewFormData.name"
+                  type="text"
+                  required
+                  placeholder="e.g., Sales Leads"
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Description (optional)
+                </label>
+                <textarea
+                  v-model="viewFormData.description"
+                  rows="3"
+                  placeholder="Optional description for this view"
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <div class="flex items-center justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  @click="handleCloseSaveViewModal"
+                  class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  :disabled="!viewFormData.name.trim()"
+                  class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer"
+                >
+                  {{ editingView ? 'Update' : 'Save' }}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Delete View Confirmation Modal -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition ease-out duration-200"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition ease-in duration-150"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="moduleKey === 'people' && showDeleteViewModal && viewToDelete"
+          class="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+          @click.self="handleCloseDeleteViewModal"
+        >
+          <div class="bg-white dark:bg-gray-900 rounded-xl w-full max-w-md shadow-2xl" @click.stop>
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Delete View</h2>
+            </div>
+            <div class="p-6">
+              <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Are you sure you want to delete "{{ viewToDelete?.label }}"? This action cannot be undone.
+              </p>
+              <div class="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  @click="handleCloseDeleteViewModal"
+                  class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  @click="confirmDeleteView"
+                  class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors cursor-pointer"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <!-- Mass Actions Bar - Floating Style -->
     <Teleport to="body">
@@ -859,7 +1063,7 @@ import {
   GlobeAltIcon,
   LinkIcon
 } from '@heroicons/vue/24/outline';
-import { Transition } from 'vue';
+import { Transition, Teleport } from 'vue';
 import TableView from '@/components/common/TableView.vue';
 import ModuleActions from '@/components/common/ModuleActions.vue';
 import RowActions from '@/components/common/RowActions.vue';
@@ -984,6 +1188,21 @@ const props = defineProps({
   resizableColumns: {
     type: Boolean,
     default: true
+  },
+  
+  // Saved Views (People module only)
+  savedViews: {
+    type: Array,
+    default: () => []
+  },
+  activeSavedViewId: {
+    type: String,
+    default: null
+  },
+  // External filters (synced from ModuleList when stat is clicked)
+  externalFilters: {
+    type: Object,
+    default: () => ({})
   }
 });
 
@@ -1001,7 +1220,10 @@ const emit = defineEmits([
   'import',
   'export',
   'bulk-action',
-  'row-updated'
+  'row-updated',
+  'saved-view-selected',
+  'stat-click',
+  'saved-views-updated'
 ]);
 
 // Use bulk actions composable
@@ -1024,6 +1246,13 @@ const isBulkDelete = ref(false);
 const bulkDeleteRows = ref([]);
 const showPreviewDrawer = ref(false);
 const previewRow = ref(null);
+
+// Saved View Management (People module only)
+const showSaveViewModal = ref(false);
+const editingView = ref(null);
+const viewFormData = ref({ name: '', description: '' });
+const viewToDelete = ref(null);
+const showDeleteViewModal = ref(false);
 
 // Store drawer state per tab
 const drawerStateByTab = ref(new Map());
@@ -1614,6 +1843,7 @@ const computedStats = computed(() => {
     }
     
     return {
+      key: config.key, // Include key for stat-click handler
       name: config.name,
       stat: formattedStat,
       previousStat: formattedPrevious,
@@ -1664,7 +1894,8 @@ const columnsStorageKey = computed(() => `${STORAGE_PREFIX}-${props.moduleKey}-c
 const searchTerm = computed(() => searchQuery.value.trim());
 
 const activeFilterCount = computed(() =>
-  Object.values(filters).filter(value => value !== '' && value !== null && value !== undefined).length
+  // Count filters that have a value (null is a valid filter value, undefined/empty string are not)
+  Object.values(filters).filter(value => value !== '' && value !== undefined).length
 );
 
 const hasFiltersApplied = computed(() => activeFilterCount.value > 0);
@@ -1700,6 +1931,37 @@ watch(() => props.data, (newVal) => {
 }, { immediate: true });
 
 const resourceName = computed(() => (typeof props.title === 'string' ? props.title.toLowerCase() : 'records'));
+
+// Active People view title - source of truth for page title
+// When a saved view is active, title reflects the view name
+// When manual filters/search are applied, title is "Custom"
+// When no view is active and no filters, title is "All People"
+const activePeopleViewTitle = computed(() => {
+  // Only for People module
+  if (props.moduleKey !== 'people' || !props.savedViews || props.savedViews.length === 0) {
+    return props.title;
+  }
+
+  // If an active view is set, return the view's label
+  if (props.activeSavedViewId) {
+    const activeView = props.savedViews.find(view => view.id === props.activeSavedViewId);
+    if (activeView) {
+      return activeView.label;
+    }
+  }
+
+  // Check if manual filters or search are applied
+  const hasActiveFilters = hasFiltersApplied.value;
+  const hasActiveSearch = searchTerm.value !== '';
+  
+  if (hasActiveFilters || hasActiveSearch) {
+    // Manual filters/search applied - show "Custom"
+    return 'Custom';
+  }
+
+  // Default: "All People" (no filters, no saved view)
+  return 'All People';
+});
 
 const emptyStateTitle = computed(() =>
   hasActiveFilters.value ? `No ${props.title.toLowerCase()} match your filters` : props.emptyTitle
@@ -1743,6 +2005,13 @@ const getFilterLabel = (filter, value) => {
   if (!value) return null;
   const option = filter.options.find(opt => opt.value === value);
   return option ? (option.label || option.value) : null;
+};
+
+// Handle stat click (People module only)
+const handleStatClick = (item) => {
+  if (props.moduleKey === 'people') {
+    emit('stat-click', item);
+  }
 };
 
 // Get count of active filters for mobile badge
@@ -1847,6 +2116,32 @@ watch(
     localStorage.setItem(filterStorageKey.value, JSON.stringify(value));
   },
   { deep: true }
+);
+
+// Watch externalFilters prop and sync to internal filters object
+// This ensures hasFiltersApplied correctly detects filters when stat is clicked
+watch(
+  () => props.externalFilters,
+  (newExternalFilters) => {
+    if (newExternalFilters && Object.keys(newExternalFilters).length > 0) {
+      // Sync external filters to internal filters
+      Object.keys(newExternalFilters).forEach(key => {
+        filters[key] = newExternalFilters[key];
+      });
+      // Clear filters that are no longer in externalFilters
+      Object.keys(filters).forEach(key => {
+        if (!(key in newExternalFilters)) {
+          filters[key] = '';
+        }
+      });
+    } else if (newExternalFilters && Object.keys(newExternalFilters).length === 0) {
+      // External filters is empty object - clear all filters
+      Object.keys(filters).forEach(key => {
+        filters[key] = '';
+      });
+    }
+  },
+  { deep: true, immediate: false }
 );
 
 // Clear filters
@@ -2553,6 +2848,217 @@ const getActionIcon = (iconName) => {
     'apps': PuzzlePieceIcon
   };
   return iconMap[iconName] || TrashIcon;
+};
+
+// Saved View Management (People module only)
+const viewsStorageKey = computed(() => `${STORAGE_PREFIX}-${props.moduleKey}-saved-views`);
+const systemViewIds = ['all', 'my-people', 'unassigned'];
+
+const isSystemView = (viewId) => {
+  return systemViewIds.includes(viewId);
+};
+
+// Load custom saved views from localStorage
+const loadCustomViews = () => {
+  if (props.moduleKey !== 'people') return [];
+  
+  try {
+    const saved = localStorage.getItem(viewsStorageKey.value);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed : [];
+    }
+  } catch (error) {
+    console.warn('[ListView] Failed to load custom views:', error);
+  }
+  return [];
+};
+
+// Save custom views to localStorage
+const saveCustomViews = (views) => {
+  if (props.moduleKey !== 'people') return;
+  
+  try {
+    // Only save custom views (not system views)
+    const customViews = views.filter(v => !isSystemView(v.id));
+    localStorage.setItem(viewsStorageKey.value, JSON.stringify(customViews));
+  } catch (error) {
+    console.warn('[ListView] Failed to save custom views:', error);
+  }
+};
+
+// Get current view configuration (filters, columns, sort, search)
+const getCurrentViewConfig = () => {
+  return {
+    filters: { ...filters },
+    search: searchQuery.value,
+    sort: {
+      field: props.sortField,
+      order: props.sortOrder
+    },
+    columns: visibleColumns.value.map(col => ({
+      key: col.key,
+      visible: col.visible,
+      width: col.width,
+      order: col.order
+    }))
+  };
+};
+
+// Apply view configuration (filters, columns, sort, search)
+const applyViewConfig = (config) => {
+  // Apply filters
+  if (config.filters) {
+    Object.keys(filters).forEach(key => {
+      delete filters[key];
+    });
+    Object.keys(config.filters).forEach(key => {
+      filters[key] = config.filters[key];
+    });
+    emit('update:filters', { ...filters });
+  }
+  
+  // Apply search
+  if (config.search !== undefined) {
+    searchQuery.value = config.search;
+    emit('update:searchQuery', config.search);
+  }
+  
+  // Apply sort
+  if (config.sort) {
+    emit('update:sort', {
+      sortField: config.sort.field,
+      sortOrder: config.sort.order
+    });
+  }
+  
+  // Apply columns
+  if (config.columns && Array.isArray(config.columns)) {
+    // Restore column visibility and order from saved view
+    const columnMap = new Map(config.columns.map(col => [col.key, col]));
+    visibleColumns.value.forEach(col => {
+      const saved = columnMap.get(col.key);
+      if (saved) {
+        col.visible = saved.visible !== false;
+        if (saved.width) col.width = saved.width;
+        if (saved.order !== undefined) col.order = saved.order;
+      }
+    });
+    // Sort by saved order
+    visibleColumns.value.sort((a, b) => {
+      const aOrder = columnMap.get(a.key)?.order ?? 999;
+      const bOrder = columnMap.get(b.key)?.order ?? 999;
+      return aOrder - bOrder;
+    });
+  }
+};
+
+// Handle save current view
+const handleSaveCurrentView = () => {
+  if (props.moduleKey !== 'people') return;
+  
+  editingView.value = null;
+  viewFormData.value = { name: '', description: '' };
+  showSaveViewModal.value = true;
+};
+
+// Handle edit view
+const handleEditView = (view) => {
+  if (props.moduleKey !== 'people' || isSystemView(view.id)) return;
+  
+  editingView.value = view;
+  viewFormData.value = {
+    name: view.label || '',
+    description: view.description || ''
+  };
+  showSaveViewModal.value = true;
+};
+
+// Handle delete view
+const handleDeleteView = (view) => {
+  if (props.moduleKey !== 'people' || isSystemView(view.id)) return;
+  
+  viewToDelete.value = view;
+  showDeleteViewModal.value = true;
+};
+
+// Save or update view
+const handleSaveView = () => {
+  if (props.moduleKey !== 'people' || !viewFormData.value.name.trim()) return;
+  
+  const currentConfig = getCurrentViewConfig();
+  const customViews = loadCustomViews();
+  
+  if (editingView.value) {
+    // Update existing view
+    const index = customViews.findIndex(v => v.id === editingView.value.id);
+    if (index !== -1) {
+      customViews[index] = {
+        ...customViews[index],
+        label: viewFormData.value.name.trim(),
+        description: viewFormData.value.description.trim() || undefined,
+        config: currentConfig,
+        updatedAt: new Date().toISOString()
+      };
+    }
+  } else {
+    // Create new view
+    const newView = {
+      id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      label: viewFormData.value.name.trim(),
+      description: viewFormData.value.description.trim() || undefined,
+      filters: currentConfig.filters,
+      config: currentConfig,
+      createdAt: new Date().toISOString()
+    };
+    customViews.push(newView);
+  }
+  
+  saveCustomViews(customViews);
+  emit('saved-views-updated', customViews);
+  
+  handleCloseSaveViewModal();
+};
+
+// Confirm delete view
+const confirmDeleteView = () => {
+  if (props.moduleKey !== 'people' || !viewToDelete.value || isSystemView(viewToDelete.value.id)) return;
+  
+  const customViews = loadCustomViews();
+  const filtered = customViews.filter(v => v.id !== viewToDelete.value.id);
+  saveCustomViews(filtered);
+  emit('saved-views-updated', filtered);
+  
+  // If deleted view was active, clear it
+  if (props.activeSavedViewId === viewToDelete.value.id) {
+    emit('saved-view-selected', null);
+  }
+  
+  handleCloseDeleteViewModal();
+};
+
+// Close save view modal
+const handleCloseSaveViewModal = () => {
+  showSaveViewModal.value = false;
+  editingView.value = null;
+  viewFormData.value = { name: '', description: '' };
+};
+
+// Close delete view modal
+const handleCloseDeleteViewModal = () => {
+  showDeleteViewModal.value = false;
+  viewToDelete.value = null;
+};
+
+// Handle saved view click - apply full config
+const handleSavedViewClick = (view) => {
+  // Apply view config if it exists (columns, sort, search)
+  if (view.config) {
+    applyViewConfig(view.config);
+  }
+  
+  // Emit event to parent
+  emit('saved-view-selected', view);
 };
 </script>
 

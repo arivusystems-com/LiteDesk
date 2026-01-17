@@ -213,7 +213,32 @@ exports.list = async (req, res) => {
       query.type = req.query.type;
     }
     if (req.query.email) query.email = req.query.email;
-    if (req.query.organization) query.organization = req.query.organization; // This is Sales organization, not tenant
+    
+    // Handle assignedTo filter (identity-based filter for saved views)
+    if (req.query.assignedTo !== undefined) {
+      if (req.query.assignedTo === 'null' || req.query.assignedTo === null || req.query.assignedTo === '') {
+        // Filter for unassigned (null or missing)
+        query.assignedTo = null;
+      } else {
+        // Filter for specific user
+        query.assignedTo = req.query.assignedTo;
+      }
+    }
+    
+    // Handle organization filter (identity-based filter for saved views)
+    // Note: organization filter can be for specific org, null (without organization), or 'has' (with organization)
+    if (req.query.organization !== undefined) {
+      if (req.query.organization === 'null' || req.query.organization === null || req.query.organization === '') {
+        // Filter for without organization (null or missing)
+        query.organization = null;
+      } else if (req.query.organization === 'has') {
+        // Filter for with organization (non-null, exists)
+        query.organization = { $ne: null, $exists: true };
+      } else {
+        // Filter for specific organization (Sales organization, not tenant)
+        query.organization = req.query.organization;
+      }
+    }
     
     // Search functionality - search across name, email, phone fields
     // Store search condition separately - will be combined after projection filter

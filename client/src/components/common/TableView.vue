@@ -1,12 +1,12 @@
 <template>
   <div class="-mx-4 -my-2 sm:-mx-6 lg:-mx-8">
     <div class="w-full py-2 align-middle">
-      <div class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900 overflow-hidden">
+      <div class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900 overflow-hidden" style="position: relative; z-index: 1;">
         <div
           ref="scrollContainerRef"
-          class="relative overflow-x-auto table-scroll-container"
+          class="relative overflow-x-auto table-scroll-container rounded-xl"
           :class="{ 'overflow-y-auto': enableInternalScroll }"
-          :style="{ ...scrollContainerStyles, width: '100%', maxWidth: '100%' }"
+          :style="{ ...scrollContainerStyles, width: '100%', maxWidth: '100%', isolation: 'auto' }"
           @scroll="handleScroll"
         >
           <div
@@ -33,11 +33,11 @@
                   v-if="selectable"
                   scope="col"
                   :class="[
-                    'relative px-7 sm:w-12 sm:px-6 sticky z-30 border-b border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-gray-200 after:content-[\'\'] dark:after:bg-gray-700',
+                    'relative px-7 sm:w-12 sm:px-6 sticky border-b border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-gray-200 after:content-[\'\'] dark:after:bg-gray-700',
                     leftEdgeColumnIndex === 0 ? 'rounded-tl-xl' : '',
                     'hover:bg-gray-50 dark:hover:bg-gray-800'
                   ]"
-                  :style="{ top: headerTop, left: '0px' }"
+                  :style="{ top: headerTop, left: '0px', zIndex: '25' }"
                 >
                   <div class="group absolute top-1/2 left-4 -mt-2 grid size-4 grid-cols-1">
                     <input
@@ -62,7 +62,7 @@
                   :aria-sort="ariaSortForColumn(column)"
                   :class="[
                     'group sticky border-b border-gray-200 bg-white text-left text-xs font-semibold uppercase tracking-wide text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white relative after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-gray-200 after:content-[\'\'] dark:after:bg-gray-700',
-                    columnIndex === 0 ? 'z-25 sticky-column-border' : 'z-10',
+                    columnIndex === 0 ? 'z-15 sticky-column-border' : 'z-10',
                     // Apply border-radius only to columns at visible edges
                     (selectable ? columnIndex + 1 : columnIndex) === leftEdgeColumnIndex ? 'rounded-tl-xl' : '',
                     (selectable ? columnIndex + 1 : columnIndex) === rightEdgeColumnIndex ? 'rounded-tr-xl' : '',
@@ -333,8 +333,13 @@
                   </td>
                 </tr>
                 <tr v-if="displayRows.length === 0">
-                  <td :colspan="selectable ? displayColumns.length + 1 : displayColumns.length" class="px-5 py-10 text-center text-sm text-gray-400 dark:text-gray-500">
-                    No data available
+                  <td :colspan="selectable ? displayColumns.length + 1 : displayColumns.length" class="px-5 py-10 text-center">
+                    <slot name="empty">
+                      <div class="flex flex-col items-center justify-center py-8">
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">{{ emptyTitle || 'No data available' }}</h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">{{ emptyMessage || 'No records found.' }}</p>
+                      </div>
+                    </slot>
                   </td>
                 </tr>
               </template>
@@ -412,6 +417,8 @@ const props = withDefaults(
     massActions?: Array<{ label: string; icon?: string; action: string; variant?: string }>
     clearSelectionTrigger?: number
     hasActions?: boolean
+    emptyTitle?: string
+    emptyMessage?: string
   }>(),
   {
     columns: () => [],

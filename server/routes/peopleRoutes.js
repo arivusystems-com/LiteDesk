@@ -67,13 +67,27 @@ router.put('/:id/update-core', protect, resolverController.updateCore);
 // Guard: Edit Participation Details - check edit participation permission
 router.put('/:id/update-app-fields', protect, requireEditParticipationPermission, resolverController.updateAppFields);
 
-// Standard CRUD routes (require Sales app)
+// Standard CRUD routes
 router.use(protect);
 router.use(resolveAppContext); // After auth, resolve appKey from URL
-router.use(requireAppEntitlement); // Check user's app entitlements
-router.use(lazySalesInitialization); // Lazy initialize Sales if needed
-router.use(requireSalesApp); // Enforce Sales-only access
 router.use(organizationIsolation);
+
+// Conditional middleware: Allow PLATFORM appKey for GET requests (list view)
+// Require Sales app only for modifications and Sales-specific operations
+router.use((req, res, next) => {
+  if (req.method === 'GET' && req.appKey === 'PLATFORM') {
+    // For GET requests with PLATFORM appKey, allow platform-level access
+    // This enables the People list to show all people regardless of participation
+    return next();
+  }
+  
+  // For other requests or non-PLATFORM appKeys, require Sales app
+  return requireAppEntitlement(req, res, () => {
+    return lazySalesInitialization(req, res, () => {
+      return requireSalesApp(req, res, next);
+    });
+  });
+});
 
 router.post('/', controller.create);
 router.get('/', controller.list);

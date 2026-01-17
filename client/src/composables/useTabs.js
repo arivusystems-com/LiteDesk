@@ -27,6 +27,8 @@ let tabsInitialized = false;
 // Flag to track programmatic navigation (to avoid circular loops)
 let isProgrammaticNavigation = false;
 let lastProgrammaticPath = null;
+// Flag to track browser navigation (popstate) to prevent route watcher from interfering
+let isBrowserNavigation = false;
 
 // Icon mapping for serialization/deserialization
 const iconMap = {
@@ -406,13 +408,13 @@ export function useTabs() {
     return router;
   };
   
-  // Navigate using router (replace to avoid history entries)
+  // Navigate using router (push to create history entries for browser back/forward)
   const navigateToPath = (path) => {
     const currentRouter = getRouter();
     if (currentRouter) {
-      // Use replace instead of push to avoid adding history entries
-      // This prevents page reloads and keeps navigation smooth
-      return currentRouter.replace(path).catch((err) => {
+      // Use push to create history entries so browser back/forward works correctly
+      // Each tab navigation creates a history entry, allowing browser back to navigate between tabs
+      return currentRouter.push(path).catch((err) => {
         // Ignore duplicate navigation errors (same route)
         if (err.name !== 'NavigationDuplicated') {
           console.log('⚠️ Navigation error (ignored):', err.message);
@@ -584,18 +586,28 @@ export function useTabs() {
     // Note: Route syncing is handled by setupRouteWatcher() in App.vue
   };
 
-  // Setup route watcher (route must be passed from setup context)
-  const setupRouteWatcher = (route) => {
-    if (!route) {
-      console.warn('⚠️ setupRouteWatcher called without route parameter');
+  // Setup route watcher (route parameter is optional - we'll use internal route if available)
+  const setupRouteWatcher = (routeParam) => {
+    // Use the route from useRoute() if available, otherwise use the parameter
+    // The internal route from useRoute() is guaranteed to be reactive
+    const routeToWatch = route || routeParam;
+    
+    if (!routeToWatch) {
+      console.warn('⚠️ setupRouteWatcher: No route available');
       return;
     }
     
+    console.log('🔧 setupRouteWatcher called');
+    console.log('🔧 Using route:', routeToWatch.path, routeToWatch.fullPath);
+    console.log('🔧 Route is reactive?', route !== null);
+    
     // Skip audit and settings routes - they don't use tabs (have their own layout)
-    if (route.path.startsWith('/audit/') || route.path.startsWith('/settings')) {
+    if (routeToWatch.path.startsWith('/audit/') || routeToWatch.path.startsWith('/settings')) {
       console.log('⏭️ Audit/Settings route detected, skipping tab watcher setup');
       return;
     }
+    
+    console.log('✅ Setting up route watcher for path:', routeToWatch.path);
     
     // Ensure home tab exists (should have been created in initTabs, but double-check)
     const homeTab = tabs.value.find(tab => tab.id === 'home' || tab.path === '/platform/home');
@@ -604,8 +616,11 @@ export function useTabs() {
       createDefaultTab();
     }
     
-    // Sync active tab with current route on initialization
-    const currentPath = route.path;
+    // Sync active tab with current route on initialization  
+    const currentPath = routeToWatch.path;
+    
+    // Track if we restored a tab from storage
+    let tabWasRestored = false;
     
     // First, check if we have an active tab from storage - restore it
     // Skip restoration if the active tab is a settings route (settings shouldn't be tabs)
@@ -619,6 +634,8 @@ export function useTabs() {
           // Continue to default navigation below
         } else {
           console.log('🔄 [setupRouteWatcher] Restoring active tab from storage:', activeTab.id, activeTab.path);
+          tabWasRestored = true; // Mark that we restored a tab
+          
           // Navigate to the active tab's path if we're not already there
           if (currentPath !== activeTab.path) {
             const currentRouter = getRouter();
@@ -638,7 +655,7 @@ export function useTabs() {
               });
             }
           }
-          return; // Don't continue with default home navigation
+          // Continue to set up the route watcher below (don't return)
         }
       } else {
         // Active tab ID exists but tab not found - clear it
@@ -648,7 +665,8 @@ export function useTabs() {
     }
     
     // If we're on root, login, or any non-excluded path, navigate to platform home
-    if (currentPath === '/' || (currentPath !== '/platform/home' && currentPath !== '/login' && !currentPath.startsWith('/settings') && !currentPath.startsWith('/audit/') && !currentPath.startsWith('/portal/'))) {
+    // BUT skip this if we just restored a tab from storage
+    if (!tabWasRestored && (currentPath === '/' || (currentPath !== '/platform/home' && currentPath !== '/login' && !currentPath.startsWith('/settings') && !currentPath.startsWith('/audit/') && !currentPath.startsWith('/portal/')))) {
       console.log('🔄 [setupRouteWatcher] Navigating to platform home from', currentPath);
       // Navigate to platform home to show it by default (without page refresh)
       const currentRouter = getRouter();
@@ -706,10 +724,10 @@ export function useTabs() {
       // On a different route, sync tabs with route
       // Tabs exist - check if active tab matches current route
       const activeTab = tabs.value.find(tab => tab.id === activeTabId.value);
-      if (activeTab && activeTab.path !== route.path) {
-        console.log('🔄 Initial sync: active tab path', activeTab.path, 'does not match route', route.path);
+      if (activeTab && activeTab.path !== routeToWatch.path) {
+        console.log('🔄 Initial sync: active tab path', activeTab.path, 'does not match route', routeToWatch.path);
         // Check if a tab exists for the current route
-        const routeTab = findTabByPath(route.path);
+        const routeTab = findTabByPath(routeToWatch.path);
         if (routeTab) {
           // Switch to existing tab for this route
           activeTabId.value = routeTab.id;
@@ -717,14 +735,14 @@ export function useTabs() {
           // Create a new tab for the current route
           const wasProgrammatic = isProgrammaticNavigation;
           isProgrammaticNavigation = false;
-          syncTabWithRoute(route.path);
+          syncTabWithRoute(routeToWatch.path);
           isProgrammaticNavigation = wasProgrammatic;
         }
       } else if (!activeTab) {
-        console.log('🔄 Initial sync: no active tab found, syncing to route', route.path);
+        console.log('🔄 Initial sync: no active tab found, syncing to route', routeToWatch.path);
         const wasProgrammatic = isProgrammaticNavigation;
         isProgrammaticNavigation = false;
-        syncTabWithRoute(route.path);
+        syncTabWithRoute(routeToWatch.path);
         isProgrammaticNavigation = wasProgrammatic;
       } else {
         console.log('✅ Initial sync: active tab matches route, no sync needed');
@@ -732,26 +750,67 @@ export function useTabs() {
     }
     
     // Watch for route changes (browser navigation)
-    // Only sync tabs when route changes from browser back/forward buttons
-    watch(() => route.fullPath, (newFullPath, oldFullPath) => {
+    // Use the internal route from useRoute() which is guaranteed to be reactive
+    if (!route) {
+      console.error('❌ Cannot set up route watcher: route not available from useRoute()');
+      console.error('❌ This means useTabs() was not called in a Vue component setup context');
+      return;
+    }
+    
+    console.log('👀 Setting up route watcher, current route:', route.path, route.fullPath);
+    console.log('👀 Route object is reactive:', route);
+    
+    // Watch BOTH route.path and route.fullPath to catch all changes including redirects
+    const stopWatcher = watch([() => route.path, () => route.fullPath], ([newPathValue, newFullPathValue], [oldPathValue, oldFullPathValue]) => {
       const newPath = route.path; // Path without query
-      const oldPath = oldFullPath ? oldFullPath.split('?')[0] : '';
+      const oldPath = oldPathValue ? oldPathValue.split('?')[0] : '';
+      const newFullPath = route.fullPath;
+      const oldFullPath = oldFullPathValue || '';
+      
+      // Log EVERY route change to debug
+      console.log('👀👀👀 Route watcher FIRED:', {
+        oldPath,
+        newPath,
+        newFullPath,
+        oldFullPath,
+        isProgrammaticNavigation,
+        isBrowserNavigation,
+        activeTabId: activeTabId.value,
+        routePath: route.path,
+        routeFullPath: route.fullPath
+      });
       
       // Skip if paths are the same
       if (newPath === oldPath) {
+        console.log('⏭️ Route watcher: paths are the same, skipping');
         return;
+      }
+      
+      // If this is browser navigation (popstate), handle it even if isProgrammaticNavigation is true
+      // The popstate handler sets isBrowserNavigation, so check that first
+      if (isBrowserNavigation) {
+        console.log('🌐 Route watcher: Browser navigation detected via isBrowserNavigation flag');
+        // Don't skip - continue to handle browser navigation below
       }
       
       // Ensure home tab exists when navigating to platform home
       if (newPath === '/platform/home') {
+        console.log('🏠 Route watcher: Navigating to platform home');
         const homeTab = tabs.value.find(tab => tab.id === 'home' || tab.path === '/platform/home');
         if (!homeTab) {
           console.log('🔄 [Route watcher] On platform home but no home tab, creating it');
           createDefaultTab();
         } else {
           // Ensure home tab is active
-          activeTabId.value = 'home';
+          if (activeTabId.value !== 'home') {
+            console.log('🔄 [Route watcher] Switching to home tab');
+            activeTabId.value = 'home';
+            console.log('✅ [Route watcher] Home tab is now active');
+          } else {
+            console.log('🔒 [Route watcher] Home tab already active');
+          }
         }
+        return; // Don't continue processing
       }
       
       // Skip routes that don't use tabs (login, landing, settings, audit app)
@@ -772,14 +831,21 @@ export function useTabs() {
       });
       
       // Check if this route change matches a programmatic navigation we just did
-      // Compare both path and fullPath to catch query parameter changes
-      if (isProgrammaticNavigation) {
-        console.log('🔒 Programmatic navigation flag is set, skipping route sync');
+      // BUT skip this check if it's browser navigation (popstate handler set the flag)
+      if (isProgrammaticNavigation && !isBrowserNavigation) {
+        console.log('🔒 Programmatic navigation flag is set (not browser nav), skipping route sync');
         return;
       }
       
+      // If it's browser navigation, override the programmatic flag
+      if (isBrowserNavigation) {
+        console.log('🌐 Route watcher: Browser navigation detected, overriding programmatic flag');
+        // Don't skip - continue to handle browser navigation
+      }
+      
       // Check if this matches the last programmatic path (with or without query)
-      if (lastProgrammaticPath) {
+      // BUT skip this check if it's browser navigation
+      if (lastProgrammaticPath && !isBrowserNavigation) {
         const lastPathWithoutQuery = lastProgrammaticPath.split('?')[0];
         const newPathWithoutQuery = newPath.split('?')[0];
         if (lastPathWithoutQuery === newPathWithoutQuery || newFullPath === lastProgrammaticPath) {
@@ -804,17 +870,216 @@ export function useTabs() {
       // Check both with and without query params
       const existingTabForRoute = findTabByPath(newFullPath) || findTabByPath(newPath);
       if (existingTabForRoute) {
-        console.log('✅ Tab already exists for route, switching to it instead of creating duplicate');
-        if (activeTabId.value !== existingTabForRoute.id) {
-          activeTabId.value = existingTabForRoute.id;
+        // Check if popstate handler already switched to this tab
+        // Only skip if the active tab already matches (popstate handled it)
+        if (isBrowserNavigation && activeTabId.value === existingTabForRoute.id) {
+          console.log('🔒 Browser navigation already handled by popstate, tab already switched');
+          // Reset flag after checking
+          setTimeout(() => {
+            isBrowserNavigation = false;
+          }, 50);
+          return;
         }
+        
+        console.log('🌐 Route watcher: Tab exists for route, switching to it:', existingTabForRoute.id, existingTabForRoute.title);
+        console.log('🌐 Current activeTabId:', activeTabId.value);
+        console.log('🌐 Target tab ID:', existingTabForRoute.id);
+        console.log('🌐 isBrowserNavigation:', isBrowserNavigation);
+        
+        // CRITICAL: Switch to tab synchronously BEFORE components process route change
+        // This ensures activeTabId is set before any component watchers fire
+        // FORCE the switch even if localStorage might have a different value
+        if (activeTabId.value !== existingTabForRoute.id) {
+          // Set activeTabId synchronously without navigation (route already changed via browser back)
+          // This will trigger the watcher to save to localStorage, which is fine
+          activeTabId.value = existingTabForRoute.id;
+          console.log('✅ Route watcher switched to tab:', existingTabForRoute.id);
+          console.log('✅ New activeTabId value:', activeTabId.value);
+          
+          // Force save to localStorage immediately to prevent any race conditions
+          saveTabsToStorage();
+        } else {
+          console.log('🔒 Tab already active, no switch needed');
+        }
+        
+        // Reset browser navigation flag since we handled it
+        if (isBrowserNavigation) {
+          setTimeout(() => {
+            isBrowserNavigation = false;
+          }, 50);
+        }
+        
+        // Update tab path if it differs (e.g., query params changed)
+        // This ensures the tab reflects the current route state
+        if (existingTabForRoute.path !== newPath && existingTabForRoute.path !== newFullPath) {
+          const pathWithoutQuery = existingTabForRoute.path.split('?')[0];
+          const newPathWithoutQuery = newPath.split('?')[0];
+          // Only update if base paths match (same route, different query)
+          if (pathWithoutQuery === newPathWithoutQuery) {
+            existingTabForRoute.path = newFullPath;
+            console.log('🔄 Updated tab path to match route:', newFullPath);
+          }
+        }
+        
         return;
       }
       
       // This must be browser navigation (back/forward button)
       console.log('🌐 Browser navigation detected - syncing tabs:', oldPath, '→', newPath);
       syncTabWithRoute(newPath);
-    });
+    }, { flush: 'sync' }); // Use sync flush to ensure tab switch happens before components process route change
+    
+    // Intercept browser back/forward navigation BEFORE Vue Router processes it
+    // This ensures tab switching happens before components mount
+    const handlePopState = (event) => {
+      // Get the target path from the location
+      const targetPath = window.location.pathname + window.location.search;
+      const targetPathWithoutQuery = window.location.pathname;
+      
+      console.log('🔙 Popstate event fired:', {
+        targetPath,
+        targetPathWithoutQuery,
+        isProgrammaticNavigation,
+        lastProgrammaticPath,
+        currentRoute: route.path
+      });
+      
+      // Skip if this matches a programmatic navigation
+      if (isProgrammaticNavigation || lastProgrammaticPath === targetPath || lastProgrammaticPath === targetPathWithoutQuery) {
+        console.log('🔙 Skipping - programmatic navigation');
+        return;
+      }
+      
+      // Skip non-tab routes (but log it)
+      if (targetPathWithoutQuery === '/login' || targetPathWithoutQuery === '/' || 
+          targetPathWithoutQuery.startsWith('/settings') || targetPathWithoutQuery.startsWith('/audit/')) {
+        console.log('🔙 Skipping - non-tab route:', targetPathWithoutQuery);
+        return;
+      }
+      
+      console.log('🔙 Popstate detected, switching tab BEFORE route change:', targetPath);
+      console.log('🔙 Current tabs:', tabs.value.map(t => ({ id: t.id, path: t.path, title: t.title })));
+      console.log('🔙 Current activeTabId:', activeTabId.value);
+      
+      // Mark as browser navigation (use module-level variable)
+      isBrowserNavigation = true;
+      
+      // Find tab for the target path
+      const targetTab = findTabByPath(targetPath) || findTabByPath(targetPathWithoutQuery);
+      console.log('🔙 Target tab found:', targetTab ? { id: targetTab.id, path: targetTab.path, title: targetTab.title } : 'NOT FOUND');
+      
+      if (targetTab) {
+        // Switch to tab IMMEDIATELY before Vue Router processes the route change
+        if (activeTabId.value !== targetTab.id) {
+          console.log('🔙 Switching from tab:', activeTabId.value, 'to tab:', targetTab.id);
+          activeTabId.value = targetTab.id;
+          console.log('✅ Tab switched BEFORE route change:', targetTab.id, targetTab.title);
+          console.log('✅ New activeTabId:', activeTabId.value);
+        } else {
+          console.log('🔙 Tab already active, no switch needed');
+        }
+        // Update tab path if needed
+        if (targetTab.path !== targetPath && targetTab.path !== targetPathWithoutQuery) {
+          const tabPathWithoutQuery = targetTab.path.split('?')[0];
+          if (tabPathWithoutQuery === targetPathWithoutQuery) {
+            targetTab.path = targetPath;
+            console.log('🔄 Updated tab path to match route:', targetPath);
+          }
+        }
+      } else {
+        console.warn('⚠️ No tab found for path:', targetPath, '- route watcher will handle it');
+      }
+      
+      // Reset flag after a short delay to allow route watcher to skip
+      setTimeout(() => {
+        isBrowserNavigation = false;
+      }, 200);
+    };
+    
+    // Add popstate listener with capture phase to run before Vue Router
+    window.addEventListener('popstate', handlePopState, true);
+    console.log('✅ Popstate listener registered with capture phase');
+    
+    // ALSO use router.afterEach as a fallback to catch route changes
+    // This ensures we catch browser navigation even if the watcher doesn't fire
+    // Wait a bit to ensure router is fully initialized
+    let routerAfterEachUnregister = null;
+    
+    const registerRouterHook = () => {
+      const currentRouter = getRouter();
+      console.log('🔍 Router available for afterEach?', !!currentRouter);
+      console.log('🔍 Router object:', currentRouter);
+      
+      if (currentRouter && !routerAfterEachUnregister) {
+        console.log('🔍 Registering router.afterEach hook...');
+        routerAfterEachUnregister = currentRouter.afterEach((to, from) => {
+        console.log('🔄🔄🔄 Router afterEach FIRED:', {
+          to: to.path,
+          from: from.path,
+          toFullPath: to.fullPath,
+          fromFullPath: from.fullPath,
+          isProgrammaticNavigation,
+          activeTabId: activeTabId.value
+        });
+        
+        // Only handle if this is browser navigation (not programmatic)
+        if (isProgrammaticNavigation) {
+          console.log('🔒 Router afterEach: Skipping - programmatic navigation');
+          return;
+        }
+        
+        const toPath = to.path;
+        const fromPath = from.path;
+        
+        // Skip if paths are the same
+        if (toPath === fromPath) {
+          console.log('⏭️ Router afterEach: Paths are the same, skipping');
+          return;
+        }
+        
+        console.log('🔄 Router afterEach: Browser navigation detected:', fromPath, '→', toPath);
+        
+        // Find tab for the new route
+        const targetTab = findTabByPath(to.fullPath) || findTabByPath(toPath);
+        console.log('🔄 Router afterEach: Target tab found?', !!targetTab, targetTab ? { id: targetTab.id, path: targetTab.path } : null);
+        
+        if (targetTab && activeTabId.value !== targetTab.id) {
+          console.log('🔄 Router afterEach: Switching to tab:', targetTab.id, 'from:', activeTabId.value);
+          activeTabId.value = targetTab.id;
+          saveTabsToStorage(); // Force save to override localStorage
+          console.log('✅ Router afterEach: Tab switched to:', targetTab.id, 'new activeTabId:', activeTabId.value);
+        } else if (targetTab) {
+          console.log('🔒 Router afterEach: Tab already active');
+        } else {
+          console.log('⚠️ Router afterEach: No tab found for route:', toPath);
+        }
+      });
+        console.log('✅ Router afterEach hook registered, unregister function:', typeof routerAfterEachUnregister === 'function');
+      } else if (!currentRouter) {
+        console.warn('⚠️ Router not available yet, will retry...');
+        // Retry after a short delay
+        setTimeout(registerRouterHook, 100);
+      }
+    };
+    
+    // Try to register immediately
+    registerRouterHook();
+    
+    // Also try after a delay in case router initializes later
+    setTimeout(registerRouterHook, 500);
+    
+    console.log('✅ Route watcher setup complete. Watching route:', route.path);
+    console.log('✅ Watcher stop function created:', typeof stopWatcher === 'function');
+    
+    // Return cleanup function
+    return () => {
+      stopWatcher(); // Stop the route watcher
+      if (routerAfterEachUnregister) {
+        routerAfterEachUnregister(); // Unregister router hook
+      }
+      window.removeEventListener('popstate', handlePopState, true);
+      console.log('🧹 Popstate listener and route watcher removed');
+    };
   };
 
   // Get active tab
