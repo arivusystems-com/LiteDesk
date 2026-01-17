@@ -71,6 +71,11 @@ function resolveAppKeyFromUrl(path) {
  * 
  * Attaches req.appKey to the request lifecycle for use in controllers and middleware.
  * Only processes authenticated requests (when req.user exists).
+ * 
+ * Resolution Priority:
+ * 1. Query parameter (req.query.appKey) - highest priority
+ * 2. URL namespace (/app/crm, /portal, /audit, /lms)
+ * 3. Fallback: DEFAULT_APP_KEY (SALES)
  */
 const resolveAppContext = (req, res, next) => {
     // Only resolve appKey for authenticated requests
@@ -79,6 +84,21 @@ const resolveAppContext = (req, res, next) => {
         return next();
     }
     
+    // Priority 1: Check query parameter for explicit appKey
+    if (req.query.appKey) {
+        const queryAppKey = req.query.appKey.toUpperCase();
+        if (isValidAppKey(queryAppKey)) {
+            req.appKey = queryAppKey;
+            const userId = req.user?._id?.toString() || 'unknown';
+            const orgId = req.user?.organizationId?.toString() || 'unknown';
+            console.log(`[AppContext] appKey=${req.appKey} from query param req.query.appKey=${req.query.appKey} path=${req.path} userId=${userId} orgId=${orgId}`);
+            return next();
+        } else {
+            console.warn(`[AppContext] Invalid appKey in query param: ${req.query.appKey}, falling back to URL resolution`);
+        }
+    }
+    
+    // Priority 2: Resolve from URL path
     // Use originalUrl to get the full path before Express route mounting
     // req.path is relative to the mount point, but we need the full path
     // req.originalUrl includes query string, so we extract just the path
