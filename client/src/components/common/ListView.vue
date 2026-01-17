@@ -62,26 +62,23 @@
                       </div>
                     </div>
                   </MenuItem>
-                  <!-- Divider -->
-                  <div class="border-t border-gray-200 dark:border-gray-700 my-1"></div>
-                  <!-- Save Current View -->
-                  <MenuItem v-slot="{ active }">
-                    <button
-                      @click="handleSaveCurrentView"
-                      :class="[
-                        active ? 'bg-gray-100 dark:bg-gray-700' : '',
-                        'block w-full text-left px-4 py-2 text-sm text-gray-900 dark:text-gray-100'
-                      ]"
-                    >
-                      Save current view…
-                    </button>
-                  </MenuItem>
                 </div>
               </MenuItems>
             </Transition>
           </Menu>
           <!-- Regular title (other modules) -->
           <h1 v-else class="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-white truncate">{{ title }}</h1>
+          
+          <!-- Save View CTA (People module only, when state doesn't match any saved view) -->
+          <button
+            v-if="moduleKey === 'people' && shouldShowSaveCTA"
+            @click="handleSaveCurrentView"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            title="Save current view as a new saved view"
+          >
+            <StarIcon class="w-4 h-4" />
+            <span>Save view</span>
+          </button>
           
           <!-- Mobile Action Buttons with Stats Icon -->
           <div class="sm:hidden flex items-center gap-2 ml-auto">
@@ -1963,6 +1960,36 @@ const activePeopleViewTitle = computed(() => {
   return 'All People';
 });
 
+// STEP 3: Determine if Save CTA should be shown - DERIVED ONLY
+// Shows "Save view" button ONLY when current state doesn't match any saved view
+// This is READ-ONLY - does NOT mutate state, filters, or views
+const shouldShowSaveCTA = computed(() => {
+  // Only for People module
+  if (props.moduleKey !== 'people' || !props.savedViews || props.savedViews.length === 0) {
+    return false;
+  }
+  
+  // Get current state
+  const currentState = {
+    filters: filters,
+    sortField: props.sortField,
+    sortOrder: props.sortOrder,
+    columns: visibleColumns.value
+  };
+  
+  // Normalize current state
+  const normalizedState = normalizePeopleViewState(currentState);
+  
+  // Get current user ID for filter normalization
+  const currentUserId = authStore.user?._id;
+  
+  // Check if state matches any saved view
+  const matchesAnyView = doesStateMatchAnySavedView(normalizedState, props.savedViews, currentUserId);
+  
+  // Show CTA only when state does NOT match any saved view
+  return !matchesAnyView;
+});
+
 const emptyStateTitle = computed(() =>
   hasActiveFilters.value ? `No ${props.title.toLowerCase()} match your filters` : props.emptyTitle
 );
@@ -2905,6 +2932,160 @@ const getCurrentViewConfig = () => {
   };
 };
 
+// STEP 1: Normalize state - PURE FUNCTION
+// Extracts canonical view state (filters, sort, columns) for comparison
+// Explicitly EXCLUDES: pagination, selection, scroll, loading
+const normalizePeopleViewState = (state) => {
+  // Extract filters - normalize empty strings and undefined to consistent representation
+  const normalizedFilters = {};
+  Object.keys(state.filters || {}).forEach(key => {
+    const value = state.filters[key];
+    // Only include filters with meaningful values (null is valid, undefined/'' are not)
+    if (value !== undefined && value !== '') {
+      normalizedFilters[key] = value === null ? null : String(value);
+    }
+  });
+  
+  // Sort keys for consistent comparison
+  const sortedFilterKeys = Object.keys(normalizedFilters).sort();
+  const normalizedFiltersObj = {};
+  sortedFilterKeys.forEach(key => {
+    normalizedFiltersObj[key] = normalizedFilters[key];
+  });
+  
+  // Extract sort - normalize field and order
+  const normalizedSort = {
+    field: String(state.sortField || 'createdAt'),
+    order: String(state.sortOrder || 'desc')
+  };
+  
+  // Extract visible columns - normalize visible state and order
+  const normalizedColumns = (state.columns || [])
+    .filter(col => col.visible !== false) // Only visible columns
+    .map(col => ({
+      key: String(col.key || ''),
+      visible: col.visible !== false,
+      order: typeof col.order === 'number' ? col.order : 999
+    }))
+    .sort((a, b) => a.order - b.order) // Sort by order
+    .map(col => col.key); // Return just keys for comparison
+  
+  return {
+    filters: normalizedFiltersObj,
+    sort: normalizedSort,
+    columns: normalizedColumns
+  };
+};
+
+// STEP 2: Match state against saved views - PURE FUNCTION
+// Compares normalized state with saved views without any side effects
+const doesStateMatchAnySavedView = (normalizedState, savedViews, currentUserId) => {
+  if (!savedViews || savedViews.length === 0) return false;
+  
+  // Helper to normalize filters for comparison (handles 'me' and 'unassigned' values)
+  const normalizeFilterValue = (key, value, userId) => {
+    if (key === 'assignedTo') {
+      // Normalize 'me' to userId and 'unassigned' to null for comparison
+      if (value === 'me' && userId) return userId;
+      if (value === 'unassigned') return null;
+      if (value === userId && userId) return userId;
+      return value === null ? null : String(value);
+    }
+    return value === null ? null : String(value);
+  };
+  
+  // Helper to compare filters
+  const filtersMatch = (currentFilters, viewFilters, userId) => {
+    const currentKeys = Object.keys(currentFilters).sort();
+    const viewKeys = Object.keys(viewFilters || {}).filter(k => {
+      const v = viewFilters[k];
+      return v !== undefined && v !== '';
+    }).sort();
+    
+    if (currentKeys.length !== viewKeys.length) return false;
+    
+    for (let i = 0; i < currentKeys.length; i++) {
+      if (currentKeys[i] !== viewKeys[i]) return false;
+      
+      const key = currentKeys[i];
+      const currentValue = normalizeFilterValue(key, currentFilters[key], userId);
+      const viewValue = normalizeFilterValue(key, viewFilters[key], userId);
+      
+      // Compare normalized values
+      if (currentValue !== viewValue) {
+        return false;
+      }
+    }
+    
+    return true;
+  };
+  
+  // Compare against each saved view
+  for (const view of savedViews) {
+    // Check if view has explicit config (means it was saved with full config including columns/sort)
+    const hasExplicitConfig = !!view.config;
+    
+    // Get config from view (may be in view.config or view directly for backward compat)
+    const viewConfig = view.config || {
+      filters: view.filters || {},
+      sort: view.sort || { field: 'createdAt', order: 'desc' },
+      columns: view.columns || []
+    };
+    
+    // Normalize view filters for comparison
+    const viewFilters = viewConfig.filters || {};
+    
+    // Compare filters (always required)
+    const normalizedViewFilters = normalizePeopleViewState({
+      filters: viewFilters,
+      sortField: 'createdAt', // dummy values for filter normalization
+      sortOrder: 'desc',
+      columns: []
+    }).filters;
+    
+    if (!filtersMatch(normalizedState.filters, normalizedViewFilters, currentUserId)) {
+      continue;
+    }
+    
+    // If view has explicit config, also compare sort and columns
+    // System views without explicit config only need filters to match
+    if (hasExplicitConfig) {
+      // Normalize view state for full comparison
+      const normalizedViewState = normalizePeopleViewState({
+        filters: viewFilters,
+        sortField: viewConfig.sort?.field || 'createdAt',
+        sortOrder: viewConfig.sort?.order || 'desc',
+        columns: viewConfig.columns || []
+      });
+      
+      // Compare sort
+      if (normalizedState.sort.field !== normalizedViewState.sort.field ||
+          normalizedState.sort.order !== normalizedViewState.sort.order) {
+        continue;
+      }
+      
+      // Compare columns (order and visibility)
+      if (normalizedState.columns.length !== normalizedViewState.columns.length) {
+        continue;
+      }
+      
+      // Check column keys match (order already normalized)
+      const columnsMatch = normalizedState.columns.every((key, index) => 
+        key === normalizedViewState.columns[index]
+      );
+      
+      if (!columnsMatch) {
+        continue;
+      }
+    }
+    
+    // All required components match!
+    return true;
+  }
+  
+  return false;
+};
+
 // Apply view configuration (filters, columns, sort, search)
 const applyViewConfig = (config) => {
   // Apply filters
@@ -2988,22 +3169,24 @@ const handleSaveView = () => {
   
   const currentConfig = getCurrentViewConfig();
   const customViews = loadCustomViews();
+  let savedView = null;
   
   if (editingView.value) {
     // Update existing view
     const index = customViews.findIndex(v => v.id === editingView.value.id);
     if (index !== -1) {
-      customViews[index] = {
+      savedView = {
         ...customViews[index],
         label: viewFormData.value.name.trim(),
         description: viewFormData.value.description.trim() || undefined,
         config: currentConfig,
         updatedAt: new Date().toISOString()
       };
+      customViews[index] = savedView;
     }
   } else {
     // Create new view
-    const newView = {
+    savedView = {
       id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       label: viewFormData.value.name.trim(),
       description: viewFormData.value.description.trim() || undefined,
@@ -3011,11 +3194,16 @@ const handleSaveView = () => {
       config: currentConfig,
       createdAt: new Date().toISOString()
     };
-    customViews.push(newView);
+    customViews.push(savedView);
   }
   
   saveCustomViews(customViews);
   emit('saved-views-updated', customViews);
+  
+  // Activate the saved view so the title reflects it immediately
+  if (savedView) {
+    emit('saved-view-selected', savedView);
+  }
   
   handleCloseSaveViewModal();
 };
@@ -3055,6 +3243,31 @@ const handleSavedViewClick = (view) => {
   // Apply view config if it exists (columns, sort, search)
   if (view.config) {
     applyViewConfig(view.config);
+  } else if (view.filters !== undefined) {
+    // For views without explicit config (like system views), still apply filters
+    // Clear existing filters first
+    Object.keys(filters).forEach(key => {
+      delete filters[key];
+    });
+    // Apply view filters with normalization (matching handleSavedViewSelected logic)
+    if (view.filters && Object.keys(view.filters).length > 0) {
+      const viewFilters = { ...view.filters };
+      const currentUserId = authStore.user?._id;
+      
+      // Normalize assignedTo values to match filter dropdown options
+      // This ensures 'me' and 'unassigned' work correctly
+      if (viewFilters.assignedTo === currentUserId) {
+        viewFilters.assignedTo = 'me';
+      } else if (viewFilters.assignedTo === null || viewFilters.assignedTo === undefined) {
+        viewFilters.assignedTo = 'unassigned';
+      }
+      
+      Object.keys(viewFilters).forEach(key => {
+        filters[key] = viewFilters[key];
+      });
+    }
+    // Emit filter update to parent to sync state
+    emit('update:filters', { ...filters });
   }
   
   // Emit event to parent
