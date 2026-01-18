@@ -122,30 +122,59 @@ export const useNotificationPreferencesStore = defineStore('notificationPreferen
     }
 
     const appPrefs = apps[appKey];
-    if (!appPrefs[eventType]) {
-      appPrefs[eventType] = {
-        inApp: { enabled: false, available: true },
-        email: { enabled: false, available: true },
-        push: { enabled: false, available: false },
-        whatsapp: { enabled: false, available: false },
-        sms: { enabled: false, available: false }
-      };
+    
+    // Handle legacy boolean format: convert to object format
+    // Get existing channel value, or use defaults if event doesn't exist
+    let channelValue;
+    if (appPrefs[eventType]) {
+      channelValue = appPrefs[eventType][channel];
+    } else {
+      // Event doesn't exist yet - will be created below
+      channelValue = undefined;
     }
-
-    const current = appPrefs[eventType][channel] || { enabled: false, available: true };
+    
+    let current;
+    if (typeof channelValue === 'boolean') {
+      // Legacy format: boolean value means enabled, and it's available
+      current = { enabled: channelValue, available: true };
+    } else if (typeof channelValue === 'object' && channelValue !== null) {
+      // New format: object with enabled and available
+      current = channelValue;
+    } else {
+      // Default: not enabled but available
+      current = { enabled: false, available: true };
+    }
 
     // If channel is not available, don't allow toggling
-    if (current.available === false) {
+    // Exception: For push, whatsapp, and sms, if channelData doesn't exist yet (undefined),
+    // allow toggling - the UI layer (handleChannelGlobalToggle) determines availability
+    const optionalChannels = ['push', 'whatsapp', 'sms'];
+    if (current.available === false && channelValue !== undefined) {
+      // Channel exists and is explicitly unavailable - don't allow toggling
       return false;
     }
+    // If channel doesn't exist (undefined) or is available, allow toggling
 
     // Apply optimistic update by creating completely new object structure
     // This ensures Vue's reactivity system detects the change
     const updatedApps = {};
     
+    // Helper to normalize channel value (handle legacy boolean format)
+    const normalizeChannel = (val) => {
+      if (typeof val === 'boolean') {
+        return { enabled: val, available: true };
+      }
+      if (typeof val === 'object' && val !== null) {
+        return val;
+      }
+      return { enabled: false, available: true };
+    };
+    
     // Copy all apps, updating only the current app
     // Create new objects at every level to ensure Vue reactivity
-    Object.keys(apps).forEach(key => {
+    const allAppKeys = new Set([...Object.keys(apps), appKey]); // Ensure current appKey is included
+    
+    allAppKeys.forEach(key => {
       if (key === appKey) {
         // Create new object for the current app with updated event
         const updatedAppPrefs = {};
@@ -153,23 +182,35 @@ export const useNotificationPreferencesStore = defineStore('notificationPreferen
         // Copy all existing events, creating new objects for each
         Object.keys(appPrefs).forEach(evtType => {
           if (evtType === eventType) {
+            const existingInApp = normalizeChannel(appPrefs[evtType].inApp);
+            const existingEmail = normalizeChannel(appPrefs[evtType].email);
+            
             // Update the specific event with new channel value
+            // For push/whatsapp/sms: preserve existing availability if it exists
+            const channelToUpdate = normalizeChannel(appPrefs[evtType][channel]);
+            const updatedChannel = {
+              ...channelToUpdate,
+              enabled
+              // Preserve availability from channelToUpdate (normalized value)
+            };
+            
             updatedAppPrefs[evtType] = {
-              inApp: { ...appPrefs[evtType].inApp },
-              email: { ...appPrefs[evtType].email },
-              push: { ...(appPrefs[evtType].push || { enabled: false, available: false }) },
-              whatsapp: { ...(appPrefs[evtType].whatsapp || { enabled: false, available: false }) },
-              sms: { ...(appPrefs[evtType].sms || { enabled: false, available: false }) },
-              [channel]: {
-                ...(appPrefs[evtType][channel] || { enabled: false, available: false }),
-                enabled
-              }
+              inApp: { ...existingInApp },
+              email: { ...existingEmail },
+              push: channel === 'push' ? updatedChannel : { ...(appPrefs[evtType].push || { enabled: false, available: false }) },
+              whatsapp: channel === 'whatsapp' ? updatedChannel : { ...(appPrefs[evtType].whatsapp || { enabled: false, available: false }) },
+              sms: channel === 'sms' ? updatedChannel : { ...(appPrefs[evtType].sms || { enabled: false, available: false }) },
+              ...(channel !== 'push' && channel !== 'whatsapp' && channel !== 'sms' ? { [channel]: updatedChannel } : {})
             };
           } else {
             // Copy other events with new objects to ensure reactivity
+            // Normalize channel values when copying (handle legacy boolean format)
+            const existingInApp = normalizeChannel(appPrefs[evtType].inApp);
+            const existingEmail = normalizeChannel(appPrefs[evtType].email);
+            
             updatedAppPrefs[evtType] = {
-              inApp: { ...appPrefs[evtType].inApp },
-              email: { ...appPrefs[evtType].email },
+              inApp: { ...existingInApp },
+              email: { ...existingEmail },
               push: { ...(appPrefs[evtType].push || { enabled: false, available: false }) },
               whatsapp: { ...(appPrefs[evtType].whatsapp || { enabled: false, available: false }) },
               sms: { ...(appPrefs[evtType].sms || { enabled: false, available: false }) }
@@ -206,17 +247,25 @@ export const useNotificationPreferencesStore = defineStore('notificationPreferen
     const testAppPrefs = appPreferences.value;
     const testEvent = testAppPrefs[eventType];
     
+    // Verify the event was created correctly
+    const rawEvent = rawPreferences.value.apps[appKey]?.[eventType];
+    
     console.log('[notificationPreferences] Optimistic update applied:', {
       appKey,
       eventType,
       channel,
       enabled,
+      rawEventExists: !!rawEvent,
+      rawEventChannel: rawEvent?.[channel],
       currentValue: rawPreferences.value.apps[appKey]?.[eventType]?.[channel],
       hasApp: !!rawPreferences.value.apps[appKey],
       hasEvent: !!rawPreferences.value.apps[appKey]?.[eventType],
       appPrefsAfter: testEvent,
+      appPrefsKeys: Object.keys(testAppPrefs || {}),
       inAppEnabled: testEvent?.inApp?.enabled,
-      emailEnabled: testEvent?.email?.enabled
+      emailEnabled: testEvent?.email?.enabled,
+      updatedAppsKeys: Object.keys(updatedApps),
+      updatedAppPrefsKeys: Object.keys(updatedApps[appKey] || {})
     });
 
     return true;
@@ -248,32 +297,69 @@ export const useNotificationPreferencesStore = defineStore('notificationPreferen
 
     try {
       // Backend expects: { appKey, events: { [eventType]: { inApp: boolean, email: boolean } } }
-      // Get current state for this event to preserve the other channels
+      // Get current state for this event from the optimistic update state (rawPreferences.value already has the update)
       const apps = rawPreferences.value.apps || {};
       const appPrefs = apps[appKey] || {};
-      const currentEvent = appPrefs[eventType] || {
-        inApp: { enabled: false, available: true },
-        email: { enabled: false, available: true },
-        push: { enabled: false, available: false },
-        whatsapp: { enabled: false, available: false },
-        sms: { enabled: false, available: false }
+      const currentEvent = appPrefs[eventType];
+      
+      // Helper to extract boolean enabled value from channel (handles both object and boolean formats)
+      const getEnabledBoolean = (channelData, isTargetChannel) => {
+        if (isTargetChannel) return enabled;
+        if (typeof channelData === 'boolean') return channelData;
+        if (typeof channelData === 'object' && channelData !== null) return !!channelData.enabled;
+        return false; // Default to false if not found
       };
       
       // Phase 14: Build payload with full channel structure
+      // Backend expects booleans for inApp/email in legacy format
+      const inAppValue = getEnabledBoolean(currentEvent?.inApp, channel === 'inApp');
+      const emailValue = getEnabledBoolean(currentEvent?.email, channel === 'email');
+      
       const payload = {
         appKey,
         events: {
           [eventType]: {
-            inApp: channel === 'inApp' ? enabled : (typeof currentEvent.inApp === 'object' ? currentEvent.inApp.enabled : currentEvent.inApp),
-            email: channel === 'email' ? enabled : (typeof currentEvent.email === 'object' ? currentEvent.email.enabled : currentEvent.email),
-            push: channel === 'push' ? { enabled, available: currentEvent.push?.available !== false } : currentEvent.push,
-            whatsapp: channel === 'whatsapp' ? { enabled, available: currentEvent.whatsapp?.available !== false } : currentEvent.whatsapp,
-            sms: channel === 'sms' ? { enabled, available: currentEvent.sms?.available !== false } : currentEvent.sms
+            inApp: inAppValue,
+            email: emailValue,
+            push: channel === 'push' ? { enabled, available: currentEvent?.push?.available !== false } : (currentEvent?.push || { enabled: false, available: false }),
+            whatsapp: channel === 'whatsapp' ? { enabled, available: currentEvent?.whatsapp?.available !== false } : (currentEvent?.whatsapp || { enabled: false, available: false }),
+            sms: channel === 'sms' ? { enabled, available: currentEvent?.sms?.available !== false } : (currentEvent?.sms || { enabled: false, available: false })
           }
         }
       };
 
+      console.log('[notificationPreferences] updatePreference API payload:', {
+        eventType,
+        channel,
+        enabled,
+        currentEvent: currentEvent ? { 
+          inApp: currentEvent.inApp, 
+          email: currentEvent.email,
+          inAppType: typeof currentEvent.inApp,
+          emailType: typeof currentEvent.email
+        } : null,
+        computedValues: {
+          inAppValue,
+          emailValue,
+          inAppFromCurrent: getEnabledBoolean(currentEvent?.inApp, false),
+          emailFromCurrent: getEnabledBoolean(currentEvent?.email, false)
+        },
+        payloadEvent: payload.events[eventType],
+        fullPayload: JSON.stringify(payload, null, 2)
+      });
+
       const data = await apiClient.put('/notification-preferences', payload);
+      
+      const digestEventFromResponse = data?.events?.[eventType];
+      console.log('[notificationPreferences] updatePreference API response:', {
+        eventType,
+        responseEvents: data?.events ? Object.keys(data.events) : [],
+        digestEventRaw: digestEventFromResponse,
+        inAppValue: digestEventFromResponse?.inApp,
+        inAppType: typeof digestEventFromResponse?.inApp,
+        emailValue: digestEventFromResponse?.email,
+        emailType: typeof digestEventFromResponse?.email
+      });
       
       // Transform backend response back to frontend format
       if (data && data.events) {
@@ -309,7 +395,34 @@ export const useNotificationPreferencesStore = defineStore('notificationPreferen
           };
         });
         
-        rawPreferences.value = transformed;
+        // Merge with existing preferences instead of replacing completely
+        // This preserves other events that weren't in the API response
+        const existingApps = rawPreferences.value?.apps || {};
+        const existingAppPrefs = existingApps[appKey] || {};
+        
+        // Merge transformed events with existing events
+        const mergedAppPrefs = {
+          ...existingAppPrefs,
+          ...transformed.apps[appKey]
+        };
+        
+        rawPreferences.value = {
+          ...rawPreferences.value,
+          apps: {
+            ...existingApps,
+            [appKey]: mergedAppPrefs
+          }
+        };
+        
+        const mergedDigestEvent = mergedAppPrefs[eventType];
+        console.log('[notificationPreferences] updatePreference merged preferences:', {
+          eventType,
+          digestEventRaw: mergedDigestEvent,
+          inAppEnabled: mergedDigestEvent?.inApp?.enabled,
+          inAppValue: mergedDigestEvent?.inApp,
+          emailEnabled: mergedDigestEvent?.email?.enabled,
+          emailValue: mergedDigestEvent?.email
+        });
       }
       
       lastSnapshot = JSON.parse(JSON.stringify(rawPreferences.value));

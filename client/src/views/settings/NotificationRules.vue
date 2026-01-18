@@ -3,6 +3,22 @@
     <!-- Header -->
     <header class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       <div>
+        <!-- Breadcrumb -->
+        <nav class="mb-4 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+          <router-link to="/settings" class="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+            Settings
+          </router-link>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+            <router-link to="/settings?tab=notifications&notificationPage=overview" class="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+              Notifications
+            </router-link>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+            <span class="text-gray-900 dark:text-white">Rules</span>
+        </nav>
         <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
           Notification Rules
         </h1>

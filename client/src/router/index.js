@@ -68,22 +68,28 @@ const routes = [
     meta: { requiresAuth: true, hideShell: true } // render without main nav/topbar
   },
   {
+    path: '/settings/notifications/overview',
+    name: 'notification-overview',
+    component: () => import('@/views/settings/NotificationOverview.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/settings/notifications',
     name: 'notification-preferences',
     component: () => import('@/views/settings/NotificationPreferences.vue'),
-    meta: { requiresAuth: true, hideShell: true }
+    meta: { requiresAuth: true }
   },
   {
     path: '/settings/notifications/rules',
     name: 'notification-rules',
     component: () => import('@/views/settings/NotificationRules.vue'),
-    meta: { requiresAuth: true, hideShell: true }
+    meta: { requiresAuth: true }
   },
   {
     path: '/settings/notifications/health',
     name: 'notification-health',
     component: () => import('@/views/settings/NotificationHealth.vue'),
-    meta: { requiresAuth: true, hideShell: true, requiresAdmin: true }
+    meta: { requiresAuth: true, requiresAdmin: true }
   },
   {
     path: '/demo-requests',

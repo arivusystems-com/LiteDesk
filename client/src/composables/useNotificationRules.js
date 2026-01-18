@@ -15,7 +15,12 @@ export function useNotificationRules() {
   const error = ref(null);
   const rules = ref([]);
 
-  const currentAppKey = computed(() => notificationStore.currentAppKey() || 'CRM');
+  const currentAppKey = computed(() => {
+    const appKey = notificationStore.currentAppKey();
+    // Map CRM to SALES (they're the same)
+    if (appKey === 'CRM') return 'SALES';
+    return appKey || 'SALES';
+  });
 
   /**
    * Fetch all notification rules for current app
@@ -168,15 +173,25 @@ export function useNotificationRules() {
         appKey: currentAppKey.value
       });
       
-      if (response.data?.success) {
+      // apiClient returns parsed JSON directly (not axios response)
+      // Backend returns: { success: true, data: { id, enabled } }
+      if (response?.success) {
         await fetchRules(); // Refresh list
-        return { success: true, data: response.data.data };
+        return { success: true, data: response.data };
       } else {
-        throw new Error(response.data?.message || 'Failed to toggle rule');
+        // If success is false or undefined, throw error
+        throw new Error(response?.message || 'Failed to toggle rule');
       }
     } catch (err) {
       error.value = err.response?.data?.message || err.message || 'Failed to toggle notification rule';
       console.error('[useNotificationRules] Error toggling rule:', err);
+      console.error('[useNotificationRules] Error details:', {
+        ruleId,
+        appKey: currentAppKey.value,
+        status: err.response?.status,
+        response: err.response?.data,
+        message: err.message
+      });
       throw err;
     } finally {
       loading.value = false;

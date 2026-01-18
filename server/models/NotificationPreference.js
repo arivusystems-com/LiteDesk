@@ -9,8 +9,8 @@ const { Schema } = mongoose;
  * Each channel has enabled (user preference) and available (system capability) flags.
  */
 const eventPreferenceSchema = new Schema({
-  inApp: { type: Boolean, default: true },
-  email: { type: Boolean, default: true },
+  inApp: { type: Boolean, default: false },
+  email: { type: Boolean, default: false },
   push: { 
     enabled: { type: Boolean, default: false },
     available: { type: Boolean, default: false }

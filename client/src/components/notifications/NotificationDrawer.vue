@@ -1,3 +1,21 @@
+<!--
+================================================================================
+NOTIFICATIONS UX CONTRACT — DO NOT VIOLATE
+================================================================================
+This file enforces the Notifications UX & Architecture Hardening Contract.
+
+Notifications are signals, not workflows.
+Actions are assistive, not authoritative.
+
+- Notifications surface awareness; they do not own domain state.
+- No domain mutation without explicit backend APIs + design review.
+- Snooze is temporary, UI-only (no backend persistence; no cross-device guarantees).
+- Grouping is visual-only (never permanently hides or mutates data; no persisted UI state).
+
+See `docs/architecture/notifications-hardening.md`.
+================================================================================
+-->
+
 <template>
   <Teleport to="body">
     <transition name="notification-drawer">
@@ -58,18 +76,97 @@
           <!-- Body -->
           <section class="flex-1 overflow-y-auto px-2 py-2 space-y-4">
             <template v-if="items.length">
-              <div v-for="group in groupedItems" :key="group.label">
+              <div v-for="section in groupedSections" :key="section.label">
                 <p class="px-2 mb-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
-                  {{ group.label }}
+                  {{ section.label }}
                 </p>
+
                 <div class="space-y-1">
-                  <NotificationItem
-                    v-for="n in group.items"
-                    :key="n.id"
-                    :item="n"
-                    :app-key="appKey"
-                    @navigated="$emit('close')"
-                  />
+                  <template v-for="entry in section.entries" :key="entry.key">
+                    <!-- Ungrouped notifications (no entity OR only one in entity bucket) -->
+                    <NotificationItem
+                      v-if="entry.kind === 'item'"
+                      :item="entry.item"
+                      :app-key="appKey"
+                      :show-actions="true"
+                      @navigated="$emit('close')"
+                      @snooze="handleSnooze"
+                    />
+
+                    <!-- Entity group -->
+                    <div
+                      v-else
+                      class="w-full"
+                    >
+                      <button
+                        type="button"
+                        class="w-full relative flex items-start gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 text-left min-h-[44px]"
+                        :aria-expanded="isGroupOpen(entry.key) ? 'true' : 'false'"
+                        :aria-label="`Notification group for ${entry.entityTitle} (${entry.count})`"
+                        @click="toggleGroup(entry.key)"
+                      >
+                        <!-- Left icon: reuse notification icon style (subtle) -->
+                        <div class="mt-1 flex-shrink-0">
+                          <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                            <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                              <path d="M10 2a6 6 0 0 0-6 6v3.586l-.707.707A1 1 0 0 0 4 14h12a1 1 0 0 0 .707-1.707L16 11.586V8a6 6 0 0 0-6-6ZM10 18a3 3 0 0 1-3-3h6a3 3 0 0 1-3 3Z" />
+                            </svg>
+                          </span>
+                        </div>
+
+                        <div class="flex-1 min-w-0">
+                          <div class="flex items-start justify-between gap-2">
+                            <p class="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                              {{ entry.entityTitle }}
+                            </p>
+                            <div class="flex items-center gap-2 flex-shrink-0">
+                              <span class="text-[11px] text-gray-400 dark:text-gray-500">
+                                {{ formatRelative(entry.latest.createdAt) }}
+                              </span>
+                              <span
+                                class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-gray-200 dark:bg-gray-800 text-[11px] font-semibold text-gray-700 dark:text-gray-200"
+                                :aria-label="`${entry.count} notifications`"
+                              >
+                                {{ entry.count }}
+                              </span>
+                            </div>
+                          </div>
+                          <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate">
+                            {{ entry.summaryText }}
+                          </p>
+                        </div>
+
+                        <!-- Group action: mark all as read (unread only), subtle and non-blocking -->
+                        <button
+                          v-if="entry.unreadCount > 0"
+                          type="button"
+                          class="absolute right-2 bottom-2 inline-flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 min-h-[28px] min-w-[28px]"
+                          :aria-label="`Mark all ${entry.count} notifications as read`"
+                          title="Mark all as read"
+                          @click.stop.prevent="markGroupAllRead(entry)"
+                        >
+                          <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M16.704 5.29a1 1 0 0 0-1.408-1.42L8 11.293 4.707 8a1 1 0 0 0-1.414 1.414l4 4a1 1 0 0 0 1.414 0l8-8.125Z" clip-rule="evenodd" />
+                          </svg>
+                        </button>
+                      </button>
+
+                      <div
+                        v-if="isGroupOpen(entry.key)"
+                        class="mt-1 space-y-1"
+                      >
+                        <NotificationItem
+                          v-for="n in entry.expandedItems"
+                          :key="n.id"
+                          :item="n"
+                          :app-key="appKey"
+                          :show-actions="true"
+                          @navigated="$emit('close')"
+                          @snooze="handleSnooze"
+                        />
+                      </div>
+                    </div>
+                  </template>
                 </div>
               </div>
               <div v-if="canLoadMore" class="mt-2 px-2">
@@ -91,7 +188,14 @@
           </section>
 
           <!-- Footer -->
-          <footer class="px-4 py-3 border-t border-gray-200 dark:border-gray-800">
+          <footer class="px-4 py-3 border-t border-gray-200 dark:border-gray-800 space-y-2">
+            <router-link
+              to="/settings?tab=notifications&notificationPage=overview"
+              class="block text-center text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+              @click="$emit('close')"
+            >
+              Notification settings
+            </router-link>
             <button
               type="button"
               class="w-full inline-flex items-center justify-center rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 min-h-[40px]"
@@ -135,7 +239,14 @@ const store = useNotificationStore();
 const authStore = useAuthStore();
 const { isOffline, isOnline } = useOffline();
 
-const items = computed(() => store.items);
+function handleSnooze(payload) {
+  // Smart Snooze v1 is UI-only and localStorage-based (device-only).
+  // Payload: { id, until, label }
+  store.snoozeNotification(payload);
+}
+
+// Snoozed notifications are hidden from the list and do not contribute to grouping.
+const items = computed(() => store.items.filter(n => !store.isSnoozed(n.id)));
 const hasUnread = computed(() => store.hasUnread);
 const loading = computed(() => store.loading);
 const canLoadMore = computed(() => !!store.nextCursor && !loading.value);
@@ -143,43 +254,125 @@ const showOfflineBanner = computed(() => props.appKey === 'AUDIT' && isOffline.v
 
 // Track when drawer opened to show "New" divider
 const openedAt = ref(null);
+const openEntityGroups = ref(new Set()); // non-persistent, resets when drawer closes
 
 // SSE stream connection
 let streamDisconnect = null;
 
-const groupedItems = computed(() => {
-  const groups = {
-    New: [],
-    Today: [],
-    Yesterday: [],
-    Earlier: []
-  };
+function formatRelative(date) {
+  return store.formatRelative(date);
+}
+
+function formatEntityType(type) {
+  if (!type) return 'Notification';
+  return String(type)
+    .split('_')
+    .map(w => w.charAt(0) + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function getEntityKey(n) {
+  const t = n?.entity?.type;
+  const id = n?.entity?.id;
+  if (!t || !id) return null;
+  return `${String(t)}:${String(id)}`;
+}
+
+function buildSectionEntries(list) {
+  const entries = [];
+  const groupsByKey = new Map(); // key -> { key, latest, items }
+
+  for (const n of list) {
+    const key = getEntityKey(n);
+    if (!key) {
+      entries.push({ kind: 'item', key: `item:${n.id}`, item: n });
+      continue;
+    }
+
+    let group = groupsByKey.get(key);
+    if (!group) {
+      group = {
+        key,
+        latest: n, // first occurrence is newest
+        items: [n]
+      };
+      groupsByKey.set(key, group);
+      entries.push({ kind: 'group', key, _groupRef: group });
+    } else {
+      group.items.push(n);
+    }
+  }
+
+  // Finalize placeholders: only create a group row if there are multiple notifications for the entity.
+  return entries.map((e) => {
+    if (e.kind === 'item') return e;
+    const g = e._groupRef;
+    if (!g || g.items.length <= 1) {
+      const single = g?.items?.[0];
+      return { kind: 'item', key: `item:${single.id}`, item: single };
+    }
+
+    const latest = g.latest;
+    const entityTitle =
+      latest?.entity?.title ||
+      latest?.entity?.name ||
+      formatEntityType(latest?.entity?.type);
+
+    const expandedItems = [...g.items].reverse(); // chronological (oldest → newest)
+    const unreadCount = g.items.filter(x => !x.readAt).length;
+
+    return {
+      kind: 'group',
+      key: g.key,
+      entityTitle,
+      latest,
+      summaryText: latest?.title || latest?.body || 'Notification',
+      count: g.items.length,
+      unreadCount,
+      expandedItems
+    };
+  });
+}
+
+const groupedSections = computed(() => {
   const now = new Date();
+  const today = [];
+  const earlier = [];
 
   for (const n of items.value) {
     const created = new Date(n.createdAt);
     const diffMs = now - created;
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
-    // Show as "New" if arrived after drawer opened
-    if (openedAt.value && created > openedAt.value) {
-      groups.New.push(n);
-    } else if (diffDays === 0) {
-      groups.Today.push(n);
-    } else if (diffDays === 1) {
-      groups.Yesterday.push(n);
-    } else {
-      groups.Earlier.push(n);
-    }
+    if (diffDays === 0) today.push(n);
+    else earlier.push(n);
   }
 
   return [
-    { label: 'New', items: groups.New },
-    { label: 'Today', items: groups.Today },
-    { label: 'Yesterday', items: groups.Yesterday },
-    { label: 'Earlier', items: groups.Earlier }
-  ].filter(g => g.items.length);
+    { label: 'Today', entries: buildSectionEntries(today) },
+    { label: 'Earlier', entries: buildSectionEntries(earlier) }
+  ].filter(s => s.entries.length);
 });
+
+function isGroupOpen(key) {
+  return openEntityGroups.value.has(key);
+}
+
+function toggleGroup(key) {
+  const next = new Set(openEntityGroups.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  openEntityGroups.value = next;
+}
+
+async function markGroupAllRead(entry) {
+  if (!entry?.expandedItems?.length) return;
+  // Use existing per-notification markRead logic (no new API)
+  for (const n of entry.expandedItems) {
+    if (!n.readAt) {
+      await store.markRead(n.id);
+    }
+  }
+}
 
 async function loadInitial() {
   await store.fetchNotifications({ unreadOnly: false, limit: 20 });
@@ -200,6 +393,7 @@ watch(
   async (open) => {
     if (open) {
       openedAt.value = new Date();
+      openEntityGroups.value = new Set(); // reset (non-persistent)
       await loadInitial();
       
       // Connect SSE stream when drawer opens
@@ -222,6 +416,7 @@ watch(
         streamDisconnect = null;
       }
       openedAt.value = null;
+      openEntityGroups.value = new Set(); // reset (non-persistent)
     }
   }
 );
