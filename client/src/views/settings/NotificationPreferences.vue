@@ -4,8 +4,24 @@
       <!-- Header -->
       <header class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
+          <!-- Breadcrumb -->
+          <nav class="mb-4 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+            <router-link to="/settings" class="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+              Settings
+            </router-link>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+            <router-link to="/settings?tab=notifications&notificationPage=overview" class="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+              Notifications
+            </router-link>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+            <span class="text-gray-900 dark:text-white">Preferences</span>
+          </nav>
           <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
-            Notification preferences
+            Notification Preferences
           </h1>
           <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
             Control in-app and email notifications for this workspace.
@@ -14,7 +30,7 @@
         <div class="flex items-center gap-3 flex-wrap">
           <!-- Link to notification rules (Phase 17) -->
           <router-link
-            to="/settings/notifications/rules"
+            to="/settings?tab=notifications&notificationPage=rules"
             class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -25,7 +41,7 @@
           <!-- Admin link to health dashboard (Phase 15) -->
           <router-link
             v-if="authStore.isAdminLike"
-            to="/settings/notifications/health"
+            to="/settings?tab=notifications&notificationPage=health"
             class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
             <svg class="w-4 h-4" viewBox="0 0 20 20" fill="none">
@@ -137,7 +153,7 @@
               @click="scrollToChannel('email')"
             />
             <ChannelBadge
-              v-if="currentAppKey === 'CRM' || currentAppKey === 'AUDIT'"
+              v-if="currentAppKey === 'SALES' || currentAppKey === 'AUDIT'"
               channel="push"
               :enabled="channelSummary.push.enabled"
               :available="true"
@@ -168,6 +184,7 @@
         <div
           v-for="group in groupedEvents"
           :key="`${group.id}-${renderKey}`"
+          :data-event-group="group.id"
           class="border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800"
         >
           <!-- Group header -->
@@ -337,9 +354,9 @@
         <!-- Channel-Specific Sections (Phase 14) -->
         <div class="space-y-4 mt-8">
           <!-- Push Notifications Section -->
-          <!-- Show for CRM and AUDIT apps -->
+          <!-- Show for Sales and Audit apps -->
           <div
-            v-if="currentAppKey === 'CRM' || currentAppKey === 'AUDIT'"
+            v-if="currentAppKey === 'SALES' || currentAppKey === 'AUDIT'"
             id="channel-section-push"
           >
             <NotificationChannelSection
@@ -427,6 +444,112 @@
               </div>
             </NotificationChannelSection>
           </div>
+
+          <!-- Digests Section -->
+          <div
+            id="channel-section-digests"
+          >
+            <div class="border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800 overflow-hidden">
+              <!-- Section header -->
+              <div class="px-4 py-3 sm:px-5 sm:py-4 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center gap-3">
+                  <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" viewBox="0 0 20 20" fill="none">
+                    <path d="M10 2a6 6 0 0 0-6 6v3.586l-.707.707A1 1 0 0 0 4 14h12a1 1 0 0 0 .707-1.707L16 11.586V8a6 6 0 0 0-6-6ZM10 18a3 3 0 0 1-3-3h6a3 3 0 0 1-3 3Z" fill="currentColor" />
+                  </svg>
+                  <div>
+                    <h3 class="text-sm sm:text-base font-semibold text-gray-900 dark:text-white">
+                      Notification Digests
+                    </h3>
+                    <p class="mt-0.5 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                      Receive summaries instead of real-time notifications
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Digest settings -->
+              <div class="border-t border-gray-200 dark:border-gray-700 px-4 py-4 sm:px-5 sm:py-5 space-y-4">
+                <!-- Daily Digest -->
+                <div class="flex items-start justify-between py-3 border-b border-gray-200 dark:border-gray-700 last:border-0">
+                  <div class="flex-1">
+                    <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-1">
+                      Daily Digest
+                    </h4>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                      Receive a daily summary of your notifications. Reduces notification noise while keeping you informed.
+                    </p>
+                    <div class="flex flex-wrap items-center gap-3">
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-600 dark:text-gray-400">In-app</span>
+                        <button
+                          type="button"
+                          class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          :class="digestDailyInApp ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'"
+                          role="switch"
+                          :aria-checked="digestDailyInApp"
+                          @click="handleToggle('DIGEST_DAILY', 'inApp', !digestDailyInApp)"
+                        >
+                          <span
+                            aria-hidden="true"
+                            class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200"
+                            :class="digestDailyInApp ? 'translate-x-5' : 'translate-x-0'"
+                          ></span>
+                        </button>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-600 dark:text-gray-400">Email</span>
+                        <button
+                          type="button"
+                          class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          :class="digestDailyEmail ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'"
+                          role="switch"
+                          :aria-checked="digestDailyEmail"
+                          @click="handleToggle('DIGEST_DAILY', 'email', !digestDailyEmail)"
+                        >
+                          <span
+                            aria-hidden="true"
+                            class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200"
+                            :class="digestDailyEmail ? 'translate-x-5' : 'translate-x-0'"
+                          ></span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Weekly Digest -->
+                <div class="flex items-start justify-between py-3">
+                  <div class="flex-1">
+                    <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-1">
+                      Weekly Digest
+                    </h4>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                      Receive a weekly summary via email. Perfect for staying informed without daily interruptions.
+                    </p>
+                    <div class="flex flex-wrap items-center gap-3">
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-600 dark:text-gray-400">Email</span>
+                        <button
+                          type="button"
+                          class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          :class="digestWeeklyEmail ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'"
+                          role="switch"
+                          :aria-checked="digestWeeklyEmail"
+                          @click="handleToggle('DIGEST_WEEKLY', 'email', !digestWeeklyEmail)"
+                        >
+                          <span
+                            aria-hidden="true"
+                            class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200"
+                            :class="digestWeeklyEmail ? 'translate-x-5' : 'translate-x-0'"
+                          ></span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -439,6 +562,7 @@ import { useRoute } from 'vue-router';
 import { useNotificationStore } from '@/stores/notifications';
 import { useNotificationPreferencesStore } from '@/stores/notificationPreferences';
 import { useAuthStore } from '@/stores/auth';
+import { useNotifications } from '@/composables/useNotifications';
 import ChannelBadge from '@/components/notifications/ChannelBadge.vue';
 import NotificationChannelSection from '@/components/notifications/NotificationChannelSection.vue';
 
@@ -446,9 +570,13 @@ const route = useRoute();
 const notificationStore = useNotificationStore();
 const prefsStore = useNotificationPreferencesStore();
 const authStore = useAuthStore();
+const toast = useNotifications();
 
-const { loading, saving, error, hasLoaded, lastSavedAt, appPreferences, rawPreferences, fetchPreferences, updatePreference, applyOptimisticUpdate } =
+const { loading, saving, error, hasLoaded, lastSavedAt, rawPreferences, fetchPreferences, updatePreference, applyOptimisticUpdate } =
   prefsStore;
+
+// Access appPreferences directly from store (don't destructure - it's a computed!)
+const appPreferences = computed(() => prefsStore.appPreferences);
 
 // Force re-render key to ensure template updates when preferences change
 const renderKey = ref(0);
@@ -457,6 +585,47 @@ const renderKey = ref(0);
 const openGroups = ref(new Set());
 
 const currentAppKey = computed(() => notificationStore.currentAppKey());
+
+// Digest preferences (computed from appPreferences)
+// Note: Backend transforms always convert to object format { enabled: boolean, available: boolean }
+const digestDailyInApp = computed(() => {
+  const prefs = appPreferences.value;
+  const digest = prefs?.['DIGEST_DAILY'];
+  if (!digest) return false;
+  const inApp = digest.inApp;
+  // After transform, inApp should always be an object with { enabled, available }
+  if (typeof inApp === 'object' && inApp !== null) {
+    return !!inApp.enabled;
+  }
+  // Fallback for legacy boolean format (shouldn't happen after transform)
+  return !!inApp;
+});
+
+const digestDailyEmail = computed(() => {
+  const prefs = appPreferences.value;
+  const digest = prefs?.['DIGEST_DAILY'];
+  if (!digest) return false;
+  const email = digest.email;
+  // After transform, email should always be an object with { enabled, available }
+  if (typeof email === 'object' && email !== null) {
+    return !!email.enabled;
+  }
+  // Fallback for legacy boolean format (shouldn't happen after transform)
+  return !!email;
+});
+
+const digestWeeklyEmail = computed(() => {
+  const prefs = appPreferences.value;
+  const digest = prefs?.['DIGEST_WEEKLY'];
+  if (!digest) return false;
+  const email = digest.email;
+  // After transform, email should always be an object with { enabled, available }
+  if (typeof email === 'object' && email !== null) {
+    return !!email.enabled;
+  }
+  // Fallback for legacy boolean format (shouldn't happen after transform)
+  return !!email;
+});
 
 // Phase 14: Channel summary for overview section
 const channelSummary = computed(() => {
@@ -492,13 +661,36 @@ const channelSummary = computed(() => {
 });
 
 function scrollToChannel(channel) {
-  const element = document.getElementById(`channel-section-${channel}`);
-  if (element) {
-    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    // Open the section if it's collapsible
-    if (channel === 'push' || channel === 'whatsapp' || channel === 'sms') {
+  // For push, whatsapp, sms - they have dedicated sections with IDs
+  if (channel === 'push' || channel === 'whatsapp' || channel === 'sms') {
+    const element = document.getElementById(`channel-section-${channel}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Open the section if it's collapsible
       setTimeout(() => {
         const button = element.querySelector('button');
+        if (button && button.getAttribute('aria-expanded') === 'false') {
+          button.click();
+        }
+      }, 300);
+    }
+  } 
+  // For digests - scroll to digest section
+  else if (channel === 'digests') {
+    const element = document.getElementById('channel-section-digests');
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+  // For inApp and email - scroll to the first event group where they're configured
+  else if (channel === 'inApp' || channel === 'email') {
+    // Find the first event group element using data attribute
+    const firstGroup = document.querySelector('[data-event-group]');
+    if (firstGroup) {
+      firstGroup.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Try to open the first group if it's collapsed
+      setTimeout(() => {
+        const button = firstGroup.querySelector('button[aria-expanded]');
         if (button && button.getAttribute('aria-expanded') === 'false') {
           button.click();
         }
@@ -510,93 +702,157 @@ function scrollToChannel(channel) {
 // UI-only grouping definitions per app.
 // These keys must match backend eventType values; we only group and label.
 const GROUP_DEFINITIONS = {
-  CRM: [
+  SALES: [
     {
       id: 'audit-lifecycle',
       label: 'Audit lifecycle',
-      description: 'Stay informed as audits progress through their lifecycle.',
+      description: 'Stay informed as audits move through key workflow steps.',
       events: [
-        'AUDIT_CREATED',
-        'AUDIT_IN_PROGRESS',
-        'AUDIT_COMPLETED'
+        'AUDIT_ASSIGNED',
+        'AUDIT_CHECKED_IN',
+        'AUDIT_SUBMITTED',
+        'AUDIT_APPROVED',
+        'AUDIT_REJECTED'
       ]
     },
     {
       id: 'corrective-actions',
       label: 'Corrective actions',
-      description: 'Know when corrective actions are created or updated.',
+      description: 'Get notified when corrective actions are created or approaching due dates.',
       events: [
-        'CORRECTIVE_ACTION_ASSIGNED',
-        'CORRECTIVE_ACTION_UPDATED',
+        'CORRECTIVE_ACTION_CREATED',
+        'CORRECTIVE_ACTION_DUE_SOON',
         'CORRECTIVE_ACTION_OVERDUE'
       ]
     },
     {
-      id: 'subscription-billing',
-      label: 'Subscription & billing',
-      description: 'Receive updates about your LiteDesk subscription.',
+      id: 'tasks',
+      label: 'Tasks',
+      description: 'Assignments, creation, and key status changes.',
       events: [
-        'SUBSCRIPTION_RENEWAL',
-        'SUBSCRIPTION_PAST_DUE',
-        'SUBSCRIPTION_CANCELLED'
+        'TASK_ASSIGNED',
+        'TASK_CREATED',
+        'TASK_STATUS_CHANGED',
+        'TASK_DUE_SOON'
       ]
     },
     {
-      id: 'system-alerts',
-      label: 'System alerts',
-      description: 'Important system-level alerts about your workspace.',
+      id: 'system-updates',
+      label: 'System updates',
+      description: 'Workspace and account-level updates.',
       events: [
-        'SYSTEM_ALERT',
-        'INTEGRATION_ERROR'
+        'USER_ADDED_TO_APP',
+        'PORTAL_ACCOUNT_CREATED',
+        'SYSTEM_TRIAL_EXPIRING',
+        'SYSTEM_SUBSCRIPTION_SUSPENDED'
+      ]
+    },
+    {
+      id: 'uploads',
+      label: 'Uploads',
+      description: 'When evidence or files are uploaded.',
+      events: [
+        'EVIDENCE_UPLOADED'
       ]
     }
   ],
   AUDIT: [
     {
-      id: 'audit-assignments',
-      label: 'Audit assignments',
-      description: 'Notifications when you are assigned to an audit.',
+      id: 'audit-workflow',
+      label: 'Audit workflow',
+      description: 'Key steps in the audit workflow.',
       events: [
         'AUDIT_ASSIGNED',
-        'AUDIT_UNASSIGNED'
+        'AUDIT_CHECKED_IN',
+        'AUDIT_SUBMITTED',
+        'AUDIT_APPROVED',
+        'AUDIT_REJECTED'
       ]
     },
     {
-      id: 'audit-status-changes',
-      label: 'Audit status changes',
-      description: 'Status changes for audits you are involved in.',
+      id: 'corrective-actions',
+      label: 'Corrective actions',
+      description: 'Corrective actions tied to audits.',
       events: [
-        'AUDIT_STATUS_CHANGED',
-        'AUDIT_DUE_SOON'
+        'CORRECTIVE_ACTION_CREATED',
+        'CORRECTIVE_ACTION_DUE_SOON',
+        'CORRECTIVE_ACTION_OVERDUE'
       ]
     },
     {
-      id: 'ca-updates',
-      label: 'Corrective action updates',
-      description: 'Changes to corrective actions related to your audits.',
+      id: 'tasks',
+      label: 'Tasks',
+      description: 'Assignments and task status changes.',
       events: [
-        'CORRECTIVE_ACTION_UPDATED',
-        'CORRECTIVE_ACTION_COMPLETED'
+        'TASK_ASSIGNED',
+        'TASK_CREATED',
+        'TASK_STATUS_CHANGED',
+        'TASK_DUE_SOON'
+      ]
+    },
+    {
+      id: 'system-updates',
+      label: 'System updates',
+      description: 'Workspace and account-level updates.',
+      events: [
+        'USER_ADDED_TO_APP',
+        'SYSTEM_TRIAL_EXPIRING',
+        'SYSTEM_SUBSCRIPTION_SUSPENDED'
+      ]
+    },
+    {
+      id: 'uploads',
+      label: 'Uploads',
+      description: 'When evidence or files are uploaded.',
+      events: [
+        'EVIDENCE_UPLOADED'
       ]
     }
   ],
   PORTAL: [
     {
-      id: 'portal-corrective-actions',
+      id: 'corrective-actions',
       label: 'Corrective actions',
-      description: 'Updates to corrective actions assigned to you.',
+      description: 'Corrective actions and due-date reminders.',
       events: [
-        'PORTAL_CORRECTIVE_ACTION_ASSIGNED',
-        'PORTAL_CORRECTIVE_ACTION_UPDATED'
+        'CORRECTIVE_ACTION_CREATED',
+        'CORRECTIVE_ACTION_DUE_SOON',
+        'CORRECTIVE_ACTION_OVERDUE'
       ]
     },
     {
-      id: 'portal-visibility',
-      label: 'Audit visibility',
-      description: 'When new audits or findings become visible to you.',
+      id: 'account-access',
+      label: 'Account & access',
+      description: 'Account creation and access updates.',
       events: [
-        'PORTAL_AUDIT_VISIBLE',
-        'PORTAL_FINDING_VISIBLE'
+        'PORTAL_ACCOUNT_CREATED',
+        'USER_ADDED_TO_APP'
+      ]
+    },
+    {
+      id: 'tasks',
+      label: 'Tasks',
+      description: 'Assignments and due-date reminders.',
+      events: [
+        'TASK_ASSIGNED',
+        'TASK_DUE_SOON'
+      ]
+    },
+    {
+      id: 'system-updates',
+      label: 'System updates',
+      description: 'Workspace and subscription updates.',
+      events: [
+        'SYSTEM_TRIAL_EXPIRING',
+        'SYSTEM_SUBSCRIPTION_SUSPENDED'
+      ]
+    },
+    {
+      id: 'uploads',
+      label: 'Uploads',
+      description: 'When evidence or files are uploaded.',
+      events: [
+        'EVIDENCE_UPLOADED'
       ]
     }
   ]
@@ -604,7 +860,7 @@ const GROUP_DEFINITIONS = {
 
 // Build UI model from backend-provided preferences and UI groups.
 const groupedEvents = computed(() => {
-  const appKey = currentAppKey.value || 'CRM';
+  const appKey = currentAppKey.value || 'SALES';
   const raw = appPreferences.value || {};
 
   const definitions = GROUP_DEFINITIONS[appKey] || [];
@@ -653,17 +909,25 @@ const groupedEvents = computed(() => {
   }
 
   // Handle unknown event types from backend (render as a separate group)
+  // Exclude digest events as they have their own dedicated section
+  const digestEventTypes = new Set(['DIGEST_DAILY', 'DIGEST_WEEKLY']);
   const unknownEvents = Object.keys(raw)
-    .filter((eventType) => !knownEventTypes.has(eventType))
+    .filter((eventType) => !knownEventTypes.has(eventType) && !digestEventTypes.has(eventType))
     .map((eventType) => {
       const conf = raw[eventType] || {};
       const inApp = conf.inApp || {};
       const email = conf.email || {};
 
+      // Use eventTypeToLabel and eventTypeToDescription to generate proper labels
+      // These functions will format event types nicely (e.g., TASK_ASSIGNED → "Task assigned")
+      // or fall back to formatted eventType or generic description
+      const label = eventTypeToLabel(eventType);
+      const description = eventTypeToDescription(eventType, appKey);
+
       return {
         eventType,
-        label: 'System event',
-        description: 'This event is managed by LiteDesk and may be required for system operation.',
+        label,
+        description,
         isUnknown: true,
         inAppEnabled: typeof inApp === 'object' ? !!inApp.enabled : !!inApp,
         inAppAvailable: typeof inApp === 'object' ? inApp.available !== false : true,
@@ -707,54 +971,61 @@ function toggleGroup(id) {
 function eventTypeToLabel(eventType) {
   // Simple, UI-only mapping. We do not change backend semantics.
   const map = {
-    AUDIT_CREATED: 'Audit created',
-    AUDIT_IN_PROGRESS: 'Audit in progress',
-    AUDIT_COMPLETED: 'Audit completed',
-    CORRECTIVE_ACTION_ASSIGNED: 'Corrective action assigned',
-    CORRECTIVE_ACTION_UPDATED: 'Corrective action updated',
-    CORRECTIVE_ACTION_OVERDUE: 'Corrective action overdue',
-    SUBSCRIPTION_RENEWAL: 'Subscription renewal',
-    SUBSCRIPTION_PAST_DUE: 'Subscription payment issue',
-    SUBSCRIPTION_CANCELLED: 'Subscription cancelled',
-    SYSTEM_ALERT: 'System alert',
-    INTEGRATION_ERROR: 'Integration error',
     AUDIT_ASSIGNED: 'Audit assigned',
-    AUDIT_UNASSIGNED: 'Audit unassigned',
-    AUDIT_STATUS_CHANGED: 'Audit status changed',
-    AUDIT_DUE_SOON: 'Audit due soon',
-    CORRECTIVE_ACTION_COMPLETED: 'Corrective action completed',
-    PORTAL_CORRECTIVE_ACTION_ASSIGNED: 'Corrective action assigned to you',
-    PORTAL_CORRECTIVE_ACTION_UPDATED: 'Corrective action updated',
-    PORTAL_AUDIT_VISIBLE: 'New audit available',
-    PORTAL_FINDING_VISIBLE: 'New finding visible'
+    AUDIT_CHECKED_IN: 'Audit checked in',
+    AUDIT_SUBMITTED: 'Audit submitted',
+    AUDIT_APPROVED: 'Audit approved',
+    AUDIT_REJECTED: 'Audit rejected',
+    CORRECTIVE_ACTION_CREATED: 'Corrective action created',
+    CORRECTIVE_ACTION_DUE_SOON: 'Corrective action due soon',
+    CORRECTIVE_ACTION_OVERDUE: 'Corrective action overdue',
+    // Task events
+    TASK_ASSIGNED: 'Task assigned',
+    TASK_CREATED: 'Task created',
+    TASK_STATUS_CHANGED: 'Task status changed',
+    TASK_DUE_SOON: 'Task due soon',
+    // Other events
+    EVIDENCE_UPLOADED: 'Evidence uploaded',
+    PORTAL_ACCOUNT_CREATED: 'Portal account created',
+    USER_ADDED_TO_APP: 'Added to workspace',
+    // System events
+    SYSTEM_TRIAL_EXPIRING: 'Trial expiring',
+    SYSTEM_SUBSCRIPTION_SUSPENDED: 'Subscription suspended'
   };
 
-  return map[eventType] || eventType;
+  // If not in map, format the event type nicely (e.g., "TASK_ASSIGNED" → "Task assigned")
+  if (map[eventType]) return map[eventType];
+  
+  // Fallback: format underscore-separated event types to readable labels
+  return eventType
+    .split('_')
+    .map(word => word.charAt(0) + word.slice(1).toLowerCase())
+    .join(' ');
 }
 
 function eventTypeToDescription(eventType, appKey) {
   // Short, user-facing descriptions (UI-only).
   const map = {
-    AUDIT_CREATED: 'When a new audit is created in this workspace.',
-    AUDIT_IN_PROGRESS: 'When an audit moves into the in-progress stage.',
-    AUDIT_COMPLETED: 'When an audit is marked as completed.',
-    CORRECTIVE_ACTION_ASSIGNED: 'When a corrective action is assigned to an owner.',
-    CORRECTIVE_ACTION_UPDATED: 'When details or status of a corrective action change.',
-    CORRECTIVE_ACTION_OVERDUE: 'When a corrective action passes its due date.',
-    SUBSCRIPTION_RENEWAL: 'Upcoming renewals for your LiteDesk subscription.',
-    SUBSCRIPTION_PAST_DUE: 'Issues collecting payment for your subscription.',
-    SUBSCRIPTION_CANCELLED: 'When your subscription is cancelled.',
-    SYSTEM_ALERT: 'Important system-level alerts and incidents.',
-    INTEGRATION_ERROR: 'Problems delivering events to connected systems.',
     AUDIT_ASSIGNED: 'When you are assigned to an audit.',
-    AUDIT_UNASSIGNED: 'When you are removed from an audit.',
-    AUDIT_STATUS_CHANGED: 'Status changes for audits you are involved in.',
-    AUDIT_DUE_SOON: 'Upcoming deadlines for your audits.',
-    CORRECTIVE_ACTION_COMPLETED: 'When a corrective action is completed.',
-    PORTAL_CORRECTIVE_ACTION_ASSIGNED: 'When a corrective action is assigned to you in the portal.',
-    PORTAL_CORRECTIVE_ACTION_UPDATED: 'When your corrective actions are updated.',
-    PORTAL_AUDIT_VISIBLE: 'When a new audit becomes visible to you.',
-    PORTAL_FINDING_VISIBLE: 'When a new finding or observation is shared with you.'
+    AUDIT_CHECKED_IN: 'When an audit is checked in.',
+    AUDIT_SUBMITTED: 'When an audit is submitted for review.',
+    AUDIT_APPROVED: 'When an audit is approved.',
+    AUDIT_REJECTED: 'When an audit is rejected.',
+    CORRECTIVE_ACTION_CREATED: 'When a corrective action is created.',
+    CORRECTIVE_ACTION_DUE_SOON: 'When a corrective action is approaching its due date.',
+    CORRECTIVE_ACTION_OVERDUE: 'When a corrective action passes its due date.',
+    // Task events
+    TASK_ASSIGNED: 'When a task is assigned to you.',
+    TASK_CREATED: 'When a new task is created.',
+    TASK_STATUS_CHANGED: 'When the status of a task changes.',
+    TASK_DUE_SOON: 'When a task is approaching its due date.',
+    // Other events
+    EVIDENCE_UPLOADED: 'When evidence or files are uploaded to an audit.',
+    PORTAL_ACCOUNT_CREATED: 'When a new portal account is created.',
+    USER_ADDED_TO_APP: 'When you are added to a workspace or module.',
+    // System events
+    SYSTEM_TRIAL_EXPIRING: 'When your trial period is about to expire.',
+    SYSTEM_SUBSCRIPTION_SUSPENDED: 'When your subscription has been suspended.'
   };
 
   if (map[eventType]) return map[eventType];
@@ -776,6 +1047,16 @@ const pushPermissionStatus = ref('default'); // 'default' | 'granted' | 'denied'
 onMounted(async () => {
   if ('Notification' in window && 'serviceWorker' in navigator) {
     pushPermissionStatus.value = Notification.permission;
+  }
+  
+  // Handle hash navigation to digest section
+  if (route.hash === '#digests') {
+    setTimeout(() => {
+      const element = document.getElementById('channel-section-digests');
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 300);
   }
 });
 
@@ -855,20 +1136,119 @@ async function subscribeToPush() {
 }
 
 async function testPushNotification() {
-  if (pushPermissionStatus.value !== 'granted') {
+  // Double-check permission status (it might have changed)
+  const currentPermission = Notification.permission;
+  if (currentPermission !== 'granted') {
+    alert(`Push notification permission is "${currentPermission}". Please enable push notifications first by clicking "Enable Push Notifications".`);
+    pushPermissionStatus.value = currentPermission; // Update status
     return;
   }
   
+  if (!('Notification' in window)) {
+    alert('Notifications are not supported in this browser.');
+    return;
+  }
+  
+  // Update permission status
+  pushPermissionStatus.value = currentPermission;
+  
   try {
-    const registration = await navigator.serviceWorker.ready;
-    await registration.showNotification('Test Notification', {
+    // Try to use service worker if available (better for push notifications)
+    // But fall back to regular Notification API if service worker isn't registered for current scope
+    if ('serviceWorker' in navigator) {
+      try {
+        // Prefer an existing registration for the current scope (avoids waiting/timeout)
+        const registration = await navigator.serviceWorker.getRegistration();
+        
+        if (registration) {
+          // Use service worker's showNotification (better for push)
+          await registration.showNotification('Test Notification', {
+            body: 'Push notifications are working!',
+            icon: '/favicon.ico',
+            badge: '/favicon.ico',
+            tag: 'test-notification',
+            requireInteraction: false
+          });
+          console.log('[NotificationPreferences] Test notification shown via service worker');
+          toast.success('Test notification triggered. Check your system notifications.');
+          return;
+        }
+      } catch (swError) {
+        console.warn('[NotificationPreferences] Service worker not available, falling back to Notification API:', swError?.message);
+        // Fall through to use regular Notification API
+      }
+    }
+    
+    // Fallback: Use regular Notification API (works even without service worker)
+    // Permission already checked at the start of function
+    
+    // Ensure window is focused (some browsers require focus for notifications)
+    if (!document.hasFocus()) {
+      console.warn('[NotificationPreferences] Window is not focused, notifications may be suppressed');
+      window.focus();
+      // Wait a moment for focus
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    // Create notification (use unique tag so it doesn't instantly replace/close)
+    const testTag = `test-notification-${Date.now()}`;
+    const notification = new Notification('Test Notification', {
       body: 'Push notifications are working!',
       icon: '/favicon.ico',
       badge: '/favicon.ico',
-      tag: 'test-notification'
+      tag: testTag,
+      // Keep it visible longer for manual verification (best-effort; browser may ignore)
+      requireInteraction: true,
+      renotify: true,
+      silent: false
     });
+    
+    // Add event handlers
+    notification.onclick = () => {
+      console.log('[NotificationPreferences] Notification clicked');
+      window.focus();
+      notification.close();
+    };
+    
+    notification.onshow = () => {
+      console.log('[NotificationPreferences] Notification shown');
+    };
+    
+    notification.onerror = (error) => {
+      console.error('[NotificationPreferences] Notification error:', error);
+    };
+    
+    notification.onclose = () => {
+      console.log('[NotificationPreferences] Notification closed');
+    };
+    
+    // Store notification temporarily to prevent garbage collection
+    // Keep reference to prevent immediate garbage collection
+    window._lastTestNotification = notification;
+    setTimeout(() => {
+      delete window._lastTestNotification;
+    }, 5000); // Clean up after 5 seconds
+    
+    // Verify notification was created
+    if (!notification) {
+      throw new Error('Failed to create notification object');
+    }
+    
+    console.log('[NotificationPreferences] Test notification created via Notification API', { 
+      notification: {
+        title: notification.title,
+        body: notification.body,
+        tag: notification.tag
+      },
+      permission: Notification.permission,
+      documentVisibility: document.visibilityState,
+      windowFocused: document.hasFocus()
+    });
+    toast.success('Test notification triggered. If you don’t see it, check Notification Center / browser OS settings.');
   } catch (error) {
     console.error('[NotificationPreferences] Failed to show test notification:', error);
+    alert(`Failed to show test notification: ${error.message || 'Unknown error'}. Please check the console for details.`);
+    toast.error('Test notification failed. See console for details.');
   }
 }
 
@@ -896,38 +1276,95 @@ function arrayBufferToBase64(buffer) {
   return window.btoa(binary);
 }
 
+// Phase 14: Debounce timers
+// - Global toggle: one timer for batching
+// - Individual toggles: one timer per (eventType, channel) so multiple edits don't clobber each other
+let globalToggleDebounceTimer = null;
+const perToggleDebounceTimers = new Map(); // key: `${eventType}:${channel}`
+
 // Phase 14: Handle global channel toggle
 async function handleChannelGlobalToggle(channel, enabled) {
   // Enable/disable channel for all events that have this channel available
   const appPrefs = appPreferences.value || {};
   const eventTypes = Object.keys(appPrefs);
   
-  // Update all events for this channel (with debouncing handled per event)
+  // For push, whatsapp, and sms: only toggle if channel is available for the event
+  // For inApp and email: always toggle (they're always available)
+  const optionalChannels = ['push', 'whatsapp', 'sms'];
+  const shouldCheckAvailability = optionalChannels.includes(channel);
+  
+  // Collect all events to toggle (batch optimistic updates first)
+  const eventsToToggle = [];
   for (const eventType of eventTypes) {
     const event = appPrefs[eventType];
     const channelData = event?.[channel];
     
-    // Only toggle if channel is available for this event
-    if (channelData?.available !== false) {
-      handleToggle(eventType, channel, enabled);
+    // For optional channels (push, whatsapp, sms), check availability
+    // For standard channels (inApp, email), always toggle
+    if (shouldCheckAvailability) {
+      // Only toggle if channel is available for this event (or not explicitly set to false)
+      if (channelData?.available !== false) {
+        eventsToToggle.push(eventType);
+      }
+    } else {
+      // inApp and email are always available, so always toggle
+      eventsToToggle.push(eventType);
     }
   }
+  
+  // Apply optimistic updates for all events first (no debouncing on optimistic updates)
+  for (const eventType of eventsToToggle) {
+    const success = applyOptimisticUpdate({ eventType, channel, enabled });
+    if (!success) {
+      console.warn('[NotificationPreferences] Could not apply optimistic update for', { eventType, channel });
+    }
+  }
+  
+  // Force template re-render
+  renderKey.value += 1;
+  
+  // Batch API calls: call updatePreference for each event (each has its own debounce internally)
+  // But clear any existing global toggle debounce timer first
+  if (globalToggleDebounceTimer) {
+    clearTimeout(globalToggleDebounceTimer);
+    globalToggleDebounceTimer = null;
+  }
+  
+  // Update all events with a single batched debounce
+  globalToggleDebounceTimer = setTimeout(() => {
+    console.log('[NotificationPreferences] Calling batch updatePreference API for', eventsToToggle.length, 'events');
+    // Call updatePreference for each event (they will be debounced individually in the store)
+    for (const eventType of eventsToToggle) {
+      updatePreference({ eventType, channel, enabled });
+    }
+  }, 350);
 }
 
 // Handle toggle with immediate optimistic update and debounced API call
-let debounceTimer = null;
+// Note: debounceTimer is declared above with globalToggleDebounceTimer
 function handleToggle(eventType, channel, enabled) {
   console.log('[NotificationPreferences] Toggle clicked:', { eventType, channel, enabled });
   
-  // Clear any pending debounce
-  if (debounceTimer) {
-    clearTimeout(debounceTimer);
+  const debounceKey = `${eventType}:${channel}`;
+  const existingTimer = perToggleDebounceTimers.get(debounceKey);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+    perToggleDebounceTimers.delete(debounceKey);
   }
 
   // Apply optimistic update immediately using store method (triggers reactivity properly)
   const success = applyOptimisticUpdate({ eventType, channel, enabled });
   if (!success) {
-    console.warn('[NotificationPreferences] Could not apply optimistic update - channel not available');
+    console.warn('[NotificationPreferences] Could not apply optimistic update - channel not available', {
+      eventType,
+      channel,
+      enabled,
+      appPreferences: appPreferences.value,
+      digestExists: {
+        daily: !!appPreferences.value?.['DIGEST_DAILY'],
+        weekly: !!appPreferences.value?.['DIGEST_WEEKLY']
+      }
+    });
     return;
   }
 
@@ -942,10 +1379,10 @@ function handleToggle(eventType, channel, enabled) {
     );
     const updatedEvent = updatedGroup?.events?.find(e => e?.eventType === eventType);
     
-    const appKey = notificationStore?.currentAppKey() || 'CRM';
-    // Access from store directly to avoid destructuring issues
-    const rawPrefsValue = prefsStore.rawPreferences?.value;
-    const appPrefsValue = prefsStore.appPreferences?.value;
+    const appKey = notificationStore?.currentAppKey() || 'SALES';
+    // Access from store directly - appPreferences is a computed, so access via .value
+    const rawPrefsValue = prefsStore.rawPreferences;
+    const appPrefsValue = appPreferences.value; // Use our component's computed, not prefsStore.appPreferences
     
     console.log('[NotificationPreferences] Optimistic update applied, debouncing API call.', {
       groupedEventsLength: groupedEventsValue?.length || 0,
@@ -956,17 +1393,22 @@ function handleToggle(eventType, channel, enabled) {
       } : null,
       appPrefsValue: appPrefsValue?.[eventType] || null,
       rawPrefsApps: rawPrefsValue?.apps?.[appKey]?.[eventType] || null,
-      allAppPrefs: Object.keys(appPrefsValue || {})
+      allAppPrefs: Object.keys(appPrefsValue || {}),
+      digestDaily: appPrefsValue?.['DIGEST_DAILY'],
+      digestWeekly: appPrefsValue?.['DIGEST_WEEKLY'],
+      currentRawValue: rawPrefsValue?.apps?.[appKey]?.['DIGEST_DAILY']?.email
     });
   } catch (err) {
     console.error('[NotificationPreferences] Error in debug logging:', err);
   }
 
-  // Debounce the API call to coalesce rapid changes
-  debounceTimer = setTimeout(() => {
-    console.log('[NotificationPreferences] Calling updatePreference API');
+  // Debounce per toggle (so multiple toggles don't overwrite each other)
+  const timer = setTimeout(() => {
+    perToggleDebounceTimers.delete(debounceKey);
+    console.log('[NotificationPreferences] Calling updatePreference API', { eventType, channel, enabled });
     updatePreference({ eventType, channel, enabled });
-  }, 350);
+  }, 250);
+  perToggleDebounceTimers.set(debounceKey, timer);
 }
 
 onMounted(async () => {
@@ -974,7 +1416,9 @@ onMounted(async () => {
   await fetchPreferences();
 
   // Open all groups by default for better discoverability on larger screens
-  const appKey = currentAppKey.value || 'CRM';
+  let appKey = currentAppKey.value || 'CRM';
+  // Map SALES to CRM for GROUP_DEFINITIONS lookup (legacy compatibility)
+  if (appKey === 'SALES') appKey = 'CRM';
   const defs = GROUP_DEFINITIONS[appKey] || [];
   const initial = new Set(defs.map((g) => g.id));
   if (defs.length > 0) {

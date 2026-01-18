@@ -3,19 +3,25 @@
     <!-- Header -->
     <header class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       <div class="flex-1">
-        <div class="flex items-center gap-3 mb-2">
-          <router-link
-            to="/settings/notifications"
-            class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-          >
-            <svg class="w-5 h-5" viewBox="0 0 20 20" fill="none">
-              <path d="M12.79 5.23a.75.75 0 0 1-.02 1.06L8.832 10l3.938 3.71a.75.75 0 1 1-1.04 1.08l-4.5-4.25a.75.75 0 0 1 0-1.08l4.5-4.25a.75.75 0 0 1 1.06.02Z" fill="currentColor" />
-            </svg>
+        <!-- Breadcrumb -->
+        <nav class="mb-4 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+          <router-link to="/settings" class="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+            Settings
           </router-link>
-          <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
-            Notification Health
-          </h1>
-        </div>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+          <router-link to="/settings?tab=notifications&notificationPage=overview" class="hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+            Notifications
+          </router-link>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+          <span class="text-gray-900 dark:text-white">Health</span>
+        </nav>
+        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">
+          Notification Health
+        </h1>
         <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
           Monitor notification delivery and channel health
         </p>
@@ -28,7 +34,7 @@
           class="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
           <option value="">All Apps</option>
-          <option value="CRM">CRM</option>
+          <option value="SALES">Sales</option>
           <option value="AUDIT">Audit</option>
           <option value="PORTAL">Portal</option>
         </select>

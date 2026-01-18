@@ -105,11 +105,11 @@
               </li>
               <li v-for="tab in tabs" :key="tab.id">
                 <button
-                  @click="activeTab = tab.id"
+                  @click="handleTabClick(tab)"
                   :title="!shouldShowExpanded ? tab.name : ''"
                   :class="[
                     'w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
-                    activeTab === tab.id
+                    activeTab === tab.id || (tab.id === 'notifications' && route.path.includes('/notifications'))
                       ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white'
                       : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'
                   ]"
@@ -133,6 +133,7 @@
           <ApplicationDetail v-else-if="activeTab === 'applications' && route.query.appKey && !route.query.app" />
           <AppsSettings v-else-if="activeTab === 'applications' && route.query.app" />
           <SubscriptionDetail v-else-if="activeTab === 'subscriptions' && route.query.appKey" />
+          <component v-else-if="activeTab === 'notifications' || route.path.includes('/notifications')" :is="currentTabComponent" />
           <component v-else :is="currentTabComponent" />
         </section>
       </div>
@@ -159,6 +160,7 @@ import ApplicationsList from '@/components/settings/ApplicationsList.vue';
 import ApplicationDetail from '@/components/settings/ApplicationDetail.vue';
 import SubscriptionsList from '@/components/settings/SubscriptionsList.vue';
 import SubscriptionDetail from '@/components/settings/SubscriptionDetail.vue';
+import NotificationSettings from '@/components/settings/NotificationSettings.vue';
 
 const authStore = useAuthStore();
 const { colorMode, toggleColorMode } = useColorMode();
@@ -306,6 +308,7 @@ const tabs = computed(() => {
     { id: 'core-modules', name: 'Core Modules', icon: CoreModulesIcon, component: CoreModulesList },
             { id: 'applications', name: 'Applications', icon: AppsIcon, component: ApplicationsList },
             { id: 'subscriptions', name: 'Subscriptions', icon: SubscriptionsIcon, component: SubscriptionsList },
+            { id: 'notifications', name: 'Notifications', icon: BellIcon, component: NotificationSettings },
             { id: 'security', name: 'Security', icon: SecurityIcon, component: SecuritySettings },
     { id: 'integrations', name: 'Integrations', icon: IntegrationsIcon, component: IntegrationsSettings }
   ];
@@ -369,6 +372,17 @@ const userMenuItems = computed(() => [
   { name: 'Sign out', action: handleLogout, divider: true, isLogout: true },
 ]);
 
+// Handle tab click - special handling for notifications
+function handleTabClick(tab) {
+  if (tab.id === 'notifications') {
+    activeTab.value = 'notifications';
+    // Use query parameters instead of route paths to stay within Settings
+    router.replace({ path: '/settings', query: { ...route.query, tab: 'notifications', notificationPage: 'overview' } });
+  } else {
+    activeTab.value = tab.id;
+  }
+}
+
 const currentTabComponent = computed(() => {
   if (!activeTab.value) return null;
   
@@ -393,6 +407,9 @@ const syncTabFromRoute = () => {
   if (typeof q === 'string') {
     const exists = tabs.value.some(t => t.id === q);
     if (exists) activeTab.value = q;
+  } else if (route.path.includes('/notifications') && !route.query.tab) {
+    // If directly navigating to a notification route, set tab but don't change path
+    activeTab.value = 'notifications';
   }
 };
 syncTabFromRoute();
@@ -417,6 +434,12 @@ const restoreInitialTab = () => {
       activeTab.value = route.query.tab;
       return;
     }
+  }
+  
+  // Check if we're on a notifications route (for direct navigation/bookmarks)
+  if (route.path.includes('/notifications')) {
+    activeTab.value = 'notifications';
+    return;
   }
   
   // Otherwise, show landing page (no tab selected)

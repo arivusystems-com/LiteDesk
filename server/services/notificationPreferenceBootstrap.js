@@ -58,14 +58,14 @@ function buildDefaultMap(appKey) {
     });
   }
 
-  // Digest defaults
+  // Digest defaults - all OFF by default, users can enable them if they want
   if (appKey === 'SALES') {
-    defaults[domainEvents.DIGEST_DAILY] = createEventPref(true, true, false, false, false, false, false, false);
-    defaults[domainEvents.DIGEST_WEEKLY] = createEventPref(false, true, false, false, false, false, false, false);
+    defaults[domainEvents.DIGEST_DAILY] = createEventPref(false, false, false, false, false, false, false, false);
+    defaults[domainEvents.DIGEST_WEEKLY] = createEventPref(false, false, false, false, false, false, false, false);
   }
 
   if (appKey === 'AUDIT') {
-    defaults[domainEvents.DIGEST_DAILY] = createEventPref(true, false, false, false, false, false, false, false);
+    defaults[domainEvents.DIGEST_DAILY] = createEventPref(false, false, false, false, false, false, false, false);
     defaults[domainEvents.DIGEST_WEEKLY] = createEventPref(false, false, false, false, false, false, false, false);
   }
 

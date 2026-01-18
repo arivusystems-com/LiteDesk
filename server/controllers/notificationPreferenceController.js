@@ -100,20 +100,37 @@ exports.updatePreferences = async (req, res) => {
     }
 
     Object.entries(updates).forEach(([eventType, value]) => {
-      const existing = pref.events.get(eventType) || {
-        inApp: false,
-        email: false,
-        push: { enabled: false, available: false },
-        whatsapp: { enabled: false, available: false },
-        sms: { enabled: false, available: false }
+      // Get existing event from Map - handle Mongoose document structure
+      const existingRaw = pref.events.get(eventType);
+      // If existing is a Mongoose document subdocument, extract plain object
+      const existing = existingRaw && typeof existingRaw === 'object' && existingRaw._doc
+        ? { ...existingRaw._doc }
+        : (existingRaw ? { ...existingRaw } : {
+            inApp: false,
+            email: false,
+            push: { enabled: false, available: false },
+            whatsapp: { enabled: false, available: false },
+            sms: { enabled: false, available: false }
+          });
+      
+      // Merge channel updates, preserving structure - create a fresh plain object
+      const merged = {
+        inApp: existing.inApp !== undefined ? existing.inApp : false,
+        email: existing.email !== undefined ? existing.email : false,
+        push: existing.push || { enabled: false, available: false },
+        whatsapp: existing.whatsapp || { enabled: false, available: false },
+        sms: existing.sms || { enabled: false, available: false }
       };
       
-      // Merge channel updates, preserving structure
-      const merged = { ...existing };
-      
       // Handle legacy boolean format
-      if (typeof value.inApp === 'boolean') merged.inApp = value.inApp;
-      if (typeof value.email === 'boolean') merged.email = value.email;
+      if (typeof value.inApp === 'boolean') {
+        console.log(`[notificationPreferenceController] Setting ${eventType}.inApp = ${value.inApp} (was ${merged.inApp})`);
+        merged.inApp = value.inApp;
+      }
+      if (typeof value.email === 'boolean') {
+        console.log(`[notificationPreferenceController] Setting ${eventType}.email = ${value.email} (was ${merged.email})`);
+        merged.email = value.email;
+      }
       
       // Handle new channel structure
       if (value.push) merged.push = { ...existing.push, ...value.push };
@@ -121,14 +138,18 @@ exports.updatePreferences = async (req, res) => {
       if (value.sms) merged.sms = { ...existing.sms, ...value.sms };
       
       pref.events.set(eventType, merged);
+      console.log(`[notificationPreferenceController] After merge, ${eventType}:`, JSON.stringify(merged));
     });
 
     await pref.save();
+    console.log(`[notificationPreferenceController] After save, digest event:`, JSON.stringify(pref.events.get('DIGEST_DAILY')));
 
     const eventsObj = {};
     pref.events.forEach((value, key) => {
       eventsObj[key] = value;
     });
+
+    console.log(`[notificationPreferenceController] Returning response, DIGEST_DAILY:`, JSON.stringify(eventsObj['DIGEST_DAILY']));
 
     return res.json({ appKey, events: eventsObj });
   } catch (err) {
