@@ -169,6 +169,8 @@ app.use('/api/activity', activityRoutes);
 app.use('/api/notes', notesRoutes);
 app.use('/api/files', filesRoutes);
 app.use('/api/v2/organization', organizationV2Routes);
+const organizationSurfaceRoutes = require('./routes/organizationSurfaceRoutes');
+app.use('/api/organizations', organizationSurfaceRoutes);
 app.use('/api/modules', moduleRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/public/forms', formRoutes); // Public form routes

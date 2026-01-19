@@ -310,13 +310,16 @@
     />
 
     <!-- Edit Profile Drawer -->
-    <!-- ENFORCES: Only core identity fields are editable -->
-    <!-- EXCLUDES: Participation fields, Lead/Contact status, app-specific fields -->
+    <!-- ENFORCES: Only shows fields that are eligible for Quick Create -->
+    <!-- Same fields as quick create: core identity fields + system fields with allowOnCreate -->
+    <!-- EXCLUDES: All other fields (participation fields, app-specific fields, etc.) -->
+    <!-- Uses quickCreate order to match quick create form -->
     <CreateRecordDrawer
       :isOpen="showEditProfileDrawer"
       moduleKey="people"
       :record="editProfileRecord"
       :excludeFields="excludedProfileFields"
+      :useQuickCreateOrder="true"
       @close="showEditProfileDrawer = false"
       @saved="handleProfileUpdated"
     />
@@ -362,6 +365,7 @@ import ParticipationEditModal from '@/components/people/ParticipationEditModal.v
 import { useRouter } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
 import { assertAttachPermission, assertEditParticipationPermission, assertLifecyclePermission } from '@/platform/permissions/peopleGuards';
+import { getFieldMetadata, PEOPLE_FIELD_METADATA } from '@/platform/fields/peopleFieldModel';
 
 const route = useRoute();
 const router = useRouter();
@@ -409,32 +413,68 @@ const editDetailsParticipationData = ref(null);
 const showEditProfileDrawer = ref(false);
 const editProfileRecord = ref(null);
 
-// Fields to exclude from "Edit profile" (app-specific fields)
-// These fields are edited ONLY via ParticipationCard
-const excludedProfileFields = [
-  // Sales app fields
-  'lead_status',
-  'contact_status',
-  'type', // Participation type (Lead/Contact)
-  'score',
-  'lead_score', // Lead score
-  'lead_owner', // Lead owner
-  'qualification_date',
-  'qualification_notes', // Qualification notes
-  'interest_products', // Interest products
-  'estimated_value', // Estimated value
-  'role', // Role (sales-specific)
-  // Helpdesk app fields
-  'requester_status',
-  'contact_type',
-  // Projects app fields
-  'stakeholder_role',
-  'member_role',
-  // Any other app-specific fields
-  'status', // Generic status (app-specific)
-  'birthday', // Birthday (if app-specific)
-  'preferred_contact_method' // Preferred contact method (if app-specific)
-];
+/**
+ * Check if a field is eligible for Quick Create (same logic as PeopleQuickCreate)
+ * Includes ONLY:
+ * - Core identity fields (owner === 'core', intent === 'identity', editable === true)
+ * - System fields with allowOnCreate (owner === 'system', editable === true, allowOnCreate === true)
+ */
+function isFieldEligibleForQuickCreate(fieldKey) {
+  try {
+    const metadata = getFieldMetadata(fieldKey);
+    
+    // Core identity fields: owner === 'core', intent === 'identity', editable === true
+    const isCoreIdentity = (
+      metadata.owner === 'core' &&
+      metadata.intent === 'identity' &&
+      metadata.editable === true
+    );
+    
+    // System fields with allowOnCreate: owner === 'system', editable === true, allowOnCreate === true
+    const isAllowedSystemField = (
+      metadata.owner === 'system' &&
+      metadata.editable === true &&
+      metadata.allowOnCreate === true
+    );
+    
+    return isCoreIdentity || isAllowedSystemField;
+  } catch (err) {
+    // Field not found in metadata - exclude it
+    return false;
+  }
+}
+
+/**
+ * Get all field keys that are eligible for Quick Create
+ * (same fields shown in quick create form)
+ */
+function getEligibleFieldKeys() {
+  const eligibleKeys = [];
+  const allFieldKeys = Object.keys(PEOPLE_FIELD_METADATA);
+  
+  for (const key of allFieldKeys) {
+    if (isFieldEligibleForQuickCreate(key)) {
+      eligibleKeys.push(key);
+    }
+  }
+  
+  return eligibleKeys;
+}
+
+/**
+ * Computed: Fields to exclude from "Edit profile" drawer
+ * Excludes all fields that are NOT eligible for quick create
+ * This ensures edit profile shows the same fields as quick create
+ */
+const excludedProfileFields = computed(() => {
+  const eligibleKeys = getEligibleFieldKeys();
+  const allFieldKeys = Object.keys(PEOPLE_FIELD_METADATA);
+  
+  // Exclude all fields that are NOT eligible
+  const excluded = allFieldKeys.filter(key => !eligibleKeys.includes(key));
+  
+  return excluded;
+});
 
 // Create drawer state
 const showCreateDrawer = ref(false);

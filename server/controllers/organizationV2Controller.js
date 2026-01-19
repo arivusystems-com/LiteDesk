@@ -1,6 +1,7 @@
 const Organization = require('../models/Organization');
 const { applyProjectionFilter } = require('../utils/appProjectionQuery');
 const { getProjection } = require('../utils/moduleProjectionResolver');
+const { mapOrganizationToSurface } = require('../utils/mappers/mapOrganizationToSurface');
 
 // Create (Sales organization)
 exports.create = async (req, res) => {
@@ -347,6 +348,222 @@ exports.addActivityLog = async (req, res) => {
       success: false,
       message: 'Error adding activity log',
       error: error.message
+    });
+  }
+};
+
+// OrganizationSurface API
+// Returns a curated, UI-safe projection.
+// Never return the raw Organization model to the UI.
+// 
+// This endpoint enforces OrganizationSurface discipline:
+// - Only business organizations (isTenant: false)
+// - Only business context fields
+// - No platform/tenant fields
+// See docs/architecture/organization-surface-invariants.md
+exports.getSurface = async (req, res) => {
+  try {
+    const User = require('../models/User');
+    const People = require('../models/People');
+    const tenantOrganizationId = req.user?.organizationId;
+    
+    if (!tenantOrganizationId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Organization context required' 
+      });
+    }
+
+    // Get all users from this tenant organization
+    const tenantUserIds = await User.find({ organizationId: tenantOrganizationId })
+      .select('_id')
+      .lean();
+    const userIds = tenantUserIds.map(u => u._id);
+
+    // Fetch organization - MUST be business org (isTenant: false)
+    const org = await Organization.findOne({ 
+      _id: req.params.id, 
+      isTenant: false, // CRITICAL: Reject tenant orgs
+      createdBy: { $in: userIds } // CRITICAL: Filter by tenant context
+    })
+      .populate('primaryContact', 'first_name last_name email')
+      .lean();
+    
+    if (!org) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Organization not found' 
+      });
+    }
+    
+    // EXPLICIT REJECTION: If somehow a tenant org got through, reject it
+    if (org.isTenant === true) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Tenant organizations cannot be accessed via OrganizationSurface' 
+      });
+    }
+    
+    // Fetch related data for surface
+    
+    // 1. People count and preview
+    const peopleCount = await People.countDocuments({ 
+      organization: org._id 
+    });
+    
+    const peoplePreview = await People.find({ 
+      organization: org._id 
+    })
+      .select('_id first_name last_name email role')
+      .limit(5) // Small preview list
+      .lean()
+      .then(people => people.map(p => ({
+        id: p._id.toString(),
+        name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email || 'Unknown',
+        role: p.role || undefined
+      })));
+    
+    // 2. App participation summary
+    const apps = [];
+    
+    // Check SALES app participation (Deals)
+    try {
+      const Deal = require('../models/Deal');
+      const dealCount = await Deal.countDocuments({ 
+        accountId: org._id,
+        organizationId: tenantOrganizationId 
+      });
+      
+      if (dealCount > 0) {
+        apps.push({
+          appKey: 'SALES',
+          hasWork: true,
+          counts: { deals: dealCount }
+        });
+      }
+    } catch (err) {
+      // Deal model might not exist - skip
+    }
+    
+    // Check HELPDESK app participation (Tickets/Cases)
+    try {
+      const Ticket = require('../models/Ticket');
+      const ticketCount = await Ticket.countDocuments({ 
+        organizationId: org._id,
+        tenantOrganizationId: tenantOrganizationId 
+      });
+      
+      if (ticketCount > 0) {
+        apps.push({
+          appKey: 'HELPDESK',
+          hasWork: true,
+          counts: { tickets: ticketCount }
+        });
+      }
+    } catch (err) {
+      // Ticket model might not exist - skip
+    }
+    
+    // Check AUDIT app participation (Audits)
+    try {
+      const Audit = require('../models/Audit');
+      const auditCount = await Audit.countDocuments({ 
+        organizationId: org._id,
+        tenantOrganizationId: tenantOrganizationId 
+      });
+      
+      if (auditCount > 0) {
+        apps.push({
+          appKey: 'AUDIT',
+          hasWork: true,
+          counts: { audits: auditCount }
+        });
+      }
+    } catch (err) {
+      // Audit model might not exist - skip
+    }
+    
+    // 3. Recent activity (limited to last 20 entries)
+    // Enhance activity logs with person information when available
+    const recentActivityLogs = (org.activityLogs || [])
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+      .slice(0, 20); // Limit to 20 most recent
+    
+    // Process activity logs and enrich with person information
+    const recentActivity = await Promise.all(
+      recentActivityLogs.map(async (log) => {
+        const activityEntry = {
+          timestamp: log.timestamp,
+          user: log.user || 'System',
+          userId: log.userId ? log.userId.toString() : undefined,
+          action: log.action || 'unknown',
+          summary: `${log.user || 'System'} ${log.action || 'performed an action'}`,
+          personId: undefined,
+          personName: undefined
+        };
+        
+        // Extract person ID from action or details if available
+        let personId = null;
+        
+        // Check if details contains person information
+        if (log.details) {
+          if (log.details.personId) {
+            personId = log.details.personId;
+          } else if (log.details.person) {
+            personId = log.details.person;
+          } else if (log.details.peopleId) {
+            personId = log.details.peopleId;
+          }
+        }
+        
+        // Also try to extract ObjectId from action string (e.g., "created people '695d51f4f9e9e6cc9e10bf47'")
+        if (!personId && log.action) {
+          const objectIdMatch = log.action.match(/['"]?([0-9a-fA-F]{24})['"]?/);
+          if (objectIdMatch && (log.action.includes('people') || log.action.includes('person'))) {
+            personId = objectIdMatch[1];
+          }
+        }
+        
+        // Fetch person name if we have a person ID
+        if (personId) {
+          try {
+            const person = await People.findOne({ 
+              _id: personId,
+              organizationId: tenantOrganizationId 
+            }).select('first_name last_name email').lean();
+            
+            if (person) {
+              activityEntry.personId = personId.toString();
+              activityEntry.personName = `${person.first_name || ''} ${person.last_name || ''}`.trim() || person.email || 'Unknown';
+            }
+          } catch (err) {
+            // Person not found or error fetching - continue without person info
+            console.warn(`[getSurface] Could not fetch person ${personId}:`, err.message);
+          }
+        }
+        
+        return activityEntry;
+      })
+    );
+    
+    // Map to OrganizationSurfaceData projection
+    const surfaceData = mapOrganizationToSurface(org, {
+      peopleCount,
+      peoplePreview,
+      apps,
+      recentActivity
+    });
+    
+    res.json({ 
+      success: true, 
+      data: surfaceData 
+    });
+  } catch (error) {
+    console.error('Error fetching organization surface:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error fetching organization surface', 
+      error: error.message 
     });
   }
 };

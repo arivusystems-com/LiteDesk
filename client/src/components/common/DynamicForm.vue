@@ -88,6 +88,10 @@ const props = defineProps({
   quickCreateMode: {
     type: Boolean,
     default: false // If true, strictly respect quickCreate config (no fallback to required fields)
+  },
+  useQuickCreateOrder: {
+    type: Boolean,
+    default: false // If true, use quickCreate array order even when showAllFields is true
   }
 });
 
@@ -172,7 +176,84 @@ const orderedFields = computed(() => {
     const ordered = [];
     const seen = new Set();
     
-    // Add all fields (excluding system fields and excluded fields)
+    // If useQuickCreateOrder is true, order fields by quickCreate array
+    if (props.useQuickCreateOrder && quickCreate.length > 0) {
+      // Create a map of all fields by key (case-insensitive)
+      const fieldMapByKey = new Map();
+      for (const field of allFields) {
+        if (field.key) {
+          const keyLower = field.key.toLowerCase();
+          if (!fieldMapByKey.has(keyLower)) {
+            fieldMapByKey.set(keyLower, field);
+          }
+        }
+      }
+      
+      // First, add fields in quickCreate order
+      for (const key of quickCreate) {
+        if (!key) continue;
+        const keyLower = key.toLowerCase().trim();
+        if (seen.has(keyLower)) continue;
+        
+        let field = fieldMapByKey.get(keyLower);
+        if (!field) {
+          // Try normalization (snake_case, camelCase, etc.)
+          const camelCaseKey = key.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
+          field = fieldMapByKey.get(camelCaseKey.toLowerCase());
+          if (!field && key.includes('_')) {
+            const camelFromSnake = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+            field = fieldMapByKey.get(camelFromSnake.toLowerCase());
+          }
+          if (!field && /[A-Z]/.test(key)) {
+            const snakeFromCamel = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+            field = fieldMapByKey.get(snakeFromCamel);
+          }
+        }
+        
+        if (field) {
+          const fieldKeyLower = field.key?.toLowerCase();
+          const isSystem = systemFieldKeys.includes(fieldKeyLower);
+          const isExcluded = props.excludeFields.some(excluded => excluded.toLowerCase() === fieldKeyLower);
+          
+          // Check dependency-based visibility
+          let isVisible = true;
+          if (field.dependencies && Array.isArray(field.dependencies) && field.dependencies.length > 0) {
+            const depState = getFieldDependencyState(field, currentFormData, allFields);
+            isVisible = depState.visible !== false;
+          }
+          
+          if (!isSystem && !isExcluded && isVisible) {
+            ordered.push(field);
+            seen.add(keyLower);
+          }
+        }
+      }
+      
+      // Then add any remaining fields that weren't in quickCreate (but are eligible)
+      for (const field of allFields) {
+        const fieldKeyLower = field.key?.toLowerCase();
+        if (seen.has(fieldKeyLower)) continue;
+        
+        const isSystem = systemFieldKeys.includes(fieldKeyLower);
+        const isExcluded = props.excludeFields.some(excluded => excluded.toLowerCase() === fieldKeyLower);
+        
+        // Check dependency-based visibility
+        let isVisible = true;
+        if (field.dependencies && Array.isArray(field.dependencies) && field.dependencies.length > 0) {
+          const depState = getFieldDependencyState(field, currentFormData, allFields);
+          isVisible = depState.visible !== false;
+        }
+        
+        if (!isSystem && !isExcluded && isVisible) {
+          ordered.push(field);
+          seen.add(fieldKeyLower);
+        }
+      }
+      
+      return ordered;
+    }
+    
+    // Default: Add all fields (excluding system fields and excluded fields)
     for (const field of allFields) {
       const fieldKeyLower = field.key?.toLowerCase();
       const isSystem = systemFieldKeys.includes(fieldKeyLower);
