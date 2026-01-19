@@ -1,311 +1,355 @@
 /**
  * ============================================================================
- * PLATFORM SIDEBAR: Builder Function
+ * PLATFORM SIDEBAR: Builder Function (LOCKED CONTRACT)
  * ============================================================================
- * 
- * Builds sidebar structure from app registry and user permissions.
- * 
- * Rules:
- * - Registry-driven: All structure comes from appRegistry
- * - Permission-aware: Filters items based on userPermissions
- * - Four sections: core, entities, apps, platform (FIXED ORDER)
- * - Exclusive ownership: Each item belongs to exactly one section
- * - Priority: Core → Entities → Apps → Platform
- * - Core entities never appear under Apps
- * 
+ *
+ * SOURCE OF TRUTH:
+ * This builder produces the locked `SidebarStructure` contract only.
+ *
+ * Critical invariant:
+ * “The sidebar shows surfaces, identities, lenses, and governance — never raw
+ * entities, app-agnostic primitives, or infrastructure.”
+ *
+ * Enforcement:
+ * - Shell: Home / Inbox / Search only
+ * - Identity: People only (permission-gated)
+ * - App lens: exactly ONE active app at a time (route → lastActiveAppId fallback)
+ * - App nav: dashboard + modules for active app only
+ * - Platform: governance only
+ *
  * ============================================================================
  */
 
-import type {
-  SidebarStructure,
-  SidebarCoreItem,
-  SidebarEntityItem,
-  SidebarDomain,
-  SidebarPlatformItem,
-  AppRegistry,
-  AppRegistryEntry,
-  AppRegistryModule,
-  SidebarModule,
-} from '@/types/sidebar.types';
-import { PermissionOutcome } from '@/types/permission-visibility.types';
+import type { SidebarStructure, SidebarItem, AppSummary, AppRegistry, AppRegistryModule } from '@/types/sidebar.types';
 import type { PermissionSnapshot } from '@/types/permission-snapshot.types';
 import { hasPermission as checkPermission } from '@/types/permission-snapshot.types';
 import { memoizeBuilder } from '@/utils/builderCache';
 import { validateAppRegistryOrThrow } from '@/utils/validateAppRegistry';
+import { assertValidSidebarStructure } from '@/utils/assertValidSidebarStructure';
+
+const LAST_ACTIVE_APP_ID_KEY = 'litedesk-sidebar-last-active-app-id';
 
 /**
- * Check if user has a specific permission (using snapshot)
+ * Hard stops (doctrine):
+ * These are raw entities or infrastructure-like primitives that must not be
+ * represented as sidebar navigation items in the locked contract.
  */
-function hasPermission(
-  permission: string | undefined,
-  snapshot: PermissionSnapshot
-): boolean {
+const FORBIDDEN_RAW_ENTITY_MODULE_KEYS = new Set([
+  'tasks',
+  'events',
+  'forms',
+  'items',
+  'organizations',
+]);
+
+function hasPermission(permission: string | undefined, snapshot: PermissionSnapshot): boolean {
   return checkPermission(snapshot, permission);
 }
 
-/**
- * Convert registry module to sidebar module
- */
-function toSidebarModule(
-  module: AppRegistryModule,
-  snapshot: PermissionSnapshot
-): SidebarModule {
-  const allowed = hasPermission(module.permission, snapshot);
-  const visibility = allowed ? PermissionOutcome.ENABLED : PermissionOutcome.HIDDEN;
-
-  return {
-    moduleKey: module.moduleKey,
-    label: module.label,
-    route: module.route,
-    permission: module.permission,
-    icon: module.icon,
-    order: module.order ?? 999,
-    visibility,
-  };
+function getCurrentPathname(): string {
+  try {
+    if (typeof window === 'undefined') return '';
+    return window.location?.pathname || '';
+  } catch {
+    return '';
+  }
 }
 
-/**
- * Build core section items
- * 
- * Core items are personal/attention layer items (Home, Inbox, Reports).
- * Virtual items, not modules. Always visible (permission-aware).
- */
-function buildCoreSection(
-  coreItems: SidebarCoreItem[] = [],
-  snapshot: PermissionSnapshot
-): SidebarCoreItem[] {
-  return coreItems
-    .map((item) => {
-      const allowed = hasPermission(item.permission, snapshot);
-      const visibility = allowed ? PermissionOutcome.ENABLED : PermissionOutcome.HIDDEN;
-      return { ...item, visibility };
-    })
-    .filter((item) => item.visibility !== PermissionOutcome.HIDDEN)
-    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+function getLastActiveAppIdFromStorage(): string | null {
+  try {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem(LAST_ACTIVE_APP_ID_KEY);
+  } catch {
+    return null;
+  }
 }
 
-/**
- * Build entities section (shared system primitives)
- * 
- * Entities are core entities that are shared across apps.
- * Must not appear under Apps section.
- */
-function buildEntitiesSection(
-  allModules: AppRegistryModule[],
-  snapshot: PermissionSnapshot
-): SidebarEntityItem[] {
-  // Filter modules marked with navigationEntity: true
-  const entityModules = allModules.filter(
-    (module) => module.navigationEntity === true
-  );
-
-  return entityModules
-    .map((module) => {
-      const allowed = hasPermission(module.permission, snapshot);
-      const visibility = allowed ? PermissionOutcome.ENABLED : PermissionOutcome.HIDDEN;
-
-      return {
-        key: module.moduleKey,
-        label: module.label,
-        route: module.route,
-        permission: module.permission,
-        icon: module.icon,
-        order: module.order ?? 999,
-        visibility,
-      };
-    })
-    .filter((item) => item.visibility !== PermissionOutcome.HIDDEN)
-    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
-}
-
-/**
- * Build apps section (domain-specific workflows)
- * 
- * Apps are business domains with their modules.
- * Only modules that are NOT marked for Core or Entities sections.
- * Modules marked excludeFromApps: true are excluded.
- */
-function buildAppsSection(
-  appRegistry: AppRegistry,
-  snapshot: PermissionSnapshot
-): SidebarDomain[] {
-  return Object.values(appRegistry)
-    .map((app) => {
-      // Filter modules for this app:
-      // 1. Must have appKey matching this app (and not 'platform')
-      // 2. Must NOT have navigationCore: true
-      // 3. Must NOT have navigationEntity: true
-      // 4. Must NOT have excludeFromApps: true
-      const appModules = (app.modules || []).filter((module) => {
-        // Skip if marked for Core section
-        if (module.navigationCore === true) {
-          return false;
-        }
-        // Skip if marked for Entities section
-        if (module.navigationEntity === true) {
-          return false;
-        }
-        // Skip if explicitly excluded from Apps
-        if (module.excludeFromApps === true) {
-          return false;
-        }
-        // Skip if appKey is 'platform' (platform-level entities)
-        if (module.appKey && module.appKey.toLowerCase() === 'platform') {
-          return false;
-        }
-        // Must belong to this app
-        return module.appKey === app.appKey || (!module.appKey && app.appKey);
-      });
-
-      // Convert to sidebar modules
-      const children = appModules
-        .map((module) => toSidebarModule(module, snapshot))
-        .filter((module) => module.visibility !== PermissionOutcome.HIDDEN)
-        .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
-
-      const hasAnyAccess =
-        children.length > 0 ||
-        appModules.some((m) => hasPermission(m.permission, snapshot));
-
-      const visibility = hasAnyAccess ? PermissionOutcome.ENABLED : PermissionOutcome.HIDDEN;
-
-      return {
-        appKey: app.appKey,
-        label: app.label,
-        dashboardRoute: app.dashboardRoute,
-        children,
-        icon: app.icon,
-        order: app.order ?? 999,
-        expanded: true, // Default to expanded, can be stored later
-        visibility,
-      };
-    })
-    .filter((domain) => domain.visibility !== PermissionOutcome.HIDDEN)
-    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
-}
-
-/**
- * Build platform section (governance items)
- * 
- * Platform items are for system administration and governance.
- * These are typically: Settings, Apps, Users, etc.
- */
-function buildPlatformSection(
-  platformItems: SidebarPlatformItem[] = [],
-  snapshot: PermissionSnapshot
-): SidebarPlatformItem[] {
-  // Default platform items if none provided
-  const defaultPlatformItems: SidebarPlatformItem[] = [
-    {
-      key: 'settings',
-      label: 'Settings',
-      route: '/settings',
-      permission: 'settings.view',
-      icon: 'cog',
-      order: 1,
-      visibility: PermissionOutcome.ENABLED,
-    },
-    {
-      key: 'apps',
-      label: 'Apps',
-      route: '/settings/apps',
-      permission: 'apps.view',
-      icon: 'squares',
-      order: 2,
-      visibility: PermissionOutcome.ENABLED,
-    },
-    {
-      key: 'users',
-      label: 'Users',
-      route: '/settings/users',
-      permission: 'users.view',
-      icon: 'users',
-      order: 3,
-      visibility: PermissionOutcome.ENABLED,
-    },
-  ];
-
-  const itemsToUse = platformItems.length > 0 ? platformItems : defaultPlatformItems;
-
-  return itemsToUse
-    .map((item) => {
-      const allowed = hasPermission(item.permission, snapshot);
-      const visibility = allowed ? PermissionOutcome.ENABLED : PermissionOutcome.HIDDEN;
-      return { ...item, visibility };
-    })
-    .filter((item) => item.visibility !== PermissionOutcome.HIDDEN)
-    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
-}
-
-/**
- * Collect all modules from registry
- */
 function collectAllModules(appRegistry: AppRegistry): AppRegistryModule[] {
-  const allModules: AppRegistryModule[] = [];
-  
+  const all: AppRegistryModule[] = [];
   for (const app of Object.values(appRegistry)) {
-    if (app.modules) {
-      for (const module of app.modules) {
-        allModules.push(module);
+    for (const m of app.modules || []) all.push(m);
+  }
+  return all;
+}
+
+function listApps(appRegistry: AppRegistry): Array<{ appKey: string; label: string; dashboardRoute: string; icon?: string; order?: number; modules?: AppRegistryModule[] }> {
+  return Object.values(appRegistry).filter((a) => a.appKey !== 'PLATFORM' && a.appKey.toLowerCase() !== 'platform');
+}
+
+function resolveActiveAppId(
+  appRegistry: AppRegistry,
+  currentPath: string,
+  fallbackLastActiveAppId: string | null
+): string {
+  const apps = listApps(appRegistry);
+
+  // 1) Resolve from current route (dashboard or module match)
+  for (const app of apps) {
+    if (currentPath === app.dashboardRoute || currentPath.startsWith(app.dashboardRoute + '/')) {
+      return app.appKey;
+    }
+    for (const module of app.modules || []) {
+      if (!module.route) continue;
+      if (currentPath === module.route || currentPath.startsWith(module.route + '/')) {
+        return app.appKey;
       }
     }
   }
-  
-  return allModules;
+
+  // 2) Fallback to last active app lens
+  if (fallbackLastActiveAppId) {
+    const normalized = fallbackLastActiveAppId.toUpperCase();
+    if (apps.some((a) => a.appKey.toUpperCase() === normalized)) return fallbackLastActiveAppId;
+  }
+
+  // 3) Final fallback: first app by order
+  const sorted = [...apps].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+  return sorted[0]?.appKey || '';
 }
 
-/**
- * Build complete sidebar structure from registry and permissions
- * 
- * Enforces exclusive ownership with priority:
- * 1. Core (navigationCore: true)
- * 2. Entities (navigationEntity: true)
- * 3. Apps (appKey && !excludeFromApps && !navigationCore && !navigationEntity)
- * 4. Platform (handled separately)
- * 
- * @param appRegistry - The app registry containing all apps and their modules
- * @param snapshot - Permission snapshot (use createPermissionSnapshot to create)
- * @param coreItems - Optional core section items (defaults to empty)
- * @param platformItems - Optional platform section items (defaults to standard governance items)
- * @param validate - Whether to validate registry (defaults to true in development)
- * @returns Complete sidebar structure with four sections in fixed order
- */
+function buildShell(snapshot: PermissionSnapshot): SidebarItem[] {
+  // These are stable surfaces (not registry-driven modules).
+  const shell: SidebarItem[] = [];
+
+  shell.push({
+    kind: 'surface',
+    id: 'home',
+    label: 'Home',
+    route: '/platform/home',
+    icon: 'home',
+  });
+
+  shell.push({
+    kind: 'surface',
+    id: 'inbox',
+    label: 'Inbox',
+    route: '/inbox',
+    icon: 'inbox',
+  });
+
+  // Search exists as a shell surface, but is executed via UI (modal) rather than navigation.
+  shell.push({
+    kind: 'surface',
+    id: 'search',
+    label: 'Search',
+    route: '/search', // Intentionally not a real route; the renderer handles this surface explicitly.
+    icon: 'magnifying-glass',
+  });
+
+  return shell;
+}
+
+function buildIdentity(allModules: AppRegistryModule[], snapshot: PermissionSnapshot): SidebarItem[] {
+  // Identity navigation is restricted to People only.
+  const people = allModules.find((m) => m.navigationEntity === true && m.moduleKey === 'people');
+  if (!people) return [];
+  if (!hasPermission(people.permission, snapshot)) return [];
+
+  return [
+    {
+      kind: 'identity',
+      id: 'people',
+      label: people.label,
+      route: people.route,
+      icon: people.icon,
+    },
+  ];
+}
+
+function buildAppSwitcherApps(appRegistry: AppRegistry, snapshot: PermissionSnapshot): AppSummary[] {
+  return listApps(appRegistry)
+    .map((app) => {
+      const modules = (app.modules || []).filter((m) => {
+        if (m.navigationCore === true) return false;
+        if (m.navigationEntity === true) return false;
+        if (m.excludeFromApps === true) return false;
+        if (m.appKey && m.appKey.toLowerCase() === 'platform') return false;
+        if (FORBIDDEN_RAW_ENTITY_MODULE_KEYS.has(m.moduleKey)) return false;
+        return true;
+      });
+
+      const hasAnyAccess = modules.some((m) => hasPermission(m.permission, snapshot));
+      return { app, hasAnyAccess };
+    })
+    .filter((x) => x.hasAnyAccess)
+    .map(
+      ({ app }) =>
+        ({
+          id: app.appKey,
+          name: app.label,
+          dashboardRoute: app.dashboardRoute,
+          icon: app.icon,
+          order: app.order ?? 999,
+        }) satisfies AppSummary
+    )
+    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+}
+
+function buildAppNav(appRegistry: AppRegistry, activeAppId: string, snapshot: PermissionSnapshot): SidebarStructure['appNav'] {
+  const app = appRegistry[activeAppId];
+  if (!app) return { appId: activeAppId, modules: [] };
+
+  // Enforce: ONLY one app lens is ever built.
+  const modules: SidebarItem[] = (app.modules || [])
+    .filter((m) => {
+      if (m.navigationCore === true) return false;
+      if (m.navigationEntity === true) return false;
+      if (m.excludeFromApps === true) return false;
+      if (m.appKey && m.appKey.toLowerCase() === 'platform') return false;
+      if (FORBIDDEN_RAW_ENTITY_MODULE_KEYS.has(m.moduleKey)) return false;
+      return hasPermission(m.permission, snapshot);
+    })
+    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
+    .map(
+      (m) =>
+        ({
+          kind: 'app',
+          id: `${activeAppId}:${m.moduleKey}`,
+          label: m.label,
+          route: m.route,
+          icon: m.icon,
+          moduleKey: m.moduleKey,
+        }) satisfies SidebarItem
+    );
+
+  const dashboard: SidebarItem = {
+    kind: 'app',
+    id: activeAppId,
+    // The first app-nav entry is always the app dashboard.
+    // Displayed as "Dashboard" to avoid duplicating the app name in the nav list.
+    label: 'Dashboard',
+    route: app.dashboardRoute,
+    // Use a stable dashboard icon (not the app icon) to avoid duplication with the app switcher.
+    // Note: platform Home already uses 'home'.
+    icon: 'squares',
+  };
+
+  return { appId: activeAppId, dashboard, modules };
+}
+
+function buildPlatformGovernance(snapshot: PermissionSnapshot): SidebarItem[] {
+  // Sidebar footer is not for navigation or configuration.
+  // Settings is accessed via the profile menu.
+  // Apps is switched exclusively via the App Switcher (mode selector).
+  // Users is accessed via governance surfaces outside the sidebar footer.
+  return [];
+}
+
 export function buildSidebarFromRegistry(
   appRegistry: AppRegistry,
   snapshot: PermissionSnapshot,
-  coreItems: SidebarCoreItem[] = [],
-  platformItems: SidebarPlatformItem[] = [],
-  validate: boolean = process.env.NODE_ENV === 'development'
+  validate: boolean = import.meta.env.DEV
 ): SidebarStructure {
-  // Validate registry in development
   if (validate) {
     try {
       validateAppRegistryOrThrow(appRegistry);
     } catch (error) {
-      // Log error but don't break in production
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Registry validation failed:', error);
-      }
+      if (import.meta.env.DEV) console.error('Registry validation failed:', error);
     }
   }
 
-  // Collect all modules for entities section
+  const currentPath = getCurrentPathname();
+  const lastActiveAppId = getLastActiveAppIdFromStorage();
+
   const allModules = collectAllModules(appRegistry);
 
-  // Use memoization for performance
+  const activeAppId = resolveActiveAppId(appRegistry, currentPath, lastActiveAppId);
+
   return memoizeBuilder(
     'buildSidebarFromRegistry',
     appRegistry,
     snapshot,
-    coreItems,
-    platformItems,
-    () => ({
-      version: 2, // Increment version for breaking change
-      core: buildCoreSection(coreItems, snapshot),
-      entities: buildEntitiesSection(allModules, snapshot),
-      apps: buildAppsSection(appRegistry, snapshot),
-      platform: buildPlatformSection(platformItems, snapshot),
-    })
+    activeAppId || undefined,
+    currentPath || undefined,
+    () => {
+      const apps = buildAppSwitcherApps(appRegistry, snapshot);
+      const effectiveActiveAppId = activeAppId || apps[0]?.id || '';
+
+      const sidebar: SidebarStructure = {
+        shell: buildShell(snapshot),
+        identity: buildIdentity(allModules, snapshot),
+        appSwitcher: {
+          activeAppId: effectiveActiveAppId,
+          apps,
+        },
+        appNav: buildAppNav(appRegistry, effectiveActiveAppId, snapshot),
+        platform: buildPlatformGovernance(snapshot),
+      };
+
+      if (import.meta.env.DEV) {
+        assertValidSidebarStructure(sidebar);
+      }
+
+      return sidebar;
+    }
   );
+}
+
+// Lightweight dev-only self-test.
+// This is intentionally framework-free: fail fast and loudly if doctrine regresses.
+if (import.meta.env.DEV) {
+  const snapshot: PermissionSnapshot = {
+    userId: 'dev-selftest',
+    roles: ['admin'],
+    permissions: {
+      'people.view': true,
+      'deals.view': true,
+      'tasks.view': true,
+      'forms.view': true,
+      'events.view': true,
+      'items.view': true,
+      'settings.view': true,
+      'apps.view': true,
+      'users.view': true,
+    },
+    generatedAt: Date.now(),
+  };
+
+  const registry: AppRegistry = {
+    SALES: {
+      appKey: 'SALES',
+      label: 'Sales',
+      dashboardRoute: '/dashboard/sales',
+      modules: [
+        { moduleKey: 'deals', label: 'Deals', route: '/deals', permission: 'deals.view', appKey: 'SALES' },
+        // Forbidden raw entities (must never appear in SidebarStructure)
+        { moduleKey: 'tasks', label: 'Tasks', route: '/tasks', permission: 'tasks.view', appKey: 'SALES' },
+        { moduleKey: 'forms', label: 'Forms', route: '/forms', permission: 'forms.view', appKey: 'SALES' },
+        { moduleKey: 'events', label: 'Events', route: '/events', permission: 'events.view', appKey: 'SALES' },
+        { moduleKey: 'items', label: 'Items', route: '/items', permission: 'items.view', appKey: 'SALES' },
+      ],
+    },
+    PLATFORM: {
+      appKey: 'PLATFORM',
+      label: 'Platform',
+      dashboardRoute: '/platform/home',
+      modules: [
+        {
+          moduleKey: 'people',
+          label: 'People',
+          route: '/people',
+          permission: 'people.view',
+          appKey: 'platform',
+          navigationEntity: true,
+          excludeFromApps: true,
+        },
+      ],
+    },
+  };
+
+  const sidebar = buildSidebarFromRegistry(registry, snapshot, false);
+
+  // Assert: Identity contains exactly one People entry.
+  if (!(sidebar.identity.length === 1 && sidebar.identity[0]?.kind === 'identity' && sidebar.identity[0]?.id === 'people')) {
+    throw new Error('[SidebarInvariantViolation] Identity must contain exactly one People entry in dev self-test');
+  }
+
+  // Assert: Forbidden raw entities do not appear.
+  const forbidden = new Set(['items', 'forms', 'tasks', 'events']);
+  for (const item of sidebar.appNav.modules) {
+    if (item.kind === 'app' && typeof item.moduleKey === 'string' && forbidden.has(item.moduleKey)) {
+      throw new Error(`[SidebarInvariantViolation] Forbidden module leaked into sidebar: ${item.moduleKey}`);
+    }
+  }
 }
 

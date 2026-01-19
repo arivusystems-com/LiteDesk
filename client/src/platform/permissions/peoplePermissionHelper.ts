@@ -42,6 +42,10 @@ export function hasPeoplePermission(
   // Format: 'people.attach.sales' -> module: 'people', action: 'attach.sales'
   // Format: 'people.view' -> module: 'people', action: 'view'
   const module = parts[0]; // Should be 'people'
+  if (!module) {
+    console.warn(`[hasPeoplePermission] Invalid permission key format: ${permissionKey}`);
+    return false;
+  }
   const action = parts.slice(1).join('.'); // Everything after 'people.'
   
   // Check permission using auth store's hasPermission method
@@ -54,7 +58,7 @@ export function hasPeoplePermission(
     const permissions = authStore.user.permissions;
     
     // Check if permissions.contacts exists
-    const contactsPerms = permissions[normalizedModule] || permissions['people'];
+    const contactsPerms: any = permissions[normalizedModule] || permissions['people'];
     if (contactsPerms) {
       // For app-specific permissions like 'attach.sales', check nested structure
       if (action.includes('.')) {
@@ -64,15 +68,20 @@ export function hasPeoplePermission(
         const appKey = actionParts[1]; // 'sales'
         
         // Check if permissions.contacts.attach exists and has the app key
-        if (contactsPerms[baseAction]) {
-          // If it's an object, check for the app key
-          if (typeof contactsPerms[baseAction] === 'object') {
-            return contactsPerms[baseAction][appKey] === true;
-          }
-          // If it's a boolean, return it (for base permissions like 'people.attach')
-          if (typeof contactsPerms[baseAction] === 'boolean') {
-            return contactsPerms[baseAction] === true;
-          }
+        if (!baseAction) return false;
+
+        const baseValue = contactsPerms[baseAction];
+        if (!baseValue) return false;
+
+        // If it's an object, check for the app key
+        if (typeof baseValue === 'object') {
+          if (!appKey) return false;
+          return baseValue[appKey] === true;
+        }
+
+        // If it's a boolean, return it (for base permissions like 'people.attach')
+        if (typeof baseValue === 'boolean') {
+          return baseValue === true;
         }
       } else {
         // Simple action like 'view' or 'edit'

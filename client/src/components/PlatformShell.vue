@@ -37,20 +37,14 @@ import Nav from '@/components/Nav.vue';
 import TabBar from '@/components/TabBar.vue';
 import { useAppShellStore } from '@/stores/appShell';
 import { useTabs } from '@/composables/useTabs';
+import { useSidebarState } from '@/composables/useSidebarState';
 
 const route = useRoute();
 const appShellStore = useAppShellStore();
 
-// Sidebar collapsed state - Load from localStorage, default to false
-const sidebarCollapsed = ref(
-  localStorage.getItem('litedesk-sidebar-collapsed') === 'true'
-);
-
-// Save sidebar state to localStorage whenever it changes
-watch(sidebarCollapsed, (newValue) => {
-  localStorage.setItem('litedesk-sidebar-collapsed', newValue.toString());
-  queueContentOffsetUpdate();
-});
+// Sidebar state (locked doctrine): collapsed + lastActiveAppId only.
+const { collapsed: sidebarCollapsed } = useSidebarState();
+watch(sidebarCollapsed, () => queueContentOffsetUpdate());
 
 const DEFAULT_CONTENT_OFFSET = 0;
 const EXTRA_OFFSET_LIGHT = '2rem';

@@ -410,6 +410,8 @@ export function validateAppRegistry(appRegistry: AppRegistry): ValidationResult 
   // This is a warning, not an error, as it might be intentional
   for (const appKey of appKeys) {
     const app = appRegistry[appKey];
+    if (!app) continue;
+
     if (app.dashboard?.kpis) {
       for (const kpi of app.dashboard.kpis) {
         if (kpi.linkTo) {
@@ -455,7 +457,7 @@ export function validateAppRegistryOrThrow(appRegistry: AppRegistry): void {
   }
   
   // Log warnings in development
-  if (process.env.NODE_ENV === 'development' && result.warnings.length > 0) {
+  if (import.meta.env.DEV && result.warnings.length > 0) {
     console.warn('App registry validation warnings:', result.warnings);
   }
 }

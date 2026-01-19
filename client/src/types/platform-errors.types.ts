@@ -47,8 +47,10 @@ export class PlatformContractError extends Error {
     this.timestamp = Date.now();
     
     // Maintains proper stack trace for where our error was thrown (only available on V8)
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, PlatformContractError);
+    const captureStackTrace: undefined | ((target: object, constructorOpt?: Function) => void) =
+      (Error as any).captureStackTrace;
+    if (typeof captureStackTrace === 'function') {
+      captureStackTrace(this, PlatformContractError);
     }
   }
 

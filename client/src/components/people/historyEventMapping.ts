@@ -249,7 +249,16 @@ export function getHistoryDisplayText(
   if (action.startsWith('added_to_')) {
     const parts = action.split('_');
     if (parts.length >= 4) {
-      const appKey = parts[2].toUpperCase();
+      const rawAppKey = parts[2];
+      if (!rawAppKey) {
+        return action
+          .replace(/_/g, ' ')
+          .replace(/([A-Z])/g, ' $1')
+          .toLowerCase()
+          .replace(/^\w/, c => c.toUpperCase());
+      }
+
+      const appKey = rawAppKey.toUpperCase();
       const type = parts.slice(4).join('_');
       const appName = formatAppName(appKey);
       const typeDisplay = formatParticipationType(type);
@@ -297,7 +306,8 @@ export function getHistoryAppContext(
   if (action.startsWith('added_to_')) {
     const parts = action.split('_');
     if (parts.length >= 3) {
-      return parts[2].toUpperCase();
+      const rawAppKey = parts[2];
+      return rawAppKey ? rawAppKey.toUpperCase() : null;
     }
   }
   

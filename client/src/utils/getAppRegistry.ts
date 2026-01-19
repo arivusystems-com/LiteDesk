@@ -78,8 +78,15 @@ export async function getAppRegistry(): Promise<AppRegistry> {
       };
       
       // Warn if dashboardRoute is not /dashboard or /dashboard/:appKey
-      if (registry[app.appKey].dashboardRoute !== '/dashboard' && !registry[app.appKey].dashboardRoute.startsWith('/dashboard/')) {
-        console.warn(`[getAppRegistry] App ${app.appKey} has unexpected dashboardRoute: ${registry[app.appKey].dashboardRoute}. Expected /dashboard or /dashboard/:appKey`);
+      const entry = registry[app.appKey];
+      if (
+        entry &&
+        entry.dashboardRoute !== '/dashboard' &&
+        !entry.dashboardRoute.startsWith('/dashboard/')
+      ) {
+        console.warn(
+          `[getAppRegistry] App ${app.appKey} has unexpected dashboardRoute: ${entry.dashboardRoute}. Expected /dashboard or /dashboard/:appKey`
+        );
       }
     }
 

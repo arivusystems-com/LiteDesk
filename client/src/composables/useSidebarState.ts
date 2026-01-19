@@ -3,143 +3,82 @@
  * PLATFORM SIDEBAR: State Management Composable
  * ============================================================================
  * 
- * Manages collapsed/expanded state for sidebar domains.
- * Persists state to localStorage.
+ * Manages ONLY the minimal sidebar state allowed by the locked SidebarStructure.
+ *
+ * Why multi-app expansion is intentionally unsupported:
+ * The sidebar has exactly one active app lens at a time. Showing or persisting
+ * multiple expanded apps reintroduces a multi-app navigation surface.
+ *
+ * Invariant:
+ * “The sidebar has exactly one active app lens at a time.
+ * App switching is explicit and does not rely on expand/collapse state.”
  * 
  * State Persistence:
- * - Collapsed/expanded domains (per domain)
- * - Last active domain (for auto-expansion)
+ * - collapsed (shell chrome only)
+ * - lastActiveAppId (app lens fallback when route is ambiguous)
  * 
  * ============================================================================
  */
 
-import { ref, computed, watch } from 'vue';
+import { ref, watch } from 'vue';
 import type { Ref } from 'vue';
 
-const STORAGE_KEY = 'litedesk-sidebar-domains-state';
-const LAST_ACTIVE_DOMAIN_KEY = 'litedesk-sidebar-last-active-domain';
+const COLLAPSED_KEY = 'litedesk-sidebar-collapsed';
+const LAST_ACTIVE_APP_ID_KEY = 'litedesk-sidebar-last-active-app-id';
 
-export interface DomainState {
-  [appKey: string]: boolean; // true = expanded, false = collapsed
-}
-
-/**
- * Load domain state from localStorage
- */
-function loadDomainState(): DomainState {
+function loadBoolean(key: string, fallback: boolean): boolean {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      return JSON.parse(stored);
-    }
+    const stored = localStorage.getItem(key);
+    if (stored === null) return fallback;
+    return stored === 'true';
   } catch (error) {
-    console.warn('Failed to load sidebar domain state:', error);
-  }
-  return {};
-}
-
-/**
- * Save domain state to localStorage
- */
-function saveDomainState(state: DomainState): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch (error) {
-    console.warn('Failed to save sidebar domain state:', error);
+    console.warn(`Failed to load ${key}:`, error);
+    return fallback;
   }
 }
 
-/**
- * Get last active domain from localStorage
- */
-export function getLastActiveDomain(): string | null {
+function saveBoolean(key: string, value: boolean): void {
   try {
-    return localStorage.getItem(LAST_ACTIVE_DOMAIN_KEY);
+    localStorage.setItem(key, value.toString());
   } catch (error) {
-    console.warn('Failed to load last active domain:', error);
-    return null;
+    console.warn(`Failed to save ${key}:`, error);
+  }
+}
+
+function loadString(key: string, fallback: string): string {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch (error) {
+    console.warn(`Failed to load ${key}:`, error);
+    return fallback;
+  }
+}
+
+function saveString(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch (error) {
+    console.warn(`Failed to save ${key}:`, error);
   }
 }
 
 /**
- * Save last active domain to localStorage
+ * Sidebar state (locked contract doctrine).
+ *
+ * Exposes ONLY:
+ * - collapsed: boolean
+ * - lastActiveAppId: string
  */
-export function setLastActiveDomain(appKey: string): void {
-  try {
-    localStorage.setItem(LAST_ACTIVE_DOMAIN_KEY, appKey);
-  } catch (error) {
-    console.warn('Failed to save last active domain:', error);
-  }
-}
+export function useSidebarState(): {
+  collapsed: Ref<boolean>;
+  lastActiveAppId: Ref<string>;
+} {
+  const collapsed = ref<boolean>(loadBoolean(COLLAPSED_KEY, false));
+  const lastActiveAppId = ref<string>(loadString(LAST_ACTIVE_APP_ID_KEY, ''));
 
-/**
- * Composable for managing sidebar domain state
- * 
- * @param initialDomains - Initial list of domain appKeys
- * @returns State management functions
- */
-export function useSidebarState(initialDomains: string[] = []) {
-  // Load initial state from localStorage
-  const domainState = ref<DomainState>(loadDomainState());
-  
-  // Initialize domains that don't exist in storage (default to expanded)
-  initialDomains.forEach((appKey) => {
-    if (!(appKey in domainState.value)) {
-      domainState.value[appKey] = true; // Default expanded
-    }
-  });
+  watch(collapsed, (value) => saveBoolean(COLLAPSED_KEY, value));
+  watch(lastActiveAppId, (value) => saveString(LAST_ACTIVE_APP_ID_KEY, value));
 
-  // Save to localStorage whenever state changes
-  watch(
-    domainState,
-    (newState) => {
-      saveDomainState(newState);
-    },
-    { deep: true }
-  );
-
-  /**
-   * Check if a domain is expanded
-   */
-  const isDomainExpanded = (appKey: string): boolean => {
-    return domainState.value[appKey] !== false; // Default to true if not set
-  };
-
-  /**
-   * Toggle domain expanded/collapsed state
-   */
-  const toggleDomain = (appKey: string): void => {
-    domainState.value[appKey] = !isDomainExpanded(appKey);
-  };
-
-  /**
-   * Set domain expanded state
-   */
-  const setDomainExpanded = (appKey: string, expanded: boolean): void => {
-    domainState.value[appKey] = expanded;
-  };
-
-  /**
-   * Expand a domain (for auto-expansion on active module)
-   */
-  const expandDomain = (appKey: string): void => {
-    setDomainExpanded(appKey, true);
-  };
-
-  /**
-   * Collapse a domain
-   */
-  const collapseDomain = (appKey: string): void => {
-    setDomainExpanded(appKey, false);
-  };
-
-  return {
-    domainState,
-    isDomainExpanded,
-    toggleDomain,
-    setDomainExpanded,
-    expandDomain,
-    collapseDomain,
-  };
+  return { collapsed, lastActiveAppId };
 }
 

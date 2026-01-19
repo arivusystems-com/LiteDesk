@@ -7,9 +7,12 @@
   ],
   "compilerOptions": {
     "baseUrl": ".",
-    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "tsBuildInfoFile": "./.tsbuildinfo/tsconfig.app.tsbuildinfo",
     "paths": {
       "@/*": ["./src/*"]
     }
+  },
+  "vueCompilerOptions": {
+    "globalTypesPath": "./.tsbuildinfo/vue-global-types.d.ts"
   }
 }
