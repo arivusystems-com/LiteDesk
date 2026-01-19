@@ -73,6 +73,7 @@
                             :excludeFields="excludeFields"
                             :showAllFields="isEditing || !quickCreateMode"
                             :quickCreateMode="quickCreateMode && !isEditing"
+                            :useQuickCreateOrder="useQuickCreateOrder"
                             @update:formData="updateFormData"
                             @ready="onFormReady"
                           />
@@ -147,6 +148,10 @@ const props = defineProps({
   quickCreateMode: {
     type: Boolean,
     default: false // If true, only show fields configured in quickCreate settings
+  },
+  useQuickCreateOrder: {
+    type: Boolean,
+    default: false // If true, use quickCreate array order even in edit mode
   }
 });
 

@@ -16,6 +16,9 @@ router.use(requireSalesApp); // Enforce CRM-only access
 router.post('/', controller.create);
 router.get('/', controller.list);
 
+// OrganizationSurface endpoint (must be before /:id route)
+router.get('/:id/surface', controller.getSurface);
+
 // Activity logs (must be before /:id route)
 router.get('/:id/activity-logs', controller.getActivityLogs);
 router.post('/:id/activity-logs', controller.addActivityLog);

@@ -217,11 +217,54 @@ const routes = [
     component: () => import('@/views/Organizations.vue'),
     meta: { requiresAuth: true, requiresPermission: { module: 'organizations', action: 'view' } }
   },
+  // OrganizationSurface is a contextual surface.
+  // It is accessed via People, Work items, or Search.
+  // It must not appear in primary navigation.
   {
     path: '/organizations/:id',
     name: 'organization-detail',
-    component: () => import('@/views/OrganizationDetail.vue'),
-    meta: { requiresAuth: true, requiresPermission: { module: 'organizations', action: 'view' } }
+    component: () => import('@/views/OrganizationSurface.vue'),
+    meta: { requiresAuth: true, requiresPermission: { module: 'organizations', action: 'view' } },
+    beforeEnter: async (to, from, next) => {
+      const authStore = useAuthStore();
+      const orgId = to.params.id;
+      
+      // Guardrail: Tenant organizations cannot be opened in OrganizationSurface
+      // Check if this is the current user's tenant organization
+      if (authStore.organization?._id === orgId || authStore.organizationId === orgId) {
+        // Redirect tenant orgs to workspace settings
+        next({ name: 'settings', query: { tab: 'organization' } });
+        return;
+      }
+      
+      // Try to fetch the organization to verify it's a business org (not tenant)
+      try {
+        const response = await apiClient(`/v2/organization/${orgId}`, { method: 'GET' });
+        
+        // If successful, check if it's a tenant org (shouldn't happen via this endpoint, but double-check)
+        if (response.success && response.data?.isTenant === true) {
+          next({ name: 'settings', query: { tab: 'organization' } });
+          return;
+        }
+        
+        // Business org - allow access
+        next();
+      } catch (error) {
+        // If 404, it might be a tenant org or non-existent org
+        // Check if it matches current user's org ID
+        if (error.is404 || error.status === 404) {
+          // If it's the current user's org, redirect to settings
+          if (authStore.organization?._id === orgId || authStore.organizationId === orgId) {
+            next({ name: 'settings', query: { tab: 'organization' } });
+            return;
+          }
+          // Otherwise, let 404 pass through (organization not found)
+        }
+        
+        // For other errors, allow navigation (component will handle error display)
+        next();
+      }
+    }
   },
   {
     path: '/groups',
