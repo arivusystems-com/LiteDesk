@@ -137,6 +137,7 @@ const uiCompositionRoutes = require('./routes/uiCompositionRoutes');
 const relationshipRoutes = require('./routes/relationshipRoutes');
 const responseRoutes = require('./routes/responseRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
+const inboxRoutes = require('./routes/inboxRoutes');
 
 // Route Linking
 app.use('/api/auth', authRoutes);
@@ -178,6 +179,9 @@ app.use('/api/forms', formRoutes.protected); // Protected form routes
 app.use('/api/reports', reportRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/upload', uploadRoutes);
+
+// Inbox Routes (Cross-app attention surface)
+app.use('/api/inbox', inboxRoutes);
 
 // Portal Application Routes (App #2)
 app.use('/portal', portalRoutes);

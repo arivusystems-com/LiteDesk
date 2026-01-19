@@ -752,6 +752,10 @@ const props = defineProps({
       required: false,
       allowedOptions: null
     })
+  },
+  locked: {
+    type: Boolean,
+    default: false // If true, field is readonly/locked
   }
 });
 
@@ -823,6 +827,8 @@ const lookupModalSearchQuery = ref('');
 const lookupModalSortBy = ref('');
 const lookupModalSortOrder = ref('asc');
 const isReadOnly = computed(() => {
+  // Check if explicitly locked via prop
+  if (props.locked) return true;
   // Check if field is read-only by type
   if (['Auto-Number', 'Formula', 'Rollup Summary'].includes(props.field.dataType)) return true;
   // System fields that should be visible but not editable (createdBy, organizationid)
