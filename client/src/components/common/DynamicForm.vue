@@ -27,6 +27,7 @@
             @update:value="updateField(col.fieldKey, $event)"
             :errors="errors"
             :dependency-state="getFieldState(getFieldByKey(col.fieldKey))"
+            :locked="props.lockedFields.includes(col.fieldKey)"
           />
         </div>
       </div>
@@ -46,6 +47,7 @@
             @update:value="updateField(field.key, $event)"
             :errors="errors"
             :dependency-state="getFieldState(field)"
+            :locked="props.lockedFields.includes(field.key)"
           />
         </div>
       </div>
@@ -80,6 +82,10 @@ const props = defineProps({
   excludeFields: {
     type: Array,
     default: () => [] // Fields to exclude from the form
+  },
+  lockedFields: {
+    type: Array,
+    default: () => [] // Fields that should be readonly/locked
   },
   showAllFields: {
     type: Boolean,

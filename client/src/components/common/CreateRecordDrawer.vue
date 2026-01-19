@@ -71,6 +71,7 @@
                             :formData="formData"
                             :errors="errors"
                             :excludeFields="excludeFields"
+                            :lockedFields="lockedFields"
                             :showAllFields="isEditing || !quickCreateMode"
                             :quickCreateMode="quickCreateMode && !isEditing"
                             :useQuickCreateOrder="useQuickCreateOrder"
@@ -144,6 +145,10 @@ const props = defineProps({
   excludeFields: {
     type: Array,
     default: () => [] // Fields to exclude from the form (e.g., app-specific fields)
+  },
+  lockedFields: {
+    type: Array,
+    default: () => [] // Fields that should be readonly/locked (e.g., ['accountId'])
   },
   quickCreateMode: {
     type: Boolean,

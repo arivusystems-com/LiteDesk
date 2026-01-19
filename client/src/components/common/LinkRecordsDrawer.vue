@@ -73,6 +73,14 @@
                   <div class="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
                     <div class="text-xs text-gray-500 dark:text-gray-400" v-if="multiple">{{ deltaCount }} selected</div>
                     <div class="ml-auto flex gap-3">
+                      <button 
+                        v-if="allowCreate"
+                        type="button" 
+                        class="inline-flex justify-center rounded-md bg-white dark:bg-gray-800 px-3 py-2 text-sm font-semibold text-gray-900 dark:text-white shadow-xs ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+                        @click="handleCreate"
+                      >
+                        Create New
+                      </button>
                       <button type="button" class="rounded-md bg-white dark:bg-gray-800 px-3 py-2 text-sm font-semibold text-gray-900 dark:text-white shadow-xs ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700" @click="closeDrawer">Cancel</button>
                       <button type="button" :disabled="multiple && deltaCount === 0" class="inline-flex justify-center rounded-md bg-indigo-600 dark:bg-indigo-500 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 dark:hover:bg-indigo-600 disabled:opacity-50" @click="confirmLink">Link</button>
                     </div>
@@ -100,10 +108,11 @@ const props = defineProps({
   multiple: { type: Boolean, default: true },
   title: { type: String, default: null },
   context: { type: Object, default: () => ({}) }, // e.g., { organizationId, contactId }
-  preselectedIds: { type: Array, default: () => [] } // already linked IDs
+  preselectedIds: { type: Array, default: () => [] }, // already linked IDs
+  allowCreate: { type: Boolean, default: false } // If true, show "Create New" button
 });
 
-const emit = defineEmits(['close', 'linked']);
+const emit = defineEmits(['close', 'linked', 'create']);
 
 const loading = ref(false);
 const items = ref([]);
@@ -147,6 +156,10 @@ const closeDrawer = () => {
   selectedIds.value = new Set();
   searchQuery.value = '';
   prelinkedIds.value = new Set();
+};
+
+const handleCreate = () => {
+  emit('create');
 };
 
 // Allow closing only when no selection changes were made

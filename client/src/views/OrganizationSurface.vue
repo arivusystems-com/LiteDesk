@@ -419,7 +419,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
@@ -698,8 +698,29 @@ const getActivitySummaryAfterPerson = (activity) => {
   return '';
 };
 
+// Listen for refresh events from command palette or other sources
+const handleRefreshOrganization = (event) => {
+  const { organizationId } = event.detail || {};
+  // Only refresh if this is the current organization
+  if (organizationId && organizationId === route.params.id) {
+    fetchOrganization();
+  }
+};
+
 // Lifecycle
 onMounted(() => {
   fetchOrganization();
+  
+  // Listen for refresh events
+  if (typeof window !== 'undefined') {
+    window.addEventListener('litedesk:refresh-organization', handleRefreshOrganization);
+  }
+});
+
+onUnmounted(() => {
+  // Clean up event listener
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('litedesk:refresh-organization', handleRefreshOrganization);
+  }
 });
 </script>
