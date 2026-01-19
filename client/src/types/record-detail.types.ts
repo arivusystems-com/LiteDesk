@@ -6,7 +6,7 @@
  */
 
 import { PermissionOutcome } from './permission-visibility.types';
-import { EmptyStateDefinition } from './empty-state.types';
+import type { EmptyStateDefinition } from './empty-state.types';
 
 /**
  * Field data types for record detail fields

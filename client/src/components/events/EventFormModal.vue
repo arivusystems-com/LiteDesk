@@ -1163,7 +1163,9 @@ const handleSubmit = async (e) => {
       // Add validation errors if present
       if (errorData.validationErrors && Array.isArray(errorData.validationErrors) && errorData.validationErrors.length > 0) {
         errorMessage += '\n\nValidation Errors:\n';
-        errorMessage += errorData.validationErrors.map((e: any) => `• ${e.field || 'Field'}: ${e.message || e}`).join('\n');
+        errorMessage += errorData.validationErrors
+          .map((e) => `• ${e.field || 'Field'}: ${e.message || e}`)
+          .join('\n');
       }
       
       // Add error field if it contains more details

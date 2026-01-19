@@ -117,7 +117,7 @@
       </div>
     </header>
 
-    <!-- Desktop Sidebar - Phase 2D: Use shared SidebarRenderer -->
+    <!-- Desktop Sidebar -->
     <aside 
       @mouseenter="handleMouseEnter"
       @mouseleave="handleMouseLeave"
@@ -157,34 +157,14 @@
         </button>
       </div>
       
-      <!-- Navigation - Phase 2D: Use SidebarRenderer -->
+      <!-- Navigation - rendered by AppSidebar -->
       <div class="flex-1 pt-16 overflow-y-auto">
-        <!-- App Switcher -->
-        <div v-if="useDynamicUI && shouldShowExpanded" class="px-2 py-2 border-b border-gray-200 dark:border-gray-700">
-          <AppSwitcher />
-        </div>
-        
-        <SidebarRenderer 
-          v-if="useDynamicUI"
-          :should-show-expanded="shouldShowExpanded"
+        <AppSidebar
+          v-if="sidebarStructure"
+          :sidebar-structure="sidebarStructure"
+          :collapsed="!shouldShowExpanded"
+          embedded
         />
-        <nav v-else class="px-4 py-4 space-y-1">
-          <!-- Fallback to hardcoded navigation if dynamic UI not available -->
-          <router-link
-            v-for="item in navigation"
-            :key="item.name"
-            :to="item.href"
-            class="flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors min-h-[44px]"
-            :class="[
-              $route.path === item.href || $route.path.startsWith(item.href + '/')
-                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-            ]"
-          >
-            <component :is="item.icon" class="w-5 h-5 mr-3" />
-            {{ item.name }}
-          </router-link>
-        </nav>
       </div>
     </aside>
 
@@ -265,6 +245,10 @@ import { RouterView, useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useAppShellStore } from '@/stores/appShell';
 import { useColorMode } from '@/composables/useColorMode';
+import { useSidebarState } from '@/composables/useSidebarState';
+import { buildSidebarFromRegistry } from '@/utils/buildSidebarFromRegistry';
+import { getAppRegistry } from '@/utils/getAppRegistry';
+import { createPermissionSnapshot } from '@/types/permission-snapshot.types';
 import { 
   HomeIcon, 
   DocumentTextIcon, 
@@ -283,22 +267,20 @@ import {
 import NotificationBell from '@/components/notifications/NotificationBell.vue';
 import NotificationDrawer from '@/components/notifications/NotificationDrawer.vue';
 import NotificationSheet from '@/components/notifications/NotificationSheet.vue';
-import AppSwitcher from '@/components/AppSwitcher.vue';
-import SidebarRenderer from '@/components/SidebarRenderer.vue';
+import AppSidebar from '@/components/AppSidebar.vue';
 
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const appShellStore = useAppShellStore();
 const { colorMode, toggleColorMode } = useColorMode();
+const { collapsed } = useSidebarState();
 const showUserMenu = ref(false);
 const notificationDrawerOpen = ref(false);
 const notificationSheetOpen = ref(false);
 
-// Phase 2D: Sidebar state (same as Nav.vue)
-const isCollapsed = ref(
-  localStorage.getItem('litedesk-sidebar-collapsed') === 'true'
-);
+// Sidebar collapsed state (shared)
+const isCollapsed = collapsed;
 const isHovering = ref(false);
 
 // Computed to determine if sidebar should show expanded
@@ -308,7 +290,6 @@ const shouldShowExpanded = computed(() => {
 
 const toggleSidebar = () => {
   isCollapsed.value = !isCollapsed.value;
-  localStorage.setItem('litedesk-sidebar-collapsed', isCollapsed.value.toString());
   window.dispatchEvent(new CustomEvent('sidebar-toggle', { 
     detail: { collapsed: isCollapsed.value } 
   }));
@@ -324,14 +305,35 @@ const handleMouseLeave = () => {
   isHovering.value = false;
 };
 
-// Phase 2D: Check if dynamic UI is available
-const useDynamicUI = computed(() => appShellStore.isLoaded && appShellStore.availableApps.length > 0);
+const sidebarStructure = ref(null);
+const loadingSidebar = ref(false);
+
+const buildSidebar = async () => {
+  if (!authStore.user || !authStore.isAuthenticated) {
+    sidebarStructure.value = null;
+    return;
+  }
+
+  loadingSidebar.value = true;
+  try {
+    const registry = await getAppRegistry();
+    if (!authStore.user || !authStore.isAuthenticated) return;
+    const snapshot = createPermissionSnapshot(authStore.user);
+    sidebarStructure.value = buildSidebarFromRegistry(registry, snapshot);
+  } catch (e) {
+    console.error('[PortalLayout] Failed to build sidebar:', e);
+    sidebarStructure.value = null;
+  } finally {
+    loadingSidebar.value = false;
+  }
+};
 
 onMounted(async () => {
   // Phase 2D: Load UI metadata if not already loaded (App.vue also does this, but safe to check)
   if (!appShellStore.isLoaded && authStore.isAuthenticated) {
     await appShellStore.loadUIMetadata();
   }
+  await buildSidebar();
 });
 
 // Close menu when clicking outside
@@ -390,28 +392,5 @@ const logoSrc = computed(() => {
   }
 });
 
-// Desktop navigation
-const navigation = [
-  {
-    name: 'Home',
-    href: '/portal/dashboard',
-    icon: HomeIcon
-  },
-  {
-    name: 'Audits',
-    href: '/portal/audits',
-    icon: DocumentTextIcon
-  },
-  {
-    name: 'Corrective Actions',
-    href: '/portal/actions',
-    icon: ClipboardDocumentCheckIcon
-  },
-  {
-    name: 'Settings',
-    href: '/portal/settings/notifications',
-    icon: Cog6ToothIcon
-  }
-];
 </script>
 

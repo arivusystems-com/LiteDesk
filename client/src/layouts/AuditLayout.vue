@@ -103,148 +103,22 @@
       </div>
     </header>
 
-    <!-- Desktop Sidebar - Phase 2D: Use shared SidebarRenderer -->
+    <!-- Desktop Sidebar -->
     <aside 
       @mouseenter="handleMouseEnter"
       @mouseleave="handleMouseLeave"
       :class="[
         'hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:z-40',
-        'bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700',
-        'transition-all duration-300 ease-in-out',
-        shouldShowExpanded ? 'lg:w-64' : 'lg:w-20'
+        'transition-all duration-300 ease-in-out'
       ]"
     >
-      <!-- Logo Section -->
-      <div class="flex items-center justify-between h-14 px-4 border-b border-gray-200 dark:border-gray-700">
-        <transition
-          enter-active-class="transition-all duration-300"
-          enter-from-class="opacity-0 w-0"
-          enter-to-class="opacity-100 w-auto"
-          leave-active-class="transition-all duration-300"
-          leave-from-class="opacity-100 w-auto"
-          leave-to-class="opacity-0 w-0"
-        >
-          <img 
-            v-if="shouldShowExpanded"
-            class="h-8 w-auto transition-all duration-300" 
-            :src="logoSrc" 
-            alt="LiteDesk Logo" 
-          />
-        </transition>
-        
-        <!-- Collapse/Expand Button -->
-        <button
-          @click="toggleSidebar"
-          class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-600 dark:text-white transition-all duration-300 flex-shrink-0"
-          :class="{ 'mx-auto': !shouldShowExpanded }"
-        >
-          <ChevronLeftIcon v-if="shouldShowExpanded" class="w-5 h-5 transition-transform duration-300" />
-          <ChevronRightIcon v-else class="w-5 h-5 transition-transform duration-300" />
-        </button>
-      </div>
-      
-      <!-- App Switcher -->
-      <div v-if="useDynamicUI && shouldShowExpanded" class="px-2 py-2 border-b border-gray-200 dark:border-gray-700">
-        <AppSwitcher />
-      </div>
-      
-      <!-- Navigation - Phase 2D: Use SidebarRenderer -->
-      <SidebarRenderer 
-        v-if="useDynamicUI"
-        :should-show-expanded="shouldShowExpanded"
+      <AppSidebar
+        v-if="sidebarStructure"
+        :sidebar-structure="sidebarStructure"
+        :collapsed="!shouldShowExpanded"
+        :on-toggle-collapse="toggleSidebar"
+        :on-notifications-click="handleNotificationsClick"
       />
-      <nav v-else class="flex-1 px-4 py-4 space-y-1">
-        <!-- Fallback to hardcoded navigation if dynamic UI not available -->
-        <router-link
-          v-for="item in navigation"
-          :key="item.name"
-          :to="item.href"
-          class="flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors"
-          :class="[
-            $route.path === item.href || $route.path.startsWith(item.href + '/')
-              ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-              : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-          ]"
-        >
-          <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path v-if="item.name === 'Dashboard'" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-            <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-          </svg>
-          {{ item.name }}
-        </router-link>
-      </nav>
-      
-      <!-- Profile Section at Bottom (Desktop) -->
-      <div class="border-t border-gray-200 dark:border-gray-700 p-4">
-        <Menu as="div" class="relative">
-          <MenuButton
-            class="w-full flex items-center rounded-lg py-2.5 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-white transition-colors"
-          >
-            <img
-              class="w-8 h-8 rounded-full ring-2 ring-gray-200 dark:ring-gray-700 flex-shrink-0"
-              :src="authStore.user?.avatar || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80'"
-              :alt="authStore.user?.username || 'User'"
-            />
-            <div class="flex-1 ml-3 text-left overflow-hidden">
-              <p class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ authStore.user?.username || 'User' }}</p>
-              <p class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ authStore.userRole || 'Auditor' }}</p>
-            </div>
-            <svg class="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-            </svg>
-          </MenuButton>
-          <transition
-            enter-active-class="transition ease-out duration-100"
-            enter-from-class="transform opacity-0 scale-95"
-            enter-to-class="transform opacity-100 scale-100"
-            leave-active-class="transition ease-in duration-75"
-            leave-from-class="transform opacity-100 scale-100"
-            leave-to-class="transform opacity-0 scale-95"
-          >
-            <MenuItems
-              class="absolute bottom-full mb-2 w-48 rounded-lg shadow-xl py-1 bg-white dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/10 left-0 z-50"
-            >
-              <MenuItem v-if="hasSalesAccess" v-slot="{ active }">
-                <button
-                  @click="router.push('/settings')"
-                  :class="[
-                    'w-full text-left px-4 py-2 text-sm transition-colors',
-                    active ? 'bg-gray-100 dark:bg-gray-700' : '',
-                    'text-gray-700 dark:text-gray-200'
-                  ]"
-                >
-                  Settings
-                </button>
-              </MenuItem>
-              <MenuItem v-slot="{ active }">
-                <button
-                  @click="toggleColorModeFromMenu"
-                  :class="[
-                    'w-full text-left px-4 py-2 text-sm transition-colors',
-                    active ? 'bg-gray-100 dark:bg-gray-700' : '',
-                    'text-gray-700 dark:text-gray-200'
-                  ]"
-                >
-                  {{ colorModeLabel }}
-                </button>
-              </MenuItem>
-              <hr class="my-1 border-gray-200 dark:border-gray-700" />
-              <MenuItem v-slot="{ active }">
-                <button
-                  @click="handleLogout"
-                  :class="[
-                    'w-full text-left px-4 py-2 text-sm transition-colors',
-                    active ? 'bg-gray-100 dark:bg-gray-700' : '',
-                    'text-red-600 dark:text-red-400'
-                  ]"
-                >
-                  Sign out
-                </button>
-              </MenuItem>
-            </MenuItems>
-          </transition>
-        </Menu>
-      </div>
     </aside>
 
     <!-- Mobile Drawer -->
@@ -267,32 +141,15 @@
             </svg>
           </button>
         </div>
-        <!-- Phase 2D: Use SidebarRenderer for mobile drawer -->
-        <SidebarRenderer 
-          v-if="useDynamicUI"
-          :should-show-expanded="true"
-        />
-        <nav v-else class="px-4 py-4 space-y-1">
-          <!-- Fallback to hardcoded navigation -->
-          <router-link
-            v-for="item in navigation"
-            :key="item.name"
-            :to="item.href"
-            @click="drawerOpen = false"
-            class="flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors"
-            :class="[
-              $route.path === item.href || $route.path.startsWith(item.href + '/')
-                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-            ]"
-          >
-            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path v-if="item.name === 'Dashboard'" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-              <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            {{ item.name }}
-          </router-link>
-        </nav>
+        <div class="px-2 py-2">
+          <AppSidebar
+            v-if="sidebarStructure"
+            :sidebar-structure="sidebarStructure"
+            :collapsed="false"
+            embedded
+            :on-notifications-click="handleNotificationsClick"
+          />
+        </div>
       </div>
     </div>
 
@@ -300,18 +157,33 @@
     <main 
       :class="[
         'flex-1 transition-all duration-300',
-        shouldShowExpanded ? 'lg:pl-64' : 'lg:pl-20'
+        shouldShowExpanded ? 'lg:pl-[15.833rem]' : 'lg:pl-[5rem]'
       ]"
     >
-      <div class="min-h-screen">
-        <RouterView />
+      <!-- Tab Bar - Hidden on mobile, visible on tablet and up -->
+      <TabBar class="hidden md:block" />
+      
+      <div class="min-h-screen pt-12 md:pt-14">
+        <RouterView v-slot="{ Component }">
+          <keep-alive :max="10">
+            <component :is="Component" :key="$route.fullPath" />
+          </keep-alive>
+        </RouterView>
       </div>
     </main>
 
     <!-- Sync Drawer (Mobile) -->
     <SyncDrawer v-model="syncDrawerOpen" />
 
-    <!-- Notification Sheet (mobile) -->
+    <!-- Notification Drawer (Desktop) -->
+    <NotificationDrawer
+      :open="notificationDrawerOpen"
+      app-key="AUDIT"
+      :mark-all-disabled="false"
+      @close="notificationDrawerOpen = false"
+    />
+
+    <!-- Notification Sheet (Mobile) -->
     <NotificationSheet
       :open="notificationSheetOpen"
       app-key="AUDIT"
@@ -328,29 +200,35 @@ import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue';
 import { useAuthStore } from '@/stores/auth';
 import { useAppShellStore } from '@/stores/appShell';
 import { useColorMode } from '@/composables/useColorMode';
+import { useSidebarState } from '@/composables/useSidebarState';
+import { buildSidebarFromRegistry } from '@/utils/buildSidebarFromRegistry';
+import { getAppRegistry } from '@/utils/getAppRegistry';
+import { createPermissionSnapshot } from '@/types/permission-snapshot.types';
 import SyncDrawer from '@/components/audit/SyncDrawer.vue';
 import { getPendingCount } from '@/services/offlineQueue.js';
 import NotificationBell from '@/components/notifications/NotificationBell.vue';
 import NotificationSheet from '@/components/notifications/NotificationSheet.vue';
-import AppSwitcher from '@/components/AppSwitcher.vue';
-import SidebarRenderer from '@/components/SidebarRenderer.vue';
-import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/vue/24/outline';
+import NotificationDrawer from '@/components/notifications/NotificationDrawer.vue';
+import AppSidebar from '@/components/AppSidebar.vue';
+import TabBar from '@/components/TabBar.vue';
+import { configureTabsStorage, useTabs } from '@/composables/useTabs';
 
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const appShellStore = useAppShellStore();
 const { colorMode, toggleColorMode } = useColorMode();
+const { collapsed } = useSidebarState();
+const { initTabs, setupRouteWatcher } = useTabs();
 
 const drawerOpen = ref(false);
 const syncDrawerOpen = ref(false);
 const pendingCount = ref(0);
 const notificationSheetOpen = ref(false);
+const notificationDrawerOpen = ref(false);
 
-// Phase 2D: Sidebar state (same as Nav.vue)
-const isCollapsed = ref(
-  localStorage.getItem('litedesk-sidebar-collapsed') === 'true'
-);
+// Sidebar collapsed state (shared)
+const isCollapsed = collapsed;
 const isHovering = ref(false);
 
 // Computed to determine if sidebar should show expanded
@@ -360,7 +238,6 @@ const shouldShowExpanded = computed(() => {
 
 const toggleSidebar = () => {
   isCollapsed.value = !isCollapsed.value;
-  localStorage.setItem('litedesk-sidebar-collapsed', isCollapsed.value.toString());
   window.dispatchEvent(new CustomEvent('sidebar-toggle', { 
     detail: { collapsed: isCollapsed.value } 
   }));
@@ -376,14 +253,55 @@ const handleMouseLeave = () => {
   isHovering.value = false;
 };
 
-// Phase 2D: Check if dynamic UI is available
-const useDynamicUI = computed(() => appShellStore.isLoaded && appShellStore.availableApps.length > 0);
+const sidebarStructure = ref(null);
+const loadingSidebar = ref(false);
+
+const buildSidebar = async () => {
+  if (!authStore.user || !authStore.isAuthenticated) {
+    sidebarStructure.value = null;
+    return;
+  }
+
+  loadingSidebar.value = true;
+  try {
+    const registry = await getAppRegistry();
+    if (!authStore.user || !authStore.isAuthenticated) return;
+    const snapshot = createPermissionSnapshot(authStore.user);
+    sidebarStructure.value = buildSidebarFromRegistry(registry, snapshot);
+  } catch (e) {
+    console.error('[AuditLayout] Failed to build sidebar:', e);
+    sidebarStructure.value = null;
+  } finally {
+    loadingSidebar.value = false;
+  }
+};
 
 onMounted(async () => {
   // Phase 2D: Load UI metadata if not already loaded (App.vue also does this, but safe to check)
   if (!appShellStore.isLoaded && authStore.isAuthenticated) {
     await appShellStore.loadUIMetadata();
   }
+  
+  // Initialize tabs for audit layout
+  if (authStore.isAuthenticated && authStore.user && authStore.organization) {
+    const instanceId = authStore.organization?._id || authStore.organization?.instanceId;
+    const userId = authStore.user?._id;
+    
+    if (instanceId && userId) {
+      configureTabsStorage({ instanceId, userId });
+      initTabs();
+      setupRouteWatcher(router);
+    } else {
+      console.error('[AuditLayout] Skipping tab initialization: missing instanceId or userId', {
+        instanceId,
+        userId,
+        organization: authStore.organization,
+        user: authStore.user
+      });
+    }
+  }
+  
+  await buildSidebar();
   
   // Load pending count
   updatePendingCount();
@@ -406,14 +324,15 @@ const colorModeLabel = computed(() => {
   return colorMode.value === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode';
 });
 
-// Phase 2D: Logo source (same as Nav.vue)
-const logoSrc = computed(() => {
-  if (colorMode.value === 'dark' || (colorMode.value === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-    return '/public/assets/nurtura_logo_white.svg';
+// Handle notifications click - desktop uses drawer, mobile uses sheet
+const handleNotificationsClick = () => {
+  // Check if we're on desktop (lg breakpoint and up)
+  if (window.innerWidth >= 1024) {
+    notificationDrawerOpen.value = true;
   } else {
-    return '/public/assets/nurtura_logo_plain.svg';
+    notificationSheetOpen.value = true;
   }
-});
+};
 
 // Check if user has Sales access (for Settings link)
 const hasSalesAccess = computed(() => {
@@ -434,20 +353,5 @@ onMounted(() => {
   onBeforeUnmount(() => clearInterval(interval));
 });
 
-// Navigation items
-const navigation = [
-  {
-    name: 'Dashboard',
-    href: '/audit/dashboard'
-  },
-  {
-    name: 'My Audits',
-    href: '/audit/audits'
-  },
-  {
-    name: 'Settings',
-    href: '/audit/settings/notifications'
-  }
-];
 </script>
 

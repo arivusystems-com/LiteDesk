@@ -16,6 +16,7 @@ import PlatformShell from '@/components/PlatformShell.vue';
 import NotificationContainer from '@/components/NotificationContainer.vue';
 import NotificationSheet from '@/components/notifications/NotificationSheet.vue';
 import { initializeDynamicRoutes } from '@/router';
+import { useSidebarState } from '@/composables/useSidebarState';
 
 const authStore = useAuthStore();
 const appShellStore = useAppShellStore();
@@ -23,6 +24,7 @@ const router = useRouter();
 const route = useRoute();
 const { initTabs, setupRouteWatcher } = useTabs();
 const { warning } = useNotifications();
+const { lastActiveAppId } = useSidebarState();
 
 // Store cleanup function for route watcher (popstate listener)
 let cleanupRouteWatcher = null;
@@ -162,6 +164,8 @@ watch(() => route.path, async (newPath) => {
       console.log(`[App] Route changed to ${newPath}, setting activeApp to ${detectedApp}`);
       appShellStore.setActiveApp(detectedApp);
     }
+    // Persist last active app lens for sidebar fallback when route is ambiguous.
+    lastActiveAppId.value = detectedApp;
   }
 }, { immediate: true });
 

@@ -1,219 +1,392 @@
 <template>
   <nav
-    class="flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-white/10"
+    class="sidebar-nav flex flex-col h-full bg-white dark:bg-gray-900 border-r border-[#EAEEF4] dark:border-gray-700"
     :class="[
-      collapsed ? 'w-20' : 'w-64',
-      'transition-all duration-300 ease-in-out'
+      // Responsive width: calculated as px ÷ 12 (Figma base), then scaled via CSS
+      // 190px ÷ 12 = 15.833rem, 60px ÷ 12 = 5rem
+      collapsed ? 'w-[5rem]' : 'w-[15.833rem]',
+      'transition-all duration-300 ease-in-out',
     ]"
   >
-    <!-- Core Section -->
-    <div v-if="sidebarStructure.core.length > 0" class="px-2 py-4 border-b border-gray-200 dark:border-white/10">
-      <div class="space-y-1">
-        <a
-          v-for="item in sidebarStructure.core"
-          :key="item.key"
-          :href="item.route"
-          @click.prevent="handleCoreClick(item.route)"
-          :class="[
-            'flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-200',
-            isActiveRoute(item.route)
-              ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white'
-              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5',
-            collapsed ? 'justify-center' : ''
-          ]"
-          :title="collapsed ? item.label : ''"
-        >
-          <component
-            v-if="getIconComponent(item.icon)"
-            :is="getIconComponent(item.icon)"
-            class="w-5 h-5 flex-shrink-0"
-          />
-          <span v-if="!collapsed" class="ml-3">{{ item.label }}</span>
-        </a>
-      </div>
-    </div>
-
-    <!-- Entities Section -->
-    <div v-if="sidebarStructure.entities.length > 0" class="px-2 py-4 border-b border-gray-200 dark:border-white/10">
-      <div class="space-y-1">
-        <a
-          v-for="item in sidebarStructure.entities"
-          :key="item.key"
-          :href="item.route"
-          @click.prevent="handleEntityClick(item.route)"
-          :class="[
-            'flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-200',
-            isActiveRoute(item.route)
-              ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white'
-              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5',
-            collapsed ? 'justify-center' : ''
-          ]"
-          :title="collapsed ? item.label : ''"
-        >
-          <component
-            v-if="getIconComponent(item.icon)"
-            :is="getIconComponent(item.icon)"
-            class="w-5 h-5 flex-shrink-0"
-          />
-          <span v-if="!collapsed" class="ml-3">{{ item.label }}</span>
-        </a>
-      </div>
-    </div>
-
-    <!-- Apps Section (Domain Workflows) -->
-    <div v-if="sidebarStructure.apps.length > 0" class="flex-1 overflow-y-auto px-2 py-4">
-      <div class="space-y-1">
-        <div
-          v-for="app in sidebarStructure.apps"
-          :key="app.appKey"
-          class="space-y-1"
-        >
-          <!-- App Header -->
-          <div class="flex items-center">
-            <!-- App Header Label (Navigates to Dashboard) -->
-            <a
-              :href="app.dashboardRoute"
-              @click.prevent="handleAppHeaderClick(app.dashboardRoute, app.appKey)"
-              :class="[
-                'flex-1 flex items-center rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors duration-200',
-                isActiveApp(app)
-                  ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5',
-                collapsed ? 'justify-center' : ''
-              ]"
-              :title="collapsed ? app.label : ''"
-            >
-              <component
-                v-if="getIconComponent(app.icon)"
-                :is="getIconComponent(app.icon)"
-                class="w-5 h-5 flex-shrink-0"
-              />
-              <span v-if="!collapsed" class="ml-3">{{ app.label }}</span>
-            </a>
-
-            <!-- Chevron (Expand/Collapse Only - Never Navigates) -->
-            <button
-              v-if="app.children.length > 0 && !collapsed"
-              @click.stop="handleChevronClick(app.appKey)"
-              class="ml-1 p-1 rounded hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              :title="isAppExpanded(app.appKey) ? 'Collapse' : 'Expand'"
-            >
-              <ChevronDownIcon
-                v-if="isAppExpanded(app.appKey)"
-                class="w-4 h-4"
-              />
-              <ChevronRightIcon
-                v-else
-                class="w-4 h-4"
-              />
-            </button>
-          </div>
-
-          <!-- App Modules (Children) -->
-          <transition
-            enter-active-class="transition-all duration-200 ease-out"
-            enter-from-class="opacity-0 max-h-0"
-            enter-to-class="opacity-100 max-h-96"
-            leave-active-class="transition-all duration-200 ease-in"
-            leave-from-class="opacity-100 max-h-96"
-            leave-to-class="opacity-0 max-h-0"
-          >
-            <div
-              v-if="isAppExpanded(app.appKey) && app.children.length > 0"
-              class="ml-4 space-y-1 border-l border-gray-200 dark:border-white/10 pl-3"
-            >
-              <a
-                v-for="module in app.children"
-                :key="module.moduleKey"
-                :href="module.route"
-                @click.prevent="handleModuleClick(module.route)"
-                :class="[
-                  'flex items-center rounded-lg px-3 py-2 text-sm transition-colors duration-200',
-                  isActiveModule(module.route)
-                    ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white font-medium'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5'
-                ]"
-              >
-                <component
-                  v-if="getIconComponent(module.icon)"
-                  :is="getIconComponent(module.icon)"
-                  class="w-4 h-4 flex-shrink-0"
-                />
-                <span class="ml-2">{{ module.label }}</span>
-              </a>
-            </div>
-          </transition>
+    <!-- Header (38px ÷ 12 = 3.167rem) - Fixed -->
+    <div class="relative h-[3.167rem] border-b border-[#EAEEF4] dark:border-gray-700 flex-shrink-0">
+      <div 
+        ref="profileDropdownRef"
+        v-click-outside="closeProfileDropdown"
+        class="absolute top-[0.667rem] flex items-center cursor-pointer rounded-[0.333rem] transition-colors hover:bg-[#F8F9FB] dark:hover:bg-gray-800"
+        :class="collapsed ? 'left-1/2 -translate-x-1/2 gap-0 p-[0.25rem]' : 'left-[1rem] gap-[0.5rem] p-[0.25rem] max-w-[calc(100%-3rem)]'"
+        @click="toggleProfileDropdown"
+      >
+        <div class="w-[1.833rem] h-[1.833rem] rounded-[0.333rem] overflow-hidden bg-[#F8F9FB] dark:bg-gray-800 flex-shrink-0">
+          <img :src="workspaceAvatarUrl" alt="" class="w-full h-full object-cover" />
+        </div>
+        <div v-if="!collapsed" class="flex items-center gap-[0.333rem] min-w-0 flex-1 overflow-hidden max-w-[calc(15.833rem-4rem)]">
+          <span class="text-[1rem] font-semibold text-[#070922] dark:text-gray-100 whitespace-nowrap truncate block min-w-0 max-w-full">{{ userName }}</span>
+          <span class="w-[0.833rem] h-[0.833rem] flex-shrink-0 flex items-center justify-center transition-transform" :class="{ 'rotate-180': showProfileDropdown }">
+            <FigmaChevronDown class="w-full h-full" :fill="iconColors.secondary" />
+          </span>
         </div>
       </div>
+
+      <!-- Profile Dropdown Menu -->
+      <Transition
+        enter-active-class="transition ease-out duration-100"
+        enter-from-class="opacity-0 scale-95"
+        enter-to-class="opacity-100 scale-100"
+        leave-active-class="transition ease-in duration-75"
+        leave-from-class="opacity-100 scale-100"
+        leave-to-class="opacity-0 scale-95"
+      >
+        <div
+          v-if="showProfileDropdown && !collapsed"
+          class="absolute left-[1rem] top-[3.5rem] w-[12rem] bg-white dark:bg-gray-800 rounded-[0.5rem] shadow-[0_4px_12px_rgba(0,0,0,0.15)] dark:shadow-[0_4px_12px_rgba(0,0,0,0.3)] border border-[#EAEEF4] dark:border-gray-700 py-[0.5rem] z-50"
+        >
+          <button
+            v-for="(item, index) in profileMenuItems"
+            :key="index"
+            @click="item.action"
+            :class="[
+              'w-full text-left px-[0.75rem] py-[0.5rem] text-[0.875rem] transition-colors flex items-center gap-[0.5rem]',
+              item.isLogout 
+                ? 'text-[#F32F47] dark:text-red-400 hover:bg-[#FEF2F2] dark:hover:bg-red-900/20' 
+                : 'text-[#070922] dark:text-gray-100 hover:bg-[#F8F9FB] dark:hover:bg-gray-700',
+              item.divider ? 'border-t border-[#EAEEF4] dark:border-gray-700 mt-[0.5rem] pt-[0.5rem]' : ''
+            ]"
+          >
+            <span>{{ item.name }}</span>
+          </button>
+        </div>
+      </Transition>
+
+      <button
+        v-if="!collapsed"
+        type="button"
+        @click.stop.prevent="onToggleCollapse?.()"
+        class="absolute right-[0.667rem] top-[1rem] w-[1.167rem] h-[1.167rem] rounded-[0.5rem] flex items-center justify-center hover:bg-[#F8F9FB] dark:hover:bg-gray-800 transition-colors"
+        title="Collapse sidebar"
+      >
+        <span class="w-full h-full flex items-center justify-center">
+          <FigmaSidebarIcon class="w-full h-full" :fill="iconColors.secondary" />
+        </span>
+      </button>
     </div>
 
-    <!-- Platform Section -->
-    <div v-if="sidebarStructure.platform.length > 0" class="px-2 py-4 border-t border-gray-200 dark:border-white/10">
-      <div class="space-y-1">
+    <!-- Scrollable Content Area -->
+    <div class="flex-1 overflow-y-auto min-h-0">
+      <!-- Search (28px ÷ 12 = 2.333rem height) -->
+      <div v-if="searchSurface" class="pt-[0.667rem] pb-[0.667rem]" :class="collapsed ? 'px-5' : 'px-[0.667rem]'">
+      <button
+        type="button"
+        @click="handleNavClick(searchSurface.route, searchSurface.label, $event)"
+        class="w-full h-[2.333rem] border border-[#EAEEF4] dark:border-gray-700 rounded-[0.5rem] flex items-center transition-colors hover:bg-[#F8F9FB] dark:hover:bg-gray-800 bg-white dark:bg-gray-900"
+        :class="collapsed ? 'justify-center px-0 py-[0.5rem]' : 'px-[0.583rem] py-[0.5rem] gap-[0.583rem]'"
+        :title="collapsed ? 'Search' : ''"
+      >
+        <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
+          <FigmaSearchIcon class="w-full h-full" :fill="iconColors.secondary" />
+        </span>
+        <span v-if="!collapsed" class="text-[1rem] text-[#898F9A] dark:text-gray-400">Search...</span>
+      </button>
+    </div>
+
+    <!-- Shell list (rows are 24px ÷ 12 = 2rem, gap 2px ÷ 12 = 0.167rem) -->
+    <div :class="collapsed ? 'px-0' : 'px-[0.667rem]'">
+      <div class="flex flex-col gap-[0.333rem]" :class="collapsed ? 'px-5' : 'px-0'">
         <a
-          v-for="item in sidebarStructure.platform"
-          :key="item.key"
+          v-for="item in shellNavItems"
+          :key="item.id"
           :href="item.route"
-          @click.prevent="handlePlatformClick(item.route)"
+          @click.prevent="handleNavClick(item.route, item.label, $event)"
+          @auxclick.prevent="handleNavClick(item.route, item.label, $event)"
+          class="w-full h-[2.333rem] rounded-[0.5rem] py-[0.333rem] flex items-center transition-colors"
           :class="[
-            'flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-200',
-            isActiveRoute(item.route)
-              ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white'
-              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5',
-            collapsed ? 'justify-center' : ''
+            collapsed ? 'justify-center px-0' : 'px-[0.5rem] gap-[0.667rem]',
+            isActiveRoute(item.route) 
+              ? 'bg-[rgba(84,71,255,0.1)] dark:bg-[rgba(84,71,255,0.2)]' 
+              : 'hover:bg-[#F8F9FB] dark:hover:bg-gray-800'
           ]"
           :title="collapsed ? item.label : ''"
         >
-          <component
-            v-if="getIconComponent(item.icon)"
-            :is="getIconComponent(item.icon)"
-            class="w-5 h-5 flex-shrink-0"
-          />
-          <span v-if="!collapsed" class="ml-3">{{ item.label }}</span>
+          <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
+            <component
+              :is="getFigmaNavIcon(item)"
+              class="w-full h-full"
+              :fill="isActiveRoute(item.route) ? iconColors.active : iconColors.primary"
+            />
+          </span>
+          <span
+            v-if="!collapsed"
+            class="text-[1rem] flex-shrink-0"
+            :class="[
+              isActiveRoute(item.route) 
+                ? 'text-[#432DD6] dark:text-purple-400' 
+                : 'text-[#070922] dark:text-gray-100'
+            ]"
+          >
+            {{ item.label }}
+          </span>
         </a>
+
+        <!-- Notifications -->
+        <button
+          v-if="typeof onNotificationsClick === 'function'"
+          type="button"
+          @click="onNotificationsClick()"
+          class="w-full h-[2.333rem] rounded-[0.5rem] py-[0.333rem] flex items-center transition-colors hover:bg-[#F8F9FB] dark:hover:bg-gray-800"
+          :class="collapsed ? 'justify-center px-0' : 'px-[0.5rem] gap-[0.667rem]'"
+          :title="collapsed ? 'Notifications' : ''"
+        >
+          <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
+            <FigmaBellIcon class="w-full h-full" :fill="iconColors.primary" />
+          </span>
+          <span v-if="!collapsed" class="flex-1 text-[1rem] text-[#070922] dark:text-gray-100 text-left">Notifications</span>
+          <span
+            v-if="!collapsed && hasUnreadNotifications"
+            class="bg-[#F32F47] dark:bg-red-500 rounded-[100px] px-[0.417rem] py-px flex items-center justify-center"
+          >
+            <span class="text-[0.75rem] text-[#FAFAFC] dark:text-white leading-none">{{ unreadBadgeText }}</span>
+          </span>
+        </button>
+
+        <!-- People -->
+        <a
+          v-for="item in sidebarStructure.identity"
+          :key="item.id"
+          :href="item.route"
+          @click.prevent="handleNavClick(item.route, item.label, $event)"
+          @auxclick.prevent="handleNavClick(item.route, item.label, $event)"
+          class="w-full h-[2.333rem] rounded-[0.5rem] py-[0.333rem] flex items-center transition-colors"
+          :class="[
+            collapsed ? 'justify-center px-5' : 'px-[0.5rem] gap-[0.667rem]',
+            isActiveRoute(item.route) 
+              ? 'bg-[rgba(84,71,255,0.1)] dark:bg-[rgba(84,71,255,0.2)]' 
+              : 'hover:bg-[#F8F9FB] dark:hover:bg-gray-800'
+          ]"
+          :title="collapsed ? item.label : ''"
+        >
+          <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
+            <component
+              :is="getFigmaNavIcon(item)"
+              class="w-full h-full"
+              :fill="isActiveRoute(item.route) ? iconColors.active : iconColors.primary"
+            />
+          </span>
+          <span
+            v-if="!collapsed"
+            class="text-[1rem] flex-shrink-0"
+            :class="[
+              isActiveRoute(item.route) 
+                ? 'text-[#432DD6] dark:text-purple-400' 
+                : 'text-[#070922] dark:text-gray-100'
+            ]"
+          >
+            {{ item.label }}
+          </span>
+        </a>
+      </div>
+
+      <!-- Divider (12px ÷ 12 = 1rem gap above) -->
+      <div class="mt-[1rem] h-px bg-[#EAEEF4] dark:bg-gray-700" />
+    </div>
+
+    <!-- App switcher + app navigation (switcher 28px ÷ 12 = 2.333rem, app rows 24px ÷ 12 = 2rem, gap 4px ÷ 12 = 0.333rem) -->
+    <div class="pt-[1rem] flex flex-col gap-[0.333rem]" :class="collapsed ? 'px-5' : 'px-[0.667rem]'">
+      <!-- App switcher -->
+      <div
+        v-if="sidebarStructure.appSwitcher.apps.length > 0"
+        ref="appSwitcherDropdownRef"
+        v-click-outside="closeAppSwitcherDropdown"
+        class="relative w-full"
+      >
+        <div
+          @click="toggleAppSwitcherDropdown"
+          class="w-full h-[2.333rem] bg-[#F8F9FB] dark:bg-gray-800 border border-[#EAEEF4] dark:border-gray-700 rounded-[0.333rem] flex items-center justify-center cursor-pointer transition-colors hover:bg-[#F0F1F3] dark:hover:bg-gray-700"
+          :class="collapsed ? 'px-0 py-0' : 'px-[0.583rem] py-[0.5rem] gap-[0.667rem]'"
+        >
+          <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
+            <FigmaSackDollarIcon class="w-full h-full" :fill="iconColors.primary" />
+          </span>
+          <div v-if="!collapsed" class="flex items-center gap-[0.333rem] flex-1 min-w-0">
+            <span class="text-[1rem] font-semibold text-[#070922] dark:text-gray-100 truncate">
+              {{ activeApp?.name || 'Sales' }}
+            </span>
+            <span class="w-[0.833rem] h-[0.833rem] flex-shrink-0 flex items-center justify-center transition-transform" :class="{ 'rotate-180': showAppSwitcherDropdown }">
+              <FigmaChevronDown class="w-full h-full" :fill="iconColors.chevron" />
+            </span>
+          </div>
+        </div>
+
+        <!-- App Switcher Dropdown Menu -->
+        <Transition
+          enter-active-class="transition ease-out duration-100"
+          enter-from-class="opacity-0 scale-95"
+          enter-to-class="opacity-100 scale-100"
+          leave-active-class="transition ease-in duration-75"
+          leave-from-class="opacity-100 scale-100"
+          leave-to-class="opacity-0 scale-95"
+        >
+          <div
+            v-if="showAppSwitcherDropdown && !collapsed"
+            class="absolute left-0 top-[2.5rem] w-full bg-white dark:bg-gray-800 rounded-[0.5rem] shadow-[0_4px_12px_rgba(0,0,0,0.15)] dark:shadow-[0_4px_12px_rgba(0,0,0,0.3)] border border-[#EAEEF4] dark:border-gray-700 py-[0.5rem] z-50 max-h-[12rem] overflow-y-auto"
+          >
+            <button
+              v-for="app in sidebarStructure.appSwitcher.apps"
+              :key="app.id"
+              @click="handleAppSelect(app.id)"
+              :class="[
+                'w-full text-left px-[0.75rem] py-[0.583rem] text-[0.875rem] transition-colors flex items-center gap-[0.667rem]',
+                sidebarStructure.appSwitcher.activeAppId === app.id
+                  ? 'bg-[rgba(84,71,255,0.1)] dark:bg-[rgba(84,71,255,0.2)] text-[#432DD6] dark:text-purple-400 font-semibold'
+                  : 'text-[#070922] dark:text-gray-100 hover:bg-[#F8F9FB] dark:hover:bg-gray-700'
+              ]"
+            >
+              <span class="w-[1.167rem] h-[1.167rem] flex-shrink-0 flex items-center justify-center">
+                <component
+                  :is="getAppIcon(app)"
+                  class="w-full h-full"
+                  :fill="sidebarStructure.appSwitcher.activeAppId === app.id ? iconColors.active : iconColors.primary"
+                />
+              </span>
+              <span class="truncate flex-1">{{ app.name }}</span>
+            </button>
+          </div>
+        </Transition>
+      </div>
+
+      <!-- App navigation -->
+      <div class="mt-[0.5rem] flex flex-col gap-[0.333rem]">
+        <a
+          v-if="sidebarStructure.appNav.dashboard"
+          :href="sidebarStructure.appNav.dashboard.route"
+          @click.prevent="handleNavClick(sidebarStructure.appNav.dashboard.route, sidebarStructure.appNav.dashboard.label, $event, { isAppContext: true })"
+          @auxclick.prevent="handleNavClick(sidebarStructure.appNav.dashboard.route, sidebarStructure.appNav.dashboard.label, $event, { isAppContext: true })"
+          class="w-full h-[2.333rem] rounded-[0.5rem] py-[0.333rem] flex items-center transition-colors"
+          :class="[
+            collapsed ? 'justify-center px-0' : 'px-[0.5rem] gap-[0.667rem]',
+            isActiveRoute(sidebarStructure.appNav.dashboard.route) 
+              ? 'bg-[rgba(84,71,255,0.1)] dark:bg-[rgba(84,71,255,0.2)]' 
+              : 'hover:bg-[#F8F9FB] dark:hover:bg-gray-800'
+          ]"
+          :title="collapsed ? sidebarStructure.appNav.dashboard.label : ''"
+        >
+          <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
+            <FigmaGridIcon class="w-full h-full" :fill="isActiveRoute(sidebarStructure.appNav.dashboard.route) ? iconColors.active : iconColors.primary" />
+          </span>
+          <span
+            v-if="!collapsed"
+            class="text-[1rem]"
+            :class="[
+              isActiveRoute(sidebarStructure.appNav.dashboard.route) 
+                ? 'text-[#432DD6] dark:text-purple-400' 
+                : 'text-[#070922] dark:text-gray-100'
+            ]"
+          >
+            {{ sidebarStructure.appNav.dashboard.label }}
+          </span>
+        </a>
+
+        <a
+          v-for="module in sidebarStructure.appNav.modules"
+          :key="module.id"
+          :href="module.route"
+          @click.prevent="handleNavClick(module.route, module.label, $event, { isAppContext: true })"
+          @auxclick.prevent="handleNavClick(module.route, module.label, $event, { isAppContext: true })"
+          class="w-full h-[2.333rem] rounded-[0.5rem] py-[0.333rem] flex items-center transition-colors"
+          :class="[
+            collapsed ? 'justify-center px-0' : 'px-[0.5rem] gap-[0.667rem]',
+            isActiveRoute(module.route) 
+              ? 'bg-[rgba(84,71,255,0.1)] dark:bg-[rgba(84,71,255,0.2)]' 
+              : 'hover:bg-[#F8F9FB] dark:hover:bg-gray-800'
+          ]"
+          :title="collapsed ? module.label : ''"
+        >
+          <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
+            <component :is="getFigmaNavIcon(module)" class="w-full h-full" :fill="isActiveRoute(module.route) ? iconColors.active : iconColors.primary" />
+          </span>
+          <span
+            v-if="!collapsed"
+            class="text-[1rem]"
+            :class="[
+              isActiveRoute(module.route) 
+                ? 'text-[#432DD6] dark:text-purple-400' 
+                : 'text-[#070922] dark:text-gray-100'
+            ]"
+          >
+            {{ module.label }}
+          </span>
+        </a>
+      </div>
+    </div>
+    </div>
+
+    <!-- Footer (38px ÷ 12 = 3.167rem) - Fixed -->
+    <div class="flex-shrink-0">
+      <!-- Footer divider -->
+      <div class="h-px bg-[#EAEEF4] dark:bg-gray-700" />
+
+      <!-- Footer content -->
+      <div class="relative h-[3.167rem]">
+      <div 
+        class="absolute top-[0.583rem] h-[2.167rem] flex items-center justify-center transition-all duration-300"
+        :class="collapsed ? 'left-1/2 -translate-x-1/2 w-[1.5rem]' : 'left-[1.167rem] w-[4.167rem]'"
+      >
+        <img 
+          :src="footerLogoUrl" 
+          alt="" 
+          class="h-full w-full object-contain"
+        />
+      </div>
+      <div v-if="!collapsed" class="absolute left-[7.917rem] top-[0.917rem] w-px h-[1.417rem] bg-[#EAEEF4] dark:bg-gray-700" />
+      <button 
+        v-if="!collapsed"
+        type="button" 
+        class="absolute left-[9.417rem] top-[0.583rem] h-[2rem] rounded-[0.5rem] p-[0.333rem] flex items-center gap-[0.333rem] hover:bg-[#F8F9FB] dark:hover:bg-gray-800 transition-colors"
+      >
+        <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
+          <FigmaInfoIcon class="w-full h-full" :fill="iconColors.primary" />
+        </span>
+        <span class="text-[1rem] text-[#070922] dark:text-gray-100">Help</span>
+      </button>
       </div>
     </div>
   </nav>
 </template>
 
 <script setup lang="ts">
+// This component renders the locked SidebarStructure.
+// Do not add new sidebar sections without updating sidebar-invariants.md
 /**
  * ============================================================================
  * PLATFORM SIDEBAR: Main Component
  * ============================================================================
  * 
- * Renders sidebar entirely from SidebarStructure.
- * No registry or permission logic inside component.
- * Component is a renderer, not a decision-maker.
- * 
- * Interaction Rules:
- * - Domain header label → Navigate to dashboardRoute
- * - Domain chevron → Expand/collapse only (never navigates)
- * - Leaf module → Navigate to module route
- * - Core items → Navigate immediately
- * - Platform items → Navigate immediately
- * 
- * Active State Rules:
- * - Active module → Highlight module, auto-expand its domain
- * - Active dashboard (/:appKey) → Highlight domain header, domain expanded
- * - Active core/platform route → No domain auto-expansion
- * 
- * Route Assumptions:
- * - /home
- * - /:appKey → App dashboard
- * - /:appKey/:moduleKey → Module view
- * - /settings/*
- * - /apps
+ * Renders the locked `SidebarStructure` contract directly.
+ *
+ * Invariant:
+ * “Sidebar renders surfaces, identities, lenses, and governance — never raw entities.”
+ *
+ * Strict order:
+ * shell → identity → appSwitcher → appNav → platform
  * 
  * ============================================================================
  */
 
-import { computed, watch, onMounted } from 'vue';
+import { computed, h, ref, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useSidebarState, setLastActiveDomain } from '@/composables/useSidebarState';
-import type { SidebarStructure } from '@/types/sidebar.types';
+import { useSidebarState } from '@/composables/useSidebarState';
+import type { SidebarStructure, AppSummary } from '@/types/sidebar.types';
+import { useTabs } from '@/composables/useTabs';
+import { useNotificationStore } from '@/stores/notifications';
+import { useAuthStore } from '@/stores/auth';
+import { useColorMode } from '@/composables/useColorMode';
+import logoWordmarkDarkUrl from '/assets/logo/Logo_word_dark.svg';
+import logoDarkUrl from '/assets/logo/Logo_dark.svg';
+import logoWordmarkLightUrl from '/assets/logo/Logo_word_light.svg';
+import logoLightUrl from '/assets/logo/Logo_light.svg';
 import {
   HomeIcon,
+  InboxIcon,
+  MagnifyingGlassIcon,
   UsersIcon,
   BuildingOfficeIcon,
   BriefcaseIcon,
@@ -221,8 +394,6 @@ import {
   CalendarIcon,
   CogIcon,
   Squares2X2Icon,
-  ChevronDownIcon,
-  ChevronRightIcon,
   ClipboardDocumentIcon,
   CubeIcon,
   ArrowDownTrayIcon,
@@ -232,37 +403,311 @@ import {
 const props = defineProps<{
   sidebarStructure: SidebarStructure;
   collapsed?: boolean;
+  embedded?: boolean;
+  onNotificationsClick?: () => void;
+  onToggleCollapse?: () => void;
 }>();
 
 // Router
 const route = useRoute();
 const router = useRouter();
+const { openTab } = useTabs();
 
 // Sidebar state management
-const appKeys = computed(() => props.sidebarStructure.apps.map((a) => a.appKey));
-const { isDomainExpanded: isAppExpanded, toggleDomain: toggleApp, expandDomain: expandApp } = useSidebarState(appKeys.value);
+const { lastActiveAppId } = useSidebarState();
+
+// Workspace identity (Figma header)
+const authStore = useAuthStore();
+const workspaceName = computed(() => authStore.organization?.name || "Darshan’s Space");
+const userName = computed(() => authStore.user?.username || authStore.user?.name || 'User');
+const workspaceAvatarUrl = computed<string>(() => 
+  authStore.user?.avatar || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=128&h=128&q=80'
+);
+
+// Logo URLs based on collapsed state and color mode
+const footerLogoUrl = computed(() => {
+  const isDark = colorMode.value === 'dark';
+  if (props.collapsed) {
+    return isDark ? logoLightUrl : logoDarkUrl;
+  } else {
+    return isDark ? logoWordmarkLightUrl : logoWordmarkDarkUrl;
+  }
+});
+
+// Profile dropdown state
+const showProfileDropdown = ref(false);
+const profileDropdownRef = ref<HTMLElement | null>(null);
+
+// App switcher dropdown state
+const showAppSwitcherDropdown = ref(false);
+const appSwitcherDropdownRef = ref<HTMLElement | null>(null);
+
+// Color mode for menu
+const { colorMode, toggleColorMode } = useColorMode();
+
+// Icon colors based on color mode
+const iconColors = computed(() => {
+  const isDark = colorMode.value === 'dark';
+  return {
+    // Primary icon color (default)
+    primary: isDark ? '#e5e7eb' : '#070922', // gray-200 in dark, dark gray in light
+    // Secondary icon color (muted)
+    secondary: isDark ? '#9ca3af' : '#485775', // gray-400 in dark, gray-600 in light
+    // Tertiary icon color (very muted)
+    tertiary: isDark ? '#6b7280' : '#898F9A', // gray-500 in dark, gray-500 in light
+    // Active/purple icon color
+    active: isDark ? '#a78bfa' : '#432DD6', // purple-400 in dark, purple-700 in light
+    // Chevron/meta icon color
+    chevron: isDark ? '#9ca3af' : '#6C6C74', // gray-400 in dark, gray-500 in light
+  };
+});
+
+// Logout handler
+const handleLogout = () => {
+  authStore.logout();
+  router.push('/');
+  authStore.error = null;
+  showProfileDropdown.value = false;
+};
+
+// Menu items for profile dropdown
+const profileMenuItems = computed(() => [
+  { name: 'Your Profile', action: () => router.push('/profile') },
+  { name: 'Settings', action: () => window.open('/settings', '_blank') },
+  { 
+    name: colorMode.value === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode', 
+    action: () => {
+      const newMode = colorMode.value === 'light' ? 'dark' : 'light';
+      toggleColorMode(newMode);
+    }
+  },
+  { name: 'Sign out', action: handleLogout, divider: true, isLogout: true },
+]);
+
+// Toggle dropdown
+const toggleProfileDropdown = () => {
+  showProfileDropdown.value = !showProfileDropdown.value;
+};
+
+// Close dropdown
+const closeProfileDropdown = () => {
+  showProfileDropdown.value = false;
+};
+
+// Toggle app switcher dropdown
+const toggleAppSwitcherDropdown = () => {
+  showAppSwitcherDropdown.value = !showAppSwitcherDropdown.value;
+};
+
+// Close app switcher dropdown
+const closeAppSwitcherDropdown = () => {
+  showAppSwitcherDropdown.value = false;
+};
+
+// Handle app selection
+const handleAppSelect = (appId: string) => {
+  switchAppLens(appId);
+  closeAppSwitcherDropdown();
+};
+
+// Click outside directive
+const vClickOutside = {
+  mounted(el: HTMLElement, binding: any) {
+    (el as any).clickOutsideEvent = (event: MouseEvent) => {
+      if (!(el === event.target || el.contains(event.target as Node))) {
+        binding.value();
+      }
+    };
+    document.addEventListener('click', (el as any).clickOutsideEvent);
+  },
+  unmounted(el: HTMLElement) {
+    document.removeEventListener('click', (el as any).clickOutsideEvent);
+  }
+};
+
+/**
+ * Figma icon helpers (node 5342:2703 subtree).
+ * Each icon accepts a `fill` prop (hex string), matching the Figma fills exactly.
+ * Icons are responsive and properly constrained to prevent overflow.
+ */
+function defineFigmaIcon(viewBox: string, d: string) {
+  return {
+    name: 'FigmaIcon',
+    props: { 
+      fill: { type: String, default: '#070922' },
+      class: { type: String, default: '' }
+    },
+    setup(props: { fill: string; class?: string }) {
+      return () =>
+        h('svg', { 
+          viewBox, 
+          fill: 'none', 
+          xmlns: 'http://www.w3.org/2000/svg',
+          width: '100%',
+          height: '100%',
+          preserveAspectRatio: 'xMidYMid meet',
+          style: {
+            display: 'block',
+            flexShrink: 0,
+          },
+          class: props.class
+        }, [
+          h('path', { d, fill: props.fill }),
+        ]);
+    },
+  };
+}
+
+const FigmaChevronDown = defineFigmaIcon(
+  '0 0 6.49844 3.49844',
+  'M3.42578 3.42578C3.32891 3.52266 3.16953 3.52266 3.07266 3.42578L0.0726563 0.425781C-0.0242188 0.328906 -0.0242188 0.169531 0.0726563 0.0726563C0.169531 -0.0242188 0.328906 -0.0242188 0.425781 0.0726563L3.24922 2.89609L6.07266 0.0726563C6.16953 -0.0242188 6.32891 -0.0242188 6.42578 0.0726563C6.52266 0.169531 6.52266 0.328906 6.42578 0.425781L3.42578 3.42578Z'
+);
+
+const FigmaSearchIcon = defineFigmaIcon(
+  '0 0 12.7987 12.7987',
+  'M9.6 5.2C9.6 4.62218 9.48619 4.05003 9.26507 3.51619C9.04395 2.98236 8.71985 2.49731 8.31127 2.08873C7.90269 1.68015 7.41764 1.35605 6.88381 1.13493C6.34997 0.913809 5.77782 0.8 5.2 0.8C4.62218 0.8 4.05003 0.913809 3.51619 1.13493C2.98236 1.35605 2.49731 1.68015 2.08873 2.08873C1.68015 2.49731 1.35605 2.98236 1.13493 3.51619C0.913809 4.05003 0.8 4.62218 0.8 5.2C0.8 5.77782 0.913809 6.34997 1.13493 6.88381C1.35605 7.41764 1.68015 7.90269 2.08873 8.31127C2.49731 8.71985 2.98236 9.04395 3.51619 9.26507C4.05003 9.48619 4.62218 9.6 5.2 9.6C5.77782 9.6 6.34997 9.48619 6.88381 9.26507C7.41764 9.04395 7.90269 8.71985 8.31127 8.31127C8.71985 7.90269 9.04395 7.41764 9.26507 6.88381C9.48619 6.34997 9.6 5.77782 9.6 5.2ZM8.5825 9.15C7.675 9.93 6.4925 10.4 5.2 10.4C2.3275 10.4 0 8.0725 0 5.2C0 2.3275 2.3275 0 5.2 0C8.0725 0 10.4 2.3275 10.4 5.2C10.4 6.4925 9.93 7.675 9.15 8.5825L12.6825 12.1175C12.8375 12.2725 12.8375 12.5275 12.6825 12.6825C12.5275 12.8375 12.2725 12.8375 12.1175 12.6825L8.5825 9.15Z'
+);
+
+const FigmaHomeIcon = defineFigmaIcon(
+  '0 0 14.401 12.7994',
+  'M7.46551 0.099375C7.31551 -0.033125 7.08801 -0.033125 6.93551 0.099375L0.135513 6.09937C-0.0294869 6.24437 -0.0469869 6.49937 0.100513 6.66437C0.248013 6.82937 0.500513 6.84687 0.665513 6.69937L1.60051 5.87437V10.7994C1.60051 11.9044 2.49551 12.7994 3.60051 12.7994H10.8005C11.9055 12.7994 12.8005 11.9044 12.8005 10.7994V5.87437L13.7355 6.69937C13.9005 6.84437 14.153 6.82937 14.3005 6.66437C14.448 6.49937 14.4305 6.24687 14.2655 6.09937L7.46551 0.099375ZM2.40051 10.7994V5.16687L7.20051 0.931875L12.0005 5.16687V10.7994C12.0005 11.4619 11.463 11.9994 10.8005 11.9994H9.20051V7.99937C9.20051 7.55687 8.84301 7.19937 8.40051 7.19937H6.00051C5.55801 7.19937 5.20051 7.55687 5.20051 7.99937V11.9994H3.60051C2.93801 11.9994 2.40051 11.4619 2.40051 10.7994ZM6.00051 11.9994V7.99937H8.40051V11.9994H6.00051Z'
+);
+
+const FigmaInboxIcon = defineFigmaIcon(
+  '0 0 12.8 11.2',
+  'M0.8 9.6V7.3975C0.8 7.3325 0.8075 7.2675 0.825 7.2025V7.2H3.3525L3.9325 8.3575C4.0675 8.6275 4.345 8.8 4.6475 8.8H8.1525C8.455 8.8 8.7325 8.63 8.8675 8.3575L9.4475 7.2H11.975V7.2025C11.99 7.265 12 7.33 12 7.3975V9.6C12 10.0425 11.6425 10.4 11.2 10.4H1.6C1.1575 10.4 0.8 10.0425 0.8 9.6ZM11.775 6.4H9.4475C9.145 6.4 8.8675 6.57 8.7325 6.8425L8.1525 8H4.6475L4.0675 6.8425C3.9325 6.5725 3.655 6.4 3.3525 6.4H1.025L2.2725 1.405C2.3625 1.05 2.6825 0.8 3.05 0.8H9.75C10.1175 0.8 10.4375 1.05 10.525 1.405L11.775 6.4ZM0 7.3975V9.6C0 10.4825 0.7175 11.2 1.6 11.2H11.2C12.0825 11.2 12.8 10.4825 12.8 9.6V7.3975C12.8 7.2675 12.785 7.1375 12.7525 7.01L11.3025 1.2125C11.125 0.5 10.485 0 9.75 0H3.05C2.315 0 1.675 0.5 1.4975 1.2125L0.0475 7.01C0.015 7.135 0 7.265 0 7.3975Z'
+);
+
+const FigmaBellIcon = defineFigmaIcon(
+  '0 0 11.2025 12.8',
+  'M5.2 0.4C5.2 0.18 5.38 0 5.6 0C5.82 0 6 0.18 6 0.4V0.82C8.0225 1.02 9.6 2.725 9.6 4.8V5.5275C9.6 6.62 10.035 7.6675 10.8075 8.4425L10.8775 8.5125C11.085 8.72 11.2025 9.0025 11.2025 9.295C11.2025 9.9075 10.7075 10.4025 10.095 10.4025H1.1075C0.495 10.4 0 9.905 0 9.2925C0 9 0.1175 8.7175 0.325 8.51L0.395 8.44C1.165 7.6675 1.6 6.62 1.6 5.5275V4.8C1.6 2.725 3.1775 1.02 5.2 0.82V0.4ZM5.6 1.6C3.8325 1.6 2.4 3.0325 2.4 4.8V5.5275C2.4 6.8325 1.8825 8.085 0.9575 9.0075L0.89 9.075C0.8325 9.1325 0.8 9.21 0.8 9.2925C0.8 9.4625 0.9375 9.6 1.1075 9.6H10.0925C10.2625 9.6 10.4 9.4625 10.4 9.2925C10.4 9.21 10.3675 9.1325 10.31 9.075L10.24 9.005C9.3175 8.0825 8.7975 6.83 8.7975 5.525V4.8C8.7975 3.0325 7.365 1.6 5.5975 1.6H5.6ZM4.845 11.4675C4.955 11.7775 5.2525 12 5.6 12C5.9475 12 6.245 11.7775 6.355 11.4675C6.4275 11.26 6.6575 11.15 6.865 11.2225C7.0725 11.295 7.1825 11.525 7.11 11.7325C6.89 12.355 6.2975 12.8 5.6 12.8C4.9025 12.8 4.31 12.355 4.09 11.7325C4.0175 11.525 4.125 11.295 4.335 11.2225C4.545 11.15 4.7725 11.2575 4.845 11.4675Z'
+);
+
+const FigmaPeopleIcon = defineFigmaIcon(
+  '0 0 11.2 12.8',
+  'M5.6 0.8C5.91517 0.8 6.22726 0.862078 6.51844 0.982689C6.80962 1.1033 7.0742 1.28008 7.29706 1.50294C7.51992 1.7258 7.6967 1.99038 7.81731 2.28156C7.93792 2.57274 8 2.88483 8 3.2C8 3.51517 7.93792 3.82726 7.81731 4.11844C7.6967 4.40962 7.51992 4.67419 7.29706 4.89706C7.0742 5.11992 6.80962 5.2967 6.51844 5.41731C6.22726 5.53792 5.91517 5.6 5.6 5.6C5.28483 5.6 4.97274 5.53792 4.68156 5.41731C4.39038 5.2967 4.1258 5.11992 3.90294 4.89706C3.68008 4.67419 3.5033 4.40962 3.38269 4.11844C3.26208 3.82726 3.2 3.51517 3.2 3.2C3.2 2.88483 3.26208 2.57274 3.38269 2.28156C3.5033 1.99038 3.68008 1.7258 3.90294 1.50294C4.1258 1.28008 4.39038 1.1033 4.68156 0.982689C4.97274 0.862078 5.28483 0.8 5.6 0.8ZM2.4 3.2C2.4 4.04869 2.73714 4.86262 3.33726 5.46274C3.93737 6.06286 4.75131 6.4 5.6 6.4C6.44869 6.4 7.26263 6.06286 7.86274 5.46274C8.46286 4.86262 8.8 4.04869 8.8 3.2C8.8 2.35131 8.46286 1.53737 7.86274 0.937258C7.26263 0.337142 6.44869 0 5.6 0C4.75131 0 3.93737 0.337142 3.33726 0.937258C2.73714 1.53737 2.4 2.35131 2.4 3.2ZM4.8 7.6C4.58 7.6 4.4 7.78 4.4 8C4.4 8.22 4.58 8.4 4.8 8.4H5.045L4.5025 10.025L3.7 8.2875C3.6275 8.13 3.4625 8.0375 3.2925 8.0675C1.42 8.4125 0 10.0575 0 12.0325C0 12.4575 0.345 12.8 0.7675 12.8H10.4325C10.8575 12.8 11.2 12.455 11.2 12.0325C11.2 10.0575 9.78 8.415 7.905 8.0675C7.735 8.035 7.57 8.13 7.4975 8.2875L6.6975 10.025L6.155 8.4H6.4C6.62 8.4 6.8 8.22 6.8 8C6.8 7.78 6.62 7.6 6.4 7.6H5.6H4.8ZM5.2375 11.6125L4.995 11.085L5.6 9.265L6.2075 11.085L5.965 11.6125C5.8225 11.9225 5.3825 11.9225 5.2375 11.6125ZM4.51 11.9475C4.5175 11.965 4.5275 11.9825 4.535 12H0.8C0.815 10.5475 1.7875 9.3225 3.1175 8.93L4.51 11.9475ZM10.4 12H6.665C6.6725 11.9825 6.6825 11.965 6.69 11.9475L8.0825 8.93C9.4125 9.3225 10.385 10.545 10.4 12Z'
+);
+
+const FigmaSackDollarIcon = defineFigmaIcon(
+  '0 0 12.8 12.8',
+  'M5.0375 3.6H7.7625L7.895 3.685C9.265 4.5625 12 6.7075 12 10.4C12 11.2825 11.2825 12 10.4 12H2.4C1.5175 12 0.8 11.2825 0.8 10.4C0.8 6.7075 3.535 4.5625 4.9075 3.685L5.04 3.6H5.0375ZM7.4975 2.8H5.3025L5.135 2.555L3.9225 0.8H8.8775L7.6675 2.555L7.5 2.8H7.4975ZM3.815 3.4625C2.28 4.5925 0 6.835 0 10.4C0 11.725 1.075 12.8 2.4 12.8H10.4C11.725 12.8 12.8 11.725 12.8 10.4C12.8 6.835 10.52 4.5925 8.985 3.4625C8.7425 3.285 8.52 3.1325 8.325 3.01L8.78 2.35L9.7525 0.94C10.025 0.5425 9.74 0 9.2575 0H3.5425C3.06 0 2.775 0.5425 3.0475 0.94L4.02 2.35L4.475 3.01C4.2825 3.1325 4.0575 3.285 3.815 3.4625ZM6.8 5.4C6.8 5.18 6.62 5 6.4 5C6.18 5 6 5.18 6 5.4V5.8325C5.7925 5.87 5.5825 5.94 5.3975 6.05C5.0725 6.2425 4.8 6.5775 4.8025 7.0625C4.805 7.5225 5.0725 7.815 5.37 7.995C5.6325 8.1525 5.965 8.255 6.24 8.3375L6.28 8.35C6.5925 8.445 6.835 8.5225 7.005 8.63C7.1525 8.7225 7.1975 8.805 7.1975 8.92C7.2 9.085 7.13 9.19 7.0025 9.27C6.8575 9.36 6.64 9.41 6.41 9.4025C6.115 9.3925 5.8425 9.3 5.5025 9.185C5.445 9.165 5.385 9.145 5.325 9.125C5.115 9.055 4.89 9.1675 4.82 9.3775C4.75 9.5875 4.8625 9.8125 5.0725 9.8825C5.1225 9.9 5.175 9.9175 5.2275 9.935C5.4575 10.015 5.72 10.105 6 10.1575V10.6C6 10.82 6.18 11 6.4 11C6.62 11 6.8 10.82 6.8 10.6V10.1725C7.0175 10.1375 7.235 10.065 7.4275 9.945C7.76 9.7375 8.0075 9.39 8 8.905C7.995 8.4425 7.735 8.14 7.4325 7.95C7.1575 7.7775 6.8075 7.67 6.525 7.585L6.5125 7.5825C6.1975 7.4875 5.955 7.4125 5.7825 7.31C5.6325 7.22 5.6025 7.15 5.6 7.0575C5.6 6.9225 5.66 6.8225 5.8025 6.7375C5.9575 6.645 6.18 6.595 6.3925 6.6C6.645 6.605 6.9175 6.6575 7.195 6.7325C7.4075 6.79 7.6275 6.6625 7.685 6.45C7.7425 6.2375 7.615 6.0175 7.4025 5.96C7.215 5.91 7.0125 5.8625 6.8 5.8325V5.4Z'
+);
+
+const FigmaGridIcon = defineFigmaIcon(
+  '0 0 11.2 11.2',
+  'M1.2 0.8C0.98 0.8 0.8 0.98 0.8 1.2V3.6C0.8 3.82 0.98 4 1.2 4H3.6C3.82 4 4 3.82 4 3.6V1.2C4 0.98 3.82 0.8 3.6 0.8H1.2ZM0 1.2C0 0.5375 0.5375 0 1.2 0H3.6C4.2625 0 4.8 0.5375 4.8 1.2V3.6C4.8 4.2625 4.2625 4.8 3.6 4.8H1.2C0.5375 4.8 0 4.2625 0 3.6V1.2ZM1.2 7.2C0.98 7.2 0.8 7.38 0.8 7.6V10C0.8 10.22 0.98 10.4 1.2 10.4H3.6C3.82 10.4 4 10.22 4 10V7.6C4 7.38 3.82 7.2 3.6 7.2H1.2ZM0 7.6C0 6.9375 0.5375 6.4 1.2 6.4H3.6C4.2625 6.4 4.8 6.9375 4.8 7.6V10C4.8 10.6625 4.2625 11.2 3.6 11.2H1.2C0.5375 11.2 0 10.6625 0 10V7.6ZM10 0.8H7.6C7.38 0.8 7.2 0.98 7.2 1.2V3.6C7.2 3.82 7.38 4 7.6 4H10C10.22 4 10.4 3.82 10.4 3.6V1.2C10.4 0.98 10.22 0.8 10 0.8ZM7.6 0H10C10.6625 0 11.2 0.5375 11.2 1.2V3.6C11.2 4.2625 10.6625 4.8 10 4.8H7.6C6.9375 4.8 6.4 4.2625 6.4 3.6V1.2C6.4 0.5375 6.9375 0 7.6 0ZM7.6 7.2C7.38 7.2 7.2 7.38 7.2 7.6V10C7.2 10.22 7.38 10.4 7.6 10.4H10C10.22 10.4 10.4 10.22 10.4 10V7.6C10.4 7.38 10.22 7.2 10 7.2H7.6ZM6.4 7.6C6.4 6.9375 6.9375 6.4 7.6 6.4H10C10.6625 6.4 11.2 6.9375 11.2 7.6V10C11.2 10.6625 10.6625 11.2 10 11.2H7.6C6.9375 11.2 6.4 10.6625 6.4 10V7.6Z'
+);
+
+const FigmaBriefcaseIcon = defineFigmaIcon(
+  '0 0 12.8 12',
+  'M4 1.2V2.4H8.8V1.2C8.8 0.98 8.62 0.8 8.4 0.8H4.4C4.18 0.8 4 0.98 4 1.2ZM3.2 2.4V1.2C3.2 0.5375 3.7375 0 4.4 0H8.4C9.0625 0 9.6 0.5375 9.6 1.2V2.4H11.2C12.0825 2.4 12.8 3.1175 12.8 4V10.4C12.8 11.2825 12.0825 12 11.2 12H1.6C0.7175 12 0 11.2825 0 10.4V4C0 3.1175 0.7175 2.4 1.6 2.4H3.2ZM9.2 3.2H3.6H1.6C1.1575 3.2 0.8 3.5575 0.8 4V6.4H4.4H5.2H7.6H8.4H12V4C12 3.5575 11.6425 3.2 11.2 3.2H9.2ZM12 7.2H8.4V8.4C8.4 8.8425 8.0425 9.2 7.6 9.2H5.2C4.7575 9.2 4.4 8.8425 4.4 8.4V7.2H0.8V10.4C0.8 10.8425 1.1575 11.2 1.6 11.2H11.2C11.6425 11.2 12 10.8425 12 10.4V7.2ZM5.2 7.2V8.4H7.6V7.2H5.2Z'
+);
+
+const FigmaFilesIcon = defineFigmaIcon(
+  '0 0 11.2 12.8',
+  'M4 9.6C3.5575 9.6 3.2 9.2425 3.2 8.8V1.6C3.2 1.1575 3.5575 0.8 4 0.8H7.6V2.8C7.6 3.2425 7.9575 3.6 8.4 3.6H10.4C10.4 3.6075 10.4 3.6125 10.4 3.62V8.8C10.4 9.2425 10.0425 9.6 9.6 9.6H4ZM8.4 1.4375L9.75 2.8H8.4V1.4375ZM4 0C3.1175 0 2.4 0.7175 2.4 1.6V8.8C2.4 9.6825 3.1175 10.4 4 10.4H9.6C10.4825 10.4 11.2 9.6825 11.2 8.8V3.62C11.2 3.3025 11.075 3 10.8525 2.775L8.4525 0.355C8.2275 0.1275 7.92 0 7.6 0H4ZM0.8 2.8C0.8 2.58 0.62 2.4 0.4 2.4C0.18 2.4 0 2.58 0 2.8V9.6C0 11.3675 1.4325 12.8 3.2 12.8H8.4C8.62 12.8 8.8 12.62 8.8 12.4C8.8 12.18 8.62 12 8.4 12H3.2C1.875 12 0.8 10.925 0.8 9.6V2.8Z'
+);
+
+const FigmaSidebarIcon = defineFigmaIcon(
+  '0 0 11.2 9.8',
+  'M9.8 0.7C10.1872 0.7 10.5 1.01281 10.5 1.4V8.4C10.5 8.78719 10.1872 9.1 9.8 9.1H4.9V0.7H9.8ZM1.4 0.7H4.2V9.1H1.4C1.01281 9.1 0.7 8.78719 0.7 8.4V1.4C0.7 1.01281 1.01281 0.7 1.4 0.7ZM1.4 0C0.627812 0 0 0.627813 0 1.4V8.4C0 9.17219 0.627812 9.8 1.4 9.8H9.8C10.5722 9.8 11.2 9.17219 11.2 8.4V1.4C11.2 0.627813 10.5722 0 9.8 0H1.4ZM1.75 1.4C1.5575 1.4 1.4 1.5575 1.4 1.75C1.4 1.9425 1.5575 2.1 1.75 2.1H3.15C3.3425 2.1 3.5 1.9425 3.5 1.75C3.5 1.5575 3.3425 1.4 3.15 1.4H1.75ZM1.4 3.15C1.4 3.3425 1.5575 3.5 1.75 3.5H3.15C3.3425 3.5 3.5 3.3425 3.5 3.15C3.5 2.9575 3.3425 2.8 3.15 2.8H1.75C1.5575 2.8 1.4 2.9575 1.4 3.15ZM1.75 4.2C1.5575 4.2 1.4 4.3575 1.4 4.55C1.4 4.7425 1.5575 4.9 1.75 4.9H3.15C3.3425 4.9 3.5 4.7425 3.5 4.55C3.5 4.3575 3.3425 4.2 3.15 4.2H1.75Z'
+);
+
+const FigmaInfoIcon = defineFigmaIcon(
+  '0 0 12.8 12.8',
+  'M6.4 0.8C7.88521 0.8 9.30959 1.39 10.3598 2.4402C11.41 3.49041 12 4.91479 12 6.4C12 7.88521 11.41 9.30959 10.3598 10.3598C9.30959 11.41 7.88521 12 6.4 12C4.91479 12 3.49041 11.41 2.4402 10.3598C1.39 9.30959 0.8 7.88521 0.8 6.4C0.8 4.91479 1.39 3.49041 2.4402 2.4402C3.49041 1.39 4.91479 0.8 6.4 0.8ZM6.4 12.8C8.09738 12.8 9.72525 12.1257 10.9255 10.9255C12.1257 9.72525 12.8 8.09738 12.8 6.4C12.8 4.70261 12.1257 3.07475 10.9255 1.87452C9.72525 0.674284 8.09738 0 6.4 0C4.70261 0 3.07475 0.674284 1.87452 1.87452C0.674284 3.07475 0 4.70261 0 6.4C0 8.09738 0.674284 9.72525 1.87452 10.9255C3.07475 12.1257 4.70261 12.8 6.4 12.8ZM5.2 8.8C4.98 8.8 4.8 8.98 4.8 9.2C4.8 9.42 4.98 9.6 5.2 9.6H7.6C7.82 9.6 8 9.42 8 9.2C8 8.98 7.82 8.8 7.6 8.8H6.8V6C6.8 5.78 6.62 5.6 6.4 5.6H5.4C5.18 5.6 5 5.78 5 6C5 6.22 5.18 6.4 5.4 6.4H6V8.8H5.2ZM6.4 4.6C6.55913 4.6 6.71174 4.53679 6.82426 4.42426C6.93678 4.31174 7 4.15913 7 4C7 3.84087 6.93678 3.68826 6.82426 3.57574C6.71174 3.46321 6.55913 3.4 6.4 3.4C6.24087 3.4 6.08826 3.46321 5.97574 3.57574C5.86321 3.68826 5.8 3.84087 5.8 4C5.8 4.15913 5.86321 4.31174 5.97574 4.42426C6.08826 4.53679 6.24087 4.6 6.4 4.6Z'
+);
+
+function wrapHeroIcon(hero: any) {
+  return {
+    name: 'HeroIconWrapper',
+    props: { fill: { type: String, default: '#070922' } },
+    setup(props: { fill: string }) {
+      return () => h(hero, { style: { color: props.fill } });
+    },
+  };
+}
 
 // Icon mapping
 const iconMap: Record<string, any> = {
   home: HomeIcon,
+  inbox: InboxIcon,
+  'magnifying-glass': MagnifyingGlassIcon,
   users: UsersIcon,
   'building-office': BuildingOfficeIcon,
+  building: BuildingOfficeIcon,
   briefcase: BriefcaseIcon,
   'check-circle': CheckCircleIcon,
+  check: CheckCircleIcon,
   calendar: CalendarIcon,
   cog: CogIcon,
   squares: Squares2X2Icon,
   'clipboard-document': ClipboardDocumentIcon,
+  clipboard: ClipboardDocumentIcon,
   cube: CubeIcon,
   'arrow-down-tray': ArrowDownTrayIcon,
+  download: ArrowDownTrayIcon,
+};
+
+const emojiToIconId: Record<string, string> = {
+  '👥': 'users',
+  '🏢': 'building',
+  '💼': 'briefcase',
+  '✅': 'check',
+  '📅': 'calendar',
+  '📦': 'cube',
+  '📝': 'clipboard',
+  '📥': 'download',
+  '⚙️': 'cog',
+  '💰': 'briefcase',
+  '🎧': 'briefcase',
+  '🌐': 'squares',
+  '📋': 'clipboard',
 };
 
 /**
  * Get icon component from icon identifier
  */
 function getIconComponent(icon?: string) {
-  if (!icon) return null;
-  return iconMap[icon] || null;
+  const normalized = icon ? (emojiToIconId[icon] || icon) : '';
+  return iconMap[normalized] || Squares2X2Icon;
+}
+
+function getFigmaNavIcon(item: any) {
+  if (item?.kind === 'surface') {
+    if (item.id === 'home') return FigmaHomeIcon;
+    if (item.id === 'inbox') return FigmaInboxIcon;
+  }
+  if (item?.kind === 'identity') {
+    return FigmaPeopleIcon;
+  }
+  if (item?.kind === 'app') {
+    const label = String(item.label || '').toLowerCase();
+    if (label.includes('deal')) return FigmaBriefcaseIcon;
+    if (label.includes('response')) return FigmaFilesIcon;
+  }
+
+  // Fallback to existing heroicon mapping, but allow exact `fill` control.
+  return wrapHeroIcon(getIconComponent(item?.icon));
+}
+
+/**
+ * Get icon component for app switcher apps
+ */
+function getAppIcon(app: AppSummary) {
+  // Use app icon if available, otherwise use default icon based on app name
+  if (app.icon) {
+    return wrapHeroIcon(getIconComponent(app.icon));
+  }
+  
+  // Fallback to icon based on app name/ID
+  const appId = (app.id || '').toLowerCase();
+  if (appId.includes('sales')) return FigmaSackDollarIcon;
+  if (appId.includes('audit')) return FigmaBriefcaseIcon;
+  if (appId.includes('project')) return FigmaGridIcon;
+  
+  // Default icon
+  return wrapHeroIcon(Squares2X2Icon);
 }
 
 /**
@@ -272,137 +717,159 @@ function isActiveRoute(routePath: string): boolean {
   return route.path === routePath || route.path.startsWith(routePath + '/');
 }
 
-/**
- * Check if a module route is active
- */
-function isActiveModule(moduleRoute: string): boolean {
-  return isActiveRoute(moduleRoute);
-}
-
-/**
- * Check if an app is active (dashboard route matches)
- */
-function isActiveApp(app: { dashboardRoute: string; appKey: string }): boolean {
-  // Check if we're on the dashboard route exactly
-  if (route.path === app.dashboardRoute) {
-    return true;
-  }
-  
-  // Check if we're on a module route within this app
-  // Route structure: /:appKey/:moduleKey or /moduleKey (legacy)
-  const pathParts = route.path.split('/').filter(Boolean);
-  
-  // Check if any module in this app is active
-  const appModules = props.sidebarStructure.apps
-    .find((a) => a.appKey === app.appKey)
-    ?.children || [];
-  
-  return appModules.some((module) => isActiveModule(module.route));
-}
-
-/**
- * Handle core item click - navigate immediately
- */
-function handleCoreClick(routePath: string) {
-  router.push(routePath);
-}
-
-/**
- * Handle entity click - navigate immediately
- */
-function handleEntityClick(routePath: string) {
-  router.push(routePath);
-}
-
-/**
- * Handle app header click - navigate to dashboard
- * Also updates last active app for state persistence
- */
-function handleAppHeaderClick(routePath: string, appKey: string) {
-  setLastActiveDomain(appKey);
-  router.push(routePath);
-}
-
-/**
- * Handle chevron click - expand/collapse only (never navigates)
- */
-function handleChevronClick(appKey: string) {
-  toggleApp(appKey);
-}
-
-/**
- * Handle module click - navigate to module route
- * Auto-expand app if collapsed
- */
-function handleModuleClick(routePath: string) {
-  // Find which app this module belongs to
-  const app = props.sidebarStructure.apps.find((a) =>
-    a.children.some((m) => m.route === routePath)
+const activeApp = computed<AppSummary | undefined>(() => {
+  return props.sidebarStructure.appSwitcher.apps.find(
+    (a) => a.id === props.sidebarStructure.appSwitcher.activeAppId
   );
-  
-  if (app) {
-    // Auto-expand app if collapsed
-    if (!isAppExpanded(app.appKey)) {
-      expandApp(app.appKey);
-    }
-    setLastActiveDomain(app.appKey);
-  }
-  
-  router.push(routePath);
-}
-
-/**
- * Handle platform item click - navigate immediately
- */
-function handlePlatformClick(routePath: string) {
-  router.push(routePath);
-}
-
-/**
- * Auto-expand app when active module is detected
- */
-watch(
-  () => route.path,
-  (newPath) => {
-    // Find active app based on route
-    for (const app of props.sidebarStructure.apps) {
-      // Check if route matches dashboard
-      if (newPath === app.dashboardRoute) {
-        expandApp(app.appKey);
-        setLastActiveDomain(app.appKey);
-        return;
-      }
-      
-      // Check if route matches any module in this app
-      const hasActiveModule = app.children.some((module) =>
-        isActiveModule(module.route)
-      );
-      
-      if (hasActiveModule) {
-        expandApp(app.appKey);
-        setLastActiveDomain(app.appKey);
-        return;
-      }
-    }
-  },
-  { immediate: true }
-);
-
-/**
- * On mount: Auto-expand app if we're on an active route
- */
-onMounted(() => {
-  // Check current route and auto-expand if needed
-  for (const app of props.sidebarStructure.apps) {
-    if (isActiveApp(app)) {
-      expandApp(app.appKey);
-      setLastActiveDomain(app.appKey);
-    }
-  }
 });
+
+const searchSurface = computed(() => {
+  return props.sidebarStructure.shell.find((i) => i.kind === 'surface' && i.id === 'search');
+});
+
+const shellNavItems = computed(() => {
+  return props.sidebarStructure.shell.filter((i) => !(i.kind === 'surface' && i.id === 'search'));
+});
+
+const notificationStore = useNotificationStore();
+
+const hasUnreadNotifications = computed(() => {
+  const n = Number((notificationStore as any).unreadCount || 0);
+  return n > 0;
+});
+
+const unreadBadgeText = computed(() => {
+  const n = Number((notificationStore as any).unreadCount || 0);
+  if (n <= 0) return '';
+  if (n > 9) return '9+';
+  return String(n);
+});
+
+function switchAppLens(nextAppId: string): void {
+  if (!nextAppId || nextAppId === props.sidebarStructure.appSwitcher.activeAppId) return;
+
+  const app = props.sidebarStructure.appSwitcher.apps.find((a) => a.id === nextAppId);
+  if (!app) return;
+
+  // Persist lens explicitly (fallback when route is ambiguous)
+  lastActiveAppId.value = app.id;
+
+  // Switching the lens is explicit. We express it by routing to the app dashboard.
+  openTab(app.dashboardRoute, { title: app.name });
+}
+
+function handleNavClick(
+  routePath: string,
+  label: string,
+  event?: MouseEvent,
+  opts: { isAppContext?: boolean } = {}
+): void {
+  // Search is a shell surface executed as a modal, not navigation.
+  if (routePath === '/search') {
+    // Guard for SSR and tests.
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('litedesk:open-global-search'));
+    }
+    return;
+  }
+
+  if (opts.isAppContext) {
+    // Keep last active lens in sync with app navigation
+    lastActiveAppId.value = props.sidebarStructure.appNav.appId;
+  }
+
+  // Preserve tabbed navigation behavior (supports background opens).
+  const openInBackground =
+    !!event &&
+    (event.button === 1 || // middle click
+      (event as any).metaKey === true ||
+      (event as any).ctrlKey === true);
+
+  openTab(routePath, {
+    title: label,
+    background: openInBackground,
+  });
+}
 </script>
 
 <style scoped>
-/* Component-specific styles */
+/* 
+ * Sidebar responsive scaling
+ * Figma design uses 12px as base font size (1280x720 frame)
+ * 
+ * Conversion approach:
+ * - All rem values calculated by dividing Figma pixels by 12 (12px = 1rem base)
+ * - This creates a 12px-based rem scale within the sidebar
+ * - CSS font-size scaling ensures visual size matches Figma while maintaining responsiveness
+ * 
+ * Example conversions (Figma px → rem, using 12px base):
+ * - 190px ÷ 12 = 15.833rem
+ * - 38px ÷ 12 = 3.167rem
+ * - 12px ÷ 12 = 1rem
+ * 
+ * The sidebar's font-size is set to scale these rem values to match Figma visually
+ * while allowing natural responsiveness.
+ */
+.sidebar-nav {
+  /* 
+   * Scale rem values to match Figma visual size
+   * At standard 16px root: 0.75rem = 12px (matches Figma base)
+   * This makes our 12px-based rem scale render correctly
+   * Responsive scaling adjusts for different screen sizes
+   */
+  font-size: clamp(0.625rem, 0.75rem, 0.875rem); /* 10px - 12px - 14px responsive */
+}
+
+/* Larger screens: maintain Figma-accurate 12px visual base */
+@media (min-width: 1280px) {
+  .sidebar-nav {
+    font-size: 0.75rem; /* 12px - matches Figma base exactly */
+  }
+}
+
+/* Tablet: slight reduction for better fit */
+@media (max-width: 1024px) and (min-width: 641px) {
+  .sidebar-nav {
+    font-size: clamp(0.6875rem, 0.71875rem, 0.75rem); /* ~11px - 12px */
+  }
+}
+
+/* Mobile: further reduction */
+@media (max-width: 640px) {
+  .sidebar-nav {
+    font-size: clamp(0.5625rem, 0.625rem, 0.6875rem); /* ~9px - 11px */
+  }
+}
+
+/* Ensure icons maintain aspect ratio and scale properly */
+.sidebar-nav svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+/* Icon colors are now handled reactively via computed properties */
+
+/* Icon wrapper containers - ensure proper sizing and prevent overflow */
+.sidebar-nav span[class*="w-\["][class*="h-\["] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Prevent flex containers from overflowing */
+.sidebar-nav .flex {
+  min-width: 0;
+}
+
+/* Only apply min-width: 0 to icon containers, not text */
+.sidebar-nav .flex > span[class*="w-\["][class*="h-\["] {
+  min-width: 0;
+}
 </style>
 

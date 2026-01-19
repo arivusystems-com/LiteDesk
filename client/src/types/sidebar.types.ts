@@ -7,182 +7,115 @@
  * - No UI logic
  * - No Vue/React specifics
  * - Registry-driven and permission-aware
- * - Supports exactly four sections: core, entities, apps, platform
+ *
+ * The authoritative contract is `SidebarStructure` below.
  * 
  * ============================================================================
  */
 
-import { PermissionOutcome } from './permission-visibility.types';
-
 /**
- * Sidebar Module (Leaf Node)
- * 
- * Represents a single navigable module within an app domain.
- * Modules are leaf nodes with no nesting beyond one level.
+ * ============================================================================
+ * SIDEBAR ARCHITECTURE (LOCKED CONTRACT)
+ * ============================================================================
+ *
+ * Critical invariant:
+ * “The sidebar shows surfaces, identities, lenses, and governance — never raw
+ * entities, app-agnostic primitives, or infrastructure.”
+ *
+ * This contract is intentionally strict. Callers must encode navigation intent
+ * via `SidebarItem.kind` instead of passing "raw entities" or arbitrary objects.
+ * ============================================================================
  */
-export interface SidebarModule {
-  /** Unique module identifier (e.g., 'contacts', 'deals') */
-  moduleKey: string;
-  
-  /** Display label for the module */
-  label: string;
-  
-  /** Route path for navigation (e.g., '/contacts', '/deals') */
-  route: string;
-  
-  /** Optional permission key required to view this module (e.g., 'contacts.view') */
-  permission?: string;
-  
-  /** Optional icon identifier (for UI layer to map to icon components) */
-  icon?: string;
-  
-  /** Optional display order within parent domain */
-  order?: number;
 
-  /** Permission outcome for this module */
-  visibility: PermissionOutcome;
-}
-
-/**
- * Domain Header (App Section)
- * 
- * Represents an application domain in the sidebar.
- * Domain headers are first-class items that can be clicked to navigate to the app dashboard.
- */
-export interface SidebarDomain {
-  /** Application key (e.g., 'SALES', 'HELPDESK', 'AUDIT') */
-  appKey: string;
-  
-  /** Display label for the app (e.g., 'Sales', 'Helpdesk') */
-  label: string;
-  
-  /** Route to the app dashboard (e.g., '/sales', '/helpdesk') */
+export type AppSummary = {
+  /** Stable app identifier (not a domain grouping key). */
+  id: string;
+  /** Human-friendly app name. */
+  name: string;
+  /**
+   * Dashboard route for this app lens.
+   * Required so the App Switcher can change context explicitly without guessing routes.
+   */
   dashboardRoute: string;
-  
-  /** Modules belonging to this app domain */
-  children: SidebarModule[];
-  
-  /** Optional icon identifier for the domain header */
+  /** Optional icon identifier for UI mapping. */
   icon?: string;
-  
-  /** Optional display order for domains */
+  /** Optional ordering for display. */
   order?: number;
-  
-  /** Whether this domain is expanded (for future state storage) */
-  expanded?: boolean;
+};
 
-  /** Permission outcome for this domain */
-  visibility: PermissionOutcome;
-}
+export type SidebarItem =
+  | {
+      kind: 'surface';
+      id: 'home' | 'inbox' | 'search';
+      label: string;
+      route: string;
+      icon?: string;
+    }
+  | {
+      kind: 'identity';
+      id: 'people';
+      label: string;
+      route: string;
+      icon?: string;
+    }
+  | {
+      kind: 'app';
+      id: string;
+      label: string;
+      route: string;
+      icon?: string;
+      /**
+       * Optional module key for app navigation items.
+       * Present for modules; omitted for an app dashboard link.
+       */
+      moduleKey?: string;
+    }
+  | {
+      kind: 'platform';
+      id: string;
+      label: string;
+      route: string;
+      icon?: string;
+    };
 
-/**
- * Core Section Item
- * 
- * Represents a global, non-collapsible item in the core section.
- * Core items are platform-level navigation items available across all apps.
- */
-export interface SidebarCoreItem {
-  /** Unique identifier for the core item */
-  key: string;
-  
-  /** Display label */
-  label: string;
-  
-  /** Route path for navigation */
-  route: string;
-  
-  /** Optional permission key required to view this item */
-  permission?: string;
-  
-  /** Optional icon identifier */
-  icon?: string;
-  
-  /** Optional display order */
-  order?: number;
-
-  /** Permission outcome for this core item */
-  visibility: PermissionOutcome;
-}
-
-/**
- * Entities Section Item
- * 
- * Represents a shared system primitive (core entity) in the entities section.
- * These are core entities that are shared across apps and must not appear under Apps.
- */
-export interface SidebarEntityItem {
-  /** Unique identifier for the entity item */
-  key: string;
-  
-  /** Display label */
-  label: string;
-  
-  /** Route path for navigation */
-  route: string;
-  
-  /** Optional permission key required to view this item */
-  permission?: string;
-  
-  /** Optional icon identifier */
-  icon?: string;
-  
-  /** Optional display order */
-  order?: number;
-
-  /** Permission outcome for this entity item */
-  visibility: PermissionOutcome;
-}
-
-/**
- * Platform Section Item
- * 
- * Represents a governance item in the platform section.
- * Platform items are for system administration and governance.
- */
-export interface SidebarPlatformItem {
-  /** Unique identifier for the platform item */
-  key: string;
-  
-  /** Display label */
-  label: string;
-  
-  /** Route path for navigation */
-  route: string;
-  
-  /** Optional permission key required to view this item */
-  permission?: string;
-  
-  /** Optional icon identifier */
-  icon?: string;
-  
-  /** Optional display order */
-  order?: number;
-
-  /** Permission outcome for this platform item */
-  visibility: PermissionOutcome;
-}
-
-/**
- * Complete Sidebar Structure
- * 
- * The root structure containing all four sections in fixed order:
- * Core → Entities → Apps → Platform
- */
 export interface SidebarStructure {
-  /** Contract version (incremented on breaking changes) */
-  version: number;
-  
-  /** Core section: personal/attention layer (Home, Inbox, Reports) */
-  core: SidebarCoreItem[];
-  
-  /** Entities section: shared system primitives (People, Organizations, Tasks, etc.) */
-  entities: SidebarEntityItem[];
-  
-  /** Apps section: domain-specific workflows (Sales, Helpdesk, etc.) */
-  apps: SidebarDomain[];
-  
-  /** Platform section: governance items (Settings, Apps, Users) */
-  platform: SidebarPlatformItem[];
+  /**
+   * Shell surfaces — global, cross-app, task-oriented.
+   * Examples: Home, Inbox, Search.
+   * Never app-specific.
+   */
+  shell: SidebarItem[];
+
+  /**
+   * Identity navigation — stable, global entities.
+   * Currently restricted to People only.
+   */
+  identity: SidebarItem[];
+
+  /**
+   * App lens selector — controls which app's navigation is active.
+   * Switching apps changes the meaning of navigation, not identity.
+   */
+  appSwitcher: {
+    activeAppId: string;
+    apps: AppSummary[];
+  };
+
+  /**
+   * Navigation for the currently active app only.
+   * Never shows modules from multiple apps at once.
+   */
+  appNav: {
+    appId: string;
+    dashboard?: SidebarItem;
+    modules: SidebarItem[];
+  };
+
+  /**
+   * Platform governance — configuration and administration.
+   * Not daily work surfaces.
+   */
+  platform: SidebarItem[];
 }
 
 /**
@@ -226,6 +159,12 @@ export interface AppRegistryModule {
   
   /** Hard stop: Exclude from Apps section (prevents core entities from appearing under apps) */
   excludeFromApps?: boolean;
+
+  /**
+   * Optional list view configuration for the module.
+   * Used by registry validators and list builders.
+   */
+  list?: any;
 }
 
 /**
@@ -251,6 +190,12 @@ export interface AppRegistryEntry {
   
   /** Optional display order */
   order?: number;
+
+  /**
+   * Optional dashboard composition for this app (KPIs, widgets, actions).
+   * Not currently required for the legacy sidebar renderer, but validated if present.
+   */
+  dashboard?: any;
 }
 
 /**

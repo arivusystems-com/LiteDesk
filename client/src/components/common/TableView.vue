@@ -815,7 +815,11 @@ const rowKey = computed(() => props.rowKey)
 
 const rowIdentifier = (row: RowData, rowIndex: number) => {
   const key = rowKey.value
-  return (key && row?.[key]) || rowIndex
+  const value = key ? row?.[key] : undefined
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'symbol') {
+    return value
+  }
+  return rowIndex
 }
 
 const parseOffsetToCss = (offset: string | number | undefined): string => {

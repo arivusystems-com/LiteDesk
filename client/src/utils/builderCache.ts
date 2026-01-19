@@ -64,7 +64,7 @@ function generatePermissionHash(snapshot: PermissionSnapshot): string {
     userId: snapshot.userId,
     roles: snapshot.roles.sort(),
     permissions: Object.keys(snapshot.permissions).sort().reduce((acc, key) => {
-      acc[key] = snapshot.permissions[key];
+      acc[key] = snapshot.permissions[key] ?? false;
       return acc;
     }, {} as Record<string, boolean>),
   });
@@ -137,7 +137,9 @@ class BuilderCache {
     // Evict oldest entries if cache is full
     if (this.cache.size >= this.maxSize) {
       const firstKey = this.cache.keys().next().value;
-      this.cache.delete(firstKey);
+      if (firstKey !== undefined) {
+        this.cache.delete(firstKey);
+      }
     }
     
     this.cache.set(key, {

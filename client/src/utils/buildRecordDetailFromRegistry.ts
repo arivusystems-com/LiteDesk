@@ -254,7 +254,7 @@ function determineRecordDetailEmptyState(
       type: EmptyStateType.NO_ACCESS,
       title: "You don't have access to this record",
       description:
-        'Your current role doesn't allow you to view this record. Contact your administrator if you believe this is a mistake.',
+        "Your current role doesn't allow you to view this record. Contact your administrator if you believe this is a mistake.",
     };
   }
 
@@ -406,7 +406,7 @@ export function buildRecordDetailFromRegistry(
           statusField: detailConfig?.header?.statusField,
         },
         tabs: tabs.length > 0 ? tabs : [],
-        defaultTab: tabs.length > 0 ? tabs[0].key : undefined,
+        defaultTab: tabs[0]?.key,
         actions,
         relatedRecords: relatedRecords.length > 0 ? relatedRecords : undefined,
         emptyState,

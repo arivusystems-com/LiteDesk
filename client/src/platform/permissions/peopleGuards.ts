@@ -28,6 +28,10 @@ import { PEOPLE_PERMISSIONS } from './peoplePermissions';
 import { hasPeoplePermission } from './peoplePermissionHelper';
 import { useAuthStore } from '@/stores/auth';
 
+function isKeyOf<T extends object>(obj: T, key: PropertyKey): key is keyof T {
+  return key in obj;
+}
+
 /**
  * Assert that user has a specific People permission
  * 
@@ -52,7 +56,10 @@ export function assertPeoplePermission(permission: PeoplePermission): void {
  * @throws Error if permission is missing
  */
 export function assertAttachPermission(appKey: string): void {
-  const permissionKey = PEOPLE_PERMISSIONS.ATTACH[appKey] || PEOPLE_PERMISSIONS.ATTACH.BASE;
+  const candidate = appKey.toUpperCase();
+  const permissionKey = isKeyOf(PEOPLE_PERMISSIONS.ATTACH, candidate)
+    ? PEOPLE_PERMISSIONS.ATTACH[candidate]
+    : PEOPLE_PERMISSIONS.ATTACH.BASE;
   assertPeoplePermission(permissionKey);
 }
 
@@ -63,7 +70,10 @@ export function assertAttachPermission(appKey: string): void {
  * @throws Error if permission is missing
  */
 export function assertEditParticipationPermission(appKey: string): void {
-  const permissionKey = PEOPLE_PERMISSIONS.EDIT_PARTICIPATION[appKey] || PEOPLE_PERMISSIONS.EDIT_PARTICIPATION.BASE;
+  const candidate = appKey.toUpperCase();
+  const permissionKey = isKeyOf(PEOPLE_PERMISSIONS.EDIT_PARTICIPATION, candidate)
+    ? PEOPLE_PERMISSIONS.EDIT_PARTICIPATION[candidate]
+    : PEOPLE_PERMISSIONS.EDIT_PARTICIPATION.BASE;
   assertPeoplePermission(permissionKey);
 }
 
@@ -74,7 +84,10 @@ export function assertEditParticipationPermission(appKey: string): void {
  * @throws Error if permission is missing
  */
 export function assertLifecyclePermission(appKey: string): void {
-  const permissionKey = PEOPLE_PERMISSIONS.LIFECYCLE[appKey] || PEOPLE_PERMISSIONS.LIFECYCLE.BASE;
+  const candidate = appKey.toUpperCase();
+  const permissionKey = isKeyOf(PEOPLE_PERMISSIONS.LIFECYCLE, candidate)
+    ? PEOPLE_PERMISSIONS.LIFECYCLE[candidate]
+    : PEOPLE_PERMISSIONS.LIFECYCLE.BASE;
   assertPeoplePermission(permissionKey);
 }
 
