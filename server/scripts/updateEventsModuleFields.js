@@ -89,18 +89,41 @@ async function updateEventsModuleFields() {
 
     for (const org of organizations) {
       // Find or create Events module definition
+      // Try to find by organizationId first, then by moduleKey/appKey (platform-level)
       let moduleDef = await ModuleDefinition.findOne({
         organizationId: org._id,
         key: 'events',
         type: 'system'
       });
+      
+      // If not found by organizationId, try finding platform-level module
+      if (!moduleDef) {
+        moduleDef = await ModuleDefinition.findOne({
+          moduleKey: 'events',
+          appKey: 'platform',
+          organizationId: null
+        });
+      }
+      
+      // If still not found, try by key only
+      if (!moduleDef) {
+        moduleDef = await ModuleDefinition.findOne({
+          key: 'events',
+          type: 'system'
+        });
+      }
 
       if (!moduleDef) {
         console.log(`  Creating Events module for organization ${org._id}`);
         moduleDef = new ModuleDefinition({
           organizationId: org._id,
           key: 'events',
+          moduleKey: 'events',
+          appKey: 'platform',
           name: 'Events',
+          label: 'Event',
+          pluralLabel: 'Events',
+          entityType: 'ACTIVITY',
           type: 'system',
           enabled: true,
           fields: [],
@@ -109,6 +132,18 @@ async function updateEventsModuleFields() {
           relationships: []
         });
         created++;
+      } else {
+        // Ensure required fields are set on existing module
+        if (!moduleDef.appKey) moduleDef.appKey = 'platform';
+        if (!moduleDef.moduleKey) moduleDef.moduleKey = 'events';
+        if (!moduleDef.key) moduleDef.key = 'events';
+        if (!moduleDef.label) moduleDef.label = 'Event';
+        if (!moduleDef.pluralLabel) moduleDef.pluralLabel = 'Events';
+        if (!moduleDef.entityType) moduleDef.entityType = 'ACTIVITY';
+        // Update organizationId if it's a platform-level module being used for this org
+        if (!moduleDef.organizationId) {
+          moduleDef.organizationId = org._id;
+        }
       }
 
       // Get current fields or initialize
@@ -309,6 +344,53 @@ async function updateEventsModuleFields() {
             console.log(`    Updated ${fieldKey} options`);
           }
           
+          // Ensure filter metadata properties exist
+          if (existingField.filterable === undefined) {
+            existingField.filterable = false;
+            fieldChanged = true;
+          }
+          if (existingField.filterType === undefined) {
+            existingField.filterType = null;
+            fieldChanged = true;
+          }
+          if (existingField.filterPriority === undefined) {
+            existingField.filterPriority = null;
+            fieldChanged = true;
+          }
+          
+          // Apply filter metadata for default filters (max 3 per module)
+          const eventsFilterMetadata = {
+            'eventOwnerId': {
+              filterable: true,
+              filterType: 'user',
+              filterPriority: 1
+            },
+            'startDateTime': {
+              filterable: true,
+              filterType: 'date',
+              filterPriority: 2
+            },
+            'eventType': {
+              filterable: true,
+              filterType: 'select',
+              filterPriority: 3
+            }
+          };
+          
+          // Apply filter metadata if field is in the metadata map
+          if (eventsFilterMetadata[fieldKey]) {
+            const filterMeta = eventsFilterMetadata[fieldKey];
+            if (existingField.filterable !== filterMeta.filterable || 
+                existingField.filterType !== filterMeta.filterType || 
+                existingField.filterPriority !== filterMeta.filterPriority) {
+              existingField.filterable = filterMeta.filterable;
+              existingField.filterType = filterMeta.filterType;
+              existingField.filterPriority = filterMeta.filterPriority;
+              fieldChanged = true;
+              console.log(`    Updated ${fieldKey} filter metadata: filterable=${filterMeta.filterable}, filterType=${filterMeta.filterType}, filterPriority=${filterMeta.filterPriority}`);
+            }
+          }
+          
           if (fieldChanged) {
             fieldsUpdated = true;
           }
@@ -322,8 +404,41 @@ async function updateEventsModuleFields() {
             options: enumOptions[fieldKey] ? enumOptions[fieldKey].map(val => ({ value: val, color: '#3B82F6' })) : [],
             visibility: { list: true, detail: true },
             order: fields.length,
-            lookupSettings: lookupSettings
+            lookupSettings: lookupSettings,
+            // Filter metadata (schema-driven filters)
+            filterable: false,
+            filterType: null,
+            filterPriority: null
           };
+          
+          // Apply filter metadata for default filters (max 3 per module)
+          const eventsFilterMetadata = {
+            'eventOwnerId': {
+              filterable: true,
+              filterType: 'user',
+              filterPriority: 1
+            },
+            'startDateTime': {
+              filterable: true,
+              filterType: 'date',
+              filterPriority: 2
+            },
+            'eventType': {
+              filterable: true,
+              filterType: 'select',
+              filterPriority: 3
+            }
+          };
+          
+          // Apply filter metadata if field is in the metadata map
+          if (eventsFilterMetadata[fieldKey]) {
+            const filterMeta = eventsFilterMetadata[fieldKey];
+            newField.filterable = filterMeta.filterable;
+            newField.filterType = filterMeta.filterType;
+            newField.filterPriority = filterMeta.filterPriority;
+            console.log(`    Applied filter metadata to new field ${fieldKey}: filterable=${filterMeta.filterable}, filterType=${filterMeta.filterType}, filterPriority=${filterMeta.filterPriority}`);
+          }
+          
           fields.push(newField);
           fieldMap.set(fieldKey, newField);
           fieldsUpdated = true;
@@ -451,8 +566,18 @@ async function updateEventsModuleFields() {
           moduleDef.markModified('fields');
         }
         
-        // Save the document first
-        await moduleDef.save();
+        // Use updateOne to avoid duplicate key errors and validation issues
+        // Only update fields, don't modify appKey/moduleKey if they would cause conflicts
+        await ModuleDefinition.updateOne(
+          { _id: moduleDef._id },
+          { 
+            $set: { 
+              fields: fields,
+              quickCreate: moduleDef.quickCreate || [],
+              quickCreateLayout: moduleDef.quickCreateLayout || { version: 1, rows: [] }
+            }
+          }
+        );
         
         // Use raw MongoDB updateOne to ensure both fields and quickCreate are saved (bypass Mongoose)
         // This is necessary because Mongoose might not save nested array changes properly

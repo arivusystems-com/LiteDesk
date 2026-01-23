@@ -158,6 +158,8 @@
       </div>
       
       <!-- Navigation - rendered by AppSidebar -->
+      <!-- ARCHITECTURE NOTE: GlobalSearch is owned by GlobalSurfacesProvider. -->
+      <!-- Sidebar search click dispatches litedesk:open-global-search custom event. -->
       <div class="flex-1 pt-16 overflow-y-auto">
         <AppSidebar
           v-if="sidebarStructure"
@@ -319,7 +321,7 @@ const buildSidebar = async () => {
     const registry = await getAppRegistry();
     if (!authStore.user || !authStore.isAuthenticated) return;
     const snapshot = createPermissionSnapshot(authStore.user);
-    sidebarStructure.value = buildSidebarFromRegistry(registry, snapshot);
+    sidebarStructure.value = await buildSidebarFromRegistry(registry, snapshot);
   } catch (e) {
     console.error('[PortalLayout] Failed to build sidebar:', e);
     sidebarStructure.value = null;

@@ -98,6 +98,14 @@ const props = defineProps({
   useQuickCreateOrder: {
     type: Boolean,
     default: false // If true, use quickCreate array order even when showAllFields is true
+  },
+  context: {
+    type: String,
+    default: null // Optional context override. If not provided, uses route-based context
+  },
+  fieldsOverride: {
+    type: Array,
+    default: null // STEP 3: Optional field list override (bypasses module config)
   }
 });
 
@@ -110,8 +118,13 @@ const error = ref(null);
 const authStore = useAuthStore();
 const route = useRoute();
 
-// Get current context from route
-const currentContext = computed(() => getCurrentContext(route.path));
+// Get current context from route or use provided context prop
+const currentContext = computed(() => {
+  if (props.context) {
+    return props.context;
+  }
+  return getCurrentContext(route.path);
+});
 
 // Field rendering helpers - case-insensitive lookup
 const fieldMap = computed(() => {
@@ -149,6 +162,68 @@ const useAdvancedLayout = computed(() => {
 const orderedFields = computed(() => {
   if (!moduleDefinition.value) return [];
   const quickCreate = moduleDefinition.value.quickCreate || [];
+  
+  // STEP 4: Hard stop quickCreate logic in full mode
+  if (props.showAllFields && props.quickCreateMode) {
+    console.warn('[DynamicForm] Invalid state: full form cannot be quickCreate', {
+      showAllFields: props.showAllFields,
+      quickCreateMode: props.quickCreateMode
+    });
+  }
+  
+  // STEP 3: Add fieldsOverride support (MANDATORY)
+  // This must run before any quickCreate or module config logic
+  if (props.fieldsOverride?.length) {
+    console.log('[DynamicForm] Using fieldsOverride:', {
+      overrideCount: props.fieldsOverride.length,
+      fields: props.fieldsOverride
+    });
+    // Map override field keys to actual field objects from module definition
+    const allFields = moduleDefinition.value?.fields || [];
+    const fieldMapByKey = new Map();
+    for (const field of allFields) {
+      if (field.key) {
+        const keyLower = field.key.toLowerCase();
+        if (!fieldMapByKey.has(keyLower)) {
+          fieldMapByKey.set(keyLower, field);
+        }
+      }
+    }
+    
+    const ordered = [];
+    const seen = new Set();
+    for (const fieldKey of props.fieldsOverride) {
+      if (!fieldKey) continue;
+      const keyLower = String(fieldKey).toLowerCase();
+      if (seen.has(keyLower)) continue;
+      
+      const field = fieldMapByKey.get(keyLower);
+      if (field) {
+        ordered.push(field);
+        seen.add(keyLower);
+      } else {
+        console.warn('[DynamicForm] fieldsOverride field not found in module:', fieldKey);
+      }
+    }
+    
+    console.log('[DynamicForm] fieldsOverride result:', {
+      inputCount: props.fieldsOverride.length,
+      outputCount: ordered.length,
+      fields: ordered.map(f => f.key)
+    });
+    
+    return ordered;
+  }
+  
+  console.log('🔍 orderedFields computed - START:', {
+    moduleKey: props.moduleKey,
+    quickCreateMode: props.quickCreateMode,
+    showAllFields: props.showAllFields,
+    quickCreate: quickCreate,
+    quickCreateLength: quickCreate.length,
+    fieldsOverride: props.fieldsOverride
+  });
+  
   // Filter fields by context first
   const allFields = filterFieldsByContext(moduleDefinition.value.fields || [], currentContext.value);
   
@@ -178,7 +253,16 @@ const orderedFields = computed(() => {
   }
   
   // If showAllFields is true (edit mode), show all fields instead of just quickCreate
-  if (props.showAllFields) {
+  // CRITICAL: When quickCreateMode is true, we MUST respect quickCreate config even if showAllFields is false
+  // This ensures create forms only show fields configured in Settings
+  console.log('🔍 Checking showAllFields condition:', {
+    showAllFields: props.showAllFields,
+    quickCreateMode: props.quickCreateMode,
+    willShowAllFields: props.showAllFields && !props.quickCreateMode
+  });
+  
+  if (props.showAllFields && !props.quickCreateMode) {
+    console.log('⚠️ showAllFields is true - showing ALL fields (edit mode)');
     const ordered = [];
     const seen = new Set();
     
@@ -287,22 +371,33 @@ const orderedFields = computed(() => {
   }
   
   // Get fields in quickCreate order, respecting main field order
+  console.log('🔍 Entering quickCreate processing path (not showAllFields)');
   const ordered = [];
   const seen = new Set(); // Use Set with lowercase keys for case-insensitive deduplication
+  
+  // CRITICAL: In quickCreateMode, ONLY process fields from quickCreate array
+  // Do NOT add any other fields, even required ones
+  const quickCreateKeysSet = new Set(quickCreate.map(k => k?.toLowerCase().trim()).filter(Boolean));
   
   console.log('🔍 Processing quickCreate fields:', {
     quickCreateArray: quickCreate,
     quickCreateLength: quickCreate.length,
+    quickCreateKeysSet: Array.from(quickCreateKeysSet),
     fieldMapByKeySize: fieldMapByKey.size,
     systemFieldKeys: systemFieldKeys,
     currentFormData: currentFormData,
     moduleKey: props.moduleKey,
     allFieldKeys: Array.from(fieldMapByKey.keys()).slice(0, 30),
-    quickCreateKeys: quickCreate.slice(0, 10)
+    quickCreateKeys: quickCreate.slice(0, 10),
+    quickCreateMode: props.quickCreateMode,
+    showAllFields: props.showAllFields,
+    willRespectQuickCreate: !props.showAllFields || props.quickCreateMode,
+    strictMode: props.quickCreateMode ? 'ONLY quickCreate fields' : 'May include other fields'
   });
   
   // First, add fields from quickCreate array in the exact order they appear
   // Check dependency visibility based on current form data
+  // In quickCreateMode, ONLY process fields from quickCreate array
   for (const key of quickCreate) {
     if (!key) continue;
     const keyLower = key.toLowerCase().trim();
@@ -392,13 +487,18 @@ const orderedFields = computed(() => {
   
   console.log('📋 Ordered fields after quickCreate processing:', {
     count: ordered.length,
-    fields: ordered.map(f => ({ key: f.key, label: f.label }))
+    fields: ordered.map(f => ({ key: f.key, label: f.label, required: f.required })),
+    quickCreateMode: props.quickCreateMode,
+    quickCreateLength: quickCreate.length,
+    strictMode: props.quickCreateMode ? 'ONLY quickCreate fields (no fallback)' : 'May include fallback fields'
   });
   
-  // Also include required fields that might not be in quickCreate (but not system fields)
-  // Only if quickCreate array is empty AND we're NOT in strict quickCreateMode
+  // CRITICAL: In quickCreateMode, ONLY show fields from quickCreate array
+  // Do NOT fall back to required fields - strictly respect admin's configuration
+  // Only if quickCreate array is empty AND we're NOT in strict quickCreateMode, fall back to required fields
   // In quickCreateMode, we strictly respect the admin's configuration (even if empty)
   if (quickCreate.length === 0 && !props.quickCreateMode) {
+    console.log('⚠️ quickCreate is empty and quickCreateMode is false - falling back to required fields');
     for (const field of allFields) {
       const fieldKeyLower = field.key?.toLowerCase();
       const isSystem = systemFieldKeys.includes(fieldKeyLower);
@@ -418,6 +518,10 @@ const orderedFields = computed(() => {
         seen.add(fieldKeyLower);
       }
     }
+  } else if (props.quickCreateMode && quickCreate.length === 0) {
+    // In strict quickCreateMode with empty config, return empty array (respect admin's choice)
+    console.log('⚠️ quickCreateMode is true but quickCreate is empty - returning empty fields array (respecting admin configuration)');
+    return [];
   }
   
   // Prioritize quickCreate order - only use field.order as tiebreaker for fields not in quickCreate
@@ -442,7 +546,44 @@ const orderedFields = computed(() => {
     return orderA - orderB;
   });
   
-  console.log('Ordered fields result:', ordered.map(f => ({ key: f.key, label: f.label })));
+  console.log('📊 Final ordered fields result (before filtering):', {
+    count: ordered.length,
+    fields: ordered.map(f => ({ key: f.key, label: f.label, required: f.required })),
+    quickCreateMode: props.quickCreateMode,
+    showAllFields: props.showAllFields,
+    quickCreateLength: quickCreate.length,
+    strictMode: props.quickCreateMode ? 'ONLY showing quickCreate fields' : 'May include fallback fields'
+  });
+  
+  // CRITICAL: In quickCreateMode, return ONLY fields from quickCreate (even if empty)
+  // This ensures create forms strictly respect Settings configuration
+  if (props.quickCreateMode) {
+    // Double-check: Filter ordered to ONLY include fields that are in quickCreate array
+    // Use the same quickCreateKeysSet we created earlier for consistency
+    const filtered = ordered.filter(f => {
+      const inQuickCreate = f.key && quickCreateKeysSet.has(f.key.toLowerCase());
+      if (!inQuickCreate) {
+        console.warn(`⚠️ Filtering out field "${f.key}" - not in quickCreate array`, {
+          fieldKey: f.key,
+          quickCreateArray: quickCreate,
+          quickCreateKeysSet: Array.from(quickCreateKeysSet)
+        });
+      }
+      return inQuickCreate;
+    });
+    console.log('✅ quickCreateMode enabled - filtered to ONLY quickCreate fields:', {
+      before: ordered.length,
+      after: filtered.length,
+      fields: filtered.map(f => ({ 
+        key: f.key, 
+        label: f.label, 
+        required: f.required,
+        dataType: f.dataType
+      })),
+      requiredFields: filtered.filter(f => f.required).map(f => ({ key: f.key, label: f.label }))
+    });
+    return filtered;
+  }
   
   return ordered;
 });
@@ -579,13 +720,46 @@ const fetchModule = async () => {
   loading.value = true;
   error.value = null;
   try {
+    // Validate moduleKey prop
+    if (!props.moduleKey) {
+      error.value = 'Module key is required';
+      console.error('❌ Module key is missing or empty');
+      loading.value = false;
+      return;
+    }
+    
     // Pass current context to API
     const context = currentContext.value;
+    console.log('🔍 fetchModule called:', {
+      moduleKey: props.moduleKey,
+      moduleKeyType: typeof props.moduleKey,
+      moduleKeyLength: props.moduleKey?.length,
+      moduleKeyTrimmed: props.moduleKey?.trim(),
+      context: context,
+      contextSource: props.context ? 'prop' : 'route'
+    });
     const data = await apiClient.get(`/modules${context ? `?context=${context}` : ''}`);
+    
+    // Validate response structure
+    if (!data || !data.data) {
+      error.value = 'Invalid API response: missing data';
+      console.error('❌ Invalid API response:', data);
+      loading.value = false;
+      return;
+    }
+    
+    if (!Array.isArray(data.data)) {
+      error.value = 'Invalid API response: data is not an array';
+      console.error('❌ API data is not an array:', typeof data.data, data.data);
+      loading.value = false;
+      return;
+    }
+    
     const peopleModuleRaw = data.data?.find(m => m.key === 'people');
     console.log('🔍 Raw API response for modules:', {
       success: data.success,
       dataLength: data.data?.length || 0,
+      dataIsArray: Array.isArray(data.data),
       peopleModule: peopleModuleRaw,
       peopleModuleQuickCreate: peopleModuleRaw?.quickCreate,
       peopleModuleQuickCreateLength: peopleModuleRaw?.quickCreate?.length || 0,
@@ -596,13 +770,35 @@ const fetchModule = async () => {
       allModuleKeys: data.data?.map(m => m.key) || []
     });
     if (data.success) {
-      const targetModule = data.data.find(m => m.key === props.moduleKey);
-      console.log('🎯 Found target module:', {
-        key: targetModule?.key,
+      // Case-insensitive lookup for module key
+      const moduleKeyLower = (props.moduleKey || '').toLowerCase().trim();
+      
+      // Debug: Check each module individually
+      const moduleMatches = data.data.map(m => {
+        const moduleKey = (m.key || '').toLowerCase().trim();
+        const matches = moduleKey === moduleKeyLower;
+        return { key: m.key, normalized: moduleKey, matches, searchingFor: moduleKeyLower };
+      });
+      
+      const targetModule = data.data.find(m => {
+        const moduleKey = (m.key || '').toLowerCase().trim();
+        return moduleKey === moduleKeyLower;
+      });
+      
+      console.log('🎯 Module lookup:', {
+        searchingFor: props.moduleKey,
+        searchingForNormalized: moduleKeyLower,
+        availableKeys: data.data.map(m => m.key),
+        availableKeysNormalized: data.data.map(m => (m.key || '').toLowerCase().trim()),
+        moduleMatches: moduleMatches,
+        found: !!targetModule,
+        foundKey: targetModule?.key,
+        foundModuleType: typeof targetModule,
         hasQuickCreate: 'quickCreate' in (targetModule || {}),
         quickCreateValue: targetModule?.quickCreate,
         quickCreateLength: targetModule?.quickCreate?.length || 0
       });
+      
       if (targetModule) {
         // Ensure quickCreate and quickCreateLayout are always present
         if (!targetModule.quickCreate) targetModule.quickCreate = [];
@@ -616,9 +812,12 @@ const fetchModule = async () => {
           quickCreateLayoutRows: targetModule.quickCreateLayout?.rows?.length || 0,
           fieldsCount: targetModule.fields?.length || 0,
           fields: targetModule.fields?.map(f => ({ key: f.key, label: f.label, required: f.required })) || [],
-          quickCreateMode: props.quickCreateMode,
-          showAllFields: props.showAllFields,
-          hasQuickCreateProp: 'quickCreate' in targetModule,
+          propsReceived: {
+            quickCreateMode: props.quickCreateMode,
+            showAllFields: props.showAllFields,
+            moduleKey: props.moduleKey
+          },
+          willRespectQuickCreate: !props.showAllFields || props.quickCreateMode,
           quickCreateType: typeof targetModule.quickCreate,
           quickCreateIsArray: Array.isArray(targetModule.quickCreate),
           rawModuleData: JSON.stringify({
@@ -661,8 +860,19 @@ const fetchModule = async () => {
 };
 
 onMounted(() => {
+  console.log('🚀 DynamicForm mounted with props:', {
+    moduleKey: props.moduleKey,
+    quickCreateMode: props.quickCreateMode,
+    showAllFields: props.showAllFields,
+    formDataKeys: Object.keys(props.formData || {})
+  });
   fetchModule();
   localFormData.value = { ...props.formData };
 });
+
+// Watch props to debug
+watch(() => [props.quickCreateMode, props.showAllFields], ([quickCreateMode, showAllFields]) => {
+  console.log('👀 Props changed:', { quickCreateMode, showAllFields });
+}, { immediate: true });
 </script>
 

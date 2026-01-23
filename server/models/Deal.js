@@ -260,8 +260,13 @@ DealSchema.pre('save', function(next) {
 
 // Static method to get pipeline summary
 DealSchema.statics.getPipelineSummary = async function(organizationId) {
+    // Convert organizationId to ObjectId if it's a string
+    const orgId = mongoose.Types.ObjectId.isValid(organizationId) 
+        ? (organizationId instanceof mongoose.Types.ObjectId ? organizationId : new mongoose.Types.ObjectId(organizationId))
+        : organizationId;
+    
     return await this.aggregate([
-        { $match: { organizationId: mongoose.Types.ObjectId(organizationId), status: { $in: ['Open', 'Active'] } } },
+        { $match: { organizationId: orgId, status: { $in: ['Open', 'Active'] } } },
         {
             $group: {
                 _id: '$stage',

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Organization = require('../models/Organization');
 const { applyProjectionFilter } = require('../utils/appProjectionQuery');
 const { getProjection } = require('../utils/moduleProjectionResolver');
@@ -75,7 +76,54 @@ exports.list = async (req, res) => {
       // Convert single type to array format for types field
       query.types = req.query.type;
     }
-    if (req.query.name) query.name = new RegExp(req.query.name, 'i');
+    // Handle search/name filter (supports both 'search' and 'name' query params)
+    // Store search term to apply after projection filter to avoid conflicts
+    let searchFilter = null;
+    const searchTerm = req.query.search || req.query.name;
+    if (searchTerm && searchTerm.trim()) {
+      const trimmedSearch = searchTerm.trim();
+      searchFilter = { name: new RegExp(trimmedSearch, 'i') };
+      console.log('[organizationV2Controller] Search term received:', trimmedSearch);
+    }
+    
+    // Handle assignedTo filter (identity-based filter for saved views)
+    // NOTE: This must be applied AFTER projection filter to avoid conflicts
+    // We'll store it separately and apply it after projection
+    let assignedToFilter = null;
+    if (req.query.assignedTo !== undefined) {
+      if (req.query.assignedTo === 'null' || req.query.assignedTo === null || req.query.assignedTo === '') {
+        // Filter for unassigned (null or missing)
+        assignedToFilter = {
+          $or: [
+            { assignedTo: null },
+            { assignedTo: { $exists: false } }
+          ]
+        };
+      } else {
+        // Filter for specific user
+        assignedToFilter = { assignedTo: req.query.assignedTo };
+      }
+    }
+    
+    // Handle isActive filter (boolean)
+    if (req.query.isActive !== undefined) {
+      if (req.query.isActive === 'true' || req.query.isActive === true) {
+        query.isActive = true;
+      } else if (req.query.isActive === 'false' || req.query.isActive === false) {
+        query.isActive = false;
+      }
+    }
+    
+    // Handle other filters
+    if (req.query.industry) query.industry = req.query.industry;
+    if (req.query.tier) {
+      // Handle subscription tier filter
+      query['subscription.tier'] = req.query.tier;
+    }
+    if (req.query.status) {
+      // Handle subscription status filter
+      query['subscription.status'] = req.query.status;
+    }
 
     // Phase 2A.2: Apply projection filter (read-time filtering only)
     // SAFETY: Projection filtering is read-only.
@@ -89,7 +137,8 @@ exports.list = async (req, res) => {
       appKey,
       moduleKey,
       hasProjection: !!projectionMeta,
-      queryBefore: JSON.stringify(query),
+      queryBefore: JSON.stringify(query, null, 2),
+      assignedToFilter: req.query.assignedTo,
       userIds: userIds.length
     });
     
@@ -100,23 +149,115 @@ exports.list = async (req, res) => {
       projectionMeta
     });
     
-    // Debug logging
-    console.log('[organizationV2Controller] After projection filter:', {
-      queryAfter: JSON.stringify(query)
-    });
+    // Apply search filter AFTER projection filter to avoid conflicts
+    // Combine with assignedTo filter if both exist
+    if (searchFilter || assignedToFilter) {
+      // If query already has $or (from projection), we need to combine with $and
+      if (query.$or) {
+        const conditionsToAdd = [];
+        if (searchFilter) conditionsToAdd.push(searchFilter);
+        if (assignedToFilter) conditionsToAdd.push(assignedToFilter);
+        
+        // Combine existing $or with search and assignedTo filters using $and
+        query.$and = [
+          { $or: query.$or },
+          ...conditionsToAdd
+        ];
+        delete query.$or; // Remove the old $or since we've moved it to $and
+        console.log('[organizationV2Controller] Combined $or with search/assignedTo using $and');
+      } else if (query.$and) {
+        // If $and already exists, add to it
+        if (searchFilter) query.$and.push(searchFilter);
+        if (assignedToFilter) query.$and.push(assignedToFilter);
+        console.log('[organizationV2Controller] Added search/assignedTo to existing $and');
+      } else {
+        // No existing $or or $and, just add the filters directly
+        if (searchFilter) {
+          Object.assign(query, searchFilter);
+          console.log('[organizationV2Controller] Search filter applied directly');
+        }
+        if (assignedToFilter) {
+          // If assignedToFilter has $or, we need to merge it properly
+          if (assignedToFilter.$or) {
+            query.$or = assignedToFilter.$or;
+          } else {
+            Object.assign(query, assignedToFilter);
+          }
+          console.log('[organizationV2Controller] AssignedTo filter applied directly');
+        }
+      }
+    }
+    
+    // Debug: Log final query
+    if (searchFilter || assignedToFilter) {
+      console.log('[organizationV2Controller] Final query after all filters:', JSON.stringify(query, null, 2));
+      if (searchFilter) {
+        console.log('[organizationV2Controller] Search filter:', JSON.stringify(searchFilter, null, 2));
+      }
+    }
 
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
+    
+    // Handle sort
+    const sortBy = req.query.sortBy || 'createdAt';
+    const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
+    const sort = { [sortBy]: sortOrder };
 
     const data = await Organization.find(query)
       .populate('createdBy', 'firstName lastName email avatar username')
       .populate('assignedTo', 'firstName lastName email avatar username')
-      .sort({ createdAt: -1 })
+      .sort(sort)
       .limit(limit)
       .skip(skip);
     const total = await Organization.countDocuments(query);
-    res.json({ success: true, data, meta: { page, limit, total } });
+    
+    // Debug logging
+    const orgIds = data.map(org => ({
+      _id: org._id.toString(),
+      name: org.name,
+      assignedTo: org.assignedTo ? (org.assignedTo._id ? org.assignedTo._id.toString() : org.assignedTo.toString()) : null
+    }));
+    
+    console.log('[organizationV2Controller] Query result:', {
+      dataLength: data.length,
+      total,
+      page,
+      limit,
+      assignedToFilter: req.query.assignedTo,
+      query: JSON.stringify(query, null, 2),
+      returnedOrgIds: orgIds
+    });
+    
+    // Convert Mongoose documents to plain objects
+    const plainData = data.map(doc => doc.toObject ? doc.toObject() : doc);
+    
+    const response = { 
+      success: true, 
+      data: plainData,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalRecords: total,
+        limit: limit
+      },
+      meta: { page, limit, total } // Keep for backward compatibility
+    };
+    
+    // Debug logging - log the actual response object structure
+    console.log('[organizationV2Controller] Response object:', JSON.stringify({
+      success: response.success,
+      dataLength: response.data.length,
+      hasPagination: !!response.pagination,
+      pagination: response.pagination,
+      hasMeta: !!response.meta,
+      meta: response.meta,
+      responseKeys: Object.keys(response)
+    }, null, 2));
+    
+    // Return response with pagination object (matching ModuleList expectations)
+    res.json(response);
   } catch (error) {
     console.error('Error listing Sales organizations:', error);
     res.status(500).json({ success: false, message: 'Error fetching organizations', error: error.message });
@@ -347,6 +488,262 @@ exports.addActivityLog = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error adding activity log',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get Editable Organization Data
+ * GET /api/organizations/:id/editable
+ * 
+ * ARCHITECTURAL INTENT:
+ * Returns ONLY editable business fields for CreateOrganizationSurface edit mode.
+ * 
+ * MUST:
+ * - Return ONLY: name, address, website, phone, industry, types
+ * - Reject tenant organizations (isTenant: false only)
+ * - Filter by tenant context (createdBy must be from tenant)
+ * 
+ * MUST NOT:
+ * - Return tenant fields (subscription, limits, enabledApps, etc.)
+ * - Return system fields (createdBy, assignedTo, etc.)
+ * - Return app participation data
+ * 
+ * If API returns forbidden fields → show generic error (defensive UX)
+ */
+exports.getEditable = async (req, res) => {
+  try {
+    const User = require('../models/User');
+    const tenantOrganizationId = req.user?.organizationId;
+    
+    if (!tenantOrganizationId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Organization context required' 
+      });
+    }
+
+    // Get all users from this tenant organization
+    const tenantUserIds = await User.find({ organizationId: tenantOrganizationId })
+      .select('_id')
+      .lean();
+    const userIds = tenantUserIds.map(u => u._id);
+
+    // Fetch organization - MUST be business org (isTenant: false)
+    const org = await Organization.findOne({ 
+      _id: req.params.id, 
+      isTenant: false, // CRITICAL: Reject tenant orgs
+      createdBy: { $in: userIds } // CRITICAL: Filter by tenant context
+    }).lean();
+    
+    if (!org) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Organization not found' 
+      });
+    }
+    
+    // EXPLICIT REJECTION: If somehow a tenant org got through, reject it
+    if (org.isTenant === true) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Tenant organizations cannot be edited via this endpoint' 
+      });
+    }
+    
+    // Return ONLY editable business fields
+    const editableData = {
+      name: org.name || '',
+      address: org.address || '',
+      website: org.website || '',
+      phone: org.phone || '',
+      industry: org.industry || '',
+      types: org.types || []
+    };
+    
+    res.json({
+      success: true,
+      data: editableData
+    });
+  } catch (error) {
+    console.error('Error fetching editable organization:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error fetching organization data',
+      error: error.message 
+    });
+  }
+};
+
+/**
+ * Update Business Organization
+ * PATCH /api/organizations/:id
+ * 
+ * ARCHITECTURAL INTENT:
+ * Updates ONLY editable business fields for CreateOrganizationSurface edit mode.
+ * 
+ * MUST:
+ * - Accept ONLY: name, address, website, phone, industry, types
+ * - Reject tenant organizations (isTenant: false only)
+ * - Filter by tenant context (createdBy must be from tenant)
+ * - Ignore any extra fields silently
+ * - Reject tenant-only fields if provided
+ * 
+ * MUST NOT:
+ * - Accept tenant fields (subscription, limits, enabledApps, etc.)
+ * - Accept system fields (createdBy, assignedTo, etc.)
+ * - Accept app participation data
+ */
+exports.update = async (req, res) => {
+  try {
+    const User = require('../models/User');
+    const tenantOrganizationId = req.user?.organizationId;
+    
+    if (!tenantOrganizationId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Organization context required' 
+      });
+    }
+
+    // Get all users from this tenant organization
+    const tenantUserIds = await User.find({ organizationId: tenantOrganizationId })
+      .select('_id')
+      .lean();
+    const userIds = tenantUserIds.map(u => u._id);
+
+    // Fetch organization - MUST be business org (isTenant: false)
+    const org = await Organization.findOne({ 
+      _id: req.params.id, 
+      isTenant: false, // CRITICAL: Reject tenant orgs
+      createdBy: { $in: userIds } // CRITICAL: Filter by tenant context
+    });
+    
+    if (!org) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Organization not found' 
+      });
+    }
+    
+    // EXPLICIT REJECTION: If somehow a tenant org got through, reject it
+    if (org.isTenant === true) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Tenant organizations cannot be edited via this endpoint' 
+      });
+    }
+    
+    // ALLOWED FIELDS ONLY (strict filtering)
+    const allowedFields = ['name', 'types', 'industry', 'website', 'phone', 'address'];
+    
+    // REJECT tenant-only fields if provided
+    const tenantOnlyFields = [
+      'subscription', 'limits', 'enabledApps', 'enabledModules',
+      'slug', 'settings', 'security', 'billing', 'isTenant'
+    ];
+    
+    const providedTenantFields = tenantOnlyFields.filter(field => req.body[field] !== undefined);
+    if (providedTenantFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Tenant-only fields are not allowed: ${providedTenantFields.join(', ')}`,
+        errors: { _general: 'Tenant-only fields cannot be updated' }
+      });
+    }
+    
+    // Update only allowed fields
+    let hasChanges = false;
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        // Handle types array specially
+        if (field === 'types') {
+          if (Array.isArray(req.body[field])) {
+            org[field] = req.body[field];
+            hasChanges = true;
+          }
+        } else {
+          // For other fields, allow empty strings (will be stored as empty)
+          const newValue = req.body[field] !== null ? (req.body[field] || '') : '';
+          if (org[field] !== newValue) {
+            org[field] = newValue;
+            hasChanges = true;
+          }
+        }
+      }
+    });
+    
+    // Validate required field
+    if (org.name === undefined || org.name === null || org.name.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Name is required',
+        errors: { name: 'Name is required' }
+      });
+    }
+    
+    // Only save if there are changes
+    if (hasChanges) {
+      // Trim name
+      org.name = org.name.trim();
+      
+      // Get user name for activity log
+      let userName = 'System';
+      if (req.user && req.user._id) {
+        const user = await User.findById(req.user._id).select('firstName lastName username');
+        if (user) {
+          userName = (user.firstName || user.lastName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : user.username) || 'User';
+        }
+      }
+      
+      // Add activity log
+      if (!org.activityLogs) {
+        org.activityLogs = [];
+      }
+      org.activityLogs.push({
+        user: userName,
+        userId: req.user?._id || null,
+        action: 'updated this record',
+        details: { type: 'update', fields: allowedFields.filter(f => req.body[f] !== undefined) },
+        timestamp: new Date()
+      });
+      
+      await org.save();
+    }
+    
+    // Return minimal organization identity (id, name, types)
+    const response = {
+      _id: org._id,
+      id: org._id.toString(),
+      name: org.name,
+      types: org.types || []
+    };
+    
+    res.json({
+      success: true,
+      data: response
+    });
+  } catch (error) {
+    console.error('Error updating organization:', error);
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const errors = {};
+      Object.keys(error.errors || {}).forEach(key => {
+        errors[key] = error.errors[key].message;
+      });
+      
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors
+      });
+    }
+    
+    res.status(400).json({
+      success: false,
+      message: 'Error updating organization',
       error: error.message
     });
   }

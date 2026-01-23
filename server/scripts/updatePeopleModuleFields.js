@@ -264,8 +264,41 @@ async function updatePeopleModuleFields(organizationId = null) {
         },
         order: order++,
         validations: [],
-        dependencies: dependencies
+        dependencies: dependencies,
+        // Filter metadata (schema-driven filters)
+        // Default to not filterable, will be set from metadata if available
+        filterable: false,
+        filterType: null,
+        filterPriority: null
       };
+      
+      // Add filter metadata from peopleFieldModel.ts metadata
+      // Default filters: assignedTo, type, do_not_contact (max 3 per module)
+      const peopleFilterMetadata = {
+        'assignedTo': {
+          filterable: true,
+          filterType: 'user',
+          filterPriority: 1
+        },
+        'type': {
+          filterable: true,
+          filterType: 'multi-select',
+          filterPriority: 2
+        },
+        'do_not_contact': {
+          filterable: true,
+          filterType: 'boolean',
+          filterPriority: 3
+        }
+      };
+      
+      // Apply filter metadata if field is in the metadata map
+      if (peopleFilterMetadata[fieldName]) {
+        const filterMeta = peopleFilterMetadata[fieldName];
+        fieldDef.filterable = filterMeta.filterable;
+        fieldDef.filterType = filterMeta.filterType;
+        fieldDef.filterPriority = filterMeta.filterPriority;
+      }
 
       // Ensure organization field is always visible in table
       if (fieldName === 'organization' || fieldName === 'organizationId') {
@@ -418,6 +451,23 @@ async function updatePeopleModuleFields(organizationId = null) {
                 ? { list: true, detail: true } 
                 : (existingField.visibility || newField.visibility)
             };
+            
+            // Preserve filter settings if user has customized them, otherwise apply metadata defaults
+            // Check if existing field has filter settings (user customization)
+            const hasExistingFilterSettings = existingField.filterable !== undefined || 
+                                             existingField.filterType !== undefined || 
+                                             existingField.filterPriority !== undefined;
+            
+            if (hasExistingFilterSettings) {
+              // Preserve user's filter customizations
+              mergedField.filterable = existingField.filterable ?? newField.filterable;
+              mergedField.filterType = existingField.filterType ?? newField.filterType;
+              mergedField.filterPriority = existingField.filterPriority ?? newField.filterPriority;
+            } else {
+              // No user customization - use metadata defaults (already set in newField)
+              // newField already has the correct filter metadata from peopleFilterMetadata
+            }
+            
             mergedFields.push(mergedField);
             processedKeys.add(key);
           } else {

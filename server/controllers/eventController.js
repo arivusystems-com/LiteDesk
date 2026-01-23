@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Event = require('../models/Event');
 const EventTracking = require('../models/EventTracking');
 const EventOrder = require('../models/EventOrder');
+const Organization = require('../models/Organization');
 const User = require('../models/User');
 const geoValidationService = require('../services/geoValidationService');
 const ModuleDefinition = require('../models/ModuleDefinition');
@@ -10,8 +11,9 @@ const { emitAuditAssigned } = require('../services/auditNotificationService');
 const { applyProjectionFilter } = require('../utils/appProjectionQuery');
 const { getProjection } = require('../utils/moduleProjectionResolver');
 const { resolveCreateType, getTypeFieldName } = require('../utils/appProjectionCreateResolver');
-
-const AUDIT_EVENT_TYPES = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
+const { isAuditEventType, AUDIT_EVENT_TYPES } = require('../utils/eventUtils');
+const { APP_KEYS } = require('../constants/appKeys');
+const { deriveEventActionPermission } = require('../domain/events/eventPermissions');
 
 async function validateAuditUserRoleScopes({
     eventType,
@@ -22,7 +24,7 @@ async function validateAuditUserRoleScopes({
     correctiveOwnerUserId,
     allowSelfReview
 }) {
-    if (!AUDIT_EVENT_TYPES.includes(eventType)) return;
+    if (!isAuditEventType(eventType)) return;
 
     const requesterOrg = String(requesterOrgId);
     const targetOrg = relatedToId ? String(relatedToId) : null;
@@ -421,9 +423,9 @@ exports.createEvent = async (req, res) => {
                 fallbackType: null // Model will use its default if needed
             });
 
-            // Note: For events, we're lenient because eventType enum values may not match projection types exactly
-            // If resolution fails, we'll let the model validation handle it
-            // Only block if explicitly not allowed (resolution returned allowed: false)
+            // ARCHITECTURE NOTE: Validate and use resolved type to prevent label ↔ enum boundary violations.
+            // The projection resolver maps projection types (MEETING) to model values (Meeting / Appointment).
+            // If resolution fails, block the request.
             if (resolved.allowed === false) {
                 return res.status(400).json({
                     success: false,
@@ -432,9 +434,12 @@ exports.createEvent = async (req, res) => {
                 });
             }
 
-            // If resolved type is provided and different, update it
-            // However, for events this is complex due to enum value differences, so we skip auto-mapping for now
-            // The model validation will handle enum value correctness
+            // Use resolved type (mapped model value) if available
+            // This ensures canonical validation: client sends key (MEETING), backend maps to label (Meeting / Appointment)
+            if (resolved.type && resolved.type !== explicitType) {
+                req.body[typeFieldName] = resolved.type;
+                console.log(`[createEvent] Mapped eventType "${explicitType}" → "${resolved.type}" via projection resolver`);
+            }
         }
         
         // ===== STRIP STATUS FROM CLIENT REQUESTS =====
@@ -444,7 +449,31 @@ exports.createEvent = async (req, res) => {
             delete req.body.status;
         }
         
-        const isAuditType = AUDIT_EVENT_TYPES.includes(req.body?.eventType);
+        // ===== AUDIT EVENT CREATION GUARDRAILS =====
+        // ARCHITECTURE NOTE: Audit events require complex configuration (roles, forms, geo)
+        // and must be created through Audit application flows, not generic event creation.
+        // See: docs/architecture/event-settings.md Section 7 (Quick Create Rules)
+        const incomingEventType = req.body?.eventType;
+        if (incomingEventType && isAuditEventType(incomingEventType)) {
+            // Reject audit event creation unless request originates from Audit app
+            if (appKey !== APP_KEYS.AUDIT) {
+                const userId = req.user?._id?.toString() || 'unknown';
+                const orgId = req.user?.organizationId?.toString() || 'unknown';
+                console.warn(`[EventController] Blocked audit event creation attempt: eventType=${incomingEventType} appKey=${appKey} userId=${userId} orgId=${orgId}`);
+                
+                return res.status(403).json({
+                    success: false,
+                    message: `Audit events (${incomingEventType}) can only be created through the Audit application.`,
+                    code: 'AUDIT_EVENT_CREATION_RESTRICTED',
+                    eventType: incomingEventType,
+                    currentApp: appKey,
+                    requiredApp: APP_KEYS.AUDIT,
+                    error: `Audit event types require complex configuration (roles, forms, geo) and must be created through Audit flows. Please use the Audit application to create audit events.`
+                });
+            }
+        }
+        
+        const isAuditType = isAuditEventType(incomingEventType);
 
         // For audit events, use explicit `auditorId` as the source of truth.
         // (eventOwnerId is hidden in audit UX; we still mirror auditorId into eventOwnerId for ownership.)
@@ -478,6 +507,60 @@ exports.createEvent = async (req, res) => {
         // Normalize eventType if provided
         if (eventData.eventType && typeof eventData.eventType === 'string') {
             eventData.eventType = eventData.eventType.charAt(0).toUpperCase() + eventData.eventType.slice(1);
+        }
+
+        // ===== AUDIT TITLE STRATEGY (SYSTEM-GENERATED BY DEFAULT) =====
+        // ARCHITECTURE NOTE:
+        // Audit events are governed workflows. Titles must be consistent across:
+        // - Inbox (attention + clarity)
+        // - Execution (what am I executing?)
+        // - Search (findability)
+        // - Reporting (aggregation + semantics)
+        //
+        // Therefore:
+        // - Backend generates a default title if none is provided.
+        // - Custom titles are allowed only if explicitly provided (non-empty).
+        // - Empty titles are never allowed for audit events.
+        // - Do NOT introduce free-text title as a primary input; it's optional.
+        const buildAuditTitlePrefix = (eventTypeLabel) => {
+            if (!eventTypeLabel) return 'Audit';
+            // Present "External Audit — Single Org" as "External Audit" in the title.
+            if (eventTypeLabel === 'External Audit — Single Org') return 'External Audit';
+            return eventTypeLabel;
+        };
+
+        if (isAuditType) {
+            const incomingName = typeof eventData.eventName === 'string' ? eventData.eventName.trim() : '';
+
+            if (incomingName) {
+                eventData.eventName = incomingName;
+            } else {
+                const prefix = buildAuditTitlePrefix(eventData.eventType);
+
+                // Beat audits: summarize route count (no free-text).
+                if (eventData.eventType === 'External Audit Beat') {
+                    const count = Array.isArray(eventData.orgList) ? eventData.orgList.length : 0;
+                    const label = `${count} Location${count === 1 ? '' : 's'}`;
+                    eventData.eventName = `${prefix} — ${label}`;
+                } else {
+                    // Single-org audits: include organization name.
+                    let orgName = 'Organization';
+                    if (eventData.relatedToId) {
+                        const org = await Organization.findById(eventData.relatedToId).select('name').lean();
+                        if (org?.name) orgName = org.name;
+                    }
+                    eventData.eventName = `${prefix} — ${orgName}`;
+                }
+            }
+
+            // Safety: never allow empty titles for audit events.
+            if (!eventData.eventName || String(eventData.eventName).trim().length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Audit events require a title.',
+                    code: 'AUDIT_TITLE_REQUIRED'
+                });
+            }
         }
         
         // For audit events, enforce role constraints and user scope rules (do not rely on UI)
@@ -829,7 +912,7 @@ exports.updateEvent = async (req, res) => {
 
         // Keep audit auditor selection consistent: auditorId is source of truth; mirror to eventOwnerId for ownership.
         const effectiveEventType = updateData.eventType || currentEvent.eventType;
-        const isAuditType = AUDIT_EVENT_TYPES.includes(effectiveEventType);
+        const isAuditType = isAuditEventType(effectiveEventType);
         if (isAuditType) {
             const auditorSelection = updateData.auditorId || currentEvent.auditorId || currentEvent.eventOwnerId;
             if (auditorSelection) {
@@ -889,7 +972,7 @@ exports.updateEvent = async (req, res) => {
         }
 
         // Audit role scope + self-review validation (backend guard; do not rely on UI)
-        if (AUDIT_EVENT_TYPES.includes(effectiveEventType)) {
+        if (isAuditEventType(effectiveEventType)) {
             const inferredAllowSelfReview =
                 validationData.allowSelfReview === true ||
                 (validationData.allowSelfReview === undefined && effectiveEventType === 'Internal Audit');
@@ -1293,12 +1376,25 @@ exports.startEvent = async (req, res) => {
             });
         }
         
-        // Validate event can be started
-        if (event.status !== 'PLANNED' && event.status !== 'Scheduled') {
-            return res.status(400).json({
-                success: false,
-                message: `Event cannot be started. Current status: ${event.status}`
+        // Enforce execution permissions
+        const permission = deriveEventActionPermission({
+            event: event.toObject ? event.toObject() : event,
+            action: 'START_EXECUTION'
+        });
+        
+        if (!permission.allowed) {
+            return res.status(403).json({
+                error: 'ACTION_NOT_ALLOWED',
+                message: permission.reason || 'Action not allowed'
             });
+        }
+        
+        // DEV-ONLY: Assert permission utility was called
+        if (process.env.NODE_ENV === 'development') {
+            console.assert(
+                permission !== undefined,
+                '[startEvent] Permission utility must be called before mutation'
+            );
         }
         
         // If GEO required, validate location
@@ -2531,15 +2627,28 @@ exports.completeEvent = async (req, res) => {
             });
         }
         
-        // Cannot complete if already cancelled
-        if (event.status === 'Cancelled') {
-            return res.status(400).json({
-                success: false,
-                message: 'Cannot complete a cancelled event.'
+        // Enforce execution permissions
+        const permission = deriveEventActionPermission({
+            event: event.toObject ? event.toObject() : event,
+            action: 'COMPLETE_EXECUTION'
+        });
+        
+        if (!permission.allowed) {
+            return res.status(403).json({
+                error: 'ACTION_NOT_ALLOWED',
+                message: permission.reason || 'Action not allowed'
             });
         }
         
-        // Already completed
+        // DEV-ONLY: Assert permission utility was called
+        if (process.env.NODE_ENV === 'development') {
+            console.assert(
+                permission !== undefined,
+                '[completeEvent] Permission utility must be called before mutation'
+            );
+        }
+        
+        // Already completed (idempotent - return success)
         if (event.status === 'Completed') {
             return res.status(200).json({
                 success: true,
@@ -2565,11 +2674,6 @@ exports.completeEvent = async (req, res) => {
         event.status = 'Completed';
         event.completedAt = new Date();
         event.executionEndTime = new Date();
-        
-        // For audit events, also set auditState to closed if not already
-        if (event.auditState && event.auditState !== 'closed') {
-            event.auditState = 'closed';
-        }
         
         // Add audit entry
         event.addAuditEntry('status_changed', req.user._id, oldStatus, 'Completed', {
@@ -2627,15 +2731,28 @@ exports.cancelEvent = async (req, res) => {
             });
         }
         
-        // Cannot cancel if already completed
-        if (event.status === 'Completed') {
-            return res.status(400).json({
-                success: false,
-                message: 'Cannot cancel a completed event.'
+        // Enforce execution permissions
+        const permission = deriveEventActionPermission({
+            event: event.toObject ? event.toObject() : event,
+            action: 'CANCEL_EXECUTION'
+        });
+        
+        if (!permission.allowed) {
+            return res.status(403).json({
+                error: 'ACTION_NOT_ALLOWED',
+                message: permission.reason || 'Action not allowed'
             });
         }
         
-        // Already cancelled
+        // DEV-ONLY: Assert permission utility was called
+        if (process.env.NODE_ENV === 'development') {
+            console.assert(
+                permission !== undefined,
+                '[cancelEvent] Permission utility must be called before mutation'
+            );
+        }
+        
+        // Already cancelled (idempotent - return success)
         if (event.status === 'Cancelled') {
             return res.status(200).json({
                 success: true,

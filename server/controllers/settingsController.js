@@ -19,6 +19,7 @@
 const ModuleDefinition = require('../models/ModuleDefinition');
 const Organization = require('../models/Organization');
 const User = require('../models/User');
+const TenantModuleConfiguration = require('../models/TenantModuleConfiguration');
 const integrationRegistry = require('../constants/integrationRegistry');
 
 /**
@@ -1707,6 +1708,213 @@ exports.disableIntegration = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to disable integration',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Get organization status-types configuration
+ * GET /api/settings/core-modules/organizations/status-types
+ * 
+ * Returns tenant-specific configuration for organization types and status picklists.
+ * If no tenant override exists, returns null (frontend will use module defaults).
+ */
+exports.getOrganizationStatusTypes = async (req, res) => {
+    try {
+        const organizationId = req.user.organizationId;
+        
+        if (!organizationId) {
+            return res.status(401).json({
+                success: false,
+                message: 'Unauthorized'
+            });
+        }
+
+        // Find tenant module configuration for organizations module
+        // Status-types configuration is module-level (not app-specific), so we check for any app key
+        // Priority: SALES > HELPDESK > other apps (since organizations are primarily used in Sales context)
+        const appPriority = ['SALES', 'HELPDESK', 'AUDIT', 'PORTAL', 'LMS'];
+        let tenantConfig = null;
+        
+        for (const appKey of appPriority) {
+            tenantConfig = await TenantModuleConfiguration.findOne({
+                organizationId,
+                appKey,
+                moduleKey: 'organizations'
+            }).lean();
+            if (tenantConfig) break;
+        }
+
+        // Extract status-types configuration from settings
+        const statusTypesConfig = tenantConfig?.settings?.statusTypes || null;
+
+        console.log('[Backend] GET status-types - tenantConfig found:', !!tenantConfig);
+        console.log('[Backend] GET status-types - Raw tenantConfig.settings:', JSON.stringify(tenantConfig?.settings, null, 2));
+        console.log('[Backend] GET status-types - statusTypesConfig:', JSON.stringify(statusTypesConfig, null, 2));
+        if (statusTypesConfig?.organizationTypes) {
+            console.log('[Backend] GET status-types - Dealer enabled state:', statusTypesConfig.organizationTypes.find(t => t.value === 'Dealer')?.enabled);
+            console.log('[Backend] GET status-types - Distributor enabled state:', statusTypesConfig.organizationTypes.find(t => t.value === 'Distributor')?.enabled);
+        }
+
+        if (!statusTypesConfig) {
+            // No tenant override exists - return null to indicate use defaults
+            console.log('[Backend] GET status-types - No config found, returning null');
+            return res.json({
+                success: true,
+                data: null
+            });
+        }
+
+        console.log('[Backend] GET status-types - Returning config:', {
+            organizationTypes: statusTypesConfig.organizationTypes?.length || 0,
+            customerStatus: statusTypesConfig.statusPicklists?.customerStatus?.length || 0,
+            partnerStatus: statusTypesConfig.statusPicklists?.partnerStatus?.length || 0,
+            vendorStatus: statusTypesConfig.statusPicklists?.vendorStatus?.length || 0
+        });
+
+        res.json({
+            success: true,
+            data: statusTypesConfig
+        });
+    } catch (error) {
+        console.error('Get organization status-types error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get organization status-types',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Update organization status-types configuration
+ * PATCH /api/settings/core-modules/organizations/status-types
+ * 
+ * Saves tenant-specific configuration for organization types and status picklists.
+ * Stores in TenantModuleConfiguration.settings.statusTypes
+ */
+exports.updateOrganizationStatusTypes = async (req, res) => {
+    try {
+        const organizationId = req.user.organizationId;
+        const { organizationTypes, statusPicklists } = req.body;
+        
+        if (!organizationId) {
+            return res.status(401).json({
+                success: false,
+                message: 'Unauthorized'
+            });
+        }
+
+        // Validate payload
+        if (!organizationTypes || !statusPicklists) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid payload: organizationTypes and statusPicklists are required'
+            });
+        }
+
+        // Find or create tenant module configuration
+        // Status-types configuration is module-level, so we store it in the first available config
+        // Priority: SALES > HELPDESK > other apps
+        const appPriority = ['SALES', 'HELPDESK', 'AUDIT', 'PORTAL', 'LMS'];
+        let tenantConfig = null;
+        
+        for (const appKey of appPriority) {
+            tenantConfig = await TenantModuleConfiguration.findOne({
+                organizationId,
+                appKey,
+                moduleKey: 'organizations'
+            });
+            if (tenantConfig) break;
+        }
+        
+        // If no config exists, create one with SALES as default appKey
+        if (!tenantConfig) {
+            tenantConfig = new TenantModuleConfiguration({
+                organizationId,
+                appKey: 'SALES',
+                moduleKey: 'organizations',
+                enabled: true
+            });
+        }
+
+        if (!tenantConfig) {
+            // Create new configuration
+            tenantConfig = new TenantModuleConfiguration({
+                organizationId,
+                appKey: 'SALES', // Default app key for organizations module
+                moduleKey: 'organizations',
+                enabled: true,
+                settings: {
+                    statusTypes: {
+                        organizationTypes,
+                        statusPicklists
+                    }
+                }
+            });
+        } else {
+            // Update existing configuration
+            if (!tenantConfig.settings) {
+                tenantConfig.settings = {};
+            }
+            console.log('[Backend] PATCH status-types - BEFORE update:', {
+                hasSettings: !!tenantConfig.settings,
+                hasStatusTypes: !!tenantConfig.settings.statusTypes,
+                currentOrgTypes: tenantConfig.settings.statusTypes?.organizationTypes?.length || 0
+            });
+            
+            // CRITICAL: For Mongoose Mixed types, we must markModified to ensure nested changes are saved
+            tenantConfig.settings.statusTypes = {
+                organizationTypes,
+                statusPicklists
+            };
+            tenantConfig.markModified('settings'); // Mark the entire settings object as modified
+            tenantConfig.markModified('settings.statusTypes'); // Also mark the nested statusTypes
+            
+            console.log('[Backend] PATCH status-types - AFTER update (before save):', {
+                organizationTypes: tenantConfig.settings.statusTypes.organizationTypes?.length || 0,
+                customerStatus: tenantConfig.settings.statusTypes.statusPicklists?.customerStatus?.length || 0,
+                dealerEnabled: tenantConfig.settings.statusTypes.organizationTypes?.find(t => t.value === 'Dealer')?.enabled
+            });
+        }
+
+        const saveResult = await tenantConfig.save();
+        
+        // CRITICAL: Reload from database to verify what was actually saved
+        const savedConfig = await TenantModuleConfiguration.findById(tenantConfig._id).lean();
+        console.log('[Backend] PATCH status-types - AFTER save (from DB - reloaded):', {
+            organizationTypes: savedConfig?.settings?.statusTypes?.organizationTypes?.length || 0,
+            dealerEnabled: savedConfig?.settings?.statusTypes?.organizationTypes?.find(t => t.value === 'Dealer')?.enabled,
+            distributorEnabled: savedConfig?.settings?.statusTypes?.organizationTypes?.find(t => t.value === 'Distributor')?.enabled,
+            fullDealerObject: savedConfig?.settings?.statusTypes?.organizationTypes?.find(t => t.value === 'Dealer')
+        });
+        console.log('[Backend] PATCH status-types - Full saved organizationTypes:', JSON.stringify(savedConfig?.settings?.statusTypes?.organizationTypes, null, 2));
+
+        console.log('[Backend] PATCH status-types - Saved successfully:', {
+            organizationTypes: organizationTypes?.length || 0,
+            customerStatus: statusPicklists?.customerStatus?.length || 0,
+            partnerStatus: statusPicklists?.partnerStatus?.length || 0,
+            vendorStatus: statusPicklists?.vendorStatus?.length || 0
+        });
+        console.log('[Backend] PATCH status-types - Full saved data:', JSON.stringify({
+            organizationTypes,
+            statusPicklists
+        }, null, 2));
+
+        res.json({
+            success: true,
+            message: 'Organization status-types updated successfully',
+            data: {
+                organizationTypes,
+                statusPicklists
+            }
+        });
+    } catch (error) {
+        console.error('Update organization status-types error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update organization status-types',
             error: error.message
         });
     }

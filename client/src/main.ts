@@ -12,6 +12,15 @@ const app = createApp(App)
 app.use(createPinia())
 app.use(router)
 
+// Platform Permissions Contract Guard (DEV-only)
+// CONTRACT-LOCKED: See docs/architecture/platform-permission-contract.md
+if (process.env.NODE_ENV === 'development') {
+  console.info(
+    '[Platform Permissions]',
+    'Explanation-only system (contract-locked). Enforcement is forbidden.'
+  );
+}
+
 // Initialize color mode
 const { colorMode } = useColorMode()
 console.log('Initial color mode:', colorMode.value)

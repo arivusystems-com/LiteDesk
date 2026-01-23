@@ -31,6 +31,8 @@ const FormResponse = require('../models/FormResponse');
 
 // Import SALES controller functions
 const salesEventController = require('./eventController');
+const { deriveEventActionPermission } = require('../domain/events/eventPermissions');
+const { deriveAuditWorkflowPermission } = require('../domain/audit/auditWorkflowPermissions');
 
 /**
  * Helper: Validate event ownership (MANDATORY for all execution endpoints)
@@ -161,6 +163,27 @@ exports.checkInAudit = async (req, res) => {
         
         const event = ownershipCheck.event;
         
+        // Enforce execution permissions
+        const permission = deriveEventActionPermission({
+            event: event.toObject ? event.toObject() : event,
+            action: 'AUDIT_CHECK_IN'
+        });
+        
+        if (!permission.allowed) {
+            return res.status(403).json({
+                error: 'ACTION_NOT_ALLOWED',
+                message: permission.reason || 'Action not allowed'
+            });
+        }
+        
+        // DEV-ONLY: Assert permission utility was called
+        if (process.env.NODE_ENV === 'development') {
+            console.assert(
+                permission !== undefined,
+                '[checkInAudit] Permission utility must be called before mutation'
+            );
+        }
+        
         // Validate location is provided
         if (!location || !location.latitude || !location.longitude) {
             return res.status(400).json({
@@ -169,13 +192,17 @@ exports.checkInAudit = async (req, res) => {
             });
         }
         
-        // Create a proxy request object for SALES controller
-        // Use event._id or eventId (SALES handles both)
-        const proxyReq = {
-            ...req,
-            params: { id: event._id.toString() },
-            body: { location }
-        };
+        // Create a proxy request for SALES controller.
+        //
+        // IMPORTANT: Do NOT spread `req` into a plain object.
+        // Express request methods (e.g. req.get) live on the prototype and are
+        // not enumerable; spreading drops them and causes runtime errors like:
+        // "req.get is not a function" → 500.
+        //
+        // Use Object.create(req) to preserve the request prototype.
+        const proxyReq = Object.create(req);
+        proxyReq.params = { id: event._id.toString() };
+        proxyReq.body = { location };
         
         // Create a proxy response object to capture SALES response
         let crmResponse = null;
@@ -282,6 +309,28 @@ exports.submitAudit = async (req, res) => {
         
         const event = ownershipCheck.event;
         
+        // Enforce audit workflow permissions
+        const workflowPermission = deriveAuditWorkflowPermission({
+            event: event.toObject ? event.toObject() : event,
+            action: 'SUBMIT_AUDIT',
+            options: { formResponseId }
+        });
+        
+        if (!workflowPermission.allowed) {
+            return res.status(403).json({
+                error: 'AUDIT_WORKFLOW_ACTION_NOT_ALLOWED',
+                message: workflowPermission.reason || 'Action not allowed'
+            });
+        }
+        
+        // DEV-ONLY: Assert permission utility was called
+        if (process.env.NODE_ENV === 'development') {
+            console.assert(
+                workflowPermission !== undefined,
+                '[submitAudit] Permission utility must be called before mutation'
+            );
+        }
+        
         // Validate formResponseId
         if (!formResponseId) {
             return res.status(400).json({
@@ -290,13 +339,10 @@ exports.submitAudit = async (req, res) => {
             });
         }
         
-        // Create proxy request for SALES controller
-        // Use event._id (SALES handles both _id and eventId)
-        const proxyReq = {
-            ...req,
-            params: { id: event._id.toString() },
-            body: { formResponseId, orgIndex }
-        };
+        // Create proxy request for SALES controller (preserve req prototype).
+        const proxyReq = Object.create(req);
+        proxyReq.params = { id: event._id.toString() };
+        proxyReq.body = { formResponseId, orgIndex };
         
         // Create proxy response to capture SALES response
         let crmResponse = null;
@@ -403,20 +449,39 @@ exports.approveAudit = async (req, res) => {
         
         const event = ownershipCheck.event;
         
-        // Validate current state
-        if (event.auditState !== 'needs_review') {
-            return res.status(400).json({
-                success: false,
-                message: `Event is not in 'needs_review' state. Current state: ${event.auditState}`
+        // Get form responses to check for pending corrective actions
+        const FormResponse = require('../models/FormResponse');
+        const eventResponses = await FormResponse.find({
+            'linkedTo.type': 'Event',
+            'linkedTo.id': event._id,
+            organizationId: req.user.organizationId
+        }).lean();
+        
+        // Enforce audit workflow permissions
+        const workflowPermission = deriveAuditWorkflowPermission({
+            event: event.toObject ? event.toObject() : event,
+            action: 'CLOSE_AUDIT',
+            options: { formResponses: eventResponses }
+        });
+        
+        if (!workflowPermission.allowed) {
+            return res.status(403).json({
+                error: 'AUDIT_WORKFLOW_ACTION_NOT_ALLOWED',
+                message: workflowPermission.reason || 'Action not allowed'
             });
         }
         
-        // Create proxy request for SALES controller
-        // Use event._id (SALES handles both _id and eventId)
-        const proxyReq = {
-            ...req,
-            params: { id: event._id.toString() }
-        };
+        // DEV-ONLY: Assert permission utility was called
+        if (process.env.NODE_ENV === 'development') {
+            console.assert(
+                workflowPermission !== undefined,
+                '[approveAudit] Permission utility must be called before mutation'
+            );
+        }
+        
+        // Create proxy request for SALES controller (preserve req prototype).
+        const proxyReq = Object.create(req);
+        proxyReq.params = { id: event._id.toString() };
         
         // Create proxy response to capture SALES response
         let crmResponse = null;
@@ -530,12 +595,10 @@ exports.rejectAudit = async (req, res) => {
             });
         }
         
-        // Create proxy request for CRM controller
-        const proxyReq = {
-            ...req,
-            params: { id: eventId },
-            body: { reason }
-        };
+        // Create proxy request for SALES controller (preserve req prototype).
+        const proxyReq = Object.create(req);
+        proxyReq.params = { id: eventId };
+        proxyReq.body = { reason };
         
         // Create proxy response to capture SALES response
         let crmResponse = null;

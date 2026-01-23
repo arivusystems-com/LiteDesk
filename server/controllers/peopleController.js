@@ -41,6 +41,9 @@ function getSalesParticipationFields() {
   ];
 }
 
+// Export for use in other controllers
+exports.getSalesParticipationFields = getSalesParticipationFields;
+
 // Create People
 exports.create = async (req, res) => {
   try {

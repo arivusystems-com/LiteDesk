@@ -52,11 +52,13 @@ export type SidebarItem =
       icon?: string;
     }
   | {
-      kind: 'identity';
-      id: 'people';
+      kind: 'coreModule';
+      id: string; // moduleKey (e.g., 'people', 'organizations', 'tasks', etc.)
       label: string;
       route: string;
       icon?: string;
+      moduleKey: string;
+      order?: number;
     }
   | {
       kind: 'app';
@@ -87,14 +89,17 @@ export interface SidebarStructure {
   shell: SidebarItem[];
 
   /**
-   * Identity navigation — stable, global entities.
-   * Currently restricted to People only.
+   * Core Modules — platform-owned modules sourced from Core Modules registry.
+   * Examples: People, Organizations, Tasks, Events, Forms, Items.
+   * Sourced strictly from GET /api/settings/core-modules.
+   * Filtered by permissions (hidden if user has zero access).
+   * Ordered as defined in Core Modules configuration.
    */
-  identity: SidebarItem[];
+  coreModules: SidebarItem[];
 
   /**
    * App lens selector — controls which app's navigation is active.
-   * Switching apps changes the meaning of navigation, not identity.
+   * Switching apps changes the meaning of navigation, not core modules.
    */
   appSwitcher: {
     activeAppId: string;

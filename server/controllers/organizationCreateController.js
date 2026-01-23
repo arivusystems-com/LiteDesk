@@ -1,0 +1,164 @@
+/**
+ * ============================================================================
+ * ORGANIZATION CREATE CONTROLLER
+ * ============================================================================
+ * 
+ * Dedicated controller for CreateOrganizationSurface.
+ * 
+ * ARCHITECTURAL INTENT:
+ * This controller handles creation of Business Organizations ONLY.
+ * 
+ * MUST:
+ * - Force isTenant = false
+ * - Accept ONLY: name, types, industry, website, phone, address
+ * - Ignore any extra fields silently
+ * - Reject tenant-only fields if provided
+ * - Return minimal organization identity (id, name, types)
+ * 
+ * MUST NOT:
+ * - Create tenant organizations
+ * - Accept subscription, billing, limits, enabledApps, or security fields
+ * - Accept app-specific fields
+ * - Accept system fields (createdBy, assignedTo, etc. - set by backend)
+ * - Accept ownership fields
+ * 
+ * Reference: docs/architecture/organization-surface-invariants.md
+ * ============================================================================
+ */
+
+const Organization = require('../models/Organization');
+
+/**
+ * Create Business Organization
+ * POST /api/organizations
+ * 
+ * Payload must ONLY include:
+ * - name (required)
+ * - types (optional, array)
+ * - industry (optional)
+ * - website (optional)
+ * - phone (optional)
+ * - address (optional)
+ * 
+ * Backend MUST:
+ * - Force isTenant = false
+ * - Ignore any extra fields silently
+ * - Reject tenant-only fields if provided
+ * - Return minimal organization identity (id, name, types)
+ */
+exports.create = async (req, res) => {
+  try {
+    const User = require('../models/User');
+    
+    // Get user name for activity log (if user is authenticated)
+    let userName = 'System';
+    if (req.user && req.user._id) {
+      const user = await User.findById(req.user._id).select('firstName lastName username');
+      if (user) {
+        userName = (user.firstName || user.lastName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : user.username) || 'User';
+      }
+    }
+    
+    // ALLOWED FIELDS ONLY (strict filtering)
+    const allowedFields = ['name', 'types', 'industry', 'website', 'phone', 'address'];
+    
+    // Build payload with only allowed fields
+    const payload = {};
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined && req.body[field] !== null && req.body[field] !== '') {
+        payload[field] = req.body[field];
+      }
+    });
+    
+    // Validate required field
+    if (!payload.name || typeof payload.name !== 'string' || payload.name.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Name is required',
+        errors: { name: 'Name is required' }
+      });
+    }
+    
+    // Validate types (must be array if provided)
+    if (payload.types !== undefined && !Array.isArray(payload.types)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Types must be an array',
+        errors: { types: 'Types must be an array' }
+      });
+    }
+    
+    // REJECT tenant-only fields if provided
+    const tenantOnlyFields = [
+      'subscription', 'limits', 'enabledApps', 'enabledModules',
+      'slug', 'settings', 'security', 'billing'
+    ];
+    
+    const providedTenantFields = tenantOnlyFields.filter(field => req.body[field] !== undefined);
+    if (providedTenantFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Tenant-only fields are not allowed: ${providedTenantFields.join(', ')}`,
+        errors: { _general: 'Tenant-only fields cannot be set when creating business organizations' }
+      });
+    }
+    
+    // Build organization body with enforced business organization settings
+    const body = {
+      ...payload,
+      name: payload.name.trim(),
+      // Force isTenant = false (business organization)
+      isTenant: false,
+      // Set createdBy from authenticated user
+      createdBy: req.user?._id || null,
+      // Default assignedTo to creator if not provided
+      assignedTo: req.user?._id || null,
+      // Add initial activity log for record creation
+      activityLogs: [{
+        user: userName,
+        userId: req.user?._id || null,
+        action: 'created this record',
+        details: { type: 'create' },
+        timestamp: new Date()
+      }]
+    };
+    
+    // Create organization
+    const org = await Organization.create(body);
+    
+    // Return minimal organization identity (id, name, types)
+    const response = {
+      _id: org._id,
+      id: org._id.toString(),
+      name: org.name,
+      types: org.types || []
+    };
+    
+    res.status(201).json({
+      success: true,
+      data: response
+    });
+  } catch (error) {
+    console.error('Error creating organization:', error);
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const errors = {};
+      Object.keys(error.errors || {}).forEach(key => {
+        errors[key] = error.errors[key].message;
+      });
+      
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors
+      });
+    }
+    
+    res.status(400).json({
+      success: false,
+      message: 'Error creating organization',
+      error: error.message
+    });
+  }
+};

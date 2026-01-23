@@ -13,6 +13,10 @@ router.get('/core-modules', controller.getCoreModules);
 router.get('/core-modules/:moduleKey', controller.getCoreModule);
 router.patch('/core-modules/:moduleKey/applications/:appKey', controller.toggleAppParticipation);
 
+// Organization Status-Types endpoints (specific to organizations module)
+router.get('/core-modules/organizations/status-types', controller.getOrganizationStatusTypes);
+router.patch('/core-modules/organizations/status-types', controller.updateOrganizationStatusTypes);
+
 // Applications endpoints
 router.get('/applications', controller.getApplications);
 router.get('/applications/:appKey', controller.getApplication);

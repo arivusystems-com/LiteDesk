@@ -104,6 +104,8 @@
     </header>
 
     <!-- Desktop Sidebar -->
+    <!-- ARCHITECTURE NOTE: GlobalSearch is owned by GlobalSurfacesProvider. -->
+    <!-- Sidebar search click dispatches litedesk:open-global-search custom event. -->
     <aside 
       @mouseenter="handleMouseEnter"
       @mouseleave="handleMouseLeave"
@@ -194,6 +196,14 @@
 </template>
 
 <script setup>
+/**
+ * ARCHITECTURE NOTE: GlobalSearch is NOT imported here.
+ * 
+ * GlobalSearch is owned by GlobalSurfacesProvider (mounted in App.vue).
+ * This layout triggers search via custom events only (litedesk:open-global-search).
+ * App layouts must NEVER own global surfaces - see GlobalSurfacesProvider.vue.
+ */
+
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { RouterView, RouterLink, useRouter, useRoute } from 'vue-router';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue';
@@ -255,6 +265,7 @@ const handleMouseLeave = () => {
 
 const sidebarStructure = ref(null);
 const loadingSidebar = ref(false);
+const pendingCountIntervalId = ref(null);
 
 const buildSidebar = async () => {
   if (!authStore.user || !authStore.isAuthenticated) {
@@ -267,7 +278,7 @@ const buildSidebar = async () => {
     const registry = await getAppRegistry();
     if (!authStore.user || !authStore.isAuthenticated) return;
     const snapshot = createPermissionSnapshot(authStore.user);
-    sidebarStructure.value = buildSidebarFromRegistry(registry, snapshot);
+    sidebarStructure.value = await buildSidebarFromRegistry(registry, snapshot);
   } catch (e) {
     console.error('[AuditLayout] Failed to build sidebar:', e);
     sidebarStructure.value = null;
@@ -305,8 +316,14 @@ onMounted(async () => {
   
   // Load pending count
   updatePendingCount();
-  const interval = setInterval(updatePendingCount, 5000);
-  onBeforeUnmount(() => clearInterval(interval));
+  pendingCountIntervalId.value = setInterval(updatePendingCount, 5000);
+});
+
+onBeforeUnmount(() => {
+  if (pendingCountIntervalId.value != null) {
+    clearInterval(pendingCountIntervalId.value);
+    pendingCountIntervalId.value = null;
+  }
 });
 
 const handleLogout = () => {
@@ -347,11 +364,6 @@ const updatePendingCount = async () => {
   }
 };
 
-onMounted(() => {
-  updatePendingCount();
-  const interval = setInterval(updatePendingCount, 5000);
-  onBeforeUnmount(() => clearInterval(interval));
-});
 
 </script>
 

@@ -14,6 +14,12 @@ const auditRoutes = [
         meta: { requiresAuth: true, requiresAuditApp: true, hideShell: true }
       },
       {
+        path: 'schedule',
+        name: 'audit-schedule',
+        component: () => import('@/views/audit/AuditScheduleSurface.vue'),
+        meta: { requiresAuth: true, requiresAuditApp: true, hideShell: true }
+      },
+      {
         path: 'audits',
         name: 'audit-list',
         component: () => import('@/views/audit/AuditList.vue'),

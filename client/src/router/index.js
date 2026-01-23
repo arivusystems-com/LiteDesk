@@ -98,6 +98,18 @@ const routes = [
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   {
+    path: '/settings/demo-requests',
+    name: 'settings-demo-requests',
+    redirect: () => ({ path: '/settings', query: { tab: 'demo-requests' } }),
+    meta: { requiresAuth: true, requiresMasterOrganization: true, hideShell: true }
+  },
+  {
+    path: '/settings/instances',
+    name: 'settings-instances',
+    redirect: () => ({ path: '/settings', query: { tab: 'instances' } }),
+    meta: { requiresAuth: true, requiresMasterOrganization: true, hideShell: true }
+  },
+  {
     path: '/demo-requests',
     name: 'demo-requests',
     component: () => import('@/views/DemoRequests.vue'),
@@ -185,12 +197,27 @@ const routes = [
     component: () => import('@/views/Events.vue'),
     meta: { requiresAuth: true, requiresPermission: { module: 'events', action: 'view' } }
   },
+  {
+    path: '/events/create',
+    name: 'events-create',
+    component: () => import('@/components/events/GenericEventCreateSurface.vue'),
+    meta: { requiresAuth: true, requiresPermission: { module: 'events', action: 'create' } }
+  },
   // Backward-compat redirect
   { path: '/calendar', redirect: { name: 'events' } },
   {
     path: '/events/:id',
     name: 'event-detail',
     component: () => import('@/views/EventDetail.vue'),
+    meta: { requiresAuth: true, requiresPermission: { module: 'events', action: 'view' } }
+  },
+  // Invariant:
+  // /events/:id/execute is the ONLY route allowed to mutate execution state.
+  // EventDetail (/events/:id) must never perform execution actions.
+  {
+    path: '/events/:id/execute',
+    name: 'event-execution',
+    component: () => import('@/views/EventExecutionSurface.vue'),
     meta: { requiresAuth: true, requiresPermission: { module: 'events', action: 'view' } }
   },
   {
@@ -222,6 +249,26 @@ const routes = [
     name: 'organizations',
     component: () => import('@/views/Organizations.vue'),
     meta: { requiresAuth: true, requiresPermission: { module: 'organizations', action: 'view' } }
+  },
+  // CreateOrganizationSurface supports both create and edit modes.
+  // Create mode: accessed via Command Palette, People contextual actions, or app workflows.
+  // Edit mode: accessed via explicit action from OrganizationSurface (e.g., "Edit business details").
+  // It must not appear in primary navigation.
+  {
+    path: '/organizations/new',
+    name: 'organizations-create',
+    component: () => import('@/views/CreateOrganizationSurface.vue'),
+    props: (route) => ({ mode: 'create' }),
+    meta: { requiresAuth: true, requiresPermission: { module: 'organizations', action: 'create' } }
+  },
+  // Edit mode route for CreateOrganizationSurface
+  // Accessed via explicit action from OrganizationSurface
+  {
+    path: '/organizations/:id/edit',
+    name: 'organizations-edit',
+    component: () => import('@/views/CreateOrganizationSurface.vue'),
+    props: (route) => ({ mode: 'edit', organizationId: route.params.id }),
+    meta: { requiresAuth: true, requiresPermission: { module: 'organizations', action: 'update' } }
   },
   // OrganizationSurface is a contextual surface.
   // It is accessed via People, Work items, or Search.
@@ -361,6 +408,14 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes
 })
+
+// DEV-ONLY: Event Domain Contract Guard
+if (import.meta.env.DEV) {
+  console.info(
+    '[Event Domain]',
+    'Event domain is contract-locked. See docs/architecture/event-domain-contract.md'
+  );
+}
 
 // Helper function to determine the correct dashboard based on user's app access
 const getDefaultRoute = (authStore) => {

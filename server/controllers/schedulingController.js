@@ -12,6 +12,7 @@
 const Scheduling = require('../models/Scheduling');
 const People = require('../models/People');
 const User = require('../models/User');
+const ModuleDefinition = require('../models/ModuleDefinition');
 
 /**
  * Helper function to add activity log to linked entity
@@ -224,19 +225,48 @@ exports.createScheduling = async (req, res) => {
       });
     }
 
-    // Validate dates based on type
-    if (type === 'task' && !dueDate) {
-      return res.status(400).json({
-        success: false,
-        message: 'Due date is required for tasks.'
+    // ARCHITECTURE NOTE: Validate dates based on module definition field requirements
+    // Respect admin configuration in Settings → Core Modules → Tasks/Events → Field Configuration
+    // See: docs/architecture/task-settings.md, docs/architecture/module-settings-doctrine.md
+    const moduleKey = type === 'task' ? 'tasks' : 'events';
+    
+    // Try tenant-specific override first, then fall back to platform default
+    let moduleDef = await ModuleDefinition.findOne({
+      moduleKey: moduleKey,
+      organizationId: req.user.organizationId
+    });
+    
+    // If no tenant override, check platform default
+    if (!moduleDef) {
+      moduleDef = await ModuleDefinition.findOne({
+        moduleKey: moduleKey,
+        appKey: 'platform'
       });
     }
 
-    if (type === 'event' && !startDate) {
-      return res.status(400).json({
-        success: false,
-        message: 'Start date is required for events.'
-      });
+    // Validate dates only if marked as required in module definition
+    if (type === 'task') {
+      const dueDateField = moduleDef?.fields?.find(f => 
+        f.key && f.key.toLowerCase() === 'duedate'
+      );
+      if (dueDateField?.required && !dueDate) {
+        return res.status(400).json({
+          success: false,
+          message: `${dueDateField.label || 'Due date'} is required.`
+        });
+      }
+    }
+
+    if (type === 'event') {
+      const startDateField = moduleDef?.fields?.find(f => 
+        f.key && f.key.toLowerCase() === 'startdate'
+      );
+      if (startDateField?.required && !startDate) {
+        return res.status(400).json({
+          success: false,
+          message: `${startDateField.label || 'Start date'} is required.`
+        });
+      }
     }
 
     // Validate status (only for tasks)

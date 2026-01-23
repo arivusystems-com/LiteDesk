@@ -134,10 +134,12 @@
                   :key="command.id"
                   :ref="el => setCommandRef(el, index)"
                   :class="[
-                    'w-full px-4 py-3 text-left transition-colors cursor-default',
-                    selectedIndex === index ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                    'w-full px-4 py-3 text-left transition-colors cursor-pointer',
+                    selectedIndex === index ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
                   ]"
-                  tabindex="-1"
+                  @mouseenter="handleCommandHover(index)"
+                  @mousedown.prevent
+                  @click="handleCommandClick(command, index)"
                   role="option"
                   :aria-selected="selectedIndex === index"
                 >
@@ -208,7 +210,7 @@
                 class="px-4 py-2 border-t border-gray-200 dark:border-gray-700"
               >
                 <p class="text-xs text-gray-400 dark:text-gray-500 text-center">
-                  Tip: Type / to run a command
+                  Use / to create, link, or navigate
                 </p>
               </div>
             </div>
@@ -261,7 +263,7 @@
                   v-if="!hasUsedCommandTrigger"
                   class="text-xs text-gray-400 dark:text-gray-500 text-center"
                 >
-                  Tip: Type / to run a command
+                  Use / to create, link, or navigate
                 </p>
               </template>
             </div>
@@ -284,9 +286,39 @@
       @create="handleLinkDrawerCreate"
     />
 
-    <!-- Create Record Drawer (for create action commands) -->
+    <!-- Organization Quick Create Drawer (dedicated Quick Create flow) -->
+    <!-- People Quick Create Drawer -->
+    <!-- ARCHITECTURAL INTENT: Opens in same tab, not navigating to new route -->
+    <PeopleQuickCreateDrawer
+      :isOpen="showPeopleDrawer"
+      @close="handlePeopleDrawerClose"
+      @saved="handlePeopleDrawerSaved"
+    />
+    
+    <!-- Event Quick Create Drawer -->
+    <!-- ARCHITECTURAL INTENT: Opens in same tab, not navigating to new route -->
+    <EventQuickCreateDrawer
+      :isOpen="showEventDrawer"
+      @close="handleEventDrawerClose"
+      @saved="handleEventDrawerSaved"
+    />
+    
+    <!-- ARCHITECTURAL INTENT: Organization Quick Create is separate from full create/edit flows -->
+    <!-- It strictly respects Settings → Core Modules → Organizations → Quick Create configuration -->
+    <!-- Command palette actions must NEVER navigate to list views - they open this Quick Create flow -->
+    <OrganizationQuickCreateDrawer
+      v-if="createDrawerModuleKey === 'organizations'"
+      :isOpen="showCreateDrawer && createDrawerModuleKey === 'organizations'"
+      :initialData="createDrawerInitialData"
+      :autoLinkContext="createDrawerAutoLinkContext"
+      @close="handleCreateDrawerClose"
+      @saved="(record) => handleCreateDrawerSaved(record)"
+    />
+    
+    <!-- Create Record Drawer (for other modules) -->
     <CreateRecordDrawer
-      :isOpen="showCreateDrawer"
+      v-else-if="createDrawerModuleKey && createDrawerModuleKey !== 'organizations'"
+      :isOpen="showCreateDrawer && createDrawerModuleKey !== 'organizations'"
       :moduleKey="createDrawerModuleKey"
       :initialData="createDrawerInitialData"
       :lockedFields="createDrawerLockedFields"
@@ -309,6 +341,9 @@ import { getAvailableCommands } from '@/commands/commandRegistry';
 import type { CommandPaletteItem, CommandContext, NavigationUtilities } from '@/types/commandPalette.types';
 import LinkRecordsDrawer from '@/components/common/LinkRecordsDrawer.vue';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
+import OrganizationQuickCreateDrawer from '@/components/organizations/OrganizationQuickCreateDrawer.vue';
+import PeopleQuickCreateDrawer from '@/components/people/PeopleQuickCreateDrawer.vue';
+import EventQuickCreateDrawer from '@/components/events/EventQuickCreateDrawer.vue';
 
 const props = defineProps({
   isOpen: {
@@ -346,6 +381,8 @@ const linkDrawerAllowCreate = ref(false);
 
 // Create drawer state (for create action commands)
 const showCreateDrawer = ref(false);
+const showPeopleDrawer = ref(false);
+const showEventDrawer = ref(false);
 const createDrawerModuleKey = ref('');
 const createDrawerInitialData = ref({});
 const createDrawerTitle = ref('');
@@ -537,6 +574,15 @@ const handleLinkDrawerOpen = (event: CustomEvent) => {
 const handleCreateDrawerOpen = (event: CustomEvent) => {
   const { moduleKey, initialData, title, description, lockedFields, autoLinkContext } = event.detail;
   
+  // ARCHITECTURAL INTENT: Organizations must use Quick Create flow, not full create
+  // This ensures command palette actions respect Settings → Quick Create configuration
+  if (moduleKey === 'organizations') {
+    console.warn('[GlobalSearch] Organizations should use OrganizationQuickCreateDrawer, not CreateRecordDrawer. Redirecting...');
+    // Redirect to Organization Quick Create
+    handleOrganizationQuickCreateOpen(event);
+    return;
+  }
+  
   // Enhance initial data with current user assignment for tasks
   const enhancedInitialData = { ...(initialData || {}) };
   
@@ -558,14 +604,81 @@ const handleCreateDrawerOpen = (event: CustomEvent) => {
   close();
 };
 
+/**
+ * Handle Organization Quick Create drawer open event
+ * ARCHITECTURAL INTENT: This is the dedicated Quick Create flow for Organizations
+ * It strictly respects Settings → Core Modules → Organizations → Quick Create configuration
+ * Command palette actions must NEVER navigate to list views - they open this Quick Create flow
+ */
+const handleOrganizationQuickCreateOpen = (event: CustomEvent) => {
+  // Handle both cases: with detail (from command palette) and without (from list view)
+  const detail = event.detail || {};
+  const { initialData, autoLinkContext } = detail;
+  
+  createDrawerModuleKey.value = 'organizations';
+  createDrawerInitialData.value = initialData || {};
+  createDrawerAutoLinkContext.value = autoLinkContext || null;
+  showCreateDrawer.value = true;
+  // Close the command palette when opening the drawer
+  close();
+};
+
+/**
+ * Handle People Quick Create drawer open event
+ * ARCHITECTURAL INTENT: Opens drawer in same tab, not navigating to new route
+ */
+const handlePeopleQuickCreateOpen = () => {
+  showPeopleDrawer.value = true;
+  // Close the command palette when opening the drawer
+  close();
+};
+
+const handlePeopleDrawerClose = () => {
+  showPeopleDrawer.value = false;
+};
+
+const handlePeopleDrawerSaved = (person: any) => {
+  showPeopleDrawer.value = false;
+  // Optionally navigate to the created person if needed
+  // For now, just close the drawer
+};
+
+/**
+ * Handle Event Quick Create drawer open event
+ * ARCHITECTURAL INTENT: Opens drawer in same tab, not navigating to new route
+ */
+const handleEventQuickCreateOpen = () => {
+  showEventDrawer.value = true;
+  // Close the command palette when opening the drawer
+  close();
+};
+
+const handleEventDrawerClose = () => {
+  showEventDrawer.value = false;
+};
+
+const handleEventDrawerSaved = (event: any) => {
+  showEventDrawer.value = false;
+  // Optionally navigate to the created event if needed
+  // For now, just close the drawer
+};
+
 onMounted(() => {
   window.addEventListener('litedesk:open-link-drawer', handleLinkDrawerOpen as EventListener);
   window.addEventListener('litedesk:open-create-drawer', handleCreateDrawerOpen as EventListener);
+  // ARCHITECTURAL INTENT: Organization Quick Create is separate from full create flows
+  // This ensures command palette actions open Quick Create, not full create/edit
+  window.addEventListener('litedesk:open-organization-quick-create', handleOrganizationQuickCreateOpen as EventListener);
+  window.addEventListener('litedesk:open-people-quick-create', handlePeopleQuickCreateOpen as EventListener);
+  window.addEventListener('litedesk:open-event-quick-create', handleEventQuickCreateOpen as EventListener);
 });
 
 onUnmounted(() => {
   window.removeEventListener('litedesk:open-link-drawer', handleLinkDrawerOpen as EventListener);
   window.removeEventListener('litedesk:open-create-drawer', handleCreateDrawerOpen as EventListener);
+  window.removeEventListener('litedesk:open-organization-quick-create', handleOrganizationQuickCreateOpen as EventListener);
+  window.removeEventListener('litedesk:open-people-quick-create', handlePeopleQuickCreateOpen as EventListener);
+  window.removeEventListener('litedesk:open-event-quick-create', handleEventQuickCreateOpen as EventListener);
 });
 
 // Perform search
@@ -970,6 +1083,14 @@ function createNavigationUtilities(): NavigationUtilities {
         }
       });
     },
+    openTab: (path: string, options?: { title?: string; background?: boolean }) => {
+      // Open route in a new tab with proper title
+      // If title is provided, use it; otherwise openTab will generate one from path
+      openTab(path, {
+        title: options?.title,
+        background: options?.background || false
+      });
+    },
     getCurrentRoute: () => router.currentRoute.value
   };
 }
@@ -983,8 +1104,9 @@ function createNavigationUtilities(): NavigationUtilities {
  * 
  * Commands execute navigation or actions, never mutate store state directly.
  * 
- * NOTE: Mouse clicks are disabled - commands execute only via keyboard (Enter key).
- * This enforces keyboard-first interaction and prevents mouse-only affordances.
+ * NOTE:
+ * Command Palette is keyboard-first, but mouse click selection is supported for accessibility.
+ * Clicking a command runs the same logic as pressing Enter (including destructive confirmation).
  */
 const executeCommand = (command: CommandPaletteItem) => {
   if (!command) return;
@@ -1010,6 +1132,44 @@ const executeCommand = (command: CommandPaletteItem) => {
 };
 
 /**
+ * Keep focus on the search input so keyboard navigation (arrows/Enter/Esc)
+ * continues to work even after mouse interaction.
+ */
+const focusSearchInput = () => {
+  nextTick(() => {
+    (searchInputRef.value as HTMLInputElement | null)?.focus?.();
+  });
+};
+
+/**
+ * Mouse hover: update selected index for visual feedback + Enter parity.
+ */
+const handleCommandHover = (index: number) => {
+  selectedIndex.value = index;
+  scrollToSelected();
+};
+
+/**
+ * Mouse click: execute the same logic as Enter key.
+ */
+const handleCommandClick = (command: CommandPaletteItem, index: number) => {
+  selectedIndex.value = index;
+
+  if (pendingDestructiveCommand.value && pendingDestructiveCommand.value.id !== command.id) {
+    pendingDestructiveCommand.value = null;
+  }
+
+  if (command.destructive) {
+    pendingDestructiveCommand.value = command;
+    focusSearchInput();
+    return;
+  }
+
+  executeCommand(command);
+  focusSearchInput();
+};
+
+/**
  * Handle link drawer close
  */
 const handleLinkDrawerClose = () => {
@@ -1022,23 +1182,38 @@ const handleLinkDrawerClose = () => {
 
 /**
  * Handle create action from link drawer
+ * ARCHITECTURAL INTENT: For Organizations, use Quick Create flow instead of full create
  */
 const handleLinkDrawerCreate = () => {
-  // Close link drawer
+  // CRITICAL: Store values BEFORE closing the drawer (which clears them)
+  const moduleKey = linkDrawerModuleKey.value;
+  const context = { ...linkDrawerContext.value };
+  
+  // Close link drawer (this clears linkDrawerModuleKey and linkDrawerContext)
   handleLinkDrawerClose();
   
-  // Open create drawer with context for auto-linking after creation
+  // ARCHITECTURAL INTENT: Organizations must use Quick Create flow
+  if (moduleKey === 'organizations') {
+    // Use Organization Quick Create drawer
+    createDrawerModuleKey.value = 'organizations';
+    createDrawerInitialData.value = {};
+    createDrawerAutoLinkContext.value = context;
+    showCreateDrawer.value = true;
+    return;
+  }
+  
+  // For other modules, use standard create drawer
   const initialData: Record<string, any> = {};
   
-  createDrawerModuleKey.value = linkDrawerModuleKey.value;
+  createDrawerModuleKey.value = moduleKey;
   createDrawerInitialData.value = initialData;
-  createDrawerTitle.value = `New ${linkDrawerModuleKey.value.charAt(0).toUpperCase() + linkDrawerModuleKey.value.slice(1)}`;
-  createDrawerDescription.value = `Create a new ${linkDrawerModuleKey.value}${linkDrawerContext.value.personId ? ' and link it to this person' : ''}`;
+  createDrawerTitle.value = `New ${moduleKey.charAt(0).toUpperCase() + moduleKey.slice(1)}`;
+  createDrawerDescription.value = `Create a new ${moduleKey}${context.personId ? ' and link it to this person' : ''}`;
   createDrawerLockedFields.value = [];
   
   // Store context for auto-linking after creation
   // We'll use a ref to track this
-  createDrawerAutoLinkContext.value = linkDrawerContext.value;
+  createDrawerAutoLinkContext.value = context;
   
   showCreateDrawer.value = true;
 };
@@ -1060,15 +1235,21 @@ const handleCreateDrawerClose = () => {
  * Handle create drawer saved event
  */
 const handleCreateDrawerSaved = async (savedRecord?: any) => {
+  // ARCHITECTURAL INTENT: Organization Quick Create handles auto-linking internally
+  // This handler is for other modules or fallback cases
+  const moduleKey = createDrawerModuleKey.value;
+  
   // If we have auto-link context and a saved record, auto-link it
   if (createDrawerAutoLinkContext.value && savedRecord?._id) {
     const context = createDrawerAutoLinkContext.value;
-    const moduleKey = createDrawerModuleKey.value;
     const recordId = savedRecord._id;
     
     try {
       // Auto-link the newly created record based on context
+      // Note: Organizations Quick Create handles auto-linking internally, so skip here
       if (context.personId && moduleKey === 'organizations') {
+        // This should not happen - OrganizationQuickCreateDrawer handles this
+        console.warn('[GlobalSearch] Auto-link for organizations should be handled by OrganizationQuickCreateDrawer');
         // Link organization to person by updating the person's organization field
         await apiClient.put(`/people/${context.personId}`, {
           organization: recordId

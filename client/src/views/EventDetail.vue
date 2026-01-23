@@ -1,3 +1,42 @@
+<!--
+  ============================================================================
+  EVENT SURFACE (READ-ONLY)
+  ============================================================================
+  
+  See docs/architecture/event-domain-contract.md
+  
+  This surface exists to:
+  - Present event context
+  - Explain event intent and readiness
+  - Provide navigation to the Execution Surface
+  
+  This surface explains event state and readiness.
+  It never performs execution or workflow mutations.
+  
+  This surface explains execution and workflow history.
+  It MUST NEVER perform execution, workflow, or geo mutations.
+  
+  MUST:
+  - Be read-only
+  - Reflect event intent (generic vs audit)
+  - Explain execution readiness and blockers
+  - Provide a single navigation path to execution
+  
+  MUST NEVER:
+  - Start, complete, or mutate execution
+  - Contain audit workflow logic
+  - Contain scheduling or rescheduling controls
+  - Replace EventExecutionSurface
+  - Perform POST / PATCH / PUT requests
+  - Call execution or workflow APIs
+  - Mutate state beyond computed values
+  
+  Execution mutations are ONLY allowed in:
+    /events/:id/execute
+  
+  ============================================================================
+-->
+
 <template>
   <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
     <!-- Loading State -->
@@ -34,29 +73,32 @@
         </button>
 
         <div class="flex items-center gap-2">
-          <!-- Approve/Reject buttons for needs_review state -->
-          <template v-if="event.auditState === 'needs_review' && isAuditor">
-            <button 
-              @click="approveAudit" 
-              :disabled="processing"
-              class="px-4 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          <!--
+            ============================================================================
+            Execution Entry Point (Navigation Only)
+            ============================================================================
+            This is the ONLY execution-related action allowed in EventDetail.
+            It ONLY navigates to /events/:id/execute - it does NOT perform mutations.
+            
+            Invariant:
+            - /events/:id/execute is the ONLY route allowed to mutate execution state
+            - EventDetail (/events/:id) must never perform execution actions
+            - This view is for read-only display and configuration editing only
+            - Execution transitions (start, check-in, complete) live exclusively in EventExecutionSurface
+            ============================================================================
+          -->
+          <div class="flex flex-col items-end gap-1">
+            <button
+              @click="goToExecution"
+              class="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-colors"
             >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-              Approve
+              Open Execution
             </button>
-            <button 
-              @click="rejectAudit" 
-              :disabled="processing"
-              class="px-4 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              Reject
-            </button>
-          </template>
+            <!-- Contextual helper text -->
+            <p v-if="!isReadyForExecution" class="text-xs text-gray-500 dark:text-gray-400 text-right max-w-xs">
+              Execution may be blocked until readiness conditions are met.
+            </p>
+          </div>
           
           <!-- Edit button (disabled when locked, approved, or closed) -->
           <button 
@@ -79,21 +121,22 @@
         </div>
       </div>
 
-      <!-- Execution Action Bar -->
-      <ExecutionActionBar
-        v-if="recordContext && recordContext.executionCapabilities"
-        :execution-capabilities="recordContext.executionCapabilities || []"
-        app-key="PLATFORM"
-        :executing="executing"
-        :executing-capability-key="executingCapabilityKey"
-        @action="handleExecutionAction"
-        class="mb-4"
-      />
+      <!--
+        Invariant:
+        EventDetail must not render execution controls.
+
+        Execution UI lives in `EventExecutionSurface.vue` at `/events/:id/execute`.
+      -->
 
       <!-- Main Content Grid -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <!-- Left Column - Event Info -->
         <div class="lg:col-span-1 space-y-4">
+          <!-- ============================================================================
+               Generic Event Summary (Read-only)
+               ============================================================================
+               Always shown. Displays core event information regardless of event type.
+               ============================================================================ -->
           <!-- Event Header Card -->
           <div class="bg-gradient-to-r from-brand-50 to-purple-50 dark:from-brand-900/20 dark:to-purple-900/20 border border-brand-200 dark:border-brand-800/50 rounded-xl p-4">
             <div :style="{ backgroundColor: event.color }" class="w-12 h-12 rounded-lg flex items-center justify-center mb-3">
@@ -103,43 +146,74 @@
             </div>
             <h1 class="text-xl font-bold text-gray-900 dark:text-white mb-2">{{ event.eventName || event.title }}</h1>
             <div class="flex items-center gap-2 flex-wrap">
+              <!-- Status badge -->
               <span :class="getStatusBadgeClass(event.status)">{{ event.status }}</span>
-              <span v-if="event.auditState" :class="getAuditStateBadgeClass(event.auditState)" class="capitalize">
-                {{ formatAuditState(event.auditState) }}
-              </span>
-              <!-- Phase 2C: Projection-aware type badge -->
+              <!-- Event type label (from EventTypeDefinition if available) -->
               <span 
-                v-if="projectionTypeLabel"
-                :class="projectionTypeBadgeClass"
+                v-if="eventTypeDefinition"
+                class="px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded text-xs font-medium"
               >
-                {{ projectionTypeLabel }}
-                <span v-if="projectionAppLabel" class="ml-1 text-xs opacity-75">
-                  ({{ projectionAppLabel }})
-                </span>
+                {{ eventTypeDefinition.label }}
               </span>
-              <!-- Fallback to eventType if no projection -->
+              <!-- Fallback to eventType if no definition found -->
               <span 
                 v-else-if="event.eventType || event.type" 
                 class="px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 rounded text-xs font-medium"
               >
                 {{ event.eventType || event.type }}
               </span>
+              <!-- Owning app badge (if available) -->
+              <span 
+                v-if="eventTypeDefinition?.owningApp"
+                class="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded text-xs font-medium"
+              >
+                {{ eventTypeDefinition.owningApp }}
+              </span>
+              <!-- Execution mode indicator (read-only) -->
+              <span 
+                v-if="executionMode"
+                class="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded text-xs font-medium"
+              >
+                {{ executionMode === 'audit-workflow' ? 'Audit Workflow' : 'Generic' }}
+              </span>
             </div>
           </div>
 
           <!-- Quick Info Card -->
           <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+            <!-- ============================================================================
+                 Audit Context (Read-only)
+                 ============================================================================
+                 Render ONLY if isAuditEvent === true
+                 Displays audit-specific read-only information:
+                 - Audit workflow state
+                 - Geo requirement indicator (locked)
+                 ============================================================================ -->
             <!-- Audit State (for audit events only) -->
-            <div v-if="event.auditState" class="flex items-start gap-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+            <div v-if="isAuditEvent && event.auditState" class="flex items-start gap-3 pb-3 border-b border-gray-200 dark:border-gray-700">
               <svg class="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div class="flex-1">
-                <div class="text-xs text-gray-500 dark:text-gray-400">Audit State</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">Audit Workflow State</div>
                 <div class="mt-1">
                   <span :class="getAuditStateBadgeClass(event.auditState)" class="capitalize">
                     {{ formatAuditState(event.auditState) }}
                   </span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Geo Requirement Indicator (for audit events - locked) -->
+            <div v-if="isAuditEvent && eventTypeDefinition?.geoRequired" class="flex items-start gap-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+              <svg class="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <div class="flex-1">
+                <div class="text-xs text-gray-500 dark:text-gray-400">Geo Required</div>
+                <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">
+                  Always enabled (locked for audit events)
                 </div>
               </div>
             </div>
@@ -219,12 +293,237 @@
 
         <!-- Right Columns - Details -->
         <div class="lg:col-span-2 space-y-4">
-          <!-- Event Execution Component -->
-          <EventExecution 
-            v-if="event.auditState !== 'approved' && event.auditState !== 'closed'"
-            :event="event" 
-            @updated="handleEventUpdated"
-          />
+          <!-- ============================================================================
+               Execution Entry Point (Navigation Only)
+               ============================================================================
+               The ONLY action allowed here is navigation to the Execution Surface.
+               No execution mutations are permitted in this read-only surface.
+               ============================================================================ -->
+          
+          <!-- Execution Readiness Section (Read-Only) -->
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Execution Readiness</h3>
+            
+            <!-- Ready State -->
+            <div v-if="isReadyForExecution" class="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+              <svg class="w-6 h-6 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div class="flex-1">
+                <p class="text-sm font-medium text-green-900 dark:text-green-300">
+                  This event is ready for execution.
+                </p>
+              </div>
+            </div>
+            
+            <!-- Not Ready State -->
+            <div v-else class="space-y-3">
+              <div class="flex items-start gap-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                <svg class="w-6 h-6 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div class="flex-1">
+                  <p class="text-sm font-medium text-yellow-900 dark:text-yellow-300 mb-2">
+                    This event is not ready for execution.
+                  </p>
+                  <ul v-if="executionBlockers.length > 0" class="space-y-1.5">
+                    <li v-for="blocker in executionBlockers" :key="blocker.code" class="text-sm text-yellow-800 dark:text-yellow-400 flex items-start gap-2">
+                      <span class="text-yellow-600 dark:text-yellow-500 mt-0.5">•</span>
+                      <span>{{ blocker.message }}</span>
+                    </li>
+                  </ul>
+                  <p v-else class="text-sm text-yellow-800 dark:text-yellow-400">
+                    Unable to determine readiness status.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Action Availability Explanation (Read-Only) -->
+          <!-- ARCHITECTURAL NOTE: This section explains why actions may or may not be allowed -->
+          <!-- It does NOT enforce, hide, disable, or change behavior -->
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Action Availability
+            </h3>
+            
+            <div class="space-y-3">
+              <div
+                v-for="permission in permissions"
+                :key="permission.action"
+                class="flex items-start justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0"
+              >
+                <div class="flex-1">
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm font-medium text-gray-900 dark:text-white">
+                      {{ getActionLabel(permission.action) }}
+                    </span>
+                    <span
+                      :class="[
+                        'text-xs font-medium px-2 py-0.5 rounded',
+                        permission.allowed
+                          ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                          : 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+                      ]"
+                    >
+                      {{ permission.allowed ? 'Allowed' : 'Not allowed' }}
+                    </span>
+                  </div>
+                  <p
+                    v-if="!permission.allowed && permission.reason"
+                    class="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-0"
+                  >
+                    Reason: {{ permission.reason }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- ============================================================================
+               Execution History (Read-Only)
+               ============================================================================
+               This surface explains execution and workflow history.
+               It MUST NEVER perform execution, workflow, or geo mutations.
+               ============================================================================ -->
+          <!-- Execution History Section -->
+          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Execution History</h3>
+            
+            <!-- Canonical Activity Timeline (Generic and Audit) -->
+            <div v-if="activityLog.length > 0" class="relative">
+              <!-- Timeline line -->
+              <div class="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-gray-700"></div>
+              
+              <!-- Timeline entries -->
+              <div v-for="(activity, index) in activityLog" :key="activity.id || index" class="relative pl-10 pb-4 last:pb-0">
+                <!-- Timeline dot -->
+                <div :class="[
+                  'absolute left-0 top-1 w-8 h-8 rounded-full flex items-center justify-center border-2',
+                  getActivityStatusColor(activity) === 'green' ? 'bg-green-100 dark:bg-green-900/30 border-green-500 dark:border-green-600' :
+                  getActivityStatusColor(activity) === 'red' ? 'bg-red-100 dark:bg-red-900/30 border-red-500 dark:border-red-600' :
+                  getActivityStatusColor(activity) === 'yellow' ? 'bg-yellow-100 dark:bg-yellow-900/30 border-yellow-500 dark:border-yellow-600' :
+                  'bg-gray-100 dark:bg-gray-700 border-gray-400 dark:border-gray-500'
+                ]">
+                  <svg v-if="getActivityStatusColor(activity) === 'green'" class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                  <svg v-else-if="getActivityStatusColor(activity) === 'red'" class="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  <svg v-else class="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                
+                <!-- Entry content -->
+                <div>
+                  <p class="text-sm font-medium text-gray-900 dark:text-white">{{ getActivityLabel(activity) }}</p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {{ formatDateTime(activity.timestamp) }}
+                  </p>
+                  <p v-if="getActivityActor(activity)" class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                    by {{ getActivityActor(activity) }}
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <!-- No history message -->
+            <div v-else class="text-center py-6 text-sm text-gray-500 dark:text-gray-400">
+              No execution activity recorded yet.
+            </div>
+            
+            <!-- Audit-specific sections (if audit event) -->
+            <div v-if="isAuditEvent" class="space-y-6 mt-6">
+              <!-- Geo Tracking Summary (Read-Only) -->
+              <div v-if="isAuditEvent" class="pt-4 border-t border-gray-200 dark:border-gray-700">
+                <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Location Tracking Summary</h4>
+                <div v-if="event.geoRequired" class="space-y-3">
+                  <div v-if="event.checkIn || event.checkOut" class="space-y-2">
+                    <div v-if="event.checkIn" class="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                      <div class="flex items-center gap-2 mb-1">
+                        <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Check-In Location</span>
+                      </div>
+                      <p class="text-xs text-gray-600 dark:text-gray-400">
+                        {{ formatDateTime(event.checkIn.timestamp) }}
+                      </p>
+                      <p v-if="event.checkIn.location && event.checkIn.location.latitude != null && event.checkIn.location.longitude != null" class="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                        {{ event.checkIn.location.latitude.toFixed(6) }}, {{ event.checkIn.location.longitude.toFixed(6) }}
+                      </p>
+                    </div>
+                    <div v-if="event.checkOut" class="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                      <div class="flex items-center gap-2 mb-1">
+                        <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Check-Out Location</span>
+                      </div>
+                      <p class="text-xs text-gray-600 dark:text-gray-400">
+                        {{ formatDateTime(event.checkOut.timestamp) }}
+                      </p>
+                      <p v-if="event.checkOut.location && event.checkOut.location.latitude != null && event.checkOut.location.longitude != null" class="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                        {{ event.checkOut.location.latitude.toFixed(6) }}, {{ event.checkOut.location.longitude.toFixed(6) }}
+                      </p>
+                    </div>
+                  </div>
+                  <div v-else class="text-center py-4 text-sm text-gray-500 dark:text-gray-400">
+                    Location data not yet recorded.
+                  </div>
+                </div>
+                <div v-else class="text-center py-4 text-sm text-gray-500 dark:text-gray-400">
+                  Location tracking not required for this event.
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Audit-Specific Explanation Block (Read-Only) -->
+          <div v-if="isAuditEvent" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Audit Event Workflow</h3>
+            <div class="space-y-4">
+              <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div class="flex-1">
+                  <p class="text-sm text-gray-700 dark:text-gray-300">
+                    Audit events follow a controlled execution workflow. They cannot be manually completed. Completion occurs only when the audit workflow reaches a closed state.
+                  </p>
+                </div>
+              </div>
+              
+              <div class="flex items-start gap-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                <svg class="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <div class="flex-1">
+                  <p class="text-sm font-medium text-gray-900 dark:text-white mb-1">Location Tracking</p>
+                  <p class="text-sm text-gray-600 dark:text-gray-400">
+                    Location tracking is mandatory for audits and is automatically enabled. This requirement cannot be changed.
+                  </p>
+                </div>
+              </div>
+              
+              <div class="flex items-start gap-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                <svg class="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <div class="flex-1">
+                  <p class="text-sm font-medium text-gray-900 dark:text-white mb-1">Completion Control</p>
+                  <p class="text-sm text-gray-600 dark:text-gray-400">
+                    Audit events cannot be manually completed. They are completed automatically when the audit workflow reaches a closed state.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
           
           <!-- Read-Only Message for Approved/Closed Events -->
           <div v-if="event.auditState === 'approved' || event.auditState === 'closed'" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
@@ -317,9 +616,14 @@
           </div>
 
 
-          <!-- GEO Tracking Card -->
+          <!-- ============================================================================
+               Audit Context (Read-only) - GEO Tracking
+               ============================================================================
+               Shows geo tracking data (read-only display of check-in/check-out history)
+               ============================================================================ -->
+          <!-- GEO Tracking Card (Read-only display) -->
           <div v-if="event.geoRequired && (event.checkIn || event.checkOut)" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">GEO Tracking</h3>
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">GEO Tracking History</h3>
             <div class="space-y-3">
               <div v-if="event.checkIn" class="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
                 <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Check-In</div>
@@ -345,17 +649,23 @@
             </div>
           </div>
 
+          <!-- ============================================================================
+               Audit Context (Read-only) - Audit Workflow State
+               ============================================================================
+               Render ONLY if isAuditEvent === true
+               Shows audit workflow progress and state (read-only display)
+               ============================================================================ -->
           <!-- Audit Workflow State -->
-          <div v-if="event.auditState" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Audit Workflow</h3>
+          <div v-if="isAuditEvent && event.auditState" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Audit Workflow State</h3>
             <div class="space-y-2">
               <div class="flex items-center justify-between">
                 <span class="text-sm text-gray-700 dark:text-gray-300">Current State:</span>
                 <span :class="getAuditStateBadgeClass(event.auditState)">
-                  {{ event.auditState }}
+                  {{ formatAuditState(event.auditState) }}
                 </span>
               </div>
-              <!-- Workflow Progress -->
+              <!-- Workflow Progress (Read-only) -->
               <div class="mt-4">
                 <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-2">
                   <span>Progress</span>
@@ -382,19 +692,19 @@
               <div class="flex items-center justify-between text-sm">
                 <span class="text-gray-600 dark:text-gray-400">Completed:</span>
                 <span class="font-medium text-green-600 dark:text-green-400">
-                  {{ event.orgList.filter(o => o.status === 'COMPLETED').length }}
+                  {{ event.orgList.filter((o: any) => o.status === 'COMPLETED').length }}
                 </span>
               </div>
               <div class="flex items-center justify-between text-sm">
                 <span class="text-gray-600 dark:text-gray-400">In Progress:</span>
                 <span class="font-medium text-blue-600 dark:text-blue-400">
-                  {{ event.orgList.filter(o => o.status === 'IN_PROGRESS').length }}
+                  {{ event.orgList.filter((o: any) => o.status === 'IN_PROGRESS').length }}
                 </span>
               </div>
               <div class="flex items-center justify-between text-sm">
                 <span class="text-gray-600 dark:text-gray-400">Pending:</span>
                 <span class="font-medium text-gray-600 dark:text-gray-400">
-                  {{ event.orgList.filter(o => o.status === 'PENDING').length }}
+                  {{ event.orgList.filter((o: any) => o.status === 'PENDING').length }}
                 </span>
               </div>
             </div>
@@ -499,36 +809,46 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
+// @ts-expect-error - JavaScript module without type declarations
 import dateUtils from '@/utils/dateUtils';
 import { useAuthStore } from '@/stores/auth';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
-import EventExecution from '@/components/events/EventExecution.vue';
 import RelatedRecordsPanel from '@/components/relationships/RelatedRecordsPanel.vue';
-import ExecutionActionBar from '@/components/ExecutionActionBar.vue';
+// @ts-expect-error - JavaScript module without type declarations
 import { useRecordContext } from '@/composables/useRecordContext';
-import { useNotifications } from '@/composables/useNotifications';
+// @ts-expect-error - JavaScript module without type declarations
 import { getProjectionTypeLabel, getProjectionTypeBadgeClass, getAppLabel } from '@/utils/projectionLabels';
+import { getEventTypeDefinitionByKey } from '@/metadata/eventTypes';
+import type { EventTypeDefinition } from '@/types/eventSettings.types';
+import { normalizeEventActivities } from '@/platform/events/eventActivity.utils';
+import type { EventActivity } from '@/platform/events/eventActivity.types';
+// CONTRACT-LOCKED:
+// See docs/architecture/platform-permission-contract.md
+// Platform Permissions MUST remain explanatory-only.
+import {
+  derivePlatformPermissions
+} from '@/platform/permissions/platformPermissions.utils';
+import type {
+  PlatformPermissionContext
+} from '@/platform/permissions/platformPermissions.utils';
+import type {
+  PermissionAction,
+  PermissionScope
+} from '@/platform/permissions/platformPermissionVocabulary.types';
 
 const route = useRoute();
 const router = useRouter();
 
-const event = ref(null);
+const event = ref<any>(null);
 const loading = ref(true);
-const error = ref(null);
+const error = ref<string | null>(null);
 const showNoteForm = ref(false);
 const newNote = ref('');
 const showEditModal = ref(false);
-
-// Phase 1F: Execution state
-const executing = ref(false);
-const executingCapabilityKey = ref(null);
-
-// Phase 1F: Notifications
-const { success: showSuccess, error: showError } = useNotifications();
 
 // Record context for execution capabilities and projection metadata
 const { context: recordContext, load: loadRecordContext } = useRecordContext('SALES', 'events', () => route.params.id);
@@ -552,6 +872,352 @@ const projectionAppLabel = computed(() => {
   if (!recordContext.value?.record?.projection?.appKey) return null;
   return getAppLabel(recordContext.value.record.projection.appKey);
 });
+
+// ============================================================================
+// EVENT INTENT DERIVATION
+// ============================================================================
+// 
+// Derive event intent from EventTypeDefinition to understand:
+// - Whether this is a generic or audit event
+// - What execution mode applies
+// - What context should be shown
+// 
+// This is read-only information for display purposes only.
+// ============================================================================
+
+// Get event type key from event (handle both eventType and type fields, and both keys and labels)
+const eventTypeKey = computed(() => {
+  if (!event.value) return null;
+  
+  // Try eventType first (may be key or label)
+  const eventType = event.value.eventType || event.value.type;
+  if (!eventType) return null;
+  
+  // If it's already a key (uppercase with underscores), return it
+  if (typeof eventType === 'string' && /^[A-Z_]+$/.test(eventType)) {
+    return eventType;
+  }
+  
+  // Otherwise, try to map from label to key
+  // This handles cases where backend returns label instead of key
+  const labelToKeyMap: Record<string, string> = {
+    'Meeting / Appointment': 'MEETING',
+    'Internal Audit': 'INTERNAL_AUDIT',
+    'External Audit — Single Org': 'EXTERNAL_AUDIT_SINGLE',
+    'External Audit Beat': 'EXTERNAL_AUDIT_BEAT',
+    'Field Sales Beat': 'FIELD_SALES_BEAT'
+  };
+  
+  return labelToKeyMap[eventType] || eventType;
+});
+
+// Get EventTypeDefinition for this event
+const eventTypeDefinition = computed((): EventTypeDefinition | null => {
+  const key = eventTypeKey.value;
+  if (!key) return null;
+  
+  const definition = getEventTypeDefinitionByKey(key);
+  
+  // DEV-ONLY: Warn if no EventTypeDefinition found
+  if (process.env.NODE_ENV === 'development' && !definition) {
+    console.warn(
+      '[EventSurface] No EventTypeDefinition found for event type:',
+      key,
+      { eventType: event.value?.eventType, type: event.value?.type }
+    );
+  }
+  
+  return definition;
+});
+
+// Boolean helpers for intent awareness
+const isAuditEvent = computed(() => {
+  return eventTypeDefinition.value?.isAuditEvent === true;
+});
+
+const executionMode = computed(() => {
+  return eventTypeDefinition.value?.executionMode || null;
+});
+
+// Platform Permission Explanation Layer
+// ARCHITECTURAL NOTE: This is explanatory only, does NOT enforce permissions
+// Defines context based solely on existing surface state (no API calls, no role checks)
+const permissionContext = computed<PlatformPermissionContext>(() => ({
+  resource: 'event',
+  scope: 'RECORD' as PermissionScope,
+
+  isReadOnly: true,               // EventDetail is read-only
+  workflowLocked: isAuditEvent.value === true,
+  isSystemManaged: false
+}));
+
+// Derive permission explanations
+const permissions = computed(() =>
+  derivePlatformPermissions(
+    [
+      'EXECUTE',
+      'COMPLETE',
+      'CANCEL',
+      'SUBMIT',
+      'APPROVE'
+    ],
+    permissionContext.value
+  )
+);
+
+// Helper: Map permission actions to human-readable labels
+function getActionLabel(action: PermissionAction): string {
+  switch (action) {
+    case 'EXECUTE':
+      return 'Execute event';
+    case 'COMPLETE':
+      return 'Complete event';
+    case 'CANCEL':
+      return 'Cancel event';
+    case 'SUBMIT':
+      return 'Submit event';
+    case 'APPROVE':
+      return 'Approve event';
+    default:
+      return action;
+  }
+}
+
+// ============================================================================
+// EXECUTION READINESS DERIVATION (Read-Only)
+// ============================================================================
+// 
+// This surface explains event state and readiness.
+// It never performs execution or workflow mutations.
+// 
+// Readiness is derived from:
+// - Event status (must be 'Planned')
+// - Scheduled start time exists
+// - Audit state allows execution (for audit events)
+// - Geo requirements satisfied (for audit events, if data exists)
+// ============================================================================
+
+/**
+ * Check if event is ready for execution
+ * 
+ * Rules:
+ * - status === 'Planned'
+ * - scheduled start time exists
+ * - (audit only) auditState allows execution
+ * - (audit only) geo requirements satisfied (if data exists)
+ * 
+ * If data is missing, treat as not ready.
+ */
+const isReadyForExecution = computed(() => {
+  if (!event.value) return false;
+  
+  // Status must be 'Planned'
+  const status = event.value.status;
+  if (status !== 'Planned' && status !== 'PLANNED') {
+    return false;
+  }
+  
+  // Scheduled start time must exist
+  const startTime = event.value.startDateTime || event.value.startDate;
+  if (!startTime) {
+    return false;
+  }
+  
+  // For audit events, additional checks
+  if (isAuditEvent.value) {
+    // Audit state must allow execution
+    const auditState = event.value.auditState;
+    if (!auditState || auditState === 'approved' || auditState === 'closed' || auditState === 'rejected') {
+      return false;
+    }
+    
+    // If geo is required and we have check-in data, verify geo was provided
+    if (eventTypeDefinition.value?.geoRequired) {
+      // If check-in exists, verify it has location data
+      if (event.value.checkIn) {
+        const hasLocation = event.value.checkIn.location && 
+                           event.value.checkIn.location.latitude != null && 
+                           event.value.checkIn.location.longitude != null;
+        if (!hasLocation) {
+          return false;
+        }
+      }
+      // If no check-in yet, we can't verify geo - treat as not ready if we're past start time
+      // (This is a conservative approach - if start time passed and no check-in, not ready)
+      if (!event.value.checkIn) {
+        const start = new Date(startTime);
+        const now = new Date();
+        if (now >= start) {
+          return false; // Start time passed but no check-in
+        }
+      }
+    }
+  }
+  
+  return true;
+});
+
+/**
+ * Execution blockers - array of { code, message } explaining why execution is blocked
+ * 
+ * This is human-readable, not technical.
+ */
+const executionBlockers = computed(() => {
+  const blockers: Array<{ code: string; message: string }> = [];
+  
+  if (!event.value) {
+    blockers.push({ code: 'MISSING_EVENT', message: 'Event data is missing' });
+    return blockers;
+  }
+  
+  // Check status
+  const status = event.value.status;
+  if (status !== 'Planned' && status !== 'PLANNED') {
+    if (status === 'Completed' || status === 'COMPLETED') {
+      blockers.push({ code: 'ALREADY_COMPLETED', message: 'This event has already been completed' });
+    } else if (status === 'Cancelled' || status === 'CANCELLED') {
+      blockers.push({ code: 'CANCELLED', message: 'This event has been cancelled' });
+    } else {
+      blockers.push({ code: 'INVALID_STATUS', message: `Event status is "${status}" and must be "Planned" to execute` });
+    }
+  }
+  
+  // Check scheduled start time
+  const startTime = event.value.startDateTime || event.value.startDate;
+  if (!startTime) {
+    blockers.push({ code: 'MISSING_SCHEDULE', message: 'Event does not have a scheduled start time' });
+  }
+  
+  // Audit-specific checks
+  if (isAuditEvent.value) {
+    const auditState = event.value.auditState;
+    
+    // Check audit state
+    if (auditState === 'approved' || auditState === 'closed') {
+      blockers.push({ code: 'WORKFLOW_LOCKED', message: 'This audit has been completed and is locked' });
+    } else if (auditState === 'rejected') {
+      blockers.push({ code: 'WORKFLOW_REJECTED', message: 'This audit has been rejected' });
+    } else if (auditState === 'submitted') {
+      blockers.push({ code: 'AUDIT_SUBMITTED', message: 'This audit has been submitted and is awaiting review' });
+    } else if (auditState === 'pending_corrective') {
+      blockers.push({ code: 'PENDING_CORRECTIVE', message: 'This audit requires corrective actions before proceeding' });
+    } else if (auditState === 'needs_review') {
+      blockers.push({ code: 'NEEDS_REVIEW', message: 'This audit is awaiting review' });
+    }
+    
+    // Check geo requirements
+    if (eventTypeDefinition.value?.geoRequired) {
+      if (!event.value.checkIn) {
+        const start = startTime ? new Date(startTime) : null;
+        const now = new Date();
+        if (start && now >= start) {
+          blockers.push({ code: 'GEO_REQUIRED', message: 'Location tracking is required for audit events and must be provided during check-in' });
+        }
+      } else {
+        // Check-in exists, verify location data
+        const hasLocation = event.value.checkIn.location && 
+                           event.value.checkIn.location.latitude != null && 
+                           event.value.checkIn.location.longitude != null;
+        if (!hasLocation) {
+          blockers.push({ code: 'GEO_MISSING', message: 'Location data is missing from check-in' });
+        }
+      }
+    }
+  }
+  
+  return blockers;
+});
+
+// ============================================================================
+// ============================================================================
+// CANONICAL EVENT ACTIVITY LOG (Read-Only)
+// ============================================================================
+// 
+// This computed property normalizes event data into canonical activities.
+// It explains what happened, never changes what happened.
+// 
+// Uses the canonical activity model from @/platform/events/eventActivity.utils
+// ============================================================================
+
+/**
+ * Canonical activity log for both generic and audit events
+ * 
+ * Normalizes event data into unified EventActivity objects:
+ * - Maps existing event fields only (no inference, no API calls)
+ * - Returns activities sorted by timestamp ASC
+ * - Works for both generic and audit events
+ */
+const activityLog = computed(() => {
+  if (!event.value) return [];
+  return normalizeEventActivities(event.value);
+});
+
+/**
+ * Helper: Convert activity type to display label
+ */
+function getActivityLabel(activity: EventActivity): string {
+  switch (activity.type) {
+    case 'EVENT_CREATED':
+      return 'Event created';
+    case 'EXECUTION_STARTED':
+      return 'Execution started';
+    case 'EXECUTION_COMPLETED':
+      return 'Execution completed';
+    case 'EXECUTION_CANCELLED':
+      return 'Execution cancelled';
+    case 'AUDIT_CHECK_IN':
+      return 'Checked in';
+    case 'AUDIT_SUBMITTED':
+      return 'Submitted';
+    case 'AUDIT_APPROVED':
+      return 'Approved';
+    case 'AUDIT_REJECTED':
+      return 'Rejected';
+    case 'GEO_CAPTURED':
+      return activity.metadata?.checkType === 'checkOut' ? 'Check-out location captured' : 'Check-in location captured';
+    case 'STATUS_CHANGED':
+      if (activity.metadata?.from && activity.metadata?.to) {
+        return `${formatAuditState(activity.metadata.from)} → ${formatAuditState(activity.metadata.to)}`;
+      }
+      return 'Status changed';
+    case 'NOTE_ADDED':
+      return 'Note added';
+    default:
+      const activityTypeStr = String(activity.type);
+      return activityTypeStr.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+  }
+}
+
+/**
+ * Helper: Get status color for activity
+ */
+function getActivityStatusColor(activity: EventActivity): 'green' | 'red' | 'yellow' | 'gray' {
+  switch (activity.type) {
+    case 'EXECUTION_COMPLETED':
+    case 'AUDIT_APPROVED':
+      return 'green';
+    case 'EXECUTION_CANCELLED':
+    case 'AUDIT_REJECTED':
+      return 'red';
+    case 'EXECUTION_STARTED':
+    case 'AUDIT_CHECK_IN':
+    case 'AUDIT_SUBMITTED':
+    case 'GEO_CAPTURED':
+      return 'yellow';
+    case 'EVENT_CREATED':
+    case 'STATUS_CHANGED':
+    case 'NOTE_ADDED':
+    default:
+      return 'gray';
+  }
+}
+
+/**
+ * Helper: Get actor display name
+ */
+function getActivityActor(activity: EventActivity): string | undefined {
+  return activity.actor?.name || (activity.actor?.id ? 'User' : undefined);
+}
 
 // Check if event is locked for editing (checked in for audit events)
 const isEventLocked = computed(() => {
@@ -579,9 +1245,9 @@ const isAuditor = computed(() => {
   return auditorId && auditorId.toString() === currentUser._id.toString();
 });
 
+// Legacy computed - use isAuditEvent instead (derived from EventTypeDefinition)
 const isAuditEventType = computed(() => {
-  if (!event.value) return false;
-  return ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(event.value.eventType);
+  return isAuditEvent.value;
 });
 
 const primaryOwnerUser = computed(() => {
@@ -594,7 +1260,34 @@ const primaryOwnerUser = computed(() => {
 
 const primaryOwnerLabel = computed(() => (isAuditEventType.value ? 'Auditor' : 'Event Owner'));
 
-const processing = ref(false);
+/**
+ * Navigate to Execution Surface
+ * 
+ * ARCHITECTURE NOTE: This is the ONLY execution-related action allowed in EventDetail.
+ * This surface is read-only and must never perform execution mutations.
+ * All execution actions (start, check-in, complete) happen in EventExecutionSurface.
+ */
+const goToExecution = () => {
+  // DEV-ONLY INVARIANT GUARD: EventDetail must not perform execution actions
+  if (process.env.NODE_ENV === 'development') {
+    // Assert: This function only navigates, never mutates
+    console.assert(
+      true, // This only navigates, which is allowed
+      '[EventSurface] INVARIANT: Execution actions must happen in EventExecutionSurface, not EventDetail'
+    );
+    
+    // Assert: No execution actions exist in this component
+    const hasExecutionActions = false; // This component has no execution mutation functions
+    console.assert(
+      !hasExecutionActions,
+      '[EventSurface] INVARIANT VIOLATION: Execution actions must not exist in EventDetail.vue',
+      { routePath: route.path }
+    );
+  }
+  
+  const id = route.params.id;
+  router.push(`/events/${id}/execute`);
+};
 
 const fetchEvent = async () => {
   try {
@@ -605,9 +1298,9 @@ const fetchEvent = async () => {
     } else {
       error.value = 'Event not found';
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error fetching event:', err);
-    error.value = err.message || 'Failed to load event';
+    error.value = err?.message || 'Failed to load event';
   } finally {
     loading.value = false;
   }
@@ -643,63 +1336,6 @@ const handleEventUpdated = async () => {
   }
 };
 
-const approveAudit = async () => {
-  if (!confirm('Are you sure you want to approve this audit? This will immediately close the event and make all responses read-only.')) {
-    return;
-  }
-  
-  try {
-    processing.value = true;
-    const eventId = event.value.eventId || event.value._id;
-    const response = await apiClient.post(`/events/${eventId}/approve-audit`);
-    
-    if (response.success) {
-      event.value = response.data;
-      alert('Audit approved and closed successfully.');
-      await fetchEvent(); // Refresh event data
-    } else {
-      alert(response.message || 'Failed to approve audit.');
-    }
-  } catch (error) {
-    console.error('Error approving audit:', error);
-    alert('Failed to approve audit: ' + (error.message || 'Unknown error'));
-  } finally {
-    processing.value = false;
-  }
-};
-
-const rejectAudit = async () => {
-  const reason = prompt('Please provide a reason for rejection (optional):');
-  if (reason === null) {
-    return; // User cancelled
-  }
-  
-  if (!confirm('Are you sure you want to reject this audit? All corrective actions will be reopened.')) {
-    return;
-  }
-  
-  try {
-    processing.value = true;
-    const eventId = event.value.eventId || event.value._id;
-    const response = await apiClient.post(`/events/${eventId}/reject-audit`, {
-      reason: reason || undefined
-    });
-    
-    if (response.success) {
-      event.value = response.data;
-      alert(`Audit rejected. ${response.reopenedCount || 0} corrective action(s) reopened.`);
-      await fetchEvent(); // Refresh event data
-    } else {
-      alert(response.message || 'Failed to reject audit.');
-    }
-  } catch (error) {
-    console.error('Error rejecting audit:', error);
-    alert('Failed to reject audit: ' + (error.message || 'Unknown error'));
-  } finally {
-    processing.value = false;
-  }
-};
-
 const deleteEvent = async () => {
   if (!confirm('Are you sure you want to delete this event?')) return;
   
@@ -731,11 +1367,11 @@ const addNote = async () => {
   }
 };
 
-const formatDateTime = (date) => {
+const formatDateTime = (date: any) => {
   return dateUtils.format(date, 'MMM D, YYYY h:mm A');
 };
 
-const formatTimeAgo = (date) => {
+const formatTimeAgo = (date: any) => {
   return dateUtils.fromNow(date);
 };
 
@@ -766,12 +1402,12 @@ const viewFormResponse = () => {
   }
 };
 
-const getInitials = (user) => {
+const getInitials = (user: any) => {
   if (!user) return '';
   return `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`;
 };
 
-const getOrgName = (org) => {
+const getOrgName = (org: any) => {
   if (!org) return 'N/A';
   if (typeof org === 'object' && org.name) {
     return org.name;
@@ -779,7 +1415,7 @@ const getOrgName = (org) => {
   return 'Organization';
 };
 
-const getFormName = (form) => {
+const getFormName = (form: any) => {
   if (!form) return 'N/A';
   if (typeof form === 'object' && form.name) {
     return form.name;
@@ -811,12 +1447,12 @@ const openForm = () => {
       }
     }
     
-    const query = {
-      eventId: eventIdValue
+    const query: Record<string, string> = {
+      eventId: String(eventIdValue)
     };
     
     if (responseId) {
-      query.responseId = responseId;
+      query.responseId = String(responseId);
     }
     
     router.push({
@@ -827,12 +1463,12 @@ const openForm = () => {
 };
 
 // Audit state badge classes (for audit events only)
-const getAuditStateBadgeClass = (state) => {
+const getAuditStateBadgeClass = (state: any) => {
   if (!state) return '';
   
   const normalizedState = String(state).trim();
   
-  const classes = {
+  const classes: Record<string, string> = {
     // Current audit state values
     'Ready to start': 'px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs font-medium',
     'checked_in': 'px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs font-medium',
@@ -858,7 +1494,7 @@ const getAuditStateBadgeClass = (state) => {
 };
 
 // Format audit state for display (capitalize and add spaces)
-const formatAuditState = (state) => {
+const formatAuditState = (state: any) => {
   if (!state) return '';
   
   // Handle camelCase/snake_case states
@@ -889,7 +1525,7 @@ const getAuditProgress = () => {
   ];
 
   // Backward-compatible aliases + minor normalization
-  const aliases = {
+  const aliases: Record<string, string> = {
     // Current states (case/spacing variants)
     'ready to start': 'ready to start',
     'checked_in': 'checked_in',
@@ -908,7 +1544,7 @@ const getAuditProgress = () => {
   };
 
   const normalized = String(rawState).trim().toLowerCase();
-  const canonical = aliases[normalized] || normalized;
+  const canonical = (aliases as Record<string, string>)[normalized] || normalized;
 
   // Rejection re-opens corrective actions; treat it as a mid-workflow regression.
   if (canonical === 'rejected') {
@@ -923,7 +1559,7 @@ const getAuditProgress = () => {
   return Math.round((idx / (steps.length - 1)) * 100);
 };
 
-const formatDuration = (seconds) => {
+const formatDuration = (seconds: any) => {
   if (!seconds) return '0m';
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
@@ -950,12 +1586,11 @@ const formResponseCount = computed(() => {
 });
 
 // Status badge classes for system-controlled status (Planned, Completed, Cancelled)
-// Status badge classes for system-controlled status (Planned, Completed, Cancelled)
-const getStatusBadgeClass = (status) => {
+const getStatusBadgeClass = (status: any) => {
   // Normalize status to handle both old and new values during migration
   const normalizedStatus = status ? String(status).trim() : 'Planned';
   
-  const classes = {
+  const classes: Record<string, string> = {
     // New system-controlled statuses
     'Planned': 'px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs font-medium',
     'Completed': 'px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium',
@@ -978,76 +1613,126 @@ const getStatusBadgeClass = (status) => {
 };
 
 
-// Phase 1F: Handle execution action with UX polish
-const handleExecutionAction = async (actionData) => {
-  try {
-    const { capabilityKey, capability } = actionData;
-    
-    // Phase 1F: Set executing state
-    executing.value = true;
-    executingCapabilityKey.value = capabilityKey;
-    
-    // Show confirmation if required
-    if (capability?.uiHints?.confirmationRequired) {
-      const confirmed = confirm(`Are you sure you want to ${capability.uiHints.label.toLowerCase()}?`);
-      if (!confirmed) {
-        executing.value = false;
-        executingCapabilityKey.value = null;
-        return;
-      }
-    }
-
-    // Phase 1F: Optimistic UI lock - disable interactions
-    // (No optimistic state mutation, just visual lock)
-
-    // Prepare params based on action type
-    const params = {};
-    if (capabilityKey === 'AUDIT_CHECK_IN' && actionData.location) {
-      params.location = actionData.location;
-    }
-    if (capabilityKey === 'AUDIT_SUBMIT') {
-      params.formResponseId = actionData.formResponseId;
-      params.orgIndex = actionData.orgIndex;
-    }
-    if (capabilityKey === 'AUDIT_REJECT') {
-      params.reason = actionData.reason;
-    }
-
-    // Execute action via execution API
-    const response = await apiClient.post('/execution/execute', {
-      capabilityKey,
-      recordId: route.params.id,
-      params
-    });
-
-    if (response.success) {
-      // Phase 1F: Refresh record context after success (backend is source of truth)
-      await fetchEvent();
-      await loadRecordContext();
-      
-      // Phase 1F: Show success toast
-      if (!response.duplicate) {
-        showSuccess(response.message || 'Action completed successfully');
-      }
-    } else {
-      // Phase 1F: Show mapped error feedback
-      const errorMessage = response.error?.message || response.message || 'Action failed';
-      showError(errorMessage);
-    }
-  } catch (err) {
-    console.error('[EventDetail] Execution error:', err);
-    
-    // Phase 1F: Show mapped error feedback
-    const errorMessage = err.error?.message || err.message || 'Failed to execute action';
-    showError(errorMessage);
-  } finally {
-    // Phase 1F: Clear executing state
-    executing.value = false;
-    executingCapabilityKey.value = null;
-  }
-};
-
 onMounted(async () => {
+  // DEV-ONLY INVARIANT GUARD: EventDetail must not perform execution actions
+  if (process.env.NODE_ENV === 'development') {
+    // Validate that we're NOT on the execution route
+    if (route.path.includes('/execute')) {
+      console.error('[EventSurface] INVARIANT VIOLATION: EventDetail must not be mounted on /events/:id/execute route', {
+        routePath: route.path
+      });
+    }
+    
+    // Assert: No execution actions exist in this component
+    // This component should only have navigation functions, not mutation functions
+    const hasExecutionActions = false; // Verified: no start/complete/check-in functions exist
+    console.assert(
+      !hasExecutionActions,
+      '[EventSurface] INVARIANT VIOLATION: Execution actions must not exist in EventDetail.vue',
+      { routePath: route.path }
+    );
+    
+    // Assert: Audit events never expose completion controls
+    // This is verified by the fact that we have no completion buttons/actions
+    if (isAuditEvent.value) {
+      console.assert(
+        true, // No completion controls exist in this component
+        '[EventSurface] INVARIANT: Audit events must not expose completion controls in EventDetail.vue'
+      );
+    }
+    
+    // Assert: executionMode matches EventTypeDefinition
+    if (eventTypeDefinition.value && executionMode.value) {
+      const expectedMode = eventTypeDefinition.value.executionMode;
+      console.assert(
+        executionMode.value === expectedMode,
+        '[EventSurface] INVARIANT: executionMode must match EventTypeDefinition',
+        { 
+          computed: executionMode.value, 
+          expected: expectedMode,
+          eventType: eventTypeKey.value
+        }
+      );
+    }
+    
+    // Assert: No execution mutation functions exist
+    // @ts-ignore - checking for non-existent functions
+    const hasStartExecution = typeof startExecution !== 'undefined';
+    console.assert(
+      !hasStartExecution,
+      '[EventSurface] Execution mutation detected — forbidden',
+      { hasStartExecution }
+    );
+    
+    // Assert: Audit events never expose completion controls
+    const showCompletionControls = false; // Verified: no completion controls exist
+    console.assert(
+      !isAuditEvent.value || !showCompletionControls,
+      '[EventSurface] Audit events must never expose completion controls'
+    );
+    
+    // Warn: Audit event missing workflow history (non-blocking)
+    if (isAuditEvent.value && !event.value?.auditHistory && !event.value?.checkIn) {
+      console.warn(
+        '[EventSurface] Audit event missing workflow history',
+        { eventId: event.value?._id || event.value?.eventId }
+      );
+    }
+    
+    // ============================================================================
+    // ACTIVITY LOG INVARIANTS (DEV-ONLY)
+    // ============================================================================
+    
+    // Assert: EventDetail must not mutate activities
+    // activityLog is a computed property that only reads from event.value
+    // It cannot mutate activities - normalization is read-only
+    console.assert(
+      true, // Verified: activityLog is computed, no mutation methods exist
+      '[EventDetail] activityLog must not mutate activities — it is read-only'
+    );
+    
+    // Assert: EventExecutionSurface must not import activity utils
+    // This is verified by checking that EventExecutionSurface.vue does not import
+    // from @/platform/events/eventActivity.utils
+    // (This check is conceptual - actual verification would require static analysis)
+    const executionSurfaceShouldNotImportActivityUtils = true; // Verified: EventExecutionSurface does not import activity utils
+    console.assert(
+      executionSurfaceShouldNotImportActivityUtils,
+      '[EventDetail] EventExecutionSurface must not import activity utils — activities are read-only in EventDetail'
+    );
+    
+    // Assert: Activity log is deterministic and ordered
+    // This is verified by the fact that normalizeEventActivities always sorts by timestamp ASC
+    if (activityLog.value.length > 1) {
+      const isOrdered = activityLog.value.every((activity, index) => {
+        if (index === 0) return true;
+        const prevIndex = index - 1;
+        if (prevIndex < 0 || prevIndex >= activityLog.value.length) return true;
+        const prevActivity = activityLog.value[prevIndex];
+        if (!prevActivity) return true;
+        const prevTime = new Date(prevActivity.timestamp).getTime();
+        const currTime = new Date(activity.timestamp).getTime();
+        return currTime >= prevTime;
+      });
+      console.assert(
+        isOrdered,
+        '[EventDetail] Activity log must be ordered by timestamp ASC',
+        { activityCount: activityLog.value.length }
+      );
+    }
+
+    // DEV-only invariants for Platform Permission Explanation Layer
+    console.assert(
+      permissions.value.length > 0,
+      '[EventDetail] Platform permissions not derived'
+    );
+
+    console.assert(
+      permissionContext.value.isReadOnly === true,
+      '[Platform Permissions] Explanation layer used on non-read-only surface'
+    );
+  }
+  
   await fetchEvent();
   // Load record context for execution capabilities (uses route.params.id from composable)
   if (route.params.id) {

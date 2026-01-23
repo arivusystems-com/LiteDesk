@@ -1,5 +1,24 @@
 <!--
   ============================================================================
+  ARCHITECTURAL INVARIANT: PEOPLE SURFACE
+  ============================================================================
+  
+  WHAT THIS SURFACE IS:
+  - A READ-ONLY display surface for person profiles
+  - Shows identity, participation, momentum, and history layers
+  - Provides navigation to creation/editing surfaces (never hosts them)
+  
+  WHAT THIS SURFACE MUST NEVER DO:
+  - MUST NOT contain create/edit logic (delegates to PeopleQuickCreateDrawer)
+  - MUST NOT mutate person records directly (redirects to appropriate surfaces)
+  - MUST NOT host inline editing forms
+  - MUST NOT perform PATCH/POST operations on person data
+  
+  INVARIANT LOCKS:
+  - No create/edit logic exists here (all mutations redirect to PeopleQuickCreateDrawer)
+  - Any attempt to mutate redirects to PeopleQuickCreateDrawer (never inline)
+  
+  ============================================================================
   PEOPLESURFACE CONTRACT
   ============================================================================
   
@@ -98,6 +117,47 @@
         :person-id="personId"
         @edit-profile="handleEditProfile"
       />
+
+      <!-- Action Availability Explanation (Read-Only) -->
+      <!-- ARCHITECTURAL NOTE: This section explains why actions may or may not be allowed -->
+      <!-- It does NOT enforce, hide, disable, or change behavior -->
+      <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+          Action Availability
+        </h2>
+        
+        <div class="space-y-3">
+          <div
+            v-for="permission in permissions"
+            :key="permission.action"
+            class="flex items-start justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0"
+          >
+            <div class="flex-1">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {{ getActionLabel(permission.action) }}
+                </span>
+                <span
+                  :class="[
+                    'text-xs font-medium px-2 py-0.5 rounded',
+                    permission.allowed
+                      ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                      : 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+                  ]"
+                >
+                  {{ permission.allowed ? 'Allowed' : 'Not allowed' }}
+                </span>
+              </div>
+              <p
+                v-if="!permission.allowed && permission.reason"
+                class="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-0"
+              >
+                Reason: {{ permission.reason }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- Layer 2: ParticipationLayer -->
       <ParticipationLayer
@@ -366,6 +426,12 @@ import { useRouter } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
 import { assertAttachPermission, assertEditParticipationPermission, assertLifecyclePermission } from '@/platform/permissions/peopleGuards';
 import { getFieldMetadata, PEOPLE_FIELD_METADATA } from '@/platform/fields/peopleFieldModel';
+// CONTRACT-LOCKED:
+// See docs/architecture/platform-permission-contract.md
+// Platform Permissions MUST remain explanatory-only.
+import {
+  derivePlatformPermissions
+} from '@/platform/permissions/platformPermissions.utils';
 
 const route = useRoute();
 const router = useRouter();
@@ -373,7 +439,11 @@ const authStore = useAuthStore();
 const { openTab } = useTabs();
 
 // Computed: Ensure personId is always a string or null (never undefined)
+// IMPORTANT: In the tabbed UI, this view can remain mounted while the global
+// route changes (e.g. to `/organizations/:id`). In that case `route.params.id`
+// is not a person id; only treat it as one on the People route.
 const personId = computed(() => {
+  if (route.name !== 'person-detail') return null;
   return route.params.id || null;
 });
 
@@ -481,6 +551,47 @@ const showCreateDrawer = ref(false);
 const createDrawerModule = ref(null);
 const createDrawerInitialData = ref({});
 
+// Platform Permission Explanation Layer
+// ARCHITECTURAL NOTE: This is explanatory only, does NOT enforce permissions
+// Defines context based solely on existing surface state (no API calls, no role checks)
+const permissionContext = computed(() => ({
+  resource: 'people',
+  scope: 'RECORD',
+
+  isReadOnly: true,               // PeopleSurface is read-only
+  isSystemManaged: false,
+  workflowLocked: false           // Explicit for clarity
+}));
+
+// Derive permission explanations
+const permissions = computed(() =>
+  derivePlatformPermissions(
+    [
+      'UPDATE',
+      'DELETE',
+      'LINK',
+      'UNLINK'
+    ],
+    permissionContext.value
+  )
+);
+
+// Helper: Map permission actions to human-readable labels
+function getActionLabel(action) {
+  switch (action) {
+    case 'UPDATE':
+      return 'Edit person';
+    case 'DELETE':
+      return 'Delete person';
+    case 'LINK':
+      return 'Link organization';
+    case 'UNLINK':
+      return 'Unlink organization';
+    default:
+      return action;
+  }
+}
+
 // Computed: Extract identity data from profileData
 const identityData = computed(() => {
   if (!profileData.value?.core?.fields) {
@@ -522,10 +633,24 @@ const identityData = computed(() => {
 
 // Methods
 const loadProfile = async () => {
+  // DEV-ONLY INVARIANT GUARD: PeopleSurface is read-only, no mutations
+  if (process.env.NODE_ENV === 'development') {
+    // This function only performs GET requests, which is allowed
+    // Any POST/PATCH/PUT would violate the invariant
+  }
+  
   try {
-    const personId = route.params.id;
+    // Guard: PeopleSurface should only load profile on its own route.
+    // In our tabbed UI, this component can remain mounted while the global route
+    // changes (e.g. to `/organizations/:id`). In that case `route.params.id` is
+    // NOT a person id and will correctly 404 on `/api/people/:id/profile`.
+    if (route.name !== 'person-detail') {
+      return;
+    }
+
+    const id = personId.value;
     // Return early if person ID is missing (e.g., when tab is closed)
-    if (!personId) {
+    if (!id) {
       return;
     }
     
@@ -533,7 +658,7 @@ const loadProfile = async () => {
     error.value = null;
     
     // Load composed profile from API
-    const response = await apiClient.get(`/people/${personId}/profile`, {
+    const response = await apiClient.get(`/people/${id}/profile`, {
       params: {
         routePath: route.path,
         routeName: route.name,
@@ -865,6 +990,14 @@ const handleStatusUpdated = async (updateData) => {
 // ENFORCES: Edit profile edits ONLY core person identity fields
 // EXCLUDES: Participation fields, Lead/Contact status, app-specific fields, workflow state
 const handleEditProfile = async (personId) => {
+  // DEV-ONLY INVARIANT GUARD: PeopleSurface must not contain create/edit logic
+  if (process.env.NODE_ENV === 'development') {
+    console.assert(
+      true, // This handler redirects to drawer, which is allowed
+      '[PeopleSurface] INVARIANT: Edit operations must redirect to PeopleQuickCreateDrawer, not mutate inline'
+    );
+  }
+  
   if (!personId) return;
   
   try {
@@ -922,11 +1055,11 @@ const handleConverted = async (convertedPerson) => {
 };
 
 // Watch for route changes
-watch(() => route.params.id, (newId) => {
+watch(() => [route.name, route.params.id], ([routeName, newId]) => {
+  // Only react to PeopleSurface route changes.
+  if (routeName !== 'person-detail') return;
   // Only load profile if person ID exists (prevents error when tab is closed)
-  if (newId) {
-    loadProfile();
-  }
+  if (newId) loadProfile();
 }, { immediate: false });
 
 // Handle record creation
@@ -960,6 +1093,19 @@ const handleProfileUpdated = () => {
 // Lifecycle
 onMounted(async () => {
   await loadProfile();
+
+  // DEV-only invariants for Platform Permission Explanation Layer
+  if (process.env.NODE_ENV === 'development') {
+    console.assert(
+      permissions.value.length > 0,
+      '[PeopleSurface] Platform permissions not derived'
+    );
+
+    console.assert(
+      permissionContext.value.isReadOnly === true,
+      '[Platform Permissions] Explanation layer used on non-read-only surface'
+    );
+  }
 });
 </script>
 

@@ -56,6 +56,10 @@
                 <span v-if="showTypeSelector && isPlatformOwned" class="text-gray-500 dark:text-gray-400 text-xs ml-2">(based on app configuration)</span>
               </label>
               <!-- Phase 2B: Show filtered options based on projection metadata -->
+              <!-- ARCHITECTURE NOTE: Audit event types are filtered out from generic event creation.
+                   Audit events require complex configuration (roles, forms, geo) and must be created
+                   through Audit application flows, not generic event creation interfaces.
+                   See: docs/architecture/event-settings.md Section 7 (Quick Create Rules) -->
               <select
                 v-if="showTypeSelector && isPlatformOwned && !isEditing"
                 v-model="form.eventType"
@@ -63,11 +67,11 @@
                 required
                 class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               >
-                <option v-for="type in allowedTypes" :key="type.projectionType" :value="type.modelValue">
+                <option v-for="type in filteredAllowedTypes" :key="type.projectionType" :value="type.modelValue">
                   {{ type.modelValue }}
                 </option>
               </select>
-              <!-- Fallback to all options if no projection or editing -->
+              <!-- Fallback to non-audit options if no projection or editing -->
               <select
                 v-else
                 v-model="form.eventType"
@@ -75,15 +79,17 @@
                 required
                 class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               >
-                <option value="Meeting / Appointment">Meeting / Appointment</option>
-                <option value="Internal Audit">Internal Audit</option>
-                <option value="External Audit — Single Org">External Audit — Single Org</option>
-                <option value="External Audit Beat">External Audit Beat</option>
-                <option value="Field Sales Beat">Field Sales Beat</option>
+                <option v-for="eventType in nonAuditEventTypes" :key="eventType" :value="eventType">
+                  {{ eventType }}
+                </option>
               </select>
               <!-- Phase 2B: Helper text when selector is hidden -->
               <p v-if="hideTypeSelector && isPlatformOwned && defaultType && !isEditing" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 This app creates {{ defaultType.modelValue }}s by default
+              </p>
+              <!-- Helper text explaining audit event exclusion -->
+              <p v-if="!isEditing" class="mt-1 text-xs text-gray-500 dark:text-gray-400 italic">
+                Audit events are scheduled from the Audit module.
               </p>
             </div>
 
@@ -448,6 +454,7 @@ import dateUtils from '@/utils/dateUtils';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
 import { useAuthStore } from '@/stores/auth';
 import { useProjectionCreate } from '@/composables/useProjectionCreate';
+import { isAuditEventType, filterNonAuditEventTypes, NON_AUDIT_EVENT_TYPES } from '@/utils/eventUtils';
 
 const props = defineProps({
   isOpen: {
@@ -485,6 +492,18 @@ const {
   resolveInitialCreatePayload,
   isTypeAllowed
 } = useProjectionCreate('events');
+
+// ARCHITECTURE NOTE: Filter out audit event types from generic event creation.
+// Audit events require complex configuration and must be created through Audit flows.
+// See: docs/architecture/event-settings.md Section 7 (Quick Create Rules)
+const filteredAllowedTypes = computed(() => {
+  if (!allowedTypes.value) return [];
+  return allowedTypes.value.filter(type => !isAuditEventType(type.modelValue));
+});
+
+const nonAuditEventTypes = computed(() => {
+  return NON_AUDIT_EVENT_TYPES;
+});
 
 const colorOptions = [
   '#3B82F6', // Blue

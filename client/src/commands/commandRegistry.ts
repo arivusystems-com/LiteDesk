@@ -101,6 +101,15 @@ function createNavigationUtilities(router: Router): NavigationUtilities {
         }
       });
     },
+    openTab: (path: string, options?: { title?: string; background?: boolean }) => {
+      // Note: This is a placeholder - actual tab opening is handled in GlobalSearch
+      // where useTabs() is available. This ensures commands can request tab opening.
+      return router.push(path).catch((err) => {
+        if (err.name !== 'NavigationDuplicated') {
+          console.warn('[CommandRegistry] Navigation error:', err);
+        }
+      });
+    },
     getCurrentRoute: () => router.currentRoute.value
   };
 }
@@ -110,6 +119,17 @@ function createNavigationUtilities(router: Router): NavigationUtilities {
  * 
  * Commands available everywhere, regardless of context.
  * These are core navigation and creation actions that are always relevant.
+ * 
+ * ARCHITECTURE NOTE: Command palette routes to intent, not raw entities.
+ * 
+ * Commands represent user intentions (e.g., "create event", "schedule audit"),
+ * not direct entity manipulation. This ensures:
+ * - Commands route to appropriate surfaces (GenericEventCreateSurface vs Audit flow)
+ * - Intent-based descriptions guide users to the right action
+ * - Audit events are blocked from generic creation flows
+ * - Each command maps to the correct workflow for its domain
+ * 
+ * See: docs/architecture/event-settings.md
  */
 function createGlobalCommands(nav: NavigationUtilities): CommandPaletteItem[] {
   return [
@@ -146,34 +166,49 @@ function createGlobalCommands(nav: NavigationUtilities): CommandPaletteItem[] {
     },
     
     // Creation commands
+    // ARCHITECTURE NOTE: Command palette routes to intent, not raw entities.
+    // Each command maps to the appropriate surface for its domain.
     {
       id: 'create-person',
       label: 'Create Person',
-      description: 'Add a new person',
+      description: 'Add a new person to your contacts',
       category: 'create',
       scope: 'global',
       icon: '➕',
-      kind: 'navigate',
-      run: () => nav.navigate('/people/create')
+      kind: 'action',
+      handler: () => {
+        // Open drawer in same tab, not navigating
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('litedesk:open-people-quick-create'));
+        }
+      }
     },
     {
       id: 'create-organization',
       label: 'Create Organization',
-      description: 'Add a new organization',
+      description: 'Add a new organization or company',
       category: 'create',
       scope: 'global',
       icon: '🏢',
-      kind: 'navigate',
-      run: () => {
-        // Navigate to organizations list - creation may happen via modal/drawer
-        // Adjust route if dedicated creation route exists
-        nav.navigate('/organizations');
+      kind: 'action',
+      // ARCHITECTURAL INTENT: Command palette opens CreateOrganizationDrawer
+      // This is a drawer with Quick → Full form behavior
+      // Post-creation: Opens OrganizationSurface for the new org
+      handler: () => {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('litedesk:open-organization-quick-create', {
+            detail: {
+              initialData: {},
+              autoLinkContext: null
+            }
+          }));
+        }
       }
     },
     {
       id: 'create-task',
       label: 'Create Task',
-      description: 'Create a new task',
+      description: 'Create a new task or to-do item',
       category: 'create',
       scope: 'global',
       icon: '✅',
@@ -215,6 +250,52 @@ function createGlobalCommands(nav: NavigationUtilities): CommandPaletteItem[] {
           }));
         }
       }
+    },
+    {
+      id: 'create-event',
+      label: 'Create Event',
+      description: 'Schedule a meeting or sales beat (basic events only)',
+      category: 'create',
+      scope: 'global',
+      icon: '📅',
+      kind: 'action',
+      // ARCHITECTURE NOTE: Opens EventQuickCreateDrawer in same tab, not navigating.
+      // This surface is intentionally limited and does not support audit events.
+      // Audit event types are blocked from generic event creation.
+      // See: docs/architecture/event-settings.md Section 7 (Quick Create Rules)
+      handler: () => {
+        // Open drawer in same tab, not navigating
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('litedesk:open-event-quick-create'));
+        }
+      }
+    },
+    {
+      id: 'schedule-audit',
+      label: 'Schedule Audit',
+      description: 'Plan and schedule an audit event',
+      category: 'create',
+      scope: 'global',
+      icon: '🔍',
+      kind: 'navigate',
+      // ARCHITECTURE NOTE: Routes to Audit Scheduling Surface, the ONLY way to create audit events.
+      // Audit events require complex configuration (roles, forms, geo) and must be
+      // created through Audit Scheduling Surface, not generic event creation.
+      // See: docs/architecture/audit-scheduling-surface.md
+      run: (nav) => nav.openTab('/audit/schedule', { title: 'Schedule Audit' })
+    },
+    {
+      id: 'plan-audit-beat',
+      label: 'Plan Audit Beat',
+      description: 'Schedule a multi-organization audit route',
+      category: 'create',
+      scope: 'global',
+      icon: '🗺️',
+      kind: 'navigate',
+      // ARCHITECTURE NOTE: Routes to Audit Scheduling Surface for beat planning.
+      // Audit beats require complex configuration and must be created through Audit Scheduling Surface.
+      // See: docs/architecture/audit-scheduling-surface.md
+      run: (nav) => nav.openTab('/audit/schedule', { title: 'Plan Audit Beat' })
     }
   ];
 }
@@ -342,6 +423,8 @@ function createPeopleContextCommands(nav: NavigationUtilities): CommandPaletteIt
       context: 'people',
       icon: '➕',
       kind: 'action',
+      // ARCHITECTURAL INTENT: People surface "Create Organization" opens CreateOrganizationDrawer
+      // Post-creation: Links organization to person and closes drawer
       handler: (route) => {
         // Guard: ensure route exists
         if (!route || !route.params) {
@@ -353,13 +436,10 @@ function createPeopleContextCommands(nav: NavigationUtilities): CommandPaletteIt
         const personId = route.params?.id as string | undefined;
         
         if (personId && typeof window !== 'undefined') {
-          // Dispatch event to open create drawer with auto-link context
-          window.dispatchEvent(new CustomEvent('litedesk:open-create-drawer', {
+          // Dispatch event to open Organization Quick Create drawer with auto-link context
+          window.dispatchEvent(new CustomEvent('litedesk:open-organization-quick-create', {
             detail: {
-              moduleKey: 'organizations',
               initialData: {},
-              title: 'New Organization',
-              description: 'Create a new organization',
               autoLinkContext: { contactId: personId, personId: personId } // Context for auto-linking after creation
             }
           }));

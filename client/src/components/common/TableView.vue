@@ -245,60 +245,81 @@
                 </tr>
               </template>
               <template v-else>
-                <tr
-                  v-for="(row, rowIndex) in displayRows"
-                  :key="rowIdentifier(row, rowIndex)"
-                  :class="[
-                    'group transition-colors cursor-pointer',
-                    isRowSelected(row) 
-                      ? 'bg-gray-50 dark:bg-indigo-950' 
-                      : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-                  ]"
-                  @click="handleRowClick(row, $event)"
-                >
-                  <td
-                    v-if="selectable"
+                <template v-if="displayRows.length > 0">
+                  <tr
+                    v-for="(row, rowIndex) in displayRows"
+                    :key="rowIdentifier(row, rowIndex)"
                     :class="[
-                      'relative px-7 sm:w-12 sm:px-6 sticky z-20 transition-colors',
-                      rowHeightClass,
-                      isRowSelected(row) ? 'bg-gray-50 dark:bg-indigo-950' : 'bg-white dark:bg-gray-900',
-                      isRowSelected(row) ? '' : 'group-hover:bg-gray-100 dark:group-hover:bg-gray-800'
+                      'group transition-colors cursor-pointer',
+                      isRowSelected(row) 
+                        ? 'bg-gray-50 dark:bg-indigo-950' 
+                        : 'hover:bg-gray-100 dark:hover:bg-gray-800'
                     ]"
-                    :style="{ left: '0px' }"
+                    @click="handleRowClick(row, $event)"
                   >
-                    <div v-if="isRowSelected(row)" class="hidden group-has-checked:block absolute inset-y-0 left-0 w-0.5 bg-indigo-600"></div>
-                    <div class="absolute top-1/2 left-4 -mt-2 grid size-4 grid-cols-1">
-                      <input
-                        type="checkbox"
-                        :checked="isRowSelected(row)"
-                        @change.stop="toggleRowSelection(row)"
-                        @click.stop
-                        class="col-start-1 row-start-1 appearance-none rounded-sm border border-gray-300 bg-white checked:border-indigo-600 checked:bg-indigo-600 indeterminate:border-indigo-600 indeterminate:bg-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:border-gray-300 disabled:bg-gray-100 disabled:checked:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:checked:border-indigo-600 dark:checked:bg-indigo-600 dark:indeterminate:border-indigo-600 dark:indeterminate:bg-indigo-600"
-                      />
-                      <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
-                        <path class="opacity-0 group-has-checked:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                        <path class="opacity-0 group-has-indeterminate:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                      </svg>
-                    </div>
-                  </td>
-                  <td
-                    v-for="(column, columnIndex) in displayColumns"
-                    :key="cellKey(column)"
-                    :class="[
-                      'px-5 text-sm text-gray-700 align-middle whitespace-nowrap dark:text-gray-200',
-                      rowHeightClass,
-                      columnIndex === 0 ? [
-                        'sticky z-20 transition-colors sticky-column-border',
+                    <td
+                      v-if="selectable"
+                      :class="[
+                        'relative px-7 sm:w-12 sm:px-6 sticky z-20 transition-colors',
+                        rowHeightClass,
                         isRowSelected(row) ? 'bg-gray-50 dark:bg-indigo-950' : 'bg-white dark:bg-gray-900',
-                        isRowSelected(row) ? '' : 'group-hover:bg-gray-100 dark:group-hover:bg-gray-800',
-                        isScrolledHorizontally ? 'sticky-column-scrolled' : ''
-                      ].join(' ') : ''
-                    ]"
-                    :style="columnCellStyle(column)"
-                  >
-                    <!-- First column: Show content and actions side by side -->
-                    <div v-if="columnIndex === 0 && hasActions" class="flex items-center justify-between gap-3">
-                      <div class="flex-1 min-w-0">
+                        isRowSelected(row) ? '' : 'group-hover:bg-gray-100 dark:group-hover:bg-gray-800'
+                      ]"
+                      :style="{ left: '0px' }"
+                    >
+                      <div v-if="isRowSelected(row)" class="hidden group-has-checked:block absolute inset-y-0 left-0 w-0.5 bg-indigo-600"></div>
+                      <div class="absolute top-1/2 left-4 -mt-2 grid size-4 grid-cols-1">
+                        <input
+                          type="checkbox"
+                          :checked="isRowSelected(row)"
+                          @change.stop="toggleRowSelection(row)"
+                          @click.stop
+                          class="col-start-1 row-start-1 appearance-none rounded-sm border border-gray-300 bg-white checked:border-indigo-600 checked:bg-indigo-600 indeterminate:border-indigo-600 indeterminate:bg-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:border-gray-300 disabled:bg-gray-100 disabled:checked:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:checked:border-indigo-600 dark:checked:bg-indigo-600 dark:indeterminate:border-indigo-600 dark:indeterminate:bg-indigo-600"
+                        />
+                        <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
+                          <path class="opacity-0 group-has-checked:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                          <path class="opacity-0 group-has-indeterminate:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                      </div>
+                    </td>
+                    <td
+                      v-for="(column, columnIndex) in displayColumns"
+                      :key="cellKey(column)"
+                      :class="[
+                        'px-5 text-sm text-gray-700 align-middle whitespace-nowrap dark:text-gray-200',
+                        rowHeightClass,
+                        columnIndex === 0 ? [
+                          'sticky z-20 transition-colors sticky-column-border',
+                          isRowSelected(row) ? 'bg-gray-50 dark:bg-indigo-950' : 'bg-white dark:bg-gray-900',
+                          isRowSelected(row) ? '' : 'group-hover:bg-gray-100 dark:group-hover:bg-gray-800',
+                          isScrolledHorizontally ? 'sticky-column-scrolled' : ''
+                        ].join(' ') : ''
+                      ]"
+                      :style="columnCellStyle(column)"
+                    >
+                      <!-- First column: Show content and actions side by side -->
+                      <div v-if="columnIndex === 0 && hasActions" class="flex items-center justify-between gap-3">
+                        <div class="flex-1 min-w-0">
+                          <slot
+                            :name="`cell-${columnKey(column)}`"
+                            :column="column"
+                            :row="row"
+                            :value="resolveValue(row, column)"
+                          >
+                            <slot name="cell" :column="column" :row="row" :value="resolveValue(row, column)">
+                              {{ resolveValue(row, column) }}
+                            </slot>
+                          </slot>
+                        </div>
+                        <div 
+                          class="flex-shrink-0 transition-opacity duration-200 opacity-0 group-hover:opacity-100" 
+                          @click.stop
+                        >
+                          <slot name="actions" :row="row" />
+                        </div>
+                      </div>
+                      <!-- Other columns: Normal rendering -->
+                      <template v-else>
                         <slot
                           :name="`cell-${columnKey(column)}`"
                           :column="column"
@@ -309,30 +330,11 @@
                             {{ resolveValue(row, column) }}
                           </slot>
                         </slot>
-                      </div>
-                      <div 
-                        class="flex-shrink-0 transition-opacity duration-200 opacity-0 group-hover:opacity-100" 
-                        @click.stop
-                      >
-                        <slot name="actions" :row="row" />
-                      </div>
-                    </div>
-                    <!-- Other columns: Normal rendering -->
-                    <template v-else>
-                      <slot
-                        :name="`cell-${columnKey(column)}`"
-                        :column="column"
-                        :row="row"
-                        :value="resolveValue(row, column)"
-                      >
-                        <slot name="cell" :column="column" :row="row" :value="resolveValue(row, column)">
-                          {{ resolveValue(row, column) }}
-                        </slot>
-                      </slot>
-                    </template>
-                  </td>
-                </tr>
-                <tr v-if="displayRows.length === 0">
+                      </template>
+                    </td>
+                  </tr>
+                </template>
+                <tr v-else>
                   <td :colspan="selectable ? displayColumns.length + 1 : displayColumns.length" class="px-5 py-10 text-center">
                     <slot name="empty">
                       <div class="flex flex-col items-center justify-center py-8">

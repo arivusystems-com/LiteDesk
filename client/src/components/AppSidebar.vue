@@ -148,41 +148,135 @@
           </span>
         </button>
 
-        <!-- People -->
-        <a
-          v-for="item in sidebarStructure.identity"
-          :key="item.id"
-          :href="item.route"
-          @click.prevent="handleNavClick(item.route, item.label, $event)"
-          @auxclick.prevent="handleNavClick(item.route, item.label, $event)"
-          class="w-full h-[2.333rem] rounded-[0.5rem] py-[0.333rem] flex items-center transition-colors"
-          :class="[
-            collapsed ? 'justify-center px-5' : 'px-[0.5rem] gap-[0.667rem]',
-            isActiveRoute(item.route) 
-              ? 'bg-[rgba(84,71,255,0.1)] dark:bg-[rgba(84,71,255,0.2)]' 
-              : 'hover:bg-[#F8F9FB] dark:hover:bg-gray-800'
-          ]"
-          :title="collapsed ? item.label : ''"
+        <!-- Divider above Core Modules -->
+        <div
+          v-if="sidebarStructure.coreModules.length > 0"
+          class="mt-[1rem] h-px bg-[#EAEEF4] dark:bg-gray-700"
+        />
+
+        <!-- Core Modules Section -->
+        <div
+          v-if="sidebarStructure.coreModules.length > 0"
+          class="w-full"
         >
-          <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
-            <component
-              :is="getFigmaNavIcon(item)"
-              class="w-full h-full"
-              :fill="isActiveRoute(item.route) ? iconColors.active : iconColors.primary"
-            />
-          </span>
-          <span
+          <!-- Core Modules Section Header (Collapsible) - Only shown when sidebar is expanded -->
+          <button
             v-if="!collapsed"
-            class="text-[1rem] flex-shrink-0"
-            :class="[
-              isActiveRoute(item.route) 
-                ? 'text-[#432DD6] dark:text-purple-400' 
-                : 'text-[#070922] dark:text-gray-100'
-            ]"
+            type="button"
+            @click="toggleCoreModules"
+            class="w-full h-[2.333rem] rounded-[0.5rem] py-[0.333rem] flex items-center transition-colors hover:bg-[#F8F9FB] dark:hover:bg-gray-800 px-[0.5rem] gap-[0.667rem] flex-shrink-0"
+            title="Core Modules"
           >
-            {{ item.label }}
-          </span>
-        </a>
+            <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
+              <FigmaChevronDown
+                class="w-full h-full transition-transform"
+                :class="{ 'rotate-180': !coreModulesCollapsed }"
+                :fill="iconColors.secondary"
+              />
+            </span>
+            <span
+              class="text-[1rem] font-semibold text-[#070922] dark:text-gray-100 flex-1 text-left"
+            >
+              Core
+            </span>
+          </button>
+
+          <!-- Core Modules List (shown when expanded and not collapsed) -->
+          <div
+            v-if="!collapsed"
+            class="overflow-hidden"
+            :style="{ 
+              maxHeight: !coreModulesCollapsed ? '500px' : '0',
+              transition: 'max-height 0.2s ease-out, opacity 0.2s ease-out',
+              opacity: !coreModulesCollapsed ? 1 : 0
+            }"
+          >
+            <div
+              v-if="!coreModulesCollapsed"
+              class="mt-[0.333rem] flex flex-col gap-[0.333rem]"
+            >
+              <a
+                v-for="item in sidebarStructure.coreModules"
+                :key="item.id"
+                :href="item.route"
+                @click.prevent="handleNavClick(item.route, item.label, $event)"
+                @auxclick.prevent="handleNavClick(item.route, item.label, $event)"
+                class="w-full h-[2.333rem] rounded-[0.5rem] py-[0.333rem] flex items-center transition-colors"
+                :class="[
+                  'px-[0.5rem] gap-[0.667rem]',
+                  isActiveRoute(item.route) 
+                    ? 'bg-[rgba(84,71,255,0.1)] dark:bg-[rgba(84,71,255,0.2)]' 
+                    : 'hover:bg-[#F8F9FB] dark:hover:bg-gray-800'
+                ]"
+                :title="item.label"
+              >
+                <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
+                  <component
+                    :is="getFigmaNavIcon(item)"
+                    class="w-full h-full"
+                    :fill="isActiveRoute(item.route) ? iconColors.active : iconColors.primary"
+                  />
+                </span>
+                <span
+                  class="text-[1rem] flex-shrink-0"
+                  :class="[
+                    isActiveRoute(item.route) 
+                      ? 'text-[#432DD6] dark:text-purple-400' 
+                      : 'text-[#070922] dark:text-gray-100'
+                  ]"
+                >
+                  {{ item.label }}
+                </span>
+              </a>
+            </div>
+          </div>
+
+          <!-- Core Section Icon (shown when sidebar is collapsed) -->
+          <button
+            v-if="collapsed"
+            type="button"
+            @click="toggleCoreModules"
+            class="w-full h-[2.333rem] rounded-[0.5rem] py-[0.333rem] flex items-center justify-center transition-colors hover:bg-[#F8F9FB] dark:hover:bg-gray-800 px-5"
+            title="Core Modules"
+          >
+            <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
+              <FigmaChevronDown
+                class="w-full h-full transition-transform"
+                :class="{ 'rotate-180': !coreModulesCollapsed }"
+                :fill="iconColors.secondary"
+              />
+            </span>
+          </button>
+
+          <!-- Core Modules Icons Only (shown ONLY when entire sidebar is collapsed AND Core section is NOT collapsed) -->
+          <div
+            v-if="collapsed && !coreModulesCollapsed"
+            class="flex flex-col gap-[0.333rem] px-5"
+          >
+            <a
+              v-for="item in sidebarStructure.coreModules"
+              :key="item.id"
+              :href="item.route"
+              @click.prevent="handleNavClick(item.route, item.label, $event)"
+              @auxclick.prevent="handleNavClick(item.route, item.label, $event)"
+              class="w-full h-[2.333rem] rounded-[0.5rem] py-[0.333rem] flex items-center justify-center transition-colors"
+              :class="[
+                isActiveRoute(item.route) 
+                  ? 'bg-[rgba(84,71,255,0.1)] dark:bg-[rgba(84,71,255,0.2)]' 
+                  : 'hover:bg-[#F8F9FB] dark:hover:bg-gray-800'
+              ]"
+              :title="item.label"
+            >
+              <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
+                <component
+                  :is="getFigmaNavIcon(item)"
+                  class="w-full h-full"
+                  :fill="isActiveRoute(item.route) ? iconColors.active : iconColors.primary"
+                />
+              </span>
+            </a>
+          </div>
+        </div>
       </div>
 
       <!-- Divider (12px ÷ 12 = 1rem gap above) -->
@@ -363,10 +457,10 @@
  * Renders the locked `SidebarStructure` contract directly.
  *
  * Invariant:
- * “Sidebar renders surfaces, identities, lenses, and governance — never raw entities.”
+ * "Sidebar renders platform surfaces, core modules, app lenses, and governance — never raw entities."
  *
  * Strict order:
- * shell → identity → appSwitcher → appNav → platform
+ * shell → coreModules → appSwitcher → appNav → platform
  * 
  * ============================================================================
  */
@@ -414,7 +508,7 @@ const router = useRouter();
 const { openTab } = useTabs();
 
 // Sidebar state management
-const { lastActiveAppId } = useSidebarState();
+const { lastActiveAppId, coreModulesCollapsed } = useSidebarState();
 
 // Workspace identity (Figma header)
 const authStore = useAuthStore();
@@ -502,6 +596,11 @@ const toggleAppSwitcherDropdown = () => {
 // Close app switcher dropdown
 const closeAppSwitcherDropdown = () => {
   showAppSwitcherDropdown.value = false;
+};
+
+// Toggle Core Modules section
+const toggleCoreModules = () => {
+  coreModulesCollapsed.value = !coreModulesCollapsed.value;
 };
 
 // Handle app selection
@@ -678,8 +777,13 @@ function getFigmaNavIcon(item: any) {
     if (item.id === 'home') return FigmaHomeIcon;
     if (item.id === 'inbox') return FigmaInboxIcon;
   }
-  if (item?.kind === 'identity') {
-    return FigmaPeopleIcon;
+  if (item?.kind === 'coreModule') {
+    // Use icon from item, or fallback based on moduleKey
+    const moduleKey = item.moduleKey?.toLowerCase() || item.id?.toLowerCase() || '';
+    if (moduleKey === 'people') return FigmaPeopleIcon;
+    if (moduleKey === 'organizations') return BuildingOfficeIcon;
+    // Fallback to icon from item or heroicon mapping
+    return wrapHeroIcon(getIconComponent(item?.icon));
   }
   if (item?.kind === 'app') {
     const label = String(item.label || '').toLowerCase();

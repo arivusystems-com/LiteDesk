@@ -72,8 +72,8 @@
                             :errors="errors"
                             :excludeFields="excludeFields"
                             :lockedFields="lockedFields"
-                            :showAllFields="isEditing || !quickCreateMode"
-                            :quickCreateMode="quickCreateMode && !isEditing"
+                            :showAllFields="isEditing || !effectiveQuickCreateMode"
+                            :quickCreateMode="effectiveQuickCreateMode"
                             :useQuickCreateOrder="useQuickCreateOrder"
                             @update:formData="updateFormData"
                             @ready="onFormReady"
@@ -116,6 +116,7 @@ import DynamicForm from './DynamicForm.vue';
 import apiClient from '@/utils/apiClient';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
 import { useAuthStore } from '@/stores/auth';
+import { isAuditEventType } from '@/utils/eventUtils';
 
 const props = defineProps({
   isOpen: {
@@ -164,6 +165,26 @@ const emit = defineEmits(['close', 'saved']);
 
 const authStore = useAuthStore();
 const isEditing = computed(() => !!props.record);
+
+// ARCHITECTURAL INTENT: For Organizations and Tasks modules, default to Quick Create mode in create flows
+// This ensures CreateRecordDrawer respects Settings → Quick Create configuration
+// Note: OrganizationQuickCreateDrawer is preferred for Organizations, but this provides fallback compatibility
+// For Tasks, this ensures the create drawer shows only fields configured in Settings → Tasks → Quick Create
+// See: docs/architecture/task-settings.md Section 3.5
+const effectiveQuickCreateMode = computed(() => {
+  if (props.moduleKey === 'organizations' && !isEditing.value) {
+    // Organizations create mode: always use Quick Create (respects Settings configuration)
+    return true;
+  }
+  if (props.moduleKey === 'tasks' && !isEditing.value) {
+    // Tasks create mode: always use Quick Create (respects Settings → Tasks → Quick Create configuration)
+    // This ensures only eligible fields appear: title, dueDate, priority, assignedTo, relatedTo
+    // See: docs/architecture/task-settings.md Section 3.5
+    return true;
+  }
+  // Otherwise, use prop value
+  return props.quickCreateMode && !isEditing.value;
+});
 
 // Module name mapping for titles
 const moduleNameMap = {
@@ -423,8 +444,48 @@ const handleSubmit = async () => {
     
     console.log('[CreateRecordDrawer] ✅ Validation passed, proceeding with submission...');
     
-    // Clean up form data - remove system fields that shouldn't be sent
-    const submitData = { ...formData.value };
+    // ARCHITECTURE NOTE: In Quick Create mode, only send fields that are in quickCreate configuration
+    // This ensures the API only receives fields configured in Settings → Core Modules → Tasks → Quick Create
+    // See: docs/architecture/task-settings.md Section 3.5
+    let submitData = { ...formData.value };
+    
+    if (effectiveQuickCreateMode.value && moduleDefinition.value?.quickCreate) {
+      const quickCreateKeys = new Set(
+        (moduleDefinition.value.quickCreate || []).map(k => k?.toLowerCase().trim()).filter(Boolean)
+      );
+      
+      // Fields that are always required by the API (even if not in quickCreate)
+      // These are API-level requirements, not user-facing fields
+      const apiRequiredFields = new Set([
+        'type',           // Required by Scheduling API (task/event)
+        'entitytype',     // Required by Scheduling API
+        'entityid',       // Required by Scheduling API
+        'ownerpersonid'    // May be set from assignedTo mapping
+      ]);
+      
+      // Filter submitData to only include fields in quickCreate configuration + API required fields
+      const filteredData = {};
+      for (const [key, value] of Object.entries(submitData)) {
+        const keyLower = key.toLowerCase();
+        // Include if in quickCreate OR if it's an API-required field
+        if (quickCreateKeys.has(keyLower) || apiRequiredFields.has(keyLower)) {
+          filteredData[key] = value;
+        }
+      }
+      
+      console.log('[CreateRecordDrawer] 🔍 Quick Create mode - filtering fields:', {
+        before: Object.keys(submitData),
+        after: Object.keys(filteredData),
+        quickCreateKeys: Array.from(quickCreateKeys),
+        apiRequiredFields: Array.from(apiRequiredFields),
+        filteredOut: Object.keys(submitData).filter(k => {
+          const keyLower = k.toLowerCase();
+          return !quickCreateKeys.has(keyLower) && !apiRequiredFields.has(keyLower);
+        })
+      });
+      
+      submitData = filteredData;
+    }
     
     // Debug: Log formData for events before cleaning
     if (props.moduleKey === 'events') {
@@ -503,6 +564,16 @@ const handleSubmit = async () => {
       if (submitData.status !== undefined) {
         console.log('[CreateRecordDrawer] ⚠️ Stripping status field from event payload:', submitData.status);
         delete submitData.status;
+      }
+      
+      // ARCHITECTURE NOTE: Prevent audit event creation through generic event creation interfaces.
+      // Audit events require complex configuration (roles, forms, geo) and must be created
+      // through Audit application flows, not generic event creation interfaces.
+      // See: docs/architecture/event-settings.md Section 7 (Quick Create Rules)
+      if (submitData.eventType && isAuditEventType(submitData.eventType)) {
+        errors.value._general = `Audit events (${submitData.eventType}) can only be created through the Audit application. Please use the Audit module to create audit events.`;
+        saving.value = false;
+        return;
       }
     }
     
@@ -606,6 +677,32 @@ const handleSubmit = async () => {
       }
       // Remove assignedTo as Scheduling API doesn't use it
       delete submitData.assignedTo;
+      
+      // ARCHITECTURE NOTE: Map Task status values to Scheduling status values
+      // Task model: ['todo', 'in_progress', 'waiting', 'completed', 'cancelled']
+      // Scheduling model: ['open', 'completed']
+      // See: server/models/Task.js, server/models/Scheduling.js
+      // Only map status if it was included in the form data (i.e., in quickCreate config)
+      if (submitData.status !== undefined && submitData.status !== null && submitData.status !== '') {
+        const statusMapping = {
+          'todo': 'open',
+          'in_progress': 'open',
+          'waiting': 'open',
+          'completed': 'completed',
+          'cancelled': 'open' // Cancelled tasks map to 'open' in Scheduling
+        };
+        const mappedStatus = statusMapping[submitData.status] || 'open';
+        if (mappedStatus !== submitData.status) {
+          console.log('[CreateRecordDrawer] 🔄 Mapping task status:', {
+            from: submitData.status,
+            to: mappedStatus
+          });
+        }
+        submitData.status = mappedStatus;
+      } else {
+        // Default to 'open' if no status provided (Scheduling API requires status for tasks)
+        submitData.status = 'open';
+      }
     }
     
     // For events using Scheduling API, inject required fields
