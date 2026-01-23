@@ -83,14 +83,16 @@
       </div>
     </div>
 
-    <!-- Intent Selection UI -->
-    <div v-else-if="!finalAppKey" class="py-12">
+    <!-- Intent Selection UI (optional, for backward compatibility) -->
+    <!-- ARCHITECTURAL INTENT: Drawer opens immediately in Quick Create mode -->
+    <!-- This intent selection can pre-select intent for Full Form, but is not required -->
+    <div v-if="!showCreateDrawer" class="py-12">
       <div class="mb-6">
         <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
           Select Intent
         </h3>
         <p class="text-sm text-gray-600 dark:text-gray-400">
-          Choose how you want to add this person:
+          Choose how you want to add this person. This intent will be locked for the entire creation session.
         </p>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -110,252 +112,26 @@
       </div>
     </div>
 
-    <!-- Form (only render when context is resolved and unambiguous) -->
-    <div v-else-if="finalAppKey && !quickCreateResult?.requiresUserChoice">
-      <!-- Header -->
-      <div class="mb-6">
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Add Person</h1>
-        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          You are adding this person for <span class="font-semibold text-gray-900 dark:text-white">{{ formatAppName(finalAppKey) }}</span>.
-          <span v-if="selectedType"> They will be added as <span class="font-medium">{{ formatAppName(finalAppKey) }}: {{ selectedType }}</span></span>
-        </p>
-      </div>
+    <!-- Create Person Drawer (opens immediately in Quick Create mode) -->
+    <!-- ARCHITECTURAL INTENT: All entry points open drawer in Quick Create mode -->
+    <!-- Intent selection happens within Full Form mode, not before opening drawer -->
+    <PeopleQuickCreateDrawer
+      :isOpen="showCreateDrawer"
+      :intentContext="intentContext"
+      @close="handleDrawerClose"
+      @saved="handleDrawerSaved"
+    />
 
-      <!-- Form -->
-      <form @submit.prevent="handleSubmit" class="space-y-6">
-        <!-- Validation Errors Summary -->
-        <div v-if="Object.keys(validationErrors).length > 0" class="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-          <div class="flex items-start gap-3">
-            <svg class="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-            </svg>
-            <div class="flex-1">
-              <h3 class="text-sm font-semibold text-red-800 dark:text-red-200 mb-2">
-                Validation Errors
-              </h3>
-              <ul class="list-disc list-inside space-y-1">
-                <li v-for="(message, field) in validationErrors" :key="field" class="text-sm text-red-700 dark:text-red-300">
-                  <span class="font-medium">{{ field }}:</span> {{ message }}
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        <!-- Core Fields Section -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Core Information</h2>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <!-- First Name -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                First Name <span class="text-red-500">*</span>
-              </label>
-              <input
-                v-model="formData.first_name"
-                type="text"
-                required
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-              />
-              <p v-if="validationErrors.first_name" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                {{ validationErrors.first_name }}
-              </p>
-            </div>
-
-            <!-- Last Name -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Last Name
-              </label>
-              <input
-                v-model="formData.last_name"
-                type="text"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-              />
-              <p v-if="validationErrors.last_name" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                {{ validationErrors.last_name }}
-              </p>
-            </div>
-
-            <!-- Email -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Email
-              </label>
-              <input
-                v-model="formData.email"
-                type="email"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-              />
-              <p v-if="validationErrors.email" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                {{ validationErrors.email }}
-              </p>
-            </div>
-
-            <!-- Phone -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Phone
-              </label>
-              <input
-                v-model="formData.phone"
-                type="tel"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-              />
-              <p v-if="validationErrors.phone" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                {{ validationErrors.phone }}
-              </p>
-            </div>
-
-            <!-- Mobile -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Mobile
-              </label>
-              <input
-                v-model="formData.mobile"
-                type="tel"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-              />
-              <p v-if="validationErrors.mobile" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                {{ validationErrors.mobile }}
-              </p>
-            </div>
-
-            <!-- Source -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Source
-              </label>
-              <input
-                v-model="formData.source"
-                type="text"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-              />
-              <p v-if="validationErrors.source" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                {{ validationErrors.source }}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <!-- App-Specific Fields Section (only for resolved app) -->
-        <div v-if="finalAppKey === 'SALES'" class="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            {{ formatAppName(finalAppKey) }} App Fields
-          </h2>
-          
-          <!-- Participation (Read-Only, derived from intent) -->
-          <div v-if="finalAppKey && selectedType" class="mb-4 p-3 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg">
-            <div class="flex items-center gap-2">
-              <svg class="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-              </svg>
-              <div>
-                <div class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Participation</div>
-                <div class="text-sm font-semibold text-gray-900 dark:text-white mt-0.5">
-                  {{ formatAppName(finalAppKey) }} — {{ selectedType }}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Sales-specific fields (only show if type is selected) -->
-          <div v-if="selectedType" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <!-- Lead Status (if type is LEAD) -->
-            <div v-if="selectedType === 'LEAD'">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Lead Status
-              </label>
-              <select
-                v-model="formData.lead_status"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-              >
-                <option value="">Select status...</option>
-                <option value="New">New</option>
-                <option value="Contacted">Contacted</option>
-                <option value="Qualified">Qualified</option>
-                <option value="Disqualified">Disqualified</option>
-                <option value="Nurturing">Nurturing</option>
-                <option value="Re-Engage">Re-Engage</option>
-              </select>
-            </div>
-
-            <!-- Contact Status (if type is CONTACT) -->
-            <div v-if="selectedType === 'CONTACT'">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Contact Status
-              </label>
-              <select
-                v-model="formData.contact_status"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-              >
-                <option value="">Select status...</option>
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-                <option value="DoNotContact">Do Not Contact</option>
-              </select>
-            </div>
-
-            <!-- Lead Score (if type is LEAD) -->
-            <div v-if="selectedType === 'LEAD'">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Lead Score
-              </label>
-              <input
-                v-model.number="formData.lead_score"
-                type="number"
-                min="0"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-              />
-            </div>
-
-            <!-- Role (if type is CONTACT) -->
-            <div v-if="selectedType === 'CONTACT'">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Role
-              </label>
-              <select
-                v-model="formData.role"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-              >
-                <option value="">Select role...</option>
-                <option value="Decision Maker">Decision Maker</option>
-                <option value="Influencer">Influencer</option>
-                <option value="Support">Support</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <!-- Form Actions -->
-        <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <button
-            type="button"
-            @click="$router.back()"
-            class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            :disabled="submitting"
-            class="px-4 py-2 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <span v-if="submitting">Creating...</span>
-            <span v-else>Create Person</span>
-          </button>
-        </div>
-      </form>
-    </div>
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, onActivated, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
+import PeopleQuickCreateDrawer from '@/components/people/PeopleQuickCreateDrawer.vue';
+import { buildIntentContext, type IntentMapping } from '@/utils/personCreationUtils';
+import type { CreatePersonIntentContext } from '@/types/personCreation.types';
 
 const route = useRoute();
 const router = useRouter();
@@ -371,7 +147,7 @@ const quickCreateResult = ref(null);
 const finalAppKey = ref(null);
 const submitting = ref(false);
 const validationErrors = ref({});
-const selectedIntent = ref(null);
+const selectedIntent = ref<IntentMapping | null>(null);
 
 // Form data
 const formData = ref({
@@ -390,7 +166,7 @@ const formData = ref({
 });
 
 // Intent mappings (explicit, deterministic)
-const intentMappings = [
+const intentMappings: IntentMapping[] = [
   { id: 'sales-lead', label: 'Add Sales Lead', description: 'Add as a Sales Lead', appKey: 'SALES', participationType: 'LEAD' },
   { id: 'sales-contact', label: 'Add Sales Contact', description: 'Add as a Sales Contact', appKey: 'SALES', participationType: 'CONTACT' },
   { id: 'support-contact', label: 'Add Support Contact', description: 'Add as a Support Contact', appKey: 'HELPDESK', participationType: 'CONTACT' },
@@ -398,6 +174,10 @@ const intentMappings = [
   { id: 'portal-user', label: 'Add Portal User', description: 'Add as a Portal User', appKey: 'PORTAL', participationType: 'USER' },
   { id: 'project-member', label: 'Add Project Member', description: 'Add as a Project Member', appKey: 'PROJECTS', participationType: 'MEMBER' }
 ];
+
+// Drawer state
+const showCreateDrawer = ref(false);
+const intentContext = ref<CreatePersonIntentContext | null>(null);
 
 // Computed
 const availableIntents = computed(() => {
@@ -414,15 +194,35 @@ const availableTypes = computed(() => {
 });
 
 // Methods
-// Select intent and proceed
-const selectIntent = async (intent) => {
-  selectedIntent.value = intent;
-  resolvedAppKey.value = intent.appKey;
-  finalAppKey.value = intent.appKey;
-  selectedType.value = intent.participationType;
+// ARCHITECTURAL INTENT: All entry points open drawer in Quick Create mode immediately.
+// Intent selection happens within the drawer when user switches to Full Form mode.
+// We still keep intent selection page for backward compatibility, but it opens drawer immediately.
+const selectIntent = async (intent: IntentMapping) => {
+  // Build intent context (can be used if provided, but drawer doesn't require it)
+  const context = buildIntentContext(intent);
+  intentContext.value = context;
   
-  // Call resolver after intent selection (silent, with explicit appKey)
-  await resolveAppContextAfterIntent(intent.appKey);
+  // Open drawer immediately in Quick Create mode
+  // User can switch to Full Form and see intent pre-selected, or change it
+  showCreateDrawer.value = true;
+};
+
+// Open drawer immediately on mount (Quick Create mode)
+onMounted(() => {
+  showCreateDrawer.value = true;
+});
+
+const handleDrawerSaved = (person: any) => {
+  // Navigate to the created person's detail page
+  router.push(`/people/${person._id || person.id}`);
+  // Reset state
+  resetState();
+};
+
+const handleDrawerClose = () => {
+  showCreateDrawer.value = false;
+  // Reset state when drawer closes
+  resetState();
 };
 
 // Resolver is called AFTER intent selection (not on mount)

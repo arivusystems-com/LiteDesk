@@ -272,8 +272,13 @@ ItemSchema.statics.getLowStockItems = async function(organizationId) {
 
 // Static method to get item statistics
 ItemSchema.statics.getItemStatistics = async function(organizationId) {
+    // Convert organizationId to ObjectId if it's a string
+    const orgId = mongoose.Types.ObjectId.isValid(organizationId) 
+        ? (organizationId instanceof mongoose.Types.ObjectId ? organizationId : new mongoose.Types.ObjectId(organizationId))
+        : organizationId;
+    
     return await this.aggregate([
-        { $match: { organizationId: mongoose.Types.ObjectId(organizationId) } },
+        { $match: { organizationId: orgId } },
         {
             $group: {
                 _id: null,

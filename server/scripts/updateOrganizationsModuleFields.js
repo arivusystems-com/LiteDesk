@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
-require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const ModuleDefinition = require('../models/ModuleDefinition');
 const Organization = require('../models/Organization');
 
@@ -162,7 +163,12 @@ function generateOrganizationFields() {
       order: order++,
       validations: [],
       dependencies: [],
-      picklistDependencies: []
+      picklistDependencies: [],
+      // Filter metadata (schema-driven filters)
+      // Default to not filterable, will be set from metadata if available
+      filterable: false,
+      filterType: null,
+      filterPriority: null
     };
     
     // Hide activitylogs from table and detail views (system field)
@@ -227,6 +233,34 @@ function generateOrganizationFields() {
       }
     }
 
+    // Add filter metadata for default filters (max 3 per module)
+    // Note: Organizations doesn't have a top-level 'status' field, using 'isActive' instead
+    const organizationFilterMetadata = {
+      'assignedTo': {
+        filterable: true,
+        filterType: 'user',
+        filterPriority: 1
+      },
+      'isActive': {
+        filterable: true,
+        filterType: 'boolean',
+        filterPriority: 2
+      },
+      'types': {
+        filterable: true,
+        filterType: 'multi-select',
+        filterPriority: 3
+      }
+    };
+    
+    // Apply filter metadata if field is in the metadata map
+    if (organizationFilterMetadata[key]) {
+      const filterMeta = organizationFilterMetadata[key];
+      field.filterable = filterMeta.filterable;
+      field.filterType = filterMeta.filterType;
+      field.filterPriority = filterMeta.filterPriority;
+    }
+
     fields.push(field);
   }
 
@@ -237,9 +271,28 @@ async function updateOrganizationsModuleFields(organizationId = null) {
   try {
     // Connect to MongoDB if not already connected
     if (mongoose.connection.readyState === 0) {
-      const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/litedesk';
-      await mongoose.connect(mongoUri);
-      console.log('Connected to MongoDB');
+      // Use same connection pattern as other scripts
+      const isProduction = process.env.NODE_ENV === 'production';
+      let MONGO_URI = process.env.MONGODB_URI 
+        || process.env.MONGO_URI 
+        || (isProduction ? process.env.MONGO_URI_PRODUCTION : process.env.MONGO_URI_LOCAL)
+        || process.env.MONGO_URI_ATLAS;
+
+      if (!MONGO_URI) {
+        console.error('❌ Error: MongoDB URI not found in environment variables.');
+        console.error('   Please set MONGODB_URI, MONGO_URI, MONGO_URI_LOCAL, or MONGO_URI_ATLAS in .env file');
+        process.exit(1);
+      }
+
+      // Extract base URI and connect to litedesk_master
+      const [mongoUriWithoutQuery, mongoUriQueryPart] = MONGO_URI.split('?');
+      const mongoQueryString = mongoUriQueryPart ? `?${mongoUriQueryPart}` : '';
+      const baseUri = mongoUriWithoutQuery.split('/').slice(0, -1).join('/');
+      const masterDbName = 'litedesk_master';
+      const MONGODB_URI = `${baseUri}/${masterDbName}${mongoQueryString}`;
+
+      await mongoose.connect(MONGODB_URI);
+      console.log('✅ Connected to MongoDB');
     }
 
     // Get organizations to process (specific one or all tenant organizations)
@@ -281,10 +334,28 @@ async function updateOrganizationsModuleFields(organizationId = null) {
     let created = 0;
 
     for (const org of organizations) {
-      const existing = await ModuleDefinition.findOne({
+      // Try to find by organizationId first, then by moduleKey/appKey (platform-level)
+      let existing = await ModuleDefinition.findOne({
         organizationId: org._id,
         key: 'organizations'
       });
+      
+      // If not found by organizationId, try finding platform-level module
+      if (!existing) {
+        existing = await ModuleDefinition.findOne({
+          moduleKey: 'organizations',
+          appKey: 'platform',
+          organizationId: null
+        });
+      }
+      
+      // If still not found, try by key only
+      if (!existing) {
+        existing = await ModuleDefinition.findOne({
+          key: 'organizations',
+          type: 'system'
+        });
+      }
 
       const fieldsToSave = JSON.parse(JSON.stringify(fields)); // Deep copy
 
@@ -338,28 +409,73 @@ async function updateOrganizationsModuleFields(organizationId = null) {
           }
         });
 
-        existing.fields = mergedFields;
-        existing.name = 'Organizations';
-        existing.type = 'system';
-        existing.enabled = existing.enabled !== false;
-        await existing.save();
+        // Use updateOne to avoid duplicate key errors
+        await ModuleDefinition.updateOne(
+          { _id: existing._id },
+          { 
+            $set: { 
+              fields: mergedFields,
+              name: 'Organizations',
+              type: 'system',
+              enabled: existing.enabled !== false,
+              appKey: existing.appKey || 'platform',
+              moduleKey: existing.moduleKey || 'organizations',
+              key: existing.key || 'organizations',
+              label: existing.label || 'Organization',
+              pluralLabel: existing.pluralLabel || 'Organizations',
+              entityType: existing.entityType || 'CORE'
+            }
+          }
+        );
         updated++;
         console.log(`✓ Updated Organizations module for organization: ${org.name || org._id}`);
       } else {
-        // Create new
-        await ModuleDefinition.create({
-          organizationId: org._id,
-          key: 'organizations',
-          name: 'Organizations',
-          type: 'system',
-          enabled: true,
-          fields: fieldsToSave,
-          relationships: [],
-          quickCreate: [],
-          quickCreateLayout: { version: 1, rows: [] }
-        });
-        created++;
-        console.log(`✓ Created Organizations module for organization: ${org.name || org._id}`);
+        // Try to create new, but handle duplicate key error if platform-level module exists
+        try {
+          await ModuleDefinition.create({
+            organizationId: org._id,
+            key: 'organizations',
+            moduleKey: 'organizations',
+            appKey: 'platform',
+            name: 'Organizations',
+            label: 'Organization',
+            pluralLabel: 'Organizations',
+            entityType: 'CORE',
+            type: 'system',
+            enabled: true,
+            fields: fieldsToSave,
+            relationships: [],
+            quickCreate: [],
+            quickCreateLayout: { version: 1, rows: [] }
+          });
+          created++;
+          console.log(`✓ Created Organizations module for organization: ${org.name || org._id}`);
+        } catch (createError) {
+          // If duplicate key error, find and update the existing platform-level module
+          if (createError.code === 11000) {
+            const platformModule = await ModuleDefinition.findOne({
+              moduleKey: 'organizations',
+              appKey: 'platform'
+            });
+            if (platformModule) {
+              await ModuleDefinition.updateOne(
+                { _id: platformModule._id },
+                { 
+                  $set: { 
+                    fields: fieldsToSave,
+                    organizationId: org._id // Associate with this organization
+                  }
+                }
+              );
+              updated++;
+              console.log(`✓ Updated existing platform Organizations module for organization: ${org.name || org._id}`);
+            } else {
+              throw createError;
+            }
+          } else {
+            throw createError;
+          }
+        }
       }
     }
 

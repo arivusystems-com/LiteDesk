@@ -1,6 +1,8 @@
 <template>
   <div class="min-h-screen bg-gray-100/70 dark:bg-gray-900 flex overflow-x-hidden">
     <!-- Sidebar Navigation -->
+    <!-- ARCHITECTURE NOTE: GlobalSearch is owned by GlobalSurfacesProvider. -->
+    <!-- Sidebar search click dispatches litedesk:open-global-search custom event. -->
     <Nav v-model="sidebarCollapsed" />
     
     <!-- Main Content Area - Dynamic margin based on sidebar state -->
@@ -31,6 +33,14 @@
 </template>
 
 <script setup>
+/**
+ * ARCHITECTURE NOTE: GlobalSearch is NOT imported here.
+ * 
+ * GlobalSearch is owned by GlobalSurfacesProvider (mounted in App.vue).
+ * This layout triggers search via custom events only (litedesk:open-global-search).
+ * App layouts must NEVER own global surfaces - see GlobalSurfacesProvider.vue.
+ */
+
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import Nav from '@/components/Nav.vue';

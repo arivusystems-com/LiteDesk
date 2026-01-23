@@ -96,6 +96,8 @@ import { EmptyStateType } from '@/types/empty-state.types';
 import ListView from '@/components/common/ListView.vue';
 import apiClient from '@/utils/apiClient';
 import { getStateFields, getFieldMetadata, getParticipationFields } from '@/platform/fields/peopleFieldModel';
+import { getModuleListConfig, hasModuleListConfig, getSystemViews } from '@/platform/modules/moduleListRegistry';
+import { getFiltersForModule } from '@/platform/filters/filterResolver';
 
 /**
  * Check if a person participates in an app using state fields
@@ -154,7 +156,8 @@ const searchQuery = ref('');
 const savedViews = ref([]);
 const activeSavedViewId = ref(null);
 
-// Data for People filters
+// Schema-driven filter data
+const moduleFieldDefinitions = ref([]);
 const availableUsers = ref([]);
 const availableOrganizations = ref([]);
 const appRegistry = ref(null);
@@ -190,11 +193,11 @@ const buildList = async () => {
       return;
     }
     
-    // Fetch users and organizations for People filters
-    if (props.moduleKey === 'people') {
-      await fetchUsersForFilters();
-      await fetchOrganizationsForFilters();
-    }
+    // Fetch field definitions for schema-driven filters
+    await fetchModuleFieldDefinitions();
+    
+    // Fetch lookup data for filter types that need it (user, entity)
+    await fetchFilterLookupData();
 
     // Create permission snapshot
     const snapshot = createPermissionSnapshot(authStore.user);
@@ -236,61 +239,79 @@ const buildList = async () => {
       // Fetch data after definition is built
       // Only skip if empty state is NOT_CONFIGURED (no columns)
       // Otherwise fetch data even if empty state exists (might be NO_DATA)
-      // Initialize stats config for People module (identity-based stats only)
-      if (props.moduleKey === 'people') {
-        statsConfig.value = [
-          { name: 'Total People', key: 'totalPeople', formatter: 'number' },
-          { name: 'Assigned to Me', key: 'assignedToMe', formatter: 'number' },
-          { name: 'Unassigned', key: 'unassigned', formatter: 'number' },
-          { name: 'With Organization', key: 'withOrganization', formatter: 'number' },
-          { name: 'Without Organization', key: 'withoutOrganization', formatter: 'number' }
-        ];
-        
-        // Initialize saved views for People module (canonical system views)
-        const currentUserId = authStore.user?._id;
-        const systemViews = [
-          {
-            id: 'all',
-            label: 'All People',
-            filters: {}
-          },
-          {
-            id: 'my-people',
-            label: 'My People',
-            filters: {
-              assignedTo: currentUserId
-            }
-          },
-          {
-            id: 'unassigned',
-            label: 'Unassigned',
-            filters: {
-              assignedTo: null
-            }
-          }
-        ];
-        
-        // Load custom saved views from localStorage
-        const customViewsStorageKey = `litedesk-listview-${props.moduleKey}-saved-views`;
-        let customViews = [];
+      
+      // Initialize module-specific configuration from registry
+      const moduleConfig = getModuleListConfig(props.moduleKey);
+      const currentUserId = authStore.user?._id;
+      const moduleLabel = listDefinition.value?.title || props.moduleKey.charAt(0).toUpperCase() + props.moduleKey.slice(1);
+      
+      // Get system views (from registry or generate defaults)
+      const systemViews = getSystemViews(props.moduleKey, moduleLabel, currentUserId);
+      
+      // Convert system views to saved views format (with label instead of name)
+      const systemViewsFormatted = systemViews.map(view => ({
+        id: view.id,
+        label: view.name,
+        filters: view.filters
+      }));
+      
+      // Load custom saved views from localStorage
+      const customViewsStorageKey = `litedesk-listview-${props.moduleKey}-saved-views`;
+      let customViews = [];
+      try {
+        const saved = localStorage.getItem(customViewsStorageKey);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          customViews = Array.isArray(parsed) ? parsed : [];
+        }
+      } catch (error) {
+        console.warn('[ModuleList] Failed to load custom views:', error);
+      }
+      
+      // Merge system views with custom views
+      savedViews.value = [...systemViewsFormatted, ...customViews];
+      
+      // Initialize stats config from registry if available
+      if (moduleConfig?.statistics) {
+        statsConfig.value = moduleConfig.statistics.stats;
+      }
+      
+      // Find default view or first view
+      const defaultView = systemViews.find(v => v.isDefault) || systemViews[0];
+      if (defaultView) {
+        // Load saved active view from localStorage, or default to default view
+        const savedViewStorageKey = `litedesk-listview-${props.moduleKey}-active-view`;
         try {
-          const saved = localStorage.getItem(customViewsStorageKey);
-          if (saved) {
-            const parsed = JSON.parse(saved);
-            customViews = Array.isArray(parsed) ? parsed : [];
+          const savedActiveViewId = localStorage.getItem(savedViewStorageKey);
+          if (savedActiveViewId && savedViews.value.find(v => v.id === savedActiveViewId)) {
+            activeSavedViewId.value = savedActiveViewId;
+            // Apply the saved view's filters
+            const savedView = savedViews.value.find(v => v.id === savedActiveViewId);
+            if (savedView && savedView.filters) {
+              const viewFilters = { ...savedView.filters };
+              // Normalize filters using registry function if available
+              if (moduleConfig?.normalizeViewFilters) {
+                const normalized = moduleConfig.normalizeViewFilters(viewFilters, currentUserId);
+                filters.value = normalized;
+              } else {
+                filters.value = viewFilters;
+              }
+            } else {
+              filters.value = {};
+            }
+          } else {
+            // Default to default view
+            activeSavedViewId.value = defaultView.id;
+            filters.value = {};
           }
         } catch (error) {
-          console.warn('[ModuleList] Failed to load custom views:', error);
+          console.warn('[ModuleList] Failed to load saved active view:', error);
+          activeSavedViewId.value = defaultView.id;
+          filters.value = {};
         }
-        
-        // Merge system views with custom views
-        savedViews.value = [...systemViews, ...customViews];
-        
-        // Always default to "All People" view on initial load
-        // Don't restore saved view from localStorage on mount - user can select it manually if needed
-        activeSavedViewId.value = 'all';
-        filters.value = {}; // Clear all filters to show all people
-      } else {
+      }
+      
+      if (!moduleConfig) {
         // For other modules, use statsConfig from definition or response
         statsConfig.value = definition?.statsConfig || [];
       }
@@ -324,39 +345,355 @@ const adaptedColumns = computed(() => {
   }));
 });
 
-// Fetch users for People filters
-const fetchUsersForFilters = async () => {
-  if (props.moduleKey !== 'people') return;
-  
+// Fetch module field definitions for schema-driven filters
+const fetchModuleFieldDefinitions = async () => {
   try {
-    const response = await apiClient.get('/users/list');
-    if (response.success && Array.isArray(response.data)) {
-      availableUsers.value = response.data;
+    const response = await apiClient.get(`/modules?key=${props.moduleKey}`);
+    if (response.success && Array.isArray(response.data) && response.data.length > 0) {
+      const module = response.data[0];
+      let fields = module.fields || [];
+      
+      // Initialize filter metadata for People module fields if missing
+      if (props.moduleKey === 'people') {
+        const peopleFilterMetadata = {
+          'assignedTo': {
+            filterable: true,
+            filterType: 'user',
+            filterPriority: 1
+          },
+          'assigned_to': { // Also check for snake_case variant
+            filterable: true,
+            filterType: 'user',
+            filterPriority: 1
+          },
+          'type': {
+            filterable: true,
+            filterType: 'multi-select',
+            filterPriority: 2
+          },
+          'do_not_contact': {
+            filterable: true,
+            filterType: 'boolean',
+            filterPriority: 3
+          },
+          'doNotContact': { // Also check for camelCase variant
+            filterable: true,
+            filterType: 'boolean',
+            filterPriority: 3
+          },
+          'organization': {
+            filterable: true,
+            filterType: 'entity',
+            filterPriority: 4
+          }
+        };
+        
+        // Debug: Log all field keys to see what we're working with
+        console.log('[ModuleList] All field keys from backend:', fields.map(f => f.key));
+        
+        // Initialize filter metadata for fields that should have it
+        let initializedCount = 0;
+        fields = fields.map(field => {
+          if (field.key && peopleFilterMetadata[field.key]) {
+            const filterMeta = peopleFilterMetadata[field.key];
+            // Always set filterable to true for known filterable fields (enable by default)
+            const updated = {
+              ...field,
+              filterable: filterMeta.filterable,
+              filterType: field.filterType || filterMeta.filterType,
+              filterPriority: field.filterPriority ?? filterMeta.filterPriority
+            };
+            console.log(`[ModuleList] ✅ Initialized filter metadata for field: ${field.key}`, {
+              before: { filterable: field.filterable, filterType: field.filterType, filterPriority: field.filterPriority },
+              after: { filterable: updated.filterable, filterType: updated.filterType, filterPriority: updated.filterPriority }
+            });
+            initializedCount++;
+            return updated;
+          }
+          // Ensure filterable defaults to false if not set
+          if (field.filterable === undefined) {
+            return { ...field, filterable: false };
+          }
+          return field;
+        });
+        
+        console.log(`[ModuleList] Initialized ${initializedCount} filterable fields out of ${Object.keys(peopleFilterMetadata).length} expected`);
+      }
+      
+      // Initialize filter metadata for Organizations module fields if missing
+      if (props.moduleKey === 'organizations') {
+        const organizationFilterMetadata = {
+          'assignedTo': {
+            filterable: true,
+            filterType: 'user',
+            filterPriority: 1
+          },
+          'assigned_to': { // Also check for snake_case variant
+            filterable: true,
+            filterType: 'user',
+            filterPriority: 1
+          },
+          'isActive': {
+            filterable: true,
+            filterType: 'boolean',
+            filterPriority: 2
+          },
+          'types': {
+            filterable: true,
+            filterType: 'multi-select',
+            filterPriority: 3
+          }
+        };
+        
+        // Debug: Log all field keys to see what we're working with
+        console.log('[ModuleList] All field keys from backend:', fields.map(f => f.key));
+        
+        // Initialize filter metadata for fields that should have it
+        let initializedCount = 0;
+        fields = fields.map(field => {
+          if (field.key && organizationFilterMetadata[field.key]) {
+            const filterMeta = organizationFilterMetadata[field.key];
+            // Always set filterable to true for known filterable fields (enable by default)
+            const updated = {
+              ...field,
+              filterable: filterMeta.filterable,
+              filterType: field.filterType || filterMeta.filterType,
+              filterPriority: field.filterPriority ?? filterMeta.filterPriority
+            };
+            console.log(`[ModuleList] ✅ Initialized filter metadata for field: ${field.key}`, {
+              before: { filterable: field.filterable, filterType: field.filterType, filterPriority: field.filterPriority },
+              after: { filterable: updated.filterable, filterType: updated.filterType, filterPriority: updated.filterPriority }
+            });
+            initializedCount++;
+            return updated;
+          }
+          // Ensure filterable defaults to false if not set
+          if (field.filterable === undefined) {
+            return { ...field, filterable: false };
+          }
+          return field;
+        });
+        
+        console.log(`[ModuleList] Initialized ${initializedCount} filterable fields out of ${Object.keys(organizationFilterMetadata).length} expected`);
+      }
+      
+      // Initialize filter metadata for Tasks module fields if missing
+      if (props.moduleKey === 'tasks') {
+        const tasksFilterMetadata = {
+          'assignedTo': {
+            filterable: true,
+            filterType: 'user',
+            filterPriority: 1
+          },
+          'assigned_to': { // Also check for snake_case variant
+            filterable: true,
+            filterType: 'user',
+            filterPriority: 1
+          },
+          'status': {
+            filterable: true,
+            filterType: 'select',
+            filterPriority: 2
+          },
+          'dueDate': {
+            filterable: true,
+            filterType: 'date',
+            filterPriority: 3
+          },
+          'due_date': { // Also check for snake_case variant
+            filterable: true,
+            filterType: 'date',
+            filterPriority: 3
+          }
+        };
+        
+        // Debug: Log all field keys to see what we're working with
+        console.log('[ModuleList] All field keys from backend:', fields.map(f => f.key));
+        
+        // Initialize filter metadata for fields that should have it
+        let initializedCount = 0;
+        fields = fields.map(field => {
+          if (field.key && tasksFilterMetadata[field.key]) {
+            const filterMeta = tasksFilterMetadata[field.key];
+            // Always set filterable to true for known filterable fields (enable by default)
+            const updated = {
+              ...field,
+              filterable: filterMeta.filterable,
+              filterType: field.filterType || filterMeta.filterType,
+              filterPriority: field.filterPriority ?? filterMeta.filterPriority
+            };
+            console.log(`[ModuleList] ✅ Initialized filter metadata for field: ${field.key}`, {
+              before: { filterable: field.filterable, filterType: field.filterType, filterPriority: field.filterPriority },
+              after: { filterable: updated.filterable, filterType: updated.filterType, filterPriority: updated.filterPriority }
+            });
+            initializedCount++;
+            return updated;
+          }
+          // Ensure filterable defaults to false if not set
+          if (field.filterable === undefined) {
+            return { ...field, filterable: false };
+          }
+          return field;
+        });
+        
+        console.log(`[ModuleList] Initialized ${initializedCount} filterable fields out of ${Object.keys(tasksFilterMetadata).length} expected`);
+      }
+      
+      moduleFieldDefinitions.value = fields;
+      
+      // Debug: Log filterable fields
+      const filterableFields = moduleFieldDefinitions.value.filter(f => f.filterable === true);
+      console.log('[ModuleList] Fetched field definitions:', moduleFieldDefinitions.value.length);
+      console.log('[ModuleList] Filterable fields:', filterableFields.map(f => ({
+        key: f.key,
+        filterable: f.filterable,
+        filterType: f.filterType,
+        filterPriority: f.filterPriority
+      })));
+      
+      // Debug: Check specific fields that should be filterable
+      if (props.moduleKey === 'people') {
+        const expectedFilterableFields = ['assignedTo', 'assigned_to', 'type', 'do_not_contact', 'doNotContact', 'organization'];
+        console.log('[ModuleList] Checking expected filterable fields:');
+        expectedFilterableFields.forEach(fieldKey => {
+          const field = moduleFieldDefinitions.value.find(f => f.key === fieldKey);
+          if (field) {
+            console.log(`  - ${fieldKey}:`, {
+              exists: true,
+              filterable: field.filterable,
+              filterType: field.filterType,
+              filterPriority: field.filterPriority,
+              hasFilterable: 'filterable' in field
+            });
+          } else {
+            console.log(`  - ${fieldKey}: NOT FOUND in field definitions`);
+          }
+        });
+      }
+      
+      // If no filterable fields found, log all fields to debug
+      if (filterableFields.length === 0 && (props.moduleKey === 'people' || props.moduleKey === 'organizations' || props.moduleKey === 'tasks')) {
+        console.warn(`[ModuleList] No filterable fields found for ${props.moduleKey}! Sample fields:`, 
+          moduleFieldDefinitions.value.slice(0, 5).map(f => ({
+            key: f.key,
+            hasFilterable: 'filterable' in f,
+            filterable: f.filterable,
+            filterType: f.filterType
+          }))
+        );
+      }
+      
+      // Debug: Check expected filterable fields for Organizations
+      if (props.moduleKey === 'organizations') {
+        const expectedFilterableFields = ['assignedTo', 'assigned_to', 'isActive', 'types'];
+        console.log('[ModuleList] Checking expected filterable fields for Organizations:');
+        expectedFilterableFields.forEach(fieldKey => {
+          const field = moduleFieldDefinitions.value.find(f => f.key === fieldKey);
+          if (field) {
+            console.log(`  - ${fieldKey}:`, {
+              exists: true,
+              filterable: field.filterable,
+              filterType: field.filterType,
+              filterPriority: field.filterPriority,
+              hasFilterable: 'filterable' in field
+            });
+          } else {
+            console.log(`  - ${fieldKey}: NOT FOUND in field definitions`);
+          }
+        });
+      }
+      
+      // Debug: Check expected filterable fields for Tasks
+      if (props.moduleKey === 'tasks') {
+        const expectedFilterableFields = ['assignedTo', 'assigned_to', 'status', 'dueDate', 'due_date'];
+        console.log('[ModuleList] Checking expected filterable fields for Tasks:');
+        expectedFilterableFields.forEach(fieldKey => {
+          const field = moduleFieldDefinitions.value.find(f => f.key === fieldKey);
+          if (field) {
+            console.log(`  - ${fieldKey}:`, {
+              exists: true,
+              filterable: field.filterable,
+              filterType: field.filterType,
+              filterPriority: field.filterPriority,
+              hasFilterable: 'filterable' in field
+            });
+          } else {
+            console.log(`  - ${fieldKey}: NOT FOUND in field definitions`);
+          }
+        });
+      }
+      
+      // Debug: Check expected filterable fields for Tasks
+      if (props.moduleKey === 'tasks') {
+        const expectedFilterableFields = ['assignedTo', 'assigned_to', 'status', 'dueDate', 'due_date'];
+        console.log('[ModuleList] Checking expected filterable fields for Tasks:');
+        expectedFilterableFields.forEach(fieldKey => {
+          const field = moduleFieldDefinitions.value.find(f => f.key === fieldKey);
+          if (field) {
+            console.log(`  - ${fieldKey}:`, {
+              exists: true,
+              filterable: field.filterable,
+              filterType: field.filterType,
+              filterPriority: field.filterPriority,
+              hasFilterable: 'filterable' in field
+            });
+          } else {
+            console.log(`  - ${fieldKey}: NOT FOUND in field definitions`);
+          }
+        });
+      }
     } else {
-      availableUsers.value = [];
+      moduleFieldDefinitions.value = [];
+      console.warn('[ModuleList] No module found or empty response');
     }
   } catch (error) {
-    console.error('[ModuleList] Error fetching users for filters:', error);
-    availableUsers.value = [];
+    console.error('[ModuleList] Error fetching module field definitions:', error);
+    moduleFieldDefinitions.value = [];
   }
 };
 
-// Fetch organizations for People filters
-const fetchOrganizationsForFilters = async () => {
-  if (props.moduleKey !== 'people') return;
+// Fetch lookup data for filter types that need it (user, entity)
+const fetchFilterLookupData = async () => {
+  // Check if any filters need user lookup
+  const needsUserLookup = moduleFieldDefinitions.value.some(
+    field => field.filterable && field.filterType === 'user'
+  );
   
-  try {
-    const response = await apiClient.get('/v2/organization', { params: { limit: 1000 } });
-    if (response.success && Array.isArray(response.data)) {
-      availableOrganizations.value = response.data;
-    } else if (response.success && response.data?.data && Array.isArray(response.data.data)) {
-      availableOrganizations.value = response.data.data;
-    } else {
+  // Check if any filters need entity lookup
+  const needsEntityLookup = moduleFieldDefinitions.value.some(
+    field => field.filterable && field.filterType === 'entity'
+  );
+  
+  // Fetch users if needed
+  if (needsUserLookup) {
+    try {
+      const response = await apiClient.get('/users/list');
+      if (response.success && Array.isArray(response.data)) {
+        availableUsers.value = response.data;
+      } else {
+        availableUsers.value = [];
+      }
+    } catch (error) {
+      console.error('[ModuleList] Error fetching users for filters:', error);
+      availableUsers.value = [];
+    }
+  }
+  
+  // Fetch organizations if needed (for entity lookups)
+  if (needsEntityLookup && props.moduleKey === 'people') {
+    try {
+      const response = await apiClient.get('/v2/organization', { params: { limit: 1000 } });
+      if (response.success && Array.isArray(response.data)) {
+        availableOrganizations.value = response.data;
+      } else if (response.success && response.data?.data && Array.isArray(response.data.data)) {
+        availableOrganizations.value = response.data.data;
+      } else {
+        availableOrganizations.value = [];
+      }
+    } catch (error) {
+      console.error('[ModuleList] Error fetching organizations for filters:', error);
       availableOrganizations.value = [];
     }
-  } catch (error) {
-    console.error('[ModuleList] Error fetching organizations for filters:', error);
-    availableOrganizations.value = [];
   }
 };
 
@@ -371,130 +708,202 @@ const getUserDisplayName = (user) => {
   return String(user._id || user.id || 'Unknown User');
 };
 
-// Build People-specific filters
-const buildPeopleFilters = () => {
-  const currentUserId = authStore.user?._id;
-  const currentUserIdStr = currentUserId ? String(currentUserId) : null;
-  
-  // Get selected participation apps (from filter state)
-  const selectedApps = filters.value.participationApp || [];
-  const selectedAppsArray = Array.isArray(selectedApps) ? selectedApps : (selectedApps ? [selectedApps] : []);
-  
-  // 1. Assigned To (Identity-level)
-  const assignedToOptions = [
-    { value: 'me', label: 'Me' },
-    { value: 'unassigned', label: 'Unassigned' }
-  ];
-  
-  // Add all users
-  availableUsers.value.forEach(user => {
-    const userIdStr = String(user._id || user.id);
-    if (currentUserIdStr && userIdStr !== currentUserIdStr) {
-      assignedToOptions.push({
-        value: userIdStr,
-        label: getUserDisplayName(user)
+// Note: buildSchemaFilters logic moved to adaptedFilters computed property
+
+// Adapt filters from schema-driven field definitions
+const adaptedFilters = computed(() => {
+  // Use schema-driven filters if field definitions are available
+  if (moduleFieldDefinitions.value.length > 0) {
+    try {
+      const schemaFilters = getFiltersForModule(props.moduleKey, moduleFieldDefinitions.value);
+      
+      // Debug: Log schema filters
+      console.log(`[ModuleList] adaptedFilters computed for ${props.moduleKey}:`, {
+        fieldDefinitionsCount: moduleFieldDefinitions.value.length,
+        schemaFiltersCount: schemaFilters.length,
+        schemaFilters: schemaFilters.map(f => ({ key: f.key, filterType: f.filterType, priority: f.priority }))
       });
-    }
-  });
-  
-  // 2. Participation (Human-readable: App · Role)
-  // Build options like "Sales · Lead", "Sales · Contact", "Helpdesk · Contact"
-  const participationOptions = [];
-  if (appRegistry.value) {
-    for (const appKey of knownParticipationApps) {
-      if (appRegistry.value[appKey]) {
-        const appDisplayName = appDisplayNames[appKey] || appKey;
+      
+      // If no filters found, log why
+      if (schemaFilters.length === 0 && props.moduleKey === 'people') {
+        const filterableFields = moduleFieldDefinitions.value.filter(f => f.filterable === true);
+        console.warn('[ModuleList] No schema filters found!', {
+          totalFields: moduleFieldDefinitions.value.length,
+          filterableFieldsCount: filterableFields.length,
+          filterableFields: filterableFields.map(f => ({
+            key: f.key,
+            filterable: f.filterable,
+            filterType: f.filterType,
+            filterPriority: f.filterPriority
+          }))
+        });
+      }
+      
+      // Enrich filters with options based on filterType
+      return schemaFilters.map(filter => {
+        const enrichedFilter = { ...filter };
         
-        // Get roles from state fields for this app
-        const stateFields = getStateFields(appKey);
-        const roles = [];
+        // Ensure options array exists (even if empty)
+        if (!enrichedFilter.options) {
+          enrichedFilter.options = [];
+        }
         
-        for (const fieldKey of stateFields) {
-          try {
-            const metadata = getFieldMetadata(fieldKey);
-            // For SALES, 'type' field gives Lead/Contact
-            if (fieldKey === 'type' && appKey === 'SALES') {
-              roles.push('Lead');
-              roles.push('Contact');
-            } else if (appKey === 'HELPDESK') {
-              // Helpdesk typically has Contact role
-              if (roles.length === 0) {
-                roles.push('Contact');
+        // Add options for user filter type
+        if (filter.filterType === 'user') {
+          const currentUserId = authStore.user?._id;
+          const currentUserIdStr = currentUserId ? String(currentUserId) : null;
+          
+          const userOptions = [
+            { value: 'me', label: 'Me' },
+            { value: 'unassigned', label: 'Unassigned' }
+          ];
+          
+          // Add all users
+          if (Array.isArray(availableUsers.value)) {
+            availableUsers.value.forEach(user => {
+              if (user) {
+                const userIdStr = String(user._id || user.id);
+                if (currentUserIdStr && userIdStr !== currentUserIdStr) {
+                  userOptions.push({
+                    value: userIdStr,
+                    label: getUserDisplayName(user)
+                  });
+                }
               }
-            }
-          } catch (error) {
-            // Field not in metadata - skip
+            });
+          }
+          
+          enrichedFilter.options = userOptions;
+        }
+        
+        // Add options for entity filter type (organization lookup)
+        if (filter.filterType === 'entity' && filter.key === 'organization') {
+          const entityOptions = [
+            { value: 'has', label: 'Has Organization' },
+            { value: '', label: 'No Organization' }
+          ];
+          
+          // Add all organizations
+          if (Array.isArray(availableOrganizations.value)) {
+            availableOrganizations.value.forEach(org => {
+              if (org) {
+                entityOptions.push({
+                  value: org._id || org.id,
+                  label: org.name || 'Unnamed Organization'
+                });
+              }
+            });
+          }
+          
+          enrichedFilter.options = entityOptions;
+        }
+        
+        // Add options for boolean filter type
+        if (filter.filterType === 'boolean') {
+          if (filter.key === 'do_not_contact' || filter.key === 'doNotContact') {
+            enrichedFilter.options = [
+              { value: 'allowed', label: 'Allowed' },
+              { value: 'doNotContact', label: 'Do Not Contact' }
+            ];
+          } else {
+            // Generic boolean options
+            enrichedFilter.options = [
+              { value: 'true', label: 'Yes' },
+              { value: 'false', label: 'No' }
+            ];
           }
         }
         
-        // If no roles found, add a default option for the app
-        if (roles.length === 0) {
-          participationOptions.push({
-            value: `${appKey}:*`,
-            label: appDisplayName
-          });
-        } else {
-          // Add each role as a separate option
-          roles.forEach(role => {
-            participationOptions.push({
-              value: `${appKey}:${role}`,
-              label: `${appDisplayName} · ${role}`
-            });
-          });
+        // For select/multi-select, options should come from field definition
+        if ((filter.filterType === 'select' || filter.filterType === 'multi-select') && !enrichedFilter.options) {
+          const fieldDef = moduleFieldDefinitions.value.find(f => f.key === filter.key);
+          if (fieldDef?.options) {
+            enrichedFilter.options = fieldDef.options;
+          } else if (filter.key === 'type' && props.moduleKey === 'people') {
+            // Special handling for People type field (participation)
+            const participationOptions = [];
+            if (appRegistry.value) {
+              for (const appKey of knownParticipationApps) {
+                if (appRegistry.value[appKey]) {
+                  const appDisplayName = appDisplayNames[appKey] || appKey;
+                  const stateFields = getStateFields(appKey);
+                  const roles = [];
+                  
+                  for (const fieldKey of stateFields) {
+                    try {
+                      const metadata = getFieldMetadata(fieldKey);
+                      if (fieldKey === 'type' && appKey === 'SALES') {
+                        roles.push('Lead');
+                        roles.push('Contact');
+                      } else if (appKey === 'HELPDESK' && roles.length === 0) {
+                        roles.push('Contact');
+                      }
+                    } catch (error) {
+                      // Field not in metadata - skip
+                    }
+                  }
+                  
+                  if (roles.length === 0) {
+                    participationOptions.push({
+                      value: `${appKey}:*`,
+                      label: appDisplayName
+                    });
+                  } else {
+                    roles.forEach(role => {
+                      participationOptions.push({
+                        value: `${appKey}:${role}`,
+                        label: `${appDisplayName} · ${role}`
+                      });
+                    });
+                  }
+                }
+              }
+            }
+            enrichedFilter.options = participationOptions;
+          }
         }
-      }
+        
+        // Ensure filter always has a label
+        if (!enrichedFilter.label) {
+          enrichedFilter.label = enrichedFilter.key || 'Unknown Filter';
+        }
+        
+        return enrichedFilter;
+      });
+    } catch (error) {
+      console.warn('[ModuleList] Error building schema filters:', error);
+      console.error('[ModuleList] Filter building error details:', error);
+      return [];
     }
   }
   
-  // 3. Do Not Contact (Compliance)
-  const doNotContactOptions = [
-    { value: 'allowed', label: 'Allowed' },
-    { value: 'doNotContact', label: 'Do Not Contact' }
-  ];
-  
-  // Build filter array
-  const peopleFilters = [
-    {
-      key: 'assignedTo',
-      label: 'Assigned To',
-      options: assignedToOptions,
-      fieldPath: 'assignedTo'
-    },
-    {
-      key: 'participation',
-      label: 'Type',
-      options: participationOptions,
-      fieldPath: 'participation'
-    },
-    {
-      key: 'doNotContact',
-      label: 'Do Not Contact',
-      options: doNotContactOptions,
-      fieldPath: 'doNotContact'
+  // Fallback: use filters from definition (for backward compatibility)
+  if (!listDefinition.value?.filters) {
+    // Debug: Log why no filters
+    if (props.moduleKey === 'people') {
+      console.log('[ModuleList] No filters - field definitions:', moduleFieldDefinitions.value.length, 'listDefinition filters:', listDefinition.value?.filters);
     }
-  ];
-  
-  // Filter out hidden filters
-  return peopleFilters.filter(f => !f.hidden);
-};
-
-// Adapt filters from definition to ListView format
-const adaptedFilters = computed(() => {
-  // For People module, build custom filters
-  if (props.moduleKey === 'people') {
-    return buildPeopleFilters();
+    return [];
   }
-  
-  // For other modules, use filters from definition
-  if (!listDefinition.value?.filters) return [];
   
   return listDefinition.value.filters.map(filter => ({
     key: filter.key,
     label: filter.label,
     options: filter.options || [],
-    fieldPath: filter.fieldPath
+    fieldPath: filter.fieldPath,
+    filterType: filter.filterType || 'select'
   }));
 });
+
+// Debug: Watch adaptedFilters to see when it changes
+watch(adaptedFilters, (newFilters) => {
+  if (props.moduleKey === 'people') {
+    console.log('[ModuleList] adaptedFilters changed:', {
+      count: newFilters.length,
+      filters: newFilters.map(f => ({ key: f.key, filterType: f.filterType, hasOptions: !!f.options, optionsCount: f.options?.length || 0 }))
+    });
+  }
+}, { immediate: true });
 
 // Get create label from primary actions
 const getCreateLabel = () => {
@@ -502,76 +911,7 @@ const getCreateLabel = () => {
   return createAction?.label || `New ${listDefinition.value?.title || 'Item'}`;
 };
 
-// Compute identity-based statistics for People module
-const computePeopleStatistics = (peopleData) => {
-  if (!peopleData || !Array.isArray(peopleData)) {
-    statistics.value = {
-      totalPeople: 0,
-      assignedToMe: 0,
-      unassigned: 0,
-      withOrganization: 0,
-      withoutOrganization: 0
-    };
-    return;
-  }
-  
-  const currentUserId = authStore.user?._id;
-  const currentUserIdStr = currentUserId ? String(currentUserId) : null;
-  
-  // Compute stats from current page data (identity fields only)
-  let assignedToMe = 0;
-  let unassigned = 0;
-  let withOrganization = 0;
-  let withoutOrganization = 0;
-  
-  peopleData.forEach(person => {
-    // Check assignedTo (identity field)
-    const assignedTo = person.assignedTo;
-    if (assignedTo) {
-      // Handle both object (populated) and string (ID) formats
-      const assignedToId = typeof assignedTo === 'object' 
-        ? (assignedTo._id || assignedTo.id || null)
-        : assignedTo;
-      
-      if (currentUserIdStr && assignedToId && String(assignedToId) === currentUserIdStr) {
-        assignedToMe++;
-      }
-    } else {
-      unassigned++;
-    }
-    
-    // Check organization (identity field)
-    const organization = person.organization;
-    if (organization) {
-      // Handle both object (populated) and string (ID) formats
-      if (typeof organization === 'object') {
-        // Check if object has meaningful data (not just _id)
-        if (organization.name || organization._id || organization.id) {
-          withOrganization++;
-        } else {
-          withoutOrganization++;
-        }
-      } else if (organization !== '' && organization !== null && organization !== undefined) {
-        withOrganization++;
-      } else {
-        withoutOrganization++;
-      }
-    } else {
-      withoutOrganization++;
-    }
-  });
-  
-  // Use totalRecords from pagination for total (represents full dataset, not just current page)
-  const totalPeople = pagination.value.totalRecords || peopleData.length;
-  
-  statistics.value = {
-    totalPeople,
-    assignedToMe,
-    unassigned,
-    withOrganization,
-    withoutOrganization
-  };
-};
+// Statistics computation is now handled by the registry
 
 // Determine when to show full-page empty state based on definition type
 // NO_DATA empty states should be shown inside the table (handled by ListView/TableView)
@@ -618,61 +958,36 @@ const fetchData = async () => {
       sortOrder: sortField.value ? (sortOrder.value || 'desc') : 'desc'
     };
 
-    // Map People filters to API params
-    if (props.moduleKey === 'people') {
-      // Assigned To filter
-      // Handle both string values ('me', 'unassigned'), null, and user IDs
-      const assignedToValue = filters.value.assignedTo;
-      if (assignedToValue !== undefined && assignedToValue !== '') {
-        if (assignedToValue === 'me') {
-          params.assignedTo = authStore.user?._id || null;
-        } else if (assignedToValue === 'unassigned' || assignedToValue === null) {
-          // Explicitly filtering for unassigned - send null to backend
-          // Handle both string 'unassigned' and null from saved views
-          params.assignedTo = null;
-        } else {
-          // It's a user ID (from saved view or manual selection)
-          params.assignedTo = assignedToValue;
-        }
-      }
-      // If assignedTo is undefined or empty string, don't include it in params
-      // This ensures we fetch all people when only participation filter is active
-      
-      // Organization filter (for "Without Organization" saved view)
-      if (filters.value.organization !== undefined) {
-        if (filters.value.organization === null || filters.value.organization === '') {
-          params.organization = null;
-        } else if (filters.value.organization === 'has') {
-          // Has organization - backend will filter for non-null
-          params.organization = 'has';
-        } else {
-          params.organization = filters.value.organization;
-        }
-      }
-      
-      // Participation App filter is NOT sent to backend
-      // It will be applied client-side after data is fetched using participatesInApp()
-      // This is because participation is derived from state fields, not a direct field
-      
-      // Participation Role filter (only if participationApp is selected)
-      // Note: This is applied client-side along with participationApp filter
-      // We don't send it to backend to avoid backend filtering issues
-      // if (filters.value.participationRole && filters.value.participationApp) {
-      //   params.type = filters.value.participationRole; // Backend uses 'type' for Lead/Contact
-      // }
-      
-      // Do Not Contact filter
-      if (filters.value.doNotContact) {
-        if (filters.value.doNotContact === 'doNotContact') {
-          params.doNotContact = true;
-        } else if (filters.value.doNotContact === 'allowed') {
-          params.doNotContact = false;
-        }
-      }
-    } else {
-      // For other modules, pass filters as-is
-      Object.assign(params, filters.value);
+    // Normalize filters using registry function if available
+    const moduleConfig = getModuleListConfig(props.moduleKey);
+    let normalizedFilters = { ...filters.value };
+    
+    if (moduleConfig?.normalizeFilters) {
+      normalizedFilters = moduleConfig.normalizeFilters(normalizedFilters, authStore.user?._id);
     }
+    
+    // Map filters to API params using schema-driven approach
+    // Use registry normalizeFilters if available (it uses generic normalizer internally)
+    if (moduleConfig?.normalizeFilters) {
+      normalizedFilters = moduleConfig.normalizeFilters(normalizedFilters, authStore.user?._id);
+    }
+    
+    // Copy normalized filters to params, excluding client-side only filters
+    Object.keys(normalizedFilters).forEach(key => {
+      // Skip participation filters (client-side only for People)
+      if (key === 'participation' || key === 'participationApp' || key === 'participationRole') {
+        return;
+      }
+      
+      const value = normalizedFilters[key];
+      // Only include defined, non-empty values (except null which is valid for unassigned)
+      if (value !== undefined && value !== '') {
+        params[key] = value;
+      } else if (value === null) {
+        // null is a valid filter value (e.g., assignedTo: null for unassigned)
+        params[key] = null;
+      }
+    });
 
     // Pass appKey as query parameter for backend filtering
     // For People module, always use PLATFORM appKey to fetch ALL people (identity + participation)
@@ -686,8 +1001,14 @@ const fetchData = async () => {
       params.appKey = props.appKey;
     }
 
-    if (searchQuery.value) {
-      params.search = searchQuery.value;
+    if (searchQuery.value && searchQuery.value.trim()) {
+      params.search = searchQuery.value.trim();
+    }
+
+    // Debug: Log search parameter for organizations
+    if (props.moduleKey === 'organizations' && searchQuery.value) {
+      console.log('[ModuleList] Search query:', searchQuery.value);
+      console.log('[ModuleList] Search param in request:', params.search);
     }
 
     // Clean up params - remove null/undefined/empty values (except when explicitly needed)
@@ -706,11 +1027,15 @@ const fetchData = async () => {
       }
     }
     
-    // Use moduleKey to determine API endpoint
-    const endpoint = `/${props.moduleKey}`;
+    // Use API endpoint from registry, or default to /{moduleKey}
+    const endpoint = moduleConfig?.apiEndpoint 
+      ? moduleConfig.apiEndpoint.startsWith('/') 
+        ? moduleConfig.apiEndpoint 
+        : `/${moduleConfig.apiEndpoint}`
+      : `/${props.moduleKey}`;
     
     // Debug: Log params being sent to API
-    if (props.moduleKey === 'people') {
+    if (props.moduleKey === 'people' || props.moduleKey === 'organizations') {
       console.log('[ModuleList] API request params:', JSON.stringify(params, null, 2));
       console.log('[ModuleList] Filters state:', JSON.stringify(filters.value, null, 2));
     }
@@ -718,23 +1043,58 @@ const fetchData = async () => {
     const response = await apiClient.get(endpoint, { params });
     
     // Debug: Log API response
-    if (props.moduleKey === 'people') {
-      console.log('[ModuleList] API response:', {
+    if (props.moduleKey === 'people' || props.moduleKey === 'organizations') {
+      // Log raw response first
+      console.log('[ModuleList] Raw API response:', response);
+      console.log('[ModuleList] Response keys:', Object.keys(response));
+      console.log('[ModuleList] Response.pagination:', response.pagination);
+      console.log('[ModuleList] Response.meta:', response.meta);
+      console.log('[ModuleList] typeof response.pagination:', typeof response.pagination);
+      
+      const logData = {
         success: response.success,
+        hasData: !!response.data,
+        dataIsArray: Array.isArray(response.data),
         dataLength: response.data?.length || 0,
         pagination: response.pagination,
+        meta: response.meta,
+        responseKeys: Object.keys(response),
+        paginationType: typeof response.pagination,
+        paginationKeys: response.pagination ? Object.keys(response.pagination) : null,
+        paginationValue: response.pagination ? JSON.parse(JSON.stringify(response.pagination)) : null,
+        metaValue: response.meta ? JSON.parse(JSON.stringify(response.meta)) : null,
         sampleData: response.data?.[0] ? {
           _id: response.data[0]._id,
-          name: (response.data[0].first_name || '') + ' ' + (response.data[0].last_name || ''),
-          type: response.data[0].type,
-          lead_status: response.data[0].lead_status,
-          contact_status: response.data[0].contact_status
-        } : null
-      });
+          name: props.moduleKey === 'people' 
+            ? (response.data[0].first_name || '') + ' ' + (response.data[0].last_name || '')
+            : response.data[0].name,
+          assignedTo: response.data[0].assignedTo,
+          assignedToId: response.data[0].assignedTo?._id || response.data[0].assignedTo || null,
+          isActive: response.data[0].isActive
+        } : null,
+        allDataIds: response.data?.map(item => ({
+          _id: item._id,
+          name: props.moduleKey === 'people' 
+            ? (item.first_name || '') + ' ' + (item.last_name || '')
+            : item.name,
+          assignedTo: item.assignedTo?._id || item.assignedTo || null
+        })) || []
+      };
+      console.log('[ModuleList] API response (full):', logData);
     }
 
-      if (response.success) {
+    if (response.success) {
       let fetchedData = response.data || [];
+      
+      // Debug: Log fetched data for organizations
+      if (props.moduleKey === 'organizations') {
+        console.log('[ModuleList] Fetched data:', {
+          isArray: Array.isArray(fetchedData),
+          length: fetchedData.length,
+          firstItem: fetchedData[0] || null,
+          responseKeys: Object.keys(response)
+        });
+      }
       
       // Apply participation filtering client-side (People module only)
       // Participation filter format: "SALES:Lead", "SALES:Contact", "HELPDESK:Contact", etc.
@@ -781,7 +1141,11 @@ const fetchData = async () => {
         }
       }
       
-      data.value = fetchedData;
+      // Force reactivity by creating a new array reference
+      // This ensures Vue detects the change even if the array contents are similar
+      data.value = [...fetchedData];
+      
+      // Handle pagination from response (check both pagination and meta objects)
       if (response.pagination) {
         pagination.value = {
           currentPage: response.pagination.currentPage || pagination.value.currentPage,
@@ -793,35 +1157,86 @@ const fetchData = async () => {
             : (response.pagination.totalRecords || response.pagination[`total${props.moduleKey.charAt(0).toUpperCase() + props.moduleKey.slice(1)}`] || 0),
           limit: pagination.value.limit
         };
+      } else if (response.meta) {
+        // Fallback to meta object if pagination is not present
+        pagination.value = {
+          currentPage: response.meta.page || pagination.value.currentPage,
+          totalPages: Math.ceil((response.meta.total || 0) / (response.meta.limit || pagination.value.limit)),
+          totalRecords: response.meta.total || 0,
+          limit: response.meta.limit || pagination.value.limit
+        };
       }
       
-      // For People module, always compute identity-based statistics from fetched data
-      // (ignore API-provided statistics which may be participation-based)
-      if (props.moduleKey === 'people') {
-        // Compute identity-based statistics from fetched data for People module
-        // Use nextTick to ensure pagination is updated first
+      // Debug: Log data update
+      if (props.moduleKey === 'people' || props.moduleKey === 'organizations') {
+        const allItemIds = data.value.map(item => ({
+          _id: item._id,
+          name: props.moduleKey === 'people'
+            ? (item.first_name || '') + ' ' + (item.last_name || '')
+            : item.name,
+          assignedTo: props.moduleKey === 'organizations'
+            ? (item.assignedTo?._id || item.assignedTo || null)
+            : undefined
+        }));
+        
+        console.log('[ModuleList] Data updated:', {
+          dataLength: data.value.length,
+          pagination: pagination.value,
+          firstItem: data.value[0] ? {
+            _id: data.value[0]._id,
+            name: props.moduleKey === 'people'
+              ? (data.value[0].first_name || '') + ' ' + (data.value[0].last_name || '')
+              : data.value[0].name,
+            assignedTo: props.moduleKey === 'organizations' 
+              ? (data.value[0].assignedTo?._id || data.value[0].assignedTo || null)
+              : undefined
+          } : null
+        });
+        
+        // Log all item IDs separately for easier inspection
+        console.log('[ModuleList] All item IDs:', JSON.stringify(allItemIds, null, 2));
+        console.log('[ModuleList] Data array reference changed:', data.value !== fetchedData);
+        
+        // Log a summary for quick comparison
+        const idsSummary = allItemIds.map(item => item._id).join(', ');
+        console.log('[ModuleList] Organization IDs summary:', idsSummary);
+      }
+      
+      // Compute statistics using registry function if available
+      if (moduleConfig?.statistics?.computeFunction) {
         await nextTick();
-        computePeopleStatistics(data.value);
+        const computedStats = moduleConfig.statistics.computeFunction(data.value, authStore.user?._id);
+        statistics.value = computedStats;
       } else if (response.statistics) {
         // For other modules, use API-provided statistics if available
         statistics.value = response.statistics;
       }
     } else {
+      // Response was not successful
+      console.warn('[ModuleList] API response not successful:', {
+        success: response.success,
+        response: response
+      });
       data.value = [];
-      // Reset statistics on error
-      if (props.moduleKey === 'people') {
-        statistics.value = {
-          totalPeople: 0,
-          assignedToMe: 0,
-          unassigned: 0,
-          withOrganization: 0,
-          withoutOrganization: 0
-        };
+      // Reset statistics on error using registry
+      const moduleConfig = getModuleListConfig(props.moduleKey);
+      if (moduleConfig?.statistics?.computeFunction) {
+        statistics.value = moduleConfig.statistics.computeFunction([], authStore.user?._id);
+      } else {
+        statistics.value = {};
       }
     }
   } catch (error) {
     console.error('[ModuleList] Error fetching data:', error);
     data.value = [];
+    
+    // Reset statistics on error using registry
+    const moduleConfig = getModuleListConfig(props.moduleKey);
+    if (moduleConfig?.statistics?.computeFunction) {
+      statistics.value = moduleConfig.statistics.computeFunction([], authStore.user?._id);
+    } else {
+      statistics.value = {};
+    }
   } finally {
     dataLoading.value = false;
   }
@@ -870,7 +1285,7 @@ const handleSearchQueryUpdate = (query) => {
 // Helper function to check if filters match a saved view (with normalization)
 // Shared between handleFiltersUpdate and handleStatClick
 const filtersMatchView = (currentFilters, viewFilters, currentUserId) => {
-  // Get filter keys for both - include null values as they are valid filter values
+  // Get filter keys for both - include null and boolean values as they are valid filter values
   const viewFilterKeys = Object.keys(viewFilters).filter(k => {
     const v = viewFilters[k];
     return v !== undefined && v !== '';
@@ -933,12 +1348,17 @@ const filtersMatchView = (currentFilters, viewFilters, currentUserId) => {
       return viewValue === null;
     }
     
-    // String comparison for non-null values
+    // Handle boolean comparison - boolean values should be compared directly
+    if (typeof viewValue === 'boolean' || typeof currentValue === 'boolean') {
+      return viewValue === currentValue;
+    }
+    
+    // String comparison for non-null, non-boolean values
     return String(viewValue) === String(currentValue);
   });
 };
 
-const handleFiltersUpdate = (newFilters) => {
+const handleFiltersUpdate = async (newFilters) => {
   // Clean up old participation filter keys if they exist (migration from old format)
   if (props.moduleKey === 'people') {
     // Remove old participationApp and participationRole filters if new participation filter exists
@@ -948,22 +1368,31 @@ const handleFiltersUpdate = (newFilters) => {
     }
   }
   
-  filters.value = newFilters;
+  // Create a new object to ensure reactivity
+  filters.value = { ...newFilters };
   pagination.value.currentPage = 1;
   
-  // Handle saved view state for People module
-  if (props.moduleKey === 'people') {
-    const currentUserId = authStore.user?._id;
+  // Wait for next tick to ensure filters are properly set before checking saved views
+  await nextTick();
+  
+  // Handle saved view state for all modules (registry config or default views)
+  // All modules get default system views via getSystemViews, so always handle saved view state
+  const moduleConfig = getModuleListConfig(props.moduleKey);
+  const currentUserId = authStore.user?._id;
+  
+  // Only handle saved view state if module has system views (from registry or generated)
+  if (savedViews.value.length > 0) {
     
     // Check if filters are empty (all cleared)
     // Include null values - they are valid filter values (e.g., organization: null)
+    // Boolean true/false are also valid filter values
     const hasAnyFilters = Object.keys(newFilters).some(key => {
       const value = newFilters[key];
       return value !== undefined && value !== '';
     });
     
     if (!hasAnyFilters) {
-      // Filters cleared - return to "All People" view
+      // Filters cleared - return to "All" view
       activeSavedViewId.value = 'all';
     } else {
       // Check if current filters match any saved view
@@ -990,42 +1419,97 @@ const handleFiltersUpdate = (newFilters) => {
     }
   }
   
+  // Fetch data with updated filters
   fetchData();
 };
 
-// Handle stat click - apply derived filters for People module
+// Handle stat click - apply derived filters
 const handleStatClick = (statItem) => {
-  if (props.moduleKey !== 'people') return;
+  const moduleConfig = getModuleListConfig(props.moduleKey);
+  if (!moduleConfig) return;
   
   const currentUserId = authStore.user?._id;
   const newFilters = {};
   
-  // Map stat key to filter
-  switch (statItem.key) {
-    case 'totalPeople':
-      // Clear all filters - show all people
-      break; // newFilters stays empty
-      
-    case 'assignedToMe':
-      // Filter: assignedTo = currentUser
-      // Use 'me' string so it matches the filter dropdown option
-      newFilters.assignedTo = 'me';
-      break;
-      
-    case 'unassigned':
-      // Filter: assignedTo = null (unassigned)
-      newFilters.assignedTo = 'unassigned';
-      break;
-      
-    case 'withOrganization':
-      // Filter: organization != null
-      newFilters.organization = 'has';
-      break;
-      
-    case 'withoutOrganization':
-      // Filter: organization = null
-      newFilters.organization = null;
-      break;
+  if (props.moduleKey === 'people') {
+    // Map stat key to filter for People module
+    switch (statItem.key) {
+      case 'totalPeople':
+        // Clear all filters - show all people
+        break; // newFilters stays empty
+        
+      case 'assignedToMe':
+        // Filter: assignedTo = currentUser
+        // Use 'me' string so it matches the filter dropdown option
+        newFilters.assignedTo = 'me';
+        break;
+        
+      case 'unassigned':
+        // Filter: assignedTo = null (unassigned)
+        newFilters.assignedTo = 'unassigned';
+        break;
+        
+      case 'withOrganization':
+        // Filter: organization != null
+        newFilters.organization = 'has';
+        break;
+        
+      case 'withoutOrganization':
+        // Filter: organization = null
+        newFilters.organization = null;
+        break;
+    }
+  } else if (props.moduleKey === 'organizations') {
+    // Map stat key to filter for Organizations module
+    switch (statItem.key) {
+      case 'totalOrganizations':
+        // Clear all filters - show all organizations
+        break; // newFilters stays empty
+        
+      case 'assignedToMe':
+        // Filter: assignedTo = currentUser
+        // Use 'me' string so it matches the filter dropdown option
+        newFilters.assignedTo = 'me';
+        break;
+        
+      case 'unassigned':
+        // Filter: assignedTo = null (unassigned)
+        newFilters.assignedTo = 'unassigned';
+        break;
+        
+      case 'activeOrganizations':
+        // Filter: isActive = true
+        newFilters.isActive = true;
+        break;
+        
+      case 'trialOrganizations':
+        // Filter: subscription.status = 'trial' or subscription.tier = 'trial'
+        newFilters.tier = 'trial';
+        break;
+    }
+  } else if (props.moduleKey === 'tasks') {
+    // Map stat key to filter for Tasks module
+    switch (statItem.key) {
+      case 'totalTasks':
+        // Clear all filters - show all tasks
+        break; // newFilters stays empty
+        
+      case 'assignedToMe':
+        // Filter: assignedTo = currentUser
+        // Use 'me' string so it matches the filter dropdown option
+        newFilters.assignedTo = 'me';
+        break;
+        
+      case 'completed':
+        // Filter: status = 'completed'
+        newFilters.status = 'completed';
+        break;
+        
+      case 'overdue':
+        // Filter: overdue = true (this will be handled by the API)
+        newFilters.overdue = true;
+        break;
+    }
   }
   
   // Use handleFiltersUpdate to properly sync filters with ListView
@@ -1036,78 +1520,44 @@ const handleStatClick = (statItem) => {
 
 // Handle saved views updated (custom views changed)
 const handleSavedViewsUpdated = (customViews) => {
-  if (props.moduleKey !== 'people') return;
+  const moduleConfig = getModuleListConfig(props.moduleKey);
+  if (!moduleConfig?.systemViews) return;
   
   // Rebuild savedViews with system views + custom views
-  const currentUserId = authStore.user?._id;
-  const systemViews = [
-    {
-      id: 'all',
-      label: 'All People',
-      filters: {}
-    },
-    {
-      id: 'my-people',
-      label: 'My People',
-      filters: {
-        assignedTo: currentUserId
-      }
-    },
-    {
-      id: 'unassigned',
-      label: 'Unassigned',
-      filters: {
-        assignedTo: null
-      }
-    }
-  ];
+  const systemViews = moduleConfig.systemViews.map(view => ({
+    id: view.id,
+    label: view.name,
+    filters: view.filters
+  }));
   
   savedViews.value = [...systemViews, ...customViews];
 };
 
 // Handle saved view selection
 const handleSavedViewSelected = (view) => {
-  if (props.moduleKey !== 'people') return;
+  const moduleConfig = getModuleListConfig(props.moduleKey);
+  if (!moduleConfig) return;
   
   // Set active saved view (will be persisted via watch)
   activeSavedViewId.value = view?.id || null;
   
   if (!view) {
-    // Clear view selection
-    filters.value = {};
-    pagination.value.currentPage = 1;
-    fetchData();
+    // Clear view selection - use handleFiltersUpdate to ensure proper sync
+    handleFiltersUpdate({});
     return;
   }
   
-  // Apply view filters (only identity-based filters)
+  // Apply view filters
   const viewFilters = view.filters ? { ...view.filters } : {};
   const currentUserId = authStore.user?._id;
   
-  // Normalize assignedTo values to match filter dropdown options
-  if (viewFilters.assignedTo === currentUserId) {
-    viewFilters.assignedTo = 'me';
-  } else if (viewFilters.assignedTo === null || viewFilters.assignedTo === undefined) {
-    viewFilters.assignedTo = 'unassigned';
-  }
+  // Normalize filters using registry function if available
+  const normalizedFilters = moduleConfig.normalizeViewFilters
+    ? moduleConfig.normalizeViewFilters(viewFilters, currentUserId)
+    : viewFilters;
   
-  // Clear existing filters first
-  filters.value = {};
-  
-  // Apply saved view filters
-  Object.keys(viewFilters).forEach(key => {
-    filters.value[key] = viewFilters[key];
-  });
-  
-  // If view has config (columns, sort, search), apply it
-  // This will be handled by ListView via emit('update:sort') etc.
-  // For now, just apply filters
-  
-  // Reset to first page
-  pagination.value.currentPage = 1;
-  
-  // Trigger fetch with new filters
-  fetchData();
+  // Use handleFiltersUpdate to properly sync filters with ListView and trigger fetch
+  handleFiltersUpdate(normalizedFilters);
 };
 
 const handleSortUpdate = ({ sortField: key, sortOrder: order }) => {
@@ -1172,9 +1622,9 @@ watch(() => [props.moduleKey, props.appKey], () => {
   }
 });
 
-// Persist active saved view to localStorage (People module only)
+// Persist active saved view to localStorage (modules with registry config)
 watch(() => activeSavedViewId.value, (newValue) => {
-  if (props.moduleKey === 'people') {
+  if (hasModuleListConfig(props.moduleKey)) {
     const savedViewStorageKey = `litedesk-listview-${props.moduleKey}-active-view`;
     if (newValue) {
       localStorage.setItem(savedViewStorageKey, newValue);

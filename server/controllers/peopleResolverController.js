@@ -13,6 +13,7 @@ const { resolvePeopleAppContext } = require('../utils/peopleAppContextResolver')
 const { resolvePeopleTypes } = require('../utils/peopleTypeResolver');
 const { resolveQuickCreateContext } = require('../utils/peopleQuickCreateContextResolver');
 const { composePersonProfile, CORE_FIELD_KEYS, APP_FIELD_KEYS_BY_APP, hasAppParticipation, getAppDisplayName } = require('../utils/personProfileComposer');
+const { getSalesParticipationFields } = require('./peopleController');
 const appRegistry = require('../constants/appRegistry');
 const People = require('../models/People');
 const User = require('../models/User');
@@ -477,10 +478,23 @@ exports.createOrAttach = async (req, res) => {
     const coreFields = {};
     const appFields = {};
 
+    // ObjectId fields that should not accept empty strings
+    const objectIdFields = ['organization', 'organizationId', 'createdBy', 'assignedTo'];
+
     // Extract core fields
     CORE_FIELD_KEYS.forEach(key => {
       if (formData.hasOwnProperty(key)) {
-        coreFields[key] = formData[key];
+        const value = formData[key];
+        // Filter out empty strings for ObjectId fields to prevent BSON casting errors
+        if (objectIdFields.includes(key)) {
+          // Only include if value is not empty string, null, or undefined
+          if (value !== null && value !== undefined && value !== '') {
+            coreFields[key] = value;
+          }
+        } else {
+          // For non-ObjectId fields, include all values (including empty strings for text fields)
+          coreFields[key] = value;
+        }
       }
     });
 
@@ -578,6 +592,10 @@ exports.createOrAttach = async (req, res) => {
         if (['organizationId', 'createdBy', 'assignedTo'].includes(key)) {
           return;
         }
+        // Filter out empty strings for ObjectId fields to prevent BSON casting errors
+        if (objectIdFields.includes(key) && (value === '' || value === null || value === undefined)) {
+          return;
+        }
         // Only update if current value is empty/null
         if (!existingPerson[key] || existingPerson[key] === '') {
           updateData[key] = value;
@@ -618,7 +636,6 @@ exports.createOrAttach = async (req, res) => {
       
       // GUARDRAIL: Explicitly exclude any participation fields that might have leaked into coreFields
       // This is a defensive measure to ensure identity-only creation
-      const { getSalesParticipationFields } = require('./peopleController');
       const participationFields = getSalesParticipationFields();
       const sanitizedCoreFields = { ...coreFields };
       participationFields.forEach(field => {

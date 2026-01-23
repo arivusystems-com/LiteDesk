@@ -1,3 +1,14 @@
+// See docs/architecture/form-settings-doctrine.md
+// Form Settings are configuration-only and must respect domain boundaries
+//
+// See client/src/platform/forms/formSettingsCapabilities.ts
+// Capability flags explicitly declare what Form Settings can and cannot do
+//
+// ARCHITECTURAL RATIONALE:
+// - Form Builder owns structure & content (sections, questions, scoring weights)
+// - Form Execution owns execution & submission (workflows, state mutations)
+// - Form Settings owns configuration only (behavior, lifecycle, access, outcomes)
+
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
@@ -235,9 +246,9 @@ const FormSchema = new Schema({
     },
     formType: {
         type: String,
-        enum: ['Audit', 'Survey', 'Feedback', 'Inspection', 'Custom'],
+        enum: ['Audit', 'Survey', 'Feedback'],
         required: true,
-        default: 'Custom'
+        default: 'Audit'
     },
 
     // 📝 FORM DETAILS TAB

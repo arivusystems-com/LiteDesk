@@ -988,7 +988,11 @@ const route = useRoute();
 const authStore = useAuthStore();
 
 // Computed: Ensure personId is always a string or null (never undefined)
+// IMPORTANT: In the tabbed UI, this view can remain mounted while the global
+// route changes (e.g. to `/organizations/:id`). In that case `route.params.id`
+// is not a person id; only treat it as one on the People route.
 const personId = computed(() => {
+  if (route.name !== 'person-detail') return null;
   return route.params.id || null;
 });
 
@@ -1025,9 +1029,16 @@ const activityTimelineKey = ref(0); // Key to force ActivityTimeline refresh
 // Methods
 const loadProfile = async () => {
   try {
-    const personId = route.params.id;
+    // Guard: this view should only fetch when we are actually on the person route.
+    // In the tabbed UI, components can remain mounted while the global route changes
+    // (e.g. to `/organizations/:id`), which would otherwise trigger a bad fetch.
+    if (route.name !== 'person-detail') {
+      return;
+    }
+
+    const id = personId.value;
     // Return early if person ID is missing (e.g., when tab is closed)
-    if (!personId) {
+    if (!id) {
       return;
     }
     
@@ -1045,7 +1056,7 @@ const loadProfile = async () => {
     
     // Load composed profile from API
     // Pass route info and appKey (if present) for app context resolution
-    const response = await apiClient.get(`/people/${personId}/profile`, {
+    const response = await apiClient.get(`/people/${id}/profile`, {
       params: {
         routePath: route.path,
         routeName: route.name,
@@ -1318,11 +1329,10 @@ const saveAppFields = async (appKey) => {
 };
 
 // Watch for route changes
-watch(() => route.params.id, (newId) => {
+watch(() => [route.name, route.params.id], ([routeName, newId]) => {
+  if (routeName !== 'person-detail') return;
   // Only load profile if person ID exists (prevents error when tab is closed)
-  if (newId) {
-    loadProfile();
-  }
+  if (newId) loadProfile();
 }, { immediate: false });
 
 // Handle note creation (refresh Activity timeline)

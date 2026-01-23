@@ -5,7 +5,7 @@
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-3">
           <!-- View Selector Dropdown (People module only) -->
-          <Menu v-if="moduleKey === 'people' && savedViews && savedViews.length > 0" as="div" class="relative inline-block text-left">
+          <Menu v-if="savedViews && savedViews.length > 0" as="div" class="relative inline-block text-left">
             <div>
               <MenuButton class="inline-flex items-center gap-2 text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-white hover:text-gray-700 dark:hover:text-gray-200 transition-colors focus:outline-none">
                 <span>{{ activePeopleViewTitle }}</span>
@@ -69,9 +69,9 @@
           <!-- Regular title (other modules) -->
           <h1 v-else class="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-white truncate">{{ title }}</h1>
           
-          <!-- Save View CTA (People module only, when state doesn't match any saved view) -->
+          <!-- Save View CTA (People and Organizations modules only, when state doesn't match any saved view) -->
           <button
-            v-if="moduleKey === 'people' && shouldShowSaveCTA"
+            v-if="savedViews && savedViews.length > 0 && shouldShowSaveCTA"
             @click="handleSaveCurrentView"
             class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
             title="Save current view as a new saved view"
@@ -152,37 +152,19 @@
     <div v-if="statsConfig && statsConfig.length > 0 && showStats" class="mb-8">
       <dl :class="[
         'grid grid-cols-1 divide-gray-200 dark:divide-gray-700 overflow-hidden rounded-lg bg-white dark:bg-gray-800 shadow-sm md:divide-x md:divide-y-0',
-        moduleKey === 'people' ? 'md:grid-cols-5' : 'md:grid-cols-4'
+        statsGridColsClass
       ]">
         <div 
           v-for="item in computedStats" 
           :key="item.name" 
           class="px-4 py-5 sm:p-6"
-          :class="moduleKey === 'people' ? 'cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-700' : ''"
-          @click="moduleKey === 'people' ? handleStatClick(item) : null"
+          :class="statsConfig && statsConfig.length > 0 ? 'cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-700' : ''"
+          @click="handleStatClick(item)"
         >
           <dt class="text-base font-normal text-gray-900 dark:text-gray-100">{{ item.name }}</dt>
           <dd class="mt-1">
-            <div v-if="moduleKey === 'people'" class="text-2xl font-semibold text-indigo-600 dark:text-indigo-400">
+            <div class="text-2xl font-semibold text-indigo-600 dark:text-indigo-400">
               {{ item.stat }}
-            </div>
-            <div v-else class="flex items-baseline justify-between md:block lg:flex">
-              <div class="flex items-baseline text-2xl font-semibold text-indigo-600 dark:text-indigo-400">
-                {{ item.stat }}
-                <span class="ml-2 text-sm font-medium text-gray-500 dark:text-gray-400">from {{ item.previousStat }}</span>
-              </div>
-
-              <div :class="[
-                item.changeType === 'increase' 
-                  ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' 
-                  : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300', 
-                'inline-flex items-baseline rounded-full px-2.5 py-0.5 text-sm font-medium md:mt-2 lg:mt-0'
-              ]">
-                <ArrowUpIcon v-if="item.changeType === 'increase'" class="mr-0.5 -ml-1 size-5 shrink-0 self-center text-green-500 dark:text-green-400" aria-hidden="true" />
-                <ArrowDownIcon v-else class="mr-0.5 -ml-1 size-5 shrink-0 self-center text-red-500 dark:text-red-400" aria-hidden="true" />
-                <span class="sr-only"> {{ item.changeType === 'increase' ? 'Increased' : 'Decreased' }} by </span>
-                {{ item.change }}
-              </div>
             </div>
           </dd>
         </div>
@@ -251,9 +233,12 @@
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     {{ filter.label || filter.key }}
                   </label>
-                  <Listbox 
-                    :model-value="filters[filter.key] || ''" 
+                  
+                  <!-- All Filters: Dropdown (including boolean) -->
+                  <Listbox
+                    :model-value="filter.filterType === 'multi-select' ? (Array.isArray(filters[filter.key]) ? filters[filter.key] : []) : (filters[filter.key] || '')" 
                     @update:model-value="(value) => { filters[filter.key] = value; handleFilterChange(filter.key); }"
+                    :multiple="filter.filterType === 'multi-select'"
                   >
                     <div class="relative">
                       <ListboxButton
@@ -272,11 +257,11 @@
                         leave-from-class="opacity-100"
                         leave-to-class="opacity-0"
                       >
-                <ListboxOptions
-                  class="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-sm shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none"
+                        <ListboxOptions
+                          class="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-sm shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none"
                         >
                           <ListboxOption
-                            :value="''"
+                            :value="filter.filterType === 'multi-select' ? [] : ''"
                             v-slot="{ active, selected }"
                           >
                             <li
@@ -297,9 +282,9 @@
                             </li>
                           </ListboxOption>
                           <ListboxOption
-                            v-for="option in filter.options"
-                            :key="option.value"
-                            :value="option.value"
+                            v-for="option in (filter.options || [])"
+                            :key="option?.value || option"
+                            :value="option?.value || option"
                             v-slot="{ active, selected }"
                           >
                             <li
@@ -308,9 +293,9 @@
                                 active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100'
                               ]"
                             >
-                              <span :class="[selected ? 'font-medium' : 'font-normal', 'block truncate']">
-                                {{ option.label || option.value }}
-                              </span>
+                        <span :class="[selected ? 'font-medium' : 'font-normal', 'block truncate']">
+                          {{ option?.label || option?.value || option || 'Unknown' }}
+                        </span>
                               <span
                                 v-if="selected"
                                 class="absolute inset-y-0 right-0 flex items-center pr-3 text-indigo-600 dark:text-indigo-400"
@@ -379,16 +364,18 @@
           </div>
         </div>
 
-        <!-- Filters (Desktop/Tablet) -->
+        <!-- Filters (Desktop/Tablet) - Type-based rendering -->
         <div class="flex flex-wrap items-center gap-3 flex-1">
           <div
             v-for="filter in filterConfig"
             :key="filter.key"
             class="relative"
           >
-            <Listbox 
-              :model-value="filters[filter.key] || ''" 
+            <!-- All Filters: Dropdown (including boolean) -->
+            <Listbox
+              :model-value="filter.filterType === 'multi-select' ? (Array.isArray(filters[filter.key]) ? filters[filter.key] : []) : (filters[filter.key] || '')" 
               @update:model-value="(value) => { filters[filter.key] = value; handleFilterChange(filter.key); }"
+              :multiple="filter.filterType === 'multi-select'"
             >
               <div class="relative">
                 <ListboxButton
@@ -412,7 +399,7 @@
                     style="z-index: 9999; position: absolute;"
                   >
                     <ListboxOption
-                      :value="''"
+                      :value="filter.filterType === 'multi-select' ? [] : ''"
                       v-slot="{ active, selected }"
                     >
                       <li
@@ -433,9 +420,9 @@
                       </li>
                     </ListboxOption>
                     <ListboxOption
-                      v-for="option in filter.options"
-                      :key="option.value"
-                      :value="option.value"
+                      v-for="option in (filter.options || [])"
+                      :key="option?.value || option"
+                      :value="option?.value || option"
                       v-slot="{ active, selected }"
                     >
                       <li
@@ -445,7 +432,7 @@
                         ]"
                       >
                         <span :class="[selected ? 'font-medium' : 'font-normal', 'block truncate']">
-                          {{ option.label || option.value }}
+                          {{ option?.label || option?.value || option }}
                         </span>
                         <span
                           v-if="selected"
@@ -455,6 +442,9 @@
                         </span>
                       </li>
                     </ListboxOption>
+                    <div v-if="!filter.options || filter.options.length === 0" class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+                      Loading options...
+                    </div>
                   </ListboxOptions>
                 </Transition>
               </div>
@@ -489,6 +479,7 @@
 
     <div class="mt-4 px-4 sm:px-6 lg:px-8" style="isolation: auto;">
       <TableView
+          :key="`table-${moduleKey}-${dataLength}-${dataHash}`"
           internal-scroll
           :data="data"
           :columns="computedColumns"
@@ -579,7 +570,7 @@
         leave-to-class="opacity-0"
       >
         <div
-          v-if="moduleKey === 'people' && showSaveViewModal"
+          v-if="savedViews && savedViews.length > 0 && showSaveViewModal"
           class="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
           @click.self="handleCloseSaveViewModal"
         >
@@ -646,7 +637,7 @@
         leave-to-class="opacity-0"
       >
         <div
-          v-if="moduleKey === 'people' && showDeleteViewModal && viewToDelete"
+          v-if="savedViews && savedViews.length > 0 && showDeleteViewModal && viewToDelete"
           class="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
           @click.self="handleCloseDeleteViewModal"
         >
@@ -1539,49 +1530,7 @@ const normalizeColumnOrder = (columns) => {
   return columns;
 };
 
-const buildPeopleDefaultColumns = (allAvailableColumns) => {
-  const peopleSpecificOrder = ['name', 'organization', 'type', 'email', 'phone', 'assignedTo'];
-  const defaultVisibleKeys = new Set(peopleSpecificOrder);
-  const processedColumns = [];
-  const processedKeys = new Set();
-
-  // Ensure 'name' is always first and locked
-  const nameColumn = allAvailableColumns.find(col => col.key === 'name');
-  if (nameColumn) {
-    processedColumns.push({ ...nameColumn, visible: true, locked: true });
-    processedKeys.add('name');
-  }
-
-  // Add other default visible columns in the specified order
-  peopleSpecificOrder.forEach(key => {
-    if (!processedKeys.has(key)) {
-      const col = allAvailableColumns.find(c => c.key === key);
-      if (col) {
-        processedColumns.push({ ...col, visible: true });
-        processedKeys.add(key);
-      }
-    }
-  });
-
-  // Add all other eligible columns as hidden by default
-  allAvailableColumns.forEach(col => {
-    if (!processedKeys.has(col.key)) {
-      try {
-        const metadata = getFieldMetadata(col.key);
-        if (metadata.owner === 'system') {
-          // System fields are never visible and should not be added to the default list for selection
-          return;
-        }
-      } catch (error) {
-        // Field not in metadata - include it, but it will be hidden by default
-      }
-      processedColumns.push({ ...col, visible: false, locked: false });
-      processedKeys.add(col.key);
-    }
-  });
-
-  return processedColumns;
-};
+// Default column builders are now in the module list registry
 
 // Initialize visible columns from props.columns, saved settings, or backend configuration
 const initializeColumns = async () => {
@@ -1683,9 +1632,13 @@ const initializeColumns = async () => {
     });
     const allAvailableColumns = Array.from(allAvailableColumnsMap.values());
 
-    if (props.moduleKey === 'people') {
-      // Use canonical defaults for People module
-      const defaultColumns = buildPeopleDefaultColumns(allAvailableColumns);
+    // Check if module has registry configuration for default columns
+    const { getModuleListConfig, buildDefaultColumns } = await import('@/platform/modules/moduleListRegistry').catch(() => ({ getModuleListConfig: () => null, buildDefaultColumns: () => [] }));
+    const moduleListConfig = getModuleListConfig(props.moduleKey);
+    
+    if (moduleListConfig?.defaultColumns) {
+      // Use registry defaults
+      const defaultColumns = buildDefaultColumns(allAvailableColumns, moduleListConfig.defaultColumns);
       visibleColumns.value = normalizeColumnOrder(defaultColumns);
       saveColumnSettings();
     } else if (moduleConfig && Array.isArray(moduleConfig.fields)) {
@@ -1741,44 +1694,53 @@ watch(() => props.columns, async () => {
       newColumns.forEach(col => {
         let isVisible = col.visible !== false;
         
-        // For People module, apply strict defaults to new columns
+        // Check registry for default column visibility
+        let shouldBeVisible = isVisible;
+        let shouldBeLocked = false;
+        
+        try {
+          const moduleListRegistry = require('@/platform/modules/moduleListRegistry');
+          const moduleConfig = moduleListRegistry.getModuleListConfig(props.moduleKey);
+          
+          if (moduleConfig?.defaultColumns) {
+            const defaultVisible = moduleConfig.defaultColumns.defaultVisibleColumns || [];
+            const lockedColumn = moduleConfig.defaultColumns.lockedColumn;
+            
+            // Check if column should be visible by default
+            if (defaultVisible.length > 0) {
+              shouldBeVisible = defaultVisible.includes(col.key);
+            }
+            
+            // Check if column should be locked
+            if (lockedColumn && col.key === lockedColumn) {
+              shouldBeLocked = true;
+            }
+          }
+        } catch (error) {
+          // Registry not available, use existing logic
+        }
+        
+        // For modules with field metadata (like people), check system fields
         if (props.moduleKey === 'people') {
-          const peopleDefaultVisible = ['name', 'organization', 'type', 'email', 'phone', 'assignedTo'];
-          
-          // Start with all new fields hidden by default
-          isVisible = false;
-          
           try {
             const metadata = getFieldMetadata(col.key);
-            
             // System fields: skip entirely (don't add to visibleColumns)
             if (metadata.owner === 'system') {
               return; // Skip this column
             }
-            // Participation fields: hidden by default
-            else if (metadata.owner === 'participation') {
-              // Exception: 'type' field is in default list
-              isVisible = col.key === 'type' && peopleDefaultVisible.includes('type');
-            }
-            // Core fields: visible ONLY if in default list
-            else if (metadata.owner === 'core') {
-              isVisible = peopleDefaultVisible.includes(col.key);
-            }
           } catch (error) {
-            // Field not in metadata - check if it's in default list
-            isVisible = peopleDefaultVisible.includes(col.key);
+            // Field not in metadata - continue
           }
         }
         
         visibleColumns.value.push({
           key: col.key,
           label: col.label || col.key,
-          visible: isVisible,
+          visible: shouldBeVisible,
           sortable: col.sortable !== false,
           dataType: col.dataType || 'Text',
-          showInTable: isVisible,
-          // Lock 'name' column for People module
-          locked: props.moduleKey === 'people' && col.key === 'name'
+          showInTable: shouldBeVisible,
+          locked: shouldBeLocked
         });
       });
       // Normalize order after adding new columns
@@ -1799,6 +1761,30 @@ watch(visibleColumns, () => {
     saveColumnSettings();
   }, 300);
 }, { deep: true });
+
+// Computed grid columns class based on number of stats
+const statsGridColsClass = computed(() => {
+  if (!props.statsConfig || props.statsConfig.length === 0) return 'md:grid-cols-1';
+  
+  const count = props.statsConfig.length;
+  // Map count to Tailwind grid classes (up to 12 columns)
+  const gridClasses = {
+    1: 'md:grid-cols-1',
+    2: 'md:grid-cols-2',
+    3: 'md:grid-cols-3',
+    4: 'md:grid-cols-4',
+    5: 'md:grid-cols-5',
+    6: 'md:grid-cols-6',
+    7: 'md:grid-cols-7',
+    8: 'md:grid-cols-8',
+    9: 'md:grid-cols-9',
+    10: 'md:grid-cols-10',
+    11: 'md:grid-cols-11',
+    12: 'md:grid-cols-12'
+  };
+  
+  return gridClasses[count] || 'md:grid-cols-4';
+});
 
 // Computed stats for HeadlessUI template
 const computedStats = computed(() => {
@@ -1890,19 +1876,49 @@ const columnsStorageKey = computed(() => `${STORAGE_PREFIX}-${props.moduleKey}-c
 
 const searchTerm = computed(() => searchQuery.value.trim());
 
-const activeFilterCount = computed(() =>
-  // Count filters that have a value (null is a valid filter value, undefined/empty string are not)
-  Object.values(filters).filter(value => value !== '' && value !== undefined).length
-);
+const activeFilterCount = computed(() => {
+  // Count filters from both internal filters and externalFilters
+  const internalFilterCount = Object.values(filters).filter(value => value !== '' && value !== undefined).length;
+  const externalFilterCount = props.externalFilters 
+    ? Object.values(props.externalFilters).filter(value => value !== '' && value !== undefined && value !== null).length
+    : 0;
+  return internalFilterCount + externalFilterCount;
+});
 
 const hasFiltersApplied = computed(() => activeFilterCount.value > 0);
 
-// Check if any filters are active
-const hasActiveFilters = computed(() => searchTerm.value !== '' || hasFiltersApplied.value);
+// Check if any filters are active (including search, internal filters, and external filters)
+const hasActiveFilters = computed(() => {
+  const hasSearch = searchTerm.value !== '';
+  const hasInternalFilters = Object.values(filters).some(value => value !== '' && value !== undefined);
+  const hasExternalFilters = props.externalFilters 
+    ? Object.values(props.externalFilters).some(value => value !== '' && value !== undefined && value !== null)
+    : false;
+  return hasSearch || hasInternalFilters || hasExternalFilters;
+});
 
 const dataLength = computed(() => (Array.isArray(props.data) ? props.data.length : 0));
+// Create a hash of the first few item IDs to detect data changes
+const dataHash = computed(() => {
+  if (!Array.isArray(props.data) || props.data.length === 0) return 'empty';
+  // Use first 3 item IDs to create a simple hash for the key
+  const ids = props.data.slice(0, 3).map(item => item[props.rowKey] || item._id).join('-');
+  return ids || 'no-ids';
+});
 const initialRender = ref(true);
-const tableLoading = computed(() => (props.loading || initialRender.value) && dataLength.value === 0);
+const tableLoading = computed(() => {
+  // Only show loading if:
+  // 1. props.loading is true AND data is empty, OR
+  // 2. initialRender is true AND we haven't received any data yet (not even empty array)
+  if (props.loading && dataLength.value === 0) {
+    return true;
+  }
+  // Once we've received data (even if empty), stop showing initial render loading
+  if (initialRender.value && !Array.isArray(props.data)) {
+    return true;
+  }
+  return false;
+});
 const skeletonRowCount = computed(() => {
   const limit = Number(props.pagination?.limit);
   if (Number.isFinite(limit) && limit > 0) {
@@ -1916,12 +1932,14 @@ const skeletonRowCount = computed(() => {
 const showEmptyState = computed(() => !tableLoading.value && dataLength.value === 0);
 onMounted(() => {
   requestAnimationFrame(() => {
-    if (Array.isArray(props.data) && props.data.length > 0) {
+    // Set initialRender to false once we have data (even if empty)
+    if (Array.isArray(props.data)) {
       initialRender.value = false;
     }
   });
 });
 watch(() => props.data, (newVal) => {
+  // Set initialRender to false as soon as we receive data (even if empty array)
   if (Array.isArray(newVal)) {
     initialRender.value = false;
   }
@@ -1932,10 +1950,10 @@ const resourceName = computed(() => (typeof props.title === 'string' ? props.tit
 // Active People view title - source of truth for page title
 // When a saved view is active, title reflects the view name
 // When manual filters/search are applied, title is "Custom"
-// When no view is active and no filters, title is "All People"
+// When no view is active and no filters, title shows default view name
 const activePeopleViewTitle = computed(() => {
-  // Only for People module
-  if (props.moduleKey !== 'people' || !props.savedViews || props.savedViews.length === 0) {
+  // Only show view name if saved views are available
+  if (!props.savedViews || props.savedViews.length === 0) {
     return props.title;
   }
 
@@ -1956,16 +1974,18 @@ const activePeopleViewTitle = computed(() => {
     return 'Custom';
   }
 
-  // Default: "All People" (no filters, no saved view)
-  return 'All People';
+  // Default: "All [Module]" (no filters, no saved view)
+  // Generate generic title from module key
+  const moduleLabel = props.title || props.moduleKey.charAt(0).toUpperCase() + props.moduleKey.slice(1);
+  return `All ${moduleLabel}`;
 });
 
 // STEP 3: Determine if Save CTA should be shown - DERIVED ONLY
 // Shows "Save view" button ONLY when current state doesn't match any saved view
 // This is READ-ONLY - does NOT mutate state, filters, or views
 const shouldShowSaveCTA = computed(() => {
-  // Only for People module
-  if (props.moduleKey !== 'people' || !props.savedViews || props.savedViews.length === 0) {
+  // Only show save CTA if saved views are available
+  if (!props.savedViews || props.savedViews.length === 0) {
     return false;
   }
   
@@ -2034,9 +2054,9 @@ const getFilterLabel = (filter, value) => {
   return option ? (option.label || option.value) : null;
 };
 
-// Handle stat click (People module only)
+// Handle stat click (works for all modules with statsConfig)
 const handleStatClick = (item) => {
-  if (props.moduleKey === 'people') {
+  if (props.statsConfig && props.statsConfig.length > 0) {
     emit('stat-click', item);
   }
 };
@@ -2047,7 +2067,11 @@ const getActiveFiltersCount = () => {
 };
 
 // Handle filter change
-const handleFilterChange = (key) => {
+const handleFilterChange = (key, value) => {
+  // If value is provided, use it; otherwise get from filters
+  if (value !== undefined) {
+    filters[key] = value;
+  }
   emit('update:filters', { ...filters });
   emit('fetch');
 };
@@ -2061,8 +2085,26 @@ const updateFilters = (key, value) => {
 
 // Initialize filters from filterConfig
 watch(() => props.filterConfig, (newConfig) => {
+  if (!Array.isArray(newConfig) || newConfig.length === 0) {
+    if (props.moduleKey === 'people') {
+      console.log('[ListView] filterConfig is empty or not an array:', {
+        isArray: Array.isArray(newConfig),
+        length: newConfig?.length,
+        value: newConfig
+      });
+    }
+    return;
+  }
+  
+  if (props.moduleKey === 'people') {
+    console.log('[ListView] filterConfig received:', {
+      count: newConfig.length,
+      filters: newConfig.map(f => ({ key: f.key, filterType: f.filterType, hasOptions: !!f.options, optionsCount: f.options?.length || 0 }))
+    });
+  }
+  
   newConfig.forEach(filter => {
-    if (!(filter.key in filters)) {
+    if (filter && filter.key && !(filter.key in filters)) {
       filters[filter.key] = '';
     }
   });
@@ -2146,29 +2188,29 @@ watch(
 );
 
 // Watch externalFilters prop and sync to internal filters object
-// This ensures hasFiltersApplied correctly detects filters when stat is clicked
+// This ensures hasFiltersApplied correctly detects filters when stat is clicked or saved view is selected
 watch(
   () => props.externalFilters,
   (newExternalFilters) => {
-    if (newExternalFilters && Object.keys(newExternalFilters).length > 0) {
-      // Sync external filters to internal filters
+    if (!newExternalFilters) return;
+    
+    // First, clear all existing filters
+    Object.keys(filters).forEach(key => {
+      filters[key] = '';
+    });
+    
+    // Then apply new external filters
+    if (Object.keys(newExternalFilters).length > 0) {
       Object.keys(newExternalFilters).forEach(key => {
-        filters[key] = newExternalFilters[key];
-      });
-      // Clear filters that are no longer in externalFilters
-      Object.keys(filters).forEach(key => {
-        if (!(key in newExternalFilters)) {
-          filters[key] = '';
+        const value = newExternalFilters[key];
+        // Handle all value types including boolean, null, and empty strings
+        if (value !== undefined) {
+          filters[key] = value;
         }
-      });
-    } else if (newExternalFilters && Object.keys(newExternalFilters).length === 0) {
-      // External filters is empty object - clear all filters
-      Object.keys(filters).forEach(key => {
-        filters[key] = '';
       });
     }
   },
-  { deep: true, immediate: false }
+  { deep: true, immediate: true }
 );
 
 // Clear filters
@@ -2228,7 +2270,8 @@ const allFields = computed(() => {
   let fields = Array.from(allFieldsMap.values()).map(field => {
     const visibleCol = visibleColumns.value.find(vc => vc.key === field.key);
     
-    // For People module, if field is not in visibleColumns, check if it's a system field
+    // For modules with field metadata, check if it's a system field
+    // This is currently only implemented for people module, but can be extended
     if (!visibleCol && props.moduleKey === 'people') {
       try {
         const metadata = getFieldMetadata(field.key);
@@ -2354,34 +2397,40 @@ const getFieldIcon = (dataType) => {
 };
 
 // Column settings
-const resetColumnSettings = () => {
-  if (props.moduleKey === 'people') {
-    // For People module, use canonical defaults
-    const allAvailableColumnsMap = new Map();
-    // Populate allAvailableColumnsMap from props.columns (which includes all registered fields)
-    props.columns.forEach(col => {
-      allAvailableColumnsMap.set(col.key, {
-        key: col.key,
-        label: col.label || col.key,
-        dataType: col.dataType,
-        sortable: col.sortable !== false,
-        showInTable: col.showInTable !== false,
-      });
-    });
-    const allAvailableColumns = Array.from(allAvailableColumnsMap.values());
+const resetColumnSettings = async () => {
+  // Use registry for default columns if available
+  const moduleListRegistry = await import('@/platform/modules/moduleListRegistry').catch(() => null);
+  if (moduleListRegistry) {
+    const { getModuleListConfig, buildDefaultColumns } = moduleListRegistry;
+    const moduleListConfig = getModuleListConfig(props.moduleKey);
     
-    const defaultColumns = buildPeopleDefaultColumns(allAvailableColumns);
-    visibleColumns.value = defaultColumns;
-    saveColumnSettings();
-  } else {
-    // For other modules, reset to all visible (existing behavior)
-    visibleColumns.value = props.columns.map(col => ({
-      ...col,
-      visible: true,
-      locked: col.key === 'name' // Only lock 'name' by default
-    }));
-    saveColumnSettings();
+    if (moduleListConfig?.defaultColumns) {
+      const allAvailableColumnsMap = new Map();
+      props.columns.forEach(col => {
+        allAvailableColumnsMap.set(col.key, {
+          key: col.key,
+          label: col.label || col.key,
+          dataType: col.dataType,
+          sortable: col.sortable !== false,
+          showInTable: col.showInTable !== false,
+        });
+      });
+      const allAvailableColumns = Array.from(allAvailableColumnsMap.values());
+      const defaultColumns = buildDefaultColumns(allAvailableColumns, moduleListConfig.defaultColumns);
+      visibleColumns.value = normalizeColumnOrder(defaultColumns);
+      saveColumnSettings();
+      return;
+    }
   }
+  
+  // Fallback: make all columns visible with 'name' locked if it exists
+  // This applies to all modules that don't have registry config
+  visibleColumns.value = props.columns.map(col => ({
+    ...col,
+    visible: true,
+    locked: col.key === 'name' || col.locked === true // Lock 'name' by default, or if explicitly set
+  }));
+  saveColumnSettings();
   
   rowHeight.value = 'medium';
   
@@ -2739,22 +2788,15 @@ const handlePreviewUpdate = async (updateData) => {
   const recordId = previewRow.value._id;
   
   try {
-    // Determine API endpoint based on moduleKey
-    let endpoint = '';
-    if (props.moduleKey === 'people') {
-      endpoint = `/people/${recordId}`;
-    } else if (props.moduleKey === 'organizations') {
-      endpoint = `/organizations/${recordId}`;
-    } else if (props.moduleKey === 'deals') {
-      endpoint = `/deals/${recordId}`;
-    } else if (props.moduleKey === 'tasks') {
-      endpoint = `/tasks/${recordId}`;
-    } else if (props.moduleKey === 'events') {
-      endpoint = `/events/${recordId}`;
-    } else {
-      console.error('Unknown module key:', props.moduleKey);
-      return;
-    }
+    // Determine API endpoint based on moduleKey (generic approach)
+    // Use plural form of moduleKey for endpoint
+    const moduleKeyPlural = props.moduleKey.endsWith('y') 
+      ? props.moduleKey.slice(0, -1) + 'ies' // e.g., "people" from "person" (though people is already plural)
+      : props.moduleKey.endsWith('s')
+      ? props.moduleKey // Already plural
+      : props.moduleKey + 's'; // Add 's' for plural
+    
+    const endpoint = `/${moduleKeyPlural}/${recordId}`;
     
     // Save to backend
     const response = await apiClient.put(endpoint, {
@@ -2877,17 +2919,34 @@ const getActionIcon = (iconName) => {
   return iconMap[iconName] || TrashIcon;
 };
 
-// Saved View Management (People module only)
+// Saved View Management (works for all modules with savedViews prop)
 const viewsStorageKey = computed(() => `${STORAGE_PREFIX}-${props.moduleKey}-saved-views`);
-const systemViewIds = ['all', 'my-people', 'unassigned'];
+const systemViewIds = computed(() => {
+  // Extract system view IDs from savedViews prop
+  // System views are typically those with common IDs like 'all', 'assigned-to-me', etc.
+  if (!props.savedViews || props.savedViews.length === 0) return [];
+  
+  // Common system view IDs across modules
+  const commonSystemIds = ['all', 'assigned-to-me', 'my-people', 'my-organizations', 'my-tasks', 'unassigned', 'active', 'trial'];
+  
+  // Return IDs that match common system patterns or are explicitly marked as system views
+  return props.savedViews
+    .filter(view => {
+      // Check if it's a common system view ID
+      if (commonSystemIds.includes(view.id)) return true;
+      // Check if view has a system flag (if added in future)
+      return view.isSystem === true;
+    })
+    .map(view => view.id);
+});
 
 const isSystemView = (viewId) => {
-  return systemViewIds.includes(viewId);
+  return systemViewIds.value.includes(viewId);
 };
 
 // Load custom saved views from localStorage
 const loadCustomViews = () => {
-  if (props.moduleKey !== 'people') return [];
+  if (!props.savedViews || props.savedViews.length === 0) return [];
   
   try {
     const saved = localStorage.getItem(viewsStorageKey.value);
@@ -2903,7 +2962,7 @@ const loadCustomViews = () => {
 
 // Save custom views to localStorage
 const saveCustomViews = (views) => {
-  if (props.moduleKey !== 'people') return;
+  if (!props.savedViews || props.savedViews.length === 0) return;
   
   try {
     // Only save custom views (not system views)
@@ -3136,7 +3195,7 @@ const applyViewConfig = (config) => {
 
 // Handle save current view
 const handleSaveCurrentView = () => {
-  if (props.moduleKey !== 'people') return;
+  if (!props.savedViews || props.savedViews.length === 0) return;
   
   editingView.value = null;
   viewFormData.value = { name: '', description: '' };
@@ -3145,7 +3204,7 @@ const handleSaveCurrentView = () => {
 
 // Handle edit view
 const handleEditView = (view) => {
-  if (props.moduleKey !== 'people' || isSystemView(view.id)) return;
+  if (!props.savedViews || props.savedViews.length === 0 || isSystemView(view.id)) return;
   
   editingView.value = view;
   viewFormData.value = {
@@ -3157,7 +3216,7 @@ const handleEditView = (view) => {
 
 // Handle delete view
 const handleDeleteView = (view) => {
-  if (props.moduleKey !== 'people' || isSystemView(view.id)) return;
+  if (!props.savedViews || props.savedViews.length === 0 || isSystemView(view.id)) return;
   
   viewToDelete.value = view;
   showDeleteViewModal.value = true;
@@ -3165,7 +3224,7 @@ const handleDeleteView = (view) => {
 
 // Save or update view
 const handleSaveView = () => {
-  if (props.moduleKey !== 'people' || !viewFormData.value.name.trim()) return;
+  if (!props.savedViews || props.savedViews.length === 0 || !viewFormData.value.name.trim()) return;
   
   const currentConfig = getCurrentViewConfig();
   const customViews = loadCustomViews();
@@ -3210,7 +3269,7 @@ const handleSaveView = () => {
 
 // Confirm delete view
 const confirmDeleteView = () => {
-  if (props.moduleKey !== 'people' || !viewToDelete.value || isSystemView(viewToDelete.value.id)) return;
+  if (!props.savedViews || props.savedViews.length === 0 || !viewToDelete.value || isSystemView(viewToDelete.value.id)) return;
   
   const customViews = loadCustomViews();
   const filtered = customViews.filter(v => v.id !== viewToDelete.value.id);
@@ -3240,37 +3299,8 @@ const handleCloseDeleteViewModal = () => {
 
 // Handle saved view click - apply full config
 const handleSavedViewClick = (view) => {
-  // Apply view config if it exists (columns, sort, search)
-  if (view.config) {
-    applyViewConfig(view.config);
-  } else if (view.filters !== undefined) {
-    // For views without explicit config (like system views), still apply filters
-    // Clear existing filters first
-    Object.keys(filters).forEach(key => {
-      delete filters[key];
-    });
-    // Apply view filters with normalization (matching handleSavedViewSelected logic)
-    if (view.filters && Object.keys(view.filters).length > 0) {
-      const viewFilters = { ...view.filters };
-      const currentUserId = authStore.user?._id;
-      
-      // Normalize assignedTo values to match filter dropdown options
-      // This ensures 'me' and 'unassigned' work correctly
-      if (viewFilters.assignedTo === currentUserId) {
-        viewFilters.assignedTo = 'me';
-      } else if (viewFilters.assignedTo === null || viewFilters.assignedTo === undefined) {
-        viewFilters.assignedTo = 'unassigned';
-      }
-      
-      Object.keys(viewFilters).forEach(key => {
-        filters[key] = viewFilters[key];
-      });
-    }
-    // Emit filter update to parent to sync state
-    emit('update:filters', { ...filters });
-  }
-  
-  // Emit event to parent
+  // Emit event to parent first - ModuleList will handle filter application and data fetching
+  // This ensures consistent behavior between ListView and ModuleList
   emit('saved-view-selected', view);
 };
 </script>

@@ -15,6 +15,7 @@ import TabBar from '@/components/TabBar.vue';
 import PlatformShell from '@/components/PlatformShell.vue';
 import NotificationContainer from '@/components/NotificationContainer.vue';
 import NotificationSheet from '@/components/notifications/NotificationSheet.vue';
+import GlobalSurfacesProvider from '@/components/global/GlobalSurfacesProvider.vue';
 import { initializeDynamicRoutes } from '@/router';
 import { useSidebarState } from '@/composables/useSidebarState';
 
@@ -360,6 +361,11 @@ usePermissionSync(2);
     :mark-all-disabled="false"
     @close="salesNotificationSheetOpen = false"
   />
+
+  <!-- Global Surfaces Provider -->
+  <!-- ARCHITECTURE NOTE: Mounted once at root level, app-agnostic -->
+  <!-- Provides GlobalSearch and CommandPalette to all layouts (Sales, Audit, Portal, etc.) -->
+  <GlobalSurfacesProvider />
 </template>
 
 <style>

@@ -47,6 +47,8 @@ export type FieldOwner = 'core' | 'participation' | 'system';
 export type FieldIntent = 'identity' | 'state' | 'detail' | 'system';
 export type FieldScope = 'CORE' | 'SALES' | string; // CORE = platform, SALES = Sales app, future: other apps
 
+export type FilterType = 'text' | 'select' | 'multi-select' | 'boolean' | 'user' | 'entity' | 'date';
+
 export interface FieldMetadata {
   owner: FieldOwner;
   intent: FieldIntent; // Required for all fields (system fields use 'system')
@@ -82,6 +84,16 @@ export interface FieldMetadata {
    * Core identity fields are implicitly allowed at creation (no need to declare).
    */
   allowOnCreate?: boolean; // Optional: allows field at creation time (system fields only)
+  
+  /**
+   * Filter metadata - schema-driven filter configuration
+   * 
+   * Controls whether and how a field appears as a filter in list views.
+   * Default: filterable = false (fields are NOT filterable by default)
+   */
+  filterable?: boolean; // Optional: whether this field can be used as a filter
+  filterType?: FilterType; // Optional: type of filter UI to render
+  filterPriority?: number; // Optional: sort order for filters (lower = higher priority, default visible filters are top N)
 }
 
 /**
@@ -112,6 +124,9 @@ export const PEOPLE_FIELD_METADATA: Record<string, FieldMetadata> = {
     fieldScope: 'CORE',
     editable: true,
     allowOnCreate: true, // Explicitly allowed at creation time
+    filterable: true,
+    filterType: 'user',
+    filterPriority: 1,
   },
   legacyContactId: {
     owner: 'system',
@@ -194,6 +209,9 @@ export const PEOPLE_FIELD_METADATA: Record<string, FieldMetadata> = {
     intent: 'identity',
     fieldScope: 'CORE',
     editable: true,
+    filterable: true,
+    filterType: 'boolean',
+    filterPriority: 3,
   },
   source: {
     owner: 'core',
@@ -206,6 +224,9 @@ export const PEOPLE_FIELD_METADATA: Record<string, FieldMetadata> = {
     intent: 'identity',
     fieldScope: 'CORE',
     editable: true,
+    filterable: true,
+    filterType: 'entity',
+    filterPriority: 4,
   },
 
   // ==========================================================================
@@ -219,6 +240,9 @@ export const PEOPLE_FIELD_METADATA: Record<string, FieldMetadata> = {
     fieldScope: 'SALES',
     editable: true,
     requiredFor: ['SALES'], // Declarative: SALES app requires this field
+    filterable: true,
+    filterType: 'multi-select',
+    filterPriority: 2,
   },
   lead_status: {
     owner: 'participation',

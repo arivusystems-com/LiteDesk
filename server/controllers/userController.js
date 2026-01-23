@@ -34,7 +34,8 @@ const {
     getSeatLimit,
     getSeatsUsed,
     getOrgSubscription,
-    isSubscriptionUsable
+    isSubscriptionUsable,
+    ensureOrgSubscriptionForEnabledApps
 } = require('../utils/subscriptionUtils');
 
 // --- Get all users in the organization ---
@@ -129,6 +130,10 @@ exports.getAddCapabilities = async (req, res) => {
                 message: 'Organization not found'
             });
         }
+
+        // Ensure billing/seat entitlements exist for enabled apps.
+        // Keeps Invite User capabilities aligned with enabledApps (especially for paid orgs).
+        await ensureOrgSubscriptionForEnabledApps(organization);
 
         // Build capabilities from enabledApps and appRegistry
         const capabilities = [];
@@ -378,6 +383,10 @@ exports.inviteUser = async (req, res) => {
                 message: 'Organization not found'
             });
         }
+
+        // Ensure billing/seat entitlements exist for enabled apps before enforcing seats.
+        // Without this, paid-by-default orgs can show "not subscribed/suspended" in Invite flows.
+        await ensureOrgSubscriptionForEnabledApps(organization);
 
         // Check if organization has reached user limit
         const currentUserCount = await User.countDocuments({ 

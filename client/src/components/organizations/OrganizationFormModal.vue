@@ -16,13 +16,27 @@
 
         <!-- Dynamic Form -->
         <form @submit.prevent="handleSubmit(form)" class="p-6 space-y-6">
+          <!-- Debug: Log computed values -->
+          <div v-if="false" style="display: none;">
+            {{ console.log('[OrganizationFormModal] Computed values:', { isEditing: isEditing, showAllFields: isEditing, quickCreateMode: !isEditing }) }}
+          </div>
           <DynamicForm
             module-key="organizations"
             :form-data="form"
             :errors="formErrors"
             @update:form-data="form = $event"
             @ready="onModuleReady"
+            :show-all-fields="isEditing"
+            :quick-create-mode="!isEditing"
           />
+          <!-- Debug: Log props being passed -->
+          <script>
+            console.log('[OrganizationFormModal] Props being passed to DynamicForm:', {
+              isEditing: isEditing.value,
+              showAllFields: isEditing.value,
+              quickCreateMode: !isEditing.value
+            });
+          </script>
 
           <!-- Form Actions -->
           <div class="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 pt-6 -mx-6 -mb-6 px-6 pb-6 flex items-center justify-end gap-3">
@@ -61,7 +75,15 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'saved']);
 
-const isEditing = computed(() => !!props.organization);
+const isEditing = computed(() => {
+  const result = !!props.organization;
+  console.log('[OrganizationFormModal] isEditing computed:', {
+    organization: props.organization,
+    isTruthy: !!props.organization,
+    result: result
+  });
+  return result;
+});
 const saving = ref(false);
 const moduleDefinition = ref(null);
 const form = ref({});
@@ -70,10 +92,32 @@ const formErrors = ref({});
 // Initialize form with default values from field definitions
 const initializeForm = (module) => {
   const initialForm = {};
-  const fields = module.fields || [];
+  
+  // CRITICAL: For create mode, only initialize fields from quickCreate config
+  // For edit mode, initialize all fields
+  let fieldsToInitialize = module.fields || [];
+  if (!isEditing.value && module.quickCreate && Array.isArray(module.quickCreate) && module.quickCreate.length > 0) {
+    // Create mode: Only initialize quickCreate fields
+    const quickCreateKeys = new Set(module.quickCreate.map(k => k?.toLowerCase()));
+    fieldsToInitialize = (module.fields || []).filter(f => {
+      if (!f.key) return false;
+      return quickCreateKeys.has(f.key.toLowerCase());
+    });
+    console.log('[OrganizationFormModal] Create mode - initializing only quickCreate fields:', {
+      quickCreate: module.quickCreate,
+      fieldsToInitialize: fieldsToInitialize.map(f => f.key)
+    });
+  } else if (!isEditing.value) {
+    // Create mode but no quickCreate config - initialize empty form (will be populated by DynamicForm)
+    console.log('[OrganizationFormModal] Create mode - no quickCreate config, initializing empty form');
+    fieldsToInitialize = [];
+  } else {
+    // Edit mode: Initialize all fields
+    console.log('[OrganizationFormModal] Edit mode - initializing all fields');
+  }
   
   // Set defaults from field definitions
-  for (const field of fields) {
+  for (const field of fieldsToInitialize) {
     if (field.defaultValue !== null && field.defaultValue !== undefined) {
       initialForm[field.key] = field.defaultValue;
     } else {
@@ -109,8 +153,8 @@ const initializeForm = (module) => {
     }
     
     // Ensure Multi-Picklist fields are arrays
-    const fields = module.fields || [];
-    for (const field of fields) {
+    // Use the same fields list we initialized with (quickCreate for create, all for edit)
+    for (const field of fieldsToInitialize) {
       if (field.dataType === 'Multi-Picklist') {
         const value = orgData[field.key];
         if (value !== null && value !== undefined && !Array.isArray(value)) {
@@ -133,6 +177,7 @@ const initializeForm = (module) => {
 const onModuleReady = (module) => {
   if (module) {
     moduleDefinition.value = module;
+    console.log('[OrganizationFormModal] Module ready, isEditing:', isEditing.value, 'will use quickCreateMode:', !isEditing.value);
     initializeForm(module);
   }
 };

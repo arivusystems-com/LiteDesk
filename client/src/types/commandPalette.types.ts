@@ -349,6 +349,9 @@ export interface NavigationUtilities {
   /** Navigate to a route with query parameters */
   navigateWithQuery: (path: string, query: Record<string, string>) => Promise<void> | void;
   
+  /** Open a route in a new tab with a title */
+  openTab: (path: string, options?: { title?: string; background?: boolean }) => Promise<void> | void;
+  
   /** Get current route (for accessing params) */
   getCurrentRoute: () => Router['currentRoute'];
 }

@@ -38,6 +38,42 @@ module.exports = {
         }
     },
 
+    HELPDESK: {
+        billingType: 'PER_USER',
+        defaultSeatLimit: null,
+        defaultPlan: 'BASIC',
+        trialDays: 14,
+        plans: {
+            BASIC: {
+                seatLimit: 5
+            },
+            PRO: {
+                seatLimit: 25
+            },
+            ENTERPRISE: {
+                seatLimit: null
+            }
+        }
+    },
+
+    PROJECTS: {
+        billingType: 'PER_USER',
+        defaultSeatLimit: null,
+        defaultPlan: 'BASIC',
+        trialDays: 14,
+        plans: {
+            BASIC: {
+                seatLimit: 5
+            },
+            PRO: {
+                seatLimit: 25
+            },
+            ENTERPRISE: {
+                seatLimit: null
+            }
+        }
+    },
+
     AUDIT: {
         billingType: 'PER_USER',
         defaultSeatLimit: null,

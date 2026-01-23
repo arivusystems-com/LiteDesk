@@ -9,7 +9,6 @@ import { buildSidebarFromRegistry } from '@/utils/buildSidebarFromRegistry';
 import { getAppRegistry } from '@/utils/getAppRegistry';
 import { createPermissionSnapshot } from '@/types/permission-snapshot.types';
 import { useColorMode } from '@/composables/useColorMode';
-import GlobalSearch from '@/components/GlobalSearch.vue';
 import AppSidebar from '@/components/AppSidebar.vue';
 import { Dialog, DialogPanel, TransitionChild, TransitionRoot, Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import { 
@@ -97,8 +96,8 @@ watch(() => route.path, () => {
 const { colorMode, toggleColorMode, clearStoredMode } = useColorMode();
 const authStore = useAuthStore();
 
-// Global search state
-const showGlobalSearch = ref(false);
+// ARCHITECTURE NOTE: GlobalSearch is now handled by GlobalSurfacesProvider in App.vue
+// This component can dispatch 'litedesk:open-global-search' event to open search if needed
 
 // App registry and sidebar structure
 const appRegistry = ref({});
@@ -128,7 +127,7 @@ const buildSidebar = async () => {
     const snapshot = createPermissionSnapshot(authStore.user);
     
     // Build locked SidebarStructure (single source of truth)
-    const structure = buildSidebarFromRegistry(registry, snapshot);
+    const structure = await buildSidebarFromRegistry(registry, snapshot);
     
     // Double-check before setting (component might have unmounted)
     if (authStore.user && authStore.isAuthenticated) {
@@ -166,38 +165,15 @@ watch(() => authStore.isAuthenticated, (isAuthenticated) => {
 });
 
 // Global search handlers
-const openGlobalSearch = () => {
-  console.log('[Nav] Opening global search');
-  showGlobalSearch.value = true;
-};
-
-const closeGlobalSearch = () => {
-  console.log('[Nav] Closing global search');
-  showGlobalSearch.value = false;
-};
-
-// Keyboard shortcut handler for global search
-const handleGlobalSearchKeydown = (event) => {
-  // Cmd/Ctrl + K to open search
-  if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
-    event.preventDefault();
-    console.log('[Nav] Cmd/Ctrl+K pressed, opening search');
-    openGlobalSearch();
-  }
-};
+// ARCHITECTURE NOTE: GlobalSearch keyboard shortcuts and event listeners
+// are now handled by GlobalSurfacesProvider in App.vue
+// This component can dispatch custom events if needed for UI triggers
 
 // Build sidebar on mount
 onMounted(() => {
   if (authStore.user && authStore.isAuthenticated) {
     buildSidebar();
   }
-  window.addEventListener('keydown', handleGlobalSearchKeydown);
-  window.addEventListener('litedesk:open-global-search', openGlobalSearch);
-});
-
-onUnmounted(() => {
-  window.removeEventListener('keydown', handleGlobalSearchKeydown);
-  window.removeEventListener('litedesk:open-global-search', openGlobalSearch);
 });
 
 const handleNotificationClick = () => {
@@ -422,10 +398,6 @@ const logoSrc = computed(() => {
     @close="showDrawer = false"
   />
   
-  <!-- Global Search Modal -->
-  <GlobalSearch
-    :is-open="showGlobalSearch"
-    @close="closeGlobalSearch"
-    @open="openGlobalSearch"
-  />
+  <!-- ARCHITECTURE NOTE: GlobalSearch is rendered by GlobalSurfacesProvider in App.vue -->
+  <!-- This ensures it's available across all layouts (Sales, Audit, Portal, etc.) -->
 </template>

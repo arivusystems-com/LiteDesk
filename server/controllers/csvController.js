@@ -3,6 +3,7 @@ const Deal = require('../models/Deal');
 const Task = require('../models/Task');
 const Organization = require('../models/Organization');
 const ImportHistory = require('../models/ImportHistory');
+const { getSalesParticipationFields } = require('./peopleController');
 
 // NOTE: Install these packages: npm install csv-parse csv-stringify multer
 // For now, using basic CSV parsing
@@ -459,7 +460,6 @@ const importContacts = async (req, res) => {
         };
 
         // Get Sales participation fields that should be stripped
-        const { getSalesParticipationFields } = require('./peopleController');
         const participationFields = getSalesParticipationFields();
 
         Object.keys(fieldMapping).forEach(csvField => {

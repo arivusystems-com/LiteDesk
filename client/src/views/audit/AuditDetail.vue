@@ -572,15 +572,15 @@ const handleCheckIn = async () => {
   }
   
   actionLoading.value = true;
+  let locationData = null;
   try {
     const eventId = route.params.eventId;
     
-    // Request location permission for check-in
-    let locationData = {};
+    // Request location — required for audit check-in (API enforces it)
     if (navigator.geolocation) {
       try {
         const position = await new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000, enableHighAccuracy: true });
         });
         locationData = {
           latitude: position.coords.latitude,
@@ -589,13 +589,21 @@ const handleCheckIn = async () => {
         };
       } catch (geoError) {
         console.warn('Geolocation error:', geoError);
-        // Continue without location if permission denied
+        alert('Location is required for check-in. Please allow location access and try again.');
+        actionLoading.value = false;
+        return;
       }
+    } else {
+      alert('Location is required for check-in. This device does not support geolocation.');
+      actionLoading.value = false;
+      return;
     }
     
-    // If offline, queue the action
+    const payload = { location: locationData };
+    
+    // If offline, queue the action (with location for sync)
     if (isOfflineMode.value) {
-      await enqueueAction('CHECK_IN', eventId, locationData);
+      await enqueueAction('CHECK_IN', eventId, payload);
       alert('Check-in saved locally. It will sync when you\'re back online.');
       await updateQueuedActions();
       actionLoading.value = false;
@@ -603,7 +611,7 @@ const handleCheckIn = async () => {
     }
     
     // Online: Execute immediately
-    const response = await apiClient.post(`/audit/execute/${eventId}/check-in`, locationData);
+    const response = await apiClient.post(`/audit/execute/${eventId}/check-in`, payload);
     if (response.success) {
       await fetchAuditDetail();
       alert('Successfully checked in!');
@@ -611,11 +619,11 @@ const handleCheckIn = async () => {
   } catch (err) {
     console.error('Error checking in:', err);
     
-    // If network error, try to queue
-    if (err.status === 0 || !navigator.onLine) {
+    // If network error, try to queue (reuse location we already obtained)
+    if ((err.status === 0 || !navigator.onLine) && locationData) {
       try {
         const eventId = route.params.eventId;
-        await enqueueAction('CHECK_IN', eventId, {});
+        await enqueueAction('CHECK_IN', eventId, { location: locationData });
         alert('Check-in saved locally. It will sync when you\'re back online.');
         await updateQueuedActions();
         actionLoading.value = false;

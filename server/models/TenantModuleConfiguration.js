@@ -92,6 +92,12 @@ const TenantModuleConfigurationSchema = new mongoose.Schema({
     }
   },
 
+  // Module-specific settings (e.g., organization status-types configuration)
+  settings: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null
+  },
+
   createdAt: {
     type: Date,
     default: Date.now

@@ -20,6 +20,34 @@ const DB_VERSION = 1;
 let dbInstance = null;
 
 /**
+ * Convert arbitrary data into an IndexedDB-cloneable payload.
+ *
+ * IndexedDB uses the structured clone algorithm. Vue reactive proxies, functions,
+ * Symbols, and circular references can cause DataCloneError:
+ *   "Failed to execute 'put' on 'IDBObjectStore': [object Array] could not be cloned."
+ *
+ * This helper aggressively normalizes data to plain JSON so offline caching
+ * never crashes the UI.
+ */
+const toIdbCloneable = (value) => {
+  try {
+    const seen = new WeakSet();
+    return JSON.parse(JSON.stringify(value, (_key, v) => {
+      if (typeof v === 'bigint') return v.toString();
+      if (typeof v === 'function' || typeof v === 'symbol') return undefined;
+      if (v && typeof v === 'object') {
+        if (seen.has(v)) return undefined; // drop circular refs
+        seen.add(v);
+      }
+      return v;
+    }));
+  } catch (_err) {
+    // As a last resort, return a minimal, safe value.
+    return null;
+  }
+};
+
+/**
  * Initialize IndexedDB
  */
 export const initDB = () => {
@@ -127,8 +155,11 @@ export const saveAssignments = async (assignments) => {
     const transaction = db.transaction(['audit_assignments'], 'readwrite');
     const store = transaction.objectStore('audit_assignments');
 
+    // Ensure cloneable array (avoid Vue proxies / non-cloneable objects)
+    const safeAssignments = Array.isArray(assignments) ? toIdbCloneable(assignments) : [];
+
     await Promise.all(
-      assignments.map((assignment) => {
+      (safeAssignments || []).map((assignment) => {
         return new Promise((resolve, reject) => {
           const data = {
             eventId: assignment.eventId,
@@ -147,7 +178,7 @@ export const saveAssignments = async (assignments) => {
       })
     );
 
-    console.log(`[IndexedDB] Saved ${assignments.length} assignments`);
+    console.log(`[IndexedDB] Saved ${(safeAssignments || []).length} assignments`);
   } catch (error) {
     console.error('[IndexedDB] Error saving assignments:', error);
     throw error;
@@ -182,11 +213,13 @@ export const saveAuditDetail = async (eventId, detail) => {
     const store = transaction.objectStore('audit_details');
 
     return new Promise((resolve, reject) => {
+      // Ensure cloneable payload (detail may contain reactive proxies / nested arrays)
+      const safeDetail = toIdbCloneable(detail) || {};
       const data = {
         eventId,
-        assignment: detail.assignment,
-        event: detail.event,
-        executionContext: detail.executionContext,
+        assignment: safeDetail.assignment,
+        event: safeDetail.event,
+        executionContext: safeDetail.executionContext,
         lastSyncedAt: new Date().toISOString()
       };
       const request = store.put(data);
@@ -230,9 +263,11 @@ export const saveTimeline = async (eventId, timeline) => {
     const store = transaction.objectStore('audit_timeline');
 
     return new Promise((resolve, reject) => {
+      // Ensure cloneable timeline entries (arrays often contain non-cloneables via reactive wrappers)
+      const safeTimeline = toIdbCloneable(timeline) || [];
       const data = {
         eventId,
-        entries: timeline,
+        entries: safeTimeline,
         lastSyncedAt: new Date().toISOString()
       };
       const request = store.put(data);
@@ -279,10 +314,12 @@ export const saveOfflineAction = async (action) => {
     const store = transaction.objectStore('offline_actions');
 
     return new Promise((resolve, reject) => {
+      // Ensure cloneable payload (may include arrays / nested objects)
+      const safeAction = toIdbCloneable(action) || {};
       const data = {
-        type: action.type, // 'CHECK_IN' | 'SUBMIT'
-        eventId: action.eventId,
-        payload: action.payload,
+        type: safeAction.type, // 'CHECK_IN' | 'SUBMIT'
+        eventId: safeAction.eventId,
+        payload: safeAction.payload,
         status: 'PENDING',
         retryCount: 0,
         createdAt: new Date().toISOString()

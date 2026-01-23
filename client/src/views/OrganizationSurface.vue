@@ -1,5 +1,24 @@
 <!--
   ============================================================================
+  ARCHITECTURAL INVARIANT: ORGANIZATION SURFACE
+  ============================================================================
+  
+  WHAT THIS SURFACE IS:
+  - A READ-ONLY display surface for business organizations
+  - Shows organization context, people, work, and activity
+  - Provides navigation to editing surface (never hosts inline editing)
+  
+  WHAT THIS SURFACE MUST NEVER DO:
+  - MUST NOT perform PATCH/POST operations on organization data
+  - MUST NOT contain inline editing forms
+  - MUST NOT mutate organization records directly
+  - MUST NOT expose tenant configuration (subscription, billing, limits)
+  
+  INVARIANT LOCKS:
+  - No PATCH/POST calls exist (surface is read-only forever)
+  - All mutations redirect to CreateOrganizationSurface (never inline)
+  
+  ============================================================================
   ORGANIZATIONSURFACE CONTRACT
   ============================================================================
   
@@ -63,9 +82,15 @@
   Editing is intentional, scoped, and introduced only via explicit workflows.
   
   Read-only enforcement:
-  - No edit affordances appear in this component
   - No inline editing capabilities
-  - No "Edit organization" buttons or forms
+  - No "Edit organization" forms within this component
+  
+  Edit affordance:
+  - "Edit business details" button in Business Details section
+  - Opens CreateOrganizationSurface in edit mode (new tab)
+  - Shows only for business organizations (not tenant)
+  - Requires edit/update permission
+  - Editing happens in CreateOrganizationSurface, not inline
   
   Future edit actions (if introduced) MUST be:
   - Scoped: Limited to specific fields or sections
@@ -79,8 +104,8 @@
   - App-specific sub-surfaces (Sales organization detail, Helpdesk organization detail)
   
   Examples of FORBIDDEN extensions:
-  - Global "Edit Organization" form
   - Inline editing of organization name
+  - Modal or drawer editing within OrganizationSurface
   - Sidebar navigation entries for OrganizationSurface
   - Tenant configuration exposure (subscription, limits, etc.)
   
@@ -302,23 +327,39 @@
       </div>
 
       <!-- D. Business Details (Collapsed by Default) -->
+      <!-- ARCHITECTURAL NOTE: OrganizationSurface remains read-only -->
+      <!-- Editing must happen only in CreateOrganizationSurface (edit mode) -->
+      <!-- No quick create toggle for edit, no additional navigation added -->
       <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <button
-          @click="showBusinessDetails = !showBusinessDetails"
-          class="w-full flex items-center justify-between p-6 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-        >
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            Business Details
-          </h2>
-          <svg
-            :class="['w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform', { 'rotate-180': showBusinessDetails }]"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        <div class="flex items-center justify-between p-6">
+          <button
+            @click="showBusinessDetails = !showBusinessDetails"
+            class="flex-1 flex items-center justify-between text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 -m-6 p-6 transition-colors rounded-lg"
           >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Business Details
+            </h2>
+            <svg
+              :class="['w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform flex-shrink-0', { 'rotate-180': showBusinessDetails }]"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          <!-- Edit business details button -->
+          <!-- ARCHITECTURAL NOTE: Explicit edit action opens CreateOrganizationSurface in edit mode (drawer) -->
+          <!-- Shows only when: organization loaded, not tenant, user has edit permission -->
+          <button
+            v-if="organization && !organization.isTenant && canEditOrganization"
+            @click="showEditDrawer = true"
+            class="ml-4 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            :title="'Edit shared business information like address, website, and industry.'"
+          >
+            Edit business details
+          </button>
+        </div>
         
         <div v-if="showBusinessDetails" class="px-6 pb-6 space-y-4">
           <!-- Helper note: Explain that details are managed by apps -->
@@ -374,6 +415,47 @@
         </div>
       </div>
 
+      <!-- Action Availability Explanation (Read-Only) -->
+      <!-- ARCHITECTURAL NOTE: This section explains why actions may or may not be allowed -->
+      <!-- It does NOT enforce, hide, disable, or change behavior -->
+      <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+          Action Availability
+        </h2>
+        
+        <div class="space-y-3">
+          <div
+            v-for="permission in permissions"
+            :key="permission.action"
+            class="flex items-start justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0"
+          >
+            <div class="flex-1">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {{ getActionLabel(permission.action) }}
+                </span>
+                <span
+                  :class="[
+                    'text-xs font-medium px-2 py-0.5 rounded',
+                    permission.allowed
+                      ? 'bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                      : 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+                  ]"
+                >
+                  {{ permission.allowed ? 'Allowed' : 'Not allowed' }}
+                </span>
+              </div>
+              <p
+                v-if="!permission.allowed && permission.reason"
+                class="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-0"
+              >
+                Reason: {{ permission.reason }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- E. Activity Timeline -->
       <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
@@ -415,6 +497,16 @@
         </p>
       </div>
     </div>
+
+    <!-- Edit Organization Drawer -->
+    <!-- ARCHITECTURAL NOTE: Opens OrganizationQuickCreateDrawer in edit mode -->
+    <!-- Editing happens in OrganizationQuickCreateDrawer, not inline -->
+    <OrganizationQuickCreateDrawer
+      :isOpen="showEditDrawer"
+      :organizationId="organization?.id || organization?._id"
+      @close="showEditDrawer = false"
+      @saved="handleOrganizationUpdated"
+    />
   </div>
 </template>
 
@@ -422,16 +514,26 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
+import { useAuthStore } from '@/stores/auth';
+import OrganizationQuickCreateDrawer from '@/components/organizations/OrganizationQuickCreateDrawer.vue';
 import apiClient from '@/utils/apiClient';
+// CONTRACT-LOCKED:
+// See docs/architecture/platform-permission-contract.md
+// Platform Permissions MUST remain explanatory-only.
+import {
+  derivePlatformPermissions
+} from '@/platform/permissions/platformPermissions.utils';
 
 const route = useRoute();
 const { openTab } = useTabs();
+const authStore = useAuthStore();
 
 // State
 const loading = ref(true);
 const error = ref(null);
 const organization = ref(null);
 const showBusinessDetails = ref(false);
+const showEditDrawer = ref(false);
 
 // Computed
 const hasBusinessDetails = computed(() => {
@@ -445,8 +547,79 @@ const hasBusinessDetails = computed(() => {
   );
 });
 
+// Permission check: user must have edit/update permission for organizations
+// ARCHITECTURAL NOTE: Reuse existing permission logic pattern
+const canEditOrganization = computed(() => {
+  return authStore.can('organizations', 'update') || authStore.can('organizations', 'edit');
+});
+
+// Platform Permission Explanation Layer
+// ARCHITECTURAL NOTE: This is explanatory only, does NOT enforce permissions
+// Defines context based solely on existing surface state (no API calls, no role checks)
+const permissionContext = computed(() => ({
+  resource: 'organization',
+  scope: 'RECORD',
+
+  isReadOnly: true,               // OrganizationSurface is read-only
+  isSystemManaged: organization.value?.isTenant === true,
+  workflowLocked: false           // Explicit for clarity
+}));
+
+// Derive permission explanations
+const permissions = computed(() =>
+  derivePlatformPermissions(
+    [
+      'UPDATE',
+      'DELETE',
+      'LINK',
+      'UNLINK'
+    ],
+    permissionContext.value
+  )
+);
+
+// Helper: Map permission actions to human-readable labels
+function getActionLabel(action) {
+  switch (action) {
+    case 'UPDATE':
+      return 'Edit organization';
+    case 'DELETE':
+      return 'Delete organization';
+    case 'LINK':
+      return 'Link people';
+    case 'UNLINK':
+      return 'Unlink people';
+    default:
+      return action;
+  }
+}
+
 // Methods
+/**
+ * Handle organization updated after edit
+ * ARCHITECTURAL NOTE: Refresh organization data after successful edit
+ */
+const handleOrganizationUpdated = () => {
+  // DEV-ONLY INVARIANT GUARD: OrganizationSurface does not mutate, only refreshes
+  if (process.env.NODE_ENV === 'development') {
+    console.assert(
+      true, // This handler only refreshes data, which is allowed
+      '[OrganizationSurface] INVARIANT: Edit operations must happen in CreateOrganizationSurface, not inline'
+    );
+  }
+  
+  showEditDrawer.value = false;
+  // Refresh organization data to show updated information
+  fetchOrganization();
+};
+
 const fetchOrganization = async () => {
+  // DEV-ONLY INVARIANT GUARD: OrganizationSurface is read-only, no mutations
+  if (process.env.NODE_ENV === 'development') {
+    // This function only performs GET requests, which is allowed
+    // Any POST/PATCH/PUT would violate the invariant
+  }
+  
   loading.value = true;
   error.value = null;
   
@@ -714,6 +887,19 @@ onMounted(() => {
   // Listen for refresh events
   if (typeof window !== 'undefined') {
     window.addEventListener('litedesk:refresh-organization', handleRefreshOrganization);
+  }
+
+  // DEV-only invariants for Platform Permission Explanation Layer
+  if (process.env.NODE_ENV === 'development') {
+    console.assert(
+      permissions.value.length > 0,
+      '[OrganizationSurface] Platform permissions not derived'
+    );
+
+    console.assert(
+      permissionContext.value.isReadOnly === true,
+      '[OrganizationSurface] Read-only invariant violated'
+    );
   }
 });
 

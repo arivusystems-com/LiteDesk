@@ -25,6 +25,136 @@ const User = require('../models/User');
 const { getAppConfig } = require('./appAccessUtils');
 const appPricingRegistry = require('../constants/appPricingRegistry');
 
+function normalizeAppKey(appKey) {
+    const upper = String(appKey || '').toUpperCase();
+    // Backward compatibility: CRM and SALES are equivalent
+    if (upper === 'CRM') return 'SALES';
+    return upper;
+}
+
+function isOrgPaid(organization) {
+    const tier = organization?.subscription?.tier;
+    const status = organization?.subscription?.status;
+    // Treat "active" status as paid-ish for provisioning purposes
+    return tier === 'paid' || status === 'active';
+}
+
+/**
+ * Ensure OrganizationSubscription exists and includes all ACTIVE enabledApps.
+ *
+ * This keeps the billing/seat engine (OrganizationSubscription) aligned with
+ * the tenant enablement model (Organization.enabledApps).
+ *
+ * - Creates missing subscription document
+ * - Adds missing app entries for enabled apps
+ * - If org is paid, ensures enabled apps are ACTIVE (unsuspends stale trials)
+ *
+ * @param {object} organization - Organization mongoose doc or plain object
+ * @returns {Promise<object|null>} - Subscription doc (lean/plain) or null
+ */
+async function ensureOrgSubscriptionForEnabledApps(organization) {
+    if (!organization?._id) return null;
+
+    const enabledApps = Array.isArray(organization.enabledApps) ? organization.enabledApps : [];
+    const enabledActiveAppKeys = enabledApps
+        .filter((entry) => {
+            if (typeof entry === 'string') return true; // legacy string array implies ACTIVE
+            return entry?.status === 'ACTIVE';
+        })
+        .map((entry) => (typeof entry === 'string' ? entry : entry?.appKey))
+        .map(normalizeAppKey)
+        .filter(Boolean);
+
+    if (enabledActiveAppKeys.length === 0) return null;
+
+    let subscription = await OrganizationSubscription.findOne({ organizationId: organization._id });
+    if (!subscription) {
+        subscription = await OrganizationSubscription.create({
+            organizationId: organization._id,
+            apps: []
+        });
+    }
+
+    const paid = isOrgPaid(organization);
+    const now = new Date();
+    const trialEndFromOrg = organization?.subscription?.trialEndDate
+        ? new Date(organization.subscription.trialEndDate)
+        : null;
+
+    let changed = false;
+
+    for (const appKey of enabledActiveAppKeys) {
+        // Validate app exists in both registries (billing requires pricing config)
+        const appConfig = getAppConfig(appKey);
+        const pricingConfig = appPricingRegistry[appKey];
+        if (!appConfig || !pricingConfig) continue;
+
+        const existing = subscription.apps.find((a) => normalizeAppKey(a.appKey) === appKey);
+
+        const planKey = pricingConfig.defaultPlan || 'BASIC';
+        const planConfig = pricingConfig.plans?.[planKey] || {};
+        const desiredSeatLimit =
+            pricingConfig.billingType === 'FLAT'
+                ? null
+                : (planConfig.seatLimit ?? pricingConfig.defaultSeatLimit ?? null);
+
+        if (!existing) {
+            const trialEndsAt = (() => {
+                if (paid) return null;
+                if (trialEndFromOrg) return trialEndFromOrg;
+                const trialDays = pricingConfig.trialDays || 14;
+                const d = new Date(now);
+                d.setDate(d.getDate() + trialDays);
+                return d;
+            })();
+
+            subscription.apps.push({
+                appKey,
+                planKey,
+                seatLimit: desiredSeatLimit,
+                seatsUsed: 0,
+                status: paid ? 'ACTIVE' : 'TRIAL',
+                trialEndsAt,
+                startedAt: now
+            });
+            changed = true;
+            continue;
+        }
+
+        // Normalize stored appKey if legacy (CRM)
+        if (normalizeAppKey(existing.appKey) !== existing.appKey) {
+            existing.appKey = appKey;
+            changed = true;
+        }
+
+        // Ensure planKey is valid / present
+        if (!existing.planKey) {
+            existing.planKey = planKey;
+            changed = true;
+        }
+
+        // Ensure seatLimit matches plan defaults when missing/undefined
+        if (typeof existing.seatLimit === 'undefined') {
+            existing.seatLimit = desiredSeatLimit;
+            changed = true;
+        }
+
+        // Paid orgs should not have enabled apps stuck in SUSPENDED/TRIAL
+        if (paid && existing.status !== 'ACTIVE') {
+            existing.status = 'ACTIVE';
+            existing.trialEndsAt = null;
+            changed = true;
+        }
+    }
+
+    if (changed) {
+        await subscription.save();
+    }
+
+    // Return a lean/plain object to keep callers safe from accidental mutations
+    return subscription.toObject ? subscription.toObject() : subscription;
+}
+
 /**
  * Get organization subscription document
  * @param {string|ObjectId} orgId - Organization ID
@@ -428,6 +558,7 @@ function assertSubscriptionUsable(subscription, appKey) {
 
 module.exports = {
     getOrgSubscription,
+    ensureOrgSubscriptionForEnabledApps,
     isAppSubscribed,
     getSeatLimit,
     getSeatsUsed,

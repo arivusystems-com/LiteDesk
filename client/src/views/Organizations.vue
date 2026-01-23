@@ -7,73 +7,14 @@
       </p>
     </div>
 
-    <ListView
-      title="Organizations"
-      description="Manage all customer organizations"
+    <!-- Registry-Driven ModuleList -->
+    <ModuleList
       module-key="organizations"
-        create-label="New Organization"
-      search-placeholder="Search organizations..."
-      :data="organizations"
-      :columns="columns"
-      :loading="loading"
-      :statistics="statistics"
-      :stats-config="[
-        { name: 'Total Organizations', key: 'totalOrganizations', formatter: 'number' },
-        { name: 'Active', key: 'activeOrganizations', formatter: 'number' },
-        { name: 'On Trial', key: 'trialOrganizations', formatter: 'number' },
-        { name: 'Paying Customers', key: 'paidOrganizations', formatter: 'number' }
-      ]"
-      :sort-field="sortField"
-      :sort-order="sortOrder"
-      :pagination="{ currentPage: pagination?.currentPage || 1, totalPages: pagination?.totalPages || 1, totalRecords: pagination?.totalOrganizations || 0, limit: pagination?.limit || 20 }"
-      :filter-config="[
-        {
-          key: 'industry',
-          label: 'All Industries',
-          options: [
-            { value: 'Technology', label: 'Technology' },
-            { value: 'Finance', label: 'Finance' },
-            { value: 'Healthcare', label: 'Healthcare' },
-            { value: 'Education', label: 'Education' },
-            { value: 'Retail', label: 'Retail' },
-            { value: 'Manufacturing', label: 'Manufacturing' },
-            { value: 'Other', label: 'Other' }
-          ]
-        },
-        {
-          key: 'tier',
-          label: 'All Tiers',
-          options: [
-            { value: 'trial', label: 'Trial' },
-            { value: 'starter', label: 'Starter' },
-            { value: 'professional', label: 'Professional' },
-            { value: 'enterprise', label: 'Enterprise' }
-          ]
-        },
-        {
-          key: 'status',
-          label: 'All Statuses',
-          options: [
-            { value: 'active', label: 'Active' },
-            { value: 'inactive', label: 'Inactive' }
-          ]
-        }
-      ]"
-      table-id="organizations-table"
-      row-key="_id"
-      empty-title="No organizations yet"
-      empty-message="Organizations are companies and accounts you work with. They're added automatically when you create deals or tickets, or you can add them directly here."
-        :show-import="false"
-        @create="openCreateModal"
-        @export="exportOrganizations"
-      @update:searchQuery="handleSearchQueryUpdate"
-      @update:filters="(newFilters) => { Object.assign(filters, newFilters); fetchOrganizations(); }"
-      @update:sort="({ sortField: key, sortOrder: order }) => { handleSort({ key, order }); }"
-      @update:pagination="(p) => { pagination.value.currentPage = p.currentPage; pagination.value.limit = p.limit || pagination.value.limit; fetchOrganizations(); }"
-      @fetch="fetchOrganizations"
+      app-key="PLATFORM"
+      @create="openCreateModal"
+      @import="showImportModal = true"
+      @export="exportOrganizations"
       @row-click="handleRowClick"
-      @edit="editOrganization"
-      @delete="handleDelete"
       @bulk-action="handleBulkAction"
     >
       <!-- Custom Organization Cell -->
@@ -97,9 +38,40 @@
         </div>
       </template>
 
-      <!-- Custom Industry Cell -->
+      <!-- Custom Industry Cell with truncation and tooltip -->
       <template #cell-industry="{ value }">
-        <span class="text-gray-700 dark:text-gray-300">{{ value || '-' }}</span>
+        <span 
+          v-if="value" 
+          class="text-gray-700 dark:text-gray-300 truncate block max-w-xs" 
+          :title="value"
+        >
+          {{ value }}
+        </span>
+        <span v-else class="text-gray-500 dark:text-gray-400">-</span>
+      </template>
+
+      <!-- Custom Types Cell with pills and +N overflow -->
+      <template #cell-types="{ value, row }">
+        <div v-if="value && Array.isArray(value) && value.length > 0" class="flex items-center gap-1 flex-wrap">
+          <span
+            v-for="(type, index) in value.slice(0, 2)"
+            :key="index"
+            class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
+          >
+            {{ type }}
+          </span>
+          <span
+            v-if="value.length > 2"
+            class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
+            :title="value.slice(2).join(', ')"
+          >
+            +{{ value.length - 2 }}
+          </span>
+        </div>
+        <span v-else-if="value && !Array.isArray(value)" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+          {{ value }}
+        </span>
+        <span v-else class="text-gray-500 dark:text-gray-400">-</span>
       </template>
 
       <!-- Custom Subscription Cell with Badge -->
@@ -155,11 +127,7 @@
       </template>
 
       <!-- Custom Assigned To Cell - handle different case variations -->
-      <template #cell-assignedTo="{ row, value }">
-        <!-- Debug: Log once per render -->
-        <div v-if="false" style="display: none;">
-          {{ console.log('🔍 assignedTo cell render:', { row: row?.assignedTo, value, isObject: typeof row?.assignedTo === 'object' }) }}
-        </div>
+      <template #cell-assignedTo="{ row }">
         <div v-if="row.assignedTo && typeof row.assignedTo === 'object' && row.assignedTo !== null && !Array.isArray(row.assignedTo)" class="flex items-center gap-2">
           <Avatar
             :user="{
@@ -175,7 +143,7 @@
         <span v-else class="text-sm text-gray-500 dark:text-gray-400">Unassigned</span>
       </template>
       <!-- Also support lowercase variant -->
-      <template #cell-assignedto="{ row, value }">
+      <template #cell-assignedto="{ row }">
         <div v-if="row.assignedTo && typeof row.assignedTo === 'object' && row.assignedTo !== null && !Array.isArray(row.assignedTo)" class="flex items-center gap-2">
           <Avatar
             :user="{
@@ -227,65 +195,39 @@
           {{ typeof row.account_manager === 'string' ? getUserDisplayName(row.account_manager) : 'Unassigned' }}
         </span>
       </template>
+    </ModuleList>
 
-    </ListView>
-
-    <!-- Create/Edit Drawer -->
-    <CreateRecordDrawer 
-      :isOpen="showFormModal"
-      moduleKey="organizations"
-      :record="editingOrganization"
-      @close="closeFormModal"
-      @saved="handleOrganizationSaved"
+    <!-- CSV Import Modal -->
+    <CSVImportModal 
+      v-if="showImportModal"
+      entity-type="Organizations"
+      @close="showImportModal = false"
+      @import-complete="handleImportComplete"
     />
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch, onActivated } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
-import { useBulkActions } from '@/composables/useBulkActions';
-import { useTabs } from '@/composables/useTabs';
+import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
-import ListView from '@/components/common/ListView.vue';
+import ModuleList from '@/components/module-list/ModuleList.vue';
 import BadgeCell from '@/components/common/table/BadgeCell.vue';
 import DateCell from '@/components/common/table/DateCell.vue';
-import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
+import CSVImportModal from '@/components/import/CSVImportModal.vue';
 import Avatar from '@/components/common/Avatar.vue';
 
 const router = useRouter();
-const route = useRoute();
 const authStore = useAuthStore();
-
-// Use tabs composable
 const { openTab } = useTabs();
 
-// Use bulk actions composable with permissions
-const { bulkActions: massActions } = useBulkActions('organizations');
-
 // State
-const organizations = ref([]);
-const loading = ref(false);
-const searchQuery = ref('');
-const showFormModal = ref(false);
-const editingOrganization = ref(null);
-const moduleDefinition = ref(null);
+const showImportModal = ref(false);
+const deleting = ref(false);
 
-// Mass Actions
-const filters = reactive({
-  industry: '',
-  tier: '',
-  status: ''
-});
-
-const pagination = ref({
-  currentPage: 1,
-  totalPages: 1,
-  totalOrganizations: 0,
-  limit: 20
-});
-
+// User management (for display names)
 const usersById = ref({});
 const usersLoaded = ref(false);
 
@@ -343,309 +285,19 @@ const loadUsers = async () => {
   }
 };
 
-const resolveUserValue = (value) => {
-  if (!value) return value;
-
-  if (typeof value === 'string') {
-    return usersById.value[value] || value;
-  }
-
-  if (typeof value === 'object' && !Array.isArray(value)) {
-    const id = value._id || value.id;
-    if (id && usersById.value[id]) {
-      const merged = { ...usersById.value[id], ...value, _id: id };
-      upsertUsers([merged]);
-      return merged;
-    }
-
-    if (id) {
-      upsertUsers([value]);
-    }
-
-    if (value.firstName || value.first_name || value.email || value.name) {
-      return value;
-    }
-
-    return value;
-  }
-
-  return value;
-};
-
-const userFieldKeys = [
-  'owner',
-  'owner_id',
-  'assignedTo',
-  'assigned_to',
-  'createdBy',
-  'created_by',
-  'accountManager',
-  'account_manager',
-  'accountmanager'
-];
-
-const normalizeOrganizationRecord = (record) => {
-  if (!record || typeof record !== 'object') return record;
-
-  const normalized = { ...record };
-
-  userFieldKeys.forEach((key) => {
-    if (!(key in normalized)) return;
-    const resolved = resolveUserValue(normalized[key]);
-    normalized[key] = resolved;
-
-    if (key === 'accountManager' && resolved && typeof resolved === 'object') {
-      normalized.account_manager = resolved;
-    }
-
-    if (key === 'account_manager' && resolved && typeof resolved === 'object') {
-      normalized.accountManager = resolved;
-    }
-  });
-
-  return normalized;
-};
-
-const normalizeOrganizationsArray = (records = []) => {
-  if (!Array.isArray(records)) return [];
-  return records.map((record) => normalizeOrganizationRecord(record));
-};
-
-const statistics = ref({
-  totalOrganizations: 0,
-  activeOrganizations: 0,
-  trialOrganizations: 0,
-  paidOrganizations: 0
-});
-
-const sortField = ref('createdAt');
-const sortOrder = ref('desc');
-
-// Check if any filters are active
-const hasActiveFilters = computed(() => {
-  return searchQuery.value.trim() !== '' || 
-         (filters?.industry || '') !== '' || 
-         (filters?.tier || '') !== '' || 
-         (filters?.status || '') !== '';
-});
-
-// Fetch module definition to build columns dynamically
-const fetchModuleDefinition = async () => {
-  // Don't fetch if user is not authenticated
-  if (!authStore.isAuthenticated) {
-    return;
-  }
-  
-  try {
-    const response = await apiClient.get('/modules');
-    const modules = response.data || [];
-    const orgsModule = modules.find(m => m.key === 'organizations');
-    if (orgsModule) {
-      moduleDefinition.value = orgsModule;
-      initializeColumnsFromModule(orgsModule);
-    }
-  } catch (error) {
-    // Silently ignore 401 errors (user logged out)
-    if (error.status === 401 || error.message?.includes('Session expired')) {
-      return;
-    }
-    console.error('Error fetching module definition:', error);
-  }
-};
-
-// Initialize columns from module definition
-const initializeColumnsFromModule = (module) => {
-  if (!module || !module.fields) return;
-};
-
-// Column definitions (dynamically generated from module fields)
-const columns = computed(() => {
-  if (!moduleDefinition.value) {
-    // Fallback to basic columns while loading
-    return [
-      { key: 'name', label: 'Organization', sortable: true, minWidth: '200px' },
-      { key: 'contactCount', label: 'Contacts', sortable: true, minWidth: '120px' },
-      { key: 'createdAt', label: 'Created', sortable: true, minWidth: '140px' }
-    ];
-  }
-  
-  const cols = [
-    { key: 'name', label: 'Organization', sortable: true, minWidth: '200px' },
-    { key: 'contactCount', label: 'Contacts', sortable: true, minWidth: '120px' },
-    { key: 'createdAt', label: 'Created', sortable: true, minWidth: '140px' }
-  ];
-  
-  // Append fields from module definition
-  const systemFieldKeys = new Set(['organizationid','createdat','updatedat','_id','__v','activitylogs','name','contactcount','createdat']);
-  for (const field of moduleDefinition.value.fields || []) {
-    const keyLower = field.key?.toLowerCase();
-    if (!keyLower || systemFieldKeys.has(keyLower) || field.visibility?.list === false) continue;
-          let minWidth = '120px';
-    if (['Email', 'Phone', 'URL'].includes(field.dataType)) minWidth = '180px';
-    else if (['Text-Area', 'Rich Text'].includes(field.dataType)) minWidth = '250px';
-    else if (['Date', 'Date-Time'].includes(field.dataType)) minWidth = '140px';
-    else if (['Picklist', 'Multi-Picklist'].includes(field.dataType)) minWidth = '150px';
-    cols.push({
-            key: field.key,
-            label: field.label || field.key,
-      sortable: !['Multi-Picklist','Text-Area','Rich Text','Formula','Rollup Summary'].includes(field.dataType),
-            dataType: field.dataType,
-      options: field.options || [],
-            minWidth
-    });
-  }
-  
-  return cols;
-});
-
 // Event handlers
-const handleRowClick = (row, event) => {
+const handleRowClick = (row, event = null) => {
+  // Navigate to OrganizationSurface only (no edit/delete from list)
   viewOrganization(row._id, event);
 };
 
-const handleDelete = (row) => {
-  deleteOrganization(row._id);
-};
-
-const handleSort = ({ key, order }) => {
-  // If key is empty, reset to default sort
-  sortField.value = key || 'createdAt';
-  sortOrder.value = order || 'desc';
-  fetchOrganizations();
-};
-
-// Methods
-const fetchOrganizations = async () => {
-  // Don't fetch if user is not authenticated
-  if (!authStore.isAuthenticated) {
-    loading.value = false;
-    return;
-  }
-  
-  loading.value = true;
-  console.log('🔍 Fetching organizations...');
-  
-  try {
-    await loadUsers();
-
-    const params = new URLSearchParams();
-    params.append('page', pagination.value.currentPage);
-    params.append('limit', pagination.value.limit);
-    params.append('sortBy', sortField.value);
-    params.append('sortOrder', sortOrder.value);
-    
-    if (searchQuery.value) params.append('search', searchQuery.value);
-    if (filters.industry) params.append('industry', filters.industry);
-    if (filters.tier) params.append('tier', filters.tier);
-    if (filters.status) params.append('status', filters.status);
-
-    // Use the tenant-scoped endpoint that filters by organizationId
-    // Note: apiClient already prepends /api, so we use /v2/organization
-    const data = await apiClient(`/v2/organization?${params.toString()}`, {
-      method: 'GET'
-    });
-
-    console.log('📦 Organizations data:', data);
-    // Debug: Check if assignedTo is populated
-    if (data.success && data.data && data.data.length > 0) {
-      console.log('🔍 Sample organization assignedTo:', {
-        org: data.data[0].name,
-        assignedTo: data.data[0].assignedTo,
-        assignedToType: typeof data.data[0].assignedTo,
-        assignedToIsObject: typeof data.data[0].assignedTo === 'object' && data.data[0].assignedTo !== null
-      });
-    }
-    
-    if (data.success) {
-      const normalized = normalizeOrganizationsArray(data.data);
-      organizations.value = normalized;
-      const discoveredUsers = [];
-      normalized.forEach((org) => {
-        userFieldKeys.forEach((key) => {
-          const candidate = org[key];
-          if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
-            const id = candidate._id || candidate.id;
-            if (id) {
-              discoveredUsers.push({ ...candidate, _id: id });
-            }
-          }
-        });
-      });
-      if (discoveredUsers.length > 0) {
-        upsertUsers(discoveredUsers);
-      }
-      
-      // Handle both 'pagination' and 'meta' response formats
-      if (data.pagination) {
-        pagination.value = data.pagination;
-      } else if (data.meta) {
-        pagination.value = {
-          currentPage: data.meta.page || 1,
-          totalPages: Math.ceil((data.meta.total || 0) / (data.meta.limit || 20)),
-          totalOrganizations: data.meta.total || 0,
-          limit: data.meta.limit || 20
-        };
-      } else {
-        // Fallback if neither format is present
-        pagination.value = {
-          currentPage: 1,
-          totalPages: 1,
-          totalOrganizations: data.data.length,
-          limit: 20
-        };
-      }
-      
-      // Calculate statistics
-      statistics.value = {
-        totalOrganizations: pagination.value.totalOrganizations || data.data.length,
-        activeOrganizations: data.data.filter(o => o.isActive).length,
-        trialOrganizations: data.data.filter(o => o.subscription?.status === 'trial').length,
-        paidOrganizations: data.data.filter(o => o.subscription?.status === 'active').length
-      };
-      
-      console.log(`✅ Loaded ${data.data.length} organizations`);
-    }
-  } catch (error) {
-    // Silently ignore 401 errors (user logged out)
-    if (error.status === 401 || error.message?.includes('Session expired')) {
-      return;
-    }
-    console.error('❌ Error fetching organizations:', error);
-  } finally {
-    loading.value = false;
-  }
-};
-
-let searchTimeout = null;
-const debouncedSearch = () => {
-  clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(() => {
-    pagination.value.currentPage = 1;
-    fetchOrganizations();
-  }, 500);
-};
-
-// Handle search query update
-const handleSearchQueryUpdate = (query) => {
-  searchQuery.value = query;
-  debouncedSearch();
-};
-
-const changePage = (page) => {
-  pagination.value.currentPage = page;
-  fetchOrganizations();
-};
-
 const viewOrganization = (orgId, event = null) => {
-  // Get organization details for tab title
-  const org = organizations.value.find(o => o._id === orgId);
-  const title = org ? org.name : 'Organization Detail';
+  const title = 'Organization Detail';
   
-  // Check if user wants to open in background
   const openInBackground = event && (
-    event.button === 1 || // Middle mouse button
-    event.metaKey ||      // Cmd on Mac
-    event.ctrlKey         // Ctrl on Windows/Linux
+    event.button === 1 ||
+    event.metaKey ||
+    event.ctrlKey
   );
   
   openTab(`/organizations/${orgId}`, {
@@ -657,327 +309,199 @@ const viewOrganization = (orgId, event = null) => {
 };
 
 const openCreateModal = () => {
-  editingOrganization.value = null;
-  showFormModal.value = true;
-};
-
-const editOrganization = (org) => {
-  editingOrganization.value = org;
-  showFormModal.value = true;
-};
-
-const closeFormModal = () => {
-  showFormModal.value = false;
-  editingOrganization.value = null;
-};
-
-const handleOrganizationSaved = (savedOrganization) => {
-  closeFormModal();
-  fetchOrganizations(); // Refresh the list
-};
-
-const deleteOrganization = async (orgId) => {
-  try {
-    // Note: apiClient already prepends /api, so we use /v2/organization
-    await apiClient(`/v2/organization/${orgId}`, {
-      method: 'DELETE'
-    });
-    fetchOrganizations();
-  } catch (error) {
-    console.error('Error deleting organization:', error);
+  // ARCHITECTURAL INTENT: All entry points open drawer in Quick Create mode
+  // Open drawer in same tab, not navigating to new route
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('litedesk:open-organization-quick-create'));
   }
 };
 
-// Bulk Actions Handlers
-const handleSelect = (selectedRows) => {
-  console.log(`${selectedRows.length} organizations selected`);
+const handleImportComplete = () => {
+  showImportModal.value = false;
+  window.location.reload(); // Temporary - ModuleList should emit refresh event
 };
 
+// Bulk action handler
 const handleBulkAction = async (actionId, selectedRows) => {
-  const orgIds = selectedRows.map(org => org._id);
-  
-  try {
-    if (actionId === 'bulk-delete' || actionId === 'delete') {
-      await Promise.all(orgIds.map(id => 
-        // Note: apiClient already prepends /api, so we use /v2/organization
-        apiClient(`/v2/organization/${id}`, { method: 'DELETE' })
-      ));
-      fetchOrganizations();
-      
-    } else if (actionId === 'bulk-export' || actionId === 'export') {
-      exportOrganizationsToCSV(selectedRows);
-    }
-  } catch (error) {
-    console.error('Error performing bulk action:', error);
-    alert('Error performing bulk action. Please try again.');
+  if (actionId === 'delete' || actionId === 'bulk-delete') {
+    await bulkDeleteOrganizations(selectedRows);
+  } else if (actionId === 'export' || actionId === 'bulk-export') {
+    await bulkExportOrganizations(selectedRows);
   }
 };
 
-const exportOrganizationsToCSV = (orgsToExport) => {
-  const headers = ['Name', 'Industry', 'Tier', 'Status', 'Contacts', 'Created'];
-  const rows = orgsToExport.map(o => [
-    o.name,
-    o.industry || '',
-    o.subscription?.tier || '',
-    o.isActive ? 'Active' : 'Inactive',
-    o.contactCount || 0,
-    new Date(o.createdAt).toLocaleDateString()
-  ]);
+// Bulk delete
+const bulkDeleteOrganizations = async (selectedRows) => {
+  if (!selectedRows || selectedRows.length === 0) return;
   
-  const csv = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `organizations-export-${new Date().toISOString().split('T')[0]}.csv`;
-  a.click();
-  window.URL.revokeObjectURL(url);
-};
-
-const exportOrganizations = () => {
-  const headers = ['Name', 'Industry', 'Tier', 'Status', 'Contacts', 'Created'];
-  const rows = organizations.value.map(o => [
-    o.name,
-    o.industry || '',
-    o.subscription?.tier || 'trial',
-    o.isActive ? 'Active' : 'Inactive',
-    o.contactCount || 0,
-    formatDate(o.createdAt)
-  ]);
+  const idsToDelete = selectedRows.map(row => row._id || row).filter(Boolean);
+  if (idsToDelete.length === 0) return;
   
-  const csvContent = [
-    headers.join(','),
-    ...rows.map(row => row.map(field => `"${field}"`).join(','))
-  ].join('\n');
-  
-  const blob = new Blob([csvContent], { type: 'text/csv' });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `organizations-${new Date().toISOString().split('T')[0]}.csv`;
-  a.click();
-};
-
-const clearFilters = () => {
-  searchQuery.value = '';
-  filters.industry = '';
-  filters.tier = '';
-  filters.status = '';
-  fetchOrganizations();
-};
-
-// Load column settings from localStorage
-const loadColumnSettings = () => {
   try {
-    const saved = localStorage.getItem('organizations-column-settings');
-    if (saved) {
-      return JSON.parse(saved);
-    }
-  } catch (e) {
-    console.error('Failed to load column settings:', e);
-  }
-  return null;
-};
-
-// Save column settings to localStorage
-const saveColumnSettings = () => {
-  try {
-    // Save only the key and visible state for each column
-    const settings = visibleColumns.value.map(col => ({
-      key: col.key,
-      visible: col.visible
-    }));
-    localStorage.setItem('organizations-column-settings', JSON.stringify(settings));
-    console.log('Saved column settings:', settings);
-  } catch (e) {
-    console.error('Failed to save column settings:', e);
-  }
-};
-
-// Column settings functions
-const resetColumnSettings = () => {
-  // Reset to default: respect module definition's visibility.list setting
-  visibleColumns.value = visibleColumns.value.map(col => {
-    const basicColumns = ['name', 'contactCount', 'createdAt'];
+    deleting.value = true;
     
-    // Basic columns are always visible
-    if (basicColumns.includes(col.key)) {
-      return { ...col, visible: true };
-    }
-    
-    // For module fields, check the module definition's visibility.list setting
-    const field = moduleDefinition.value?.fields?.find(f => 
-      f.key?.toLowerCase() === col.key?.toLowerCase()
+    // Delete all in parallel, fail fast on permission errors
+    const deletePromises = idsToDelete.map(id => 
+      apiClient.delete(`/v2/organization/${id}`)
     );
     
-    return { 
-      ...col, 
-      visible: field?.visibility?.list ?? false // Use module definition default
-    };
-  });
+    const results = await Promise.allSettled(deletePromises);
+    
+    // Check for failures
+    const failures = results.filter(r => r.status === 'rejected');
+    if (failures.length > 0) {
+      const firstFailure = failures[0].reason;
+      const errorMessage = firstFailure?.response?.data?.message || 
+                          firstFailure?.message || 
+                          'Failed to delete some organizations';
+      
+      // If permission error, show specific message
+      if (firstFailure?.response?.status === 403) {
+        alert(`Permission denied: ${errorMessage}`);
+      } else {
+        alert(`Failed to delete ${failures.length} of ${idsToDelete.length} organizations. ${errorMessage}`);
+      }
+      
+      // Don't reload if some failed - let user see what succeeded
+      return;
+    }
+    
+    // All succeeded - reload list
+    window.location.reload(); // Temporary - ModuleList should emit refresh event
+  } catch (error) {
+    console.error('Error bulk deleting organizations:', error);
+    alert(`Error deleting organizations: ${error.message || 'Unknown error'}`);
+  } finally {
+    deleting.value = false;
+  }
+};
+
+// Bulk export - identity fields only
+const bulkExportOrganizations = async (selectedRows) => {
+  if (!selectedRows || selectedRows.length === 0) return;
   
-  // Save the reset
-  saveColumnSettings();
-};
-
-const applyColumnSettings = async () => {
-  // Save column settings to localStorage
-  saveColumnSettings();
-  
-  // TODO: Optionally save to module definition on backend
-  // This would persist across all users, but for now we'll use localStorage (per-user)
-  
-  showColumnSettings.value = false;
-  console.log('Applied column settings:', visibleColumns.value);
-};
-
-const toggleColumnVisibility = (columnKey) => {
-  const column = visibleColumns.value.find(col => col.key === columnKey);
-  if (column) {
-    column.visible = !column.visible;
+  try {
+    // Extract identity fields only (core + system fields)
+    const identityFields = [
+      'name', 'industry', 'website', 'phone', 'address',
+      'assignedTo', 'accountManager', 'tags', 'createdAt', 'updatedAt'
+    ];
+    
+    const csvRows = [];
+    
+    // Header row
+    const headers = ['Name', 'Industry', 'Website', 'Phone', 'Address', 'Assigned To', 'Account Manager', 'Tags', 'Created At', 'Updated At'];
+    csvRows.push(headers.join(','));
+    
+    // Data rows
+    selectedRows.forEach(row => {
+      const assignedToName = row.assignedTo && typeof row.assignedTo === 'object' 
+        ? getUserDisplayName(row.assignedTo)
+        : (row.assignedTo || '');
+      
+      const accountManagerName = row.accountManager && typeof row.accountManager === 'object'
+        ? getUserDisplayName(row.accountManager)
+        : (row.account_manager && typeof row.account_manager === 'object'
+          ? getUserDisplayName(row.account_manager)
+          : (row.accountManager || row.account_manager || ''));
+      
+      const tags = Array.isArray(row.tags) ? row.tags.join('; ') : '';
+      const createdAt = row.createdAt ? new Date(row.createdAt).toISOString() : '';
+      const updatedAt = row.updatedAt ? new Date(row.updatedAt).toISOString() : '';
+      
+      const rowData = [
+        escapeCsv(row.name || ''),
+        escapeCsv(row.industry || ''),
+        escapeCsv(row.website || ''),
+        escapeCsv(row.phone || ''),
+        escapeCsv(row.address || ''),
+        escapeCsv(assignedToName),
+        escapeCsv(accountManagerName),
+        escapeCsv(tags),
+        createdAt,
+        updatedAt
+      ];
+      
+      csvRows.push(rowData.join(','));
+    });
+    
+    // Create and download CSV
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `organizations_export_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Error bulk exporting organizations:', error);
+    alert('Error exporting organizations. Please try again.');
   }
 };
 
-// Drag and drop functionality
-const dragStartIndex = ref(null);
-
-const handleDragStart = (event, index) => {
-  dragStartIndex.value = index;
-  event.dataTransfer.effectAllowed = 'move';
-  event.dataTransfer.setData('text/html', event.target.outerHTML);
-  event.target.style.opacity = '0.5';
-};
-
-const handleDragOver = (event) => {
-  event.preventDefault();
-  event.dataTransfer.dropEffect = 'move';
-};
-
-const handleDragEnter = (event) => {
-  event.preventDefault();
-  event.target.classList.add('drag-over');
-};
-
-const handleDragLeave = (event) => {
-  event.target.classList.remove('drag-over');
-};
-
-const handleDrop = (event, dropIndex) => {
-  event.preventDefault();
-  event.target.classList.remove('drag-over');
-  
-  if (dragStartIndex.value !== null && dragStartIndex.value !== dropIndex) {
-    // Reorder the columns
-    const draggedColumn = visibleColumns.value[dragStartIndex.value];
-    visibleColumns.value.splice(dragStartIndex.value, 1);
-    visibleColumns.value.splice(dropIndex, 0, draggedColumn);
+// Helper to escape CSV values
+const escapeCsv = (value) => {
+  if (value == null || value === '') return '';
+  const stringValue = String(value);
+  // If value contains comma, quote, or newline, wrap in quotes and escape quotes
+  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
   }
-  
-  dragStartIndex.value = null;
+  return stringValue;
 };
 
-const handleDragEnd = (event) => {
-  event.target.style.opacity = '1';
-  dragStartIndex.value = null;
-};
-
-const getUserInitials = (user) => {
-  if (!user) return '?';
-  if (user.firstName && user.lastName) {
-    return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
+const exportOrganizations = async () => {
+  try {
+    const response = await fetch('/api/csv/export/organizations', {
+      headers: {
+        'Authorization': `Bearer ${authStore.user?.token}`
+      }
+    });
+    
+    if (!response.ok) throw new Error('Export failed');
+    
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `organizations_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Error exporting organizations:', error);
+    alert('Error exporting organizations. Please try again.');
   }
-  if (user.first_name && user.last_name) {
-    return `${user.first_name[0]}${user.last_name[0]}`.toUpperCase();
-  }
-  if (user.username) {
-    return user.username.substring(0, 2).toUpperCase();
-  }
-  if (user.email) {
-    return user.email.substring(0, 2).toUpperCase();
-  }
-  return '?';
 };
 
 const getUserDisplayName = (user) => {
-  if (!user) return 'Unknown';
-
+  if (!user) return 'Unassigned';
   if (typeof user === 'string') {
     const cached = usersById.value[user];
-    if (cached) return getUserDisplayName(cached);
+    if (cached) {
+      return getUserDisplayName(cached);
+    }
     return user;
   }
-
   const firstName = user.firstName || user.first_name || user.name || '';
   const lastName = user.lastName || user.last_name || '';
   const combined = `${firstName} ${lastName}`.trim();
   if (combined) return combined;
-
   if (user.email) return user.email;
   if (user.username) return user.username;
-
-  const id = user._id || user.id;
-  if (id && usersById.value[id]) {
-    return getUserDisplayName(usersById.value[id]);
+  if (user._id && usersById.value[user._id]) {
+    return getUserDisplayName(usersById.value[user._id]);
   }
-
-  return 'Unknown User';
-};
-
-const getInitials = (name) => {
-  return name.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 2);
-};
-
-const formatDate = (date) => {
-  if (!date) return '-';
-  return new Date(date).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  });
+  return 'Unassigned';
 };
 
 // Lifecycle
 onMounted(async () => {
-  // Don't fetch if user is not authenticated
-  if (!authStore.isAuthenticated) {
-    return;
-  }
-  
-  // Fetch module definition first to build columns dynamically
-  await fetchModuleDefinition();
   await loadUsers();
-  
-  // Load saved sort state from localStorage before fetching
-  const savedSort = localStorage.getItem('datatable-organizations-table-sort');
-  if (savedSort) {
-    try {
-      const { by, order } = JSON.parse(savedSort);
-      sortField.value = by;
-      sortOrder.value = order;
-      console.log('Loaded saved sort in Organizations:', { by, order });
-    } catch (e) {
-      console.error('Failed to parse saved sort:', e);
-    }
-  }
-  
-  fetchOrganizations();
-});
-
-// Refresh module definition when component is activated (e.g., returning from settings)
-onActivated(async () => {
-  // Don't fetch if user is not authenticated
-  if (!authStore.isAuthenticated) {
-    return;
-  }
-  
-  await fetchModuleDefinition();
-});
-
-// Watch for route query changes (for refresh)
-watch(() => route.query.refresh, () => {
-  if (route.query.refresh) {
-    fetchOrganizations();
-  }
 });
 
 </script>

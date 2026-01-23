@@ -1,6 +1,6 @@
 import type { SidebarStructure, SidebarItem } from '@/types/sidebar.types';
 
-const ALLOWED_KINDS = new Set<SidebarItem['kind']>(['surface', 'identity', 'app', 'platform']);
+const ALLOWED_KINDS = new Set<SidebarItem['kind']>(['surface', 'coreModule', 'app', 'platform']);
 
 const FORBIDDEN_RAW_ENTITY_MODULE_KEYS = new Set([
   'tasks',
@@ -20,16 +20,16 @@ function invariant(condition: unknown, message: string): asserts condition {
  * Dev-only guardrail for the locked sidebar doctrine.
  *
  * Validates:
- * - identity contains only People
+ * - coreModules contains only coreModule items
  * - appNav contains only one app lens
- * - no items use kinds outside surface | identity | app | platform
+ * - no items use kinds outside surface | coreModule | app | platform
  */
 export function assertValidSidebarStructure(structure: SidebarStructure): void {
   invariant(structure !== null && typeof structure === 'object', 'SidebarStructure must be an object');
 
   const allItems: SidebarItem[] = [
     ...structure.shell,
-    ...structure.identity,
+    ...structure.coreModules,
     ...(structure.appNav.dashboard ? [structure.appNav.dashboard] : []),
     ...structure.appNav.modules,
     ...structure.platform,
@@ -39,10 +39,10 @@ export function assertValidSidebarStructure(structure: SidebarStructure): void {
     invariant(ALLOWED_KINDS.has(item.kind), `Invalid sidebar item kind: ${(item as any).kind}`);
   }
 
-  // Identity: People only.
-  for (const item of structure.identity) {
-    invariant(item.kind === 'identity', 'Identity section must contain only identity items');
-    invariant(item.id === 'people', `Identity item must be People only (got: ${item.id})`);
+  // Core Modules: must be coreModule kind items.
+  for (const item of structure.coreModules) {
+    invariant(item.kind === 'coreModule', 'Core Modules section must contain only coreModule items');
+    invariant(typeof item.moduleKey === 'string', 'Core module items must have a moduleKey');
   }
 
   // App lens: exactly one active app context.

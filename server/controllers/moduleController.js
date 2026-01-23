@@ -2082,6 +2082,15 @@ exports.listModules = async (req, res) => {
                 let finalQuickCreate = (override.quickCreate !== undefined && override.quickCreate !== null) 
                     ? override.quickCreate 
                     : (sys.quickCreate || []);
+                
+                // ARCHITECTURE NOTE: Tasks Settings configure structure only, never work.
+                // If Tasks quickCreate is empty, apply canonical default: title, dueDate, priority, assignedTo, relatedTo
+                // See: docs/architecture/task-settings.md Section 3.5
+                if (sys.key === 'tasks' && (!finalQuickCreate || finalQuickCreate.length === 0)) {
+                    finalQuickCreate = ['title', 'dueDate', 'priority', 'assignedTo', 'relatedTo'];
+                    console.log('📋 Tasks: Applying canonical default Quick Create:', finalQuickCreate);
+                }
+                
                 console.log('✅ Final quickCreate:', {
                     value: finalQuickCreate,
                     length: finalQuickCreate?.length || 0,
@@ -2344,6 +2353,22 @@ exports.listModules = async (req, res) => {
                         'partnerVisibility'
                     ];
                 }
+                
+                // PLATFORM-LEVEL CANONICAL DEFAULT: Organizations Quick Create
+                // This is intentionally minimal - Organizations are contextual business entities, not primary workflow objects.
+                // Only "name" is required by default. Other eligible fields (industry, types, website, phone, address)
+                // can be added via Settings but are optional. This mirrors People Quick Create philosophy.
+                // Changes require updating: module-settings-doctrine.md, organization-settings.md
+                if (sys.key === 'organizations') {
+                    defaultQuickCreate = ['name'];
+                }
+                
+                // ARCHITECTURE NOTE: Tasks Settings configure structure only, never work.
+                // Tasks Quick Create default: title (required, locked), dueDate, priority, assignedTo, relatedTo
+                // See: docs/architecture/task-settings.md Section 3.5
+                if (sys.key === 'tasks') {
+                    defaultQuickCreate = ['title', 'dueDate', 'priority', 'assignedTo', 'relatedTo'];
+                }
 
                 merged.push({ 
                     ...sys, 
@@ -2439,6 +2464,15 @@ exports.listModules = async (req, res) => {
             ...module,
             fields: filterFieldsByReadAccess(module.fields || [], req.user, module.key)
         }));
+
+        // Filter by key if provided in query parameter
+        if (req.query.key) {
+            const requestedKey = req.query.key.toLowerCase().trim();
+            const filtered = filteredMerged.filter(module => 
+                module.key && module.key.toLowerCase() === requestedKey
+            );
+            return res.json({ success: true, data: filtered });
+        }
 
         res.json({ success: true, data: filteredMerged });
     } catch (error) {

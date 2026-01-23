@@ -103,13 +103,79 @@
           </p>
         </div>
         
+        <!-- Microcopy for Organizations module -->
+        <div v-if="isOrganizationsModule" class="px-2 flex-shrink-0">
+          <p class="text-sm text-gray-600 dark:text-gray-400">
+            Configure how Organization fields are displayed. Field ownership and application scope are defined by the platform and apps. 
+            <strong>Note:</strong> This configures business organizations (Customer, Partner, Vendor), not tenant organizations. 
+            Tenant organization settings are managed in Platform Settings.
+          </p>
+        </div>
+        
+        <!-- Microcopy for Tasks module -->
+        <div v-if="isTasksModule" class="px-2 flex-shrink-0">
+          <p class="text-sm text-gray-600 dark:text-gray-400">
+            Configure how Task fields are displayed. Field ownership and application scope are defined by the platform and apps.
+            <strong>Note:</strong> Tasks Settings configure structure only, never work. Task lists, completion, time tracking, and automation belong in Surfaces and Work interfaces.
+          </p>
+        </div>
+        
+        <!-- Microcopy for Events module -->
+        <!-- 
+          ARCHITECTURE NOTE: Events Settings configure structure, constraints, and eligibility only.
+          Excludes: scheduling, execution, audit workflows, calendars.
+          See: docs/architecture/event-settings.md
+        -->
+        <div v-if="isEventsModule" class="px-2 flex-shrink-0">
+          <p class="text-sm text-gray-600 dark:text-gray-400">
+            Configure how Event fields are displayed. Field ownership and application scope are defined by the platform and apps.
+            <strong>Note:</strong> Events Settings configure structure and constraints only, not scheduling or execution. 
+            Event lists, calendars, scheduling, execution, audit workflows, and geo tracking belong in Surfaces and Work interfaces.
+          </p>
+        </div>
+        
+        <!-- Microcopy for Forms module -->
+        <!-- 
+          ARCHITECTURE NOTE: Forms Settings configure structure & behavior ONLY.
+          MUST NOT: Edit sections/questions, Edit responses, Execute workflows, Run scoring
+          
+          CAPABILITY DECLARATION:
+          - Fields are configurable (can configure visibility, behavior, rules)
+          - builderEditable: false (form structure belongs to Form Builder)
+          - contentEditable: false (form content belongs to Form Builder)
+          - submissionMutationAllowed: false (responses belong to Form Responses / Analytics)
+          
+          See: client/src/platform/modules/forms/formsModule.definition.ts
+          See: client/src/platform/forms/formSettingsCapabilities.ts
+        -->
+        <div v-if="isFormsModule" class="px-2 flex-shrink-0">
+          <p class="text-sm text-gray-600 dark:text-gray-400">
+            Configure Form record fields: visibility, behavior, and rules. Field ownership and application scope are defined by the platform and apps.
+            <strong>Note:</strong> Forms Settings configure structure and behavior only, not form content. 
+            Form sections/questions are edited in the Form Builder. Responses and execution belong in Form Responses and Work interfaces.
+          </p>
+          
+          <!-- Capability Indicators -->
+          <div class="mt-3 flex flex-wrap gap-2">
+            <span v-if="hasCapability('metadataEditable')" class="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded text-xs font-medium">
+              ✓ Metadata Editable
+            </span>
+            <span v-if="isCapabilityLocked('builderEditable')" class="px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded text-xs font-medium">
+              🔒 Structure Locked (Form Builder)
+            </span>
+            <span v-if="isCapabilityLocked('contentEditable')" class="px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded text-xs font-medium">
+              🔒 Content Locked (Form Builder)
+            </span>
+          </div>
+        </div>
+        
         <div class="flex-1 overflow-hidden flex gap-4 min-h-0">
         <!-- Left: Fields list -->
         <aside class="w-96 flex-none bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col min-h-0">
           <div class="p-3 border-b border-gray-200 dark:border-white/10 flex items-center justify-between gap-2 flex-shrink-0">
             <div class="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate flex-1 min-w-0">{{ selectedModule?.name }}</div>
             <button 
-              v-if="selectedModule && !props.hideFieldCreation && !isPeopleModule" 
+              v-if="selectedModule && !props.hideFieldCreation && !isPeopleModule && !isOrganizationsModule && !isTasksModule" 
               @click="openAddField" 
               class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 text-xs font-medium transition-colors flex-shrink-0 whitespace-nowrap"
             >
@@ -170,6 +236,361 @@
             <div v-for="(fields, appKey) in groupedFields.participation" :key="appKey" class="mb-4">
               <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">
                 {{ appKey === 'SALES' ? 'Sales Participation' : `${appKey} Participation` }}
+              </div>
+              <ul class="space-y-1">
+                <li
+                  v-for="fieldKey in fields"
+                  :key="fieldKey"
+                  class="group"
+                  :draggable="true"
+                  @dragstart="onDragStart(getFieldIndex(fieldKey))"
+                  @dragover.prevent="onDragOver(getFieldIndex(fieldKey))"
+                  @drop.prevent="onDrop(getFieldIndex(fieldKey))"
+                >
+                  <div :class="[
+                        'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
+                        getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
+                      ]">
+                    <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                      <span>{{ getFieldLabel(fieldKey) }}</span>
+                      <span class="px-1.5 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">{{ appKey }}</span>
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <!-- System Fields -->
+            <div class="mb-4">
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">System Fields</div>
+              <ul class="space-y-1">
+                <li
+                  v-for="fieldKey in groupedFields.system"
+                  :key="fieldKey"
+                  class="group"
+                >
+                  <div :class="[
+                        'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2 opacity-75',
+                        getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5'
+                      ]">
+                    <div class="mr-2 text-xs text-purple-600 dark:text-purple-400" title="System field">🔒</div>
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                      <span>{{ getFieldLabel(fieldKey) }}</span>
+                      <span class="px-1.5 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">System</span>
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </template>
+
+          <!-- Organizations module: Grouped by ownership (similar to People) -->
+          <template v-else-if="isOrganizationsModule">
+            <!-- Core Business Fields -->
+            <div class="mb-4">
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Core Business</div>
+              <ul class="space-y-1">
+                <li
+                  v-for="(fieldKey, idx) in groupedFields.coreIdentity"
+                  :key="fieldKey"
+                  class="group"
+                  :draggable="true"
+                  @dragstart="onDragStart(getFieldIndex(fieldKey))"
+                  @dragover.prevent="onDragOver(getFieldIndex(fieldKey))"
+                  @drop.prevent="onDrop(getFieldIndex(fieldKey))"
+                >
+                  <div :class="[
+                        'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
+                        getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
+                      ]">
+                    <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                      <span>{{ getFieldLabel(fieldKey) }}</span>
+                      <span class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <!-- App Participation Groups -->
+            <div v-for="(fields, appKey) in groupedFields.participation" :key="appKey" class="mb-4">
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">
+                {{ appKey === 'SALES' ? 'Sales Participation' : `${appKey} Participation` }}
+              </div>
+              <ul class="space-y-1">
+                <li
+                  v-for="fieldKey in fields"
+                  :key="fieldKey"
+                  class="group"
+                  :draggable="true"
+                  @dragstart="onDragStart(getFieldIndex(fieldKey))"
+                  @dragover.prevent="onDragOver(getFieldIndex(fieldKey))"
+                  @drop.prevent="onDrop(getFieldIndex(fieldKey))"
+                >
+                  <div :class="[
+                        'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
+                        getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
+                      ]">
+                    <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                      <span>{{ getFieldLabel(fieldKey) }}</span>
+                      <span class="px-1.5 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">{{ appKey }}</span>
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <!-- System Fields -->
+            <div class="mb-4">
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">System Fields</div>
+              <ul class="space-y-1">
+                <li
+                  v-for="fieldKey in groupedFields.system"
+                  :key="fieldKey"
+                  class="group"
+                >
+                  <div :class="[
+                        'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2 opacity-75',
+                        getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5'
+                      ]">
+                    <div class="mr-2 text-xs text-purple-600 dark:text-purple-400" title="System field">🔒</div>
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                      <span>{{ getFieldLabel(fieldKey) }}</span>
+                      <span class="px-1.5 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">System</span>
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </template>
+
+          <!-- Tasks module: Grouped by ownership (similar to Organizations) -->
+          <template v-else-if="isTasksModule">
+            <!-- Core Task Fields -->
+            <div class="mb-4">
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Core Task Fields</div>
+              <ul class="space-y-1">
+                <li
+                  v-for="(fieldKey, idx) in groupedFields.coreIdentity"
+                  :key="fieldKey"
+                  class="group"
+                  :draggable="true"
+                  @dragstart="onDragStart(getFieldIndex(fieldKey))"
+                  @dragover.prevent="onDragOver(getFieldIndex(fieldKey))"
+                  @drop.prevent="onDrop(getFieldIndex(fieldKey))"
+                >
+                  <div :class="[
+                        'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
+                        getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
+                      ]">
+                    <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                      <span>{{ getFieldLabel(fieldKey) }}</span>
+                      <span class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <!-- App Participation Groups -->
+            <div v-for="(fields, appKey) in groupedFields.participation" :key="appKey" class="mb-4">
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">
+                {{ appKey === 'SALES' ? 'Sales Participation' : `${appKey} Participation` }}
+              </div>
+              <ul class="space-y-1">
+                <li
+                  v-for="fieldKey in fields"
+                  :key="fieldKey"
+                  class="group"
+                  :draggable="true"
+                  @dragstart="onDragStart(getFieldIndex(fieldKey))"
+                  @dragover.prevent="onDragOver(getFieldIndex(fieldKey))"
+                  @drop.prevent="onDrop(getFieldIndex(fieldKey))"
+                >
+                  <div :class="[
+                        'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
+                        getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
+                      ]">
+                    <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                      <span>{{ getFieldLabel(fieldKey) }}</span>
+                      <span class="px-1.5 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">{{ appKey }}</span>
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <!-- System Fields -->
+            <div class="mb-4">
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">System Fields</div>
+              <ul class="space-y-1">
+                <li
+                  v-for="fieldKey in groupedFields.system"
+                  :key="fieldKey"
+                  class="group"
+                >
+                  <div :class="[
+                        'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2 opacity-75',
+                        getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5'
+                      ]">
+                    <div class="mr-2 text-xs text-purple-600 dark:text-purple-400" title="System field">🔒</div>
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                      <span>{{ getFieldLabel(fieldKey) }}</span>
+                      <span class="px-1.5 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">System</span>
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </template>
+
+          <!-- Events module: Grouped by ownership (similar to Tasks) -->
+          <!-- 
+            ARCHITECTURE NOTE: Events Settings configure structure only, never execution.
+            - No GEO coordinates (belongs in execution)
+            - No check-in/check-out fields (belongs in execution)
+            - No route sequencing (belongs in execution)
+            - No audit history (belongs in execution)
+            - No metadata (belongs in execution)
+            See: docs/architecture/event-settings.md Section 5
+          -->
+          <template v-else-if="isFormsModule">
+            <!-- Core Fields (Forms module) -->
+            <!-- 
+              ARCHITECTURE NOTE: Forms use the same Fields Configuration model as other core modules.
+              "Metadata" is not a separate field type — these are record fields.
+              Form content structure is managed exclusively by the Form Builder.
+              
+              Core fields must always appear in the field list.
+              They may be fixed or read-only, but must never be hidden.
+              This preserves discoverability and prevents "magic fields".
+              See: client/src/platform/forms/formSettingsMap.ts
+            -->
+            <div class="mb-4">
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Core Fields</div>
+              <ul class="space-y-1">
+                <li
+                  v-for="field in getFieldsForTab('metadataFields').filter(f => !f.isSystem)"
+                  :key="field.key"
+                  class="group"
+                >
+                  <div :class="[
+                        'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
+                        getFieldIndex(field.key) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
+                        field.isFixed ? 'opacity-90' : ''
+                      ]"
+                      @click="selectFieldByKey(field.key)"
+                      :style="{ cursor: 'pointer' }"
+                    >
+                    <div class="flex-1 text-left truncate flex items-center gap-2">
+                      <!-- Lock icon for fixed fields -->
+                      <div v-if="field.isFixed" class="mr-1 text-xs text-purple-600 dark:text-purple-400" title="Fixed position field">🔒</div>
+                      <span>{{ field.label }}</span>
+                      <!-- Core badge -->
+                      <span
+                        class="px-1.5 py-0.5 text-xs font-medium rounded bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
+                      >
+                        Core
+                      </span>
+                      <!-- Fixed badge -->
+                      <span
+                        v-if="field.isFixed"
+                        class="px-1.5 py-0.5 text-xs font-medium rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                      >
+                        Fixed
+                      </span>
+                    </div>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <!-- System Fields (Forms module) -->
+            <div class="mb-4">
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">System Fields</div>
+              <ul class="space-y-1">
+                <li
+                  v-for="field in getFieldsForTab('metadataFields').filter(f => f.isSystem)"
+                  :key="field.key"
+                  class="group"
+                >
+                  <div :class="[
+                        'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
+                        getFieldIndex(field.key) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
+                        'opacity-90'
+                      ]"
+                      @click="selectFieldByKey(field.key)"
+                      :style="{ cursor: 'pointer' }"
+                    >
+                    <div class="flex-1 text-left truncate flex items-center gap-2">
+                      <!-- Lock icon for system fields -->
+                      <div class="mr-1 text-xs text-purple-600 dark:text-purple-400" title="System field">🔒</div>
+                      <span>{{ field.label }}</span>
+                      <!-- System badge -->
+                      <span
+                        class="px-1.5 py-0.5 text-xs font-medium rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+                      >
+                        System
+                      </span>
+                    </div>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </template>
+
+          <template v-else-if="isEventsModule">
+            <!-- Core Event Fields -->
+            <div class="mb-4">
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Core Event Fields</div>
+              <ul class="space-y-1">
+                <li
+                  v-for="(fieldKey, idx) in groupedFields.coreIdentity"
+                  :key="fieldKey"
+                  class="group"
+                  :draggable="true"
+                  @dragstart="onDragStart(getFieldIndex(fieldKey))"
+                  @dragover.prevent="onDragOver(getFieldIndex(fieldKey))"
+                  @drop.prevent="onDrop(getFieldIndex(fieldKey))"
+                >
+                  <div :class="[
+                        'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
+                        getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
+                      ]">
+                    <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                      <span>{{ getFieldLabel(fieldKey) }}</span>
+                      <span class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <!-- App Participation Groups -->
+            <div v-for="(fields, appKey) in groupedFields.participation" :key="appKey" class="mb-4">
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">
+                {{ appKey === 'AUDIT' ? 'Audit Participation' : appKey === 'SALES' ? 'Sales Participation' : `${appKey} Participation` }}
               </div>
               <ul class="space-y-1">
                 <li
@@ -296,13 +717,13 @@
                   v-for="tab in subTabs"
                   :key="tab.id"
                   @click="activeSubTab = tab.id"
-                  :disabled="isSystemField(currentField) && tab.id !== 'general'"
+                  :disabled="isSystemField(currentField) && (tab.id !== 'general' && tab.id !== 'filters')"
                   :class="[
                     activeSubTab === tab.id
                       ? 'border-brand-600 text-brand-600 dark:text-brand-400'
                       : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600',
                     'whitespace-nowrap py-3 px-1 border-b-2 text-sm font-medium',
-                    isSystemField(currentField) && tab.id !== 'general' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                    isSystemField(currentField) && (tab.id !== 'general' && tab.id !== 'filters') ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
                   ]"
                 >
                   {{ tab.name }}
@@ -310,6 +731,94 @@
               </nav>
             </div>
             <div v-if="activeSubTab === 'general'" class="space-y-4">
+              <!-- Form Type Editor (Forms module only) -->
+              <!-- 
+                ARCHITECTURE NOTE: Form Type is a CORE domain field.
+                It is user-editable and intent-defining.
+                Built-in types are protected from deletion, not from selection or change.
+                See: client/src/platform/forms/formTypeRegistry.ts
+              -->
+              <div v-if="isFormsModule && currentField?.key === 'formType'" class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <label class="block text-sm font-medium text-gray-900 dark:text-white mb-2">Form Type</label>
+                <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                  Form Type defines how the form is interpreted and executed. You can change the type or add new ones. Built-in types cannot be removed.
+                </p>
+                <div class="space-y-3">
+                  <div>
+                    <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Select Form Type</label>
+                    <select 
+                      v-model="currentField.defaultValue"
+                      :disabled="false"
+                      class="w-full px-3 py-2 rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-white/10 text-sm cursor-pointer"
+                      @focus="loadFieldSettings()"
+                    >
+                      <option value="">Select a form type...</option>
+                      <option 
+                        v-for="type in getFormTypeDefinitions()" 
+                        :key="type.key" 
+                        :value="type.key"
+                      >
+                        {{ type.label }} {{ type.builtIn ? '(Built-in)' : '(Custom)' }}
+                      </option>
+                    </select>
+                  </div>
+                  
+                  <!-- Custom Form Types List (with remove option) -->
+                  <div v-if="getCustomFormTypes().length > 0">
+                    <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Custom Form Types</label>
+                    <div class="space-y-2">
+                      <div 
+                        v-for="type in getCustomFormTypes()" 
+                        :key="type.key"
+                        class="flex items-center justify-between p-2 bg-white dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600"
+                      >
+                        <span class="text-sm text-gray-900 dark:text-white">{{ type.label }}</span>
+                        <button
+                          v-if="!isBuiltInFormType(type.key)"
+                          @click="handleRemoveCustomFormType(type.key)"
+                          class="px-2 py-1 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                        >
+                          Remove
+                        </button>
+                        <span
+                          v-else
+                          class="px-2 py-1 text-xs text-gray-500 dark:text-gray-400 italic"
+                        >
+                          Built-in
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Add Custom Form Type</label>
+                    <div class="flex gap-2">
+                      <input 
+                        v-model="newFormTypeKey"
+                        placeholder="e.g., webform"
+                        class="flex-1 px-3 py-2 rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-white/10 text-sm"
+                        @keyup.enter="handleAddCustomFormType"
+                      />
+                      <input 
+                        v-model="newFormTypeLabel"
+                        placeholder="e.g., Webform"
+                        class="flex-1 px-3 py-2 rounded bg-white dark:bg-gray-800 border border-gray-200 dark:border-white/10 text-sm"
+                        @keyup.enter="handleAddCustomFormType"
+                      />
+                      <button 
+                        @click="handleAddCustomFormType"
+                        class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded text-sm font-medium transition-colors"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      Built-in types (Audit, Survey, Feedback) cannot be removed
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <!-- Basic Field Information -->
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -694,6 +1203,25 @@
                 </div>
               </div>
               
+              <!-- Events module: App participation fields info -->
+              <!-- 
+                ARCHITECTURE NOTE: Events app participation fields are visibility-configurable ONLY.
+                Required state is controlled by event type, not by Settings.
+                See: docs/architecture/event-settings.md Section 4.2
+              -->
+              <div v-if="isEventsModule && currentField?.key && isEventsAppParticipationField(currentField.key)" class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <div class="flex items-start gap-3">
+                  <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <p class="text-sm text-blue-800 dark:text-blue-300">
+                      App participation fields are visibility-configurable only. Required state is controlled by event type, not by Settings.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
               <div>
                 <!-- Empty State -->
                 <div v-if="!currentField.validations || currentField.validations.length === 0" class="flex flex-col items-center justify-center py-12 px-4 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
@@ -706,10 +1234,10 @@
                   </p>
                   <button 
                     @click="addValidation" 
-                    :disabled="isPeopleModule && currentField?.key && getPeopleFieldMetadata(currentField.key)?.owner === 'participation'"
+                    :disabled="(isPeopleModule && currentField?.key && getPeopleFieldMetadata(currentField.key)?.owner === 'participation') || (isEventsModule && currentField?.key && isEventsAppParticipationField(currentField.key))"
                     :class="[
                       'px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2',
-                      isPeopleModule && currentField?.key && getPeopleFieldMetadata(currentField.key)?.owner === 'participation' ? 'opacity-50 cursor-not-allowed' : ''
+                      ((isPeopleModule && currentField?.key && getPeopleFieldMetadata(currentField.key)?.owner === 'participation') || (isEventsModule && currentField?.key && isEventsAppParticipationField(currentField.key))) ? 'opacity-50 cursor-not-allowed' : ''
                     ]"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
@@ -869,6 +1397,104 @@
                       </svg>
                       Add custom validation
                     </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div v-if="activeSubTab === 'filters'" class="space-y-4">
+              <!-- System fields: Hide Filter Settings entirely -->
+              <div v-if="isSystemField(currentField)" class="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                <p class="text-sm text-gray-600 dark:text-gray-400">
+                  Filter settings are not available for system fields.
+                </p>
+              </div>
+
+              <!-- Filter Settings for non-system fields -->
+              <div v-else>
+                <!-- Helper text -->
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Filterable fields appear in list filters and saved views.
+                </p>
+
+                <!-- Field ownership info -->
+                <div v-if="isPeopleModule && currentField?.key && getPeopleFieldMetadata(currentField.key)" class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                  <p class="text-xs text-blue-800 dark:text-blue-300">
+                    <span v-if="getPeopleFieldMetadata(currentField.key)?.owner === 'core'">
+                      <strong>Core Field:</strong> Filter Type is read-only and locked to schema default.
+                    </span>
+                    <span v-else-if="getPeopleFieldMetadata(currentField.key)?.owner === 'participation'">
+                      <strong>App-Owned Field:</strong> Fully editable.
+                    </span>
+                  </p>
+                </div>
+
+                <!-- Filterable Toggle -->
+                <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Enable as filter
+                      </label>
+                      <p class="text-xs text-gray-500 dark:text-gray-400">
+                        Allow this field to be used as a filter in list views
+                      </p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        v-model="currentField.filterable"
+                        :disabled="isSystemField(currentField)"
+                        @change="handleFilterableChange"
+                        class="sr-only peer"
+                      />
+                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 dark:peer-focus:ring-brand-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-brand-600"></div>
+                    </label>
+                  </div>
+
+                  <!-- Filter Type (visible only when filterable is ON) -->
+                  <div v-if="currentField.filterable" class="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Filter type
+                      </label>
+                      <select
+                        v-model="currentField.filterType"
+                        :disabled="isSystemField(currentField) || (isPeopleModule && getPeopleFieldMetadata(currentField.key)?.owner === 'core')"
+                        @change="handleFilterTypeChange"
+                        class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm"
+                      >
+                        <option value="">Select filter type...</option>
+                        <option
+                          v-for="filterType in getAllowedFilterTypes(currentField.dataType)"
+                          :key="filterType.value"
+                          :value="filterType.value"
+                        >
+                          {{ filterType.label }}
+                        </option>
+                      </select>
+                      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        Filter type is determined by the field's data type
+                      </p>
+                    </div>
+
+                    <!-- Filter Priority (visible only when filterable is ON) -->
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Filter priority
+                      </label>
+                      <input
+                        type="number"
+                        v-model.number="currentField.filterPriority"
+                        :disabled="isSystemField(currentField)"
+                        @input="handleFilterPriorityChange"
+                        min="1"
+                        placeholder="Auto-assign"
+                        class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm"
+                      />
+                      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        Lower number = higher priority. Default visible filters are top 3 by priority.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1446,12 +2072,1647 @@
             </div>
           </div>
           
+          <!-- Forms Module Details Fields (read-only display) -->
+          <div v-if="isFormsModule" class="mt-6">
+            <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-4">Form Module Details</h4>
+            <div class="space-y-3">
+              <div
+                v-for="field in getFieldsForTab('moduleDetails')"
+                :key="field.key"
+                class="bg-gray-50 dark:bg-gray-700/30 border border-gray-200 dark:border-gray-600 rounded-lg p-3"
+              >
+                <div class="flex items-start justify-between">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class="text-sm font-medium text-gray-900 dark:text-white">
+                        {{ field.label }}
+                      </span>
+                      <span
+                        :class="[
+                          'px-2 py-0.5 text-xs font-medium rounded',
+                          field.editable
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                        ]"
+                      >
+                        {{ field.editable ? 'Editable' : 'Read-Only' }}
+                      </span>
+                    </div>
+                    <p v-if="field.notes" class="text-xs text-gray-500 dark:text-gray-400">
+                      {{ field.notes }}
+                    </p>
+                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-1 font-mono">
+                      {{ field.key }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Permission Matrix Section (Read-Only Explanation) -->
+            <!-- 
+              ARCHITECTURE NOTE: Permissions here are explanatory, not enforcement.
+              Actual enforcement happens at API & surface level.
+              This mirrors Event Execution permission design.
+              See: client/src/platform/events/eventPermissions.utils.ts
+              See: client/src/platform/forms/formSettingsPermissions.ts
+            -->
+            <div class="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+              <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-4">Who Can Configure What</h4>
+              <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <div class="mb-4">
+                  <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                    This matrix explains configuration authority in Form Settings. Permissions are explanatory only and do not enforce access.
+                  </p>
+                  <p class="text-xs text-gray-500 dark:text-gray-500 italic">
+                    Actual enforcement happens at API & surface level. This mirrors Event Execution permission design.
+                  </p>
+                </div>
+                <div class="space-y-3">
+                  <div
+                    v-for="permission in formSettingsPermissions"
+                    :key="permission.action"
+                    class="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
+                  >
+                    <div class="flex-1">
+                      <div class="flex items-center gap-2 mb-1">
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">
+                          {{ getFormSettingsActionLabel(permission.action) }}
+                        </span>
+                        <span
+                          :class="[
+                            'px-2 py-0.5 text-xs font-medium rounded',
+                            permission.allowed
+                              ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                              : 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
+                          ]"
+                        >
+                          {{ permission.allowed ? 'Allowed' : 'Not Allowed' }}
+                        </span>
+                      </div>
+                      <p v-if="permission.reason" class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        {{ permission.reason }}
+                      </p>
+                    </div>
+                  </div>
+                  <div v-if="formSettingsPermissions.length === 0" class="text-center py-4 text-sm text-gray-500 dark:text-gray-400">
+                    No permission information available.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Additional Details Content (for Core modules) -->
           <div v-if="$slots['details-extra']" class="mt-6">
             <slot name="details-extra" />
           </div>
         </div>
 
+        <!-- Status & Types Tab (Organizations module only) -->
+        <!-- 
+          INTENT: This tab configures organization types and status picklists.
+          These are NOT fields - they are app-scoped semantic configurations that control
+          workflow states and business classifications. Changes are persisted to tenant
+          module configuration, not field definitions.
+        -->
+        <div class="flex-1 overflow-y-auto" v-else-if="activeTopTab === 'status-types' && isOrganizationsModule">
+          <div class="p-6">
+            <!-- Header -->
+            <div class="mb-6">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Status & Types</h3>
+              <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                Configure organization types and status picklists. These are app-scoped semantics that control workflow states.
+              </p>
+              <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                <p class="text-xs text-blue-800 dark:text-blue-400">
+                  <strong>Note:</strong> Organization types and status values are app-scoped. Changes here affect how organizations are classified and tracked within specific applications (Sales, Helpdesk, etc.).
+                </p>
+              </div>
+            </div>
+
+            <!-- Organization Types Section -->
+            <div class="mb-8">
+              <div class="flex items-center justify-between mb-4">
+                <div>
+                  <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Organization Types</h4>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    Enable or disable organization types. These are business classifications used to categorize organizations.
+                  </p>
+                </div>
+              </div>
+              
+              <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                <div v-if="organizationTypes.length === 0" class="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
+                  Loading organization types...
+                </div>
+                <div v-else class="space-y-3">
+                  <div 
+                    v-for="(type, index) in organizationTypes" 
+                    :key="`${type.value}-${index}`"
+                    class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+                  >
+                    <div class="flex items-center gap-3 flex-1">
+                      <div class="cursor-grab select-none text-gray-400 dark:text-gray-500" title="Drag to reorder">⋮⋮</div>
+                      <div class="flex-1">
+                        <div class="text-sm font-medium text-gray-900 dark:text-white">{{ type.label }}</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ type.description || 'Business organization type' }}</div>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                      <div 
+                        class="group relative inline-flex w-11 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-in-out outline-offset-2 outline-indigo-600"
+                        :class="type.enabled ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'"
+                      >
+                        <span class="size-5 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out" :class="type.enabled ? 'translate-x-5' : 'translate-x-0'"></span>
+                        <input 
+                          type="checkbox" 
+                          class="absolute inset-0 size-full appearance-none focus:outline-hidden cursor-pointer" 
+                          :aria-label="`${type.enabled ? 'Disable' : 'Enable'} ${type.label}`"
+                          :checked="type.enabled"
+                          @change="type.enabled = !type.enabled"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700">
+                    Organization types are business classifications. Disabling a type hides it from selection but does not affect existing organizations.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Status Picklists Section -->
+            <div class="space-y-6">
+              <!-- Customer Status -->
+              <div>
+                <div class="flex items-center justify-between mb-4">
+                  <div class="flex items-center gap-2">
+                    <h4 class="text-base font-semibold text-gray-900 dark:text-white">Customer Status</h4>
+                    <span class="px-2 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">Sales</span>
+                  </div>
+                  <button
+                    @click="addStatusValue('customerStatus')"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Value
+                  </button>
+                </div>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  Status values for organizations with type "Customer"
+                </p>
+                
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                  <div v-if="statusPicklists.customerStatus.length === 0" class="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
+                    No status values configured. Click "Add Value" to create one.
+                  </div>
+                  <div v-else class="space-y-2">
+                    <div
+                      v-for="(status, index) in statusPicklists.customerStatus"
+                      :key="status.value || index"
+                      class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg group"
+                    >
+                      <div class="cursor-grab select-none text-gray-400 dark:text-gray-500" title="Drag to reorder">⋮⋮</div>
+                      <div class="flex-1 min-w-0">
+                        <input
+                          v-if="status.editing"
+                          v-model="status.editValue"
+                          @blur="saveStatusValue('customerStatus', index)"
+                          @keyup.enter="saveStatusValue('customerStatus', index)"
+                          @keyup.esc="cancelStatusEdit('customerStatus', index)"
+                          class="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-brand-500"
+                          autofocus
+                        />
+                        <span v-else class="text-sm font-medium text-gray-900 dark:text-white">{{ status.label }}</span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <div 
+                          class="group relative inline-flex w-9 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-in-out outline-offset-2 outline-indigo-600"
+                          :class="status.enabled ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'"
+                        >
+                          <span class="size-4 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out" :class="status.enabled ? 'translate-x-4' : 'translate-x-0'"></span>
+                          <input 
+                            type="checkbox" 
+                            class="absolute inset-0 size-full appearance-none focus:outline-hidden cursor-pointer" 
+                            :aria-label="`${status.enabled ? 'Disable' : 'Enable'} ${status.label}`"
+                            :checked="status.enabled"
+                            @change="status.enabled = !status.enabled"
+                          />
+                        </div>
+                        <button
+                          @click="startStatusEdit('customerStatus', index)"
+                          class="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors rounded"
+                          title="Rename"
+                        >
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                    Customer status values are app-scoped (Sales app). Disabled values remain in the system but are hidden from selection.
+                  </div>
+                </div>
+              </div>
+
+              <!-- Partner Status -->
+              <div>
+                <div class="flex items-center justify-between mb-4">
+                  <div class="flex items-center gap-2">
+                    <h4 class="text-base font-semibold text-gray-900 dark:text-white">Partner Status</h4>
+                    <span class="px-2 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">Sales</span>
+                  </div>
+                  <button
+                    @click="addStatusValue('partnerStatus')"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Value
+                  </button>
+                </div>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  Status values for organizations with type "Partner"
+                </p>
+                
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                  <div v-if="statusPicklists.partnerStatus.length === 0" class="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
+                    No status values configured. Click "Add Value" to create one.
+                  </div>
+                  <div v-else class="space-y-2">
+                    <div
+                      v-for="(status, index) in statusPicklists.partnerStatus"
+                      :key="status.value || index"
+                      class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg group"
+                    >
+                      <div class="cursor-grab select-none text-gray-400 dark:text-gray-500" title="Drag to reorder">⋮⋮</div>
+                      <div class="flex-1 min-w-0">
+                        <input
+                          v-if="status.editing"
+                          v-model="status.editValue"
+                          @blur="saveStatusValue('partnerStatus', index)"
+                          @keyup.enter="saveStatusValue('partnerStatus', index)"
+                          @keyup.esc="cancelStatusEdit('partnerStatus', index)"
+                          class="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-brand-500"
+                          autofocus
+                        />
+                        <span v-else class="text-sm font-medium text-gray-900 dark:text-white">{{ status.label }}</span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <div 
+                          class="group relative inline-flex w-9 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-in-out outline-offset-2 outline-indigo-600"
+                          :class="status.enabled ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'"
+                        >
+                          <span class="size-4 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out" :class="status.enabled ? 'translate-x-4' : 'translate-x-0'"></span>
+                          <input 
+                            type="checkbox" 
+                            class="absolute inset-0 size-full appearance-none focus:outline-hidden cursor-pointer" 
+                            :aria-label="`${status.enabled ? 'Disable' : 'Enable'} ${status.label}`"
+                            :checked="status.enabled"
+                            @change="status.enabled = !status.enabled"
+                          />
+                        </div>
+                        <button
+                          @click="startStatusEdit('partnerStatus', index)"
+                          class="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors rounded"
+                          title="Rename"
+                        >
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                    Partner status values are app-scoped (Sales app). Disabled values remain in the system but are hidden from selection.
+                  </div>
+                </div>
+              </div>
+
+              <!-- Vendor Status -->
+              <div>
+                <div class="flex items-center justify-between mb-4">
+                  <div class="flex items-center gap-2">
+                    <h4 class="text-base font-semibold text-gray-900 dark:text-white">Vendor Status</h4>
+                    <span class="px-2 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">Sales</span>
+                  </div>
+                  <button
+                    @click="addStatusValue('vendorStatus')"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Value
+                  </button>
+                </div>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  Status values for organizations with type "Vendor"
+                </p>
+                
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                  <div v-if="statusPicklists.vendorStatus.length === 0" class="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
+                    No status values configured. Click "Add Value" to create one.
+                  </div>
+                  <div v-else class="space-y-2">
+                    <div
+                      v-for="(status, index) in statusPicklists.vendorStatus"
+                      :key="status.value || index"
+                      class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg group"
+                    >
+                      <div class="cursor-grab select-none text-gray-400 dark:text-gray-500" title="Drag to reorder">⋮⋮</div>
+                      <div class="flex-1 min-w-0">
+                        <input
+                          v-if="status.editing"
+                          v-model="status.editValue"
+                          @blur="saveStatusValue('vendorStatus', index)"
+                          @keyup.enter="saveStatusValue('vendorStatus', index)"
+                          @keyup.esc="cancelStatusEdit('vendorStatus', index)"
+                          class="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-brand-500"
+                          autofocus
+                        />
+                        <span v-else class="text-sm font-medium text-gray-900 dark:text-white">{{ status.label }}</span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <div 
+                          class="group relative inline-flex w-9 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-in-out outline-offset-2 outline-indigo-600"
+                          :class="status.enabled ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'"
+                        >
+                          <span class="size-4 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out" :class="status.enabled ? 'translate-x-4' : 'translate-x-0'"></span>
+                          <input 
+                            type="checkbox" 
+                            class="absolute inset-0 size-full appearance-none focus:outline-hidden cursor-pointer" 
+                            :aria-label="`${status.enabled ? 'Disable' : 'Enable'} ${status.label}`"
+                            :checked="status.enabled"
+                            @change="status.enabled = !status.enabled"
+                          />
+                        </div>
+                        <button
+                          @click="startStatusEdit('vendorStatus', index)"
+                          class="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors rounded"
+                          title="Rename"
+                        >
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                    Vendor status values are app-scoped (Sales app). Disabled values remain in the system but are hidden from selection.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Save Button -->
+            <div v-if="statusTypesDirty" class="mt-8 flex justify-end">
+              <button
+                @click="saveStatusTypes"
+                :disabled="savingStatusTypes"
+                class="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+              >
+                <div v-if="savingStatusTypes" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <span>{{ savingStatusTypes ? 'Saving...' : 'Save Changes' }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Status & Priority Tab (Tasks module only) -->
+        <!-- 
+          ARCHITECTURE NOTE: Tasks Settings configure structure only, never work.
+          This tab configures status and priority picklists for Tasks.
+          The 'completed' status is system-locked and cannot be modified.
+          See: docs/architecture/task-settings.md Section 3.3
+        -->
+        <div class="flex-1 overflow-y-auto" v-else-if="activeTopTab === 'status-priority' && isTasksModule">
+          <div class="p-6">
+            <!-- Header -->
+            <div class="mb-6">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Status & Priority</h3>
+              <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                Configure task status and priority picklists. Status controls task lifecycle. Completion is system-managed.
+              </p>
+              <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                <p class="text-xs text-blue-800 dark:text-blue-400">
+                  <strong>Note:</strong> The "Completed" status is system-controlled and cannot be modified or removed. 
+                  It triggers system behaviors (completion date, Inbox removal, etc.).
+                </p>
+              </div>
+            </div>
+
+            <!-- Status Picklist Section -->
+            <div class="mb-8">
+              <div class="flex items-center justify-between mb-4">
+                <div>
+                  <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Status Picklist</h4>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    Configure available task status values. The "Completed" status is system-locked.
+                  </p>
+                </div>
+                <button
+                  @click="addTaskStatusValue"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Status
+                </button>
+              </div>
+              
+              <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                <div v-if="taskStatusPicklist.length === 0" class="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
+                  Loading status values...
+                </div>
+                <div v-else class="space-y-2">
+                  <div
+                    v-for="(status, index) in taskStatusPicklist"
+                    :key="status.value || index"
+                    class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg group"
+                  >
+                    <div 
+                      v-if="status.value !== 'completed'"
+                      class="cursor-grab select-none text-gray-400 dark:text-gray-500" 
+                      title="Drag to reorder"
+                    >⋮⋮</div>
+                    <div 
+                      v-else
+                      class="text-gray-400 dark:text-gray-500" 
+                      title="System-locked"
+                    >🔒</div>
+                    <div class="flex-1 min-w-0">
+                      <input
+                        v-if="status.editing && status.value !== 'completed'"
+                        v-model="status.editValue"
+                        @blur="saveTaskStatusValue(index)"
+                        @keyup.enter="saveTaskStatusValue(index)"
+                        @keyup.esc="cancelTaskStatusEdit(index)"
+                        class="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        autofocus
+                      />
+                      <span v-else class="text-sm font-medium text-gray-900 dark:text-white">
+                        {{ status.label }}
+                        <span v-if="status.value === 'completed'" class="ml-2 px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">System-Locked</span>
+                      </span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <div 
+                        v-if="status.value !== 'completed'"
+                        class="group relative inline-flex w-9 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-in-out outline-offset-2 outline-indigo-600"
+                        :class="status.enabled ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'"
+                      >
+                        <span class="size-4 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out" :class="status.enabled ? 'translate-x-4' : 'translate-x-0'"></span>
+                        <input 
+                          type="checkbox" 
+                          class="absolute inset-0 size-full appearance-none focus:outline-hidden cursor-pointer" 
+                          :aria-label="`${status.enabled ? 'Disable' : 'Enable'} ${status.label}`"
+                          :checked="status.enabled"
+                          @change="status.enabled = !status.enabled"
+                        />
+                      </div>
+                      <button
+                        v-if="status.value !== 'completed'"
+                        @click="startTaskStatusEdit(index)"
+                        class="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors rounded"
+                        title="Rename"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        v-if="status.value !== 'completed'"
+                        @click="removeTaskStatusValue(index)"
+                        class="p-1.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200 transition-colors rounded"
+                        title="Remove"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                  Status values control task lifecycle. The "Completed" status is system-controlled and cannot be modified.
+                </div>
+              </div>
+            </div>
+
+            <!-- Priority Picklist Section -->
+            <div>
+              <div class="flex items-center justify-between mb-4">
+                <div>
+                  <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Priority Picklist</h4>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    Configure available task priority values.
+                  </p>
+                </div>
+                <button
+                  @click="addTaskPriorityValue"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Priority
+                </button>
+              </div>
+              
+              <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                <div v-if="taskPriorityPicklist.length === 0" class="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
+                  Loading priority values...
+                </div>
+                <div v-else class="space-y-2">
+                  <div
+                    v-for="(priority, index) in taskPriorityPicklist"
+                    :key="priority.value || index"
+                    class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg group"
+                  >
+                    <div class="cursor-grab select-none text-gray-400 dark:text-gray-500" title="Drag to reorder">⋮⋮</div>
+                    <div class="flex-1 min-w-0">
+                      <input
+                        v-if="priority.editing"
+                        v-model="priority.editValue"
+                        @blur="saveTaskPriorityValue(index)"
+                        @keyup.enter="saveTaskPriorityValue(index)"
+                        @keyup.esc="cancelTaskPriorityEdit(index)"
+                        class="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        autofocus
+                      />
+                      <span v-else class="text-sm font-medium text-gray-900 dark:text-white">{{ priority.label }}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <div 
+                        class="group relative inline-flex w-9 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-in-out outline-offset-2 outline-indigo-600"
+                        :class="priority.enabled ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'"
+                      >
+                        <span class="size-4 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out" :class="priority.enabled ? 'translate-x-4' : 'translate-x-0'"></span>
+                        <input 
+                          type="checkbox" 
+                          class="absolute inset-0 size-full appearance-none focus:outline-hidden cursor-pointer" 
+                          :aria-label="`${priority.enabled ? 'Disable' : 'Enable'} ${priority.label}`"
+                          :checked="priority.enabled"
+                          @change="priority.enabled = !priority.enabled"
+                        />
+                      </div>
+                      <button
+                        @click="startTaskPriorityEdit(index)"
+                        class="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors rounded"
+                        title="Rename"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        @click="removeTaskPriorityValue(index)"
+                        class="p-1.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200 transition-colors rounded"
+                        title="Remove"
+                        :disabled="taskPriorityPicklist.length <= 1"
+                        :class="taskPriorityPicklist.length <= 1 ? 'opacity-50 cursor-not-allowed' : ''"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                  Priority values control task urgency. At least one priority value must remain enabled.
+                </div>
+              </div>
+            </div>
+
+            <!-- Save Button -->
+            <div v-if="taskStatusPriorityDirty" class="mt-8 flex justify-end">
+              <button
+                @click="saveTaskStatusPriority"
+                :disabled="savingTaskStatusPriority"
+                class="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+              >
+                <div v-if="savingTaskStatusPriority" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <span>{{ savingTaskStatusPriority ? 'Saving...' : 'Save Changes' }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Status & Types Tab (Items module only) -->
+        <div class="flex-1 overflow-y-auto" v-else-if="activeTopTab === 'status-types' && isItemsModule">
+          <div class="p-6">
+            <!-- Header -->
+            <div class="mb-6">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Status & Types</h3>
+              <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                Configure item types and status picklists. These control how items are classified and their lifecycle states.
+              </p>
+            </div>
+
+            <!-- Item Types Section -->
+            <div class="mb-8">
+              <div class="flex items-center justify-between mb-4">
+                <div>
+                  <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Item Types</h4>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    Enable or disable item types. These are business classifications used to categorize items.
+                  </p>
+                </div>
+              </div>
+              
+              <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                <div v-if="itemTypes.length === 0" class="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
+                  Loading item types...
+                </div>
+                <div v-else class="space-y-3">
+                  <div 
+                    v-for="(type, index) in itemTypes" 
+                    :key="`${type.value}-${index}`"
+                    class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+                  >
+                    <div class="flex items-center gap-3 flex-1">
+                      <div class="cursor-grab select-none text-gray-400 dark:text-gray-500" title="Drag to reorder">⋮⋮</div>
+                      <div class="flex-1">
+                        <div class="text-sm font-medium text-gray-900 dark:text-white">{{ type.label }}</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ type.description || 'Item type classification' }}</div>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                      <div 
+                        class="group relative inline-flex w-11 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-in-out outline-offset-2 outline-indigo-600"
+                        :class="type.enabled ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'"
+                      >
+                        <span class="size-5 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out" :class="type.enabled ? 'translate-x-5' : 'translate-x-0'"></span>
+                        <input 
+                          type="checkbox" 
+                          class="absolute inset-0 size-full appearance-none focus:outline-hidden cursor-pointer" 
+                          :aria-label="`${type.enabled ? 'Disable' : 'Enable'} ${type.label}`"
+                          :checked="type.enabled"
+                          @change="type.enabled = !type.enabled"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700">
+                    Item types are business classifications. Disabling a type hides it from selection but does not affect existing items.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Status Picklist Section -->
+            <div>
+              <div class="flex items-center justify-between mb-4">
+                <div>
+                  <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Status Picklist</h4>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    Configure available item status values.
+                  </p>
+                </div>
+                <button
+                  @click="addItemStatusValue"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Status
+                </button>
+              </div>
+              
+              <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                <div v-if="itemStatusPicklist.length === 0" class="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
+                  Loading status values...
+                </div>
+                <div v-else class="space-y-2">
+                  <div
+                    v-for="(status, index) in itemStatusPicklist"
+                    :key="status.value || index"
+                    class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg group"
+                  >
+                    <div class="cursor-grab select-none text-gray-400 dark:text-gray-500" title="Drag to reorder">⋮⋮</div>
+                    <div class="flex-1 min-w-0">
+                      <input
+                        v-if="status.editing"
+                        v-model="status.editValue"
+                        @blur="saveItemStatusValue(index)"
+                        @keyup.enter="saveItemStatusValue(index)"
+                        @keyup.esc="cancelItemStatusEdit(index)"
+                        class="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        autofocus
+                      />
+                      <span v-else class="text-sm font-medium text-gray-900 dark:text-white">{{ status.label }}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <div 
+                        class="group relative inline-flex w-9 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-in-out outline-offset-2 outline-indigo-600"
+                        :class="status.enabled ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'"
+                      >
+                        <span class="size-4 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out" :class="status.enabled ? 'translate-x-4' : 'translate-x-0'"></span>
+                        <input 
+                          type="checkbox" 
+                          class="absolute inset-0 size-full appearance-none focus:outline-hidden cursor-pointer" 
+                          :aria-label="`${status.enabled ? 'Disable' : 'Enable'} ${status.label}`"
+                          :checked="status.enabled"
+                          @change="status.enabled = !status.enabled"
+                        />
+                      </div>
+                      <button
+                        @click="startItemStatusEdit(index)"
+                        class="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors rounded"
+                        title="Rename"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        @click="removeItemStatusValue(index)"
+                        class="p-1.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200 transition-colors rounded"
+                        title="Remove"
+                        :disabled="itemStatusPicklist.length <= 1"
+                        :class="itemStatusPicklist.length <= 1 ? 'opacity-50 cursor-not-allowed' : ''"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                  Status values control item lifecycle. At least one status value must remain enabled.
+                </div>
+              </div>
+            </div>
+
+            <!-- Save Button -->
+            <div v-if="itemStatusTypesDirty" class="mt-8 flex justify-end">
+              <button
+                @click="saveItemStatusTypes"
+                :disabled="savingItemStatusTypes"
+                class="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+              >
+                <div v-if="savingItemStatusTypes" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <span>{{ savingItemStatusTypes ? 'Saving...' : 'Save Changes' }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Status Tab (Events module only) -->
+        <!-- 
+          ARCHITECTURE NOTE: Events Settings configure structure only, never execution.
+          This tab displays system-locked event statuses (Planned, Completed, Cancelled).
+          These statuses are required for execution and cannot be modified, deleted, or renamed.
+          Event execution depends on these statuses for lifecycle management.
+          See: docs/architecture/event-settings.md Section 2.2
+        -->
+        <div class="flex-1 overflow-y-auto" v-else-if="activeTopTab === 'status' && isEventsModule">
+          <div class="p-6">
+            <!-- Header -->
+            <div class="mb-6">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Event Status</h3>
+              <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                Event statuses are system-controlled and required for execution. These statuses cannot be modified.
+              </p>
+              <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                <p class="text-xs text-blue-800 dark:text-blue-400">
+                  <strong>System-Owned Statuses:</strong> All event statuses (Planned, Completed, Cancelled) are system-controlled and cannot be deleted, renamed, or reordered. 
+                  These statuses are required for event execution and lifecycle management. Status transitions happen via system actions (complete, cancel) in Work interfaces, not Settings.
+                </p>
+              </div>
+            </div>
+
+            <!-- Status Picklist Section -->
+            <div class="mb-8">
+              <div class="flex items-center justify-between mb-4">
+                <div>
+                  <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Event Status Picklist</h4>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    System-owned event statuses required for execution. These cannot be modified.
+                  </p>
+                </div>
+              </div>
+              
+              <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                <div v-if="eventStatusPicklist.length === 0" class="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
+                  Loading status values...
+                </div>
+                <div v-else class="space-y-2">
+                  <div
+                    v-for="(status, index) in eventStatusPicklist"
+                    :key="status.value || index"
+                    class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+                  >
+                    <div 
+                      class="text-gray-400 dark:text-gray-500" 
+                      title="System-locked"
+                    >🔒</div>
+                    <div class="flex-1 min-w-0">
+                      <span class="text-sm font-medium text-gray-900 dark:text-white">
+                        {{ status.label }}
+                        <span class="ml-2 px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">System-Locked</span>
+                      </span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <div 
+                        class="group relative inline-flex w-9 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-in-out outline-offset-2 outline-indigo-600 bg-indigo-600 dark:bg-indigo-500"
+                      >
+                        <span class="size-4 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out translate-x-4"></span>
+                        <input 
+                          type="checkbox" 
+                          class="absolute inset-0 size-full appearance-none focus:outline-hidden cursor-not-allowed opacity-50" 
+                          :aria-label="`${status.label} (System-locked)`"
+                          checked
+                          disabled
+                        />
+                      </div>
+                      <button
+                        disabled
+                        class="p-1.5 text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-50"
+                        title="System-locked - Cannot rename"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        disabled
+                        class="p-1.5 text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-50"
+                        title="System-locked - Cannot delete"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                  <strong>System-Owned Statuses:</strong> Event statuses (Planned, Completed, Cancelled) are system-controlled and required for execution. 
+                  These statuses cannot be deleted, renamed, or reordered. Status transitions happen via system actions in Work interfaces, not Settings.
+                  See: <a href="/docs/architecture/event-settings.md" target="_blank" class="text-brand-600 dark:text-brand-400 hover:underline">docs/architecture/event-settings.md</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Roles & Rules Tab (Events module only) -->
+        <!-- 
+          ARCHITECTURE NOTE: Events Settings configure constraints, not behavior.
+          - Role Requirements: Configure which roles are mandatory per event type (not role assignment)
+          - Geo Rules: Configure geo requirements per event type (not geo tracking execution)
+          - Form Linking Rules: Configure form linking eligibility (not form assignment or execution)
+          This tab configures constraints that enable behavior elsewhere, not behavior itself.
+          See: docs/architecture/event-settings.md Section 4.3, 4.4, 4.5
+        -->
+        <div class="flex-1 overflow-y-auto" v-else-if="activeTopTab === 'roles-rules' && isEventsModule">
+          <div class="p-6">
+            <!-- Header -->
+            <div class="mb-6">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Roles & Rules</h3>
+              <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                Configure role requirements, geo rules, and form linking rules per event type. These settings define constraints, not behavior.
+              </p>
+              <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                <p class="text-xs text-blue-800 dark:text-blue-400">
+                  <strong>Note:</strong> This tab configures constraints (which roles are required, geo requirements, form linking eligibility). 
+                  It does not configure role assignment, user selection, workflow transitions, or execution behavior. 
+                  Those belong in Work interfaces.
+                </p>
+              </div>
+            </div>
+
+            <!-- Role Requirements per Event Type Section -->
+            <div class="mb-8">
+              <div class="mb-4">
+                <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Role Requirements per Event Type</h4>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                  Configure which roles are mandatory for each event type. This controls field requirements, not role assignment.
+                </p>
+                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                  <p class="text-xs text-amber-800 dark:text-amber-400">
+                    <strong>Important:</strong> These checkboxes configure field requirements (which roles must be assigned), not role assignment itself. 
+                    Role assignment happens in Work interfaces when creating/editing events.
+                  </p>
+                </div>
+              </div>
+              
+              <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                <div class="space-y-6">
+                  <!-- Meeting / Appointment -->
+                  <div class="border-b border-gray-200 dark:border-gray-700 pb-4 last:border-b-0 last:pb-0">
+                    <h5 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Meeting / Appointment</h5>
+                    <div class="space-y-3">
+                      <label class="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          :checked="eventRoleRules['Meeting / Appointment']?.auditorRequired || false"
+                          @change="updateEventRoleRule('Meeting / Appointment', 'auditorRequired', $event.target.checked)"
+                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                        />
+                        <div class="flex-1">
+                          <span class="text-sm font-medium text-gray-900 dark:text-white">Auditor Required</span>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Auditor field is optional for Meeting / Appointment events.
+                          </p>
+                        </div>
+                      </label>
+                      <label class="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          :checked="eventRoleRules['Meeting / Appointment']?.reviewerRequired || false"
+                          @change="updateEventRoleRule('Meeting / Appointment', 'reviewerRequired', $event.target.checked)"
+                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                        />
+                        <div class="flex-1">
+                          <span class="text-sm font-medium text-gray-900 dark:text-white">Reviewer Required</span>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Reviewer field is optional for Meeting / Appointment events.
+                          </p>
+                        </div>
+                      </label>
+                      <label class="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          :checked="eventRoleRules['Meeting / Appointment']?.correctiveOwnerRequired || false"
+                          @change="updateEventRoleRule('Meeting / Appointment', 'correctiveOwnerRequired', $event.target.checked)"
+                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                        />
+                        <div class="flex-1">
+                          <span class="text-sm font-medium text-gray-900 dark:text-white">Corrective Owner Required</span>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Corrective Owner field is optional for Meeting / Appointment events.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  <!-- Internal Audit -->
+                  <div class="border-b border-gray-200 dark:border-gray-700 pb-4 last:border-b-0 last:pb-0">
+                    <h5 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Internal Audit</h5>
+                    <div class="space-y-3">
+                      <label class="flex items-start gap-3 opacity-75">
+                        <input
+                          type="checkbox"
+                          checked
+                          disabled
+                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                        />
+                        <div class="flex-1">
+                          <span class="text-sm font-medium text-gray-900 dark:text-white">Auditor Required</span>
+                          <span class="ml-2 px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Locked</span>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Auditor is always required for audit events. This cannot be changed.
+                          </p>
+                        </div>
+                      </label>
+                      <label class="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          :checked="eventRoleRules['Internal Audit']?.reviewerRequired || false"
+                          @change="updateEventRoleRule('Internal Audit', 'reviewerRequired', $event.target.checked)"
+                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                        />
+                        <div class="flex-1">
+                          <span class="text-sm font-medium text-gray-900 dark:text-white">Reviewer Required</span>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Reviewer is optional for Internal Audit events (self-review allowed).
+                          </p>
+                        </div>
+                      </label>
+                      <label class="flex items-start gap-3 opacity-75">
+                        <input
+                          type="checkbox"
+                          checked
+                          disabled
+                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                        />
+                        <div class="flex-1">
+                          <span class="text-sm font-medium text-gray-900 dark:text-white">Corrective Owner Required</span>
+                          <span class="ml-2 px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Locked</span>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Corrective Owner is always required for audit events. This cannot be changed.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  <!-- External Audit — Single Org -->
+                  <div class="border-b border-gray-200 dark:border-gray-700 pb-4 last:border-b-0 last:pb-0">
+                    <h5 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">External Audit — Single Org</h5>
+                    <div class="space-y-3">
+                      <label class="flex items-start gap-3 opacity-75">
+                        <input
+                          type="checkbox"
+                          checked
+                          disabled
+                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                        />
+                        <div class="flex-1">
+                          <span class="text-sm font-medium text-gray-900 dark:text-white">Auditor Required</span>
+                          <span class="ml-2 px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Locked</span>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Auditor is always required for audit events. This cannot be changed.
+                          </p>
+                        </div>
+                      </label>
+                      <label class="flex items-start gap-3 opacity-75">
+                        <input
+                          type="checkbox"
+                          checked
+                          disabled
+                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                        />
+                        <div class="flex-1">
+                          <span class="text-sm font-medium text-gray-900 dark:text-white">Reviewer Required</span>
+                          <span class="ml-2 px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Locked</span>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Reviewer is always required for External Audit — Single Org events. This cannot be changed.
+                          </p>
+                        </div>
+                      </label>
+                      <label class="flex items-start gap-3 opacity-75">
+                        <input
+                          type="checkbox"
+                          checked
+                          disabled
+                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                        />
+                        <div class="flex-1">
+                          <span class="text-sm font-medium text-gray-900 dark:text-white">Corrective Owner Required</span>
+                          <span class="ml-2 px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Locked</span>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Corrective Owner is always required for audit events. This cannot be changed.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  <!-- External Audit Beat -->
+                  <div class="border-b border-gray-200 dark:border-gray-700 pb-4 last:border-b-0 last:pb-0">
+                    <h5 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">External Audit Beat</h5>
+                    <div class="space-y-3">
+                      <label class="flex items-start gap-3 opacity-75">
+                        <input
+                          type="checkbox"
+                          checked
+                          disabled
+                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                        />
+                        <div class="flex-1">
+                          <span class="text-sm font-medium text-gray-900 dark:text-white">Auditor Required</span>
+                          <span class="ml-2 px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Locked</span>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Auditor is always required for audit events. This cannot be changed.
+                          </p>
+                        </div>
+                      </label>
+                      <label class="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          :checked="eventRoleRules['External Audit Beat']?.reviewerRequired || false"
+                          @change="updateEventRoleRule('External Audit Beat', 'reviewerRequired', $event.target.checked)"
+                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                        />
+                        <div class="flex-1">
+                          <span class="text-sm font-medium text-gray-900 dark:text-white">Reviewer Required</span>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Reviewer is optional for External Audit Beat events.
+                          </p>
+                        </div>
+                      </label>
+                      <label class="flex items-start gap-3 opacity-75">
+                        <input
+                          type="checkbox"
+                          checked
+                          disabled
+                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                        />
+                        <div class="flex-1">
+                          <span class="text-sm font-medium text-gray-900 dark:text-white">Corrective Owner Required</span>
+                          <span class="ml-2 px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Locked</span>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Corrective Owner is always required for audit events. This cannot be changed.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  <!-- Field Sales Beat -->
+                  <div>
+                    <h5 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Field Sales Beat</h5>
+                    <div class="space-y-3">
+                      <label class="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          :checked="eventRoleRules['Field Sales Beat']?.auditorRequired || false"
+                          @change="updateEventRoleRule('Field Sales Beat', 'auditorRequired', $event.target.checked)"
+                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                        />
+                        <div class="flex-1">
+                          <span class="text-sm font-medium text-gray-900 dark:text-white">Auditor Required</span>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Auditor field is optional for Field Sales Beat events.
+                          </p>
+                        </div>
+                      </label>
+                      <label class="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          :checked="eventRoleRules['Field Sales Beat']?.reviewerRequired || false"
+                          @change="updateEventRoleRule('Field Sales Beat', 'reviewerRequired', $event.target.checked)"
+                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                        />
+                        <div class="flex-1">
+                          <span class="text-sm font-medium text-gray-900 dark:text-white">Reviewer Required</span>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Reviewer field is optional for Field Sales Beat events.
+                          </p>
+                        </div>
+                      </label>
+                      <label class="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          :checked="eventRoleRules['Field Sales Beat']?.correctiveOwnerRequired || false"
+                          @change="updateEventRoleRule('Field Sales Beat', 'correctiveOwnerRequired', $event.target.checked)"
+                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                        />
+                        <div class="flex-1">
+                          <span class="text-sm font-medium text-gray-900 dark:text-white">Corrective Owner Required</span>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Corrective Owner field is optional for Field Sales Beat events.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Geo Rules Section -->
+            <div class="mb-8">
+              <div class="mb-4">
+                <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Geo Rules</h4>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                  Configure geo requirements per event type. This controls whether geo tracking is required, not geo tracking execution.
+                </p>
+                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                  <p class="text-xs text-amber-800 dark:text-amber-400">
+                    <strong>Important:</strong> These settings configure geo requirements (whether geo tracking must be enabled), not geo tracking execution. 
+                    Geo tracking execution (GPS capture, radius validation) belongs in Work interfaces.
+                  </p>
+                </div>
+              </div>
+              
+              <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                <div class="space-y-4">
+                  <div
+                    v-for="eventType in ['Meeting / Appointment', 'Internal Audit', 'External Audit — Single Org', 'External Audit Beat', 'Field Sales Beat']"
+                    :key="eventType"
+                    class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+                  >
+                    <div class="flex-1">
+                      <span class="text-sm font-medium text-gray-900 dark:text-white">{{ eventType }}</span>
+                      <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        <span v-if="isAuditEventType(eventType)">
+                          Geo is always required for audit events and cannot be disabled.
+                        </span>
+                        <span v-else>
+                          Geo requirement can be configured for this event type.
+                        </span>
+                      </p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                      <span
+                        v-if="isAuditEventType(eventType)"
+                        class="px-2 py-1 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded"
+                      >
+                        Locked
+                      </span>
+                      <label
+                        v-else
+                        class="relative inline-flex w-11 h-6 items-center rounded-full transition-colors"
+                        :class="eventGeoRules[eventType] ? 'bg-brand-600 dark:bg-brand-500' : 'bg-gray-200 dark:bg-gray-700'"
+                      >
+                        <input
+                          type="checkbox"
+                          :checked="eventGeoRules[eventType] || false"
+                          @change="updateEventGeoRule(eventType, $event.target.checked)"
+                          class="sr-only"
+                        />
+                        <span
+                          class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+                          :class="eventGeoRules[eventType] ? 'translate-x-6' : 'translate-x-1'"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Form Linking Rules Section -->
+            <div>
+              <div class="mb-4">
+                <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Form Linking Rules</h4>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                  Configure form linking eligibility per event type. This controls whether forms can be linked, not form assignment or execution.
+                </p>
+                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                  <p class="text-xs text-amber-800 dark:text-amber-400">
+                    <strong>Important:</strong> These settings configure form linking eligibility (whether forms can be linked to events), not form assignment or execution. 
+                    Form assignment and execution belong in Work interfaces.
+                  </p>
+                </div>
+              </div>
+              
+              <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+                <div class="space-y-6">
+                  <div
+                    v-for="eventType in ['Meeting / Appointment', 'Internal Audit', 'External Audit — Single Org', 'External Audit Beat', 'Field Sales Beat']"
+                    :key="eventType"
+                    class="border-b border-gray-200 dark:border-gray-700 pb-4 last:border-b-0 last:pb-0"
+                  >
+                    <h5 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">{{ eventType }}</h5>
+                    <div class="space-y-3">
+                      <label class="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          :checked="eventFormRules[eventType]?.allowLinking !== false"
+                          @change="updateEventFormRule(eventType, 'allowLinking', $event.target.checked)"
+                          :disabled="isAuditEventType(eventType)"
+                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                          :class="isAuditEventType(eventType) ? 'opacity-50 cursor-not-allowed' : ''"
+                        />
+                        <div class="flex-1">
+                          <span class="text-sm font-medium text-gray-900 dark:text-white">Allow Linking Forms</span>
+                          <span
+                            v-if="isAuditEventType(eventType)"
+                            class="ml-2 px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded"
+                          >
+                            Always Allowed
+                          </span>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            <span v-if="isAuditEventType(eventType)">
+                              Forms can always be linked to audit events.
+                            </span>
+                            <span v-else>
+                              Enable or disable form linking for this event type.
+                            </span>
+                          </p>
+                        </div>
+                      </label>
+                      <label
+                        v-if="isAuditEventType(eventType)"
+                        class="flex items-start gap-3"
+                      >
+                        <input
+                          type="checkbox"
+                          :checked="eventFormRules[eventType]?.requireOnCreation || false"
+                          @change="updateEventFormRule(eventType, 'requireOnCreation', $event.target.checked)"
+                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                        />
+                        <div class="flex-1">
+                          <span class="text-sm font-medium text-gray-900 dark:text-white">Require Form on Creation</span>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Require a form to be linked when creating audit events of this type.
+                          </p>
+                        </div>
+                      </label>
+                      <label
+                        v-if="isAuditEventType(eventType)"
+                        class="flex items-start gap-3"
+                      >
+                        <input
+                          type="checkbox"
+                          :checked="eventFormRules[eventType]?.preventUnlinkingAfterStart || false"
+                          @change="updateEventFormRule(eventType, 'preventUnlinkingAfterStart', $event.target.checked)"
+                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                        />
+                        <div class="flex-1">
+                          <span class="text-sm font-medium text-gray-900 dark:text-white">Prevent Unlinking After Start</span>
+                          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Prevent unlinking forms from events that have been started (checked in).
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Save Button -->
+            <div v-if="eventRolesRulesDirty" class="mt-8 flex justify-end">
+              <button
+                @click="saveEventRolesRules"
+                :disabled="savingEventRolesRules"
+                class="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+              >
+                <div v-if="savingEventRolesRules" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <span>{{ savingEventRolesRules ? 'Saving...' : 'Save Changes' }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Logic & Rules Tab (Forms module only) -->
+        <!-- 
+          ARCHITECTURE NOTE: Forms Settings configure structure & behavior ONLY.
+          Logic & Rules tab configures form behavior settings, not form content.
+          
+          CAPABILITY DECLARATION:
+          - behaviorRulesConfigurable: true (can configure auto-assignment, workflow triggers)
+          - scoringEditable: false (scoring weights belong to Form Builder)
+          - questionLogicEditable: false (question-level logic belongs to Form Builder)
+          
+          See: client/src/platform/modules/forms/formsModule.definition.ts
+          See: client/src/platform/forms/formSettingsCapabilities.ts
+        -->
+        <div class="flex-1 overflow-y-auto" v-else-if="activeTopTab === 'logic' && isFormsModule">
+          <div class="p-6">
+            <!-- Header -->
+            <div class="mb-6">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Logic & Rules</h3>
+              <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                Configure form behavior, scoring, and automation rules. Form content is edited in the Form Builder.
+              </p>
+              
+              <!-- Capability Indicators -->
+              <div class="mt-4 space-y-2">
+                <div v-if="hasCapability('behaviorRulesConfigurable')" class="flex items-center gap-2 text-xs">
+                  <span class="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded font-medium">
+                    ✓ Behavior Rules Configurable
+                  </span>
+                  <span class="text-gray-500 dark:text-gray-400">Configure auto-assignment and workflow triggers</span>
+                </div>
+                <div v-if="isCapabilityLocked('scoringEditable')" class="flex items-center gap-2 text-xs">
+                  <span class="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded font-medium">
+                    🔒 Scoring Weights Locked
+                  </span>
+                  <span class="text-gray-500 dark:text-gray-400">Managed in Form Builder</span>
+                </div>
+                <div v-if="isCapabilityLocked('questionLogicEditable')" class="flex items-center gap-2 text-xs">
+                  <span class="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded font-medium">
+                    🔒 Question Logic Locked
+                  </span>
+                  <span class="text-gray-500 dark:text-gray-400">Managed in Form Builder</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Logic & Rules Configuration -->
+            <div class="space-y-4">
+              <div
+                v-for="field in getFieldsForTab('logicAndRules')"
+                :key="field.key"
+                class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4"
+              >
+                <div class="flex items-start justify-between mb-2">
+                  <div class="flex-1">
+                    <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+                      {{ field.label }}
+                    </h4>
+                    <div class="flex items-center gap-2 mb-2">
+                      <span
+                        :class="[
+                          'px-2 py-0.5 text-xs font-medium rounded',
+                          field.editable
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                        ]"
+                      >
+                        {{ field.editable ? 'Editable' : 'Read-Only' }}
+                      </span>
+                      <span
+                        :class="[
+                          'px-2 py-0.5 text-xs font-medium rounded',
+                          field.source === 'settings'
+                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                            : field.source === 'builder'
+                            ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                            : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+                        ]"
+                      >
+                        {{ field.source === 'settings' ? 'Settings' : field.source === 'builder' ? 'Builder' : 'Execution' }}
+                      </span>
+                    </div>
+                    <p v-if="field.notes" class="text-xs text-gray-500 dark:text-gray-400">
+                      {{ field.notes }}
+                    </p>
+                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-1 font-mono">
+                      {{ field.key }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Outcomes Tab (Forms module only) -->
+        <!-- 
+          ARCHITECTURE NOTE: Forms Settings configure structure & behavior ONLY.
+          Outcomes tab configures form outcome rules, not form content.
+          
+          CAPABILITY DECLARATION:
+          - outcomesConfigurable: true (can configure audit rules, reporting metrics, signals)
+          - executionBehaviorEditable: false (execution belongs to Event Execution / Work interfaces)
+          - workflowExecutionEditable: false (workflow execution belongs to Audit Workflow / Work components)
+          
+          See: client/src/platform/modules/forms/formsModule.definition.ts
+          See: client/src/platform/forms/formSettingsCapabilities.ts
+        -->
+        <div class="flex-1 overflow-y-auto" v-else-if="activeTopTab === 'outcomes' && isFormsModule">
+          <div class="p-6">
+            <!-- Header -->
+            <div class="mb-6">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Outcomes</h3>
+              <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                Configure form outcomes, reporting metrics, and post-submission signals. Form content is edited in the Form Builder.
+              </p>
+              
+              <!-- Capability Indicators -->
+              <div class="mt-4 space-y-2">
+                <div v-if="hasCapability('outcomesConfigurable')" class="flex items-center gap-2 text-xs">
+                  <span class="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded font-medium">
+                    ✓ Outcomes Configurable
+                  </span>
+                  <span class="text-gray-500 dark:text-gray-400">Configure audit rules, reporting metrics, and signals</span>
+                </div>
+                <div v-if="isCapabilityLocked('executionBehaviorEditable')" class="flex items-center gap-2 text-xs">
+                  <span class="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded font-medium">
+                    🔒 Execution Behavior Locked
+                  </span>
+                  <span class="text-gray-500 dark:text-gray-400">Managed in Event Execution / Work interfaces</span>
+                </div>
+                <div v-if="isCapabilityLocked('workflowExecutionEditable')" class="flex items-center gap-2 text-xs">
+                  <span class="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded font-medium">
+                    🔒 Workflow Execution Locked
+                  </span>
+                  <span class="text-gray-500 dark:text-gray-400">Managed in Audit Workflow / Work components</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Outcomes Configuration -->
+            <div class="space-y-4">
+              <div
+                v-for="field in getFieldsForTab('outcomes')"
+                :key="field.key"
+                class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4"
+              >
+                <div class="flex items-start justify-between mb-2">
+                  <div class="flex-1">
+                    <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+                      {{ field.label }}
+                    </h4>
+                    <div class="flex items-center gap-2 mb-2">
+                      <span
+                        :class="[
+                          'px-2 py-0.5 text-xs font-medium rounded',
+                          field.editable
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                        ]"
+                      >
+                        {{ field.editable ? 'Editable' : 'Read-Only' }}
+                      </span>
+                      <span
+                        :class="[
+                          'px-2 py-0.5 text-xs font-medium rounded',
+                          field.source === 'settings'
+                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                            : field.source === 'builder'
+                            ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                            : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+                        ]"
+                      >
+                        {{ field.source === 'settings' ? 'Settings' : field.source === 'builder' ? 'Builder' : 'Execution' }}
+                      </span>
+                    </div>
+                    <p v-if="field.notes" class="text-xs text-gray-500 dark:text-gray-400">
+                      {{ field.notes }}
+                    </p>
+                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-1 font-mono">
+                      {{ field.key }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Access Tab (Forms module only) -->
+        <!-- 
+          ARCHITECTURE NOTE: Forms Settings configure structure & behavior ONLY.
+          Access tab configures form access settings, not form content.
+          
+          CAPABILITY DECLARATION:
+          - accessConfigurable: true (can configure public links, approval workflows)
+          - auditWorkflowBypassAllowed: false (audit workflow rules are owned by Audit App)
+          
+          See: client/src/platform/modules/forms/formsModule.definition.ts
+          See: client/src/platform/forms/formSettingsCapabilities.ts
+        -->
+        <div class="flex-1 overflow-y-auto" v-else-if="activeTopTab === 'access' && isFormsModule">
+          <div class="p-6">
+            <!-- Header -->
+            <div class="mb-6">
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Access</h3>
+              <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                Configure form access, public links, and approval workflows. Form content is edited in the Form Builder.
+              </p>
+              
+              <!-- Capability Indicators -->
+              <div class="mt-4 space-y-2">
+                <div v-if="hasCapability('accessConfigurable')" class="flex items-center gap-2 text-xs">
+                  <span class="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded font-medium">
+                    ✓ Access Configurable
+                  </span>
+                  <span class="text-gray-500 dark:text-gray-400">Configure public links and approval workflows</span>
+                </div>
+                <div v-if="isCapabilityLocked('auditWorkflowBypassAllowed')" class="flex items-center gap-2 text-xs">
+                  <span class="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded font-medium">
+                    🔒 Audit Workflow Locked
+                  </span>
+                  <span class="text-gray-500 dark:text-gray-400">Audit workflow rules are owned by Audit App</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Access Configuration -->
+            <div class="space-y-4">
+              <div
+                v-for="field in getFieldsForTab('access')"
+                :key="field.key"
+                class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4"
+              >
+                <div class="flex items-start justify-between mb-2">
+                  <div class="flex-1">
+                    <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+                      {{ field.label }}
+                    </h4>
+                    <div class="flex items-center gap-2 mb-2">
+                      <span
+                        :class="[
+                          'px-2 py-0.5 text-xs font-medium rounded',
+                          field.editable
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                        ]"
+                      >
+                        {{ field.editable ? 'Editable' : 'Read-Only' }}
+                      </span>
+                      <span
+                        :class="[
+                          'px-2 py-0.5 text-xs font-medium rounded',
+                          field.source === 'settings'
+                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                            : field.source === 'builder'
+                            ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                            : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+                        ]"
+                      >
+                        {{ field.source === 'settings' ? 'Settings' : field.source === 'builder' ? 'Builder' : 'Execution' }}
+                      </span>
+                    </div>
+                    <p v-if="field.notes" class="text-xs text-gray-500 dark:text-gray-400">
+                      {{ field.notes }}
+                    </p>
+                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-1 font-mono">
+                      {{ field.key }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Relationships Tab (with Forms-specific display) -->
         <div class="flex-1 overflow-y-auto" v-else-if="activeTopTab === 'relationships'">
           <div class="p-6">
           <!-- Header -->
@@ -1460,6 +3721,56 @@
             <p class="text-sm text-gray-500 dark:text-gray-400">
               Define relationships between this module and other modules. Relationships enable data linking and cross-module references.
             </p>
+          </div>
+
+          <!-- Forms Module Relationships (read-only display) -->
+          <div v-if="isFormsModule" class="mb-6">
+            <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-4">Form Relationships</h4>
+            <div class="space-y-3">
+              <div
+                v-for="field in getFieldsForTab('relationships')"
+                :key="field.key"
+                class="bg-gray-50 dark:bg-gray-700/30 border border-gray-200 dark:border-gray-600 rounded-lg p-3"
+              >
+                <div class="flex items-start justify-between">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class="text-sm font-medium text-gray-900 dark:text-white">
+                        {{ field.label }}
+                      </span>
+                      <span
+                        :class="[
+                          'px-2 py-0.5 text-xs font-medium rounded',
+                          field.editable
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                        ]"
+                      >
+                        {{ field.editable ? 'Editable' : 'Read-Only' }}
+                      </span>
+                      <span
+                        :class="[
+                          'px-2 py-0.5 text-xs font-medium rounded',
+                          field.source === 'settings'
+                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                            : field.source === 'builder'
+                            ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                            : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+                        ]"
+                      >
+                        {{ field.source === 'settings' ? 'Settings' : field.source === 'builder' ? 'Builder' : 'Execution' }}
+                      </span>
+                    </div>
+                    <p v-if="field.notes" class="text-xs text-gray-500 dark:text-gray-400">
+                      {{ field.notes }}
+                    </p>
+                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-1 font-mono">
+                      {{ field.key }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Empty State -->
@@ -2292,6 +4603,158 @@
                   </div>
                 </template>
                 
+                <!-- Organizations module: grouped by core business fields (similar to People) -->
+                <!-- 
+                  PLATFORM-LEVEL CANONICAL DEFAULT: Organizations Quick Create
+                  Name field MUST always be present, required, and non-removable.
+                  Default Quick Create shows ONLY "name". Other eligible fields are optional.
+                  This is intentionally minimal - Organizations are contextual business entities, not primary workflow objects.
+                  Changes require updating: module-settings-doctrine.md, organization-settings.md
+                -->
+                <template v-else-if="isOrganizationsModule">
+                  <div v-if="quickCreateAvailableFields.length > 0" class="mb-4">
+                    <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Core Business Fields</div>
+                    <ul class="space-y-1">
+                      <li
+                        v-for="f in quickCreateAvailableFields"
+                        :key="f.key"
+                        class="px-3 py-2 rounded flex items-center gap-2"
+                        :class="[
+                          quickCreateSelected.has(f.key) ? 'bg-gray-100 dark:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/5',
+                          f.key?.toLowerCase() === 'name' ? 'cursor-default' : 'cursor-pointer'
+                        ]"
+                        @click="f.key?.toLowerCase() !== 'name' ? toggleQuickRow(f) : null"
+                        :title="f.key?.toLowerCase() === 'name' ? 'Name is required and cannot be removed' : (f.required ? 'Required field is always included' : '')"
+                      >
+                        <input 
+                          type="checkbox" 
+                          :checked="quickCreateSelected.has(f.key)" 
+                          :disabled="f.key?.toLowerCase() === 'name' || f.required" 
+                          @change.stop="f.key?.toLowerCase() !== 'name' ? toggleQuickCreate(f.key, $event.target.checked) : null" 
+                        />
+                        <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
+                        <span v-if="f.key?.toLowerCase() === 'name'" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded ml-auto">Required</span>
+                        <span v-else class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded ml-auto">Core</span>
+                      </li>
+                    </ul>
+                  </div>
+                  
+                  <!-- Info message if no fields -->
+                  <div v-if="quickCreateAvailableFields.length === 0" class="p-3 text-xs text-gray-500 dark:text-gray-400 text-center">
+                    No eligible fields available for Quick Create.
+                  </div>
+                  
+                  <!-- Helper text for Organizations -->
+                  <div class="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <p class="text-xs text-blue-800 dark:text-blue-400">
+                      <strong>Organizations require only a name to be created.</strong> Additional details can be added later from context.
+                    </p>
+                  </div>
+                </template>
+                
+                <!-- Tasks module: grouped by core task fields -->
+                <!-- 
+                  ARCHITECTURE NOTE: Tasks Settings configure structure only, never work.
+                  Quick Create is for fast task capture. Only essential fields appear.
+                  Title field MUST always be present, required, and non-removable (locked position).
+                  Eligible fields: title (required, locked), dueDate, priority, assignedTo, relatedTo
+                  Excluded: description, status, app fields, system fields, time tracking, subtasks, tags
+                  See: docs/architecture/task-settings.md Section 3.5
+                -->
+                <template v-else-if="isTasksModule">
+                  <div v-if="quickCreateAvailableFields.length > 0" class="mb-4">
+                    <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Core Task Fields</div>
+                    <ul class="space-y-1">
+                      <li
+                        v-for="f in quickCreateAvailableFields"
+                        :key="f.key"
+                        class="px-3 py-2 rounded flex items-center gap-2"
+                        :class="[
+                          quickCreateSelected.has(f.key) ? 'bg-gray-100 dark:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/5',
+                          f.key?.toLowerCase() === 'title' ? 'cursor-default' : 'cursor-pointer'
+                        ]"
+                        @click="f.key?.toLowerCase() !== 'title' ? toggleQuickRow(f) : null"
+                        :title="f.key?.toLowerCase() === 'title' ? 'Title is required and cannot be removed' : (f.required ? 'Required field is always included' : '')"
+                      >
+                        <input 
+                          type="checkbox" 
+                          :checked="quickCreateSelected.has(f.key)" 
+                          :disabled="f.key?.toLowerCase() === 'title' || f.required" 
+                          @change.stop="f.key?.toLowerCase() !== 'title' ? toggleQuickCreate(f.key, $event.target.checked) : null" 
+                        />
+                        <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
+                        <span v-if="f.key?.toLowerCase() === 'title'" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded ml-auto">Required</span>
+                        <span v-else class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded ml-auto">Core</span>
+                      </li>
+                    </ul>
+                  </div>
+                  
+                  <!-- Info message if no fields -->
+                  <div v-if="quickCreateAvailableFields.length === 0" class="p-3 text-xs text-gray-500 dark:text-gray-400 text-center">
+                    No eligible fields available for Quick Create.
+                  </div>
+                  
+                  <!-- Helper text for Tasks -->
+                  <div class="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <p class="text-xs text-blue-800 dark:text-blue-400">
+                      <strong>Quick Create is for fast task capture.</strong> Only essential fields appear. Detailed configuration happens later.
+                    </p>
+                  </div>
+                </template>
+                
+                <!-- Events module: grouped by core event fields -->
+                <!-- 
+                  ARCHITECTURE NOTE: Events Settings configure structure, constraints, and eligibility only.
+                  Quick Create is for fast event scheduling. Only minimal scheduling-safe fields appear.
+                  eventName field MUST always be present, required, and non-removable (locked position).
+                  Eligible fields: eventName (required, locked), eventType, startDateTime, endDateTime, location
+                  Excluded: audit roles, geo, forms, recurrence, multi-org routing, notes, metadata
+                  Rationale: Audit events require complex configuration (roles, forms, geo) and should not be created via Quick Create.
+                  Quick Create is for simple scheduling (Meeting / Appointment, Field Sales Beat), not audit workflows.
+                  See: docs/architecture/event-settings.md Section 7
+                -->
+                <template v-else-if="isEventsModule">
+                  <div v-if="quickCreateAvailableFields.length > 0" class="mb-4">
+                    <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Core Event Fields</div>
+                    <ul class="space-y-1">
+                      <li
+                        v-for="f in quickCreateAvailableFields"
+                        :key="f.key"
+                        class="px-3 py-2 rounded flex items-center gap-2"
+                        :class="[
+                          quickCreateSelected.has(f.key) ? 'bg-gray-100 dark:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/5',
+                          f.key?.toLowerCase() === 'eventname' ? 'cursor-default' : 'cursor-pointer'
+                        ]"
+                        @click="f.key?.toLowerCase() !== 'eventname' ? toggleQuickRow(f) : null"
+                        :title="f.key?.toLowerCase() === 'eventname' ? 'Event Name is required and cannot be removed' : (f.required ? 'Required field is always included' : '')"
+                      >
+                        <input 
+                          type="checkbox" 
+                          :checked="quickCreateSelected.has(f.key)" 
+                          :disabled="f.key?.toLowerCase() === 'eventname' || f.required" 
+                          @change.stop="f.key?.toLowerCase() !== 'eventname' ? toggleQuickCreate(f.key, $event.target.checked) : null" 
+                        />
+                        <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
+                        <span v-if="f.key?.toLowerCase() === 'eventname'" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded ml-auto">Required</span>
+                        <span v-else class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded ml-auto">Core</span>
+                      </li>
+                    </ul>
+                  </div>
+                  
+                  <!-- Info message if no fields -->
+                  <div v-if="quickCreateAvailableFields.length === 0" class="p-3 text-xs text-gray-500 dark:text-gray-400 text-center">
+                    No eligible fields available for Quick Create.
+                  </div>
+                  
+                  <!-- Helper text for Events -->
+                  <div class="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <p class="text-xs text-blue-800 dark:text-blue-400">
+                      <strong>Quick Create is for fast event scheduling.</strong> Only minimal scheduling-safe fields appear. 
+                      <strong>Audit events require complex configuration (roles, forms, geo) and should be created via full event edit, not Quick Create.</strong>
+                    </p>
+                  </div>
+                </template>
+                
                 <!-- Other modules: grouped by regular and system fields -->
                 <template v-else>
                   <!-- Regular Fields -->
@@ -2339,6 +4802,16 @@
               <div class="p-3 border-t border-gray-200 dark:border-white/10">
                 <div class="text-xs text-gray-500 dark:text-gray-400">
                   <span v-if="isPeopleModule">Select core identity fields to include in Quick Create.</span>
+                  <span v-else-if="isOrganizationsModule">
+                    <strong>Organizations require only a name to be created.</strong> Additional details can be added later from context. Only core business fields (name, industry, website, phone, address, types) are eligible.
+                  </span>
+                  <span v-else-if="isTasksModule">
+                    <strong>Quick Create is for fast task capture.</strong> Only essential fields (title, dueDate, priority, assignedTo, relatedTo) are eligible. Detailed configuration happens later.
+                  </span>
+                  <span v-else-if="isEventsModule">
+                    <strong>Quick Create is for fast event scheduling.</strong> Only minimal scheduling-safe fields (eventName, eventType, startDateTime, endDateTime, location) are eligible. 
+                    Audit events require complex configuration (roles, forms, geo) and should be created via full event edit, not Quick Create.
+                  </span>
                   <span v-else>Select fields to include in Quick Create.</span>
                 </div>
               </div>
@@ -2355,18 +4828,33 @@
                   <div 
                     v-for="(f, idx) in orderedQuickCreate" 
                     :key="f.key" 
-                    :draggable="true"
+                    :draggable="!(isOrganizationsModule && f.key?.toLowerCase() === 'name' && idx === 0) && !(isTasksModule && f.key?.toLowerCase() === 'title' && idx === 0) && !(isEventsModule && f.key?.toLowerCase() === 'eventname' && idx === 0)"
                     @dragstart="onQuickCreateDragStart(idx)"
                     @dragover.prevent="onQuickCreateDragOver(idx)"
                     @drop.prevent="onQuickCreateDrop(idx)"
-                    class="rounded border border-gray-200 dark:border-white/10 px-3 py-2 text-sm text-gray-800 dark:text-gray-200 flex items-center gap-2 cursor-move transition-colors"
+                    class="rounded border border-gray-200 dark:border-white/10 px-3 py-2 text-sm text-gray-800 dark:text-gray-200 flex items-center gap-2 transition-colors"
                     :class="{
+                      'cursor-move': !(isOrganizationsModule && f.key?.toLowerCase() === 'name' && idx === 0) && !(isTasksModule && f.key?.toLowerCase() === 'title' && idx === 0) && !(isEventsModule && f.key?.toLowerCase() === 'eventname' && idx === 0),
+                      'cursor-default': (isOrganizationsModule && f.key?.toLowerCase() === 'name' && idx === 0) || (isTasksModule && f.key?.toLowerCase() === 'title' && idx === 0) || (isEventsModule && f.key?.toLowerCase() === 'eventname' && idx === 0),
                       'opacity-50': quickCreateDragStartIdx === idx,
                       'ring-2 ring-brand-500/50': quickCreateDragOverIdx === idx
                     }"
                   >
-                    <ArrowsUpDownIcon class="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                    <ArrowsUpDownIcon 
+                      v-if="!(isOrganizationsModule && f.key?.toLowerCase() === 'name' && idx === 0) && !(isTasksModule && f.key?.toLowerCase() === 'title' && idx === 0) && !(isEventsModule && f.key?.toLowerCase() === 'eventname' && idx === 0)"
+                      class="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" 
+                    />
+                    <svg 
+                      v-else
+                      class="w-4 h-4 text-amber-500 dark:text-amber-400 flex-shrink-0" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
                     <span class="flex-1">{{ f.label || f.key }}</span>
+                    <span v-if="(isOrganizationsModule && f.key?.toLowerCase() === 'name') || (isTasksModule && f.key?.toLowerCase() === 'title') || (isEventsModule && f.key?.toLowerCase() === 'eventname')" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Required</span>
                   </div>
                 </div>
               </div>
@@ -2845,12 +5333,50 @@
 </template>
 
 <script setup>
+// See docs/architecture/form-settings-doctrine.md
+// Form Settings are configuration-only and must respect domain boundaries
+
 import { ref, onMounted, computed, watch, reactive, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { Switch } from '@headlessui/vue';
 import apiClient from '@/utils/apiClient';
 import ModuleFormModal from './ModuleFormModal.vue';
 import { ArrowsUpDownIcon } from '@heroicons/vue/24/outline';
+
+// DEV-only guards: Forms Settings must never support execution
+if (process.env.NODE_ENV === 'development') {
+  // This guard ensures Forms Settings never expose execution capabilities
+  // Forms Settings configure structure & behavior ONLY.
+  // Execution must never be configurable for Forms module.
+  // See: docs/architecture/form-settings-doctrine.md
+  // See: client/src/platform/modules/forms/formsModule.definition.ts
+}
+
+import {
+  FORM_SETTINGS_TABS,
+  getFieldsForTab,
+  getFieldMapping
+} from '@/platform/forms/formSettingsMap';
+import {
+  FORM_SETTINGS_CAPABILITIES,
+  isCapabilityLocked,
+  hasCapability
+} from '@/platform/forms/formSettingsCapabilities';
+import {
+  deriveFormSettingsPermissions,
+  getFormSettingsActionLabel
+} from '@/platform/forms/formSettingsPermissions';
+import {
+  FORM_TYPE_DEFINITIONS,
+  getFormTypeDefinitions,
+  getCustomFormTypes,
+  removeCustomFormType,
+  getBuiltInFormTypes,
+  isBuiltInFormType,
+  getFormTypeDefinition,
+  addCustomFormType
+} from '@/platform/forms/formTypeRegistry';
 import {
   PEOPLE_FIELD_METADATA,
   getFieldMetadata,
@@ -2948,6 +5474,18 @@ const fieldTypes = [
   'Rollup Summary'
 ];
 const selectedModule = computed(() => modules.value.find(m => m._id === selectedModuleId.value));
+
+// Form Settings Permissions (explanatory only, not enforcement)
+// ARCHITECTURE NOTE: Permissions here are explanatory, not enforcement.
+// Actual enforcement happens at API & surface level.
+// This mirrors Event Execution permission design.
+// See: client/src/platform/forms/formSettingsPermissions.ts
+const formSettingsPermissions = computed(() => {
+  if (!isFormsModule.value) {
+    return [];
+  }
+  return deriveFormSettingsPermissions();
+});
 const dragStartIdx = ref(null);
 const dragOverIdx = ref(null);
 const baseTopTabs = [
@@ -2959,20 +5497,53 @@ const baseTopTabs = [
 const TOP_TAB_IDS_BASE = ['details', 'fields', 'relationships', 'quick'];
 function getAllowedTopTabs(moduleKey) {
   if (moduleKey === 'forms') {
+    // Forms module has custom tabs: details, fields, logic, outcomes, access, relationships
     // Forms module doesn't have Quick Create tab
-    return TOP_TAB_IDS_BASE.filter(id => id !== 'quick');
+    return ['details', 'fields', 'logic', 'outcomes', 'access', 'relationships'];
   }
   if (moduleKey === 'deals') {
     return [...TOP_TAB_IDS_BASE, 'pipeline', 'playbooks'];
+  }
+  if (moduleKey === 'organizations') {
+    // Organizations module has Status & Types tab
+    return [...TOP_TAB_IDS_BASE, 'status-types'];
+  }
+  if (moduleKey === 'tasks') {
+    // Tasks module has Status & Priority tab (Tasks-specific, unlike People)
+    return [...TOP_TAB_IDS_BASE, 'status-priority'];
+  }
+  if (moduleKey === 'events') {
+    // Events module has Status tab and Roles & Rules tab (Events-specific)
+    // ARCHITECTURE NOTE: Events Settings configure structure and constraints, not behavior.
+    // Status tab: System-locked event statuses (Planned, Completed, Cancelled)
+    // Roles & Rules tab: Role requirements, geo rules, form linking rules per event type
+    // See: docs/architecture/event-settings.md Section 2.2, 4.3, 4.4, 4.5
+    return [...TOP_TAB_IDS_BASE, 'status', 'roles-rules'];
+  }
+  if (moduleKey === 'items') {
+    // Items module has Status & Types tab (Items-specific, similar to Tasks)
+    return [...TOP_TAB_IDS_BASE, 'status-types'];
   }
   return [...TOP_TAB_IDS_BASE];
 }
 const topTabs = computed(() => {
   const moduleKey = selectedModule.value?.key;
   const tabs = [...baseTopTabs];
-  // Remove Quick Create tab for forms module
+  // Forms module has custom tabs: Fields Configuration, Logic & Rules, Outcomes, Access
+  // ARCHITECTURE NOTE: Forms Settings configure structure & behavior ONLY.
+  // Forms use the same Fields Configuration model as other core modules.
+  // "Metadata" is not a separate field type — these are record fields.
+  // Form content structure is managed exclusively by the Form Builder.
+  // See: client/src/platform/modules/forms/formsModule.definition.ts
   if (moduleKey === 'forms') {
-    return tabs.filter(tab => tab.id !== 'quick');
+    return [
+      { id: 'details', name: 'Module details' },
+      { id: 'fields', name: 'Fields Configuration' },
+      { id: 'logic', name: 'Logic & Rules' },
+      { id: 'outcomes', name: 'Outcomes' },
+      { id: 'access', name: 'Access' },
+      { id: 'relationships', name: 'Relationships' },
+    ];
   }
   if (moduleKey === 'deals') {
     // Only add pipeline/playbooks tabs if they're not excluded
@@ -2983,15 +5554,58 @@ const topTabs = computed(() => {
       tabs.push({ id: 'playbooks', name: 'Playbook Configuration' });
     }
   }
+  if (moduleKey === 'organizations') {
+    // Insert "Status & Types" tab after "Field Configurations" and before "Relationships"
+    const fieldsTabIndex = tabs.findIndex(tab => tab.id === 'fields');
+    if (fieldsTabIndex >= 0) {
+      tabs.splice(fieldsTabIndex + 1, 0, { id: 'status-types', name: 'Status & Types' });
+    }
+  }
+  if (moduleKey === 'tasks') {
+    // Insert "Status & Priority" tab after "Field Configurations" and before "Relationships"
+    // ARCHITECTURE NOTE: Tasks have status/priority picklists (unlike People), so this tab is Tasks-specific
+    // See: docs/architecture/task-settings.md Section 3.3
+    const fieldsTabIndex = tabs.findIndex(tab => tab.id === 'fields');
+    if (fieldsTabIndex >= 0) {
+      tabs.splice(fieldsTabIndex + 1, 0, { id: 'status-priority', name: 'Status & Priority' });
+    }
+  }
+  if (moduleKey === 'events') {
+    // Insert "Status" tab and "Roles & Rules" tab after "Field Configurations" and before "Relationships"
+    // ARCHITECTURE NOTE: Events Settings configure structure and constraints, not behavior.
+    // Status tab: System-locked event statuses (Planned, Completed, Cancelled) - required for execution
+    // Roles & Rules tab: Role requirements, geo rules, form linking rules per event type
+    // See: docs/architecture/event-settings.md Section 2.2, 4.3, 4.4, 4.5
+    const fieldsTabIndex = tabs.findIndex(tab => tab.id === 'fields');
+    if (fieldsTabIndex >= 0) {
+      tabs.splice(fieldsTabIndex + 1, 0, { id: 'status', name: 'Status' });
+      tabs.splice(fieldsTabIndex + 2, 0, { id: 'roles-rules', name: 'Roles & Rules' });
+    }
+  }
+  if (moduleKey === 'items') {
+    // Insert "Status & Types" tab after "Field Configurations" and before "Relationships"
+    // ARCHITECTURE NOTE: Items have status and item_type picklists, similar to Tasks
+    const fieldsTabIndex = tabs.findIndex(tab => tab.id === 'fields');
+    if (fieldsTabIndex >= 0) {
+      tabs.splice(fieldsTabIndex + 1, 0, { id: 'status-types', name: 'Status & Types' });
+    }
+  }
   return tabs;
 });
 const tabTitleMap = {
   details: 'Module Details',
   fields: 'Field Configurations',
+  'status-types': 'Status & Types',
+  'status-priority': 'Status & Priority',
+  'status': 'Status',
+  'roles-rules': 'Roles & Rules',
   relationships: 'Relationships',
   quick: 'Quick Create',
   pipeline: 'Pipeline Settings',
-  playbooks: 'Playbook Configuration'
+  playbooks: 'Playbook Configuration',
+  logic: 'Logic & Rules',
+  outcomes: 'Outcomes',
+  access: 'Access'
 };
 const currentTopTabLabel = computed(() => tabTitleMap[activeTopTab.value] || 'Module Details');
 // Initialize activeTopTab from URL or localStorage, default to 'fields'
@@ -2999,7 +5613,7 @@ const getInitialTab = () => {
   // First check URL query
   const route = useRoute();
   const modeKey = typeof route.query.mode === 'string' ? route.query.mode : null;
-  if (modeKey && ['details', 'fields', 'relationships', 'quick'].includes(modeKey)) {
+  if (modeKey && ['details', 'fields', 'status-types', 'status-priority', 'status', 'roles-rules', 'relationships', 'quick', 'logic', 'outcomes', 'access'].includes(modeKey)) {
     return modeKey;
   }
   // If no URL param, we'll check localStorage after module loads
@@ -3957,6 +6571,7 @@ function spanClass(span) {
 const subTabs = [
   { id: 'general', name: 'General' },
   { id: 'validations', name: 'Field Validation' },
+  { id: 'filters', name: 'Filter Settings' },
   { id: 'dependencies', name: 'Dependencies' }
 ];
 const activeSubTab = ref('general');
@@ -4010,6 +6625,28 @@ const filteredFields = computed(() => {
     });
   }
   
+  // Filter out execution fields for Events module
+  // ARCHITECTURE NOTE: Events Settings configure structure only, never execution.
+  // Excludes: GEO coordinates, check-in/check-out, route sequencing, audit history, metadata.
+  // See: docs/architecture/event-settings.md Section 5.5
+  if (selectedModule.value?.key === 'events') {
+    const executionFieldPatterns = [
+      'geolocation', 'georequired', 'checkin', 'checkout', 'executionstarttime', 'executionendtime', 
+      'timespent', 'ispaused', 'pausereasons', 'orglist', 'routesequence', 'currentorgindex', 
+      'ismultiorg', 'audithistory', 'metadata', 'formassignment'
+    ];
+    fields = fields.filter(f => {
+      const keyLower = (f.key || '').toLowerCase();
+      // Block execution fields - they belong in Work interfaces, not Settings
+      // Rationale: GEO coordinates belong in execution (geo tracking execution)
+      // Rationale: check-in/check-out belong in execution (event execution)
+      // Rationale: route sequencing belongs in execution (multi-org route execution)
+      // Rationale: audit history belongs in execution (audit trail)
+      // Rationale: metadata belongs in execution (form responses, etc.)
+      return !executionFieldPatterns.some(pattern => keyLower.includes(pattern.toLowerCase()));
+    });
+  }
+  
   // Apply search filter
   const q = (fieldSearch.value || '').toLowerCase();
   if (q) {
@@ -4026,6 +6663,72 @@ const filteredFields = computed(() => {
 const isPeopleModule = computed(() => {
   return selectedModule.value?.key?.toLowerCase() === 'people';
 });
+
+// Check if current module is Organizations
+const isOrganizationsModule = computed(() => {
+  return selectedModule.value?.key?.toLowerCase() === 'organizations';
+});
+
+// Check if current module is Tasks
+// ARCHITECTURE NOTE: Tasks Settings configure structure only, never work.
+// See: docs/architecture/task-settings.md
+const isTasksModule = computed(() => {
+  return selectedModule.value?.key?.toLowerCase() === 'tasks';
+});
+
+// Check if current module is Events
+// ARCHITECTURE NOTE: Events Settings configure structure, constraints, and eligibility only.
+// Excludes: scheduling, execution, audit workflows, calendars.
+// See: docs/architecture/event-settings.md
+const isEventsModule = computed(() => {
+  return selectedModule.value?.key?.toLowerCase() === 'events';
+});
+
+// Check if current module is Items
+const isItemsModule = computed(() => {
+  return selectedModule.value?.key?.toLowerCase() === 'items';
+});
+
+// Check if current module is Forms
+// ARCHITECTURE NOTE: Forms Settings configure structure & behavior ONLY.
+// MUST NOT: Edit sections/questions, Edit responses, Execute workflows, Run scoring
+// See: docs/architecture/form-settings-doctrine.md
+// See: client/src/platform/modules/forms/formsModule.definition.ts
+const isFormsModule = computed(() => {
+  return selectedModule.value?.key?.toLowerCase() === 'forms';
+});
+
+// DEV-only guard: Ensure Forms module never supports execution
+if (process.env.NODE_ENV === 'development') {
+  watch(() => isFormsModule.value, (isForms) => {
+    if (isForms) {
+      // Assert that Forms Settings never expose execution capabilities
+      // This is a runtime check to catch any accidental execution features
+      // See: docs/architecture/form-settings-doctrine.md
+      // See: client/src/platform/forms/formSettingsCapabilities.ts
+      console.assert(
+        !isForms || !activeTopTab.value || activeTopTab.value !== 'execution',
+        '[Forms Settings] Execution must never be configurable. Forms Settings configure structure & behavior ONLY. See docs/architecture/form-settings-doctrine.md'
+      );
+      
+      // Assert critical capabilities remain locked
+      // If any of these flip, Form Settings must be re-reviewed
+      console.assert(
+        !FORM_SETTINGS_CAPABILITIES.builderEditable,
+        '[Forms Settings] builderEditable must remain false. Form Builder owns structure & content.'
+      );
+      console.assert(
+        !FORM_SETTINGS_CAPABILITIES.scoringEditable,
+        '[Forms Settings] scoringEditable must remain false. Scoring weights belong to Form Builder.'
+      );
+      console.assert(
+        !FORM_SETTINGS_CAPABILITIES.executionBehaviorEditable,
+        '[Forms Settings] executionBehaviorEditable must remain false. Execution belongs to Event Execution / Work interfaces.'
+      );
+    }
+  });
+  
+}
 
 // Computed: Fields available for Quick Create (People module: only core identity fields)
 // Helper: Check if a field is eligible for Quick Create
@@ -4099,6 +6802,168 @@ const quickCreateAvailableFields = computed(() => {
     return [...coreFields, ...participationFields, ...systemFields];
   }
   
+  // For Organizations module, enforce strict eligibility rules
+  // PLATFORM-LEVEL CANONICAL DEFAULT: Only core business fields are eligible for Quick Create
+  // Eligible: name, industry, types, website, phone, address
+  // Excluded: customerStatus, partnerStatus, vendorStatus (app-scoped semantics, not fields)
+  // Excluded: createdBy, assignedTo, accountManager (assignment/ownership fields)
+  // Excluded: isTenant, subscription, enabledApps, limits, security (tenant/system fields)
+  // This is intentionally minimal - Organizations are contextual business entities, not primary workflow objects.
+  // Changes require updating: module-settings-doctrine.md, organization-settings.md
+  if (isOrganizationsModule.value) {
+    // Canonical eligible fields: ONLY core business identity fields
+    const canonicalEligibleFields = ['name', 'industry', 'types', 'website', 'phone', 'address'];
+    
+    // Explicitly excluded field patterns (fail-safe enforcement)
+    const excludedPatterns = [
+      // Status fields (app-scoped semantics, not Quick Create fields)
+      'customerStatus', 'partnerStatus', 'vendorStatus',
+      // Assignment/ownership fields
+      'createdBy', 'assignedTo', 'accountManager', 'owner',
+      // Tenant/system fields
+      'isTenant', 'subscription', 'enabledApps', 'limits', 'security', 'settings',
+      'slug', 'isactive', 'enabledmodules'
+    ];
+    
+    const eligibleFields = editFields.value.filter(f => {
+      if (!f.key) return false;
+      
+      const keyLower = f.key.toLowerCase();
+      
+      // Exclude tenant fields (if tenant fields are hidden)
+      if (!showTenantFields.value) {
+        const tenantFieldPatterns = ['subscription.', 'limits.', 'settings.', 'slug', 'isactive', 'enabledmodules'];
+        if (tenantFieldPatterns.some(pattern => keyLower.startsWith(pattern) || keyLower === pattern)) {
+          return false;
+        }
+      }
+      
+      // Explicit exclusion check (fail-safe)
+      if (excludedPatterns.some(pattern => keyLower === pattern.toLowerCase() || keyLower.startsWith(pattern.toLowerCase() + '.'))) {
+        return false;
+      }
+      
+      // Only include canonical eligible fields
+      return canonicalEligibleFields.includes(keyLower);
+    });
+    
+    // Return core business fields only
+    return eligibleFields;
+  }
+  
+  // For Tasks module, enforce strict Quick Create eligibility rules
+  // ARCHITECTURE NOTE: Tasks Settings configure structure only, never work.
+  // Quick Create is for fast task capture. Only essential fields appear.
+  // Eligible: title (required, locked), dueDate, priority, assignedTo, relatedTo
+  // Excluded: description, status, app participation fields, system fields, time tracking, subtasks, tags
+  // See: docs/architecture/task-settings.md Section 3.5
+  if (isTasksModule.value) {
+    // Canonical eligible fields: ONLY core task fields for Quick Create
+    const canonicalEligibleFields = ['title', 'duedate', 'priority', 'assignedto', 'relatedto'];
+    
+    // Explicitly excluded field patterns (fail-safe enforcement)
+    const excludedPatterns = [
+      // Description (too dense for Quick Create)
+      'description',
+      // Status (defaults to 'todo', cannot be set in Quick Create)
+      'status',
+      // App participation fields (app-scoped, not Quick Create fields)
+      'salesstagetasktype', 'helpdesksla', 'auditcorrectiveflag',
+      // System fields
+      'createdby', 'createdat', 'updatedat', 'completeddate', 'completedat', 'organizationid',
+      'assignedby', '_id', '__v',
+      // Time tracking (task management feature, not Quick Create)
+      'estimatedhours', 'actualhours',
+      // Subtasks (task management complexity, not Quick Create)
+      'subtasks',
+      // Tags (can be added in full task edit)
+      'tags',
+      // Reminder fields
+      'reminderdate', 'remindersent',
+      // Start date (belongs in full task edit)
+      'startdate'
+    ];
+    
+    const eligibleFields = editFields.value.filter(f => {
+      if (!f.key) return false;
+      
+      const keyLower = f.key.toLowerCase();
+      
+      // Explicit exclusion check (fail-safe)
+      if (excludedPatterns.some(pattern => keyLower === pattern.toLowerCase() || keyLower.startsWith(pattern.toLowerCase() + '.'))) {
+        return false;
+      }
+      
+      // Only include canonical eligible fields
+      return canonicalEligibleFields.includes(keyLower);
+    });
+    
+    // Return eligible fields only (title, dueDate, priority, assignedTo, relatedTo)
+    return eligibleFields;
+  }
+  
+  // For Events module, enforce strict Quick Create eligibility rules
+  // ARCHITECTURE NOTE: Events Settings configure structure, constraints, and eligibility only.
+  // Quick Create is for fast event scheduling. Only minimal scheduling-safe fields appear.
+  // Eligible: eventName (required, locked), eventType, startDateTime, endDateTime, location
+  // Excluded: audit roles (auditorId, reviewerId, correctiveOwnerId), geo (geoRequired, geoLocation), 
+  // forms (linkedFormId), recurrence, multi-org routing (orgList, routeSequence), notes, metadata
+  // Rationale: Audit events require complex configuration (roles, forms, geo) and should not be created via Quick Create.
+  // Quick Create is for simple scheduling (Meeting / Appointment, Field Sales Beat), not audit workflows.
+  // See: docs/architecture/event-settings.md Section 7
+  if (isEventsModule.value) {
+    // Canonical eligible fields: ONLY minimal scheduling-safe fields for Quick Create
+    const canonicalEligibleFields = ['eventname', 'eventtype', 'startdatetime', 'enddatetime', 'location'];
+    
+    // Explicitly excluded field patterns (fail-safe enforcement)
+    const excludedPatterns = [
+      // Audit roles (audit events require complex role configuration, not Quick Create)
+      'auditorid', 'reviewerid', 'correctiveownerid',
+      // Geo (geo tracking belongs in execution, not Quick Create)
+      'georequired', 'geolocation', 'checkin', 'checkout',
+      // Forms (form linking belongs in full event edit, not Quick Create)
+      'linkedformid', 'formassignment',
+      // Recurrence (recurrence configuration belongs in full event edit)
+      'recurrence',
+      // Multi-org routing (route configuration belongs in full event edit)
+      'orglist', 'routesequence', 'currentorgindex', 'ismultiorg',
+      // Notes (can be added in full event edit)
+      'notes',
+      // Metadata (belongs in execution, not Quick Create)
+      'metadata',
+      // Audit state (belongs in execution, not Quick Create)
+      'auditstate', 'allowselfreview', 'minvisitduration', 'backgroundtracking', 'partnervisibility',
+      // KPI fields (belongs in execution, not Quick Create)
+      'kpitargets', 'kpiactuals', 'allowedactions',
+      // System fields
+      'status', 'createdby', 'createdtime', 'modifiedtime', 'modifiedby', 'organizationid', 
+      'eventid', 'completedat', 'cancelledat', 'cancelledby', 'cancellationreason', '_id', '__v',
+      // Execution tracking (belongs in execution, not Quick Create)
+      'executionstarttime', 'executionendtime', 'timespent', 'ispaused', 'pausereasons',
+      // Audit history (belongs in execution, not Quick Create)
+      'audithistory',
+      // Related organization (can be added in full event edit)
+      'relatedtoid'
+    ];
+    
+    const eligibleFields = editFields.value.filter(f => {
+      if (!f.key) return false;
+      
+      const keyLower = f.key.toLowerCase();
+      
+      // Explicit exclusion check (fail-safe)
+      if (excludedPatterns.some(pattern => keyLower === pattern.toLowerCase() || keyLower.includes(pattern.toLowerCase()))) {
+        return false;
+      }
+      
+      // Only include canonical eligible fields
+      return canonicalEligibleFields.includes(keyLower);
+    });
+    
+    // Return eligible fields only (eventName, eventType, startDateTime, endDateTime, location)
+    return eligibleFields;
+  }
+  
   // For other modules, organize by system vs regular fields
   const regularFields = [];
   const systemFields = [];
@@ -4116,8 +6981,18 @@ const quickCreateAvailableFields = computed(() => {
 });
 
 // Grouped fields for People module (derived from metadata)
+// Also used for Organizations module (with simplified grouping)
+// Also used for Tasks module (with task-specific grouping)
+// Also used for Events module (with event-specific grouping)
+// Also used for Forms module (with form-specific grouping)
+// ARCHITECTURE NOTE: Tasks Settings configure structure only, never work.
+// ARCHITECTURE NOTE: Events Settings configure structure, constraints, and eligibility only.
+// ARCHITECTURE NOTE: Forms Settings configure structure & behavior ONLY.
+// See: docs/architecture/task-settings.md Section 3.2
+// See: docs/architecture/event-settings.md Section 6
+// See: client/src/platform/modules/forms/formsModule.definition.ts
 const groupedFields = computed(() => {
-  if (!isPeopleModule.value) {
+  if (!isPeopleModule.value && !isOrganizationsModule.value && !isTasksModule.value && !isEventsModule.value && !isFormsModule.value) {
     return { coreIdentity: [], participation: {}, system: [] };
   }
 
@@ -4125,27 +7000,244 @@ const groupedFields = computed(() => {
   const participation = {};
   const system = [];
 
-  // Get all fields from editFields
-  const allFieldKeys = editFields.value.map(f => f.key).filter(Boolean);
+  // Get all fields from editFields (filtered for Organizations to exclude tenant fields)
+  let allFieldKeys = editFields.value.map(f => f.key).filter(Boolean);
+  
+  // For Organizations: exclude tenant fields unless showTenantFields is true
+  if (isOrganizationsModule.value && !showTenantFields.value) {
+    const tenantFieldPatterns = ['subscription.', 'limits.', 'settings.', 'slug', 'isactive', 'enabledmodules'];
+    allFieldKeys = allFieldKeys.filter(key => {
+      const keyLower = key.toLowerCase();
+      return !tenantFieldPatterns.some(pattern => keyLower.startsWith(pattern) || keyLower === pattern);
+    });
+  }
+
+  // Apply search filter
+  const q = (fieldSearch.value || '').toLowerCase();
+  if (q) {
+    allFieldKeys = allFieldKeys.filter(fieldKey => {
+      const field = editFields.value.find(f => f.key === fieldKey);
+      if (!field) return false;
+      const label = (field.label || '').toLowerCase();
+      const key = (field.key || '').toLowerCase();
+      return label.includes(q) || key.includes(q);
+    });
+  }
 
   for (const fieldKey of allFieldKeys) {
     try {
-      const metadata = getFieldMetadata(fieldKey);
-      
-      if (metadata.owner === 'core' && metadata.intent === 'identity') {
-        coreIdentity.push(fieldKey);
-      } else if (metadata.owner === 'participation' && metadata.fieldScope) {
-        if (!participation[metadata.fieldScope]) {
-          participation[metadata.fieldScope] = [];
+      // For Organizations, use simplified field classification based on field key patterns
+      if (isOrganizationsModule.value) {
+        // Core business fields (name, industry, website, phone, address, types)
+        const coreBusinessFields = ['name', 'industry', 'website', 'phone', 'address', 'types'];
+        if (coreBusinessFields.includes(fieldKey.toLowerCase())) {
+          coreIdentity.push(fieldKey);
+          continue;
         }
-        participation[metadata.fieldScope].push(fieldKey);
-      } else if (metadata.owner === 'system') {
+        
+        // App participation fields (customerStatus, partnerStatus, vendorStatus, etc.)
+        const participationFields = ['customerstatus', 'customertier', 'partnerstatus', 'partnertier', 'partnertype', 
+                                     'vendorstatus', 'vendorrating', 'assignedto', 'accountmanager', 'annualrevenue', 
+                                     'numberofemployees', 'slalevel', 'paymentterms', 'creditlimit'];
+        if (participationFields.includes(fieldKey.toLowerCase())) {
+          // Determine app scope (most are SALES)
+          const appScope = 'SALES'; // Default to SALES for now
+          if (!participation[appScope]) {
+            participation[appScope] = [];
+          }
+          participation[appScope].push(fieldKey);
+          continue;
+        }
+        
+        // System fields (createdBy, createdAt, updatedAt, organizationId, etc.)
+        const systemFields = ['createdby', 'createdat', 'updatedat', 'organizationid', 'primarycontact', 'activitylogs', 'notes', 'attachments'];
+        if (systemFields.includes(fieldKey.toLowerCase())) {
+          system.push(fieldKey);
+          continue;
+        }
+        
+        // Default: treat unknown fields as system
         system.push(fieldKey);
+      } else if (isTasksModule.value) {
+        // Tasks module: use task-specific field classification
+        // Core Task Fields (platform-owned): title, dueDate, priority, status, description
+        // ARCHITECTURE NOTE: Tasks Settings configure structure only. See: docs/architecture/task-settings.md Section 3.2
+        const coreTaskFields = ['title', 'duedate', 'priority', 'status', 'description', 'assignedto', 'startdate', 'tags'];
+        if (coreTaskFields.includes(fieldKey.toLowerCase())) {
+          coreIdentity.push(fieldKey);
+          continue;
+        }
+        
+        // App participation fields (salesStageTaskType, helpdeskSLA, auditCorrectiveFlag, etc.)
+        const participationFields = ['salesstagetasktype', 'helpdesksla', 'auditcorrectiveflag'];
+        if (participationFields.some(pf => fieldKey.toLowerCase().includes(pf.toLowerCase()))) {
+          // Determine app scope based on field name patterns
+          let appScope = 'SALES'; // Default
+          if (fieldKey.toLowerCase().includes('helpdesk') || fieldKey.toLowerCase().includes('sla')) {
+            appScope = 'HELPDESK';
+          } else if (fieldKey.toLowerCase().includes('audit') || fieldKey.toLowerCase().includes('corrective')) {
+            appScope = 'AUDIT';
+          }
+          if (!participation[appScope]) {
+            participation[appScope] = [];
+          }
+          participation[appScope].push(fieldKey);
+          continue;
+        }
+        
+        // System fields (createdBy, createdAt, updatedAt, completedDate, organizationId, etc.)
+        const systemFields = ['createdby', 'createdat', 'updatedat', 'completeddate', 'completedat', 'organizationid', 
+                             'assignedby', 'estimatedhours', 'actualhours', 'reminderdate', 'remindersent', '_id', '__v'];
+        if (systemFields.includes(fieldKey.toLowerCase()) || fieldKey.toLowerCase().startsWith('_')) {
+          system.push(fieldKey);
+          continue;
+        }
+        
+        // Default: treat unknown fields as system
+        system.push(fieldKey);
+      } else if (isEventsModule.value) {
+        // Events module: use event-specific field classification
+        // ARCHITECTURE NOTE: Events Settings configure structure only, never execution.
+        // Excludes: GEO coordinates, check-in/check-out, route sequencing, audit history, metadata.
+        // PRIORITY EXCLUSION: Event Priority is system-owned and NOT configurable in Event Settings.
+        // If any code attempts to register Event Priority settings, it should be rejected.
+        // See: docs/architecture/event-settings.md Section 8.2
+        // See: docs/architecture/event-settings.md Section 6
+        
+        // Core Event Fields (platform-owned): eventName, eventType, startDateTime, endDateTime, location
+        const coreEventFields = ['eventname', 'eventtype', 'startdatetime', 'enddatetime', 'location', 'notes', 'relatedtoid', 'recurrence'];
+        if (coreEventFields.includes(fieldKey.toLowerCase())) {
+          coreIdentity.push(fieldKey);
+          continue;
+        }
+        
+        // App participation fields (auditState, auditorId, reviewerId, correctiveOwnerId, linkedFormId)
+        // ARCHITECTURE NOTE: App fields are visibility-configurable ONLY, not required-configurable.
+        // See: docs/architecture/event-settings.md Section 4.2
+        const participationFields = ['auditstate', 'auditorid', 'reviewerid', 'correctiveownerid', 'linkedformid', 
+                                     'allowselfreview', 'minvisitduration', 'backgroundtracking', 'partnervisibility',
+                                     'allowedactions', 'kpitargets', 'kpiactuals'];
+        if (participationFields.some(pf => fieldKey.toLowerCase().includes(pf.toLowerCase()))) {
+          // Determine app scope based on field name patterns
+          let appScope = 'AUDIT'; // Default to AUDIT for most event app fields
+          if (fieldKey.toLowerCase().includes('kpi') || fieldKey.toLowerCase().includes('allowedactions')) {
+            appScope = 'SALES';
+          }
+          if (!participation[appScope]) {
+            participation[appScope] = [];
+          }
+          participation[appScope].push(fieldKey);
+          continue;
+        }
+        
+        // System fields (status, createdBy, createdTime, modifiedTime, etc.)
+        // ARCHITECTURE NOTE: System fields are read-only, always visible in config.
+        // See: docs/architecture/event-settings.md Section 6.3
+        const systemFields = ['status', 'createdby', 'createdtime', 'modifiedtime', 'modifiedby', 'organizationid', 
+                             'eventid', 'completedat', 'cancelledat', 'cancelledby', 'cancellationreason', '_id', '__v'];
+        if (systemFields.includes(fieldKey.toLowerCase()) || fieldKey.toLowerCase().startsWith('_')) {
+          system.push(fieldKey);
+          continue;
+        }
+        
+        // Explicitly block execution fields (GEO coordinates, check-in/check-out, route sequencing, audit history, metadata)
+        // ARCHITECTURE NOTE: These fields belong to execution, not structure configuration.
+        // See: docs/architecture/event-settings.md Section 5.5
+        const executionFieldPatterns = [
+          'geolocation', 'georequired', 'checkin', 'checkout', 'executionstarttime', 'executionendtime', 
+          'timespent', 'ispaused', 'pausereasons', 'orglist', 'routesequence', 'currentorgindex', 
+          'ismultiorg', 'audithistory', 'metadata', 'formassignment'
+        ];
+        if (executionFieldPatterns.some(pattern => fieldKey.toLowerCase().includes(pattern.toLowerCase()))) {
+          // Skip these fields - they are execution-only and should not appear in Settings
+          // Rationale: GEO coordinates belong in execution (geo tracking execution)
+          // Rationale: check-in/check-out belong in execution (event execution)
+          // Rationale: route sequencing belongs in execution (multi-org route execution)
+          // Rationale: audit history belongs in execution (audit trail)
+          // Rationale: metadata belongs in execution (form responses, etc.)
+          continue;
+        }
+        
+        // Default: treat unknown fields as system
+        system.push(fieldKey);
+      } else if (isFormsModule.value) {
+        // Forms module: use form-specific field classification
+        // ARCHITECTURE NOTE: Forms Settings configure structure & behavior ONLY.
+        // See: client/src/platform/modules/forms/formsModule.definition.ts
+        
+        // Core Form Fields (platform-owned): name, description, visibility, status, assignedTo, approvalRequired
+        const coreFormFields = ['name', 'description', 'visibility', 'status', 'assignedto', 'approvalrequired'];
+        if (coreFormFields.includes(fieldKey.toLowerCase())) {
+          coreIdentity.push(fieldKey);
+          continue;
+        }
+        
+        // Logic & Rules fields: kpiMetrics, scoringFormula, thresholds, autoAssignment
+        const logicFields = ['kpimetrics', 'scoringformula', 'thresholds', 'autoassignment'];
+        if (logicFields.some(lf => fieldKey.toLowerCase().includes(lf.toLowerCase()))) {
+          // Group under 'LOGIC' app scope for display
+          if (!participation['LOGIC']) {
+            participation['LOGIC'] = [];
+          }
+          participation['LOGIC'].push(fieldKey);
+          continue;
+        }
+        
+        // Outcomes fields: outcomesAndRules.auditResultRule, outcomesAndRules.reportingMetrics, outcomesAndRules.postSubmissionSignals
+        const outcomesFields = ['auditresultrule', 'reportingmetrics', 'postsubmissionsignals', 'outcomesandrules'];
+        if (outcomesFields.some(of => fieldKey.toLowerCase().includes(of.toLowerCase()))) {
+          // Group under 'OUTCOMES' app scope for display
+          if (!participation['OUTCOMES']) {
+            participation['OUTCOMES'] = [];
+          }
+          participation['OUTCOMES'].push(fieldKey);
+          continue;
+        }
+        
+        // Access fields: publicLink.enabled, publicLink.slug, approvalWorkflow
+        const accessFields = ['publiclink', 'approvalworkflow', 'slug'];
+        if (accessFields.some(af => fieldKey.toLowerCase().includes(af.toLowerCase()))) {
+          // Group under 'ACCESS' app scope for display
+          if (!participation['ACCESS']) {
+            participation['ACCESS'] = [];
+          }
+          participation['ACCESS'].push(fieldKey);
+          continue;
+        }
+        
+        // System fields (formId, formVersion, createdAt, updatedAt)
+        // ARCHITECTURE NOTE: Form Type is a CORE domain field, not a system field.
+        // It is user-editable and intent-defining.
+        // See: client/src/platform/forms/formTypeRegistry.ts
+        const systemFields = ['formid', 'formversion', 'createdat', 'updatedat', 'createdby', 'modifiedby', 'organizationid', '_id', '__v'];
+        if (systemFields.includes(fieldKey.toLowerCase()) || fieldKey.toLowerCase().startsWith('_')) {
+          system.push(fieldKey);
+          continue;
+        }
+        
+        // Default: treat unknown fields as system
+        system.push(fieldKey);
+      } else {
+        // People module: use metadata
+        const metadata = getFieldMetadata(fieldKey);
+        
+        if (metadata.owner === 'core' && metadata.intent === 'identity') {
+          coreIdentity.push(fieldKey);
+        } else if (metadata.owner === 'participation' && metadata.fieldScope) {
+          if (!participation[metadata.fieldScope]) {
+            participation[metadata.fieldScope] = [];
+          }
+          participation[metadata.fieldScope].push(fieldKey);
+        } else if (metadata.owner === 'system') {
+          system.push(fieldKey);
+        }
       }
     } catch (err) {
       // Field not in metadata - fail fast in development
       if (process.env.NODE_ENV === 'development') {
-        console.error(`[People Field Model] Field "${fieldKey}" is missing from PEOPLE_FIELD_METADATA`, err);
+        if (isPeopleModule.value) {
+          console.error(`[People Field Model] Field "${fieldKey}" is missing from PEOPLE_FIELD_METADATA`, err);
+        }
       }
       // For now, treat as system field to prevent breaking
       system.push(fieldKey);
@@ -4155,15 +7247,43 @@ const groupedFields = computed(() => {
   return { coreIdentity, participation, system };
 });
 
-// Helper: Get field index by key
+// Helper: Get field index by key (case-insensitive)
 function getFieldIndex(fieldKey) {
-  return editFields.value.findIndex(f => f.key === fieldKey);
+  if (!fieldKey) return -1;
+  return editFields.value.findIndex(f => f.key && f.key.toLowerCase() === fieldKey.toLowerCase());
 }
 
 // Helper: Select field by key
 function selectFieldByKey(fieldKey) {
-  const idx = getFieldIndex(fieldKey);
+  if (!fieldKey) return;
+  
+  let idx = getFieldIndex(fieldKey);
+  
+  // For Forms module: If field not found in editFields, check formSettingsMap and add it
+  if (idx < 0 && isFormsModule.value && activeTopTab.value === 'fields') {
+    const fieldMapping = getFieldMapping(fieldKey);
+    if (fieldMapping) {
+      // Create a field object from the mapping
+      const newField = {
+        key: fieldMapping.key,
+        label: fieldMapping.label,
+        dataType: 'Text', // Default data type
+        editable: fieldMapping.editable,
+        defaultValue: '',
+        value: '',
+        visibility: { list: true, detail: true },
+        required: false,
+        order: editFields.value.length
+      };
+      
+      // Add to editFields
+      editFields.value.push(newField);
+      idx = editFields.value.length - 1;
+    }
+  }
+  
   if (idx >= 0) {
+    // Always call selectField, even if it's the same field, to ensure reactivity
     selectField(idx);
   }
 }
@@ -4188,6 +7308,88 @@ function getPeopleFieldMetadata(fieldKey) {
   } catch (err) {
     return null;
   }
+}
+
+// Filter Settings Helper Functions
+function getAllowedFilterTypes(dataType) {
+  if (!dataType) return [];
+  
+  const filterTypeMap = {
+    'Text': [{ value: 'text', label: 'Text' }],
+    'Email': [{ value: 'text', label: 'Text' }],
+    'Phone': [{ value: 'text', label: 'Text' }],
+    'Picklist': [
+      { value: 'select', label: 'Select' },
+      { value: 'multi-select', label: 'Multi-Select' }
+    ],
+    'Multi-Picklist': [
+      { value: 'select', label: 'Select' },
+      { value: 'multi-select', label: 'Multi-Select' }
+    ],
+    'Checkbox': [{ value: 'boolean', label: 'Boolean' }],
+    'Lookup (Relationship)': [{ value: 'entity', label: 'Entity' }],
+    'Date': [{ value: 'date', label: 'Date' }],
+    'Date-Time': [{ value: 'date', label: 'Date' }]
+  };
+
+  // Special handling for user lookup fields
+  if (dataType === 'Lookup (Relationship)') {
+    // Check if it's a user lookup (assignedTo, createdBy, etc.)
+    if (currentField.value?.lookupSettings?.targetModule === 'users' || 
+        currentField.value?.key === 'assignedTo' || 
+        currentField.value?.key === 'createdBy' ||
+        currentField.value?.key === 'lead_owner') {
+      return [{ value: 'user', label: 'User' }];
+    }
+    // Default to entity for other lookups
+    return filterTypeMap['Lookup (Relationship)'] || [];
+  }
+
+  return filterTypeMap[dataType] || [];
+}
+
+function handleFilterableChange() {
+  if (!currentField.value.filterable) {
+    // When disabling filterable, clear filterType and filterPriority
+    currentField.value.filterType = null;
+    currentField.value.filterPriority = null;
+  } else {
+    // When enabling filterable, auto-assign filterType based on dataType if not set
+    if (!currentField.value.filterType) {
+      const allowedTypes = getAllowedFilterTypes(currentField.value.dataType);
+      if (allowedTypes.length > 0) {
+        currentField.value.filterType = allowedTypes[0].value;
+      }
+    }
+    // Auto-assign priority if not set
+    if (!currentField.value.filterPriority) {
+      const filterableFields = editFields.value.filter(f => f.filterable && f.filterPriority !== null && f.filterPriority !== undefined);
+      const maxPriority = filterableFields.length > 0 
+        ? Math.max(...filterableFields.map(f => f.filterPriority || 0))
+        : 0;
+      currentField.value.filterPriority = maxPriority + 1;
+    }
+  }
+  // Changes are automatically tracked by isDirty computed property
+}
+
+function handleFilterTypeChange() {
+  // Changes are automatically tracked by isDirty computed property
+}
+
+function handleFilterPriorityChange() {
+  // Changes are automatically tracked by isDirty computed property
+}
+
+// Helper: Check if an Events field is an app participation field
+// ARCHITECTURE NOTE: Events app participation fields are visibility-configurable ONLY.
+// See: docs/architecture/event-settings.md Section 4.2
+function isEventsAppParticipationField(fieldKey) {
+  if (!isEventsModule.value || !fieldKey) return false;
+  const participationFields = ['auditstate', 'auditorid', 'reviewerid', 'correctiveownerid', 'linkedformid', 
+                               'allowselfreview', 'minvisitduration', 'backgroundtracking', 'partnervisibility',
+                               'allowedactions', 'kpitargets', 'kpiactuals'];
+  return participationFields.some(pf => (fieldKey || '').toLowerCase().includes(pf.toLowerCase()));
 }
 
 // Helper: Format app keys to app names for display
@@ -4249,20 +7451,36 @@ function isValidationDisabled() {
   return metadata?.owner === 'participation';
 }
 
-// Helper: Check if field can be hidden (People module only)
+// Helper: Check if field can be hidden
 function canHideField(field) {
-  if (!isPeopleModule.value || !field?.key) return true; // Default behavior for non-People
+  if (!field?.key) return true;
   
-  try {
-    const metadata = getFieldMetadata(field.key);
-    // Can hide: core fields OR participation detail fields
-    // Cannot hide: system fields OR participation state fields
-    if (metadata.owner === 'system') return false;
-    if (metadata.owner === 'participation' && metadata.intent === 'state') return false;
-    return true;
-  } catch (err) {
-    return true; // Default to allowing hide if metadata not found
+  // For Forms module, check formSettingsMap for system/fixed markers
+  if (isFormsModule.value) {
+    try {
+      const fieldMapping = getFieldMapping(field.key);
+      if (fieldMapping?.isSystem || fieldMapping?.isFixed) return false;
+    } catch (err) {
+      // Field not in mapping - continue with other checks
+    }
   }
+  
+  // For People module, use metadata
+  if (isPeopleModule.value) {
+    try {
+      const metadata = getFieldMetadata(field.key);
+      // Can hide: core fields OR participation detail fields
+      // Cannot hide: system fields OR participation state fields
+      if (metadata.owner === 'system') return false;
+      if (metadata.owner === 'participation' && metadata.intent === 'state') return false;
+      return true;
+    } catch (err) {
+      return true; // Default to allowing hide if metadata not found
+    }
+  }
+  
+  // Default behavior for other modules
+  return !isSystemField(field) && !isCoreField(field, selectedModule.value?.key);
 }
 
 // Helper: Check if field is a participation state field (locked by app)
@@ -4298,6 +7516,22 @@ const lookupTargetFields = computed(() => {
 function isSystemField(field) {
   if (!field || !field.key) return false;
   
+  // For Forms module, check formSettingsMap for system field markers
+  if (isFormsModule.value) {
+    try {
+      const fieldMapping = getFieldMapping(field.key);
+      if (fieldMapping?.isSystem) return true;
+    } catch (err) {
+      // Field not in mapping - fallback to legacy check
+    }
+    // Legacy check for Forms system fields
+    // ARCHITECTURE NOTE: Form Type is a CORE domain field, not a system field.
+    // It is user-editable and intent-defining.
+    // See: client/src/platform/forms/formTypeRegistry.ts
+    const formsSystemFields = ['formid', 'formversion', 'createdat', 'updatedat', 'createdby', 'modifiedby', 'organizationid', '_id', '__v'];
+    return formsSystemFields.includes((field.key || '').toLowerCase()) || (field.key || '').toLowerCase().startsWith('_');
+  }
+  
   // For People module, use metadata
   if (isPeopleModule.value) {
     try {
@@ -4310,6 +7544,24 @@ function isSystemField(field) {
     }
   }
   
+  // For Events module, check event-specific system fields
+  // ARCHITECTURE NOTE: Events Settings configure structure only. System fields are read-only.
+  // See: docs/architecture/event-settings.md Section 6.3
+  if (isEventsModule.value) {
+    const eventSystemFields = ['status', 'createdby', 'createdtime', 'modifiedtime', 'modifiedby', 'organizationid', 
+                              'eventid', 'completedat', 'cancelledat', 'cancelledby', 'cancellationreason'];
+    return eventSystemFields.includes((field.key || '').toLowerCase()) || (field.key || '').toLowerCase().startsWith('_');
+  }
+  
+  // For Forms module, formType is NOT a system field
+  // ARCHITECTURE NOTE: Form Type is a CORE domain field.
+  // It is user-editable and intent-defining.
+  // Built-in types are protected from deletion, not from selection or change.
+  // See: client/src/platform/forms/formTypeRegistry.ts
+  if (isFormsModule.value && field.key?.toLowerCase() === 'formtype') {
+    return false; // Form Type is not a system field
+  }
+  
   // Legacy check for other modules
   const systemFieldKeys = ['createdby', 'organizationid', 'createdat', 'updatedat', 'activitylogs'];
   return systemFieldKeys.includes((field.key || '').toLowerCase());
@@ -4318,6 +7570,22 @@ function isSystemField(field) {
 // Check if a field is a core field that cannot be deleted
 function isCoreField(field, moduleKey) {
   if (!field || !field.key || !moduleKey) return false;
+  
+  // For Forms module, check formSettingsMap for system/fixed field markers
+  if (moduleKey.toLowerCase() === 'forms') {
+    try {
+      const fieldMapping = getFieldMapping(field.key);
+      if (fieldMapping?.isSystem || fieldMapping?.isFixed) return true;
+    } catch (err) {
+      // Field not in mapping - fallback to legacy check
+    }
+    // ARCHITECTURE NOTE: Form Type is a CORE domain field, not a fixed position field
+    // It is user-editable and intent-defining.
+    // See: client/src/platform/forms/formTypeRegistry.ts
+    if (field.key?.toLowerCase() === 'formtype') {
+      return false; // Form Type is not fixed position
+    }
+  }
   
   // Core fields per module that cannot be deleted
   const coreFieldsByModule = {
@@ -4335,7 +7603,8 @@ function isCoreField(field, moduleKey) {
     'organizations': ['name', 'organizationid', 'createdby'],
     'deals': ['name', 'organizationid', 'createdby', 'assignedto'],
     'tasks': ['title', 'organizationid', 'createdby', 'assignedto'],
-    'forms': ['name'] // Name field is required and cannot be deleted or reordered
+    'events': ['eventname', 'eventtype', 'startdatetime', 'enddatetime', 'eventownerid', 'organizationid', 'createdby'],
+    'forms': ['name', 'createdat', 'updatedat', 'createdby', 'modifiedby'] // Core system fields (formType is core but editable, not system)
   };
   
   const coreFields = coreFieldsByModule[moduleKey.toLowerCase()] || [];
@@ -4345,8 +7614,30 @@ function isCoreField(field, moduleKey) {
 // Check if a field cannot be reordered (must stay at top)
 function isFixedPositionField(field, moduleKey) {
   if (!field || !field.key || !moduleKey) return false;
-  // For forms module, name field must always be at the top
-  if (moduleKey.toLowerCase() === 'forms' && field.key.toLowerCase() === 'name') {
+  
+  // For Forms module, check formSettingsMap for fixed field markers
+  if (moduleKey.toLowerCase() === 'forms') {
+    try {
+      const fieldMapping = getFieldMapping(field.key);
+      if (fieldMapping?.isFixed) return true;
+    } catch (err) {
+      // Field not in mapping - fallback to legacy check
+    }
+    // Legacy check: name field must always be at the top
+    if (field.key.toLowerCase() === 'name') {
+      return true;
+    }
+  }
+  
+  // PLATFORM-LEVEL CANONICAL DEFAULT: Organizations Quick Create
+  // Name field must always be present, required, and non-removable in Quick Create
+  if (moduleKey.toLowerCase() === 'organizations' && field.key.toLowerCase() === 'name') {
+    return true;
+  }
+  // ARCHITECTURE NOTE: Tasks Settings configure structure only, never work.
+  // Title field must always be present, required, and non-removable in Quick Create
+  // See: docs/architecture/task-settings.md Section 3.5
+  if (moduleKey.toLowerCase() === 'tasks' && field.key.toLowerCase() === 'title') {
     return true;
   }
   return false;
@@ -4397,6 +7688,17 @@ function canChangeFieldType(field) {
 const canDeleteField = computed(() => {
   if (!currentField.value || !selectedModule.value) return false;
   const owner = currentField.value?.owner || 'platform'; // Default to platform if not set
+  
+  // For Forms module, check formSettingsMap for system/fixed markers
+  if (isFormsModule.value && currentField.value?.key) {
+    try {
+      const fieldMapping = getFieldMapping(currentField.value.key);
+      if (fieldMapping?.isSystem || fieldMapping?.isFixed) return false;
+    } catch (err) {
+      // Field not in mapping - continue with other checks
+    }
+  }
+  
   // Only org-owned fields can be deleted by org admins
   // Also check legacy system/core field checks for backward compatibility
   return owner === 'org' && !isSystemField(currentField.value) && !isCoreField(currentField.value, selectedModule.value.key);
@@ -4406,6 +7708,20 @@ const canDeleteField = computed(() => {
 function loadFieldSettings() {
   if (!currentField.value) return;
   const field = currentField.value;
+  
+  // For Forms module: Initialize formType defaultValue if not set
+  if (isFormsModule.value && field.key === 'formType') {
+    // If defaultValue is not set, try to get it from value or set a default
+    if (!field.defaultValue && field.value) {
+      field.defaultValue = field.value;
+    } else if (!field.defaultValue) {
+      // Set default to first available form type (usually 'audit')
+      const availableTypes = getFormTypeDefinitions();
+      if (availableTypes.length > 0) {
+        field.defaultValue = availableTypes[0].key;
+      }
+    }
+  }
   
   // Load number settings
   if (['Integer', 'Decimal', 'Currency'].includes(field.dataType)) {
@@ -4549,6 +7865,55 @@ const fetchModules = async () => {
         const sorted = initial.sort((a,b) => (a.order ?? 0) - (b.order ?? 0));
         let normalizedFields = filterSystemFields(uniqueFieldsByKey(sorted));
         normalizedFields = normalizeFormsFields(normalizedFields, initialMod.key);
+        
+        // Initialize filter metadata for People module fields based on metadata
+        if (initialMod.key?.toLowerCase() === 'people') {
+          const peopleFilterMetadata = {
+            'assignedTo': {
+              filterable: true,
+              filterType: 'user',
+              filterPriority: 1
+            },
+            'type': {
+              filterable: true,
+              filterType: 'multi-select',
+              filterPriority: 2
+            },
+            'do_not_contact': {
+              filterable: true,
+              filterType: 'boolean',
+              filterPriority: 3
+            },
+            'organization': {
+              filterable: true,
+              filterType: 'entity',
+              filterPriority: 4
+            }
+          };
+          
+          // Initialize filter metadata for fields that should have it
+          // Enable filterable fields by default based on metadata
+          normalizedFields.forEach(field => {
+            if (field.key && peopleFilterMetadata[field.key]) {
+              const filterMeta = peopleFilterMetadata[field.key];
+              // Always set filterable to true for known filterable fields (enable by default)
+              field.filterable = filterMeta.filterable;
+              // Set filterType and filterPriority if not explicitly set by user
+              if (field.filterType === undefined || field.filterType === null) {
+                field.filterType = filterMeta.filterType;
+              }
+              if (field.filterPriority === undefined || field.filterPriority === null) {
+                field.filterPriority = filterMeta.filterPriority;
+              }
+            } else if (field.key) {
+              // Ensure filterable defaults to false if not set
+              if (field.filterable === undefined) {
+                field.filterable = false;
+              }
+            }
+          });
+        }
+        
         editFields.value = normalizedFields;
         
         // For People module: enforce default "Required in Form" flags when no saved Quick Create config exists
@@ -4613,18 +7978,20 @@ const fetchModules = async () => {
         fieldSearch.value = '';
         syncOptionsBuffer();
         // Always prioritize URL mode, then localStorage, then default to 'fields'
-        let tabToSet = 'fields'; // default
-        if (modeKey && ['details','fields','relationships','quick'].includes(modeKey)) {
+        // Get allowed tabs for this module
+        const allowedTabs = getAllowedTopTabs(initialMod.key);
+        let tabToSet = allowedTabs[0] || 'fields'; // default to first allowed tab
+        if (modeKey && allowedTabs.includes(modeKey)) {
           tabToSet = modeKey;
           console.log('Restoring tab from URL:', tabToSet);
         } else {
           // If no mode in URL, check localStorage for this module
           const storedMode = localStorage.getItem(`litedesk-modfields-tab-${initialMod.key}`);
-          if (storedMode && ['details','fields','relationships','quick'].includes(storedMode)) {
+          if (storedMode && allowedTabs.includes(storedMode)) {
             tabToSet = storedMode;
             console.log('Restoring tab from localStorage:', tabToSet, 'for module:', initialMod.key);
           } else {
-            console.log('Using default tab: fields for module:', initialMod.key);
+            console.log('Using default tab:', tabToSet, 'for module:', initialMod.key);
           }
         }
         // Set directly without triggering watcher during initialization
@@ -4634,6 +8001,34 @@ const fetchModules = async () => {
         }
         // Ensure URL reflects selection (use the tab we just set)
         router.replace({ query: { ...route.query, module: initialMod.key, field: editFields.value[selectedFieldIdx.value]?.key || '', mode: tabToSet, subtab: activeSubTab.value } });
+        
+        // If organizations module and status-types tab, fetch status types after a brief delay
+        // to ensure reactive state is settled
+        if (initialMod.key === 'organizations' && tabToSet === 'status-types') {
+          nextTick(() => {
+            fetchStatusTypes();
+          });
+        }
+        
+        // If items module and status-types tab, initialize snapshot
+        if (initialMod.key === 'items' && tabToSet === 'status-types') {
+          nextTick(() => {
+            const snapshotData = {
+              itemTypes: itemTypes.value.map(t => ({
+                value: t.value,
+                label: t.label,
+                enabled: t.enabled !== undefined ? t.enabled : true
+              })),
+              status: itemStatusPicklist.value.map(s => ({
+                value: s.value,
+                label: s.label || s.value,
+                enabled: s.enabled !== undefined ? s.enabled : true
+              }))
+            };
+            itemStatusTypesOriginalSnapshot.value = JSON.stringify(snapshotData);
+            itemStatusTypesDirty.value = false;
+          });
+        }
         moduleNameEdit.value = initialMod.name || '';
         moduleEnabled.value = initialMod.enabled !== false;
         relationships.value = JSON.parse(JSON.stringify(initialMod.relationships || []));
@@ -4646,6 +8041,36 @@ const fetchModules = async () => {
         const layoutKeysInit = extractLayoutKeys(quickLayout.value);
         // Use quickCreate from module definition - NO hardcoding, all config comes from Settings UI
         let quickKeysInit = initialMod.quickCreate || [];
+        
+        // PLATFORM-LEVEL CANONICAL DEFAULT: Organizations Quick Create
+        // If no tenant override exists, apply canonical default: only "name"
+        // This is intentionally minimal - Organizations are contextual business entities, not primary workflow objects.
+        // Changes require updating: module-settings-doctrine.md, organization-settings.md
+        if (isOrganizationsModule.value) {
+          if (!quickKeysInit || quickKeysInit.length === 0) {
+            // Apply canonical default: only "name"
+            quickKeysInit = ['name'];
+          } else {
+            // Config exists - ensure "name" is present and filter to only eligible fields
+            const eligibleKeys = quickKeysInit.filter(key => {
+              if (!key) return false;
+              const keyLower = key.toLowerCase();
+              // Always include name
+              if (keyLower === 'name') return true;
+              // Check if field is in eligible list
+              const canonicalEligibleFields = ['name', 'industry', 'types', 'website', 'phone', 'address'];
+              return canonicalEligibleFields.includes(keyLower);
+            });
+            // Ensure name is first
+            const nameKey = eligibleKeys.find(k => k?.toLowerCase() === 'name');
+            if (nameKey) {
+              quickKeysInit = [nameKey, ...eligibleKeys.filter(k => k?.toLowerCase() !== 'name')];
+            } else {
+              // Name missing - add it at the beginning
+              quickKeysInit = ['name', ...eligibleKeys];
+            }
+          }
+        }
         
         // For People module: enforce default configuration when no saved config exists
         if (isPeopleModule.value) {
@@ -4846,12 +8271,88 @@ const fetchModules = async () => {
               }
             }
           });
+          
+          // PLATFORM-LEVEL CANONICAL DEFAULT: Organizations Quick Create
+          // Ensure name is always first in field order
+          if (isOrganizationsModule.value) {
+            const nameIdx = quickCreateFieldOrder.value.findIndex(k => k?.toLowerCase() === 'name');
+            if (nameIdx > 0) {
+              const nameKey = quickCreateFieldOrder.value[nameIdx];
+              quickCreateFieldOrder.value.splice(nameIdx, 1);
+              quickCreateFieldOrder.value.unshift(nameKey);
+            } else if (nameIdx === -1 && quickCreateSelected.value.has('name')) {
+              // Name is selected but not in order - add it at the beginning
+              quickCreateFieldOrder.value.unshift('name');
+            }
+          }
+          
+          // ARCHITECTURE NOTE: Tasks Settings configure structure only, never work.
+          // Ensure title is always first in field order (required, locked position)
+          // See: docs/architecture/task-settings.md Section 3.5
+          if (isTasksModule.value) {
+            const titleIdx = quickCreateFieldOrder.value.findIndex(k => k?.toLowerCase() === 'title');
+            if (titleIdx > 0) {
+              const titleKey = quickCreateFieldOrder.value[titleIdx];
+              quickCreateFieldOrder.value.splice(titleIdx, 1);
+              quickCreateFieldOrder.value.unshift(titleKey);
+            } else if (titleIdx === -1 && quickCreateSelected.value.has('title')) {
+              // Title is selected but not in order - add it at the beginning
+              quickCreateFieldOrder.value.unshift('title');
+            }
+          }
         } else {
-          // No saved order, initialize with editFields order (filtered for People module)
-          const fieldsToUse = isPeopleModule.value ? quickCreateAvailableFields.value : editFields.value;
+          // No saved order, initialize with editFields order (filtered for People/Organizations/Tasks/Events module)
+          const fieldsToUse = isPeopleModule.value || isOrganizationsModule.value || isTasksModule.value || isEventsModule.value
+            ? quickCreateAvailableFields.value 
+            : editFields.value;
           quickCreateFieldOrder.value = fieldsToUse
             .filter(f => finalCombined.includes(f.key))
             .map(f => f.key);
+          
+          // PLATFORM-LEVEL CANONICAL DEFAULT: Organizations Quick Create
+          // Ensure name is always first in field order
+          if (isOrganizationsModule.value) {
+            const nameIdx = quickCreateFieldOrder.value.findIndex(k => k?.toLowerCase() === 'name');
+            if (nameIdx > 0) {
+              const nameKey = quickCreateFieldOrder.value[nameIdx];
+              quickCreateFieldOrder.value.splice(nameIdx, 1);
+              quickCreateFieldOrder.value.unshift(nameKey);
+            } else if (nameIdx === -1 && quickCreateSelected.value.has('name')) {
+              // Name is selected but not in order - add it at the beginning
+              quickCreateFieldOrder.value.unshift('name');
+            }
+          }
+          
+          // ARCHITECTURE NOTE: Tasks Settings configure structure only, never work.
+          // Ensure title is always first in field order (required, locked position)
+          // See: docs/architecture/task-settings.md Section 3.5
+          if (isTasksModule.value) {
+            const titleIdx = quickCreateFieldOrder.value.findIndex(k => k?.toLowerCase() === 'title');
+            if (titleIdx > 0) {
+              const titleKey = quickCreateFieldOrder.value[titleIdx];
+              quickCreateFieldOrder.value.splice(titleIdx, 1);
+              quickCreateFieldOrder.value.unshift(titleKey);
+            } else if (titleIdx === -1 && quickCreateSelected.value.has('title')) {
+              // Title is selected but not in order - add it at the beginning
+              quickCreateFieldOrder.value.unshift('title');
+            }
+          }
+          
+          // ARCHITECTURE NOTE: Events Settings configure structure, constraints, and eligibility only.
+          // Ensure eventName is always first in field order (required, locked position).
+          // Quick Create is for simple scheduling, not audit workflows.
+          // See: docs/architecture/event-settings.md Section 7
+          if (isEventsModule.value) {
+            const eventNameIdx = quickCreateFieldOrder.value.findIndex(k => k?.toLowerCase() === 'eventname');
+            if (eventNameIdx > 0) {
+              const eventNameKey = quickCreateFieldOrder.value[eventNameIdx];
+              quickCreateFieldOrder.value.splice(eventNameIdx, 1);
+              quickCreateFieldOrder.value.unshift(eventNameKey);
+            } else if (eventNameIdx === -1 && quickCreateSelected.value.has('eventName')) {
+              // eventName is selected but not in order - add it at the beginning
+              quickCreateFieldOrder.value.unshift('eventName');
+            }
+          }
         }
         // capture snapshot after initializing state and all reactive updates settle
         // Use double nextTick to ensure all watchers and computed properties have updated
@@ -4885,6 +8386,55 @@ const fetchModules = async () => {
             const sorted = initial.sort((a,b) => (a.order ?? 0) - (b.order ?? 0));
             let normalizedFields = filterSystemFields(uniqueFieldsByKey(sorted));
             normalizedFields = normalizeFormsFields(normalizedFields, storedMod.key);
+            
+            // Initialize filter metadata for People module fields based on metadata
+            if (storedMod.key?.toLowerCase() === 'people') {
+              const peopleFilterMetadata = {
+                'assignedTo': {
+                  filterable: true,
+                  filterType: 'user',
+                  filterPriority: 1
+                },
+                'type': {
+                  filterable: true,
+                  filterType: 'multi-select',
+                  filterPriority: 2
+                },
+                'do_not_contact': {
+                  filterable: true,
+                  filterType: 'boolean',
+                  filterPriority: 3
+                },
+                'organization': {
+                  filterable: true,
+                  filterType: 'entity',
+                  filterPriority: 4
+                }
+              };
+              
+              // Initialize filter metadata for fields that should have it
+              // Enable filterable fields by default based on metadata
+              normalizedFields.forEach(field => {
+                if (field.key && peopleFilterMetadata[field.key]) {
+                  const filterMeta = peopleFilterMetadata[field.key];
+                  // Always set filterable to true for known filterable fields (enable by default)
+                  field.filterable = filterMeta.filterable;
+                  // Set filterType and filterPriority if not explicitly set by user
+                  if (field.filterType === undefined || field.filterType === null) {
+                    field.filterType = filterMeta.filterType;
+                  }
+                  if (field.filterPriority === undefined || field.filterPriority === null) {
+                    field.filterPriority = filterMeta.filterPriority;
+                  }
+                } else if (field.key) {
+                  // Ensure filterable defaults to false if not set
+                  if (field.filterable === undefined) {
+                    field.filterable = false;
+                  }
+                }
+              });
+            }
+            
             editFields.value = normalizedFields;
             // try stored field
             const storedFieldKey = localStorage.getItem('litedesk-modfields-field') || '';
@@ -4992,6 +8542,54 @@ const selectModule = (mod, preferFieldKey = null) => {
     }
   }
   
+  // Initialize filter metadata for People module fields based on metadata
+  if (mod.key?.toLowerCase() === 'people') {
+    const peopleFilterMetadata = {
+      'assignedTo': {
+        filterable: true,
+        filterType: 'user',
+        filterPriority: 1
+      },
+      'type': {
+        filterable: true,
+        filterType: 'multi-select',
+        filterPriority: 2
+      },
+      'do_not_contact': {
+        filterable: true,
+        filterType: 'boolean',
+        filterPriority: 3
+      },
+      'organization': {
+        filterable: true,
+        filterType: 'entity',
+        filterPriority: 4
+      }
+    };
+    
+              // Initialize filter metadata for fields that should have it
+              // Enable filterable fields by default based on metadata
+              normalizedFields.forEach(field => {
+                if (field.key && peopleFilterMetadata[field.key]) {
+                  const filterMeta = peopleFilterMetadata[field.key];
+                  // Always set filterable to true for known filterable fields (enable by default)
+                  field.filterable = filterMeta.filterable;
+                  // Set filterType and filterPriority if not explicitly set by user
+                  if (field.filterType === undefined || field.filterType === null) {
+                    field.filterType = filterMeta.filterType;
+                  }
+                  if (field.filterPriority === undefined || field.filterPriority === null) {
+                    field.filterPriority = filterMeta.filterPriority;
+                  }
+                } else if (field.key) {
+                  // Ensure filterable defaults to false if not set
+                  if (field.filterable === undefined) {
+                    field.filterable = false;
+                  }
+                }
+              });
+            }
+  
   editFields.value = normalizedFields;
   if (preferFieldKey) {
     const idx = editFields.value.findIndex(f => f.key === preferFieldKey);
@@ -5056,6 +8654,33 @@ const selectModule = (mod, preferFieldKey = null) => {
   }
   const selKey = editFields.value[selectedFieldIdx.value]?.key || '';
   router.replace({ query: { ...route.query, module: mod.key, field: selKey, mode: activeTopTab.value, subtab: activeSubTab.value } });
+  
+  // If organizations module and status-types tab, fetch status types after a brief delay
+  // to ensure reactive state is settled
+  if (mod.key === 'organizations' && activeTopTab.value === 'status-types') {
+    nextTick(() => {
+      fetchStatusTypes();
+    });
+  }
+  
+  // If items module and status-types tab, initialize snapshot
+  if (mod.key === 'items' && activeTopTab.value === 'status-types') {
+    nextTick(() => {
+      const snapshotData = {
+        itemTypes: itemTypes.value.map(t => ({
+          value: t.value,
+          label: t.label,
+          enabled: t.enabled !== undefined ? t.enabled : true
+        })),
+        status: itemStatusPicklist.value.map(s => ({
+          value: s.value,
+          label: s.label || s.value,
+          enabled: s.enabled !== undefined ? s.enabled : true
+        }))
+      };
+      itemStatusTypesOriginalSnapshot.value = JSON.stringify(snapshotData);
+    });
+  }
   // persist selection
   try { localStorage.setItem('litedesk-modfields-module', mod.key); } catch (e) {}
   try { if (selKey) localStorage.setItem('litedesk-modfields-field', selKey); } catch (e) {}
@@ -5314,6 +8939,26 @@ const saveModule = async () => {
         return exists;
       });
     
+    // Ensure filter metadata is included for all fields
+    deduplicatedFields.forEach(field => {
+      // Ensure filterable is explicitly set (default to false if not set)
+      if (field.filterable === undefined) {
+        field.filterable = false;
+      }
+      // Keep filterType and filterPriority as-is (can be null/undefined if not filterable)
+    });
+    
+    // Debug: Log filter metadata for People module
+    if (mod.key?.toLowerCase() === 'people') {
+      const filterableFields = deduplicatedFields.filter(f => f.filterable === true);
+      console.log('[ModulesAndFields] Saving People module with filterable fields:', filterableFields.map(f => ({
+        key: f.key,
+        filterable: f.filterable,
+        filterType: f.filterType,
+        filterPriority: f.filterPriority
+      })));
+    }
+    
     const payload = {
       fields: deduplicatedFields,
       relationships: relationships.value,
@@ -5374,6 +9019,9 @@ const saveModule = async () => {
 };
 
 const selectField = (idx) => {
+  // Check if we were already dirty before selecting the field
+  const wasDirtyBefore = isDirty.value;
+  
   selectedFieldIdx.value = idx;
   syncOptionsBuffer();
   loadFieldSettings(); // Load field-specific settings
@@ -5382,10 +9030,154 @@ const selectField = (idx) => {
     router.replace({ query: { ...route.query, module: mod.key, field: editFields.value[selectedFieldIdx.value]?.key || '', mode: activeTopTab.value, subtab: activeSubTab.value } });
     try { if (editFields.value[selectedFieldIdx.value]?.key) localStorage.setItem('litedesk-modfields-field', editFields.value[selectedFieldIdx.value].key); } catch (e) {}
   }
+  
+  // If we weren't dirty before selecting the field, update the snapshot after selection
+  // This prevents initialization changes from loadFieldSettings() from marking the form as dirty
+  if (!wasDirtyBefore) {
+    nextTick(() => {
+      nextTick(() => {
+        originalSnapshot.value = getSnapshot();
+      });
+    });
+  }
 };
 
 const currentField = computed(() => editFields.value[selectedFieldIdx.value]);
 const currentFieldTitle = computed(() => currentField.value?.label || currentField.value?.key || 'Field');
+
+// Form Type editing (Forms module)
+const newFormTypeKey = ref('');
+const newFormTypeLabel = ref('');
+
+function handleAddCustomFormType() {
+  if (!newFormTypeKey.value || !newFormTypeLabel.value) return;
+  
+  try {
+    const newType = addCustomFormType({
+      key: newFormTypeKey.value.toLowerCase().trim(),
+      label: newFormTypeLabel.value.trim()
+    });
+    
+    // Set the new type as the current value
+    if (currentField.value && currentField.value.key === 'formType') {
+      currentField.value.defaultValue = newType.key;
+    }
+    
+    // Clear inputs
+    newFormTypeKey.value = '';
+    newFormTypeLabel.value = '';
+  } catch (error) {
+    console.error('[Form Type] Failed to add custom form type:', error);
+    alert(`Failed to add form type: ${error.message}`);
+  }
+}
+
+function handleRemoveCustomFormType(key) {
+  if (!key) return;
+  
+  // Prevent removing built-in types (safety check)
+  // Built-in types: Audit, Survey, Feedback
+  if (isBuiltInFormType(key)) {
+    alert('Built-in form types (Audit, Survey, Feedback) cannot be removed.');
+    return;
+  }
+  
+  // Additional check: explicitly prevent removal of audit, survey, feedback (case-insensitive)
+  const normalizedKey = String(key).toLowerCase();
+  const protectedTypes = ['audit', 'survey', 'feedback'];
+  if (protectedTypes.includes(normalizedKey)) {
+    alert('Built-in form types (Audit, Survey, Feedback) cannot be removed.');
+    return;
+  }
+  
+  // Confirm removal
+  if (!confirm(`Are you sure you want to remove the custom form type "${key}"?`)) {
+    return;
+  }
+  
+  try {
+    const removed = removeCustomFormType(key);
+    if (removed) {
+      // If the removed type was the current value, reset to empty or first available type
+      if (currentField.value && currentField.value.key === 'formType' && currentField.value.defaultValue === key) {
+        const availableTypes = getFormTypeDefinitions();
+        currentField.value.defaultValue = availableTypes.length > 0 ? availableTypes[0].key : '';
+      }
+    }
+  } catch (error) {
+    console.error('[Form Type] Failed to remove custom form type:', error);
+    alert(`Failed to remove form type: ${error.message}`);
+  }
+}
+
+  // DEV-only guard: Ensure any field rendered in the right configuration panel
+  // also exists in the left field list (for Forms module)
+  // NOTE: This must be after currentField is defined
+  if (process.env.NODE_ENV === 'development') {
+    watch([() => isFormsModule.value, () => currentField.value?.key, () => activeTopTab.value], () => {
+      if (isFormsModule.value && activeTopTab.value === 'fields' && currentField.value?.key) {
+        const fieldKey = currentField.value.key;
+        const fieldsList = getFieldsForTab('metadataFields'); // Internal key remains metadataFields for backward compatibility
+        // Case-insensitive check to handle potential case mismatches
+        const fieldInList = fieldsList.some(f => f.key.toLowerCase() === fieldKey.toLowerCase());
+        
+        // Core system fields (name, createdAt, etc.) must appear in the list
+        // Note: formType is a CORE field but NOT a system field, so it's excluded from this check
+        const coreSystemFields = ['name', 'createdat', 'updatedat', 'createdby', 'modifiedby'];
+        const isCoreSystemField = coreSystemFields.includes(fieldKey.toLowerCase());
+        
+        if (isCoreSystemField && !fieldInList) {
+          console.assert(
+            false,
+            `[Forms Settings] Core system field "${fieldKey}" is rendered in the right panel but missing from the left field list. All configurable fields must appear in the list.`
+          );
+        }
+        
+        // Additional check: formType (core field, not system) must also be in the list
+        if (fieldKey.toLowerCase() === 'formtype' && !fieldInList) {
+          console.assert(
+            false,
+            `[Forms Settings] Core field "formType" is rendered in the right panel but missing from the left field list. All configurable fields must appear in the list.`
+          );
+        }
+        
+        // Assert: formType must resolve to a registry entry (case-insensitive)
+        if (fieldKey.toLowerCase() === 'formtype') {
+          const formTypeValue = currentField.value?.defaultValue || currentField.value?.value;
+          if (formTypeValue) {
+            // Normalize to lowercase for comparison (registry uses lowercase keys)
+            const normalizedValue = formTypeValue.toLowerCase();
+            const typeDef = getFormTypeDefinition(normalizedValue);
+            
+            // Legacy values (Custom, Inspection) are deprecated but may exist in database
+            const legacyValues = ['custom', 'inspection'];
+            const isLegacyValue = legacyValues.includes(normalizedValue);
+            
+            if (!typeDef && !isLegacyValue) {
+              console.warn(
+                `[Forms Settings] Form type "${formTypeValue}" does not resolve to a registry entry. See client/src/platform/forms/formTypeRegistry.ts`,
+                { formTypeValue, normalizedValue, availableTypes: getFormTypeDefinitions().map(t => t.key) }
+              );
+            } else if (isLegacyValue) {
+              console.info(
+                `[Forms Settings] Legacy form type "${formTypeValue}" detected. Please migrate to a supported type (audit, survey, feedback).`,
+                { formTypeValue, normalizedValue, availableTypes: getFormTypeDefinitions().map(t => t.key) }
+              );
+            }
+          }
+        }
+        
+        // Assert: formType is never treated as a system field
+        if (fieldKey.toLowerCase() === 'formtype') {
+          console.assert(
+            !isSystemField(currentField.value),
+            '[Forms Settings] formType must never be treated as a system field. It is a CORE domain field. See client/src/platform/forms/formTypeRegistry.ts',
+            { field: currentField.value }
+          );
+        }
+      }
+    });
+  }
 const otherFields = computed(() => editFields.value.filter((_, i) => i !== selectedFieldIdx.value));
 
 // Track if user manually edited field key to prevent auto-generation
@@ -5728,6 +9520,33 @@ function getModuleName(key) {
 
 function toggleQuickCreate(key, checked) {
   const s = quickCreateSelected.value;
+  
+  // PLATFORM-LEVEL CANONICAL DEFAULT: Organizations Quick Create
+  // Name field MUST always be present, required, and non-removable
+  if (isOrganizationsModule.value && key?.toLowerCase() === 'name' && !checked) {
+    // Prevent unchecking name field for organizations
+    s.add(key);
+    return;
+  }
+  
+  // ARCHITECTURE NOTE: Tasks Settings configure structure only. Title field MUST always be present, required, and non-removable.
+  // See: docs/architecture/task-settings.md Section 3.5
+  if (isTasksModule.value && key?.toLowerCase() === 'title' && !checked) {
+    // Prevent unchecking title field for tasks
+    s.add(key);
+    return;
+  }
+  
+  // ARCHITECTURE NOTE: Events Settings configure structure, constraints, and eligibility only.
+  // eventName field MUST always be present, required, and non-removable.
+  // Quick Create is for simple scheduling, not audit workflows.
+  // See: docs/architecture/event-settings.md Section 7
+  if (isEventsModule.value && key?.toLowerCase() === 'eventname' && !checked) {
+    // Prevent unchecking eventName field for events
+    s.add(key);
+    return;
+  }
+  
   // prevent deselecting required fields
   const field = editFields.value.find(f => f.key === key);
   if (!checked && field && field.required) {
@@ -5738,7 +9557,21 @@ function toggleQuickCreate(key, checked) {
     s.add(key);
     // Add to order if not already present
     if (!quickCreateFieldOrder.value.includes(key)) {
-      quickCreateFieldOrder.value.push(key);
+      // For organizations, ensure name is always first
+      if (isOrganizationsModule.value && key?.toLowerCase() === 'name') {
+        quickCreateFieldOrder.value.unshift(key);
+      } else if (isTasksModule.value && key?.toLowerCase() === 'title') {
+        // ARCHITECTURE NOTE: Tasks Settings configure structure only. Ensure title is always first.
+        // See: docs/architecture/task-settings.md Section 3.5
+        quickCreateFieldOrder.value.unshift(key);
+      } else if (isEventsModule.value && key?.toLowerCase() === 'eventname') {
+        // ARCHITECTURE NOTE: Events Settings configure structure, constraints, and eligibility only.
+        // Ensure eventName is always first. Quick Create is for simple scheduling, not audit workflows.
+        // See: docs/architecture/event-settings.md Section 7
+        quickCreateFieldOrder.value.unshift(key);
+      } else {
+        quickCreateFieldOrder.value.push(key);
+      }
     }
   } else {
     s.delete(key);
@@ -5778,6 +9611,88 @@ function onQuickCreateDrop(idx) {
   // Get the current ordered keys
   const currentOrder = orderedQuickCreate.value.map(f => f.key);
   
+  // PLATFORM-LEVEL CANONICAL DEFAULT: Organizations Quick Create
+  // Name field must always be first - prevent moving it or moving other fields before it
+  if (isOrganizationsModule.value) {
+    const nameKey = currentOrder.find(k => k?.toLowerCase() === 'name');
+    if (nameKey) {
+      // If trying to move name from position 0, prevent it
+      if (from === 0 && nameKey === currentOrder[0]) {
+        return;
+      }
+      // If trying to move something to position 0 when name exists, move to position 1 instead
+      if (to === 0 && nameKey !== currentOrder[from]) {
+        const [moved] = currentOrder.splice(from, 1);
+        // Ensure name stays at position 0
+        if (currentOrder[0]?.toLowerCase() !== 'name') {
+          const nameIdx = currentOrder.indexOf(nameKey);
+          if (nameIdx > 0) {
+            currentOrder.splice(nameIdx, 1);
+            currentOrder.unshift(nameKey);
+          }
+        }
+        currentOrder.splice(1, 0, moved);
+        quickCreateFieldOrder.value = currentOrder;
+        return;
+      }
+    }
+  }
+  
+  // ARCHITECTURE NOTE: Tasks Settings configure structure only. Title field must always be first.
+  // See: docs/architecture/task-settings.md Section 3.5
+  if (isTasksModule.value) {
+    const titleKey = currentOrder.find(k => k?.toLowerCase() === 'title');
+    if (titleKey) {
+      // If trying to move title from position 0, prevent it
+      if (from === 0 && titleKey === currentOrder[0]) {
+        return;
+      }
+      // If trying to move something to position 0 when title exists, move to position 1 instead
+      if (to === 0 && titleKey !== currentOrder[from]) {
+        const [moved] = currentOrder.splice(from, 1);
+        // Ensure title stays at position 0
+        if (currentOrder[0]?.toLowerCase() !== 'title') {
+          const titleIdx = currentOrder.indexOf(titleKey);
+          if (titleIdx > 0) {
+            currentOrder.splice(titleIdx, 1);
+            currentOrder.unshift(titleKey);
+          }
+        }
+        currentOrder.splice(1, 0, moved);
+        quickCreateFieldOrder.value = currentOrder;
+        return;
+      }
+    }
+  }
+  
+  // ARCHITECTURE NOTE: Events Settings configure structure, constraints, and eligibility only.
+  // eventName field must always be first. Quick Create is for simple scheduling, not audit workflows.
+  // See: docs/architecture/event-settings.md Section 7
+  if (isEventsModule.value) {
+    const eventNameKey = currentOrder.find(k => k?.toLowerCase() === 'eventname');
+    if (eventNameKey) {
+      // If trying to move eventName from position 0, prevent it
+      if (from === 0 && eventNameKey === currentOrder[0]) {
+        return;
+      }
+      // If trying to move something to position 0 when eventName exists, move to position 1 instead
+      if (to === 0 && eventNameKey !== currentOrder[from]) {
+        const [moved] = currentOrder.splice(from, 1);
+        // Ensure eventName stays at position 0
+        if (currentOrder[0]?.toLowerCase() !== 'eventname') {
+          const eventNameIdx = currentOrder.indexOf(eventNameKey);
+          if (eventNameIdx > 0) {
+            currentOrder.splice(eventNameIdx, 1);
+            currentOrder.unshift(eventNameKey);
+          }
+        }
+        currentOrder.splice(1, 0, moved);
+        quickCreateFieldOrder.value = currentOrder;
+        return;
+      }
+    }
+  }
+  
   // Move the item
   const [moved] = currentOrder.splice(from, 1);
   currentOrder.splice(to, 0, moved);
@@ -5787,7 +9702,12 @@ function onQuickCreateDrop(idx) {
 }
 const orderedQuickCreate = computed(() => {
   // For People module, filter to only core identity fields
-  const fieldsToProcess = isPeopleModule.value ? quickCreateAvailableFields.value : editFields.value;
+  // For Organizations module, use quickCreateAvailableFields (core business fields only)
+  // For Tasks module, use quickCreateAvailableFields (core task fields only)
+  // For Events module, use quickCreateAvailableFields (core event fields only)
+  const fieldsToProcess = isPeopleModule.value || isOrganizationsModule.value || isTasksModule.value || isEventsModule.value
+    ? quickCreateAvailableFields.value 
+    : editFields.value;
   
   // If we have a custom order, use it; otherwise fall back to editFields order
   if (quickCreateFieldOrder.value.length > 0) {
@@ -5798,8 +9718,54 @@ const orderedQuickCreate = computed(() => {
     const ordered = [];
     const seen = new Set();
     
-    // First, add fields in custom order (filtered for People module)
+    // PLATFORM-LEVEL CANONICAL DEFAULT: Organizations Quick Create
+    // Ensure name is always first
+    if (isOrganizationsModule.value) {
+      const nameKey = quickCreateFieldOrder.value.find(k => k?.toLowerCase() === 'name');
+      if (nameKey && quickCreateSelected.value.has(nameKey)) {
+        const nameField = fieldsToProcess.find(x => x.key === nameKey);
+        if (nameField) {
+          ordered.push(nameField);
+          seen.add(nameKey);
+        }
+      }
+    }
+    
+    // ARCHITECTURE NOTE: Tasks Settings configure structure only. Ensure title is always first.
+    // See: docs/architecture/task-settings.md Section 3.5
+    if (isTasksModule.value) {
+      const titleKey = quickCreateFieldOrder.value.find(k => k?.toLowerCase() === 'title');
+      if (titleKey && quickCreateSelected.value.has(titleKey)) {
+        const titleField = fieldsToProcess.find(x => x.key === titleKey);
+        if (titleField) {
+          ordered.push(titleField);
+          seen.add(titleKey);
+        }
+      }
+    }
+    
+    // ARCHITECTURE NOTE: Events Settings configure structure, constraints, and eligibility only.
+    // Ensure eventName is always first. Quick Create is for simple scheduling, not audit workflows.
+    // See: docs/architecture/event-settings.md Section 7
+    if (isEventsModule.value) {
+      const eventNameKey = quickCreateFieldOrder.value.find(k => k?.toLowerCase() === 'eventname');
+      if (eventNameKey && quickCreateSelected.value.has(eventNameKey)) {
+        const eventNameField = fieldsToProcess.find(x => x.key === eventNameKey);
+        if (eventNameField) {
+          ordered.push(eventNameField);
+          seen.add(eventNameKey);
+        }
+      }
+    }
+    
+    // First, add fields in custom order (filtered for People/Organizations/Tasks/Events module)
     for (const key of quickCreateFieldOrder.value) {
+      // Skip name if already added for organizations
+      if (isOrganizationsModule.value && key?.toLowerCase() === 'name' && seen.has(key)) continue;
+      // Skip title if already added for tasks
+      if (isTasksModule.value && key?.toLowerCase() === 'title' && seen.has(key)) continue;
+      // Skip eventName if already added for events
+      if (isEventsModule.value && key?.toLowerCase() === 'eventname' && seen.has(key)) continue;
       if (!quickCreateSelected.value.has(key)) continue;
       if (seen.has(key)) continue;
       const f = fieldsToProcess.find(x => x.key === key);
@@ -5809,7 +9775,7 @@ const orderedQuickCreate = computed(() => {
       }
     }
     
-    // Then add any newly selected fields that aren't in the order yet (filtered for People module)
+    // Then add any newly selected fields that aren't in the order yet (filtered for People/Organizations module)
     for (const f of fieldsToProcess) {
       const k = f.key;
       if (!k) continue;
@@ -5822,9 +9788,41 @@ const orderedQuickCreate = computed(() => {
     return ordered;
   }
   
-  // Fallback to original behavior: order by editFields (filtered for People module)
+  // Fallback to original behavior: order by editFields (filtered for People/Organizations/Tasks/Events module)
   const seen = new Set();
   const out = [];
+  
+  // PLATFORM-LEVEL CANONICAL DEFAULT: Organizations Quick Create
+  // Ensure name is always first
+  if (isOrganizationsModule.value) {
+    const nameField = fieldsToProcess.find(f => f.key?.toLowerCase() === 'name');
+    if (nameField && quickCreateSelected.value.has(nameField.key)) {
+      out.push(nameField);
+      seen.add(nameField.key);
+    }
+  }
+  
+  // ARCHITECTURE NOTE: Tasks Settings configure structure only. Ensure title is always first.
+  // See: docs/architecture/task-settings.md Section 3.5
+  if (isTasksModule.value) {
+    const titleField = fieldsToProcess.find(f => f.key?.toLowerCase() === 'title');
+    if (titleField && quickCreateSelected.value.has(titleField.key)) {
+      out.push(titleField);
+      seen.add(titleField.key);
+    }
+  }
+  
+  // ARCHITECTURE NOTE: Events Settings configure structure, constraints, and eligibility only.
+  // Ensure eventName is always first. Quick Create is for simple scheduling, not audit workflows.
+  // See: docs/architecture/event-settings.md Section 7
+  if (isEventsModule.value) {
+    const eventNameField = fieldsToProcess.find(f => f.key?.toLowerCase() === 'eventname');
+    if (eventNameField && quickCreateSelected.value.has(eventNameField.key)) {
+      out.push(eventNameField);
+      seen.add(eventNameField.key);
+    }
+  }
+  
   for (const f of fieldsToProcess) {
     const k = f.key;
     if (!k) continue;
@@ -6669,6 +10667,73 @@ async function saveQuickCreate() {
       });
     }
     
+    // ARCHITECTURE NOTE: Tasks Settings configure structure only, never work.
+    // Ensure title is always selected and first in Quick Create (required, locked position)
+    // See: docs/architecture/task-settings.md Section 3.5
+    if (isTasksModule.value) {
+      // Ensure 'title' is always in the selected keys
+      if (!allKeys.includes('title')) {
+        allKeys.unshift('title');
+      }
+      // Ensure 'title' is always first in the order
+      const titleIdx = allKeys.findIndex(k => k?.toLowerCase() === 'title');
+      if (titleIdx > 0) {
+        const titleKey = allKeys[titleIdx];
+        allKeys.splice(titleIdx, 1);
+        allKeys.unshift(titleKey);
+      }
+      // Filter to only eligible fields (title, dueDate, priority, assignedTo, relatedTo)
+      const eligibleFields = ['title', 'duedate', 'priority', 'assignedto', 'relatedto'];
+      allKeys = allKeys.filter(key => {
+        const keyLower = key?.toLowerCase();
+        return eligibleFields.includes(keyLower) || keyLower === 'title'; // Always include title
+      });
+      // Ensure title is still first after filtering
+      if (allKeys[0]?.toLowerCase() !== 'title') {
+        const titleKey = allKeys.find(k => k?.toLowerCase() === 'title');
+        if (titleKey) {
+          allKeys = allKeys.filter(k => k?.toLowerCase() !== 'title');
+          allKeys.unshift(titleKey);
+        } else {
+          allKeys.unshift('title');
+        }
+      }
+    }
+    
+    // ARCHITECTURE NOTE: Events Settings configure structure, constraints, and eligibility only.
+    // Ensure eventName is always selected and first in Quick Create (required, locked position).
+    // Quick Create is for simple scheduling, not audit workflows.
+    // See: docs/architecture/event-settings.md Section 7
+    if (isEventsModule.value) {
+      // Ensure 'eventName' is always in the selected keys
+      if (!allKeys.some(k => k?.toLowerCase() === 'eventname')) {
+        allKeys.unshift('eventName');
+      }
+      // Ensure 'eventName' is always first in the order
+      const eventNameIdx = allKeys.findIndex(k => k?.toLowerCase() === 'eventname');
+      if (eventNameIdx > 0) {
+        const eventNameKey = allKeys[eventNameIdx];
+        allKeys.splice(eventNameIdx, 1);
+        allKeys.unshift(eventNameKey);
+      }
+      // Filter to only eligible fields (eventName, eventType, startDateTime, endDateTime, location)
+      const eligibleFields = ['eventname', 'eventtype', 'startdatetime', 'enddatetime', 'location'];
+      allKeys = allKeys.filter(key => {
+        const keyLower = key?.toLowerCase();
+        return eligibleFields.includes(keyLower) || keyLower === 'eventname'; // Always include eventName
+      });
+      // Ensure eventName is still first after filtering
+      if (allKeys[0]?.toLowerCase() !== 'eventname') {
+        const eventNameKey = allKeys.find(k => k?.toLowerCase() === 'eventname');
+        if (eventNameKey) {
+          allKeys = allKeys.filter(k => k?.toLowerCase() !== 'eventname');
+          allKeys.unshift(eventNameKey);
+        } else {
+          allKeys.unshift('eventName');
+        }
+      }
+    }
+    
     const payload = {
       quickCreate: allKeys,
       quickCreateLayout: quickMode.value === 'advanced' ? quickLayout.value : { version: 1, rows: [] }
@@ -6744,8 +10809,1429 @@ async function saveQuickCreate() {
   }
 }
 
-onMounted(() => {
-  fetchModules();
+// ============================================================================
+// Organization Types & Status Picklists (Status & Types tab)
+// ============================================================================
+// INTENT: These are NOT fields - they are app-scoped semantic configurations
+// that control workflow states and business classifications. Changes are
+// persisted to tenant module configuration, not field definitions.
+// ============================================================================
+
+// Organization Types state
+// Organization Types state - initialized as empty, will be populated from API
+const organizationTypes = ref([]);
+
+// Status Picklists state - initialized as empty, will be populated from API
+const statusPicklists = ref({
+  customerStatus: [],
+  partnerStatus: [],
+  vendorStatus: []
+});
+
+const savingStatusTypes = ref(false);
+const statusTypesOriginalSnapshot = ref('');
+const isInitialLoad = ref(true); // Flag to prevent auto-save during initial load
+const lastSaveTimestamp = ref(0); // Track when we last saved to prevent refetching stale data
+
+// Tasks Status & Priority state
+// ARCHITECTURE NOTE: Tasks Settings configure structure only, never work.
+// Status and Priority picklists control task lifecycle options.
+// The 'completed' status is system-locked and cannot be modified.
+// See: docs/architecture/task-settings.md Section 3.3
+const taskStatusPicklist = ref([
+  { value: 'todo', label: 'To Do', enabled: true, editing: false },
+  { value: 'in_progress', label: 'In Progress', enabled: true, editing: false },
+  { value: 'waiting', label: 'Waiting', enabled: true, editing: false },
+  { value: 'completed', label: 'Completed', enabled: true, editing: false, systemLocked: true },
+  { value: 'cancelled', label: 'Cancelled', enabled: true, editing: false }
+]);
+
+const taskPriorityPicklist = ref([
+  { value: 'low', label: 'Low', enabled: true, editing: false },
+  { value: 'medium', label: 'Medium', enabled: true, editing: false },
+  { value: 'high', label: 'High', enabled: true, editing: false },
+  { value: 'urgent', label: 'Urgent', enabled: true, editing: false }
+]);
+
+const savingTaskStatusPriority = ref(false);
+const taskStatusPriorityOriginalSnapshot = ref('');
+
+// Items Status & Types state
+const itemTypes = ref([
+  { value: 'Product', label: 'Product', enabled: true, description: 'Physical product that can be sold' },
+  { value: 'Service', label: 'Service', enabled: true, description: 'Service that can be provided' },
+  { value: 'Serialized Product', label: 'Serialized Product', enabled: true, description: 'Product with unique serial numbers' },
+  { value: 'Non-Stock Product', label: 'Non-Stock Product', enabled: true, description: 'Product not tracked in inventory' }
+]);
+
+const itemStatusPicklist = ref([
+  { value: 'Active', label: 'Active', enabled: true, editing: false },
+  { value: 'Inactive', label: 'Inactive', enabled: true, editing: false }
+]);
+
+const savingItemStatusTypes = ref(false);
+const itemStatusTypesOriginalSnapshot = ref('');
+
+const itemStatusTypesDirty = computed(() => {
+  if (!itemStatusTypesOriginalSnapshot.value) return false;
+  
+  const current = JSON.stringify({
+    itemTypes: itemTypes.value.map(t => ({
+      value: t.value,
+      label: t.label,
+      enabled: t.enabled !== undefined ? t.enabled : true
+    })),
+    status: itemStatusPicklist.value.map(s => ({
+      value: s.value,
+      label: s.label || s.value,
+      enabled: s.enabled !== undefined ? s.enabled : true
+    }))
+  });
+  
+  return current !== itemStatusTypesOriginalSnapshot.value;
+});
+
+// Events Roles & Rules state
+// ARCHITECTURE NOTE: Events Settings configure constraints, not behavior.
+// These state variables track role requirements, geo rules, and form linking rules per event type.
+// See: docs/architecture/event-settings.md Section 4.3, 4.4, 4.5
+const eventRoleRules = ref({
+  'Meeting / Appointment': { auditorRequired: false, reviewerRequired: false, correctiveOwnerRequired: false },
+  'Internal Audit': { auditorRequired: true, reviewerRequired: false, correctiveOwnerRequired: true }, // auditor and correctiveOwner locked
+  'External Audit — Single Org': { auditorRequired: true, reviewerRequired: true, correctiveOwnerRequired: true }, // all locked
+  'External Audit Beat': { auditorRequired: true, reviewerRequired: false, correctiveOwnerRequired: true }, // auditor and correctiveOwner locked
+  'Field Sales Beat': { auditorRequired: false, reviewerRequired: false, correctiveOwnerRequired: false }
+});
+
+const eventGeoRules = ref({
+  'Meeting / Appointment': false,
+  'Internal Audit': true, // locked
+  'External Audit — Single Org': true, // locked
+  'External Audit Beat': true, // locked
+  'Field Sales Beat': true // default true, can be changed
+});
+
+const eventFormRules = ref({
+  'Meeting / Appointment': { allowLinking: true, requireOnCreation: false, preventUnlinkingAfterStart: false },
+  'Internal Audit': { allowLinking: true, requireOnCreation: false, preventUnlinkingAfterStart: false },
+  'External Audit — Single Org': { allowLinking: true, requireOnCreation: false, preventUnlinkingAfterStart: false },
+  'External Audit Beat': { allowLinking: true, requireOnCreation: false, preventUnlinkingAfterStart: false },
+  'Field Sales Beat': { allowLinking: true, requireOnCreation: false, preventUnlinkingAfterStart: false }
+});
+
+const savingEventRolesRules = ref(false);
+const eventRolesRulesOriginalSnapshot = ref('');
+
+// Events Status state
+// ARCHITECTURE NOTE: Events Settings configure structure only, never execution.
+// Event status picklist controls event lifecycle options.
+// All event statuses (Planned, Completed, Cancelled) are system-locked and cannot be modified.
+// These statuses are required for execution and status transitions.
+// See: docs/architecture/event-settings.md Section 2.2
+// SYSTEM-OWNED STATUSES: ['Planned', 'Completed', 'Cancelled']
+// These statuses:
+// - Cannot be deleted
+// - Cannot be renamed
+// - Cannot be reordered below configurable statuses
+// - Are required for event execution and lifecycle management
+const EVENT_SYSTEM_STATUSES = ['Planned', 'Completed', 'Cancelled'];
+const eventStatusPicklist = ref([
+  { value: 'Planned', label: 'Planned', enabled: true, editing: false, systemLocked: true },
+  { value: 'Completed', label: 'Completed', enabled: true, editing: false, systemLocked: true },
+  { value: 'Cancelled', label: 'Cancelled', enabled: true, editing: false, systemLocked: true }
+]);
+
+const savingEventStatus = ref(false);
+const eventStatusOriginalSnapshot = ref('');
+
+// Helper: Check if event status is system-locked
+// ARCHITECTURE NOTE: System statuses are required for execution and cannot be modified.
+// See: docs/architecture/event-settings.md Section 2.2
+function isEventSystemStatus(statusValue) {
+  return EVENT_SYSTEM_STATUSES.includes(statusValue);
+}
+
+// Helper: Check if event type is an audit event type
+// ARCHITECTURE NOTE: Audit events have locked role requirements and geo requirements.
+// See: docs/architecture/event-settings.md Section 2.1
+function isAuditEventType(eventType) {
+  return ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'].includes(eventType);
+}
+
+// Computed: Check if event roles & rules configuration is dirty
+const eventRolesRulesDirty = computed(() => {
+  if (!eventRolesRulesOriginalSnapshot.value) return false;
+  
+  const current = JSON.stringify({
+    roleRules: eventRoleRules.value,
+    geoRules: eventGeoRules.value,
+    formRules: eventFormRules.value
+  });
+  
+  return current !== eventRolesRulesOriginalSnapshot.value;
+});
+
+// Update event role rule
+function updateEventRoleRule(eventType, roleType, value) {
+  if (!eventRoleRules.value[eventType]) {
+    eventRoleRules.value[eventType] = {};
+  }
+  eventRoleRules.value[eventType][roleType] = value;
+}
+
+// Update event geo rule
+function updateEventGeoRule(eventType, value) {
+  // Prevent changing geo rules for audit events (they're locked)
+  if (isAuditEventType(eventType)) {
+    return;
+  }
+  eventGeoRules.value[eventType] = value;
+}
+
+// Update event form rule
+function updateEventFormRule(eventType, ruleType, value) {
+  if (!eventFormRules.value[eventType]) {
+    eventFormRules.value[eventType] = {};
+  }
+  eventFormRules.value[eventType][ruleType] = value;
+}
+
+// Save event roles & rules
+async function saveEventRolesRules() {
+  if (!selectedModule.value || savingEventRolesRules.value) return;
+  
+  savingEventRolesRules.value = true;
+  try {
+    // TODO: Implement API call to save event roles & rules configuration
+    // This should save to tenant module configuration, not field definitions
+    console.log('Saving event roles & rules:', {
+      roleRules: eventRoleRules.value,
+      geoRules: eventGeoRules.value,
+      formRules: eventFormRules.value
+    });
+    
+    // Update snapshot after successful save
+    eventRolesRulesOriginalSnapshot.value = JSON.stringify({
+      roleRules: eventRoleRules.value,
+      geoRules: eventGeoRules.value,
+      formRules: eventFormRules.value
+    });
+  } catch (err) {
+    console.error('Failed to save event roles & rules:', err);
+    // TODO: Show error message to user
+  } finally {
+    savingEventRolesRules.value = false;
+  }
+}
+
+// Computed: Check if event status configuration is dirty
+// ARCHITECTURE NOTE: Event statuses are system-locked, so this should always return false.
+// This is a defensive check to prevent any accidental modifications.
+const eventStatusDirty = computed(() => {
+  // Event statuses are system-locked and cannot be modified
+  // This computed property exists for consistency with other tabs but should always return false
+  return false;
+});
+
+// Event Status functions (defensive guards - all operations are blocked for system statuses)
+// ARCHITECTURE NOTE: All event statuses are system-locked. These functions exist as defensive guards
+// to prevent any code from attempting to modify system statuses.
+// See: docs/architecture/event-settings.md Section 2.2
+
+function startEventStatusEdit(index) {
+  const status = eventStatusPicklist.value[index];
+  if (isEventSystemStatus(status.value)) {
+    if (import.meta.env.DEV) {
+      console.error('❌ [Event Settings] Attempted to edit system-locked status:', status.value);
+      console.error('   System statuses cannot be modified. See: docs/architecture/event-settings.md Section 2.2');
+    }
+    return; // System-locked - cannot edit
+  }
+  // This should never execute since all statuses are system-locked
+  status.editing = true;
+  status.editValue = status.label;
+}
+
+function saveEventStatusValue(index) {
+  const status = eventStatusPicklist.value[index];
+  if (isEventSystemStatus(status.value)) {
+    if (import.meta.env.DEV) {
+      console.error('❌ [Event Settings] Attempted to save system-locked status:', status.value);
+      console.error('   System statuses cannot be modified. See: docs/architecture/event-settings.md Section 2.2');
+    }
+    return; // System-locked - cannot save
+  }
+  // This should never execute since all statuses are system-locked
+  if (status.editValue && status.editValue.trim()) {
+    status.label = status.editValue.trim();
+  }
+  status.editing = false;
+  delete status.editValue;
+}
+
+function cancelEventStatusEdit(index) {
+  const status = eventStatusPicklist.value[index];
+  status.editing = false;
+  delete status.editValue;
+}
+
+function removeEventStatusValue(index) {
+  const status = eventStatusPicklist.value[index];
+  if (isEventSystemStatus(status.value)) {
+    if (import.meta.env.DEV) {
+      console.error('❌ [Event Settings] Attempted to delete system-locked status:', status.value);
+      console.error('   System statuses cannot be deleted. See: docs/architecture/event-settings.md Section 2.2');
+    }
+    return; // System-locked - cannot delete
+  }
+  // This should never execute since all statuses are system-locked
+  eventStatusPicklist.value.splice(index, 1);
+}
+
+// Initialize event status snapshot (for consistency, even though statuses are read-only)
+function initializeEventStatusSnapshot() {
+  const snapshotData = {
+    status: eventStatusPicklist.value.map(s => ({
+      value: s.value,
+      label: s.label || s.value,
+      enabled: s.enabled !== undefined ? s.enabled : true,
+      systemLocked: s.systemLocked || false
+    }))
+  };
+  eventStatusOriginalSnapshot.value = JSON.stringify(snapshotData);
+}
+
+// Computed: Check if task status/priority configuration is dirty
+const taskStatusPriorityDirty = computed(() => {
+  if (!taskStatusPriorityOriginalSnapshot.value) return false;
+  
+  const current = JSON.stringify({
+    status: taskStatusPicklist.value.map(s => ({
+      value: s.value,
+      label: s.label || s.value,
+      enabled: s.enabled !== undefined ? s.enabled : true
+    })),
+    priority: taskPriorityPicklist.value.map(p => ({
+      value: p.value,
+      label: p.label || p.value,
+      enabled: p.enabled !== undefined ? p.enabled : true
+    }))
+  });
+  
+  return current !== taskStatusPriorityOriginalSnapshot.value;
+});
+
+// Tasks Status & Priority functions
+function addTaskStatusValue() {
+  const newValue = `status_${Date.now()}`;
+  taskStatusPicklist.value.push({
+    value: newValue,
+    label: 'New Status',
+    enabled: true,
+    editing: true,
+    editValue: 'New Status'
+  });
+}
+
+function startTaskStatusEdit(index) {
+  if (taskStatusPicklist.value[index].value === 'completed') return; // System-locked
+  taskStatusPicklist.value[index].editing = true;
+  taskStatusPicklist.value[index].editValue = taskStatusPicklist.value[index].label;
+}
+
+function saveTaskStatusValue(index) {
+  if (taskStatusPicklist.value[index].value === 'completed') return; // System-locked
+  const status = taskStatusPicklist.value[index];
+  if (status.editValue && status.editValue.trim()) {
+    status.label = status.editValue.trim();
+    if (status.value.startsWith('status_')) {
+      // New status - update value to match label (normalized)
+      status.value = status.label.toLowerCase().replace(/\s+/g, '_');
+    }
+  }
+  status.editing = false;
+  delete status.editValue;
+}
+
+function cancelTaskStatusEdit(index) {
+  const status = taskStatusPicklist.value[index];
+  status.editing = false;
+  delete status.editValue;
+  if (status.value.startsWith('status_')) {
+    // Remove new status if cancelled
+    taskStatusPicklist.value.splice(index, 1);
+  }
+}
+
+function removeTaskStatusValue(index) {
+  if (taskStatusPicklist.value[index].value === 'completed') return; // System-locked
+  taskStatusPicklist.value.splice(index, 1);
+}
+
+function addTaskPriorityValue() {
+  const newValue = `priority_${Date.now()}`;
+  taskPriorityPicklist.value.push({
+    value: newValue,
+    label: 'New Priority',
+    enabled: true,
+    editing: true,
+    editValue: 'New Priority'
+  });
+}
+
+function startTaskPriorityEdit(index) {
+  taskPriorityPicklist.value[index].editing = true;
+  taskPriorityPicklist.value[index].editValue = taskPriorityPicklist.value[index].label;
+}
+
+function saveTaskPriorityValue(index) {
+  const priority = taskPriorityPicklist.value[index];
+  if (priority.editValue && priority.editValue.trim()) {
+    priority.label = priority.editValue.trim();
+    if (priority.value.startsWith('priority_')) {
+      // New priority - update value to match label (normalized)
+      priority.value = priority.label.toLowerCase().replace(/\s+/g, '_');
+    }
+  }
+  priority.editing = false;
+  delete priority.editValue;
+}
+
+function cancelTaskPriorityEdit(index) {
+  const priority = taskPriorityPicklist.value[index];
+  priority.editing = false;
+  delete priority.editValue;
+  if (priority.value.startsWith('priority_')) {
+    // Remove new priority if cancelled
+    taskPriorityPicklist.value.splice(index, 1);
+  }
+}
+
+function removeTaskPriorityValue(index) {
+  if (taskPriorityPicklist.value.length <= 1) return; // Must have at least one
+  taskPriorityPicklist.value.splice(index, 1);
+}
+
+// Items Status & Types functions
+function addItemStatusValue() {
+  const newValue = `status_${Date.now()}`;
+  itemStatusPicklist.value.push({
+    value: newValue,
+    label: 'New Status',
+    enabled: true,
+    editing: true,
+    editValue: 'New Status'
+  });
+}
+
+function startItemStatusEdit(index) {
+  itemStatusPicklist.value[index].editing = true;
+  itemStatusPicklist.value[index].editValue = itemStatusPicklist.value[index].label;
+}
+
+function saveItemStatusValue(index) {
+  const status = itemStatusPicklist.value[index];
+  if (status.editValue && status.editValue.trim()) {
+    status.label = status.editValue.trim();
+    if (status.value.startsWith('status_')) {
+      // If it's a new status, update the value to a slug version
+      status.value = status.editValue.trim().toLowerCase().replace(/\s+/g, '_');
+    }
+  }
+  status.editing = false;
+  delete status.editValue;
+}
+
+function cancelItemStatusEdit(index) {
+  const status = itemStatusPicklist.value[index];
+  status.editing = false;
+  delete status.editValue;
+  // If it was a new status and user cancelled, remove it
+  if (status.value.startsWith('status_') && !status.label || status.label === 'New Status') {
+    itemStatusPicklist.value.splice(index, 1);
+  }
+}
+
+function removeItemStatusValue(index) {
+  if (itemStatusPicklist.value.length <= 1) return; // Must have at least one
+  itemStatusPicklist.value.splice(index, 1);
+}
+
+async function saveItemStatusTypes() {
+  try {
+    savingItemStatusTypes.value = true;
+    
+    const payload = {
+      itemTypes: itemTypes.value.map(t => ({
+        value: t.value,
+        label: t.label,
+        enabled: t.enabled !== undefined ? t.enabled : true
+      })),
+      status: itemStatusPicklist.value.map(s => ({
+        value: s.value,
+        label: s.label || s.value,
+        enabled: s.enabled !== undefined ? s.enabled : true
+      }))
+    };
+    
+    // TODO: Implement API endpoint for saving item status/types
+    // await apiClient.patch(`/settings/core-modules/items/status-types`, payload);
+    
+    console.log('[Item Status Types] Save successful (local only for now)');
+    itemStatusTypesOriginalSnapshot.value = JSON.stringify(payload);
+  } catch (err) {
+    console.error('Failed to save item status/types:', err);
+    alert(err.message || 'Failed to save item status/types. Please try again.');
+  } finally {
+    savingItemStatusTypes.value = false;
+  }
+}
+
+async function saveTaskStatusPriority() {
+  if (!isTasksModule.value || !selectedModule.value || savingTaskStatusPriority.value) return;
+  
+  savingTaskStatusPriority.value = true;
+  try {
+    // TODO: Implement API endpoint for saving task status/priority configuration
+    // For now, just update the snapshot
+    const snapshotData = {
+      status: taskStatusPicklist.value.map(s => ({
+        value: s.value,
+        label: s.label || s.value,
+        enabled: s.enabled !== undefined ? s.enabled : true
+      })),
+      priority: taskPriorityPicklist.value.map(p => ({
+        value: p.value,
+        label: p.label || p.value,
+        enabled: p.enabled !== undefined ? p.enabled : true
+      }))
+    };
+    
+    taskStatusPriorityOriginalSnapshot.value = JSON.stringify(snapshotData);
+    
+    // TODO: Call API endpoint when available
+    // await apiClient.patch(`/settings/core-modules/tasks/status-priority`, snapshotData);
+    
+    console.log('[Task Status Priority] Save successful (local only for now)');
+  } catch (err) {
+    console.error('Failed to save task status/priority:', err);
+    alert(err.message || 'Failed to save task status/priority. Please try again.');
+  } finally {
+    savingTaskStatusPriority.value = false;
+  }
+}
+
+// Computed: Check if status types configuration is dirty
+// Compare only the fields that are saved (value, label, enabled), not UI state (editing, description, etc.)
+const statusTypesDirty = computed(() => {
+  if (!statusTypesOriginalSnapshot.value) return false;
+  
+  // Normalize current state to match snapshot structure (only saved fields)
+  const current = JSON.stringify({
+    organizationTypes: organizationTypes.value.map(t => ({
+      value: t.value,
+      label: t.label || t.value,
+      enabled: t.enabled !== undefined ? t.enabled : true
+    })),
+    statusPicklists: {
+      customerStatus: statusPicklists.value.customerStatus.map(s => ({
+        value: s.value,
+        label: s.label || s.value,
+        enabled: s.enabled !== undefined ? s.enabled : true
+      })),
+      partnerStatus: statusPicklists.value.partnerStatus.map(s => ({
+        value: s.value,
+        label: s.label || s.value,
+        enabled: s.enabled !== undefined ? s.enabled : true
+      })),
+      vendorStatus: statusPicklists.value.vendorStatus.map(s => ({
+        value: s.value,
+        label: s.label || s.value,
+        enabled: s.enabled !== undefined ? s.enabled : true
+      }))
+    }
+  });
+  
+  const isDirty = current !== statusTypesOriginalSnapshot.value;
+  if (isDirty) {
+    console.log('[Status Types] Dirty check: Data has changed');
+  }
+  return isDirty;
+});
+
+// Fetch organization types and status picklists from module configuration
+// First tries to fetch tenant overrides, then falls back to module defaults
+// Flag to prevent concurrent fetches
+const fetchingStatusTypes = ref(false);
+
+async function fetchStatusTypes() {
+  if (!isOrganizationsModule.value || !selectedModule.value) {
+    console.log('[Status Types] Skipping fetch - module not ready:', { 
+      isOrganizationsModule: isOrganizationsModule.value, 
+      selectedModule: selectedModule.value?.key 
+    });
+    return;
+  }
+  
+  // Prevent concurrent fetches
+  if (fetchingStatusTypes.value) {
+    console.log('[Status Types] Fetch already in progress, skipping...');
+    return;
+  }
+  
+  // CRITICAL: Don't refetch if we just saved (within last 2 seconds) to prevent overwriting fresh saves
+  const timeSinceLastSave = Date.now() - lastSaveTimestamp.value;
+  if (timeSinceLastSave < 2000) {
+    console.log('[Status Types] ⚠️ Skipping fetch - just saved', timeSinceLastSave, 'ms ago. Data is fresh.');
+    fetchingStatusTypes.value = false;
+    return;
+  }
+  
+  fetchingStatusTypes.value = true;
+  console.log('[Status Types] 🔄 STARTING fetchStatusTypes - Stack trace:', new Error().stack);
+  try {
+    // Step 1: Try to fetch tenant module configuration overrides first
+    let tenantOverrides = null;
+    try {
+      const tenantResponse = await apiClient.get(`/settings/core-modules/organizations/status-types`);
+      console.log('[Status Types] 🔍 Tenant override response (FULL):', JSON.stringify(tenantResponse, null, 2));
+      if (tenantResponse.success) {
+        // Check if data exists (could be null if no override exists, or an object if override exists)
+        if (tenantResponse.data !== null && tenantResponse.data !== undefined) {
+          tenantOverrides = tenantResponse.data;
+          console.log('[Status Types] ✅ Tenant overrides loaded:', {
+            hasData: !!tenantOverrides,
+            organizationTypes: tenantOverrides?.organizationTypes?.length || 0,
+            customerStatus: tenantOverrides?.statusPicklists?.customerStatus?.length || 0,
+            partnerStatus: tenantOverrides?.statusPicklists?.partnerStatus?.length || 0,
+            vendorStatus: tenantOverrides?.statusPicklists?.vendorStatus?.length || 0
+          });
+          // Log FULL enabled values from tenant overrides to verify they're being saved/loaded correctly
+          if (tenantOverrides?.organizationTypes) {
+            console.log('[Status Types] 📊 Tenant override enabled values - organizationTypes:', 
+              JSON.stringify(tenantOverrides.organizationTypes.map(t => ({ value: t.value, label: t.label, enabled: t.enabled })), null, 2)
+            );
+          }
+          if (tenantOverrides?.statusPicklists?.customerStatus) {
+            console.log('[Status Types] 📊 Tenant override enabled values - customerStatus:', 
+              JSON.stringify(tenantOverrides.statusPicklists.customerStatus.map(s => ({ value: s.value, label: s.label, enabled: s.enabled })), null, 2)
+            );
+          }
+          if (tenantOverrides?.statusPicklists?.partnerStatus) {
+            console.log('[Status Types] 📊 Tenant override enabled values - partnerStatus:', 
+              JSON.stringify(tenantOverrides.statusPicklists.partnerStatus.map(s => ({ value: s.value, label: s.label, enabled: s.enabled })), null, 2)
+            );
+          }
+          if (tenantOverrides?.statusPicklists?.vendorStatus) {
+            console.log('[Status Types] 📊 Tenant override enabled values - vendorStatus:', 
+              JSON.stringify(tenantOverrides.statusPicklists.vendorStatus.map(s => ({ value: s.value, label: s.label, enabled: s.enabled })), null, 2)
+            );
+          }
+        } else {
+          console.log('[Status Types] ⚠️ No tenant override found (response.data is null/undefined), will use defaults');
+          tenantOverrides = null;
+        }
+      } else {
+        console.log('[Status Types] ❌ Tenant override request failed:', tenantResponse);
+        tenantOverrides = null;
+      }
+    } catch (tenantErr) {
+      // No tenant override exists yet - this is fine, we'll use defaults
+      console.log('[Status Types] ⚠️ No tenant override found (error):', tenantErr.message);
+      tenantOverrides = null;
+    }
+    
+    // Step 2: Fetch module configuration to get enum metadata (defaults)
+    // Try multiple contexts to ensure we get all fields
+    // First try with sales context (for app-scoped fields), then fallback to platform
+    let module = null;
+    let response = await apiClient.get(`/modules?key=organizations&context=sales`);
+    if (response.success && response.data && response.data.length > 0) {
+      module = response.data[0];
+    } else {
+      // Fallback to platform context
+      response = await apiClient.get(`/modules?key=organizations&context=platform`);
+      if (response.success && response.data && response.data.length > 0) {
+        module = response.data[0];
+      }
+    }
+    
+    if (module) {
+      // Debug: Log all fields to see what we're getting
+      console.log('[Status Types] Module fields:', module.fields?.map(f => ({ key: f.key, dataType: f.dataType, options: f.options, enum: f.enum, context: f.context })));
+      console.log('[Status Types] Total fields:', module.fields?.length);
+      console.log('[Status Types] 🔍 Checking tenant overrides:', {
+        hasTenantOverrides: !!tenantOverrides,
+        hasOrganizationTypes: !!(tenantOverrides?.organizationTypes),
+        organizationTypesIsArray: Array.isArray(tenantOverrides?.organizationTypes),
+        organizationTypesLength: tenantOverrides?.organizationTypes?.length || 0,
+        hasStatusPicklists: !!(tenantOverrides?.statusPicklists)
+      });
+      
+      // Extract organization types from module fields (types field options/enum)
+      // Priority: Use tenant overrides if they exist, otherwise use module defaults
+      // CRITICAL: Check if tenantOverrides exists and has organizationTypes array (even if empty)
+      if (tenantOverrides && tenantOverrides.organizationTypes && Array.isArray(tenantOverrides.organizationTypes)) {
+        // Use tenant overrides directly (they contain all types with enabled state)
+        // Even if array is empty, use it (means user disabled everything)
+        // This preserves ALL custom types and their enabled states
+        console.log('[Status Types] ✅ TENANT OVERRIDES FOUND - Using tenant overrides for organization types:', tenantOverrides.organizationTypes.length, 'types');
+        const mappedTypes = tenantOverrides.organizationTypes.map(t => ({
+          value: t.value,
+          label: t.label || t.value,
+          enabled: t.enabled !== undefined ? t.enabled : true,
+          description: `${t.value} organizations`
+        }));
+        console.log('[Status Types] ✅ Mapped organization types with enabled states:', JSON.stringify(mappedTypes.map(t => ({ value: t.value, enabled: t.enabled })), null, 2));
+        // CRITICAL: Replace entire array to ensure Vue reactivity and prevent any overwrites
+        // CRITICAL: Only update if we're not in the middle of a save operation
+        if (!savingStatusTypes.value) {
+          organizationTypes.value = [...mappedTypes];
+          console.log('[Status Types] ✅ Set organizationTypes.value. Current state:', JSON.stringify(organizationTypes.value.map(t => ({ value: t.value, enabled: t.enabled })), null, 2));
+        } else {
+          console.log('[Status Types] ⚠️ Skipping organizationTypes update - save in progress');
+        }
+      } else {
+        console.log('[Status Types] ⚠️ NOT using tenant overrides for organizationTypes. Reason:', {
+          hasTenantOverrides: !!tenantOverrides,
+          hasOrganizationTypes: !!(tenantOverrides?.organizationTypes),
+          isArray: Array.isArray(tenantOverrides?.organizationTypes),
+          willUseModuleDefaults: true
+        });
+        // Fallback to module defaults
+        const typesField = module.fields?.find(f => f.key === 'types');
+        const typesEnum = typesField?.enum || typesField?.options || [];
+        if (typesField && typesEnum.length > 0) {
+          // Create new array to ensure reactivity
+          const newTypes = typesEnum.map(type => ({
+            value: type,
+            label: type,
+            enabled: true,
+            description: `${type} organizations`
+          }));
+          // Replace the entire array to ensure Vue reactivity
+          organizationTypes.value = newTypes;
+          console.log('[Status Types] Loaded organization types from module defaults:', newTypes.length);
+        } else {
+          console.warn('[Status Types] No types field or enum found in module:', { 
+            hasTypesField: !!typesField, 
+            hasEnum: (typesField?.enum || typesField?.options || []).length > 0,
+            typesField: typesField ? { key: typesField.key, dataType: typesField.dataType, options: typesField.options, enum: typesField.enum } : null,
+            availableFields: module.fields?.map(f => f.key).slice(0, 20) // Show first 20 field keys
+          });
+          // Fallback: Use hardcoded defaults if field not found
+          if (!typesField) {
+            console.log('[Status Types] Using hardcoded defaults for organization types');
+            organizationTypes.value = ['Customer', 'Partner', 'Vendor', 'Distributor', 'Dealer'].map(type => ({
+              value: type,
+              label: type,
+              enabled: true,
+              description: `${type} organizations`
+            }));
+          }
+        }
+      }
+      
+      // Extract status picklists from module fields
+      // Priority: Use tenant overrides if they exist, otherwise use module defaults
+      // CRITICAL: Check if tenantOverrides.statusPicklists exists and has the specific status array
+      // We check for array existence, not length, because empty arrays are valid (user removed all)
+      if (tenantOverrides && tenantOverrides.statusPicklists && tenantOverrides.statusPicklists.customerStatus && Array.isArray(tenantOverrides.statusPicklists.customerStatus)) {
+        // Use tenant overrides directly (even if empty array - means user removed all statuses)
+        // This includes ALL custom statuses that were added by the user
+        console.log('[Status Types] ✅ TENANT OVERRIDES FOUND - Using tenant overrides for customerStatus:', tenantOverrides.statusPicklists.customerStatus.length, 'statuses');
+        const mappedStatuses = tenantOverrides.statusPicklists.customerStatus.map(s => ({
+          value: s.value,
+          label: s.label || s.value,
+          enabled: s.enabled !== undefined ? s.enabled : true,
+          editing: false
+        }));
+        console.log('[Status Types] ✅ Mapped customerStatus with enabled states:', JSON.stringify(mappedStatuses.map(s => ({ value: s.value, enabled: s.enabled })), null, 2));
+        // CRITICAL: Replace entire array to ensure Vue reactivity and preserve all custom values
+        // Use spread operator to create new array reference
+        // CRITICAL: Only update if we're not in the middle of a save operation
+        if (!savingStatusTypes.value) {
+          statusPicklists.value.customerStatus = [...mappedStatuses];
+          console.log('[Status Types] ✅ Set customerStatus.value. Current state:', JSON.stringify(statusPicklists.value.customerStatus.map(s => ({ value: s.value, enabled: s.enabled })), null, 2));
+        } else {
+          console.log('[Status Types] ⚠️ Skipping customerStatus update - save in progress');
+        }
+      } else {
+        console.log('[Status Types] ⚠️ NOT using tenant overrides for customerStatus. Reason:', {
+          hasTenantOverrides: !!tenantOverrides,
+          hasStatusPicklists: !!(tenantOverrides?.statusPicklists),
+          hasCustomerStatus: !!(tenantOverrides?.statusPicklists?.customerStatus),
+          isArray: Array.isArray(tenantOverrides?.statusPicklists?.customerStatus),
+          willUseModuleDefaults: true
+        });
+        // Fallback to module defaults
+        const customerStatusField = module.fields?.find(f => f.key === 'customerStatus');
+        const customerStatusEnum = customerStatusField?.enum || customerStatusField?.options || [];
+        if (customerStatusField && customerStatusEnum.length > 0) {
+          const newCustomerStatuses = customerStatusEnum.map(status => ({
+            value: status,
+            label: status,
+            enabled: true,
+            editing: false
+          }));
+          // Replace the entire array to ensure Vue reactivity
+          statusPicklists.value.customerStatus = newCustomerStatuses;
+          console.log('[Status Types] Loaded customer status from module defaults:', newCustomerStatuses.length);
+        } else {
+          console.warn('[Status Types] No customerStatus field or enum found');
+          // Fallback: Use hardcoded defaults
+          if (!customerStatusField) {
+            console.log('[Status Types] Using hardcoded defaults for customerStatus');
+            statusPicklists.value.customerStatus = ['Active', 'Prospect', 'Churned', 'Lead Customer'].map(status => ({
+              value: status,
+              label: status,
+              enabled: true,
+              editing: false
+            }));
+          }
+        }
+      }
+      
+      // Partner Status
+      if (tenantOverrides && tenantOverrides.statusPicklists && tenantOverrides.statusPicklists.partnerStatus && Array.isArray(tenantOverrides.statusPicklists.partnerStatus)) {
+        // Use tenant overrides directly (even if empty array)
+        // This includes ALL custom statuses that were added by the user
+        console.log('[Status Types] ✅ TENANT OVERRIDES FOUND - Using tenant overrides for partnerStatus:', tenantOverrides.statusPicklists.partnerStatus.length, 'statuses');
+        const mappedStatuses = tenantOverrides.statusPicklists.partnerStatus.map(s => ({
+          value: s.value,
+          label: s.label || s.value,
+          enabled: s.enabled !== undefined ? s.enabled : true,
+          editing: false
+        }));
+        console.log('[Status Types] ✅ Mapped partnerStatus with enabled states:', JSON.stringify(mappedStatuses.map(s => ({ value: s.value, enabled: s.enabled })), null, 2));
+        // CRITICAL: Replace entire array to ensure Vue reactivity and preserve all custom values
+        // Use spread operator to create new array reference
+        // CRITICAL: Only update if we're not in the middle of a save operation
+        if (!savingStatusTypes.value) {
+          statusPicklists.value.partnerStatus = [...mappedStatuses];
+          console.log('[Status Types] ✅ Set partnerStatus.value. Current state:', JSON.stringify(statusPicklists.value.partnerStatus.map(s => ({ value: s.value, enabled: s.enabled })), null, 2));
+        } else {
+          console.log('[Status Types] ⚠️ Skipping partnerStatus update - save in progress');
+        }
+      } else {
+        console.log('[Status Types] ⚠️ NOT using tenant overrides for partnerStatus. Reason:', {
+          hasTenantOverrides: !!tenantOverrides,
+          hasStatusPicklists: !!(tenantOverrides?.statusPicklists),
+          hasPartnerStatus: !!(tenantOverrides?.statusPicklists?.partnerStatus),
+          isArray: Array.isArray(tenantOverrides?.statusPicklists?.partnerStatus),
+          willUseModuleDefaults: true
+        });
+        // Fallback to module defaults
+        const partnerStatusField = module.fields?.find(f => f.key === 'partnerStatus');
+        const partnerStatusEnum = partnerStatusField?.enum || partnerStatusField?.options || [];
+        if (partnerStatusField && partnerStatusEnum.length > 0) {
+          const newPartnerStatuses = partnerStatusEnum.map(status => ({
+            value: status,
+            label: status,
+            enabled: true,
+            editing: false
+          }));
+          // Replace the entire array to ensure Vue reactivity
+          statusPicklists.value.partnerStatus = newPartnerStatuses;
+          console.log('[Status Types] Loaded partner status from module defaults:', newPartnerStatuses.length);
+        } else {
+          console.warn('[Status Types] No partnerStatus field or enum found');
+          // Fallback: Use hardcoded defaults
+          if (!partnerStatusField) {
+            console.log('[Status Types] Using hardcoded defaults for partnerStatus');
+            statusPicklists.value.partnerStatus = ['Active', 'Onboarding', 'Inactive'].map(status => ({
+              value: status,
+              label: status,
+              enabled: true,
+              editing: false
+            }));
+          }
+        }
+      }
+      
+      // Vendor Status
+      if (tenantOverrides && tenantOverrides.statusPicklists && tenantOverrides.statusPicklists.vendorStatus && Array.isArray(tenantOverrides.statusPicklists.vendorStatus)) {
+        // Use tenant overrides directly (even if empty array)
+        // This includes ALL custom statuses that were added by the user
+        console.log('[Status Types] ✅ TENANT OVERRIDES FOUND - Using tenant overrides for vendorStatus:', tenantOverrides.statusPicklists.vendorStatus.length, 'statuses');
+        const mappedStatuses = tenantOverrides.statusPicklists.vendorStatus.map(s => ({
+          value: s.value,
+          label: s.label || s.value,
+          enabled: s.enabled !== undefined ? s.enabled : true,
+          editing: false
+        }));
+        console.log('[Status Types] ✅ Mapped vendorStatus with enabled states:', JSON.stringify(mappedStatuses.map(s => ({ value: s.value, enabled: s.enabled })), null, 2));
+        // CRITICAL: Replace entire array to ensure Vue reactivity and preserve all custom values
+        // Use spread operator to create new array reference
+        // CRITICAL: Only update if we're not in the middle of a save operation
+        if (!savingStatusTypes.value) {
+          statusPicklists.value.vendorStatus = [...mappedStatuses];
+          console.log('[Status Types] ✅ Set vendorStatus.value. Current state:', JSON.stringify(statusPicklists.value.vendorStatus.map(s => ({ value: s.value, enabled: s.enabled })), null, 2));
+        } else {
+          console.log('[Status Types] ⚠️ Skipping vendorStatus update - save in progress');
+        }
+      } else {
+        console.log('[Status Types] ⚠️ NOT using tenant overrides for vendorStatus. Reason:', {
+          hasTenantOverrides: !!tenantOverrides,
+          hasStatusPicklists: !!(tenantOverrides?.statusPicklists),
+          hasVendorStatus: !!(tenantOverrides?.statusPicklists?.vendorStatus),
+          isArray: Array.isArray(tenantOverrides?.statusPicklists?.vendorStatus),
+          willUseModuleDefaults: true
+        });
+        // Fallback to module defaults
+        const vendorStatusField = module.fields?.find(f => f.key === 'vendorStatus');
+        const vendorStatusEnum = vendorStatusField?.enum || vendorStatusField?.options || [];
+        if (vendorStatusField && vendorStatusEnum.length > 0) {
+          const newVendorStatuses = vendorStatusEnum.map(status => ({
+            value: status,
+            label: status,
+            enabled: true,
+            editing: false
+          }));
+          // Replace the entire array to ensure Vue reactivity
+          statusPicklists.value.vendorStatus = newVendorStatuses;
+          console.log('[Status Types] Loaded vendor status from module defaults:', newVendorStatuses.length);
+        } else {
+          console.warn('[Status Types] No vendorStatus field or enum found');
+          // Fallback: Use hardcoded defaults
+          if (!vendorStatusField) {
+            console.log('[Status Types] Using hardcoded defaults for vendorStatus');
+            statusPicklists.value.vendorStatus = ['Approved', 'Pending', 'Suspended'].map(status => ({
+              value: status,
+              label: status,
+              enabled: true,
+              editing: false
+            }));
+          }
+        }
+      }
+      
+      // Save snapshot for dirty checking
+      // This snapshot is used to detect changes, so it must match the exact structure we save
+      const snapshotData = {
+        organizationTypes: organizationTypes.value.map(t => ({
+          value: t.value,
+          label: t.label || t.value,
+          enabled: t.enabled !== undefined ? t.enabled : true
+        })),
+        statusPicklists: {
+          customerStatus: statusPicklists.value.customerStatus.map(s => ({
+            value: s.value,
+            label: s.label || s.value,
+            enabled: s.enabled !== undefined ? s.enabled : true
+          })),
+          partnerStatus: statusPicklists.value.partnerStatus.map(s => ({
+            value: s.value,
+            label: s.label || s.value,
+            enabled: s.enabled !== undefined ? s.enabled : true
+          })),
+          vendorStatus: statusPicklists.value.vendorStatus.map(s => ({
+            value: s.value,
+            label: s.label || s.value,
+            enabled: s.enabled !== undefined ? s.enabled : true
+          }))
+        }
+      };
+      statusTypesOriginalSnapshot.value = JSON.stringify(snapshotData);
+      
+      console.log('[Status Types] Snapshot saved:', {
+        organizationTypes: organizationTypes.value.length,
+        customerStatus: statusPicklists.value.customerStatus.length,
+        partnerStatus: statusPicklists.value.partnerStatus.length,
+        vendorStatus: statusPicklists.value.vendorStatus.length,
+        snapshotEnabledValues: {
+          orgTypes: snapshotData.organizationTypes.map(t => ({ value: t.value, enabled: t.enabled })),
+          customerStatus: snapshotData.statusPicklists.customerStatus.map(s => ({ value: s.value, enabled: s.enabled }))
+        }
+      });
+      
+      // Mark initial load as complete after a short delay to prevent watch from triggering
+      // Use a longer delay to ensure all reactive updates have settled
+      // Store timeout ID to prevent multiple timeouts
+      if (window.statusTypesLoadTimeout) {
+        clearTimeout(window.statusTypesLoadTimeout);
+      }
+      window.statusTypesLoadTimeout = setTimeout(() => {
+        // Double-check that data is still there before clearing the flag
+        if (organizationTypes.value.length > 0 || 
+            statusPicklists.value.customerStatus.length > 0 ||
+            statusPicklists.value.partnerStatus.length > 0 ||
+            statusPicklists.value.vendorStatus.length > 0) {
+          // Only clear if not already cleared
+          if (isInitialLoad.value) {
+            isInitialLoad.value = false;
+            console.log('[Status Types] ✅ Initial load flag cleared. Final state:', JSON.stringify({
+              organizationTypes: organizationTypes.value.map(t => ({ value: t.value, enabled: t.enabled })),
+              customerStatus: statusPicklists.value.customerStatus.map(s => ({ value: s.value, enabled: s.enabled })),
+              partnerStatus: statusPicklists.value.partnerStatus.map(s => ({ value: s.value, enabled: s.enabled })),
+              vendorStatus: statusPicklists.value.vendorStatus.map(s => ({ value: s.value, enabled: s.enabled }))
+            }, null, 2));
+          }
+        } else {
+          console.warn('[Status Types] Data appears empty after load, keeping initial load flag active');
+        }
+        window.statusTypesLoadTimeout = null;
+      }, 500); // Increased delay to ensure all updates settle
+      
+      console.log('[Status Types] ✅ Fetch completed. Final counts:', {
+        organizationTypesCount: organizationTypes.value.length,
+        customerStatusCount: statusPicklists.value.customerStatus.length,
+        partnerStatusCount: statusPicklists.value.partnerStatus.length,
+        vendorStatusCount: statusPicklists.value.vendorStatus.length
+      });
+      console.log('[Status Types] ✅ Fetch completed. Final enabled states:', JSON.stringify({
+        organizationTypes: organizationTypes.value.map(t => ({ value: t.value, enabled: t.enabled })),
+        customerStatus: statusPicklists.value.customerStatus.map(s => ({ value: s.value, enabled: s.enabled })),
+        partnerStatus: statusPicklists.value.partnerStatus.map(s => ({ value: s.value, enabled: s.enabled })),
+        vendorStatus: statusPicklists.value.vendorStatus.map(s => ({ value: s.value, enabled: s.enabled }))
+      }, null, 2));
+    } else {
+      // Module fetch failed - only use hardcoded defaults if we don't have tenant overrides
+      if (tenantOverrides && (
+        (tenantOverrides.organizationTypes && tenantOverrides.organizationTypes.length > 0) ||
+        (tenantOverrides.statusPicklists && (
+          (tenantOverrides.statusPicklists.customerStatus && tenantOverrides.statusPicklists.customerStatus.length > 0) ||
+          (tenantOverrides.statusPicklists.partnerStatus && tenantOverrides.statusPicklists.partnerStatus.length > 0) ||
+          (tenantOverrides.statusPicklists.vendorStatus && tenantOverrides.statusPicklists.vendorStatus.length > 0)
+        ))
+      )) {
+        // We have tenant overrides, use them even if module fetch failed
+        console.log('[Status Types] Module fetch failed but tenant overrides exist, using tenant overrides');
+        // Apply tenant overrides (same logic as above)
+        if (tenantOverrides.organizationTypes && Array.isArray(tenantOverrides.organizationTypes)) {
+          organizationTypes.value = [...tenantOverrides.organizationTypes.map(t => ({
+            value: t.value,
+            label: t.label || t.value,
+            enabled: t.enabled !== undefined ? t.enabled : true,
+            description: `${t.value} organizations`
+          }))];
+        }
+        if (tenantOverrides.statusPicklists) {
+          if (tenantOverrides.statusPicklists.customerStatus && Array.isArray(tenantOverrides.statusPicklists.customerStatus)) {
+            statusPicklists.value.customerStatus = [...tenantOverrides.statusPicklists.customerStatus.map(s => ({
+              value: s.value,
+              label: s.label || s.value,
+              enabled: s.enabled !== undefined ? s.enabled : true,
+              editing: false
+            }))];
+          }
+          if (tenantOverrides.statusPicklists.partnerStatus && Array.isArray(tenantOverrides.statusPicklists.partnerStatus)) {
+            statusPicklists.value.partnerStatus = [...tenantOverrides.statusPicklists.partnerStatus.map(s => ({
+              value: s.value,
+              label: s.label || s.value,
+              enabled: s.enabled !== undefined ? s.enabled : true,
+              editing: false
+            }))];
+          }
+          if (tenantOverrides.statusPicklists.vendorStatus && Array.isArray(tenantOverrides.statusPicklists.vendorStatus)) {
+            statusPicklists.value.vendorStatus = [...tenantOverrides.statusPicklists.vendorStatus.map(s => ({
+              value: s.value,
+              label: s.label || s.value,
+              enabled: s.enabled !== undefined ? s.enabled : true,
+              editing: false
+            }))];
+          }
+        }
+        // Save snapshot
+        const snapshotData = {
+          organizationTypes: organizationTypes.value.map(t => ({
+            value: t.value,
+            label: t.label || t.value,
+            enabled: t.enabled !== undefined ? t.enabled : true
+          })),
+          statusPicklists: {
+            customerStatus: statusPicklists.value.customerStatus.map(s => ({
+              value: s.value,
+              label: s.label || s.value,
+              enabled: s.enabled !== undefined ? s.enabled : true
+            })),
+            partnerStatus: statusPicklists.value.partnerStatus.map(s => ({
+              value: s.value,
+              label: s.label || s.value,
+              enabled: s.enabled !== undefined ? s.enabled : true
+            })),
+            vendorStatus: statusPicklists.value.vendorStatus.map(s => ({
+              value: s.value,
+              label: s.label || s.value,
+              enabled: s.enabled !== undefined ? s.enabled : true
+            }))
+          }
+        };
+        statusTypesOriginalSnapshot.value = JSON.stringify(snapshotData);
+        setTimeout(() => {
+          isInitialLoad.value = false;
+        }, 500);
+      } else {
+        // No tenant overrides, use hardcoded defaults
+        console.warn('[Status Types] Module response was empty or invalid - using hardcoded defaults');
+        organizationTypes.value = ['Customer', 'Partner', 'Vendor', 'Distributor', 'Dealer'].map(type => ({
+          value: type,
+          label: type,
+          enabled: true,
+          description: `${type} organizations`
+        }));
+        statusPicklists.value.customerStatus = ['Active', 'Prospect', 'Churned', 'Lead Customer'].map(status => ({
+          value: status,
+          label: status,
+          enabled: true,
+          editing: false
+        }));
+        statusPicklists.value.partnerStatus = ['Active', 'Onboarding', 'Inactive'].map(status => ({
+          value: status,
+          label: status,
+          enabled: true,
+          editing: false
+        }));
+        statusPicklists.value.vendorStatus = ['Approved', 'Pending', 'Suspended'].map(status => ({
+          value: status,
+          label: status,
+          enabled: true,
+          editing: false
+        }));
+        // Save snapshot for dirty checking
+        const snapshotData = {
+          organizationTypes: organizationTypes.value.map(t => ({
+            value: t.value,
+            label: t.label || t.value,
+            enabled: t.enabled !== undefined ? t.enabled : true
+          })),
+          statusPicklists: {
+            customerStatus: statusPicklists.value.customerStatus.map(s => ({
+              value: s.value,
+              label: s.label || s.value,
+              enabled: s.enabled !== undefined ? s.enabled : true
+            })),
+            partnerStatus: statusPicklists.value.partnerStatus.map(s => ({
+              value: s.value,
+              label: s.label || s.value,
+              enabled: s.enabled !== undefined ? s.enabled : true
+            })),
+            vendorStatus: statusPicklists.value.vendorStatus.map(s => ({
+              value: s.value,
+              label: s.label || s.value,
+              enabled: s.enabled !== undefined ? s.enabled : true
+            }))
+          }
+        };
+        statusTypesOriginalSnapshot.value = JSON.stringify(snapshotData);
+        
+        // Mark initial load as complete
+        setTimeout(() => {
+          isInitialLoad.value = false;
+        }, 500);
+      }
+    }
+  } catch (err) {
+    console.error('[Status Types] Failed to fetch status types:', err);
+  } finally {
+    fetchingStatusTypes.value = false;
+  }
+}
+
+// Handle organization type toggle
+function handleTypeToggle(type) {
+  // Dirty checking is handled by computed property
+}
+
+// Handle status value toggle (enable/disable)
+function handleStatusToggle(statusKey, index) {
+  // Dirty checking is handled by computed property
+}
+
+// Add new status value
+function addStatusValue(statusKey) {
+  const newValue = {
+    value: `New Status ${statusPicklists.value[statusKey].length + 1}`,
+    label: `New Status ${statusPicklists.value[statusKey].length + 1}`,
+    enabled: true,
+    editing: true,
+    editValue: ''
+  };
+  statusPicklists.value[statusKey].push(newValue);
+  // Focus will be handled by autofocus on input
+}
+
+// Start editing a status value
+function startStatusEdit(statusKey, index) {
+  const status = statusPicklists.value[statusKey][index];
+  status.editing = true;
+  status.editValue = status.label;
+}
+
+// Save status value edit
+function saveStatusValue(statusKey, index) {
+  const status = statusPicklists.value[statusKey][index];
+  if (status.editValue && status.editValue.trim()) {
+    status.label = status.editValue.trim();
+    status.value = status.editValue.trim(); // Update value as well
+  }
+  status.editing = false;
+  status.editValue = '';
+}
+
+// Cancel status value edit
+function cancelStatusEdit(statusKey, index) {
+  const status = statusPicklists.value[statusKey][index];
+  status.editing = false;
+  status.editValue = '';
+  
+  // If this was a new status being cancelled, remove it
+  if (!status.value || status.value.startsWith('New Status')) {
+    statusPicklists.value[statusKey].splice(index, 1);
+  }
+}
+
+// Save status types and organization types to tenant module configuration
+async function saveStatusTypes() {
+  if (!isOrganizationsModule.value || !selectedModule.value || savingStatusTypes.value) return;
+  
+  savingStatusTypes.value = true;
+  try {
+    // Prepare payload for tenant module configuration
+    const payload = {
+      organizationTypes: organizationTypes.value.map(t => ({
+        value: t.value,
+        label: t.label || t.value,
+        enabled: t.enabled !== undefined ? t.enabled : true
+      })),
+      statusPicklists: {
+        customerStatus: statusPicklists.value.customerStatus.map(s => ({
+          value: s.value,
+          label: s.label || s.value,
+          enabled: s.enabled !== undefined ? s.enabled : true
+        })),
+        partnerStatus: statusPicklists.value.partnerStatus.map(s => ({
+          value: s.value,
+          label: s.label || s.value,
+          enabled: s.enabled !== undefined ? s.enabled : true
+        })),
+        vendorStatus: statusPicklists.value.vendorStatus.map(s => ({
+          value: s.value,
+          label: s.label || s.value,
+          enabled: s.enabled !== undefined ? s.enabled : true
+        }))
+      }
+    };
+    
+    console.log('[Status Types] 💾 Payload enabled values:', JSON.stringify({
+      organizationTypes: payload.organizationTypes.map(t => ({ value: t.value, label: t.label, enabled: t.enabled })),
+      customerStatus: payload.statusPicklists.customerStatus.map(s => ({ value: s.value, label: s.label, enabled: s.enabled })),
+      partnerStatus: payload.statusPicklists.partnerStatus.map(s => ({ value: s.value, label: s.label, enabled: s.enabled })),
+      vendorStatus: payload.statusPicklists.vendorStatus.map(s => ({ value: s.value, label: s.label, enabled: s.enabled }))
+    }, null, 2));
+    
+    // Save to tenant module configuration endpoint
+    // Note: This should be a PATCH to /settings/core-modules/organizations/status-types
+    // or similar endpoint that persists to TenantModuleConfiguration
+    console.log('[Status Types] 💾 Saving payload (FULL):', JSON.stringify(payload, null, 2));
+    const response = await apiClient.patch(`/settings/core-modules/organizations/status-types`, payload);
+    console.log('[Status Types] 💾 Save response (FULL):', JSON.stringify(response, null, 2));
+    
+    if (response && response.success) {
+      // Update snapshot after successful save to prevent unnecessary re-saves
+      // Normalize the snapshot to match the exact structure used in statusTypesDirty comparison
+      // This ensures the snapshot matches what we're comparing against
+      const savedData = {
+        organizationTypes: (response.data?.organizationTypes || organizationTypes.value).map(t => ({
+          value: t.value,
+          label: t.label || t.value,
+          enabled: t.enabled !== undefined ? t.enabled : true
+        })),
+        statusPicklists: {
+          customerStatus: (response.data?.statusPicklists?.customerStatus || statusPicklists.value.customerStatus).map(s => ({
+            value: s.value,
+            label: s.label || s.value,
+            enabled: s.enabled !== undefined ? s.enabled : true
+          })),
+          partnerStatus: (response.data?.statusPicklists?.partnerStatus || statusPicklists.value.partnerStatus).map(s => ({
+            value: s.value,
+            label: s.label || s.value,
+            enabled: s.enabled !== undefined ? s.enabled : true
+          })),
+          vendorStatus: (response.data?.statusPicklists?.vendorStatus || statusPicklists.value.vendorStatus).map(s => ({
+            value: s.value,
+            label: s.label || s.value,
+            enabled: s.enabled !== undefined ? s.enabled : true
+          }))
+        }
+      };
+      statusTypesOriginalSnapshot.value = JSON.stringify(savedData);
+      lastSaveTimestamp.value = Date.now(); // Mark when we saved to prevent immediate refetch
+      console.log('[Status Types] ✅ Save successful, snapshot updated with normalized saved data:', JSON.stringify({
+        organizationTypes: savedData.organizationTypes.map(t => ({ value: t.value, enabled: t.enabled })),
+        customerStatus: savedData.statusPicklists.customerStatus.map(s => ({ value: s.value, enabled: s.enabled })),
+        partnerStatus: savedData.statusPicklists.partnerStatus.map(s => ({ value: s.value, enabled: s.enabled })),
+        vendorStatus: savedData.statusPicklists.vendorStatus.map(s => ({ value: s.value, enabled: s.enabled }))
+      }, null, 2));
+      console.log('[Status Types] ✅ Save timestamp recorded:', lastSaveTimestamp.value, '- future fetches within 2s will be skipped');
+    } else {
+      const errorMsg = response?.message || response?.error || 'Failed to save status types';
+      console.error('[Status Types] Save failed:', errorMsg, response);
+      throw new Error(errorMsg);
+    }
+  } catch (err) {
+    console.error('Failed to save status types:', err);
+    alert(err.message || 'Failed to save status types. Please try again.');
+  } finally {
+    savingStatusTypes.value = false;
+  }
+}
+
+// Watch for module and tab changes to fetch status types
+// Fetch when status-types tab is opened for organizations module
+let watchDebounceTimer = null;
+watch(() => [selectedModule.value?.key, activeTopTab.value], async ([moduleKey, tab]) => {
+  // Debounce watch to prevent multiple rapid triggers
+  if (watchDebounceTimer) {
+    clearTimeout(watchDebounceTimer);
+  }
+  
+  watchDebounceTimer = setTimeout(async () => {
+    console.log('[Status Types] Watch triggered:', { moduleKey, tab, hasData: organizationTypes.value.length > 0, isFetching: fetchingStatusTypes.value });
+    
+    if (moduleKey === 'organizations' && tab === 'status-types') {
+      // Skip if already fetching
+      if (fetchingStatusTypes.value) {
+        console.log('[Status Types] Already fetching, skipping watch trigger');
+        return;
+      }
+      
+      // Reset initial load flag when switching to this tab
+      isInitialLoad.value = true;
+      
+      // Always fetch on tab switch to ensure we have the latest data from server
+      // This ensures data is refreshed on page reload
+      console.log('[Status Types] Fetching status types for organizations module...');
+      await fetchStatusTypes();
+    } else if (moduleKey === 'events' && tab === 'status') {
+      // Initialize event status snapshot when status tab is opened
+      // ARCHITECTURE NOTE: Event statuses are system-locked, but we initialize the snapshot for consistency.
+      // See: docs/architecture/event-settings.md Section 8.1
+      await nextTick();
+      initializeEventStatusSnapshot();
+    } else {
+      // Reset flag when switching away from status-types tab
+      isInitialLoad.value = true;
+    }
+    
+    // Initialize item status/types when switching to items status-types tab
+    if (moduleKey === 'items' && tab === 'status-types') {
+      // Initialize snapshot with current values
+      const snapshotData = {
+        itemTypes: itemTypes.value.map(t => ({
+          value: t.value,
+          label: t.label,
+          enabled: t.enabled !== undefined ? t.enabled : true
+        })),
+        status: itemStatusPicklist.value.map(s => ({
+          value: s.value,
+          label: s.label || s.value,
+          enabled: s.enabled !== undefined ? s.enabled : true
+        }))
+      };
+      itemStatusTypesOriginalSnapshot.value = JSON.stringify(snapshotData);
+    }
+  }, 100); // Small debounce to prevent rapid triggers
+}, { immediate: false });
+
+// Auto-save when status types change (debounced)
+let statusTypesSaveTimer = null;
+watch([organizationTypes, statusPicklists], () => {
+  // Skip auto-save during initial load or if already saving or fetching
+  if (isInitialLoad.value || savingStatusTypes.value || fetchingStatusTypes.value) {
+    console.log('[Status Types] Auto-save watch skipped:', {
+      isInitialLoad: isInitialLoad.value,
+      savingStatusTypes: savingStatusTypes.value,
+      fetchingStatusTypes: fetchingStatusTypes.value
+    });
+    return;
+  }
+  
+  // Only auto-save if we have data, it's dirty, and we have a snapshot (meaning data was loaded)
+  if (organizationTypes.value.length > 0 && 
+      statusTypesOriginalSnapshot.value && 
+      statusTypesDirty.value) {
+    // Clear existing timer
+    if (statusTypesSaveTimer) {
+      clearTimeout(statusTypesSaveTimer);
+    }
+    // Debounce save by 1000ms to avoid excessive saves
+    statusTypesSaveTimer = setTimeout(async () => {
+      console.log('[Status Types] Auto-saving changes...', {
+        organizationTypes: organizationTypes.value.length,
+        customerStatus: statusPicklists.value.customerStatus.length,
+        partnerStatus: statusPicklists.value.partnerStatus.length,
+        vendorStatus: statusPicklists.value.vendorStatus.length,
+        isDirty: statusTypesDirty.value
+      });
+      try {
+        await saveStatusTypes();
+        console.log('[Status Types] Auto-save completed successfully');
+      } catch (err) {
+        console.error('[Status Types] Auto-save failed:', err);
+      }
+    }, 1000);
+  }
+}, { deep: true });
+
+onMounted(async () => {
+  await fetchModules();
+  
+  // After modules are loaded, if we're on the organizations status-types tab, fetch status types
+  if (selectedModule.value?.key === 'organizations' && activeTopTab.value === 'status-types') {
+    console.log('[Status Types] onMounted: Fetching status types after module load');
+    await nextTick();
+    await fetchStatusTypes();
+  }
+  
+  // After modules are loaded, if we're on the tasks status-priority tab, initialize snapshot
+  // ARCHITECTURE NOTE: Tasks Settings configure structure only, never work.
+  // See: docs/architecture/task-settings.md Section 3.3
+  if (selectedModule.value?.key === 'tasks' && activeTopTab.value === 'status-priority') {
+    await nextTick();
+    // Initialize snapshot with current values
+    const snapshotData = {
+      status: taskStatusPicklist.value.map(s => ({
+        value: s.value,
+        label: s.label || s.value,
+        enabled: s.enabled !== undefined ? s.enabled : true
+      })),
+      priority: taskPriorityPicklist.value.map(p => ({
+        value: p.value,
+        label: p.label || p.value,
+        enabled: p.enabled !== undefined ? p.enabled : true
+      }))
+    };
+    taskStatusPriorityOriginalSnapshot.value = JSON.stringify(snapshotData);
+  }
+  
+  // After modules are loaded, if we're on the items status-types tab, initialize snapshot
+  if (selectedModule.value?.key === 'items' && activeTopTab.value === 'status-types') {
+    await nextTick();
+    // Initialize snapshot with current values
+    const snapshotData = {
+      itemTypes: itemTypes.value.map(t => ({
+        value: t.value,
+        label: t.label,
+        enabled: t.enabled !== undefined ? t.enabled : true
+      })),
+      status: itemStatusPicklist.value.map(s => ({
+        value: s.value,
+        label: s.label || s.value,
+        enabled: s.enabled !== undefined ? s.enabled : true
+      }))
+    };
+    itemStatusTypesOriginalSnapshot.value = JSON.stringify(snapshotData);
+    itemStatusTypesDirty.value = false;
+  }
+  
+  // After modules are loaded, if we're on the events status tab, initialize snapshot
+  // ARCHITECTURE NOTE: Event statuses are system-locked, but we initialize the snapshot for consistency.
+  // See: docs/architecture/event-settings.md Section 2.2
+  if (selectedModule.value?.key === 'events' && activeTopTab.value === 'status') {
+    await nextTick();
+    initializeEventStatusSnapshot();
+  }
   
   // Close dependency dropdowns when clicking outside
   document.addEventListener('click', (e) => {

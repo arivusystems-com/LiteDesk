@@ -7,63 +7,14 @@
       </p>
     </div>
 
-    <ListView
-      title="Tasks"
-      description="Manage your tasks and to-dos"
+    <!-- Registry-Driven ModuleList -->
+    <ModuleList
       module-key="tasks"
-      create-label="New Task"
-      search-placeholder="Search tasks..."
-      :data="tasks"
-      :columns="columns"
-      :loading="loading"
-      :statistics="statistics"
-      :stats-config="[]"
-      :pagination="{ currentPage: pagination.currentPage, totalPages: pagination.totalPages, totalRecords: pagination.totalTasks, limit: pagination.tasksPerPage }"
-      :sort-field="sortField"
-      :sort-order="sortOrder"
-      :filter-config="[
-        {
-          key: 'status',
-          label: 'All Status',
-          options: [
-            { value: 'open', label: 'Open' },
-            { value: 'completed', label: 'Completed' }
-          ]
-        },
-        {
-          key: 'assignedTo',
-          label: 'All Assignees',
-          options: [
-            { value: 'me', label: 'My Tasks' }
-          ]
-        },
-        {
-          key: 'appContext',
-          label: 'All Apps',
-          options: [
-            { value: '', label: 'All Apps' },
-            { value: 'SALES', label: 'Sales' },
-            { value: 'PORTAL', label: 'Portal' },
-            { value: 'AUDIT', label: 'Audit' },
-            { value: 'LMS', label: 'LMS' }
-          ]
-        }
-      ]"
-      table-id="tasks-table"
-      row-key="_id"
-      empty-title="No tasks yet"
-      empty-message="Tasks appear here when you're assigned work across Sales or Helpdesk. You can also create standalone tasks to track your own work."
+      app-key="PLATFORM"
       @create="openCreateModal"
       @import="showImportModal = true"
       @export="exportTasks"
-      @update:searchQuery="handleSearchQueryUpdate"
-      @update:filters="(newFilters) => { Object.assign(filters, newFilters); fetchTasks(); }"
-      @update:sort="({ sortField: key, sortOrder: order }) => { handleSort({ key, order }); }"
-      @update:pagination="(p) => { pagination.currentPage = p.currentPage; pagination.tasksPerPage = p.limit || pagination.tasksPerPage; fetchTasks(); }"
-      @fetch="fetchTasks"
-      @row-click="openDetailModal"
-      @edit="openEditModal"
-      @delete="handleDelete"
+      @row-click="handleRowClick"
       @bulk-action="handleBulkAction"
     >
       <!-- Custom Title Cell with checkbox -->
@@ -81,43 +32,50 @@
         </div>
       </template>
 
-      <!-- Custom App Context Cell with Badge -->
-      <template #cell-appContext="{ value }">
-        <BadgeCell 
-          :value="formatAppContext(value)" 
-          :variant-map="{
-            'Sales': 'primary',
-            'Portal': 'info',
-            'Audit': 'warning',
-            'LMS': 'success'
-          }"
-        />
-      </template>
-
       <!-- Custom Status Cell with Badge -->
       <template #cell-status="{ value }">
         <BadgeCell 
           :value="formatStatus(value)" 
           :variant-map="{
-            'Open': 'default',
-            'Completed': 'success'
+            'Todo': 'default',
+            'In Progress': 'info',
+            'Waiting': 'warning',
+            'Completed': 'success',
+            'Cancelled': 'danger'
           }"
         />
       </template>
 
+      <!-- Custom Priority Cell with Badge -->
+      <template #cell-priority="{ value }">
+        <BadgeCell 
+          v-if="value"
+          :value="formatPriority(value)" 
+          :variant-map="{
+            'Low': 'default',
+            'Medium': 'info',
+            'High': 'warning',
+            'Urgent': 'danger'
+          }"
+        />
+        <span v-else class="text-gray-500 dark:text-gray-400">-</span>
+      </template>
+
       <!-- Custom Assigned To Cell -->
       <template #cell-assignedTo="{ row }">
-        <div v-if="row.assignedTo || row.ownerPersonId" class="flex items-center gap-2">
+        <div v-if="row.assignedTo" class="flex items-center gap-2">
           <Avatar
+            v-if="typeof row.assignedTo === 'object'"
             :user="{
-              firstName: row.assignedTo?.firstName || row.ownerPersonId?.first_name,
-              lastName: row.assignedTo?.lastName || row.ownerPersonId?.last_name,
-              avatar: row.assignedTo?.avatar
+              firstName: row.assignedTo.firstName || row.assignedTo.first_name,
+              lastName: row.assignedTo.lastName || row.assignedTo.last_name,
+              email: row.assignedTo.email,
+              avatar: row.assignedTo.avatar
             }"
             size="sm"
           />
-          <span class="text-sm text-gray-900 dark:text-white">
-            {{ row.assignedTo?.firstName || row.ownerPersonId?.first_name }} {{ row.assignedTo?.lastName || row.ownerPersonId?.last_name }}
+          <span class="text-sm text-gray-700 dark:text-gray-300">
+            {{ getUserDisplayName(row.assignedTo) }}
           </span>
         </div>
         <span v-else class="text-sm text-gray-500 dark:text-gray-400">Unassigned</span>
@@ -136,7 +94,12 @@
         <span v-else class="text-sm text-gray-500 dark:text-gray-400">No due date</span>
       </template>
 
-    </ListView>
+      <!-- Custom Created Date Cell -->
+      <template #cell-createdAt="{ value }">
+        <DateCell :value="value" format="short" />
+      </template>
+
+    </ModuleList>
 
     <!-- Task Form Modal -->
     <CreateRecordDrawer 
@@ -158,107 +121,26 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { useAuthStore } from '../stores/auth';
-import { useBulkActions } from '@/composables/useBulkActions';
-import apiClient from '../utils/apiClient';
-import ListView from '@/components/common/ListView.vue';
-import BadgeCell from '../components/common/table/BadgeCell.vue';
-import DateCell from '../components/common/table/DateCell.vue';
+import { useAuthStore } from '@/stores/auth';
+import { useTabs } from '@/composables/useTabs';
+import apiClient from '@/utils/apiClient';
+import ModuleList from '@/components/module-list/ModuleList.vue';
+import BadgeCell from '@/components/common/table/BadgeCell.vue';
+import DateCell from '@/components/common/table/DateCell.vue';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
-import CSVImportModal from '../components/import/CSVImportModal.vue';
+import CSVImportModal from '@/components/import/CSVImportModal.vue';
 import Avatar from '@/components/common/Avatar.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
+const { openTab } = useTabs();
 
 // State
-const tasks = ref([]);
-const loading = ref(false);
-const searchQuery = ref('');
 const showFormModal = ref(false);
-const showDetailModal = ref(false);
 const showImportModal = ref(false);
 const editingTask = ref(null);
-const selectedTask = ref(null);
-
-const filters = reactive({
-  status: '',
-  assignedTo: '',
-  appContext: '' // Default to empty = All Apps
-});
-
-const pagination = reactive({
-  currentPage: 1,
-  totalPages: 1,
-  totalTasks: 0,
-  tasksPerPage: 20
-});
-
-const sortField = ref('createdAt');
-const sortOrder = ref('desc');
-
-const statistics = reactive({
-  total: 0,
-  overdue: 0,
-  dueToday: 0,
-  byStatus: {},
-  byPriority: {}
-});
-
-// Mass Actions
-// Use bulk actions composable with permissions
-const { bulkActions: baseMassActions } = useBulkActions('tasks');
-
-// Check if any filters are active
-const hasActiveFilters = computed(() => {
-  return searchQuery.value.trim() !== '' || 
-         (filters?.status || '') !== '' || 
-         (filters?.assignedTo || '') !== '';
-});
-
-// Add custom "Mark Complete" action for tasks
-const massActions = computed(() => {
-  const actions = [];
-  
-  // Add Mark Complete action if user can edit
-  if (authStore.can('tasks', 'edit')) {
-    actions.push({ label: 'Mark Complete', icon: 'edit', action: 'bulk-complete', variant: 'success' });
-  }
-  
-  // Add base actions (Delete, Export) based on permissions
-  actions.push(...baseMassActions.value);
-  
-  return actions;
-});
-
-// Column definitions
-const columns = computed(() => {
-  const allColumns = [
-    { key: 'title', label: 'Task', sortable: true, minWidth: '250px' },
-    { key: 'appContext', label: 'App', sortable: true, minWidth: '100px' },
-    { key: 'status', label: 'Status', sortable: true, minWidth: '150px' },
-    { 
-      key: 'assignedTo', 
-      label: 'Assigned To', 
-      sortable: false,  // Server doesn't support sorting by populated field
-      minWidth: '180px',
-      sortValue: (row) => {
-        if (row.assignedTo) {
-          return `${row.assignedTo.firstName || ''} ${row.assignedTo.lastName || ''}`.trim();
-        }
-        if (row.ownerPersonId) {
-          return `${row.ownerPersonId.first_name || ''} ${row.ownerPersonId.last_name || ''}`.trim();
-        }
-        return '';
-      }
-    },
-    { key: 'dueDate', label: 'Due Date', sortable: true, minWidth: '140px' }
-  ];
-  
-  return allColumns;
-});
 
 // Helper functions for dates
 const isOverdue = (dueDate) => {
@@ -271,148 +153,22 @@ const isDueToday = (dueDate) => {
   return new Date(dueDate).toDateString() === new Date().toDateString();
 };
 
-// Event handlers
-const handlePageChange = (page) => {
-  pagination.currentPage = page;
-  fetchTasks();
-};
-
-const handleSort = ({ key, order }) => {
-  const sortMap = {
-    'title': 'title',
-    'priority': 'priority',
-    'status': 'status',
-    'dueDate': 'dueDate'
-  };
-  
-  // If key is empty, reset to default sort
-  if (!key) {
-    sortField.value = 'createdAt';
-    sortOrder.value = 'desc';
-  } else {
-    sortField.value = sortMap[key] || 'createdAt';
-    sortOrder.value = order;
-  }
-  
-  fetchTasks();
-};
-
-// Fetch tasks
-const fetchTasks = async () => {
-  try {
-    loading.value = true;
-    
-    // Use Scheduling API to fetch tasks
-    // Aggregation: by default fetches across all apps
-    // Optional appContext filter narrows to specific app
-    const params = {
-      type: 'task'
-    };
-
-    // Add appContext filter if selected (empty string means "All Apps")
-    if (filters.appContext) {
-      params.appContext = filters.appContext;
-    }
-
-    console.log('Fetching tasks with params:', params);
-    const response = await apiClient.get('/scheduling', { params });
-    console.log('Tasks response:', response);
-
-    if (response && response.success) {
-      // Map Scheduling items to task-like structure for UI compatibility
-      const items = Array.isArray(response.data) ? response.data : [];
-      console.log('Raw scheduling items:', items.length, items);
-      
-      tasks.value = items.map(item => {
-        // Handle ownerPersonId mapping (can be object or null)
-        let assignedTo = null;
-        if (item.ownerPersonId) {
-          if (typeof item.ownerPersonId === 'object' && item.ownerPersonId._id) {
-            assignedTo = {
-              firstName: item.ownerPersonId.first_name || '',
-              lastName: item.ownerPersonId.last_name || '',
-              _id: item.ownerPersonId._id
-            };
-          }
-        }
-        
-        return {
-          ...item,
-          assignedTo,
-          // Scheduling model doesn't have priority or tags - set defaults
-          priority: null,
-          tags: []
-        };
-      });
-      
-      // Note: Scheduling API returns flat list without pagination
-      // Set pagination values for UI compatibility
-      pagination.totalTasks = tasks.value.length;
-      pagination.totalPages = 1;
-      console.log('Tasks loaded:', tasks.value.length, tasks.value);
-    } else {
-      console.error('Response not successful:', response);
-      tasks.value = [];
-    }
-  } catch (error) {
-    console.error('Error fetching tasks:', error);
-    console.error('Error details:', error.message, error.stack);
-    if (error.response) {
-      console.error('Error response:', error.response);
-    }
-    tasks.value = [];
-  } finally {
-    loading.value = false;
-  }
-};
-
-// Fetch statistics - not available for Scheduling API
-const fetchStatistics = async () => {
-  // Statistics endpoint not available for Scheduling API
-  // Keep function for compatibility but no-op
-};
-
-// Debounced search
-let searchTimeout;
-const debouncedSearch = () => {
-  clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(() => {
-    pagination.currentPage = 1;
-    fetchTasks();
-  }, 300);
-};
-
-// Handle search query update
-const handleSearchQueryUpdate = (query) => {
-  searchQuery.value = query;
-  debouncedSearch();
-};
-
-// Clear filters
-const clearFilters = () => {
-  filters.status = '';
-  filters.assignedTo = '';
-  filters.appContext = '';
-  searchQuery.value = '';
-  pagination.currentPage = 1;
-  fetchTasks();
-};
-
-// Page navigation
-const changePage = (page) => {
-  pagination.currentPage = page;
-  fetchTasks();
+// Helper function to get user display name
+const getUserDisplayName = (user) => {
+  if (!user) return '';
+  if (typeof user === 'string') return user;
+  const firstName = user.firstName || user.first_name || '';
+  const lastName = user.lastName || user.last_name || '';
+  return `${firstName} ${lastName}`.trim() || user.email || '';
 };
 
 // Toggle task status (quick complete/incomplete)
 const toggleTaskStatus = async (task) => {
   try {
-    // Scheduling API uses 'open' and 'completed' status values
-    const newStatus = task.status === 'completed' ? 'open' : 'completed';
-    await apiClient.patch(`/scheduling/${task._id}/status`, { status: newStatus });
-    await fetchTasks();
-    // Note: Statistics endpoint may not exist for Scheduling - skip for now
-    // await fetchStatistics();
+    const newStatus = task.status === 'completed' ? 'todo' : 'completed';
+    await apiClient.patch(`/tasks/${task._id}/status`, { status: newStatus });
+    // ModuleList will automatically refresh the data
+    window.location.reload(); // Temporary - ModuleList should emit refresh event
   } catch (error) {
     console.error('Error toggling task status:', error);
   }
@@ -424,110 +180,28 @@ const openCreateModal = () => {
   showFormModal.value = true;
 };
 
-const openDetailModal = (task) => {
-  selectedTask.value = task;
-  showDetailModal.value = true;
+const handleRowClick = (row) => {
+  // Navigate to task detail if route exists, otherwise emit event
+  openTab(`/tasks/${row._id}`, {
+    title: row.title || 'Task Detail',
+    background: false
+  });
 };
 
-const openEditModal = (task) => {
-  editingTask.value = task;
-  showFormModal.value = true;
-};
-
-const closeFormModal = () => {
-  showFormModal.value = false;
-  editingTask.value = null;
-};
-
-const closeDetailModal = () => {
-  showDetailModal.value = false;
-  selectedTask.value = null;
-};
-
-const handleTaskSave = async () => {
-  closeFormModal();
-  // Reset to page 1 to see the new/updated task
-  pagination.currentPage = 1;
-  await fetchTasks();
-};
-
-const handleEdit = (task) => {
-  closeDetailModal();
-  editingTask.value = task;
-  showFormModal.value = true;
-};
-
-const handleDelete = async (row) => {
-  const taskId = row._id || row;
+const handleBulkAction = async (action, rows) => {
+  const taskIds = rows.map(task => task._id);
   
   try {
-    await apiClient.delete(`/scheduling/${taskId}`);
-    closeDetailModal();
-    await fetchTasks();
-  } catch (error) {
-    console.error('Error deleting task:', error);
-  }
-};
-
-// Bulk Actions Handlers
-const handleSelect = (selectedRows) => {
-  console.log(`${selectedRows.length} tasks selected`);
-};
-
-const handleBulkAction = async (actionId, selectedRows) => {
-  const taskIds = selectedRows.map(task => task._id);
-  
-  try {
-    if (actionId === 'bulk-delete' || actionId === 'delete') {
-      await Promise.all(taskIds.map(id => apiClient.delete(`/scheduling/${id}`)));
-      await fetchTasks();
-      
-    } else if (actionId === 'bulk-complete') {
-      if (!confirm(`Mark ${selectedRows.length} tasks as complete?`)) return;
-      
-      await Promise.all(taskIds.map(id => 
-        apiClient.patch(`/scheduling/${id}/status`, { status: 'completed' })
-      ));
-      await fetchTasks();
-      
-    } else if (actionId === 'bulk-export' || actionId === 'export') {
-      exportTasksToCSV(selectedRows);
+    if (action === 'delete') {
+      await Promise.all(taskIds.map(id => apiClient.delete(`/tasks/${id}`)));
+      window.location.reload(); // Temporary - ModuleList should emit refresh event
+    } else if (action === 'export') {
+      // Export functionality handled by ModuleList
     }
   } catch (error) {
     console.error('Error performing bulk action:', error);
     alert('Error performing bulk action. Please try again.');
   }
-};
-
-const exportTasksToCSV = (tasksToExport) => {
-  const csv = [
-    ['Title', 'Status', 'Due Date', 'Assigned To'].join(','),
-    ...tasksToExport.map(task => {
-      const owner = task.assignedTo || task.ownerPersonId;
-      const ownerName = owner 
-        ? `${owner.firstName || owner.first_name || ''} ${owner.lastName || owner.last_name || ''}`.trim()
-        : '';
-      return [
-        task.title,
-        task.status,
-        task.dueDate || '',
-        ownerName
-      ].join(',');
-    })
-  ].join('\n');
-  
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `tasks-export-${new Date().toISOString().split('T')[0]}.csv`;
-  a.click();
-  window.URL.revokeObjectURL(url);
-};
-
-const handleStatusChange = async () => {
-  await fetchTasks();
-  closeDetailModal();
 };
 
 // Export tasks
@@ -556,11 +230,20 @@ const exportTasks = async () => {
   }
 };
 
-// Column settings handled by ListView component
-
 const handleImportComplete = () => {
   showImportModal.value = false;
-  fetchTasks();
+  window.location.reload(); // Temporary - ModuleList should emit refresh event
+};
+
+const handleTaskSave = () => {
+  showFormModal.value = false;
+  editingTask.value = null;
+  window.location.reload(); // Temporary - ModuleList should emit refresh event
+};
+
+const closeFormModal = () => {
+  showFormModal.value = false;
+  editingTask.value = null;
 };
 
 // Utility functions
@@ -574,70 +257,30 @@ const formatDate = (date) => {
 };
 
 const formatStatus = (status) => {
-  // Map Scheduling status values ('open', 'completed') to display format
+  // Map task status values to display format
   const statusMap = {
-    'open': 'Open',
-    'completed': 'Completed'
+    'todo': 'Todo',
+    'in_progress': 'In Progress',
+    'waiting': 'Waiting',
+    'completed': 'Completed',
+    'cancelled': 'Cancelled'
   };
   if (statusMap[status]) {
     return statusMap[status];
   }
-  // Fallback for old status values if any
-  return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  // Fallback: capitalize first letter
+  return status ? status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ') : '-';
 };
 
-const formatAppContext = (appContext) => {
-  // Map app context keys to display names
-  const appContextMap = {
-    'SALES': 'Sales',
-    'PORTAL': 'Portal',
-    'AUDIT': 'Audit',
-    'LMS': 'LMS',
-    'CONTROL_PLANE': 'Control Plane'
+const formatPriority = (priority) => {
+  // Map priority values to display format
+  const priorityMap = {
+    'low': 'Low',
+    'medium': 'Medium',
+    'high': 'High',
+    'urgent': 'Urgent'
   };
-  if (appContextMap[appContext]) {
-    return appContextMap[appContext];
-  }
-  // Fallback: return as-is if not in map
-  return appContext || 'Unknown';
+  return priorityMap[priority] || priority;
 };
-
-// Initialize
-onMounted(() => {
-  // Load saved sort state from localStorage before fetching
-  const savedSort = localStorage.getItem('datatable-tasks-table-sort');
-  if (savedSort) {
-    try {
-      const { by, order } = JSON.parse(savedSort);
-      
-      // Map frontend column keys to backend sort fields
-      const sortMap = {
-        'title': 'title',
-        'priority': 'priority',
-        'status': 'status',
-        'dueDate': 'dueDate'
-      };
-      
-      // If the saved sort key is valid, use it; otherwise default to createdAt
-      if (by && sortMap[by]) {
-        sortField.value = sortMap[by];
-        sortOrder.value = order;
-        console.log('Loaded saved sort in Tasks:', { by, order, mapped: sortField.value });
-      } else {
-        sortField.value = 'createdAt';
-        sortOrder.value = 'desc';
-        console.log('Saved sort invalid or empty, using default:', { by, order });
-        // Clear invalid saved sort
-        localStorage.removeItem('datatable-tasks-table-sort');
-      }
-    } catch (e) {
-      console.error('Failed to parse saved sort:', e);
-      sortField.value = 'createdAt';
-      sortOrder.value = 'desc';
-    }
-  }
-  
-  fetchTasks();
-});
 </script>
 

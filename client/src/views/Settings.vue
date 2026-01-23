@@ -122,6 +122,37 @@
                   </transition>
                 </button>
               </li>
+              
+              <!-- Internal Section (Environment-Gated) -->
+              <template v-if="isInternalEnvironment">
+                <li>
+                  <hr class="my-2 border-gray-200 dark:border-gray-700" />
+                </li>
+                <li>
+                  <div v-if="shouldShowExpanded" class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Internal
+                  </div>
+                </li>
+                <li v-for="internalTab in internalTabs" :key="internalTab.id">
+                  <button
+                    @click="handleTabClick(internalTab)"
+                    :title="!shouldShowExpanded ? internalTab.name : ''"
+                    :class="[
+                      'w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
+                      activeTab === internalTab.id || route.path.includes(internalTab.path)
+                        ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'
+                    ]"
+                  >
+                    <div class="flex items-center justify-center w-5">
+                      <component :is="internalTab.icon" class="w-5 h-5" />
+                    </div>
+                    <transition enter-active-class="transition-all duration-300 ease-out" enter-from-class="opacity-0 max-w-0" enter-to-class="opacity-100 max-w-xs" leave-active-class="transition-all duration-300 ease-in" leave-from-class="opacity-100 max-w-xs" leave-to-class="opacity-0 max-w-0">
+                      <span v-if="shouldShowExpanded" class="truncate">{{ internalTab.name }}</span>
+                    </transition>
+                  </button>
+                </li>
+              </template>
             </ul>
           </nav>
         </aside>
@@ -161,6 +192,8 @@ import ApplicationDetail from '@/components/settings/ApplicationDetail.vue';
 import SubscriptionsList from '@/components/settings/SubscriptionsList.vue';
 import SubscriptionDetail from '@/components/settings/SubscriptionDetail.vue';
 import NotificationSettings from '@/components/settings/NotificationSettings.vue';
+import DemoRequests from '@/views/DemoRequests.vue';
+import InstanceManagement from '@/views/InstanceManagement.vue';
 
 const authStore = useAuthStore();
 const { colorMode, toggleColorMode } = useColorMode();
@@ -355,6 +388,65 @@ const CoreModulesIcon = () => h('svg', {
     d: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4'
   })
 ]);
+
+// Internal section icons
+const DemoRequestsIcon = () => h('svg', {
+  fill: 'none',
+  stroke: 'currentColor',
+  viewBox: '0 0 24 24',
+  xmlns: 'http://www.w3.org/2000/svg'
+}, [
+  h('path', {
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    'stroke-width': '2',
+    d: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'
+  })
+]);
+
+const InstancesIcon = () => h('svg', {
+  fill: 'none',
+  stroke: 'currentColor',
+  viewBox: '0 0 24 24',
+  xmlns: 'http://www.w3.org/2000/svg'
+}, [
+  h('path', {
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    'stroke-width': '2',
+    d: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10'
+  })
+]);
+
+// Environment check: Internal section only shows in development/internal environments
+// This section is for internal/operational tooling only and must never be used for customer-facing configuration
+const isInternalEnvironment = computed(() => {
+  // Gate by development environment - NEVER expose in production builds
+  return import.meta.env.DEV === true;
+});
+
+// Internal section tabs (environment-gated)
+const internalTabs = computed(() => {
+  if (!isInternalEnvironment.value) return [];
+  
+  return [
+    { 
+      id: 'demo-requests', 
+      name: 'Demo Requests', 
+      icon: DemoRequestsIcon, 
+      component: DemoRequests,
+      path: '/settings/demo-requests'
+    },
+    { 
+      id: 'instances', 
+      name: 'Instances', 
+      icon: InstancesIcon, 
+      component: InstanceManagement,
+      path: '/settings/instances'
+    }
+  ];
+});
+
 // User dropdown actions
 const toggleColorModeFromMenu = () => {
   const newMode = colorMode.value === 'light' ? 'dark' : 'light';
@@ -372,12 +464,16 @@ const userMenuItems = computed(() => [
   { name: 'Sign out', action: handleLogout, divider: true, isLogout: true },
 ]);
 
-// Handle tab click - special handling for notifications
+// Handle tab click - special handling for notifications and internal tabs
 function handleTabClick(tab) {
   if (tab.id === 'notifications') {
     activeTab.value = 'notifications';
     // Use query parameters instead of route paths to stay within Settings
     router.replace({ path: '/settings', query: { ...route.query, tab: 'notifications', notificationPage: 'overview' } });
+  } else if (tab.path) {
+    // Internal tabs use query parameters to stay within Settings layout
+    activeTab.value = tab.id;
+    router.replace({ path: '/settings', query: { ...route.query, tab: tab.id } });
   } else {
     activeTab.value = tab.id;
   }
@@ -397,6 +493,13 @@ const currentTabComponent = computed(() => {
     return SubscriptionDetail;
   }
   
+  // Check internal tabs first (environment-gated)
+  const internalTab = internalTabs.value.find(t => t.id === activeTab.value);
+  if (internalTab) {
+    return internalTab.component;
+  }
+  
+  // Then check regular tabs
   const tab = tabs.value.find(t => t.id === activeTab.value);
   return tab?.component || null;
 });
@@ -405,7 +508,7 @@ const currentTabComponent = computed(() => {
 const syncTabFromRoute = () => {
   const q = route.query.tab;
   if (typeof q === 'string') {
-    const exists = tabs.value.some(t => t.id === q);
+    const exists = tabs.value.some(t => t.id === q) || internalTabs.value.some(t => t.id === q);
     if (exists) activeTab.value = q;
   } else if (route.path.includes('/notifications') && !route.query.tab) {
     // If directly navigating to a notification route, set tab but don't change path
@@ -429,7 +532,7 @@ watch(activeTab, (val) => {
 const restoreInitialTab = () => {
   // If there's a tab in the URL query, use it
   if (route.query.tab) {
-  const validIds = new Set(tabs.value.map(t => t.id));
+    const validIds = new Set([...tabs.value.map(t => t.id), ...internalTabs.value.map(t => t.id)]);
     if (validIds.has(route.query.tab)) {
       activeTab.value = route.query.tab;
       return;
@@ -455,10 +558,10 @@ watch(activeTab, (v) => {
 });
 
 // If available tabs change due to permission changes, keep the closest valid tab
-watch(tabs, (list) => {
+watch([tabs, internalTabs], ([tabsList, internalTabsList]) => {
   if (activeTab.value) {
-  const validIds = new Set(list.map(t => t.id));
-  if (!validIds.has(activeTab.value)) {
+    const validIds = new Set([...tabsList.map(t => t.id), ...internalTabsList.map(t => t.id)]);
+    if (!validIds.has(activeTab.value)) {
       activeTab.value = null; // Show landing page if tab is invalid
     }
   }

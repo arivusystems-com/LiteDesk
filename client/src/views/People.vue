@@ -211,11 +211,9 @@
     </ModuleList>
 
     <!-- Quick Create Drawer -->
-    <PeopleQuickCreateDrawer
-      :isOpen="showQuickCreate"
-      @close="showQuickCreate = false"
-      @saved="handlePersonCreated"
-    />
+    <!-- ARCHITECTURAL INTENT: Drawer requires intent context -->
+    <!-- People.vue redirects to /people/create for intent selection -->
+    <!-- Intent must be selected before drawer can open -->
 
     <!-- CSV Import Modal -->
     <CSVImportModal 
@@ -445,8 +443,11 @@ const viewContact = (contactId, event = null) => {
 };
 
 const openCreateModal = () => {
-  editingContact.value = null;
-  showQuickCreate.value = true;
+  // ARCHITECTURAL INTENT: All entry points open drawer in Quick Create mode
+  // Open drawer in same tab, not navigating to new route
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('litedesk:open-people-quick-create'));
+  }
 };
 
 const handlePersonCreated = () => {

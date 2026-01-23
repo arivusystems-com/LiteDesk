@@ -25,6 +25,7 @@ import type { Ref } from 'vue';
 
 const COLLAPSED_KEY = 'litedesk-sidebar-collapsed';
 const LAST_ACTIVE_APP_ID_KEY = 'litedesk-sidebar-last-active-app-id';
+const CORE_MODULES_COLLAPSED_KEY = 'litedesk-sidebar-core-modules-collapsed';
 
 function loadBoolean(key: string, fallback: boolean): boolean {
   try {
@@ -65,20 +66,24 @@ function saveString(key: string, value: string): void {
 /**
  * Sidebar state (locked contract doctrine).
  *
- * Exposes ONLY:
- * - collapsed: boolean
- * - lastActiveAppId: string
+ * Exposes:
+ * - collapsed: boolean (entire sidebar collapsed state)
+ * - lastActiveAppId: string (last active app lens)
+ * - coreModulesCollapsed: boolean (Core Modules section collapse state)
  */
 export function useSidebarState(): {
   collapsed: Ref<boolean>;
   lastActiveAppId: Ref<string>;
+  coreModulesCollapsed: Ref<boolean>;
 } {
   const collapsed = ref<boolean>(loadBoolean(COLLAPSED_KEY, false));
   const lastActiveAppId = ref<string>(loadString(LAST_ACTIVE_APP_ID_KEY, ''));
+  const coreModulesCollapsed = ref<boolean>(loadBoolean(CORE_MODULES_COLLAPSED_KEY, false));
 
   watch(collapsed, (value) => saveBoolean(COLLAPSED_KEY, value));
   watch(lastActiveAppId, (value) => saveString(LAST_ACTIVE_APP_ID_KEY, value));
+  watch(coreModulesCollapsed, (value) => saveBoolean(CORE_MODULES_COLLAPSED_KEY, value));
 
-  return { collapsed, lastActiveAppId };
+  return { collapsed, lastActiveAppId, coreModulesCollapsed };
 }
 
