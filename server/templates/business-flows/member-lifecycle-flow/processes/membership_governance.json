@@ -1,0 +1,58 @@
+{
+  "name": "Membership Governance Process",
+  "description": "Handles membership activations and status changes",
+  "appKey": "SALES",
+  "trigger": {
+    "type": "domain_event",
+    "eventType": "status.changed"
+  },
+  "status": "draft",
+  "version": 1,
+  "nodes": [
+    {
+      "id": "trigger_1",
+      "type": "trigger",
+      "config": {
+        "entityType": "people",
+        "condition": {
+          "field": "membershipStatus",
+          "operator": "equals",
+          "value": "Active"
+        }
+      },
+      "order": 1
+    },
+    {
+      "id": "action_1",
+      "type": "action",
+      "config": {
+        "actionType": "create_task",
+        "params": {
+          "title": "Welcome new member",
+          "description": "Schedule orientation session",
+          "dueDate": "1_day",
+          "assignee": "owner"
+        }
+      },
+      "order": 2
+    },
+    {
+      "id": "end_1",
+      "type": "end",
+      "config": {},
+      "order": 3
+    }
+  ],
+  "edges": [
+    {
+      "fromNodeId": "trigger_1",
+      "toNodeId": "action_1",
+      "condition": null
+    },
+    {
+      "fromNodeId": "action_1",
+      "toNodeId": "end_1",
+      "condition": null
+    }
+  ]
+}

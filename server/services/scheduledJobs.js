@@ -1,11 +1,14 @@
 const cron = require('node-cron');
 const { runDailyDigest, runWeeklyDigest } = require('./digestScheduler');
+const { tick: escalationTick } = require('./escalationResolver');
 
 const NOTIFICATION_DEBUG = process.env.NOTIFICATION_DEBUG === 'true';
 const ENABLE_DIGEST_SCHEDULER = process.env.ENABLE_DIGEST_SCHEDULER !== 'false'; // Default: enabled
+const ENABLE_ESCALATION_SCHEDULER = process.env.ENABLE_ESCALATION_SCHEDULER !== 'false'; // Default: enabled (Phase 3)
 
 let dailyDigestJob = null;
 let weeklyDigestJob = null;
+let escalationJob = null;
 
 /**
  * Initialize and start scheduled jobs for notification digests.
@@ -17,12 +20,9 @@ let weeklyDigestJob = null;
  * Set ENABLE_DIGEST_SCHEDULER=false to disable.
  */
 function startScheduledJobs() {
-  if (!ENABLE_DIGEST_SCHEDULER) {
-    console.log('[scheduledJobs] Digest scheduler disabled (ENABLE_DIGEST_SCHEDULER=false)');
-    return;
-  }
+  console.log('[scheduledJobs] Starting scheduled jobs...');
 
-  console.log('[scheduledJobs] Starting notification digest scheduler...');
+  if (ENABLE_DIGEST_SCHEDULER) {
 
   // Daily digest: Every day at 9:00 AM
   // Cron format: minute hour day month day-of-week
@@ -63,11 +63,30 @@ function startScheduledJobs() {
     timezone: process.env.DIGEST_TIMEZONE || 'UTC'
   });
 
-  console.log('[scheduledJobs] ✅ Digest scheduler started');
-  console.log('[scheduledJobs]   - Daily digest: 9:00 AM every day');
-  console.log('[scheduledJobs]   - Weekly digest: 9:00 AM every Monday');
+    console.log('[scheduledJobs]   - Daily digest: 9:00 AM every day');
+    console.log('[scheduledJobs]   - Weekly digest: 9:00 AM every Monday');
+  } else {
+    console.log('[scheduledJobs] Digest scheduler disabled (ENABLE_DIGEST_SCHEDULER=false)');
+  }
+
+  // Escalation resolver (Phase 3): check pending approvals past timeout
+  if (ENABLE_ESCALATION_SCHEDULER) {
+    escalationJob = cron.schedule('* * * * *', async () => {
+      try {
+        const r = await escalationTick();
+        if (r.processed > 0 && NOTIFICATION_DEBUG) {
+          console.log(`[scheduledJobs] Escalation tick: processed=${r.processed} escalated=${r.escalated} failed=${r.failed}`);
+        }
+      } catch (err) {
+        console.error('[scheduledJobs] Escalation tick failed:', err.message);
+      }
+    }, { scheduled: true, timezone: process.env.DIGEST_TIMEZONE || 'UTC' });
+    console.log('[scheduledJobs]   - Escalation resolver: every minute');
+  } else {
+    console.log('[scheduledJobs] Escalation scheduler disabled (ENABLE_ESCALATION_SCHEDULER=false)');
+  }
+
   console.log(`[scheduledJobs]   - Timezone: ${process.env.DIGEST_TIMEZONE || 'UTC'}`);
-  
   if (NOTIFICATION_DEBUG) {
     console.log('[scheduledJobs]   - Debug mode: enabled');
   }
@@ -87,6 +106,12 @@ function stopScheduledJobs() {
     weeklyDigestJob.stop();
     weeklyDigestJob = null;
     console.log('[scheduledJobs] Weekly digest job stopped');
+  }
+
+  if (escalationJob) {
+    escalationJob.stop();
+    escalationJob = null;
+    console.log('[scheduledJobs] Escalation job stopped');
   }
 }
 

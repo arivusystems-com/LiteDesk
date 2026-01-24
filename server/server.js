@@ -134,10 +134,17 @@ const auditExecutionRoutes = require('./routes/auditExecutionRoutes');
 const auditReadRoutes = require('./routes/auditReadRoutes');
 const digestRoutes = require('./routes/digestRoutes');
 const uiCompositionRoutes = require('./routes/uiCompositionRoutes');
+const configRegistryRoutes = require('./routes/configRegistryRoutes');
 const relationshipRoutes = require('./routes/relationshipRoutes');
 const responseRoutes = require('./routes/responseRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
 const inboxRoutes = require('./routes/inboxRoutes');
+const automationRuleRoutes = require('./routes/automationRuleRoutes');
+const processRoutes = require('./routes/processRoutes');
+const approvalRoutes = require('./routes/approvalRoutes');
+const businessFlowRoutes = require('./routes/businessFlowRoutes');
+const businessFlowTemplateRoutes = require('./routes/businessFlowTemplateRoutes');
+const automationContextRoutes = require('./routes/automationContextRoutes');
 
 // Route Linking
 app.use('/api/auth', authRoutes);
@@ -156,6 +163,13 @@ app.use('/api/demo', demoRoutes);
 app.use('/api/instances', instanceRoutes);
 app.use('/api/metrics', metricsRoutes);
 app.use('/api/admin', adminRoutes); // Admin-only cross-organization endpoints
+app.use('/api/admin/automation-rules', automationRuleRoutes); // Admin automation rule management
+app.use('/api/admin/processes', processRoutes); // Admin process management
+app.use('/api/admin/approvals', approvalRoutes); // Approval decision API (Phase 3)
+app.use('/api/approvals', approvalRoutes); // User-facing approval inbox (Phase 4C)
+app.use('/api/admin/business-flows', businessFlowRoutes); // Business Flow UI (Phase 4D)
+app.use('/api/admin/business-flow-templates', businessFlowTemplateRoutes); // Business Flow Templates (Default Templates)
+app.use('/api/automation', automationContextRoutes); // Automation context visibility (read-only)
 app.use('/api/admin/notifications', notificationAnalyticsRoutes); // Admin notification analytics
 app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/notification-preferences', notificationPreferenceRoutes);
@@ -196,6 +210,9 @@ app.use('/api/digest', digestRoutes);
 
 // UI Composition Routes (Phase 0D)
 app.use('/api/ui', uiCompositionRoutes);
+
+// Configuration Registry Routes
+app.use('/api/config-registry', configRegistryRoutes);
 
 // Relationship Routes (Phase 0E)
 app.use('/api/relationships', relationshipRoutes);
@@ -286,6 +303,16 @@ mongoose.connect(masterUri)
       scheduledJobs.startScheduledJobs();
       console.log('✅ Scheduled jobs started');
     }
+
+    // 3b. Initialize automation engine (domain events → rule resolution → dry-run planning)
+    const automationEngine = require('./services/automationEngine');
+    automationEngine.init();
+    console.log('✅ Automation engine initialized');
+
+    // 3c. Initialize process executor (domain events → process execution)
+    const processExecutor = require('./services/processExecutor');
+    processExecutor.init();
+    console.log('✅ Process executor initialized');
     
     // 4. Start Server after successful DB connection
     server = app.listen(PORT, () => {

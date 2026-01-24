@@ -517,6 +517,7 @@ const getSubscriptionClass = (tier) => {
 };
 
 onMounted(() => {
+  document.title = 'Instances | LiteDesk';
   fetchInstances();
 });
 </script>

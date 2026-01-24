@@ -204,7 +204,12 @@ const fetchCoreModules = async () => {
     });
 
     if (data && data.modules) {
-      modules.value = data.modules;
+      // Sort modules by order property (modules without order go to the end)
+      modules.value = data.modules.sort((a, b) => {
+        const orderA = a.order !== undefined ? a.order : 999;
+        const orderB = b.order !== undefined ? b.order : 999;
+        return orderA - orderB;
+      });
     } else {
       modules.value = [];
     }

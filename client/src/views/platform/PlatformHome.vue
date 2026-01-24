@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useAppShellStore } from '@/stores/appShell';
 import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
+import AppFlows from '@/components/automation/AppFlows.vue';
 import {
   CheckCircleIcon,
   ClockIcon,
@@ -526,7 +527,12 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- 4️⃣ Alerts / Warnings -->
+        <!-- 4️⃣ How This App Works (Business Flows) -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <AppFlows app-key="SALES" />
+        </div>
+
+        <!-- 5️⃣ Alerts / Warnings -->
         <div
           v-if="alerts.length > 0"
           class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"

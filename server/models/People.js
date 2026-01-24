@@ -92,6 +92,16 @@ const PeopleSchema = new Schema({
     enum: ['Email', 'Phone', 'WhatsApp', 'SMS', 'None']
   },
   
+  // Derived Status (computed from Configuration Registry)
+  // This field is computed from lifecycle mappings and is nullable
+  // If no config exists or computation fails, this remains null
+  derivedStatus: {
+    type: String,
+    trim: true,
+    default: null,
+    index: true
+  },
+  
   // Notes & Activities
   notes: [{
     text: { type: String, required: true },

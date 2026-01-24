@@ -48,6 +48,7 @@
               :current-status="currentStatusValue"
               :person-id="personId"
               :status-badge-id="`status-badge-${appKey}-${personId}`"
+              :derived-status="appSection.fields?.derivedStatus || null"
               @status-updated="handleStatusUpdated"
             />
             <StatusFlag

@@ -1,0 +1,101 @@
+{
+  "name": "Renewal Automation Process",
+  "description": "Sends renewal reminders and handles membership expiry",
+  "appKey": "SALES",
+  "trigger": {
+    "type": "domain_event",
+    "eventType": "status.changed"
+  },
+  "status": "draft",
+  "version": 1,
+  "nodes": [
+    {
+      "id": "trigger_1",
+      "type": "trigger",
+      "config": {
+        "entityType": "people",
+        "condition": {
+          "field": "membershipExpiryDate",
+          "operator": "less_than",
+          "value": "7_days_from_now"
+        }
+      },
+      "order": 1
+    },
+    {
+      "id": "action_1",
+      "type": "action",
+      "config": {
+        "actionType": "notify_user",
+        "params": {
+          "channel": "email",
+          "template": "renewal_reminder",
+          "recipient": "record"
+        }
+      },
+      "order": 2
+    },
+    {
+      "id": "condition_1",
+      "type": "condition",
+      "config": {
+        "field": "membershipExpiryDate",
+        "operator": "less_than",
+        "value": "today"
+      },
+      "order": 3
+    },
+    {
+      "id": "action_2",
+      "type": "action",
+      "config": {
+        "actionType": "update_record",
+        "params": {
+          "entityType": "people",
+          "field": "membershipStatus",
+          "value": "Expired"
+        }
+      },
+      "order": 4
+    },
+    {
+      "id": "end_1",
+      "type": "end",
+      "config": {},
+      "order": 5
+    }
+  ],
+  "edges": [
+    {
+      "fromNodeId": "trigger_1",
+      "toNodeId": "action_1",
+      "condition": null
+    },
+    {
+      "fromNodeId": "action_1",
+      "toNodeId": "condition_1",
+      "condition": null
+    },
+    {
+      "fromNodeId": "condition_1",
+      "toNodeId": "action_2",
+      "condition": {
+        "operator": "equals",
+        "value": true
+      }
+    },
+    {
+      "fromNodeId": "action_2",
+      "toNodeId": "end_1",
+      "condition": null
+    },
+    {
+      "fromNodeId": "condition_1",
+      "toNodeId": "end_1",
+      "condition": {
+        "operator": "equals",
+        "value": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "name": "Sales Lifecycle Flow",
+  "description": "End-to-end flow from Lead capture to Deal closure. This flow reflects how most sales teams operate. You can modify or disable any process.",
+  "appKey": "SALES",
+  "processKeys": [
+    "lead_intake",
+    "lead_qualification",
+    "deal_governance"
+  ],
+  "metadata": {
+    "recommendedApps": ["SALES"],
+    "recommendedModules": ["people", "organizations", "deals"],
+    "editableThresholds": [
+      {
+        "processKey": "deal_governance",
+        "threshold": "deal_value_threshold",
+        "default": 1000000,
+        "description": "Deal value threshold for requiring approval (in base currency)"
+      }
+    ],
+    "whyThisExists": "This flow automates the complete sales lifecycle from initial lead capture through deal closure, ensuring consistent follow-up, proper qualification, and governance for high-value deals.",
+    "safeDefaults": {
+      "allProcessesStartAsDraft": true,
+      "noAutoActivation": true,
+      "requiresAdminReview": true
+    }
+  }
+}

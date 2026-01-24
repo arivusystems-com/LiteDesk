@@ -1205,6 +1205,11 @@ const handleLinkDrawerCreate = () => {
   // For other modules, use standard create drawer
   const initialData: Record<string, any> = {};
   
+  // Auto-assign tasks to current user
+  if (moduleKey === 'tasks' && authStore.user?._id) {
+    initialData.assignedTo = authStore.user._id;
+  }
+  
   createDrawerModuleKey.value = moduleKey;
   createDrawerInitialData.value = initialData;
   createDrawerTitle.value = `New ${moduleKey.charAt(0).toUpperCase() + moduleKey.slice(1)}`;

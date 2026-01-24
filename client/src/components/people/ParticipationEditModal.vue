@@ -83,6 +83,26 @@
 
             <!-- Form -->
             <form @submit.prevent="handleSubmit" class="space-y-6">
+              <!-- Lifecycle Control (Type): Primary Control for SALES -->
+              <div v-if="appKey === 'SALES'" class="mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
+                <label class="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                  Type <span class="text-red-600">*</span>
+                  <span class="ml-2 text-xs text-gray-500 dark:text-gray-400 font-normal">(Primary control)</span>
+                </label>
+                <select
+                  v-model="formData.type"
+                  required
+                  class="w-full px-4 py-3 border-2 border-brand-500 dark:border-brand-400 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all cursor-pointer font-medium"
+                >
+                  <option value="">Select type...</option>
+                  <option value="Lead">Lead</option>
+                  <option value="Contact">Contact</option>
+                </select>
+                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  Changing type updates status automatically
+                </p>
+              </div>
+              
               <!-- Detail Fields Section -->
               <div v-if="visibleDetailFields.length > 0">
                 <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-4 uppercase tracking-wide">
@@ -434,6 +454,11 @@ const getFieldOptions = (fieldName) => {
 const initializeFormData = () => {
   formData.value = {};
   const existingFields = props.participationData?.fields || {};
+  
+  // Always include type field for SALES (primary control)
+  if (appKey === 'SALES' && existingFields.type) {
+    formData.value.type = existingFields.type;
+  }
   
   // Pre-fill only visible detail fields
   visibleDetailFields.value.forEach(fieldName => {

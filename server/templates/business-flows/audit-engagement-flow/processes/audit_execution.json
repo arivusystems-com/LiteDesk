@@ -1,0 +1,58 @@
+{
+  "name": "Audit Execution Process",
+  "description": "Tracks audit completion and triggers report generation",
+  "appKey": "AUDIT",
+  "trigger": {
+    "type": "domain_event",
+    "eventType": "status.changed"
+  },
+  "status": "draft",
+  "version": 1,
+  "nodes": [
+    {
+      "id": "trigger_1",
+      "type": "trigger",
+      "config": {
+        "entityType": "event",
+        "condition": {
+          "field": "status",
+          "operator": "equals",
+          "value": "Completed"
+        }
+      },
+      "order": 1
+    },
+    {
+      "id": "action_1",
+      "type": "action",
+      "config": {
+        "actionType": "create_task",
+        "params": {
+          "title": "Generate audit report",
+          "description": "Create final audit report for client",
+          "dueDate": "3_days",
+          "assignee": "owner"
+        }
+      },
+      "order": 2
+    },
+    {
+      "id": "end_1",
+      "type": "end",
+      "config": {},
+      "order": 3
+    }
+  ],
+  "edges": [
+    {
+      "fromNodeId": "trigger_1",
+      "toNodeId": "action_1",
+      "condition": null
+    },
+    {
+      "fromNodeId": "action_1",
+      "toNodeId": "end_1",
+      "condition": null
+    }
+  ]
+}

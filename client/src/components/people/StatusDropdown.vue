@@ -110,6 +110,10 @@ const props = defineProps({
   statusBadgeId: {
     type: String,
     default: null
+  },
+  derivedStatus: {
+    type: String,
+    default: null
   }
 });
 
@@ -119,8 +123,16 @@ const showDropdown = ref(false);
 const updating = ref(false);
 const dropdownRef = ref(null);
 
-// Determine if status is editable (only for SALES Lead/Contact)
+// Determine if status is editable
+// Status is read-only when derivedStatus exists (system-owned)
+// Legacy mode: editable when derivedStatus is null
 const isEditable = computed(() => {
+  // If derivedStatus exists, status is system-owned (read-only)
+  if (props.derivedStatus != null && props.derivedStatus !== '') {
+    return false;
+  }
+  
+  // Legacy mode: allow editing for SALES Lead/Contact
   return props.appKey === 'SALES' && 
          (props.participationType === 'Lead' || props.participationType === 'Contact');
 });

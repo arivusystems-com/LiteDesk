@@ -1,12 +1,24 @@
 const Deal = require('../models/Deal');
 const People = require('../models/People');
 const mongoose = require('mongoose');
+const {
+  computeAndSetDerivedStatus,
+  hasConfiguration,
+  hasLifecycleOrTypeChanged,
+  validateStatusWriteProtection
+} = require('../services/derivedStatusService');
+const { validateStageInPipeline, validateDealRelationships } = require('../services/systemInvariants');
+const {
+  syncLegacyToRoleBased,
+  syncRoleBasedToLegacy
+} = require('../services/dealRelationshipService');
 
 // @desc    Create new deal
 // @route   POST /api/deals
 // @access  Private
 exports.createDeal = async (req, res) => {
     try {
+        const appKey = req.appKey || req.query.appKey || 'SALES';
         const payload = {
             ...req.body,
             organizationId: req.user.organizationId,
@@ -15,30 +27,95 @@ exports.createDeal = async (req, res) => {
             modifiedBy: req.user._id
         };
 
-        if (!payload.pipeline) {
-            payload.pipeline = 'Default Pipeline';
+        const statusWriteResult = await validateStatusWriteProtection('deal', payload, appKey);
+        if (statusWriteResult) {
+            return res.status(400).json({
+                success: false,
+                code: statusWriteResult.code,
+                message: statusWriteResult.message,
+                errors: statusWriteResult.errors
+            });
         }
 
-        if (!payload.status) {
-            payload.status = 'Open';
+        const stagePipelineResult = await validateStageInPipeline({
+            moduleKey: 'deals',
+            organizationId: req.user.organizationId,
+            updateData: payload,
+            appKey
+        });
+        if (!stagePipelineResult.valid) {
+            return res.status(400).json({
+                success: false,
+                code: stagePipelineResult.code,
+                message: stagePipelineResult.message,
+                errors: stagePipelineResult.errors
+            });
         }
+
+        if (!payload.status) payload.status = 'Open';
 
         const newDeal = await Deal.create(payload);
+
+        await syncLegacyToRoleBased(newDeal, req.user._id);
+
+        const relationshipResult = await validateDealRelationships({
+            moduleKey: 'deals',
+            recordId: newDeal._id,
+            organizationId: req.user.organizationId,
+            updateData: newDeal.toObject()
+        });
+        if (!relationshipResult.valid) {
+            await Deal.findByIdAndDelete(newDeal._id);
+            return res.status(400).json({
+                success: false,
+                code: relationshipResult.code,
+                message: relationshipResult.message,
+                errors: relationshipResult.errors
+            });
+        }
+
+        const computedDerivedStatus = await computeAndSetDerivedStatus('deal', newDeal, appKey);
+        const configExists = await hasConfiguration('deal', appKey);
+        if (configExists && computedDerivedStatus && newDeal.status !== computedDerivedStatus) {
+            newDeal.status = computedDerivedStatus;
+        }
+
+        await syncRoleBasedToLegacy(newDeal);
         
+        if (
+            newDeal.isModified('dealPeople') ||
+            newDeal.isModified('dealOrganizations') ||
+            newDeal.isModified('contactId') ||
+            newDeal.isModified('accountId') ||
+            newDeal.isModified('derivedStatus') ||
+            newDeal.isModified('status') ||
+            newDeal.isModified('probability')
+        ) {
+            await newDeal.save();
+        }
+
         const deal = await Deal.findById(newDeal._id)
             .populate('contactId', 'first_name last_name email')
-            .populate('ownerId', 'firstName lastName email');
-        
-        res.status(201).json({
-            success: true,
-            data: deal
+            .populate('ownerId', 'firstName lastName email')
+            .populate('dealPeople.personId', 'first_name last_name email')
+            .populate('dealOrganizations.organizationId', 'name');
+
+        const { emitDealEvents } = require('../services/domainEventHelpers');
+        await emitDealEvents({
+            previous: null,
+            current: deal?.toObject ? deal.toObject() : deal,
+            appKey,
+            triggeredBy: req.user?._id ?? null,
+            organizationId: req.user?.organizationId ?? null
         });
+
+        res.status(201).json({ success: true, data: deal });
     } catch (error) {
         console.error('Create deal error:', error);
-        res.status(400).json({ 
+        res.status(400).json({
             success: false,
-            message: 'Error creating deal.', 
-            error: error.message 
+            message: 'Error creating deal.',
+            error: error.message
         });
     }
 };
@@ -115,6 +192,8 @@ exports.getDeals = async (req, res) => {
             .populate('contactId', 'first_name last_name email')
             .populate('ownerId', 'firstName lastName email')
             .populate('accountId', 'name')
+            .populate('dealPeople.personId', 'first_name last_name email')
+            .populate('dealOrganizations.organizationId', 'name')
             .sort(sort)
             .limit(limit)
             .skip(skip);
@@ -193,6 +272,8 @@ exports.getDealById = async (req, res) => {
         .populate('contactId', 'first_name last_name email phone')
         .populate('ownerId', 'firstName lastName email')
         .populate('accountId', 'name industry')
+        .populate('dealPeople.personId', 'first_name last_name email phone')
+        .populate('dealOrganizations.organizationId', 'name industry')
         .populate('notes.createdBy', 'firstName lastName')
         .populate('stageHistory.changedBy', 'firstName lastName');
         
@@ -266,28 +347,105 @@ exports.updateDeal = async (req, res) => {
             }
         }
         
+        const appKey = req.appKey || req.query.appKey || 'SALES';
+
+        const statusWriteResult = await validateStatusWriteProtection('deal', req.body, appKey);
+        if (statusWriteResult) {
+            return res.status(400).json({
+                success: false,
+                code: statusWriteResult.code,
+                message: statusWriteResult.message,
+                errors: statusWriteResult.errors
+            });
+        }
+
+        const stagePipelineResult = await validateStageInPipeline({
+            moduleKey: 'deals',
+            recordId: req.params.id,
+            organizationId: req.user.organizationId,
+            updateData: req.body,
+            appKey
+        });
+        if (!stagePipelineResult.valid) {
+            return res.status(400).json({
+                success: false,
+                code: stagePipelineResult.code,
+                message: stagePipelineResult.message,
+                errors: stagePipelineResult.errors
+            });
+        }
+
+        const shouldComputeDerivedStatus = hasLifecycleOrTypeChanged('deal', null, req.body);
+
+        let previousDeal = null;
+        if (shouldComputeDerivedStatus) {
+            previousDeal = await Deal.findOne(
+                { _id: req.params.id, organizationId: req.user.organizationId }
+            ).lean();
+        }
+
         const updatedDeal = await Deal.findOneAndUpdate(
-            { 
-                _id: req.params.id, 
-                organizationId: req.user.organizationId 
-            },
+            { _id: req.params.id, organizationId: req.user.organizationId },
             req.body,
             { new: true, runValidators: true }
         )
-        .populate('contactId', 'first_name last_name email')
-        .populate('ownerId', 'firstName lastName email');
+            .populate('contactId', 'first_name last_name email')
+            .populate('ownerId', 'firstName lastName email');
 
         if (!updatedDeal) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 success: false,
-                message: 'Deal not found or access denied.' 
+                message: 'Deal not found or access denied.'
             });
         }
-        
-        res.status(200).json({
-            success: true,
-            data: updatedDeal
+
+        await syncLegacyToRoleBased(updatedDeal, req.user._id);
+
+        const relationshipResult = await validateDealRelationships({
+            moduleKey: 'deals',
+            recordId: req.params.id,
+            organizationId: req.user.organizationId,
+            updateData: updatedDeal.toObject()
         });
+        if (!relationshipResult.valid) {
+            return res.status(400).json({
+                success: false,
+                code: relationshipResult.code,
+                message: relationshipResult.message,
+                errors: relationshipResult.errors
+            });
+        }
+
+        if (shouldComputeDerivedStatus) {
+            const computedDerivedStatus = await computeAndSetDerivedStatus('deal', updatedDeal, appKey);
+            const configExists = await hasConfiguration('deal', appKey);
+            if (configExists && computedDerivedStatus && updatedDeal.status !== computedDerivedStatus) {
+                updatedDeal.status = computedDerivedStatus;
+            }
+        }
+
+        await syncRoleBasedToLegacy(updatedDeal);
+        await updatedDeal.save();
+
+        if (shouldComputeDerivedStatus) {
+            const { emitDealEvents } = require('../services/domainEventHelpers');
+            await emitDealEvents({
+                previous: previousDeal,
+                current: updatedDeal.toObject ? updatedDeal.toObject() : updatedDeal,
+                appKey,
+                triggeredBy: req.user?._id ?? null,
+                organizationId: req.user?.organizationId ?? null
+            });
+        }
+
+        const populatedDeal = await Deal.findById(updatedDeal._id)
+            .populate('contactId', 'first_name last_name email')
+            .populate('ownerId', 'firstName lastName email')
+            .populate('accountId', 'name industry')
+            .populate('dealPeople.personId', 'first_name last_name email')
+            .populate('dealOrganizations.organizationId', 'name');
+
+        res.status(200).json({ success: true, data: populatedDeal });
     } catch (error) {
         console.error('Update deal error:', error);
         res.status(400).json({ 
@@ -303,6 +461,23 @@ exports.updateDeal = async (req, res) => {
 // @access  Private
 exports.deleteDeal = async (req, res) => {
     try {
+        // Validate deletion invariants
+        const { validateDelete } = require('../services/systemInvariants');
+        const invariantResult = await validateDelete({
+            moduleKey: 'deals',
+            recordId: req.params.id,
+            organizationId: req.user.organizationId
+        });
+        
+        if (!invariantResult.valid) {
+            return res.status(400).json({
+                success: false,
+                code: invariantResult.code,
+                message: invariantResult.message,
+                errors: invariantResult.errors
+            });
+        }
+        
         const result = await Deal.findOneAndDelete({ 
             _id: req.params.id, 
             organizationId: req.user.organizationId 
@@ -452,49 +627,65 @@ exports.getPipelineSummary = async (req, res) => {
 exports.updateStage = async (req, res) => {
     try {
         const { stage } = req.body;
-        
+        const appKey = req.appKey || req.query.appKey || 'SALES';
+
         const deal = await Deal.findOne({
             _id: req.params.id,
             organizationId: req.user.organizationId
         });
-        
+
         if (!deal) {
             return res.status(404).json({
                 success: false,
                 message: 'Deal not found or access denied'
             });
         }
-        
-        deal.stage = stage;
-        
-        // Add to stage history
-        deal.stageHistory.push({
-            stage: stage,
-            changedBy: req.user._id
+
+        const stagePipelineResult = await validateStageInPipeline({
+            moduleKey: 'deals',
+            recordId: req.params.id,
+            organizationId: req.user.organizationId,
+            updateData: { stage, pipeline: deal.pipeline },
+            appKey
         });
-        
-        // Auto-update probability based on stage
-        const probabilities = { 
-            'Qualification': 25,
-            'Proposal': 50,
-            'Negotiation': 70,
-            'Contract Sent': 85,
-            'Closed Won': 100,
-            'Closed Lost': 0
-        };
-        deal.probability = probabilities[stage];
+        if (!stagePipelineResult.valid) {
+            return res.status(400).json({
+                success: false,
+                code: stagePipelineResult.code,
+                message: stagePipelineResult.message,
+                errors: stagePipelineResult.errors
+            });
+        }
+
+        const previousSnapshot = deal.toObject ? deal.toObject() : { ...deal };
+
+        deal.stage = stage;
+        deal.stageHistory.push({ stage, changedBy: req.user._id });
         deal.modifiedBy = req.user._id;
-        
+
+        const computedDerivedStatus = await computeAndSetDerivedStatus('deal', deal, appKey);
+        const configExists = await hasConfiguration('deal', appKey);
+        if (configExists && computedDerivedStatus && deal.status !== computedDerivedStatus) {
+            deal.status = computedDerivedStatus;
+        }
         await deal.save();
-        
+
+        const { emitDealEvents } = require('../services/domainEventHelpers');
+        await emitDealEvents({
+            previous: previousSnapshot,
+            current: deal.toObject ? deal.toObject() : deal,
+            appKey,
+            triggeredBy: req.user?._id ?? null,
+            organizationId: req.user?.organizationId ?? null
+        });
+
         const updatedDeal = await Deal.findById(deal._id)
             .populate('contactId', 'first_name last_name email')
-            .populate('ownerId', 'firstName lastName email');
-        
-        res.status(200).json({
-            success: true,
-            data: updatedDeal
-        });
+            .populate('ownerId', 'firstName lastName email')
+            .populate('dealPeople.personId', 'first_name last_name email')
+            .populate('dealOrganizations.organizationId', 'name');
+
+        res.status(200).json({ success: true, data: updatedDeal });
     } catch (error) {
         console.error('Update stage error:', error);
         res.status(500).json({

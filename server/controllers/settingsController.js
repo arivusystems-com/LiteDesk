@@ -45,14 +45,26 @@ exports.getCoreModules = async (req, res) => {
             .map(key => key.toUpperCase())
             .filter(appKey => VALID_APPS.includes(appKey)); // Only include valid apps
 
-        // Core platform modules (from NAVIGATION_INTENT_AUDIT.md)
-        const coreModuleKeys = ['people', 'organizations', 'tasks', 'events', 'items', 'forms', 'reports'];
+        // Core platform modules with explicit ordering
+        // Order: People, Organization, Task, Event, Item, Form (new modules added at the bottom)
+        const coreModuleOrder = ['people', 'organizations', 'tasks', 'events', 'items', 'forms'];
+        const coreModuleKeys = [...coreModuleOrder, 'reports']; // reports and any future modules go at the end
 
         // Get all platform-owned modules (appKey: 'platform')
-        const platformModules = await ModuleDefinition.find({
+        const platformModulesRaw = await ModuleDefinition.find({
             appKey: 'platform',
             moduleKey: { $in: coreModuleKeys }
         }).lean();
+        
+        // Sort modules according to the defined order (modules not in coreModuleOrder go to the end)
+        const platformModules = platformModulesRaw.sort((a, b) => {
+            const orderA = coreModuleOrder.indexOf(a.moduleKey);
+            const orderB = coreModuleOrder.indexOf(b.moduleKey);
+            // If not in coreModuleOrder, place at end (use a high number)
+            const effectiveOrderA = orderA === -1 ? 999 : orderA;
+            const effectiveOrderB = orderB === -1 ? 999 : orderB;
+            return effectiveOrderA - effectiveOrderB;
+        });
 
         // Check organization-level overrides for module participation
         const moduleOverrides = organization.moduleOverrides || {};
@@ -88,12 +100,17 @@ exports.getCoreModules = async (req, res) => {
                 });
             }
 
+            // Calculate order: modules in coreModuleOrder get their index, others go to the end
+            const orderIndex = coreModuleOrder.indexOf(module.moduleKey);
+            const order = orderIndex === -1 ? 999 : orderIndex;
+
             return {
                 moduleKey: module.moduleKey,
                 name: module.label || capitalizeFirst(module.moduleKey),
                 description: module.description || `${module.label || capitalizeFirst(module.moduleKey)} - Shared platform capability`,
                 icon: 'module',
                 platformOwned: true,
+                order: order,
                 applications: appsUsingModule
             };
         });
@@ -176,6 +193,11 @@ exports.getCoreModule = async (req, res) => {
             });
         }
 
+        // Core module order: People, Organization, Task, Event, Item, Form (new modules at the end)
+        const coreModuleOrder = ['people', 'organizations', 'tasks', 'events', 'items', 'forms'];
+        const orderIndex = coreModuleOrder.indexOf(module.moduleKey);
+        const order = orderIndex === -1 ? 999 : orderIndex;
+
         res.json({
             success: true,
             moduleKey: module.moduleKey,
@@ -183,6 +205,7 @@ exports.getCoreModule = async (req, res) => {
             description: module.description || `${module.label || capitalizeFirst(module.moduleKey)} - Shared platform capability`,
             icon: 'module',
             platformOwned: true,
+            order: order,
             applications: applications
         });
     } catch (error) {

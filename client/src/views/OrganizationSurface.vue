@@ -456,6 +456,13 @@
         </div>
       </div>
 
+      <!-- Automation Context -->
+      <AutomationContext
+        v-if="organization._id"
+        entity-type="organization"
+        :entity-id="organization._id"
+      />
+
       <!-- E. Activity Timeline -->
       <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
@@ -516,6 +523,7 @@ import { useRoute } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
 import { useAuthStore } from '@/stores/auth';
 import OrganizationQuickCreateDrawer from '@/components/organizations/OrganizationQuickCreateDrawer.vue';
+import AutomationContext from '@/components/automation/AutomationContext.vue';
 import apiClient from '@/utils/apiClient';
 // CONTRACT-LOCKED:
 // See docs/architecture/platform-permission-contract.md

@@ -318,13 +318,43 @@ const getTitleForPath = (path, params = {}) => {
     '/items': 'Projects',
     '/demo-requests': 'Demo Requests',
     '/instances': 'Instances',
+    // Control Plane routes
+    '/control': 'Control Plane',
+    '/control/demo-requests': 'Demo Requests',
+    '/control/instances': 'Instances',
+    '/control/automation-rules': 'Automation Rules',
+    '/control/processes': 'Processes',
+    '/control/flows': 'Business Flows',
     // Audit app routes
     '/audit/dashboard': 'Audit Dashboard',
     '/audit/audits': 'My Audits'
   };
   
+  // Check for exact path match FIRST (before any other logic)
+  if (titles[path]) {
+    return titles[path];
+  }
+  
   // Check for base path
   const basePath = '/' + path.split('/')[1];
+  const segments = path.split('/');
+  
+  // Special case: Control Plane routes (handle detail pages)
+  if (path.startsWith('/control/')) {
+    // Check for flow detail pages: /control/flows/:id, /control/flows/:id/health, /control/flows/:id/edit
+    if (segments[2] === 'flows' && segments[3]) {
+      if (segments[4] === 'health') {
+        return 'Flow Health';
+      } else if (segments[4] === 'edit') {
+        return 'Edit Business Flow';
+      } else if (segments[3] === 'create') {
+        return 'Create Business Flow';
+      }
+      return 'Business Flow';
+    }
+    // For other control routes, return the base title or Control Plane
+    return titles[`/control/${segments[2]}`] || 'Control Plane';
+  }
   
   // Special case: Audit app routes (should not use tabs system)
   if (path.startsWith('/audit/')) {
@@ -332,7 +362,6 @@ const getTitleForPath = (path, params = {}) => {
     if (path === '/audit/dashboard' || path.startsWith('/audit/dashboard')) {
       return 'Audit Dashboard';
     } else if (path === '/audit/audits' || path.startsWith('/audit/audits')) {
-      const segments = path.split('/');
       if (segments.length > 3) {
         // Detail page: /audit/audits/:eventId
         return 'Audit Detail';
@@ -344,16 +373,14 @@ const getTitleForPath = (path, params = {}) => {
   
   // Special case: Form Response detail view
   // Route shape: /forms/:formId/responses/:responseId
-  const segments = path.split('/');
   if (segments[1] === 'forms' && segments[3] === 'responses' && segments[4]) {
     return `(${segments[4]}) Details`;
   }
 
   // If it's a detail page (has ID), customize title
-  // But skip if it's an audit route (handled above)
-  if (path.split('/').length > 2 && !path.startsWith('/audit/')) {
+  // But skip if it's an audit route or control route (handled above)
+  if (path.split('/').length > 2 && !path.startsWith('/audit/') && !path.startsWith('/control/')) {
     const module = segments[1];
-    const id = segments[2];
     
     // Capitalize module name
     const moduleName = module.charAt(0).toUpperCase() + module.slice(1);

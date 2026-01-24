@@ -1,0 +1,29 @@
+{
+  "name": "Member Lifecycle Flow",
+  "description": "Complete flow from lead signup through trial, membership activation, renewal, and expiry handling",
+  "appKey": "SALES",
+  "processKeys": [
+    "lead_intake",
+    "trial_conversion",
+    "membership_governance",
+    "renewal_automation"
+  ],
+  "metadata": {
+    "recommendedApps": ["SALES"],
+    "recommendedModules": ["people", "deals"],
+    "editableThresholds": [
+      {
+        "processKey": "trial_conversion",
+        "threshold": "trial_duration_days",
+        "default": 7,
+        "description": "Trial period duration in days"
+      }
+    ],
+    "whyThisExists": "This flow automates the complete membership lifecycle for gyms, fitness centers, and subscription businesses, handling trials, activations, renewals, and expirations.",
+    "safeDefaults": {
+      "allProcessesStartAsDraft": true,
+      "noAutoActivation": true,
+      "requiresAdminReview": true
+    }
+  }
+}

@@ -70,7 +70,7 @@
                             :moduleKey="moduleKey"
                             :formData="formData"
                             :errors="errors"
-                            :excludeFields="excludeFields"
+                            :excludeFields="effectiveExcludeFields"
                             :lockedFields="lockedFields"
                             :showAllFields="isEditing || !effectiveQuickCreateMode"
                             :quickCreateMode="effectiveQuickCreateMode"
@@ -78,6 +78,16 @@
                             @update:formData="updateFormData"
                             @ready="onFormReady"
                           />
+                          <!-- Deal relationship editor (People + Organizations) -->
+                          <div v-if="moduleKey === 'deals'" class="pt-6 border-t border-gray-200 dark:border-gray-700">
+                            <DealRelationshipEditor
+                              ref="relationshipEditorRef"
+                              v-model="dealRelationships"
+                              :people="dealPeopleList"
+                              :organizations="dealOrgList"
+                              :read-only="false"
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -113,6 +123,7 @@ import { ref, watch, computed } from 'vue';
 import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import { XMarkIcon } from '@heroicons/vue/24/outline';
 import DynamicForm from './DynamicForm.vue';
+import DealRelationshipEditor from '@/components/deals/DealRelationshipEditor.vue';
 import apiClient from '@/utils/apiClient';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
 import { useAuthStore } from '@/stores/auth';
@@ -146,6 +157,11 @@ const props = defineProps({
   excludeFields: {
     type: Array,
     default: () => [] // Fields to exclude from the form (e.g., app-specific fields)
+  },
+  // When true, Deal create/edit uses role-based relationship editor; contactId/accountId excluded
+  useDealRelationshipEditor: {
+    type: Boolean,
+    default: true
   },
   lockedFields: {
     type: Array,
@@ -210,11 +226,25 @@ const computedDescription = computed(() => {
     : `Fill in the information below to create a new ${moduleName.toLowerCase()}.`;
 });
 
+const effectiveExcludeFields = computed(() => {
+  const base = props.excludeFields || [];
+  if (props.moduleKey === 'deals' && props.useDealRelationshipEditor) {
+    return [...base, 'contactId', 'accountId'];
+  }
+  return base;
+});
+
 const formData = ref({ ...props.initialData });
 const errors = ref({});
 const saving = ref(false);
 const moduleDefinition = ref(null);
 const initialSnapshot = ref({});
+
+// Deal relationship editor state (when moduleKey=deals)
+const relationshipEditorRef = ref(null);
+const dealRelationships = ref({ dealPeople: [], dealOrganizations: [] });
+const dealPeopleList = ref([]);
+const dealOrgList = ref([]);
 
 // Keys that may be auto-populated by components (not user edits)
 const ignoredDirtyKeys = new Set(['assignedTo']);
@@ -261,6 +291,9 @@ const closeDrawer = () => {
     setTimeout(() => {
       formData.value = {};
       errors.value = {};
+      if (props.moduleKey === 'deals') {
+        dealRelationships.value = { dealPeople: [], dealOrganizations: [] };
+      }
     }, 300);
   }
 };
@@ -352,7 +385,39 @@ watch(() => props.record, () => {
   if (moduleDefinition.value && props.record) {
     initializeForm(moduleDefinition.value);
   }
+  if (props.moduleKey === 'deals' && props.record) {
+    const r = props.record;
+    dealRelationships.value = {
+      dealPeople: Array.isArray(r.dealPeople) ? r.dealPeople.map((p) => ({ ...p })) : [],
+      dealOrganizations: Array.isArray(r.dealOrganizations) ? r.dealOrganizations.map((o) => ({ ...o })) : []
+    };
+  }
 }, { deep: true });
+
+// Fetch people and organizations when opening deal form
+watch(() => [props.isOpen, props.moduleKey], async ([open, key]) => {
+  if (!open || key !== 'deals') return;
+  dealRelationships.value = { dealPeople: [], dealOrganizations: [] };
+  if (props.record) {
+    const r = props.record;
+    dealRelationships.value = {
+      dealPeople: Array.isArray(r.dealPeople) ? r.dealPeople.map((p) => ({ ...p })) : [],
+      dealOrganizations: Array.isArray(r.dealOrganizations) ? r.dealOrganizations.map((o) => ({ ...o })) : []
+    };
+  }
+  try {
+    const [peopleRes, orgRes] = await Promise.all([
+      apiClient.get('/people', { params: { limit: 200 } }),
+      apiClient.get('/v2/organization', { params: { limit: 200 } })
+    ]);
+    dealPeopleList.value = Array.isArray(peopleRes?.data) ? peopleRes.data : [];
+    dealOrgList.value = Array.isArray(orgRes?.data) ? orgRes.data : [];
+  } catch (e) {
+    console.warn('[CreateRecordDrawer] Failed to fetch people/organizations for deal relationships:', e);
+    dealPeopleList.value = [];
+    dealOrgList.value = [];
+  }
+}, { immediate: true });
 
 // Watch for form data changes and clear errors for fields that are now valid
 watch(() => formData.value, (newFormData, oldFormData) => {
@@ -441,6 +506,15 @@ const handleSubmit = async () => {
         return;
       }
     }
+
+    // Deal relationship validation (one primary contact, one active customer org)
+    if (props.moduleKey === 'deals' && props.useDealRelationshipEditor && relationshipEditorRef.value) {
+      const relValid = relationshipEditorRef.value.validate();
+      if (!relValid) {
+        saving.value = false;
+        return;
+      }
+    }
     
     console.log('[CreateRecordDrawer] ✅ Validation passed, proceeding with submission...');
     
@@ -460,7 +534,8 @@ const handleSubmit = async () => {
         'type',           // Required by Scheduling API (task/event)
         'entitytype',     // Required by Scheduling API
         'entityid',       // Required by Scheduling API
-        'ownerpersonid'    // May be set from assignedTo mapping
+        'ownerpersonid',  // May be set from assignedTo mapping
+        'assignedto'      // Required by Task API - auto-assigned to current user
       ]);
       
       // Filter submitData to only include fields in quickCreate configuration + API required fields
@@ -635,6 +710,31 @@ const handleSubmit = async () => {
     if (props.moduleKey === 'organizations') {
       delete submitData.slug;
     }
+
+    // Deal role-based relationships: use dealPeople/dealOrganizations, remove legacy contactId/accountId
+    if (props.moduleKey === 'deals' && props.useDealRelationshipEditor) {
+      delete submitData.contactId;
+      delete submitData.accountId;
+      const norm = (id) => (id && typeof id === 'object' && id._id) ? id._id : id;
+      const people = (dealRelationships.value?.dealPeople || []).map((p) => ({
+        personId: norm(p.personId),
+        role: p.role,
+        isPrimary: !!p.isPrimary,
+        isActive: p.isActive !== false,
+        addedAt: p.addedAt || new Date(),
+        addedBy: p.addedBy || null
+      }));
+      const orgs = (dealRelationships.value?.dealOrganizations || []).map((o) => ({
+        organizationId: norm(o.organizationId),
+        role: o.role,
+        isPrimary: !!o.isPrimary,
+        isActive: o.isActive !== false,
+        addedAt: o.addedAt || new Date(),
+        addedBy: o.addedBy || null
+      }));
+      submitData.dealPeople = people;
+      submitData.dealOrganizations = orgs;
+    }
     
     // Determine API endpoint based on module key
     // Note: apiClient already prepends /api, so we don't include it here
@@ -643,7 +743,7 @@ const handleSubmit = async () => {
       'people': '/people',
       'organizations': '/v2/organization',
       'deals': '/deals',
-      'tasks': '/scheduling',
+      'tasks': '/tasks',
       'events': '/events',
       'users': '/users'
     };
@@ -655,53 +755,11 @@ const handleSubmit = async () => {
       delete submitData.legacyOrganizationId;
     }
     
-    // For tasks using Scheduling API, inject required fields
-    if (props.moduleKey === 'tasks' && endpoint === '/scheduling') {
-      submitData.type = 'task';
-      
-      // For standalone tasks (no entityType/entityId provided), use Organization as default entity
-      // This allows tasks to be created without being attached to a specific Person/Deal/etc.
-      if (!submitData.entityType || !submitData.entityId) {
-        const organizationId = authStore.user?.organizationId;
-        if (organizationId) {
-          submitData.entityType = 'Organization';
-          submitData.entityId = organizationId;
-        }
-      }
-      
-      // Map assignedTo to ownerPersonId if needed (Scheduling uses ownerPersonId, not assignedTo)
-      // Note: This is a temporary mapping - the form should ideally use ownerPersonId directly
-      // For now, we assume assignedTo is a Person ID (not User ID)
-      if (submitData.assignedTo && !submitData.ownerPersonId) {
-        submitData.ownerPersonId = submitData.assignedTo;
-      }
-      // Remove assignedTo as Scheduling API doesn't use it
-      delete submitData.assignedTo;
-      
-      // ARCHITECTURE NOTE: Map Task status values to Scheduling status values
-      // Task model: ['todo', 'in_progress', 'waiting', 'completed', 'cancelled']
-      // Scheduling model: ['open', 'completed']
-      // See: server/models/Task.js, server/models/Scheduling.js
-      // Only map status if it was included in the form data (i.e., in quickCreate config)
-      if (submitData.status !== undefined && submitData.status !== null && submitData.status !== '') {
-        const statusMapping = {
-          'todo': 'open',
-          'in_progress': 'open',
-          'waiting': 'open',
-          'completed': 'completed',
-          'cancelled': 'open' // Cancelled tasks map to 'open' in Scheduling
-        };
-        const mappedStatus = statusMapping[submitData.status] || 'open';
-        if (mappedStatus !== submitData.status) {
-          console.log('[CreateRecordDrawer] 🔄 Mapping task status:', {
-            from: submitData.status,
-            to: mappedStatus
-          });
-        }
-        submitData.status = mappedStatus;
-      } else {
-        // Default to 'open' if no status provided (Scheduling API requires status for tasks)
-        submitData.status = 'open';
+    // For tasks, ensure default status if not provided
+    if (props.moduleKey === 'tasks') {
+      // Default to 'todo' if no status provided
+      if (!submitData.status) {
+        submitData.status = 'todo';
       }
     }
     

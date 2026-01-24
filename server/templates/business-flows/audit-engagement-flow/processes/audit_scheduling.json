@@ -1,0 +1,93 @@
+{
+  "name": "Audit Scheduling Process",
+  "description": "Creates audit events and assigns field team when audit is scheduled",
+  "appKey": "AUDIT",
+  "trigger": {
+    "type": "domain_event",
+    "eventType": "status.changed"
+  },
+  "status": "draft",
+  "version": 1,
+  "nodes": [
+    {
+      "id": "trigger_1",
+      "type": "trigger",
+      "config": {
+        "entityType": "organization",
+        "condition": {
+          "field": "status",
+          "operator": "equals",
+          "value": "Audit Scheduled"
+        }
+      },
+      "order": 1
+    },
+    {
+      "id": "action_1",
+      "type": "action",
+      "config": {
+        "actionType": "create_record",
+        "params": {
+          "entityType": "event",
+          "name": "Audit - {{organization.name}}",
+          "type": "Audit",
+          "organization": "{{organization.id}}",
+          "startDate": "{{organization.auditDate}}"
+        }
+      },
+      "order": 2
+    },
+    {
+      "id": "ownership_1",
+      "type": "ownership_rule",
+      "config": {
+        "entityType": "event",
+        "assignment": "role",
+        "target": "auditor"
+      },
+      "order": 3
+    },
+    {
+      "id": "action_2",
+      "type": "action",
+      "config": {
+        "actionType": "notify_user",
+        "params": {
+          "channel": "in_app",
+          "template": "audit_scheduled",
+          "recipient": "role",
+          "role": "auditor"
+        }
+      },
+      "order": 4
+    },
+    {
+      "id": "end_1",
+      "type": "end",
+      "config": {},
+      "order": 5
+    }
+  ],
+  "edges": [
+    {
+      "fromNodeId": "trigger_1",
+      "toNodeId": "action_1",
+      "condition": null
+    },
+    {
+      "fromNodeId": "action_1",
+      "toNodeId": "ownership_1",
+      "condition": null
+    },
+    {
+      "fromNodeId": "ownership_1",
+      "toNodeId": "action_2",
+      "condition": null
+    },
+    {
+      "fromNodeId": "action_2",
+      "toNodeId": "end_1",
+      "condition": null
+    }
+  ]
+}

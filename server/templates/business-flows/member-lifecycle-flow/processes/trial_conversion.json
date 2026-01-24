@@ -1,0 +1,75 @@
+{
+  "name": "Trial Conversion Process",
+  "description": "Converts trial members to active memberships after trial period",
+  "appKey": "SALES",
+  "trigger": {
+    "type": "domain_event",
+    "eventType": "status.changed"
+  },
+  "status": "draft",
+  "version": 1,
+  "nodes": [
+    {
+      "id": "trigger_1",
+      "type": "trigger",
+      "config": {
+        "entityType": "people",
+        "condition": {
+          "field": "membershipStatus",
+          "operator": "equals",
+          "value": "Trial Ended"
+        }
+      },
+      "order": 1
+    },
+    {
+      "id": "action_1",
+      "type": "action",
+      "config": {
+        "actionType": "update_record",
+        "params": {
+          "entityType": "people",
+          "field": "membershipStatus",
+          "value": "Active"
+        }
+      },
+      "order": 2
+    },
+    {
+      "id": "action_2",
+      "type": "action",
+      "config": {
+        "actionType": "notify_user",
+        "params": {
+          "channel": "whatsapp",
+          "template": "trial_converted",
+          "recipient": "record"
+        }
+      },
+      "order": 3
+    },
+    {
+      "id": "end_1",
+      "type": "end",
+      "config": {},
+      "order": 4
+    }
+  ],
+  "edges": [
+    {
+      "fromNodeId": "trigger_1",
+      "toNodeId": "action_1",
+      "condition": null
+    },
+    {
+      "fromNodeId": "action_1",
+      "toNodeId": "action_2",
+      "condition": null
+    },
+    {
+      "fromNodeId": "action_2",
+      "toNodeId": "end_1",
+      "condition": null
+    }
+  ]
+}

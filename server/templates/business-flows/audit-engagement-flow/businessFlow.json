@@ -1,0 +1,22 @@
+{
+  "name": "Audit Engagement Flow",
+  "description": "Complete flow from client onboarding through audit execution to closure and billing",
+  "appKey": "AUDIT",
+  "processKeys": [
+    "client_onboarding",
+    "audit_scheduling",
+    "audit_execution",
+    "closure_billing"
+  ],
+  "metadata": {
+    "recommendedApps": ["AUDIT"],
+    "recommendedModules": ["organizations", "events", "forms"],
+    "editableThresholds": [],
+    "whyThisExists": "This flow automates the complete audit engagement lifecycle, ensuring proper client setup, scheduled audits, execution tracking, and financial closure.",
+    "safeDefaults": {
+      "allProcessesStartAsDraft": true,
+      "noAutoActivation": true,
+      "requiresAdminReview": true
+    }
+  }
+}

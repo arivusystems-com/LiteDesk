@@ -1,0 +1,101 @@
+{
+  "name": "Deal Governance Process",
+  "description": "Requests approval for high-value deals and notifies Finance when approved",
+  "appKey": "SALES",
+  "trigger": {
+    "type": "domain_event",
+    "eventType": "stage.changed"
+  },
+  "status": "draft",
+  "version": 1,
+  "nodes": [
+    {
+      "id": "trigger_1",
+      "type": "trigger",
+      "config": {
+        "entityType": "deal"
+      },
+      "order": 1
+    },
+    {
+      "id": "condition_1",
+      "type": "condition",
+      "config": {
+        "field": "value",
+        "operator": "greater_than",
+        "value": 1000000
+      },
+      "order": 2
+    },
+    {
+      "id": "approval_1",
+      "type": "approval_gate",
+      "config": {
+        "entityType": "deal",
+        "approvalType": "single",
+        "approvers": [
+          {
+            "type": "role",
+            "value": "sales_manager"
+          }
+        ],
+        "onApprove": "continue",
+        "onReject": "fail",
+        "timeout": {
+          "duration": 24,
+          "unit": "hours"
+        },
+        "onTimeout": "fail"
+      },
+      "order": 3
+    },
+    {
+      "id": "action_1",
+      "type": "action",
+      "config": {
+        "actionType": "notify_user",
+        "params": {
+          "channel": "email",
+          "template": "deal_approved",
+          "recipient": "role",
+          "role": "finance"
+        }
+      },
+      "order": 4
+    },
+    {
+      "id": "end_1",
+      "type": "end",
+      "config": {},
+      "order": 5
+    }
+  ],
+  "edges": [
+    {
+      "fromNodeId": "trigger_1",
+      "toNodeId": "condition_1",
+      "condition": null
+    },
+    {
+      "fromNodeId": "condition_1",
+      "toNodeId": "approval_1",
+      "condition": {
+        "operator": "equals",
+        "value": true
+      }
+    },
+    {
+      "fromNodeId": "approval_1",
+      "toNodeId": "action_1",
+      "condition": {
+        "operator": "equals",
+        "value": "approved"
+      }
+    },
+    {
+      "fromNodeId": "action_1",
+      "toNodeId": "end_1",
+      "condition": null
+    }
+  ]
+}
