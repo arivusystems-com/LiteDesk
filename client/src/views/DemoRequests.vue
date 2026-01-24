@@ -527,6 +527,7 @@ const clearFilters = () => {
 };
 
 onMounted(() => {
+  document.title = 'Demo Requests | LiteDesk';
   fetchDemoRequests();
   fetchStats();
 });

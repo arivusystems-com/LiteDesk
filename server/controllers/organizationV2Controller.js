@@ -37,6 +37,17 @@ exports.create = async (req, res) => {
     };
     
     const org = await Organization.create(body);
+    
+    // Compute derived status (non-blocking)
+    const { computeAndSetDerivedStatus } = require('../services/derivedStatusService');
+    const appKey = req.appKey || req.query.appKey || 'SALES';
+    await computeAndSetDerivedStatus('organization', org, appKey);
+    
+    // Save if derivedStatus was computed
+    if (org.derivedStatus !== undefined) {
+      await org.save();
+    }
+    
     res.status(201).json({ success: true, data: org });
   } catch (error) {
     res.status(400).json({ success: false, message: 'Error creating organization', error: error.message });
@@ -355,6 +366,23 @@ exports.remove = async (req, res) => {
       .lean();
     const userIds = tenantUserIds.map(u => u._id);
 
+    // Validate deletion invariants
+    const { validateDelete } = require('../services/systemInvariants');
+    const invariantResult = await validateDelete({
+      moduleKey: 'organizations',
+      recordId: req.params.id,
+      organizationId: tenantOrganizationId
+    });
+    
+    if (!invariantResult.valid) {
+      return res.status(400).json({
+        success: false,
+        code: invariantResult.code,
+        message: invariantResult.message,
+        errors: invariantResult.errors
+      });
+    }
+
     // Only allow deletion of Sales organizations created by users from this tenant
     const deleted = await Organization.findOneAndDelete({ 
       _id: req.params.id, 
@@ -653,6 +681,84 @@ exports.update = async (req, res) => {
       });
     }
     
+    // Validate status write protection (if config exists, block direct status writes)
+    // Note: This endpoint only allows specific fields, but check for completeness
+    const { validateStatusWriteProtection } = require('../services/derivedStatusService');
+    const appKey = req.appKey || req.query.appKey || 'SALES';
+    const statusWriteProtectionResult = await validateStatusWriteProtection('organization', req.body, appKey);
+    
+    if (statusWriteProtectionResult && !statusWriteProtectionResult.valid) {
+      return res.status(400).json({
+        success: false,
+        code: statusWriteProtectionResult.code,
+        message: statusWriteProtectionResult.message,
+        errors: statusWriteProtectionResult.errors
+      });
+    }
+    
+    // Validate status invariant (fail-closed: block if status !== derivedStatus when config exists)
+    const { validateStatusInvariant } = require('../services/systemInvariants');
+    const statusInvariantResult = await validateStatusInvariant({
+      moduleKey: 'organizations',
+      recordId: req.params.id,
+      organizationId: tenantOrganizationId,
+      updateData: req.body,
+      appKey
+    });
+    
+    if (!statusInvariantResult.valid) {
+      return res.status(400).json({
+        success: false,
+        code: statusInvariantResult.code,
+        message: statusInvariantResult.message,
+        errors: statusInvariantResult.errors
+      });
+    }
+    
+    // Validate type mutation invariants if types are being updated
+    if (req.body.types !== undefined && Array.isArray(req.body.types)) {
+      const { validateTypeMutation, validateRoleInvariant } = require('../services/systemInvariants');
+      
+      // Validate type mutation (additive only)
+      const typeMutationResult = await validateTypeMutation({
+        moduleKey: 'organizations',
+        recordId: req.params.id,
+        organizationId: tenantOrganizationId,
+        updateData: { types: req.body.types }
+      });
+      
+      if (!typeMutationResult.valid) {
+        return res.status(400).json({
+          success: false,
+          code: typeMutationResult.code,
+          message: typeMutationResult.message,
+          errors: typeMutationResult.errors
+        });
+      }
+      
+      // Validate role invariant if primaryContact is also being updated
+      if (req.body.primaryContact !== undefined) {
+        const roleInvariantResult = await validateRoleInvariant({
+          moduleKey: 'organizations',
+          recordId: req.params.id,
+          organizationId: tenantOrganizationId,
+          updateData: { types: req.body.types, primaryContact: req.body.primaryContact }
+        });
+        
+        if (!roleInvariantResult.valid) {
+          return res.status(400).json({
+            success: false,
+            code: roleInvariantResult.code,
+            message: roleInvariantResult.message,
+            errors: roleInvariantResult.errors
+          });
+        }
+      }
+    }
+    
+    // Snapshot before mutation (for domain events)
+    const previousSnapshot = org.toObject ? org.toObject() : { ...org };
+
     // Update only allowed fields
     let hasChanges = false;
     allowedFields.forEach(field => {
@@ -709,7 +815,54 @@ exports.update = async (req, res) => {
         timestamp: new Date()
       });
       
+      // Check if lifecycle or type fields changed and compute derived status
+      const { hasLifecycleOrTypeChanged, computeAndSetDerivedStatus, hasConfiguration } = require('../services/derivedStatusService');
+      const shouldComputeDerivedStatus = hasLifecycleOrTypeChanged('organization', org, req.body);
+      const appKey = req.appKey || req.query.appKey || 'SALES';
+      
       await org.save();
+      
+      // Compute derived status if lifecycle/type fields changed
+      if (shouldComputeDerivedStatus) {
+        const computedDerivedStatus = await computeAndSetDerivedStatus('organization', org, appKey);
+        
+        // If config exists and derivedStatus was computed, update status field to match
+        const configExists = await hasConfiguration('organization', appKey);
+        if (configExists && computedDerivedStatus) {
+          // Update the appropriate status field based on types
+          // For organizations, we need to determine which status field to update
+          // based on the types array (customerStatus, partnerStatus, vendorStatus)
+          if (org.types && org.types.length > 0) {
+            const firstType = org.types[0].toLowerCase();
+            if (firstType === 'customer' && org.customerStatus !== computedDerivedStatus) {
+              org.customerStatus = computedDerivedStatus;
+            } else if (firstType === 'partner' && org.partnerStatus !== computedDerivedStatus) {
+              org.partnerStatus = computedDerivedStatus;
+            } else if (firstType === 'vendor' && org.vendorStatus !== computedDerivedStatus) {
+              org.vendorStatus = computedDerivedStatus;
+            }
+          }
+        }
+        
+        // Save if derivedStatus or status was updated
+        if (org.derivedStatus !== undefined && org.isModified('derivedStatus')) {
+          await org.save();
+        } else if (org.isModified('customerStatus') || org.isModified('partnerStatus') || org.isModified('vendorStatus')) {
+          await org.save();
+        }
+      }
+
+      // Emit domain events for automation (lifecycle/type changes)
+      if (shouldComputeDerivedStatus) {
+        const { emitOrganizationEvents } = require('../services/domainEventHelpers');
+        emitOrganizationEvents({
+          previous: previousSnapshot,
+          current: org.toObject ? org.toObject() : org,
+          appKey,
+          triggeredBy: req.user?._id ?? null,
+          organizationId: req.user?.organizationId ?? null
+        });
+      }
     }
     
     // Return minimal organization identity (id, name, types)

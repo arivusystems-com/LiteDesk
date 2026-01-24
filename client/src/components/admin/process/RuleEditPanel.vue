@@ -1,0 +1,395 @@
+<template>
+  <TransitionRoot as="template" :show="!!rule">
+    <Dialog class="relative z-60" @close="$emit('close')">
+      <TransitionChild
+        as="template"
+        enter="ease-out duration-200"
+        enter-from="opacity-0"
+        enter-to="opacity-100"
+        leave="ease-in duration-200"
+        leave-from="opacity-100"
+        leave-to="opacity-0"
+      >
+        <div class="fixed inset-0 bg-gray-500/75 dark:bg-black/75" />
+      </TransitionChild>
+
+      <div class="fixed inset-0 overflow-hidden">
+        <div class="absolute inset-0 overflow-hidden">
+          <div class="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
+            <TransitionChild
+              as="template"
+              enter="transform transition ease-in-out duration-300"
+              enter-from="translate-x-full"
+              enter-to="translate-x-0"
+              leave="transform transition ease-in-out duration-300"
+              leave-from="translate-x-0"
+              leave-to="translate-x-full"
+            >
+              <DialogPanel class="pointer-events-auto w-screen max-w-md">
+                <div class="flex h-full flex-col bg-white dark:bg-gray-800 shadow-xl">
+                  <!-- Header -->
+                  <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center justify-between">
+                      <DialogTitle class="text-lg font-semibold text-gray-900 dark:text-white">
+                        Edit Rule
+                      </DialogTitle>
+                      <button
+                        @click="$emit('close')"
+                        class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                      >
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Content -->
+                  <div class="flex-1 overflow-y-auto p-6">
+                    <!-- Field Rule Panel -->
+                    <div v-if="rule.nodeType === 'field_rule'" class="space-y-4">
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Field <span class="text-red-500">*</span>
+                        </label>
+                        <input
+                          v-model="ruleData.fieldKey"
+                          type="text"
+                          placeholder="e.g. approval"
+                          class="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Rule Type <span class="text-red-500">*</span>
+                        </label>
+                        <select
+                          v-model="ruleData.rule"
+                          class="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg"
+                        >
+                          <option value="mandatory">Make mandatory</option>
+                          <option value="default">Set default value</option>
+                          <option value="visibility">Show / hide field</option>
+                        </select>
+                      </div>
+                      <div v-if="ruleData.rule === 'default'">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Default Value
+                        </label>
+                        <input
+                          v-model="ruleData.value"
+                          type="text"
+                          placeholder="Enter default value"
+                          class="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg"
+                        />
+                      </div>
+                      <div v-if="ruleData.rule === 'visibility'">
+                        <label class="flex items-center">
+                          <input
+                            type="checkbox"
+                            v-model="ruleData.value"
+                            class="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                          />
+                          <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Show field</span>
+                        </label>
+                      </div>
+                      <div v-if="ruleData.rule === 'mandatory'" class="text-xs text-gray-500 dark:text-gray-400 italic p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+                        This field will be mandatory when the process runs
+                      </div>
+                    </div>
+
+                    <!-- Ownership Rule Panel -->
+                    <div v-else-if="rule.nodeType === 'ownership_rule'" class="space-y-4">
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Assignment Type <span class="text-red-500">*</span>
+                        </label>
+                        <select
+                          v-model="ruleData.assignment"
+                          class="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg"
+                        >
+                          <option value="owner">Specific user</option>
+                          <option value="role">Role</option>
+                          <option value="rule">Rule-based</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Target <span class="text-red-500">*</span>
+                        </label>
+                        <input
+                          v-model="ruleData.target"
+                          type="text"
+                          placeholder="User ID, role name, or rule reference"
+                          class="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg"
+                        />
+                      </div>
+                      <div class="text-xs text-gray-500 dark:text-gray-400 italic p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+                        Assignment will follow existing permission rules.
+                      </div>
+                    </div>
+
+                    <!-- Status Guard Panel -->
+                    <div v-else-if="rule.nodeType === 'status_guard'" class="space-y-4">
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Field <span class="text-red-500">*</span>
+                        </label>
+                        <select
+                          v-model="ruleData.field"
+                          class="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg"
+                        >
+                          <option value="status">Status</option>
+                          <option value="lifecycle">Lifecycle</option>
+                          <option value="stage">Stage</option>
+                        </select>
+                      </div>
+                      <div class="grid grid-cols-2 gap-3">
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            From
+                          </label>
+                          <input
+                            v-model="ruleData.from"
+                            type="text"
+                            placeholder="e.g. Open"
+                            class="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg"
+                          />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            To
+                          </label>
+                          <input
+                            v-model="ruleData.to"
+                            type="text"
+                            placeholder="e.g. Closed Won"
+                            class="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Block Reason (shown to users)
+                        </label>
+                        <input
+                          v-model="ruleData.blockReason"
+                          type="text"
+                          placeholder="e.g. Approval required"
+                          class="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg"
+                        />
+                      </div>
+                    </div>
+
+                    <!-- Action Panel -->
+                    <div v-else-if="rule.nodeType === 'action'" class="space-y-4">
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Action Type <span class="text-red-500">*</span>
+                        </label>
+                        <select
+                          v-model="ruleData.actionType"
+                          class="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg"
+                        >
+                          <option value="">Select action...</option>
+                          <option value="create_task">Create Task</option>
+                          <option value="notify_user">Send Notification</option>
+                          <option value="start_process">Start Process</option>
+                        </select>
+                      </div>
+
+                      <!-- Create Task Params -->
+                      <div v-if="ruleData.actionType === 'create_task'" class="space-y-3">
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Task Title <span class="text-red-500">*</span>
+                          </label>
+                          <input
+                            v-model="ruleData.params.title"
+                            type="text"
+                            placeholder="e.g. Follow up on deal"
+                            class="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg"
+                          />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Description
+                          </label>
+                          <textarea
+                            v-model="ruleData.params.description"
+                            rows="2"
+                            placeholder="Task description..."
+                            class="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg"
+                          ></textarea>
+                        </div>
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Assign To
+                          </label>
+                          <select
+                            v-model="ruleData.params.assignee"
+                            class="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg"
+                          >
+                            <option value="owner">Record Owner</option>
+                            <option value="triggeredBy">User Who Triggered</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <!-- Notify User Params -->
+                      <div v-if="ruleData.actionType === 'notify_user'" class="space-y-3">
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Message <span class="text-red-500">*</span>
+                          </label>
+                          <textarea
+                            v-model="ruleData.params.message"
+                            rows="3"
+                            placeholder="Notification message..."
+                            class="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg"
+                          ></textarea>
+                        </div>
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Recipient
+                          </label>
+                          <select
+                            v-model="ruleData.params.recipient"
+                            class="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg"
+                          >
+                            <option value="owner">Record Owner</option>
+                            <option value="triggeredBy">User Who Triggered</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Footer -->
+                  <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-3">
+                    <button
+                      @click="$emit('close')"
+                      class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      @click="saveRule"
+                      class="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              </DialogPanel>
+            </TransitionChild>
+          </div>
+        </div>
+      </div>
+    </Dialog>
+  </TransitionRoot>
+</template>
+
+<script setup>
+import { ref, watch, computed } from 'vue';
+import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
+
+const props = defineProps({
+  rule: {
+    type: Object,
+    default: null
+  },
+  process: {
+    type: Object,
+    required: true
+  }
+});
+
+const emit = defineEmits(['close', 'save']);
+
+const ruleData = ref({});
+
+watch(() => props.rule, (newRule) => {
+  if (newRule && newRule.node) {
+    const config = newRule.node.config || {};
+    
+    if (newRule.nodeType === 'field_rule') {
+      ruleData.value = {
+        fieldKey: config.fieldKey || '',
+        rule: config.rule || 'mandatory',
+        value: config.value || ''
+      };
+    } else if (newRule.nodeType === 'ownership_rule') {
+      ruleData.value = {
+        assignment: config.assignment || 'owner',
+        target: config.target || ''
+      };
+    } else if (newRule.nodeType === 'status_guard') {
+      const transition = config.allowedTransitions?.[0] || '';
+      const [from, to] = transition.includes('→') ? transition.split('→').map(s => s.trim()) : ['', ''];
+      ruleData.value = {
+        field: config.field || 'stage',
+        from: from,
+        to: to,
+        blockReason: config.blockReason || ''
+      };
+    } else if (newRule.nodeType === 'action') {
+      ruleData.value = {
+        actionType: config.actionType || '',
+        params: { ...(config.params || {}) }
+      };
+    }
+  }
+}, { immediate: true });
+
+const saveRule = () => {
+  const updatedNode = { ...props.rule.node };
+  
+  // Get entity type from existing nodes or default
+  const getEntityType = () => {
+    const fieldRuleNode = props.process.nodes?.find(n => n.type === 'field_rule');
+    if (fieldRuleNode?.config?.entityType) return fieldRuleNode.config.entityType;
+    const ownershipNode = props.process.nodes?.find(n => n.type === 'ownership_rule');
+    if (ownershipNode?.config?.entityType) return ownershipNode.config.entityType;
+    const statusGuardNode = props.process.nodes?.find(n => n.type === 'status_guard');
+    if (statusGuardNode?.config?.entityType) return statusGuardNode.config.entityType;
+    return 'deal'; // Default
+  };
+
+  const entityType = getEntityType();
+  
+  if (props.rule.nodeType === 'field_rule') {
+    updatedNode.config = {
+      entityType: entityType,
+      fieldKey: ruleData.value.fieldKey,
+      rule: ruleData.value.rule,
+      value: ruleData.value.rule === 'visibility' ? ruleData.value.value : ruleData.value.value || true
+    };
+  } else if (props.rule.nodeType === 'ownership_rule') {
+    updatedNode.config = {
+      entityType: entityType,
+      assignment: ruleData.value.assignment,
+      target: ruleData.value.target
+    };
+  } else if (props.rule.nodeType === 'status_guard') {
+    updatedNode.config = {
+      entityType: entityType,
+      field: ruleData.value.field,
+      allowedTransitions: [`${ruleData.value.from} → ${ruleData.value.to}`]
+    };
+    if (ruleData.value.blockReason) {
+      updatedNode.config.blockReason = ruleData.value.blockReason;
+    }
+  } else if (props.rule.nodeType === 'action') {
+    updatedNode.config = {
+      actionType: ruleData.value.actionType,
+      params: { ...ruleData.value.params }
+    };
+  }
+
+  emit('save', {
+    ...props.rule,
+    node: updatedNode
+  });
+};
+</script>

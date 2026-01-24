@@ -1,0 +1,90 @@
+{
+  "name": "Client Onboarding Process",
+  "description": "Sets up new audit clients with required fields and initial documentation",
+  "appKey": "AUDIT",
+  "trigger": {
+    "type": "domain_event",
+    "eventType": "record.created"
+  },
+  "status": "draft",
+  "version": 1,
+  "nodes": [
+    {
+      "id": "trigger_1",
+      "type": "trigger",
+      "config": {
+        "entityType": "organization",
+        "condition": {
+          "field": "type",
+          "operator": "equals",
+          "value": "Audit Client"
+        }
+      },
+      "order": 1
+    },
+    {
+      "id": "field_rule_1",
+      "type": "field_rule",
+      "config": {
+        "entityType": "organization",
+        "fieldKey": "auditType",
+        "rule": "mandatory",
+        "value": true
+      },
+      "order": 2
+    },
+    {
+      "id": "field_rule_2",
+      "type": "field_rule",
+      "config": {
+        "entityType": "organization",
+        "fieldKey": "complianceOfficer",
+        "rule": "mandatory",
+        "value": true
+      },
+      "order": 3
+    },
+    {
+      "id": "action_1",
+      "type": "action",
+      "config": {
+        "actionType": "create_task",
+        "params": {
+          "title": "Complete client onboarding checklist",
+          "description": "Verify all required documentation is collected",
+          "dueDate": "7_days",
+          "assignee": "owner"
+        }
+      },
+      "order": 4
+    },
+    {
+      "id": "end_1",
+      "type": "end",
+      "config": {},
+      "order": 5
+    }
+  ],
+  "edges": [
+    {
+      "fromNodeId": "trigger_1",
+      "toNodeId": "field_rule_1",
+      "condition": null
+    },
+    {
+      "fromNodeId": "field_rule_1",
+      "toNodeId": "field_rule_2",
+      "condition": null
+    },
+    {
+      "fromNodeId": "field_rule_2",
+      "toNodeId": "action_1",
+      "condition": null
+    },
+    {
+      "fromNodeId": "action_1",
+      "toNodeId": "end_1",
+      "condition": null
+    }
+  ]
+}

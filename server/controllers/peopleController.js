@@ -88,6 +88,17 @@ exports.create = async (req, res) => {
       }]
     };
     const record = await People.create(body);
+    
+    // Compute derived status (non-blocking)
+    const { computeAndSetDerivedStatus } = require('../services/derivedStatusService');
+    const appKey = req.appKey || req.query.appKey || 'SALES';
+    await computeAndSetDerivedStatus('people', record, appKey);
+    
+    // Save if derivedStatus was computed
+    if (record.derivedStatus !== undefined) {
+      await record.save();
+    }
+    
     res.status(201).json({ success: true, data: record });
   } catch (error) {
     console.error('Error creating people record:', error);
@@ -547,6 +558,59 @@ exports.update = async (req, res) => {
       console.warn(`Attempt to modify createdBy field blocked for People record ${req.params.id}`);
     }
     
+    // Validate unlink invariants if organization is being unlinked
+    if (updateData.organization === null || updateData.organization === '') {
+      const { validateUnlink } = require('../services/systemInvariants');
+      const invariantResult = await validateUnlink({
+        moduleKey: 'people',
+        recordId: req.params.id,
+        organizationId: req.user.organizationId,
+        updateData: { organization: null }
+      });
+      
+      if (!invariantResult.valid) {
+        return res.status(400).json({
+          success: false,
+          code: invariantResult.code,
+          message: invariantResult.message,
+          errors: invariantResult.errors
+        });
+      }
+    }
+    
+    // Validate status write protection (if config exists, block direct status writes)
+    const { validateStatusWriteProtection } = require('../services/derivedStatusService');
+    const appKey = req.appKey || req.query.appKey || 'SALES';
+    const statusWriteProtectionResult = await validateStatusWriteProtection('people', updateData, appKey);
+    
+    if (statusWriteProtectionResult && !statusWriteProtectionResult.valid) {
+      return res.status(400).json({
+        success: false,
+        code: statusWriteProtectionResult.code,
+        message: statusWriteProtectionResult.message,
+        errors: statusWriteProtectionResult.errors
+      });
+    }
+    
+    // Validate status invariant (fail-closed: block if status !== derivedStatus when config exists)
+    const { validateStatusInvariant } = require('../services/systemInvariants');
+    const statusInvariantResult = await validateStatusInvariant({
+      moduleKey: 'people',
+      recordId: req.params.id,
+      organizationId: req.user.organizationId,
+      updateData,
+      appKey
+    });
+    
+    if (!statusInvariantResult.valid) {
+      return res.status(400).json({
+        success: false,
+        code: statusInvariantResult.code,
+        message: statusInvariantResult.message,
+        errors: statusInvariantResult.errors
+      });
+    }
+    
     // Validate field-level write access
     const ModuleDefinition = require('../models/ModuleDefinition');
     const { validateFieldWrite } = require('../utils/fieldAccessControl');
@@ -604,12 +668,58 @@ exports.update = async (req, res) => {
       updateKeys: Object.keys(updateData)
     });
     
+    // Check if lifecycle or type fields changed
+    const { hasLifecycleOrTypeChanged, computeAndSetDerivedStatus, hasConfiguration } = require('../services/derivedStatusService');
+    const shouldComputeDerivedStatus = hasLifecycleOrTypeChanged('people', null, updateData);
+    
+    let previous = null;
+    if (shouldComputeDerivedStatus) {
+      previous = await People.findOne(
+        { _id: req.params.id, organizationId: req.user.organizationId }
+      ).lean();
+    }
+
     const updated = await People.findOneAndUpdate(
       { _id: req.params.id, organizationId: req.user.organizationId },
       { $set: updateData },
       { new: true, runValidators: true }
     );
     if (!updated) return res.status(404).json({ success: false, message: 'Not found' });
+    
+    // Emit domain events for automation (lifecycle/type changes only)
+    if (shouldComputeDerivedStatus) {
+      const { emitPeopleEvents } = require('../services/domainEventHelpers');
+      emitPeopleEvents({
+        previous,
+        current: updated.toObject ? updated.toObject() : updated,
+        appKey,
+        triggeredBy: req.user?._id ?? null,
+        organizationId: req.user?.organizationId ?? null
+      });
+    }
+    
+    // Compute derived status if lifecycle/type fields changed
+    if (shouldComputeDerivedStatus) {
+      const computedDerivedStatus = await computeAndSetDerivedStatus('people', updated, appKey);
+      
+      // If config exists and derivedStatus was computed, update status field to match
+      const configExists = await hasConfiguration('people', appKey);
+      if (configExists && computedDerivedStatus) {
+        // Update the appropriate status field based on type
+        if (updated.type === 'Lead' && updated.lead_status !== computedDerivedStatus) {
+          updated.lead_status = computedDerivedStatus;
+        } else if (updated.type === 'Contact' && updated.contact_status !== computedDerivedStatus) {
+          updated.contact_status = computedDerivedStatus;
+        }
+      }
+      
+      // Save if derivedStatus or status was updated
+      if (updated.derivedStatus !== undefined && updated.isModified('derivedStatus')) {
+        await updated.save();
+      } else if (updated.isModified('lead_status') || updated.isModified('contact_status')) {
+        await updated.save();
+      }
+    }
     
     // Re-fetch with populated fields to ensure populate works correctly
     const populatedRecord = await People.findById(updated._id)
@@ -638,6 +748,23 @@ exports.update = async (req, res) => {
 // Delete
 exports.remove = async (req, res) => {
   try {
+    // Validate deletion invariants
+    const { validateDelete } = require('../services/systemInvariants');
+    const invariantResult = await validateDelete({
+      moduleKey: 'people',
+      recordId: req.params.id,
+      organizationId: req.user.organizationId
+    });
+    
+    if (!invariantResult.valid) {
+      return res.status(400).json({
+        success: false,
+        code: invariantResult.code,
+        message: invariantResult.message,
+        errors: invariantResult.errors
+      });
+    }
+    
     const deleted = await People.findOneAndDelete({ _id: req.params.id, organizationId: req.user.organizationId });
     if (!deleted) return res.status(404).json({ success: false, message: 'Not found' });
     res.json({ success: true, data: deleted._id });

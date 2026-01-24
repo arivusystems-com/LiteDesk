@@ -58,38 +58,95 @@
             </div>
           </div>
 
+          <!-- Pipeline Selector (if config exists) -->
+          <div v-if="pipelines.length > 0" class="mb-6">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Pipeline
+            </label>
+            <select 
+              v-model="form.pipeline" 
+              class="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all cursor-pointer"
+            >
+              <option :value="null">Select pipeline...</option>
+              <option v-for="pipeline in pipelines" :key="pipeline.key" :value="pipeline.key">
+                {{ pipeline.label }}
+              </option>
+            </select>
+          </div>
+          
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Stage: Primary Control (always editable) -->
             <div class="flex flex-col">
               <label class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Stage <span class="text-red-600">*</span>
+                <span class="ml-2 text-xs text-gray-500 dark:text-gray-400 font-normal">(Primary control)</span>
               </label>
               <select 
                 v-model="form.stage" 
                 required
-                class="px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all cursor-pointer"
+                class="px-4 py-3 bg-white dark:bg-gray-800 border-2 border-brand-500 dark:border-brand-400 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all cursor-pointer font-medium"
               >
-                <option value="Qualification">Qualification</option>
-                <option value="Proposal">Proposal</option>
-                <option value="Negotiation">Negotiation</option>
-                <option value="Contract Sent">Contract Sent</option>
-                <option value="Closed Won">Closed Won</option>
-                <option value="Closed Lost">Closed Lost</option>
+                <!-- Config-driven stages (if config exists) -->
+                <template v-if="stages.length > 0">
+                  <option v-for="stage in stages" :key="stage" :value="stage">
+                    {{ stage }}
+                  </option>
+                </template>
+                <!-- Legacy stages (fallback when no config) -->
+                <template v-else>
+                  <option value="Qualification">Qualification</option>
+                  <option value="Proposal">Proposal</option>
+                  <option value="Negotiation">Negotiation</option>
+                  <option value="Contract Sent">Contract Sent</option>
+                  <option value="Closed Won">Closed Won</option>
+                  <option value="Closed Lost">Closed Lost</option>
+                </template>
               </select>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Changing stage updates status and probability automatically
+              </p>
             </div>
 
+            <!-- Probability: Read-only when derivedStatus exists -->
             <div class="flex flex-col">
               <label class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Probability (%) <span class="text-red-600">*</span>
+                Probability (%)
+                <span v-if="isStatusReadOnly" class="ml-2 text-xs text-gray-500 dark:text-gray-400 italic">
+                  (System-owned)
+                </span>
               </label>
+              <!-- Read-only badge when derivedStatus exists -->
+              <div
+                v-if="isStatusReadOnly"
+                class="px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg"
+              >
+                <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-info-50 dark:bg-info-900/20 text-info-700 dark:text-info-300 border border-info-200 dark:border-info-800">
+                  {{ form.probability }}%
+                </span>
+              </div>
+              <!-- Editable input (legacy mode when derivedStatus is null) -->
               <input 
+                v-else
                 v-model.number="form.probability" 
                 type="number" 
                 min="0"
                 max="100"
                 placeholder="50"
-                required
                 class="px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
               />
+            </div>
+          </div>
+          
+          <!-- Status: Read-only badge when derivedStatus exists -->
+          <div v-if="isStatusReadOnly" class="mt-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Status
+              <span class="ml-2 text-xs text-gray-500 dark:text-gray-400 italic">(System-owned)</span>
+            </label>
+            <div class="px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg">
+              <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-info-50 dark:bg-info-900/20 text-info-700 dark:text-info-300 border border-info-200 dark:border-info-800">
+                {{ form.status || '—' }}
+              </span>
             </div>
           </div>
         </div>
@@ -253,6 +310,9 @@ const isEditing = computed(() => !!props.deal);
 const saving = ref(false);
 const contacts = ref([]);
 const users = ref([]);
+const pipelines = ref([]);
+const stages = ref([]);
+const loadingConfig = ref(false);
 
 const form = ref({
   name: '',
@@ -267,7 +327,10 @@ const form = ref({
   ownerId: authStore.user?._id || '',
   description: '',
   nextFollowUpDate: '',
-  tags: []
+  tags: [],
+  status: 'Open',
+  derivedStatus: null, // Track derivedStatus to determine if status/probability is read-only
+  pipeline: null
 });
 
 const tagsString = ref('');
@@ -277,18 +340,8 @@ watch(tagsString, (newValue) => {
   form.value.tags = newValue.split(',').map(tag => tag.trim()).filter(tag => tag);
 });
 
-// Auto-update probability based on stage
-watch(() => form.value.stage, (newStage) => {
-  const probabilities = {
-    'Qualification': 25,
-    'Proposal': 50,
-    'Negotiation': 70,
-    'Contract Sent': 85,
-    'Closed Won': 100,
-    'Closed Lost': 0
-  };
-  form.value.probability = probabilities[newStage] || form.value.probability;
-});
+// NOTE: Probability is now system-owned when derivedStatus exists
+// Backend computes probability from stage config, so we don't auto-update here
 
 // Load deal data if editing
 if (props.deal) {
@@ -298,13 +351,21 @@ if (props.deal) {
     contactId: props.deal.contactId?._id || '',
     ownerId: props.deal.ownerId?._id || authStore.user?._id,
     expectedCloseDate: props.deal.expectedCloseDate ? new Date(props.deal.expectedCloseDate).toISOString().split('T')[0] : '',
-    nextFollowUpDate: props.deal.nextFollowUpDate ? new Date(props.deal.nextFollowUpDate).toISOString().split('T')[0] : ''
+    nextFollowUpDate: props.deal.nextFollowUpDate ? new Date(props.deal.nextFollowUpDate).toISOString().split('T')[0] : '',
+    status: props.deal.status || 'Open',
+    derivedStatus: props.deal.derivedStatus || null,
+    pipeline: props.deal.pipeline || null
   };
   
   if (props.deal.tags && Array.isArray(props.deal.tags)) {
     tagsString.value = props.deal.tags.join(', ');
   }
 }
+
+// Check if status/probability should be read-only (when derivedStatus exists)
+const isStatusReadOnly = computed(() => {
+  return form.value.derivedStatus != null && form.value.derivedStatus !== '';
+});
 
 // Fetch contacts for dropdown
 const fetchContacts = async () => {
@@ -338,17 +399,58 @@ const fetchUsers = async () => {
   }
 };
 
+// Fetch pipelines and stages from config registry (non-blocking)
+const fetchPipelineConfig = async () => {
+  try {
+    loadingConfig.value = true;
+    const pipelinesData = await apiClient.get('/config-registry/pipelines', {
+      params: { appKey: 'SALES' }
+    });
+    
+    if (pipelinesData.success && pipelinesData.data && pipelinesData.data.length > 0) {
+      pipelines.value = pipelinesData.data;
+      
+      // If deal has a pipeline, fetch its stages
+      if (form.value.pipeline) {
+        const pipeline = pipelinesData.data.find(
+          (p) => p.key === form.value.pipeline || p.label === form.value.pipeline
+        );
+        if (pipeline) {
+          const stagesData = await apiClient.get(`/config-registry/pipelines/${pipeline.key}/stages`, {
+            params: { appKey: 'SALES' }
+          });
+          if (stagesData.success && stagesData.data) {
+            stages.value = stagesData.data.map((s) => s.sourceStatusValue).filter(Boolean);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching pipeline config:', error);
+    // Non-blocking: continue with legacy behavior
+  } finally {
+    loadingConfig.value = false;
+  }
+};
+
 const handleSubmit = async () => {
   saving.value = true;
   
   try {
-    // Clean up empty values
+    // Clean up empty values and system-owned fields
     const payload = { ...form.value };
     if (!payload.contactId) delete payload.contactId;
     if (!payload.type) delete payload.type;
     if (!payload.source) delete payload.source;
     if (!payload.description) delete payload.description;
     if (!payload.nextFollowUpDate) delete payload.nextFollowUpDate;
+    
+    // Remove system-owned fields when derivedStatus exists (backend will compute them)
+    if (payload.derivedStatus != null && payload.derivedStatus !== '') {
+      delete payload.status;
+      delete payload.probability;
+      delete payload.derivedStatus; // Don't send derivedStatus, backend computes it
+    }
     
     // Use convenience methods that handle JSON.stringify automatically
     const data = isEditing.value 
@@ -369,6 +471,28 @@ const handleSubmit = async () => {
 onMounted(() => {
   fetchContacts();
   fetchUsers();
+  fetchPipelineConfig();
+});
+
+// Watch pipeline changes to update stages
+watch(() => form.value.pipeline, async (newPipeline) => {
+  if (newPipeline && pipelines.value.length > 0) {
+    const pipeline = pipelines.value.find(
+      (p) => p.key === newPipeline || p.label === newPipeline
+    );
+    if (pipeline) {
+      try {
+        const stagesData = await apiClient.get(`/config-registry/pipelines/${pipeline.key}/stages`, {
+          params: { appKey: 'SALES' }
+        });
+        if (stagesData.success && stagesData.data) {
+          stages.value = stagesData.data.map((s) => s.sourceStatusValue).filter(Boolean);
+        }
+      } catch (error) {
+        console.error('Error fetching stages for pipeline:', error);
+      }
+    }
+  }
 });
 </script>
 

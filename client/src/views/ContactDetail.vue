@@ -373,6 +373,13 @@
             ref="eventsWidgetRef"
           />
 
+          <!-- Automation Context -->
+          <AutomationContext
+            v-if="contact._id"
+            entity-type="people"
+            :entity-id="contact._id"
+          />
+
           <!-- Activity Timeline -->
           <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
             <div class="flex items-center justify-between mb-3">
@@ -467,6 +474,7 @@ import RelatedDealsWidget from '@/components/deals/RelatedDealsWidget.vue';
 import RelatedTasksWidget from '@/components/tasks/RelatedTasksWidget.vue';
 import RelatedOrganizationWidget from '@/components/organizations/RelatedOrganizationWidget.vue';
 import RelatedRecordsRenderer from '@/components/relationships/RelatedRecordsRenderer.vue';
+import AutomationContext from '@/components/automation/AutomationContext.vue';
 import { useAuthStore } from '@/stores/auth';
 import Avatar from '@/components/common/Avatar.vue';
 import { useRecordContext } from '@/composables/useRecordContext';

@@ -33,15 +33,14 @@ const DealSchema = new Schema({
     pipeline: {
         type: String,
         trim: true,
-        default: 'Default Pipeline'
+        default: null
     },
     
-    // 📊 SALES PIPELINE
+    // 📊 SALES PIPELINE (config-driven; no hardcoded stages)
     // **********************************
     stage: {
         type: String,
-        enum: ['Qualification', 'Proposal', 'Negotiation', 'Contract Sent', 'Closed Won', 'Closed Lost', 'Lead', 'Qualified'],
-        default: 'Qualification',
+        trim: true,
         required: true
     },
     probability: {
@@ -63,6 +62,7 @@ const DealSchema = new Schema({
     
     // 🔗 RELATIONSHIPS
     // **********************************
+    // Legacy relationship fields (maintained for backward compatibility)
     contactId: {
         type: Schema.Types.ObjectId,
         ref: 'People',
@@ -72,6 +72,68 @@ const DealSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'Organization'
     },
+    
+    // Role-based relationships (additive, supports multiple contacts/orgs with roles)
+    dealPeople: [{
+        personId: {
+            type: Schema.Types.ObjectId,
+            ref: 'People',
+            required: true
+        },
+        role: {
+            type: String,
+            trim: true,
+            required: true
+            // e.g., 'primary_contact', 'decision_maker', 'influencer', 'partner_contact'
+        },
+        isPrimary: {
+            type: Boolean,
+            default: false
+        },
+        isActive: {
+            type: Boolean,
+            default: true
+        },
+        addedAt: {
+            type: Date,
+            default: Date.now
+        },
+        addedBy: {
+            type: Schema.Types.ObjectId,
+            ref: 'User'
+        }
+    }],
+    
+    dealOrganizations: [{
+        organizationId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Organization',
+            required: true
+        },
+        role: {
+            type: String,
+            trim: true,
+            required: true
+            // e.g., 'customer', 'partner', 'reseller'
+        },
+        isPrimary: {
+            type: Boolean,
+            default: false
+        },
+        isActive: {
+            type: Boolean,
+            default: true
+        },
+        addedAt: {
+            type: Date,
+            default: Date.now
+        },
+        addedBy: {
+            type: Schema.Types.ObjectId,
+            ref: 'User'
+        }
+    }],
+    
     ownerId: {
         type: Schema.Types.ObjectId,
         ref: 'User',
@@ -106,6 +168,16 @@ const DealSchema = new Schema({
         type: String,
         enum: ['Open', 'Won', 'Lost', 'Stalled', 'Active', 'Abandoned'],
         default: 'Open'
+    },
+    
+    // Derived Status (computed from Configuration Registry)
+    // This field is computed from lifecycle mappings and is nullable
+    // If no config exists or computation fails, this remains null
+    derivedStatus: {
+        type: String,
+        trim: true,
+        default: null,
+        index: true
     },
     lostReason: {
         type: String,
@@ -186,57 +258,19 @@ DealSchema.methods.isOverdue = function() {
 };
 
 // Method to advance stage
+// Stage progression is config-driven (pipeline + stages). No hardcoded stages.
+// When using config, advance by setting stage via API; this method is retained for compatibility.
 DealSchema.methods.advanceStage = async function(userId) {
-    const stages = ['Qualification', 'Proposal', 'Negotiation', 'Contract Sent', 'Closed Won'];
-    const currentIndex = stages.indexOf(this.stage);
-    
-    if (currentIndex < stages.length - 1) {
-        const newStage = stages[currentIndex + 1];
-        
-        // Add to history
-        this.stageHistory.push({
-            stage: newStage,
-            changedBy: userId
-        });
-        
-        this.stage = newStage;
-        
-        // Update probability based on stage
-        const probabilities = { 'Qualification': 25, 'Proposal': 50, 'Negotiation': 70, 'Contract Sent': 85, 'Closed Won': 100 };
-        this.probability = probabilities[newStage];
-        
-        if (newStage === 'Closed Won') {
-            this.status = 'Won';
-            this.actualCloseDate = new Date();
-        }
-        
-        return await this.save();
-    }
-    
     return this;
 };
 
-// Pre-save middleware to update stage history
+// Pre-save middleware: stage history only. No hardcoded stage/status normalization.
 DealSchema.pre('save', function(next) {
-    // Normalize legacy values to new taxonomy
-    if (this.stage === 'Lead') {
-        this.stage = 'Qualification';
-    } else if (this.stage === 'Qualified') {
-        this.stage = 'Proposal';
-    }
-
-    if (this.status === 'Active') {
-        this.status = 'Open';
-    } else if (this.status === 'Abandoned') {
-        this.status = 'Stalled';
-    }
-
     if (this.type === 'Existing Business') {
         this.type = 'Existing Customer';
     }
 
     if (this.isModified('stage') && !this.isNew) {
-        // Add to stage history if stage changed
         const lastHistory = this.stageHistory[this.stageHistory.length - 1];
         if (!lastHistory || lastHistory.stage !== this.stage) {
             this.stageHistory.push({
@@ -245,16 +279,6 @@ DealSchema.pre('save', function(next) {
             });
         }
     }
-    
-    // Auto-update status based on stage
-    if (this.stage === 'Closed Won' && this.status === 'Open') {
-        this.status = 'Won';
-        this.actualCloseDate = this.actualCloseDate || new Date();
-    } else if (this.stage === 'Closed Lost' && this.status === 'Open') {
-        this.status = 'Lost';
-        this.actualCloseDate = this.actualCloseDate || new Date();
-    }
-    
     next();
 });
 

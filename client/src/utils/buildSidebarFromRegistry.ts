@@ -128,6 +128,14 @@ function buildShell(snapshot: PermissionSnapshot): SidebarItem[] {
     icon: 'inbox',
   });
 
+  shell.push({
+    kind: 'surface',
+    id: 'approvals',
+    label: 'Approvals',
+    route: '/approvals',
+    icon: 'check-circle',
+  });
+
   // Search exists as a shell surface, but is executed via UI (modal) rather than navigation.
   shell.push({
     kind: 'surface',

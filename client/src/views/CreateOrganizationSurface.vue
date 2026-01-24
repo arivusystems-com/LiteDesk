@@ -203,8 +203,22 @@ Post-creation behavior is driven by invocation context via query params:
           <div v-if="shouldShowStatusField('customerStatus', formData.types)">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Customer Status
+              <span v-if="isStatusReadOnly('customerStatus')" class="ml-2 text-xs text-gray-500 dark:text-gray-400 italic">
+                (System-owned)
+              </span>
             </label>
+            <!-- Read-only badge when derivedStatus exists -->
+            <div
+              v-if="isStatusReadOnly('customerStatus')"
+              class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg"
+            >
+              <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-info-50 dark:bg-info-900/20 text-info-700 dark:text-info-300 border border-info-200 dark:border-info-800">
+                {{ formData.customerStatus || '—' }}
+              </span>
+            </div>
+            <!-- Editable select (legacy mode when derivedStatus is null) -->
             <select
+              v-else
               v-model="formData.customerStatus"
               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
             >
@@ -226,8 +240,22 @@ Post-creation behavior is driven by invocation context via query params:
           <div v-if="shouldShowStatusField('partnerStatus', formData.types)">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Partner Status
+              <span v-if="isStatusReadOnly('partnerStatus')" class="ml-2 text-xs text-gray-500 dark:text-gray-400 italic">
+                (System-owned)
+              </span>
             </label>
+            <!-- Read-only badge when derivedStatus exists -->
+            <div
+              v-if="isStatusReadOnly('partnerStatus')"
+              class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg"
+            >
+              <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-info-50 dark:bg-info-900/20 text-info-700 dark:text-info-300 border border-info-200 dark:border-info-800">
+                {{ formData.partnerStatus || '—' }}
+              </span>
+            </div>
+            <!-- Editable select (legacy mode when derivedStatus is null) -->
             <select
+              v-else
               v-model="formData.partnerStatus"
               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
             >
@@ -249,8 +277,22 @@ Post-creation behavior is driven by invocation context via query params:
           <div v-if="shouldShowStatusField('vendorStatus', formData.types)">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Vendor Status
+              <span v-if="isStatusReadOnly('vendorStatus')" class="ml-2 text-xs text-gray-500 dark:text-gray-400 italic">
+                (System-owned)
+              </span>
             </label>
+            <!-- Read-only badge when derivedStatus exists -->
+            <div
+              v-if="isStatusReadOnly('vendorStatus')"
+              class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg"
+            >
+              <span class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-info-50 dark:bg-info-900/20 text-info-700 dark:text-info-300 border border-info-200 dark:border-info-800">
+                {{ formData.vendorStatus || '—' }}
+              </span>
+            </div>
+            <!-- Editable select (legacy mode when derivedStatus is null) -->
             <select
+              v-else
               v-model="formData.vendorStatus"
               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
             >
@@ -440,7 +482,8 @@ const formData = ref({
   // Status fields (intent-aware)
   customerStatus: null,
   partnerStatus: null,
-  vendorStatus: null
+  vendorStatus: null,
+  derivedStatus: null // Track derivedStatus to determine if status is read-only
 });
 
 // ============================================================================
@@ -542,6 +585,14 @@ const shouldShowStatusField = (fieldKey, selectedTypes) => {
   }
   
   return selectedTypes.some(type => relevantTypes.includes(type));
+};
+
+/**
+ * Check if a status field should be read-only (when derivedStatus exists)
+ */
+const isStatusReadOnly = (fieldKey) => {
+  // Status is read-only when derivedStatus exists (system-owned)
+  return formData.value.derivedStatus != null && formData.value.derivedStatus !== '';
 };
 
 // Computed: Allowed statuses for each status field (intent-aware)
@@ -848,7 +899,8 @@ const fetchOrganizationData = async () => {
         // Status fields (preserve existing values in edit mode)
         customerStatus: data.customerStatus || null,
         partnerStatus: data.partnerStatus || null,
-        vendorStatus: data.vendorStatus || null
+        vendorStatus: data.vendorStatus || null,
+        derivedStatus: data.derivedStatus || null
       };
 
       // EDIT MODE RESTRICTION: Determine if types should be read-only

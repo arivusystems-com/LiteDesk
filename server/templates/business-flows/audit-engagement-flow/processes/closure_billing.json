@@ -1,0 +1,58 @@
+{
+  "name": "Closure & Billing Process",
+  "description": "Notifies Finance when audit is closed and ready for billing",
+  "appKey": "AUDIT",
+  "trigger": {
+    "type": "domain_event",
+    "eventType": "status.changed"
+  },
+  "status": "draft",
+  "version": 1,
+  "nodes": [
+    {
+      "id": "trigger_1",
+      "type": "trigger",
+      "config": {
+        "entityType": "organization",
+        "condition": {
+          "field": "status",
+          "operator": "equals",
+          "value": "Audit Closed"
+        }
+      },
+      "order": 1
+    },
+    {
+      "id": "action_1",
+      "type": "action",
+      "config": {
+        "actionType": "notify_user",
+        "params": {
+          "channel": "email",
+          "template": "audit_closed",
+          "recipient": "role",
+          "role": "finance"
+        }
+      },
+      "order": 2
+    },
+    {
+      "id": "end_1",
+      "type": "end",
+      "config": {},
+      "order": 3
+    }
+  ],
+  "edges": [
+    {
+      "fromNodeId": "trigger_1",
+      "toNodeId": "action_1",
+      "condition": null
+    },
+    {
+      "fromNodeId": "action_1",
+      "toNodeId": "end_1",
+      "condition": null
+    }
+  ]
+}

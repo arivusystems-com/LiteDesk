@@ -1,0 +1,114 @@
+{
+  "name": "Lead Qualification Process",
+  "description": "Creates Organization and Deal when a Lead is qualified (type changed to Sales Contact)",
+  "appKey": "SALES",
+  "trigger": {
+    "type": "domain_event",
+    "eventType": "status.changed"
+  },
+  "status": "draft",
+  "version": 1,
+  "nodes": [
+    {
+      "id": "trigger_1",
+      "type": "trigger",
+      "config": {
+        "entityType": "people",
+        "condition": {
+          "field": "type",
+          "operator": "equals",
+          "value": "Sales Contact"
+        }
+      },
+      "order": 1
+    },
+    {
+      "id": "condition_1",
+      "type": "condition",
+      "config": {
+        "field": "type",
+        "operator": "equals",
+        "value": "Sales Contact"
+      },
+      "order": 2
+    },
+    {
+      "id": "action_1",
+      "type": "action",
+      "config": {
+        "actionType": "create_record",
+        "params": {
+          "entityType": "organization",
+          "name": "{{people.organizationName}}",
+          "owner": "{{people.owner}}"
+        }
+      },
+      "order": 3
+    },
+    {
+      "id": "action_2",
+      "type": "action",
+      "config": {
+        "actionType": "create_record",
+        "params": {
+          "entityType": "deal",
+          "name": "{{people.firstName}} {{people.lastName}} - New Deal",
+          "organization": "{{action_1.id}}",
+          "owner": "{{people.owner}}",
+          "stage": "Qualified"
+        }
+      },
+      "order": 4
+    },
+    {
+      "id": "action_3",
+      "type": "action",
+      "config": {
+        "actionType": "notify_user",
+        "params": {
+          "channel": "in_app",
+          "template": "lead_qualified",
+          "recipient": "role",
+          "role": "sales_manager"
+        }
+      },
+      "order": 5
+    },
+    {
+      "id": "end_1",
+      "type": "end",
+      "config": {},
+      "order": 6
+    }
+  ],
+  "edges": [
+    {
+      "fromNodeId": "trigger_1",
+      "toNodeId": "condition_1",
+      "condition": null
+    },
+    {
+      "fromNodeId": "condition_1",
+      "toNodeId": "action_1",
+      "condition": {
+        "operator": "equals",
+        "value": true
+      }
+    },
+    {
+      "fromNodeId": "action_1",
+      "toNodeId": "action_2",
+      "condition": null
+    },
+    {
+      "fromNodeId": "action_2",
+      "toNodeId": "action_3",
+      "condition": null
+    },
+    {
+      "fromNodeId": "action_3",
+      "toNodeId": "end_1",
+      "condition": null
+    }
+  ]
+}

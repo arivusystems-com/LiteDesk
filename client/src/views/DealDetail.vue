@@ -65,13 +65,24 @@
               </div>
               
               <div class="flex items-center gap-2 mb-2">
+                <!-- Stage: Primary Control (prominent) -->
                 <span 
-                  class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                  class="inline-flex items-center px-3 py-1 rounded-md text-sm font-semibold border-2"
                   :class="getStageClass(deal.stage)"
                 >
                   {{ deal.stage }}
                 </span>
+                <!-- Status: Read-only badge when derivedStatus exists -->
                 <span 
+                  v-if="deal.derivedStatus"
+                  class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                  :class="getStatusClass(deal.status)"
+                  title="System-owned (computed from stage)"
+                >
+                  {{ deal.status }}
+                </span>
+                <span 
+                  v-else
                   class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
                   :class="getStatusClass(deal.status)"
                 >
@@ -96,18 +107,105 @@
               </div>
             </div>
 
-            <!-- Contact Info -->
-            <div v-if="deal.contactId" class="mb-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+            <!-- Primary Contact (from dealPeople or legacy contactId) -->
+            <div v-if="primaryContact" class="mb-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
               <div class="flex items-center gap-2 mb-2">
                 <svg class="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
-                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Contact</span>
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Primary Contact</span>
               </div>
               <p class="text-sm font-semibold text-gray-900 dark:text-white">
-                {{ deal.contactId.first_name }} {{ deal.contactId.last_name }}
+                {{ primaryContact.first_name }} {{ primaryContact.last_name }}
               </p>
-              <p class="text-xs text-gray-600 dark:text-gray-400">{{ deal.contactId.email }}</p>
+              <p class="text-xs text-gray-600 dark:text-gray-400">{{ primaryContact.email }}</p>
+            </div>
+            
+            <!-- Primary Customer Organization (from dealOrganizations or legacy accountId) -->
+            <div v-if="primaryCustomer" class="mb-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+              <div class="flex items-center gap-2 mb-2">
+                <svg class="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Primary Customer</span>
+              </div>
+              <p class="text-sm font-semibold text-gray-900 dark:text-white">
+                {{ primaryCustomer.name }}
+              </p>
+            </div>
+
+            <!-- All Participants (progressive disclosure) -->
+            <div class="mb-4">
+              <button
+                v-if="hasMultipleParticipants"
+                type="button"
+                @click="showAllParticipants = !showAllParticipants"
+                class="w-full flex items-center justify-between text-left py-2 px-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              >
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ showAllParticipants ? 'Hide' : 'All' }} Participants
+                </span>
+                <svg
+                  :class="['w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform', { 'rotate-180': showAllParticipants }]"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              <div v-if="showAllParticipants && hasMultipleParticipants" class="mt-2 space-y-3">
+                <!-- People on this Deal -->
+                <div v-if="allPeople.length" class="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  <div class="px-3 py-2 bg-gray-50 dark:bg-gray-800/80 border-b border-gray-200 dark:border-gray-700">
+                    <span class="text-xs font-semibold text-gray-700 dark:text-gray-300">People on this Deal</span>
+                  </div>
+                  <ul class="divide-y divide-gray-200 dark:divide-gray-700">
+                    <li
+                      v-for="(entry, idx) in allPeople"
+                      :key="`p-${entry.personId?._id || entry.personId}-${entry.role}-${idx}`"
+                      class="flex items-center justify-between gap-2 px-3 py-2"
+                      :class="{ 'opacity-60': !entry.isActive }"
+                    >
+                      <div class="min-w-0 flex-1">
+                        <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {{ participantPersonName(entry) }}
+                        </p>
+                        <div class="flex items-center gap-2 mt-0.5 flex-wrap">
+                          <span class="text-xs text-gray-500 dark:text-gray-400">{{ participantRoleLabel(entry.role, 'person') }}</span>
+                          <span v-if="entry.isPrimary" class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300">Primary</span>
+                          <span v-if="!entry.isActive" class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300">Inactive</span>
+                        </div>
+                      </div>
+                    </li>
+                  </ul>
+                </div>
+                <!-- Organizations on this Deal -->
+                <div v-if="allOrgs.length" class="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  <div class="px-3 py-2 bg-gray-50 dark:bg-gray-800/80 border-b border-gray-200 dark:border-gray-700">
+                    <span class="text-xs font-semibold text-gray-700 dark:text-gray-300">Organizations on this Deal</span>
+                  </div>
+                  <ul class="divide-y divide-gray-200 dark:divide-gray-700">
+                    <li
+                      v-for="(entry, idx) in allOrgs"
+                      :key="`o-${entry.organizationId?._id || entry.organizationId}-${entry.role}-${idx}`"
+                      class="flex items-center justify-between gap-2 px-3 py-2"
+                      :class="{ 'opacity-60': !entry.isActive }"
+                    >
+                      <div class="min-w-0 flex-1">
+                        <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {{ participantOrgName(entry) }}
+                        </p>
+                        <div class="flex items-center gap-2 mt-0.5 flex-wrap">
+                          <span class="text-xs text-gray-500 dark:text-gray-400">{{ participantRoleLabel(entry.role, 'org') }}</span>
+                          <span v-if="entry.isPrimary" class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300">Primary</span>
+                          <span v-if="!entry.isActive" class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300">Inactive</span>
+                        </div>
+                      </div>
+                    </li>
+                  </ul>
+                </div>
+              </div>
             </div>
 
             <!-- Quick Info -->
@@ -270,6 +368,13 @@
             />
           </div>
 
+          <!-- Automation Context -->
+          <AutomationContext
+            v-if="deal._id"
+            entity-type="deal"
+            :entity-id="deal._id"
+          />
+
           <!-- Activity Timeline -->
           <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
             <div class="flex items-center justify-between mb-3">
@@ -362,13 +467,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import RelatedEventsWidget from '@/components/events/RelatedEventsWidget.vue';
 import RelatedRecordsPanel from '@/components/relationships/RelatedRecordsPanel.vue';
+import AutomationContext from '@/components/automation/AutomationContext.vue';
 import Avatar from '@/components/common/Avatar.vue';
 
 const route = useRoute();
@@ -386,6 +492,84 @@ const newNote = ref('');
 const showEventModal = ref(false);
 const eventToEdit = ref(null);
 const eventsWidgetRef = ref(null);
+const showAllParticipants = ref(false);
+
+// Primary Contact: from dealPeople (role=primary_contact, isPrimary=true) or legacy contactId
+const primaryContact = computed(() => {
+  if (!deal.value) return null;
+  
+  // Check role-based relationships first
+  if (deal.value.dealPeople && Array.isArray(deal.value.dealPeople)) {
+    const primary = deal.value.dealPeople.find(
+      (p) => p.isPrimary && p.isActive && p.role === 'primary_contact' && p.personId
+    );
+    if (primary && primary.personId) {
+      return typeof primary.personId === 'object' ? primary.personId : null;
+    }
+  }
+  
+  // Fallback to legacy contactId
+  if (deal.value.contactId) {
+    return typeof deal.value.contactId === 'object' ? deal.value.contactId : null;
+  }
+  
+  return null;
+});
+
+// Primary Customer: from dealOrganizations (role=customer, isPrimary=true) or legacy accountId
+const primaryCustomer = computed(() => {
+  if (!deal.value) return null;
+  
+  // Check role-based relationships first
+  if (deal.value.dealOrganizations && Array.isArray(deal.value.dealOrganizations)) {
+    const primary = deal.value.dealOrganizations.find(
+      (o) => o.isPrimary && o.isActive && o.role === 'customer' && o.organizationId
+    );
+    if (primary && primary.organizationId) {
+      return typeof primary.organizationId === 'object' ? primary.organizationId : null;
+    }
+  }
+  
+  // Fallback to legacy accountId
+  if (deal.value.accountId) {
+    return typeof deal.value.accountId === 'object' ? deal.value.accountId : null;
+  }
+  
+  return null;
+});
+
+const allPeople = computed(() => {
+  if (!deal.value?.dealPeople || !Array.isArray(deal.value.dealPeople)) return [];
+  return deal.value.dealPeople.filter((p) => p.personId);
+});
+const allOrgs = computed(() => {
+  if (!deal.value?.dealOrganizations || !Array.isArray(deal.value.dealOrganizations)) return [];
+  return deal.value.dealOrganizations.filter((o) => o.organizationId);
+});
+const hasMultipleParticipants = computed(() => {
+  return allPeople.value.length > 1 || allOrgs.value.length > 1;
+});
+
+const personRoleLabels = { primary_contact: 'Primary contact', decision_maker: 'Decision maker', influencer: 'Influencer', partner_contact: 'Partner contact' };
+const orgRoleLabels = { customer: 'Customer', partner: 'Partner', reseller: 'Reseller' };
+
+function participantPersonName(entry) {
+  const p = entry.personId;
+  if (!p) return '—';
+  const o = typeof p === 'object' ? p : null;
+  if (o) return [o.first_name, o.last_name].filter(Boolean).join(' ') || o.email || '—';
+  return '—';
+}
+function participantOrgName(entry) {
+  const o = entry.organizationId;
+  if (!o) return '—';
+  const obj = typeof o === 'object' ? o : null;
+  return obj?.name || '—';
+}
+function participantRoleLabel(role, kind) {
+  if (kind === 'person') return personRoleLabels[role] || role;
+  return orgRoleLabels[role] || role;
+}
 
 const fetchDeal = async () => {
   loading.value = true;

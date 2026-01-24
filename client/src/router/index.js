@@ -68,6 +68,18 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/approvals',
+    name: 'approvals',
+    component: () => import('@/views/ApprovalInbox.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/approvals/:id',
+    name: 'approval-detail',
+    component: () => import('@/views/ApprovalDetail.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/settings',
     name: 'settings',
     component: () => import('@/views/Settings.vue'),
@@ -151,6 +163,69 @@ const routes = [
     }
   },
   {
+    path: '/control/automation-rules',
+    name: 'control-automation-rules',
+    component: () => import('@/views/admin/AutomationRules.vue'),
+    meta: { 
+      requiresAuth: true, 
+      requiresAdmin: true 
+    }
+  },
+  {
+    path: '/control/processes',
+    name: 'control-processes',
+    component: () => import('@/views/admin/Processes.vue'),
+    meta: { 
+      requiresAuth: true, 
+      requiresAdmin: true 
+    }
+  },
+  {
+    path: '/control/flows',
+    name: 'control-flows',
+    component: () => import('@/views/admin/BusinessFlows.vue'),
+    meta: { 
+      requiresAuth: true, 
+      requiresAdmin: true 
+    }
+  },
+  {
+    path: '/control/flows/create',
+    name: 'control-flows-create',
+    component: () => import('@/views/admin/BusinessFlowForm.vue'),
+    meta: { 
+      requiresAuth: true, 
+      requiresAdmin: true 
+    }
+  },
+  {
+    path: '/control/flows/:id',
+    name: 'control-flows-detail',
+    component: () => import('@/views/admin/BusinessFlowDetail.vue'),
+    meta: { 
+      requiresAuth: true, 
+      requiresAdmin: true 
+    }
+  },
+  {
+    path: '/control/flows/:id/health',
+    name: 'control-flows-health',
+    component: () => import('@/views/admin/BusinessFlowHealth.vue'),
+    meta: { 
+      requiresAuth: true, 
+      requiresAdmin: true 
+    }
+  },
+  {
+    path: '/control/flows/:id/edit',
+    name: 'control-flows-edit',
+    component: () => import('@/views/admin/BusinessFlowForm.vue'),
+    meta: { 
+      requiresAuth: true, 
+      requiresAdmin: true 
+    }
+  },
+  {
     path: '/people',
     name: 'people',
     component: () => import('@/views/People.vue'),
@@ -189,6 +264,12 @@ const routes = [
     path: '/tasks',
     name: 'tasks',
     component: () => import('@/views/Tasks.vue'),
+    meta: { requiresAuth: true, requiresPermission: { module: 'tasks', action: 'view' } }
+  },
+  {
+    path: '/tasks/:id',
+    name: 'task-detail',
+    component: () => import('@/views/TaskDetail.vue'),
     meta: { requiresAuth: true, requiresPermission: { module: 'tasks', action: 'view' } }
   },
   {

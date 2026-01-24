@@ -1,0 +1,110 @@
+{
+  "name": "Lead Intake Process",
+  "description": "Automatically assigns ownership and sends welcome message when a new Sales Lead is created",
+  "appKey": "SALES",
+  "trigger": {
+    "type": "domain_event",
+    "eventType": "record.created"
+  },
+  "status": "draft",
+  "version": 1,
+  "nodes": [
+    {
+      "id": "trigger_1",
+      "type": "trigger",
+      "config": {
+        "entityType": "people",
+        "condition": {
+          "field": "type",
+          "operator": "equals",
+          "value": "Sales Lead"
+        }
+      },
+      "order": 1
+    },
+    {
+      "id": "condition_1",
+      "type": "condition",
+      "config": {
+        "field": "type",
+        "operator": "equals",
+        "value": "Sales Lead"
+      },
+      "order": 2
+    },
+    {
+      "id": "ownership_1",
+      "type": "ownership_rule",
+      "config": {
+        "entityType": "people",
+        "assignment": "role",
+        "target": "sales_rep",
+        "condition": null
+      },
+      "order": 3
+    },
+    {
+      "id": "action_1",
+      "type": "action",
+      "config": {
+        "actionType": "notify_user",
+        "params": {
+          "channel": "whatsapp",
+          "template": "welcome_lead",
+          "recipient": "owner"
+        }
+      },
+      "order": 4
+    },
+    {
+      "id": "action_2",
+      "type": "action",
+      "config": {
+        "actionType": "create_task",
+        "params": {
+          "title": "Follow up with new lead",
+          "description": "Contact the new lead within 24 hours",
+          "dueDate": "24_hours",
+          "assignee": "owner"
+        }
+      },
+      "order": 5
+    },
+    {
+      "id": "end_1",
+      "type": "end",
+      "config": {},
+      "order": 6
+    }
+  ],
+  "edges": [
+    {
+      "fromNodeId": "trigger_1",
+      "toNodeId": "condition_1",
+      "condition": null
+    },
+    {
+      "fromNodeId": "condition_1",
+      "toNodeId": "ownership_1",
+      "condition": {
+        "operator": "equals",
+        "value": true
+      }
+    },
+    {
+      "fromNodeId": "ownership_1",
+      "toNodeId": "action_1",
+      "condition": null
+    },
+    {
+      "fromNodeId": "action_1",
+      "toNodeId": "action_2",
+      "condition": null
+    },
+    {
+      "fromNodeId": "action_2",
+      "toNodeId": "end_1",
+      "condition": null
+    }
+  ]
+}

@@ -564,19 +564,44 @@ const handleLogout = () => {
   showProfileDropdown.value = false;
 };
 
+// Check if user is admin (uses store's isAdminLike which includes owners and admins)
+const isAdmin = computed(() => {
+  return authStore.isAdminLike || authStore.isPlatformAdmin;
+});
+
+// Profile menu item type
+interface ProfileMenuItem {
+  name: string;
+  action: () => void;
+  divider?: boolean;
+  isLogout?: boolean;
+}
+
 // Menu items for profile dropdown
-const profileMenuItems = computed(() => [
-  { name: 'Your Profile', action: () => router.push('/profile') },
-  { name: 'Settings', action: () => window.open('/settings', '_blank') },
-  { 
-    name: colorMode.value === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode', 
-    action: () => {
-      const newMode = colorMode.value === 'light' ? 'dark' : 'light';
-      toggleColorMode(newMode);
-    }
-  },
-  { name: 'Sign out', action: handleLogout, divider: true, isLogout: true },
-]);
+const profileMenuItems = computed<ProfileMenuItem[]>(() => {
+  const items: ProfileMenuItem[] = [
+    { name: 'Your Profile', action: () => { router.push('/profile'); } },
+  ];
+  
+  // Add Control Panel for admins (above Settings)
+  if (isAdmin.value) {
+    items.push({ name: 'Control Panel', action: () => { router.push('/control'); } });
+  }
+  
+  items.push(
+    { name: 'Settings', action: () => { window.open('/settings', '_blank'); } },
+    { 
+      name: colorMode.value === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode', 
+      action: () => {
+        const newMode = colorMode.value === 'light' ? 'dark' : 'light';
+        toggleColorMode(newMode);
+      }
+    },
+    { name: 'Sign out', action: handleLogout, divider: true, isLogout: true }
+  );
+  
+  return items;
+});
 
 // Toggle dropdown
 const toggleProfileDropdown = () => {
