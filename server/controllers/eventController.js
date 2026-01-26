@@ -273,7 +273,7 @@ exports.getEvents = async (req, res) => {
         if (search) {
             const searchConditions = [
                 { eventName: { $regex: search, $options: 'i' } },
-                { notes: { $regex: search, $options: 'i' } },
+                { 'notes.text': { $regex: search, $options: 'i' } }, // notes is an array of subdocuments with 'text' field
                 { location: { $regex: search, $options: 'i' } }
             ];
             

@@ -128,6 +128,7 @@ import apiClient from '@/utils/apiClient';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
 import { useAuthStore } from '@/stores/auth';
 import { isAuditEventType } from '@/utils/eventUtils';
+import { useTabs } from '@/composables/useTabs';
 
 const props = defineProps({
   isOpen: {
@@ -180,12 +181,14 @@ const props = defineProps({
 const emit = defineEmits(['close', 'saved']);
 
 const authStore = useAuthStore();
+const { openTab, activeTab } = useTabs();
 const isEditing = computed(() => !!props.record);
 
-// ARCHITECTURAL INTENT: For Organizations and Tasks modules, default to Quick Create mode in create flows
+// ARCHITECTURAL INTENT: For Organizations, Tasks, and Items modules, default to Quick Create mode in create flows
 // This ensures CreateRecordDrawer respects Settings → Quick Create configuration
 // Note: OrganizationQuickCreateDrawer is preferred for Organizations, but this provides fallback compatibility
 // For Tasks, this ensures the create drawer shows only fields configured in Settings → Tasks → Quick Create
+// For Items, this ensures the create drawer shows only fields configured in Settings → Items → Quick Create
 // See: docs/architecture/task-settings.md Section 3.5
 const effectiveQuickCreateMode = computed(() => {
   if (props.moduleKey === 'organizations' && !isEditing.value) {
@@ -196,6 +199,11 @@ const effectiveQuickCreateMode = computed(() => {
     // Tasks create mode: always use Quick Create (respects Settings → Tasks → Quick Create configuration)
     // This ensures only eligible fields appear: title, dueDate, priority, assignedTo, relatedTo
     // See: docs/architecture/task-settings.md Section 3.5
+    return true;
+  }
+  if (props.moduleKey === 'items' && !isEditing.value) {
+    // Items create mode: always use Quick Create (respects Settings → Items → Quick Create configuration)
+    // This ensures only fields configured in Quick Create appear: item_name, item_type, category, selling_price
     return true;
   }
   // Otherwise, use prop value
@@ -821,7 +829,84 @@ const handleSubmit = async () => {
     if (response.success || response.data) {
       console.log('[CreateRecordDrawer] ✅ Success! Closing drawer...');
       saving.value = false; // Reset saving state before closing
-      emit('saved', response.data || response);
+      
+      const savedRecord = response.data || response;
+      
+      // Always open the saved record in a new tab
+      if (savedRecord) {
+        const recordId = savedRecord._id || savedRecord.id || savedRecord.eventId;
+        
+        if (recordId) {
+          // Get record title/name based on module type
+          let recordTitle = '';
+          const moduleTitleMap = {
+            'people': () => {
+              const firstName = savedRecord.first_name || '';
+              const lastName = savedRecord.last_name || '';
+              return firstName || lastName ? `${firstName} ${lastName}`.trim() : savedRecord.email || 'Contact';
+            },
+            'organizations': () => savedRecord.name || 'Organization',
+            'deals': () => savedRecord.name || 'Deal',
+            'tasks': () => savedRecord.title || 'Task',
+            'events': () => savedRecord.eventName || savedRecord.title || 'Event',
+            'users': () => savedRecord.firstName && savedRecord.lastName 
+              ? `${savedRecord.firstName} ${savedRecord.lastName}`.trim()
+              : savedRecord.email || savedRecord.username || 'User'
+          };
+          
+          const getTitle = moduleTitleMap[props.moduleKey];
+          if (getTitle) {
+            recordTitle = getTitle();
+          } else {
+            recordTitle = savedRecord.name || savedRecord.title || moduleNameMap[props.moduleKey] || 'Record';
+          }
+          
+          // Get record path based on module
+          const modulePathMap = {
+            'people': `/people/${recordId}`,
+            'organizations': `/organizations/${recordId}`,
+            'deals': `/deals/${recordId}`,
+            'tasks': `/tasks/${recordId}`,
+            'events': `/events/${recordId}`,
+            'users': `/users/${recordId}`
+          };
+          
+          const recordPath = modulePathMap[props.moduleKey] || `/${props.moduleKey}/${recordId}`;
+          
+          // Get icon based on module
+          const moduleIconMap = {
+            'people': 'users',
+            'organizations': 'building',
+            'deals': 'briefcase',
+            'tasks': 'check',
+            'events': '📅',
+            'users': 'user'
+          };
+          
+          const icon = moduleIconMap[props.moduleKey] || 'document';
+          
+          // Check if we're already viewing this record
+          const currentPath = activeTab.value?.path || '';
+          const isAlreadyViewing = currentPath === recordPath || currentPath.includes(`/${recordId}`);
+          
+          // Open tab with the saved record (always for new records, or if not already viewing for edits)
+          if (!isEditing.value || !isAlreadyViewing) {
+            openTab(recordPath, {
+              title: recordTitle,
+              icon: icon
+            });
+          }
+        }
+      }
+      
+      // Dispatch global event to refresh calendar/list views for events
+      if (props.moduleKey === 'events' && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('litedesk:event-created', {
+          detail: { event: savedRecord }
+        }));
+      }
+      
+      emit('saved', savedRecord);
       closeDrawer();
     } else {
       console.log('[CreateRecordDrawer] ❌ Failed:', response);

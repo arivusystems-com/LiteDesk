@@ -208,11 +208,13 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
 import { useAuthStore } from '@/stores/auth';
+import { useTabs } from '@/composables/useTabs';
 import { getEventTypesForApp, EVENT_TYPES, getEventTypeByKey, getEventTypeDefinitionByKey } from '@/metadata/eventTypes';
 import type { EventTypeDefinition } from '@/types/eventSettings.types';
 
 const router = useRouter();
 const authStore = useAuthStore();
+const { openTab } = useTabs();
 
 const props = defineProps({
   initialData: {
@@ -486,6 +488,25 @@ const handleSubmit = async () => {
 
     if (response.success) {
       emit('created', response.data);
+      
+      // Open the saved event in a new tab
+      if (response.data) {
+        const eventId = response.data.eventId || response.data._id;
+        if (eventId) {
+          const eventTitle = response.data.eventName || response.data.title || 'Event';
+          openTab(`/events/${eventId}`, {
+            title: eventTitle,
+            icon: '📅'
+          });
+        }
+      }
+      
+      // Dispatch global event to refresh calendar/list views
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('litedesk:event-created', {
+          detail: { event: response.data }
+        }));
+      }
       
       // ARCHITECTURE NOTE: Navigation is handled by parent component (drawer or surface)
       // When used in EventQuickCreateDrawer, parent will handle navigation if needed

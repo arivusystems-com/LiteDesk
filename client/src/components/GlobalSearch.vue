@@ -659,8 +659,13 @@ const handleEventDrawerClose = () => {
 
 const handleEventDrawerSaved = (event: any) => {
   showEventDrawer.value = false;
-  // Optionally navigate to the created event if needed
-  // For now, just close the drawer
+  
+  // Dispatch global event to refresh calendar/list views
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('litedesk:event-created', {
+      detail: { event }
+    }));
+  }
 };
 
 onMounted(() => {

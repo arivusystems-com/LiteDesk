@@ -134,6 +134,14 @@
           </p>
         </div>
         
+        <!-- Microcopy for Items module -->
+        <div v-if="isItemsModule" class="px-2 flex-shrink-0">
+          <p class="text-sm text-gray-600 dark:text-gray-400">
+            Configure how Item fields are displayed. Field ownership and application scope are defined by the platform and apps.
+            <strong>Note:</strong> Items Settings configure structure only. Items are supporting/secondary entities used primarily in sales contexts.
+          </p>
+        </div>
+        
         <!-- Microcopy for Forms module -->
         <!-- 
           ARCHITECTURE NOTE: Forms Settings configure structure & behavior ONLY.
@@ -591,6 +599,93 @@
             <div v-for="(fields, appKey) in groupedFields.participation" :key="appKey" class="mb-4">
               <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">
                 {{ appKey === 'AUDIT' ? 'Audit Participation' : appKey === 'SALES' ? 'Sales Participation' : `${appKey} Participation` }}
+              </div>
+              <ul class="space-y-1">
+                <li
+                  v-for="fieldKey in fields"
+                  :key="fieldKey"
+                  class="group"
+                  :draggable="true"
+                  @dragstart="onDragStart(getFieldIndex(fieldKey))"
+                  @dragover.prevent="onDragOver(getFieldIndex(fieldKey))"
+                  @drop.prevent="onDrop(getFieldIndex(fieldKey))"
+                >
+                  <div :class="[
+                        'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
+                        getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
+                      ]">
+                    <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                      <span>{{ getFieldLabel(fieldKey) }}</span>
+                      <span class="px-1.5 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">{{ appKey }}</span>
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <!-- System Fields -->
+            <div class="mb-4">
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">System Fields</div>
+              <ul class="space-y-1">
+                <li
+                  v-for="fieldKey in groupedFields.system"
+                  :key="fieldKey"
+                  class="group"
+                >
+                  <div :class="[
+                        'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2 opacity-75',
+                        getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5'
+                      ]">
+                    <div class="mr-2 text-xs text-purple-600 dark:text-purple-400" title="System field">🔒</div>
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                      <span>{{ getFieldLabel(fieldKey) }}</span>
+                      <span class="px-1.5 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">System</span>
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </template>
+
+          <!-- Items module: Grouped by ownership (similar to Events) -->
+          <template v-else-if="isItemsModule">
+            <!-- Core Item Fields -->
+            <div class="mb-4">
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Core Item Fields</div>
+              <ul class="space-y-1">
+                <li
+                  v-for="(fieldKey, idx) in groupedFields.coreIdentity"
+                  :key="fieldKey"
+                  class="group"
+                  :draggable="true"
+                  @dragstart="onDragStart(getFieldIndex(fieldKey))"
+                  @dragover.prevent="onDragOver(getFieldIndex(fieldKey))"
+                  @drop.prevent="onDrop(getFieldIndex(fieldKey))"
+                >
+                  <div :class="[
+                        'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
+                        getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
+                      ]">
+                    <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                      <span>{{ getFieldLabel(fieldKey) }}</span>
+                      <span class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <!-- App Participation Groups -->
+            <div v-for="(fields, appKey) in groupedFields.participation" :key="appKey" class="mb-4">
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">
+                {{ appKey === 'SALES' ? 'Sales Participation' : `${appKey} Participation` }}
               </div>
               <ul class="space-y-1">
                 <li
@@ -5386,6 +5481,71 @@ import {
   getDetailFields,
   isSystemField as isSystemFieldFromModel
 } from '@/platform/fields/peopleFieldModel';
+import {
+  TASK_FIELD_METADATA,
+  getTaskFieldMetadata,
+  getCoreTaskFields,
+  getTaskSystemFields,
+  getTaskParticipationFields,
+  getTaskQuickCreateFields,
+  isTaskSystemField,
+  isTaskCoreField,
+  isTaskProtectedField,
+  groupTaskFields,
+  classifyTaskField
+} from '@/platform/fields/taskFieldModel';
+import {
+  ORGANIZATION_FIELD_METADATA,
+  getOrganizationFieldMetadata,
+  getCoreOrganizationFields,
+  getOrganizationSystemFields,
+  getOrganizationParticipationFields,
+  getOrganizationQuickCreateFields,
+  isOrganizationSystemField,
+  isOrganizationCoreField,
+  isOrganizationProtectedField,
+  groupOrganizationFields,
+  classifyOrganizationField
+} from '@/platform/fields/organizationFieldModel';
+import {
+  DEAL_FIELD_METADATA,
+  getDealFieldMetadata,
+  getCoreDealFields,
+  getDealSystemFields,
+  getDealParticipationFields,
+  getDealQuickCreateFields,
+  isDealSystemField,
+  isDealCoreField,
+  isDealProtectedField,
+  groupDealFields,
+  classifyDealField
+} from '@/platform/fields/dealFieldModel';
+import {
+  EVENT_FIELD_METADATA,
+  getEventFieldMetadata,
+  getCoreEventFields,
+  getEventSystemFields,
+  getEventParticipationFields,
+  getEventQuickCreateFields,
+  isEventSystemField,
+  isEventCoreField,
+  isEventProtectedField,
+  groupEventFields,
+  classifyEventField
+} from '@/platform/fields/eventFieldModel';
+import {
+  ITEM_FIELD_METADATA,
+  getItemFieldMetadata,
+  getCoreItemFields,
+  getItemSystemFields,
+  getItemParticipationFields,
+  getItemQuickCreateFields,
+  isItemSystemField,
+  isItemCoreField,
+  isItemProtectedField,
+  groupItemFields,
+  classifyItemField
+} from '@/platform/fields/itemFieldModel';
 
 const props = defineProps({
   moduleFilter: {
@@ -6804,26 +6964,11 @@ const quickCreateAvailableFields = computed(() => {
   
   // For Organizations module, enforce strict eligibility rules
   // PLATFORM-LEVEL CANONICAL DEFAULT: Only core business fields are eligible for Quick Create
-  // Eligible: name, industry, types, website, phone, address
-  // Excluded: customerStatus, partnerStatus, vendorStatus (app-scoped semantics, not fields)
-  // Excluded: createdBy, assignedTo, accountManager (assignment/ownership fields)
-  // Excluded: isTenant, subscription, enabledApps, limits, security (tenant/system fields)
+  // Uses organizationFieldModel.ts for eligibility determination
   // This is intentionally minimal - Organizations are contextual business entities, not primary workflow objects.
   // Changes require updating: module-settings-doctrine.md, organization-settings.md
   if (isOrganizationsModule.value) {
-    // Canonical eligible fields: ONLY core business identity fields
-    const canonicalEligibleFields = ['name', 'industry', 'types', 'website', 'phone', 'address'];
-    
-    // Explicitly excluded field patterns (fail-safe enforcement)
-    const excludedPatterns = [
-      // Status fields (app-scoped semantics, not Quick Create fields)
-      'customerStatus', 'partnerStatus', 'vendorStatus',
-      // Assignment/ownership fields
-      'createdBy', 'assignedTo', 'accountManager', 'owner',
-      // Tenant/system fields
-      'isTenant', 'subscription', 'enabledApps', 'limits', 'security', 'settings',
-      'slug', 'isactive', 'enabledmodules'
-    ];
+    const quickCreateFieldKeys = getOrganizationQuickCreateFields();
     
     const eligibleFields = editFields.value.filter(f => {
       if (!f.key) return false;
@@ -6838,13 +6983,11 @@ const quickCreateAvailableFields = computed(() => {
         }
       }
       
-      // Explicit exclusion check (fail-safe)
-      if (excludedPatterns.some(pattern => keyLower === pattern.toLowerCase() || keyLower.startsWith(pattern.toLowerCase() + '.'))) {
-        return false;
-      }
-      
-      // Only include canonical eligible fields
-      return canonicalEligibleFields.includes(keyLower);
+      // Use organization field model to check eligibility
+      const metadata = getOrganizationFieldMetadata(f.key);
+      if (metadata?.allowOnCreate === true) return true;
+      if (metadata?.owner === 'core' && metadata?.intent === 'identity') return true;
+      return quickCreateFieldKeys.some(k => k.toLowerCase() === keyLower);
     });
     
     // Return core business fields only
@@ -6857,45 +7000,31 @@ const quickCreateAvailableFields = computed(() => {
   // Eligible: title (required, locked), dueDate, priority, assignedTo, relatedTo
   // Excluded: description, status, app participation fields, system fields, time tracking, subtasks, tags
   // See: docs/architecture/task-settings.md Section 3.5
+  // Field eligibility is now driven by taskFieldModel.ts
   if (isTasksModule.value) {
-    // Canonical eligible fields: ONLY core task fields for Quick Create
-    const canonicalEligibleFields = ['title', 'duedate', 'priority', 'assignedto', 'relatedto'];
-    
-    // Explicitly excluded field patterns (fail-safe enforcement)
-    const excludedPatterns = [
-      // Description (too dense for Quick Create)
-      'description',
-      // Status (defaults to 'todo', cannot be set in Quick Create)
-      'status',
-      // App participation fields (app-scoped, not Quick Create fields)
-      'salesstagetasktype', 'helpdesksla', 'auditcorrectiveflag',
-      // System fields
-      'createdby', 'createdat', 'updatedat', 'completeddate', 'completedat', 'organizationid',
-      'assignedby', '_id', '__v',
-      // Time tracking (task management feature, not Quick Create)
-      'estimatedhours', 'actualhours',
-      // Subtasks (task management complexity, not Quick Create)
-      'subtasks',
-      // Tags (can be added in full task edit)
-      'tags',
-      // Reminder fields
-      'reminderdate', 'remindersent',
-      // Start date (belongs in full task edit)
-      'startdate'
-    ];
+    // Get Quick Create eligible fields from task field model
+    const quickCreateFieldKeys = getTaskQuickCreateFields();
     
     const eligibleFields = editFields.value.filter(f => {
       if (!f.key) return false;
       
       const keyLower = f.key.toLowerCase();
       
-      // Explicit exclusion check (fail-safe)
-      if (excludedPatterns.some(pattern => keyLower === pattern.toLowerCase() || keyLower.startsWith(pattern.toLowerCase() + '.'))) {
-        return false;
+      // Use task field model to check eligibility
+      const metadata = getTaskFieldMetadata(f.key);
+      
+      // If field is in metadata and has allowOnCreate: true, it's eligible
+      if (metadata?.allowOnCreate === true) {
+        return true;
       }
       
-      // Only include canonical eligible fields
-      return canonicalEligibleFields.includes(keyLower);
+      // Primary core fields are implicitly allowed
+      if (metadata?.owner === 'core' && metadata?.intent === 'primary') {
+        return true;
+      }
+      
+      // Fallback: check against the Quick Create field keys list
+      return quickCreateFieldKeys.some(k => k.toLowerCase() === keyLower);
     });
     
     // Return eligible fields only (title, dueDate, priority, assignedTo, relatedTo)
@@ -6912,52 +7041,29 @@ const quickCreateAvailableFields = computed(() => {
   // Quick Create is for simple scheduling (Meeting / Appointment, Field Sales Beat), not audit workflows.
   // See: docs/architecture/event-settings.md Section 7
   if (isEventsModule.value) {
-    // Canonical eligible fields: ONLY minimal scheduling-safe fields for Quick Create
-    const canonicalEligibleFields = ['eventname', 'eventtype', 'startdatetime', 'enddatetime', 'location'];
-    
-    // Explicitly excluded field patterns (fail-safe enforcement)
-    const excludedPatterns = [
-      // Audit roles (audit events require complex role configuration, not Quick Create)
-      'auditorid', 'reviewerid', 'correctiveownerid',
-      // Geo (geo tracking belongs in execution, not Quick Create)
-      'georequired', 'geolocation', 'checkin', 'checkout',
-      // Forms (form linking belongs in full event edit, not Quick Create)
-      'linkedformid', 'formassignment',
-      // Recurrence (recurrence configuration belongs in full event edit)
-      'recurrence',
-      // Multi-org routing (route configuration belongs in full event edit)
-      'orglist', 'routesequence', 'currentorgindex', 'ismultiorg',
-      // Notes (can be added in full event edit)
-      'notes',
-      // Metadata (belongs in execution, not Quick Create)
-      'metadata',
-      // Audit state (belongs in execution, not Quick Create)
-      'auditstate', 'allowselfreview', 'minvisitduration', 'backgroundtracking', 'partnervisibility',
-      // KPI fields (belongs in execution, not Quick Create)
-      'kpitargets', 'kpiactuals', 'allowedactions',
-      // System fields
-      'status', 'createdby', 'createdtime', 'modifiedtime', 'modifiedby', 'organizationid', 
-      'eventid', 'completedat', 'cancelledat', 'cancelledby', 'cancellationreason', '_id', '__v',
-      // Execution tracking (belongs in execution, not Quick Create)
-      'executionstarttime', 'executionendtime', 'timespent', 'ispaused', 'pausereasons',
-      // Audit history (belongs in execution, not Quick Create)
-      'audithistory',
-      // Related organization (can be added in full event edit)
-      'relatedtoid'
-    ];
+    // Get Quick Create eligible fields from event field model
+    const quickCreateFieldKeys = getEventQuickCreateFields();
     
     const eligibleFields = editFields.value.filter(f => {
       if (!f.key) return false;
       
       const keyLower = f.key.toLowerCase();
       
-      // Explicit exclusion check (fail-safe)
-      if (excludedPatterns.some(pattern => keyLower === pattern.toLowerCase() || keyLower.includes(pattern.toLowerCase()))) {
-        return false;
+      // Use event field model to check eligibility
+      const metadata = getEventFieldMetadata(f.key);
+      
+      // If field is in metadata and has allowOnCreate: true, it's eligible
+      if (metadata?.allowOnCreate === true) {
+        return true;
       }
       
-      // Only include canonical eligible fields
-      return canonicalEligibleFields.includes(keyLower);
+      // Primary core fields are implicitly allowed
+      if (metadata?.owner === 'core' && metadata?.intent === 'primary') {
+        return true;
+      }
+      
+      // Fallback: check against the Quick Create field keys list
+      return quickCreateFieldKeys.some(k => k.toLowerCase() === keyLower);
     });
     
     // Return eligible fields only (eventName, eventType, startDateTime, endDateTime, location)
@@ -6992,7 +7098,7 @@ const quickCreateAvailableFields = computed(() => {
 // See: docs/architecture/event-settings.md Section 6
 // See: client/src/platform/modules/forms/formsModule.definition.ts
 const groupedFields = computed(() => {
-  if (!isPeopleModule.value && !isOrganizationsModule.value && !isTasksModule.value && !isEventsModule.value && !isFormsModule.value) {
+  if (!isPeopleModule.value && !isOrganizationsModule.value && !isTasksModule.value && !isEventsModule.value && !isFormsModule.value && !isItemsModule.value) {
     return { coreIdentity: [], participation: {}, system: [] };
   }
 
@@ -7026,140 +7132,120 @@ const groupedFields = computed(() => {
 
   for (const fieldKey of allFieldKeys) {
     try {
-      // For Organizations, use simplified field classification based on field key patterns
+      // For Items module, use item field model for classification
+      // ARCHITECTURE NOTE: Items Settings configure structure only.
+      // Field classification is now driven by itemFieldModel.ts
+      if (isItemsModule.value) {
+        const classification = classifyItemField(fieldKey);
+        
+        if (classification === 'core') {
+          coreIdentity.push(fieldKey);
+          continue;
+        }
+        
+        if (classification === 'system') {
+          system.push(fieldKey);
+          continue;
+        }
+        
+        // Participation fields - group by fieldScope
+        if (classification === 'participation') {
+          const metadata = getItemFieldMetadata(fieldKey);
+          if (metadata && metadata.fieldScope) {
+            const scope = metadata.fieldScope;
+            if (!participation[scope]) {
+              participation[scope] = [];
+            }
+            participation[scope].push(fieldKey);
+          } else {
+            // Fallback: participation field without metadata/fieldScope
+            console.warn(`[Items Field Model] Field "${fieldKey}" is participation but missing fieldScope. Adding to system group as fallback.`);
+            system.push(fieldKey);
+          }
+          continue;
+        }
+        
+        // Fallback: If classification is null (field not in metadata),
+        // add to system group to ensure it's still visible
+        // This handles fields that exist in editFields but aren't in ITEM_FIELD_METADATA yet
+        if (!classification) {
+          console.warn(`[Items Field Model] Field "${fieldKey}" not found in ITEM_FIELD_METADATA. Adding to system group as fallback. Available keys:`, Object.keys(ITEM_FIELD_METADATA).slice(0, 10).join(', '));
+          system.push(fieldKey);
+          continue;
+        }
+        
+        // Should never reach here, but add to system as ultimate fallback
+        console.warn(`[Items Field Model] Field "${fieldKey}" has unexpected classification: ${classification}. Adding to system group as fallback.`);
+        system.push(fieldKey);
+        continue;
+      }
+      
+      // For Organizations, use organization field model for classification
+      // ARCHITECTURE NOTE: Organizations Settings configure structure only.
+      // Field classification is now driven by organizationFieldModel.ts
       if (isOrganizationsModule.value) {
-        // Core business fields (name, industry, website, phone, address, types)
-        const coreBusinessFields = ['name', 'industry', 'website', 'phone', 'address', 'types'];
-        if (coreBusinessFields.includes(fieldKey.toLowerCase())) {
+        const classification = classifyOrganizationField(fieldKey);
+        
+        if (classification === 'core') {
           coreIdentity.push(fieldKey);
           continue;
         }
         
-        // App participation fields (customerStatus, partnerStatus, vendorStatus, etc.)
-        const participationFields = ['customerstatus', 'customertier', 'partnerstatus', 'partnertier', 'partnertype', 
-                                     'vendorstatus', 'vendorrating', 'assignedto', 'accountmanager', 'annualrevenue', 
-                                     'numberofemployees', 'slalevel', 'paymentterms', 'creditlimit'];
-        if (participationFields.includes(fieldKey.toLowerCase())) {
-          // Determine app scope (most are SALES)
-          const appScope = 'SALES'; // Default to SALES for now
-          if (!participation[appScope]) {
-            participation[appScope] = [];
-          }
-          participation[appScope].push(fieldKey);
-          continue;
-        }
-        
-        // System fields (createdBy, createdAt, updatedAt, organizationId, etc.)
-        const systemFields = ['createdby', 'createdat', 'updatedat', 'organizationid', 'primarycontact', 'activitylogs', 'notes', 'attachments'];
-        if (systemFields.includes(fieldKey.toLowerCase())) {
+        if (classification === 'system') {
           system.push(fieldKey);
           continue;
         }
         
-        // Default: treat unknown fields as system
-        system.push(fieldKey);
+        // Participation field - group by app scope
+        if (!participation[classification]) {
+          participation[classification] = [];
+        }
+        participation[classification].push(fieldKey);
+        continue;
       } else if (isTasksModule.value) {
-        // Tasks module: use task-specific field classification
-        // Core Task Fields (platform-owned): title, dueDate, priority, status, description
+        // Tasks module: use task field model for classification
         // ARCHITECTURE NOTE: Tasks Settings configure structure only. See: docs/architecture/task-settings.md Section 3.2
-        const coreTaskFields = ['title', 'duedate', 'priority', 'status', 'description', 'assignedto', 'startdate', 'tags'];
-        if (coreTaskFields.includes(fieldKey.toLowerCase())) {
+        // Field classification is now driven by taskFieldModel.ts
+        const classification = classifyTaskField(fieldKey);
+        
+        if (classification === 'core') {
           coreIdentity.push(fieldKey);
           continue;
         }
         
-        // App participation fields (salesStageTaskType, helpdeskSLA, auditCorrectiveFlag, etc.)
-        const participationFields = ['salesstagetasktype', 'helpdesksla', 'auditcorrectiveflag'];
-        if (participationFields.some(pf => fieldKey.toLowerCase().includes(pf.toLowerCase()))) {
-          // Determine app scope based on field name patterns
-          let appScope = 'SALES'; // Default
-          if (fieldKey.toLowerCase().includes('helpdesk') || fieldKey.toLowerCase().includes('sla')) {
-            appScope = 'HELPDESK';
-          } else if (fieldKey.toLowerCase().includes('audit') || fieldKey.toLowerCase().includes('corrective')) {
-            appScope = 'AUDIT';
-          }
-          if (!participation[appScope]) {
-            participation[appScope] = [];
-          }
-          participation[appScope].push(fieldKey);
-          continue;
-        }
-        
-        // System fields (createdBy, createdAt, updatedAt, completedDate, organizationId, etc.)
-        const systemFields = ['createdby', 'createdat', 'updatedat', 'completeddate', 'completedat', 'organizationid', 
-                             'assignedby', 'estimatedhours', 'actualhours', 'reminderdate', 'remindersent', '_id', '__v'];
-        if (systemFields.includes(fieldKey.toLowerCase()) || fieldKey.toLowerCase().startsWith('_')) {
+        if (classification === 'system') {
           system.push(fieldKey);
           continue;
         }
         
-        // Default: treat unknown fields as system
-        system.push(fieldKey);
+        // Participation fields - classification returns the app scope (e.g., 'SALES', 'HELPDESK', 'AUDIT')
+        if (!participation[classification]) {
+          participation[classification] = [];
+        }
+        participation[classification].push(fieldKey);
+        continue;
       } else if (isEventsModule.value) {
-        // Events module: use event-specific field classification
+        // Events module: use event field model for classification
         // ARCHITECTURE NOTE: Events Settings configure structure only, never execution.
-        // Excludes: GEO coordinates, check-in/check-out, route sequencing, audit history, metadata.
-        // PRIORITY EXCLUSION: Event Priority is system-owned and NOT configurable in Event Settings.
-        // If any code attempts to register Event Priority settings, it should be rejected.
-        // See: docs/architecture/event-settings.md Section 8.2
-        // See: docs/architecture/event-settings.md Section 6
+        // Field classification is now driven by eventFieldModel.ts
+        const classification = classifyEventField(fieldKey);
         
-        // Core Event Fields (platform-owned): eventName, eventType, startDateTime, endDateTime, location
-        const coreEventFields = ['eventname', 'eventtype', 'startdatetime', 'enddatetime', 'location', 'notes', 'relatedtoid', 'recurrence'];
-        if (coreEventFields.includes(fieldKey.toLowerCase())) {
+        if (classification === 'core') {
           coreIdentity.push(fieldKey);
           continue;
         }
         
-        // App participation fields (auditState, auditorId, reviewerId, correctiveOwnerId, linkedFormId)
-        // ARCHITECTURE NOTE: App fields are visibility-configurable ONLY, not required-configurable.
-        // See: docs/architecture/event-settings.md Section 4.2
-        const participationFields = ['auditstate', 'auditorid', 'reviewerid', 'correctiveownerid', 'linkedformid', 
-                                     'allowselfreview', 'minvisitduration', 'backgroundtracking', 'partnervisibility',
-                                     'allowedactions', 'kpitargets', 'kpiactuals'];
-        if (participationFields.some(pf => fieldKey.toLowerCase().includes(pf.toLowerCase()))) {
-          // Determine app scope based on field name patterns
-          let appScope = 'AUDIT'; // Default to AUDIT for most event app fields
-          if (fieldKey.toLowerCase().includes('kpi') || fieldKey.toLowerCase().includes('allowedactions')) {
-            appScope = 'SALES';
-          }
-          if (!participation[appScope]) {
-            participation[appScope] = [];
-          }
-          participation[appScope].push(fieldKey);
-          continue;
-        }
-        
-        // System fields (status, createdBy, createdTime, modifiedTime, etc.)
-        // ARCHITECTURE NOTE: System fields are read-only, always visible in config.
-        // See: docs/architecture/event-settings.md Section 6.3
-        const systemFields = ['status', 'createdby', 'createdtime', 'modifiedtime', 'modifiedby', 'organizationid', 
-                             'eventid', 'completedat', 'cancelledat', 'cancelledby', 'cancellationreason', '_id', '__v'];
-        if (systemFields.includes(fieldKey.toLowerCase()) || fieldKey.toLowerCase().startsWith('_')) {
+        if (classification === 'system') {
           system.push(fieldKey);
           continue;
         }
         
-        // Explicitly block execution fields (GEO coordinates, check-in/check-out, route sequencing, audit history, metadata)
-        // ARCHITECTURE NOTE: These fields belong to execution, not structure configuration.
-        // See: docs/architecture/event-settings.md Section 5.5
-        const executionFieldPatterns = [
-          'geolocation', 'georequired', 'checkin', 'checkout', 'executionstarttime', 'executionendtime', 
-          'timespent', 'ispaused', 'pausereasons', 'orglist', 'routesequence', 'currentorgindex', 
-          'ismultiorg', 'audithistory', 'metadata', 'formassignment'
-        ];
-        if (executionFieldPatterns.some(pattern => fieldKey.toLowerCase().includes(pattern.toLowerCase()))) {
-          // Skip these fields - they are execution-only and should not appear in Settings
-          // Rationale: GEO coordinates belong in execution (geo tracking execution)
-          // Rationale: check-in/check-out belong in execution (event execution)
-          // Rationale: route sequencing belongs in execution (multi-org route execution)
-          // Rationale: audit history belongs in execution (audit trail)
-          // Rationale: metadata belongs in execution (form responses, etc.)
-          continue;
+        // Participation fields - classification returns the app scope (e.g., 'SALES', 'AUDIT')
+        if (!participation[classification]) {
+          participation[classification] = [];
         }
-        
-        // Default: treat unknown fields as system
-        system.push(fieldKey);
+        participation[classification].push(fieldKey);
+        continue;
       } else if (isFormsModule.value) {
         // Forms module: use form-specific field classification
         // ARCHITECTURE NOTE: Forms Settings configure structure & behavior ONLY.
@@ -7386,10 +7472,9 @@ function handleFilterPriorityChange() {
 // See: docs/architecture/event-settings.md Section 4.2
 function isEventsAppParticipationField(fieldKey) {
   if (!isEventsModule.value || !fieldKey) return false;
-  const participationFields = ['auditstate', 'auditorid', 'reviewerid', 'correctiveownerid', 'linkedformid', 
-                               'allowselfreview', 'minvisitduration', 'backgroundtracking', 'partnervisibility',
-                               'allowedactions', 'kpitargets', 'kpiactuals'];
-  return participationFields.some(pf => (fieldKey || '').toLowerCase().includes(pf.toLowerCase()));
+  // Use event field model to check if field is a participation field
+  const metadata = getEventFieldMetadata(fieldKey);
+  return metadata?.owner === 'participation';
 }
 
 // Helper: Format app keys to app names for display
@@ -7516,6 +7601,31 @@ const lookupTargetFields = computed(() => {
 function isSystemField(field) {
   if (!field || !field.key) return false;
   
+  // For Tasks module, use task field model
+  if (isTasksModule.value) {
+    return isTaskSystemField(field.key);
+  }
+  
+  // For Organizations module, use organization field model
+  if (isOrganizationsModule.value) {
+    return isOrganizationSystemField(field.key);
+  }
+  
+  // For Deals module, use deal field model
+  if (selectedModule.value?.key === 'deals') {
+    return isDealSystemField(field.key);
+  }
+  
+  // For Events module, use event field model
+  if (isEventsModule.value) {
+    return isEventSystemField(field.key);
+  }
+  
+  // For Items module, use item field model
+  if (isItemsModule.value) {
+    return isItemSystemField(field.key);
+  }
+  
   // For Forms module, check formSettingsMap for system field markers
   if (isFormsModule.value) {
     try {
@@ -7571,6 +7681,31 @@ function isSystemField(field) {
 function isCoreField(field, moduleKey) {
   if (!field || !field.key || !moduleKey) return false;
   
+  // For Tasks module, use task field model
+  if (moduleKey.toLowerCase() === 'tasks') {
+    return isTaskProtectedField(field.key);
+  }
+  
+  // For Organizations module, use organization field model
+  if (moduleKey.toLowerCase() === 'organizations') {
+    return isOrganizationProtectedField(field.key);
+  }
+  
+  // For Deals module, use deal field model
+  if (moduleKey.toLowerCase() === 'deals') {
+    return isDealProtectedField(field.key);
+  }
+  
+  // For Events module, use event field model
+  if (moduleKey.toLowerCase() === 'events') {
+    return isEventProtectedField(field.key);
+  }
+  
+  // For Items module, use item field model
+  if (moduleKey.toLowerCase() === 'items') {
+    return isItemProtectedField(field.key);
+  }
+  
   // For Forms module, check formSettingsMap for system/fixed field markers
   if (moduleKey.toLowerCase() === 'forms') {
     try {
@@ -7588,6 +7723,7 @@ function isCoreField(field, moduleKey) {
   }
   
   // Core fields per module that cannot be deleted
+  // NOTE: Tasks module now uses taskFieldModel.ts - see isTaskProtectedField() above
   const coreFieldsByModule = {
     'people': [
       // System fields (already protected, but listed for completeness)
@@ -7599,11 +7735,11 @@ function isCoreField(field, moduleKey) {
       // Contact-specific core
       'contact_status', 'role'
     ],
+    // NOTE: Organizations module now uses organizationFieldModel.ts - see isOrganizationProtectedField() above
+    // NOTE: Deals module now uses dealFieldModel.ts - see isDealProtectedField() above
+    // NOTE: Events module now uses eventFieldModel.ts - see isEventProtectedField() above
+    // NOTE: Items module now uses itemFieldModel.ts - see isItemProtectedField() above
     // Add other modules here if needed
-    'organizations': ['name', 'organizationid', 'createdby'],
-    'deals': ['name', 'organizationid', 'createdby', 'assignedto'],
-    'tasks': ['title', 'organizationid', 'createdby', 'assignedto'],
-    'events': ['eventname', 'eventtype', 'startdatetime', 'enddatetime', 'eventownerid', 'organizationid', 'createdby'],
     'forms': ['name', 'createdat', 'updatedat', 'createdby', 'modifiedby'] // Core system fields (formType is core but editable, not system)
   };
   
@@ -7865,6 +8001,16 @@ const fetchModules = async () => {
         const sorted = initial.sort((a,b) => (a.order ?? 0) - (b.order ?? 0));
         let normalizedFields = filterSystemFields(uniqueFieldsByKey(sorted));
         normalizedFields = normalizeFormsFields(normalizedFields, initialMod.key);
+        
+        // DEBUG: Log fields for items module
+        if (initialMod.key?.toLowerCase() === 'items') {
+          console.log('[ModulesAndFields] Items module fields:', {
+            initialFieldsCount: initial.length,
+            normalizedFieldsCount: normalizedFields.length,
+            initialFields: initial.map(f => ({ key: f.key, label: f.label, dataType: f.dataType })),
+            normalizedFields: normalizedFields.map(f => ({ key: f.key, label: f.label, dataType: f.dataType }))
+          });
+        }
         
         // Initialize filter metadata for People module fields based on metadata
         if (initialMod.key?.toLowerCase() === 'people') {

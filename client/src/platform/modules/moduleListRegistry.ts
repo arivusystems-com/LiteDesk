@@ -14,6 +14,7 @@
  */
 
 import { useAuthStore } from '@/stores/auth';
+import { getItemFieldMetadata } from '@/platform/fields/itemFieldModel';
 
 export interface DefaultColumnConfig {
   /** Column keys in display order */
@@ -428,6 +429,215 @@ function computeTasksStatistics(data: any[], currentUserId?: string): Record<str
 }
 
 /**
+ * Compute Events statistics
+ */
+function computeEventsStatistics(data: any[], currentUserId?: string): Record<string, number> {
+  const stats = {
+    totalEvents: data.length,
+    upcoming: 0,
+    past: 0,
+    myEvents: 0,
+    today: 0,
+    thisWeek: 0
+  };
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(today.getDate() - today.getDay());
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+  data.forEach(event => {
+    const startDate = event.startDateTime ? new Date(event.startDateTime) : null;
+    
+    // Upcoming vs Past
+    if (startDate) {
+      if (startDate >= now) {
+        stats.upcoming++;
+      } else {
+        stats.past++;
+      }
+    }
+
+    // My Events
+    const ownerId = typeof event.eventOwnerId === 'object' && event.eventOwnerId?._id
+      ? event.eventOwnerId._id
+      : event.eventOwnerId;
+    if (ownerId === currentUserId) {
+      stats.myEvents++;
+    }
+
+    // Today
+    if (startDate) {
+      const eventDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+      if (eventDateOnly.getTime() === today.getTime()) {
+        stats.today++;
+      }
+    }
+
+    // This Week
+    if (startDate && startDate >= startOfWeek && startDate <= endOfWeek) {
+      stats.thisWeek++;
+    }
+  });
+
+  return stats;
+}
+
+/**
+ * Normalize Events filters
+ */
+function normalizeEventsFilters(filters: Record<string, any>, currentUserId?: string): Record<string, any> {
+  const normalized = { ...filters };
+
+  // Normalize eventOwnerId (similar to assignedTo)
+  if ('eventOwnerId' in normalized) {
+    if (normalized.eventOwnerId === 'me' && currentUserId) {
+      normalized.eventOwnerId = currentUserId;
+    } else if (normalized.eventOwnerId === 'unassigned') {
+      normalized.eventOwnerId = null;
+    }
+  }
+
+  // Normalize date range filters
+  if ('startDateTime' in normalized && normalized.startDateTime === '') {
+    delete normalized.startDateTime;
+  }
+  if ('endDateTime' in normalized && normalized.endDateTime === '') {
+    delete normalized.endDateTime;
+  }
+
+  // Normalize eventType filter
+  if ('eventType' in normalized && normalized.eventType === '') {
+    delete normalized.eventType;
+  }
+
+  // Normalize status filter
+  if ('status' in normalized && normalized.status === '') {
+    delete normalized.status;
+  }
+
+  return normalized;
+}
+
+/**
+ * Normalize Events view filters (from saved views)
+ */
+function normalizeEventsViewFilters(filters: Record<string, any>, currentUserId?: string): Record<string, any> {
+  const normalized = { ...filters };
+
+  // Normalize eventOwnerId for UI display
+  if ('eventOwnerId' in normalized) {
+    if (normalized.eventOwnerId === currentUserId) {
+      normalized.eventOwnerId = 'me';
+    } else if (normalized.eventOwnerId === null) {
+      normalized.eventOwnerId = 'unassigned';
+    }
+  }
+
+  // Handle date filters - ensure they're in the right format for API
+  // The API expects startDateTime and endDateTime as ISO strings
+  // startDateTime becomes $gte, endDateTime becomes $lte on startDateTime field
+  if ('startDateTime' in normalized && normalized.startDateTime) {
+    // Already in correct format (ISO string)
+  }
+  if ('endDateTime' in normalized && normalized.endDateTime) {
+    // Already in correct format (ISO string)
+  }
+
+  return normalized;
+}
+
+/**
+ * Compute Items statistics
+ */
+function computeItemsStatistics(data: any[], currentUserId?: string): Record<string, number> {
+  const stats = {
+    totalItems: data.length,
+    activeItems: 0,
+    inactiveItems: 0,
+    products: 0,
+    services: 0,
+    serializedProducts: 0,
+    nonStockProducts: 0,
+    lowStock: 0,
+    outOfStock: 0
+  };
+
+  data.forEach(item => {
+    // Status counts
+    if (item.status === 'Active') {
+      stats.activeItems++;
+    } else if (item.status === 'Inactive') {
+      stats.inactiveItems++;
+    }
+
+    // Type counts
+    if (item.item_type === 'Product') {
+      stats.products++;
+    } else if (item.item_type === 'Service') {
+      stats.services++;
+    } else if (item.item_type === 'Serialized Product') {
+      stats.serializedProducts++;
+    } else if (item.item_type === 'Non-Stock Product') {
+      stats.nonStockProducts++;
+    }
+
+    // Stock status (only for products that track stock)
+    if (item.item_type === 'Product' || item.item_type === 'Serialized Product') {
+      if (item.stock_quantity === 0) {
+        stats.outOfStock++;
+      } else if (item.reorder_level > 0 && item.stock_quantity <= item.reorder_level) {
+        stats.lowStock++;
+      }
+    }
+  });
+
+  return stats;
+}
+
+/**
+ * Normalize Items filters
+ */
+function normalizeItemsFilters(filters: Record<string, any>, currentUserId?: string): Record<string, any> {
+  const normalized = { ...filters };
+
+  // Normalize status filter
+  if ('status' in normalized && normalized.status === '') {
+    delete normalized.status;
+  }
+
+  // Normalize item_type filter
+  if ('item_type' in normalized && normalized.item_type === '') {
+    delete normalized.item_type;
+  }
+
+  // Normalize category filter
+  if ('category' in normalized && normalized.category === '') {
+    delete normalized.category;
+  }
+
+  // Normalize boolean filters
+  if ('low_stock' in normalized && normalized.low_stock === false) {
+    delete normalized.low_stock;
+  }
+  if ('out_of_stock' in normalized && normalized.out_of_stock === false) {
+    delete normalized.out_of_stock;
+  }
+
+  return normalized;
+}
+
+/**
+ * Normalize Items view filters (from saved views)
+ */
+function normalizeItemsViewFilters(filters: Record<string, any>, currentUserId?: string): Record<string, any> {
+  // Same as normalizeItemsFilters for Items
+  return normalizeItemsFilters(filters, currentUserId);
+}
+
+/**
  * Module List Configuration Registry
  */
 export const MODULE_LIST_REGISTRY: Record<string, ModuleListConfig> = {
@@ -560,8 +770,177 @@ export const MODULE_LIST_REGISTRY: Record<string, ModuleListConfig> = {
     apiEndpoint: '/tasks',
     normalizeFilters: normalizeTasksFilters,
     normalizeViewFilters: normalizeTasksViewFilters
+  },
+
+  events: {
+    defaultColumns: {
+      defaultVisibleColumns: ['eventName', 'eventType', 'startDateTime', 'endDateTime', 'status', 'eventOwnerId'],
+      lockedColumn: 'eventName',
+      excludedFromDefault: []
+    },
+    statistics: {
+      stats: [
+        { name: 'Total Events', key: 'totalEvents', formatter: 'number' },
+        { name: 'Upcoming', key: 'upcoming', formatter: 'number' },
+        { name: 'Past', key: 'past', formatter: 'number' },
+        { name: 'My Events', key: 'myEvents', formatter: 'number' },
+        { name: 'Today', key: 'today', formatter: 'number' },
+        { name: 'This Week', key: 'thisWeek', formatter: 'number' }
+      ],
+      computeFunction: computeEventsStatistics
+    },
+    systemViews: [
+      {
+        id: 'all',
+        name: 'All Events',
+        filters: {},
+        isDefault: true
+      },
+      {
+        id: 'upcoming',
+        name: 'Upcoming Events',
+        filters: { _special: 'upcoming' } // Special marker for dynamic date filtering
+      },
+      {
+        id: 'past',
+        name: 'Past Events',
+        filters: { _special: 'past' } // Special marker for dynamic date filtering
+      },
+      {
+        id: 'my-events',
+        name: 'My Events',
+        filters: { eventOwnerId: 'me' }
+      }
+    ],
+    apiEndpoint: '/events',
+    normalizeFilters: normalizeEventsFilters,
+    normalizeViewFilters: normalizeEventsViewFilters
+  },
+
+  /*
+  ============================================================================
+  ITEM LIST VIEW — DEFAULT COLUMN CONTRACT
+  ============================================================================
+  - Defines the canonical default columns for Item list view
+  - item_name is the frozen primary identifier
+  - This is a UI configuration layer only
+  - Field meaning and ownership are defined in itemFieldModel.ts
+  ============================================================================
+  */
+  items: {
+    defaultColumns: {
+      // Canonical default columns in exact order:
+      // 1. item_name (CORE, primary) - frozen/locked
+      // 2. item_code (CORE, identity)
+      // 3. item_type (SALES, state)
+      // 4. category (SALES, detail)
+      // 5. selling_price (SALES, tracking)
+      // 6. status (SALES, state)
+      // 7. stock_quantity (SALES, tracking)
+      defaultVisibleColumns: ['item_name', 'item_code', 'item_type', 'category', 'selling_price', 'status', 'stock_quantity'],
+      lockedColumn: 'item_name',
+      excludedFromDefault: []
+    },
+    statistics: {
+      stats: [
+        { name: 'Total Items', key: 'totalItems', formatter: 'number' },
+        { name: 'Active', key: 'activeItems', formatter: 'number' },
+        { name: 'Products', key: 'products', formatter: 'number' },
+        { name: 'Services', key: 'services', formatter: 'number' },
+        { name: 'Low Stock', key: 'lowStock', formatter: 'number' },
+        { name: 'Out of Stock', key: 'outOfStock', formatter: 'number' }
+      ],
+      computeFunction: computeItemsStatistics
+    },
+    systemViews: [
+      {
+        id: 'all',
+        name: 'All Items',
+        filters: {},
+        isDefault: true
+      },
+      {
+        id: 'active',
+        name: 'Active Items',
+        filters: { status: 'Active' }
+      },
+      {
+        id: 'products',
+        name: 'Products',
+        filters: { item_type: 'Product' }
+      },
+      {
+        id: 'services',
+        name: 'Services',
+        filters: { item_type: 'Service' }
+      },
+      {
+        id: 'low-stock',
+        name: 'Low Stock',
+        filters: { low_stock: true }
+      },
+      {
+        id: 'out-of-stock',
+        name: 'Out of Stock',
+        filters: { out_of_stock: true }
+      }
+    ],
+    apiEndpoint: '/items',
+    normalizeFilters: normalizeItemsFilters,
+    normalizeViewFilters: normalizeItemsViewFilters
   }
 };
+
+/**
+ * DEV-only safety checks for Item list view configuration
+ * Validates that item_name is present and frozen as required
+ */
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  const itemsConfig = MODULE_LIST_REGISTRY.items;
+  if (itemsConfig) {
+    const { defaultVisibleColumns, lockedColumn } = itemsConfig.defaultColumns;
+    
+    // Assert that item_name is present in default columns
+    console.assert(
+      defaultVisibleColumns.includes('item_name'),
+      '⚠️ [moduleListRegistry] Item list view: item_name is missing from defaultVisibleColumns. ' +
+      'item_name must always be present as the primary identifier.'
+    );
+    
+    // Assert that item_name is the locked column
+    console.assert(
+      lockedColumn === 'item_name',
+      '⚠️ [moduleListRegistry] Item list view: lockedColumn is not "item_name". ' +
+      'item_name must be frozen/locked as the primary identifier.'
+    );
+    
+    // Warn if item_name is missing from default columns (additional safety check)
+    if (!defaultVisibleColumns.includes('item_name')) {
+      console.warn(
+        '⚠️ [moduleListRegistry] Item list view: item_name is missing from defaultVisibleColumns. ' +
+        'item_name must always be present as the primary identifier.'
+      );
+    }
+    
+    // Validate that all default columns exist in field metadata
+    defaultVisibleColumns.forEach(fieldKey => {
+      const metadata = getItemFieldMetadata(fieldKey);
+      if (!metadata) {
+        console.warn(
+          `⚠️ [moduleListRegistry] Item list view: Field "${fieldKey}" is in defaultVisibleColumns but not found in ITEM_FIELD_METADATA.`
+        );
+      } else {
+        // Warn if field is not editable or filterable (may indicate misconfiguration)
+        if (!metadata.editable && !metadata.filterable) {
+          console.warn(
+            `⚠️ [moduleListRegistry] Item list view: Field "${fieldKey}" is in defaultVisibleColumns but is neither editable nor filterable. ` +
+            'Consider if this field should be in the default view.'
+          );
+        }
+      }
+    });
+  }
+}
 
 /**
  * Get module list configuration

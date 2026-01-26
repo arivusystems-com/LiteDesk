@@ -1,0 +1,685 @@
+/**
+ * ============================================================================
+ * PLATFORM FIELD MODEL: Deal
+ * ============================================================================
+ * 
+ * Canonical field metadata for Deal entity.
+ * 
+ * This file encodes the authoritative field classification for Deal records.
+ * Deals are SALES app entities, so most business fields are SALES-scoped.
+ * 
+ * ⚠️ IMPORTANT:
+ * - Field ownership, intent, and scope are FINALIZED
+ * - Do NOT infer, reinterpret, or reclassify any field
+ * - This is DATA-MEANING encoding, not UI or schema redesign
+ * 
+ * ============================================================================
+ * 
+ * ARCHITECTURAL NOTES:
+ * 
+ * 1. Deals are SALES app entities
+ *    - All deal business fields are SALES-scoped participation fields
+ *    - Deal fields (name, amount, stage) exist because of SALES app participation
+ *    - fieldScope: 'SALES' indicates SALES app ownership
+ * 
+ * 2. Deal business fields are participation fields (SALES-scoped)
+ *    - `name`, `amount`, `stage`, `pipeline`, `expectedCloseDate`, etc.
+ *    - These exist only because of SALES app participation
+ *    - owner: 'participation', fieldScope: 'SALES'
+ *    - Note: Deals have no core fields (core fields require fieldScope: 'CORE')
+ * 
+ * 3. System fields are infrastructure-scoped
+ *    - `createdBy`, `createdAt`, `updatedAt`, `organizationId`, etc.
+ *    - Managed by the platform, never user-editable
+ *    - fieldScope: 'CORE' indicates platform-level ownership
+ * 
+ * 4. Quick Create eligibility
+ *    - Essential fields: name (required), amount, stage, expectedCloseDate, ownerId
+ *    - Excluded: description, notes, lineItems, tracking fields, system fields
+ * 
+ * ============================================================================
+ */
+
+import type {
+  BaseFieldMetadata,
+  BaseFieldOwner,
+  BaseFieldIntent,
+  BaseFieldScope,
+  BaseFilterType,
+} from './BaseFieldModel';
+import {
+  validateBaseFieldMetadata,
+  classifyFieldBase,
+} from './BaseFieldModel';
+
+// =============================================================================
+// DEAL-SPECIFIC TYPE ALIASES (for backward compatibility)
+// =============================================================================
+
+/**
+ * Field ownership classification for Deals.
+ * @deprecated Use BaseFieldOwner from BaseFieldModel.ts
+ */
+export type DealFieldOwner = BaseFieldOwner;
+
+/**
+ * Field intent classification for Deals.
+ * Deals module uses 'primary' for name, 'tracking' for value/probability, 'scheduling' for dates.
+ */
+export type DealFieldIntent = 'primary' | 'state' | 'tracking' | 'scheduling' | 'detail' | 'system';
+
+/**
+ * Field scope classification for Deals.
+ * @deprecated Use BaseFieldScope from BaseFieldModel.ts
+ */
+export type DealFieldScope = BaseFieldScope;
+
+/**
+ * Filter type classification for Deals.
+ * @deprecated Use BaseFilterType from BaseFieldModel.ts
+ */
+export type DealFilterType = BaseFilterType;
+
+// =============================================================================
+// DEAL FIELD METADATA INTERFACE
+// =============================================================================
+
+/**
+ * Deal-specific field metadata interface.
+ * Extends BaseFieldMetadata with Deal-specific intent types.
+ */
+export interface DealFieldMetadata extends Omit<BaseFieldMetadata, 'intent'> {
+  /**
+   * Field intent classification.
+   * Deals uses additional intents: 'primary', 'tracking', 'scheduling'.
+   */
+  intent: DealFieldIntent;
+}
+
+// =============================================================================
+// FIELD METADATA DEFINITIONS
+// =============================================================================
+
+/**
+ * Field metadata map - single source of truth for Deal fields
+ * 
+ * Every Deal field MUST be classified here.
+ * Missing fields will cause runtime errors.
+ */
+export const DEAL_FIELD_METADATA: Record<string, DealFieldMetadata> = {
+  // ==========================================================================
+  // SYSTEM FIELDS (platform-managed, read-only, infrastructure-scoped)
+  // ==========================================================================
+  organizationId: {
+    owner: 'system',
+    intent: 'system',
+    fieldScope: 'CORE',
+    editable: false,
+    isProtected: true,
+  },
+  createdBy: {
+    owner: 'system',
+    intent: 'system',
+    fieldScope: 'CORE',
+    editable: false,
+    isProtected: true,
+  },
+  createdAt: {
+    owner: 'system',
+    intent: 'system',
+    fieldScope: 'CORE',
+    editable: false,
+  },
+  updatedAt: {
+    owner: 'system',
+    intent: 'system',
+    fieldScope: 'CORE',
+    editable: false,
+  },
+  modifiedBy: {
+    owner: 'system',
+    intent: 'system',
+    fieldScope: 'CORE',
+    editable: false,
+  },
+  _id: {
+    owner: 'system',
+    intent: 'system',
+    fieldScope: 'CORE',
+    editable: false,
+  },
+  __v: {
+    owner: 'system',
+    intent: 'system',
+    fieldScope: 'CORE',
+    editable: false,
+  },
+  derivedStatus: {
+    owner: 'system',
+    intent: 'system',
+    fieldScope: 'CORE',
+    editable: false,
+  },
+  
+  // ==========================================================================
+  // SALES APP PARTICIPATION FIELDS (Deal business fields)
+  // ==========================================================================
+  // Note: Deals are SALES-specific entities, so all business fields are
+  // participation fields with SALES scope, not core fields.
+  
+  // Primary field - required, cannot be hidden or deleted
+  name: {
+    owner: 'participation',
+    intent: 'primary',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: true,
+    isProtected: true,
+    filterable: true,
+    filterType: 'text',
+    filterPriority: 1,
+  },
+  
+  // Value tracking fields
+  amount: {
+    owner: 'participation',
+    intent: 'tracking',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: true,
+    isProtected: true,
+    filterable: true,
+    filterType: 'number',
+    filterPriority: 2,
+  },
+  currency: {
+    owner: 'participation',
+    intent: 'detail',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: true,
+  },
+  probability: {
+    owner: 'participation',
+    intent: 'tracking',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: false,
+    filterable: true,
+    filterType: 'number',
+    filterPriority: 3,
+  },
+  
+  // Pipeline and stage fields
+  pipeline: {
+    owner: 'participation',
+    intent: 'state',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: true,
+    filterable: true,
+    filterType: 'select',
+    filterPriority: 4,
+  },
+  stage: {
+    owner: 'participation',
+    intent: 'state',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: true,
+    isProtected: true,
+    filterable: true,
+    filterType: 'select',
+    filterPriority: 5,
+  },
+  status: {
+    owner: 'participation',
+    intent: 'state',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: false,
+    filterable: true,
+    filterType: 'select',
+    filterPriority: 6,
+  },
+  
+  // Scheduling fields
+  expectedCloseDate: {
+    owner: 'participation',
+    intent: 'scheduling',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: true,
+    filterable: true,
+    filterType: 'date',
+    filterPriority: 7,
+  },
+  actualCloseDate: {
+    owner: 'participation',
+    intent: 'scheduling',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: false,
+    filterable: true,
+    filterType: 'date',
+    filterPriority: 8,
+  },
+  
+  // Detail fields
+  description: {
+    owner: 'participation',
+    intent: 'detail',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: false,
+  },
+  type: {
+    owner: 'participation',
+    intent: 'state',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: false,
+    filterable: true,
+    filterType: 'select',
+    filterPriority: 9,
+  },
+  source: {
+    owner: 'participation',
+    intent: 'detail',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: false,
+    filterable: true,
+    filterType: 'select',
+    filterPriority: 10,
+  },
+  nextStep: {
+    owner: 'participation',
+    intent: 'detail',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: false,
+  },
+  tags: {
+    owner: 'participation',
+    intent: 'detail',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: false,
+    filterable: true,
+    filterType: 'multi-select',
+    filterPriority: 11,
+  },
+  priority: {
+    owner: 'participation',
+    intent: 'state',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: false,
+    filterable: true,
+    filterType: 'select',
+    filterPriority: 12,
+  },
+  lostReason: {
+    owner: 'participation',
+    intent: 'detail',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: false,
+  },
+  
+  // ==========================================================================
+  // SALES APP PARTICIPATION FIELDS
+  // ==========================================================================
+  
+  // Assignment fields
+  ownerId: {
+    owner: 'participation',
+    intent: 'detail',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: true,
+    filterable: true,
+    filterType: 'user',
+    filterPriority: 13,
+  },
+  
+  // Relationship fields
+  contactId: {
+    owner: 'participation',
+    intent: 'detail',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: false,
+    filterable: true,
+    filterType: 'entity',
+    filterPriority: 14,
+  },
+  accountId: {
+    owner: 'participation',
+    intent: 'detail',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: false,
+    filterable: true,
+    filterType: 'entity',
+    filterPriority: 15,
+  },
+  dealPeople: {
+    owner: 'participation',
+    intent: 'detail',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: false,
+  },
+  dealOrganizations: {
+    owner: 'participation',
+    intent: 'detail',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: false,
+  },
+  
+  // Tracking fields
+  lastActivityDate: {
+    owner: 'participation',
+    intent: 'tracking',
+    fieldScope: 'SALES',
+    editable: false,
+    requiredFor: ['SALES'],
+    filterable: true,
+    filterType: 'date',
+    filterPriority: 16,
+  },
+  nextFollowUpDate: {
+    owner: 'participation',
+    intent: 'scheduling',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    filterable: true,
+    filterType: 'date',
+    filterPriority: 17,
+  },
+  stageHistory: {
+    owner: 'participation',
+    intent: 'tracking',
+    fieldScope: 'SALES',
+    editable: false,
+    requiredFor: ['SALES'],
+  },
+  
+  // Notes and activities
+  notes: {
+    owner: 'participation',
+    intent: 'detail',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: false,
+  },
+  lineItems: {
+    owner: 'participation',
+    intent: 'detail',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: false,
+  },
+  
+  // Custom fields
+  customFields: {
+    owner: 'participation',
+    intent: 'detail',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    allowOnCreate: false,
+  },
+};
+
+// =============================================================================
+// VALIDATION & GUARDRAILS
+// =============================================================================
+
+/**
+ * Validates Deal-specific field metadata for correctness.
+ * Extends base validation with Deal-specific rules.
+ * Throws if invalid combinations are detected.
+ */
+function validateDealFieldMetadata(fieldName: string, metadata: DealFieldMetadata): void {
+  // Run base validation first (cast to BaseFieldMetadata for compatibility)
+  validateBaseFieldMetadata(fieldName, metadata as unknown as BaseFieldMetadata);
+
+  const { owner, intent } = metadata;
+
+  // Deal-specific: Participation fields must have intent: 'primary', 'state', 'detail', 'tracking', or 'scheduling'
+  const validParticipationIntents = ['primary', 'state', 'detail', 'tracking', 'scheduling'];
+  if (owner === 'participation' && !validParticipationIntents.includes(intent)) {
+    throw new Error(
+      `Field "${fieldName}": Deal participation fields must have intent: ${validParticipationIntents.join(' | ')}. Found: ${intent}`
+    );
+  }
+}
+
+/**
+ * Validates all field metadata on module load
+ * Fails fast if any field has invalid classification
+ */
+function validateAllDealMetadata(): void {
+  for (const [fieldName, metadata] of Object.entries(DEAL_FIELD_METADATA)) {
+    validateDealFieldMetadata(fieldName, metadata);
+  }
+}
+
+// Run validation on module load
+validateAllDealMetadata();
+
+// =============================================================================
+// HELPER UTILITIES
+// =============================================================================
+
+/**
+ * Get metadata for a deal field
+ * Returns undefined if field is not found (allows graceful handling of unknown fields)
+ */
+export function getDealFieldMetadata(fieldName: string): DealFieldMetadata | undefined {
+  // Normalize field name for case-insensitive lookup
+  const normalizedName = fieldName.toLowerCase();
+  
+  // Try exact match first
+  if (DEAL_FIELD_METADATA[fieldName]) {
+    return DEAL_FIELD_METADATA[fieldName];
+  }
+  
+  // Try case-insensitive match
+  for (const [key, metadata] of Object.entries(DEAL_FIELD_METADATA)) {
+    if (key.toLowerCase() === normalizedName) {
+      return metadata;
+    }
+  }
+  
+  return undefined;
+}
+
+/**
+ * Check if a field is a system field
+ */
+export function isDealSystemField(fieldName: string): boolean {
+  const metadata = getDealFieldMetadata(fieldName);
+  return metadata?.owner === 'system';
+}
+
+/**
+ * Check if a field is a core deal field
+ * Note: Deals are SALES-specific, so they don't have core fields.
+ * This function returns false for all Deal fields (they're all participation or system).
+ */
+export function isDealCoreField(fieldName: string): boolean {
+  const metadata = getDealFieldMetadata(fieldName);
+  return metadata?.owner === 'core';
+}
+
+/**
+ * Check if a field is a protected field (cannot be deleted)
+ */
+export function isDealProtectedField(fieldName: string): boolean {
+  const metadata = getDealFieldMetadata(fieldName);
+  return metadata?.isProtected === true;
+}
+
+/**
+ * Get all core deal fields (SALES-owned)
+ */
+export function getCoreDealFields(): string[] {
+  return Object.entries(DEAL_FIELD_METADATA)
+    .filter(([_, metadata]) => metadata.owner === 'core')
+    .map(([fieldName]) => fieldName);
+}
+
+/**
+ * Get all system fields
+ */
+export function getDealSystemFields(): string[] {
+  return Object.entries(DEAL_FIELD_METADATA)
+    .filter(([_, metadata]) => metadata.owner === 'system')
+    .map(([fieldName]) => fieldName);
+}
+
+/**
+ * Get all participation fields for a specific app
+ */
+export function getDealParticipationFields(appKey: string): string[] {
+  return Object.entries(DEAL_FIELD_METADATA)
+    .filter(([_, metadata]) => 
+      metadata.owner === 'participation' && metadata.fieldScope === appKey
+    )
+    .map(([fieldName]) => fieldName);
+}
+
+/**
+ * Get all fields eligible for Quick Create
+ * Essential fields: name (required), amount, stage, expectedCloseDate, ownerId
+ */
+export function getDealQuickCreateFields(): string[] {
+  return Object.entries(DEAL_FIELD_METADATA)
+    .filter(([_, metadata]) => 
+      metadata.allowOnCreate === true || 
+      (metadata.owner === 'participation' && metadata.intent === 'primary')
+    )
+    .map(([fieldName]) => fieldName);
+}
+
+/**
+ * Get all protected fields (cannot be deleted)
+ */
+export function getDealProtectedFields(): string[] {
+  return Object.entries(DEAL_FIELD_METADATA)
+    .filter(([_, metadata]) => metadata.isProtected === true)
+    .map(([fieldName]) => fieldName);
+}
+
+/**
+ * Classify a field into its group for UI display
+ * Returns: 'core' | 'system' | app scope (e.g., 'SALES')
+ * 
+ * Uses base classification utility for consistency.
+ */
+export function classifyDealField(fieldName: string): string {
+  const metadata = getDealFieldMetadata(fieldName);
+  return classifyFieldBase(metadata as unknown as BaseFieldMetadata);
+}
+
+/**
+ * Group deal fields by their classification
+ * Used for UI rendering in ModulesAndFields.vue
+ * Note: Deals are SALES-specific, so they don't have core fields.
+ */
+export function groupDealFields(fieldKeys: string[]): {
+  coreIdentity: string[];
+  participation: Record<string, string[]>;
+  system: string[];
+} {
+  const coreIdentity: string[] = [];
+  const participation: Record<string, string[]> = {};
+  const system: string[] = [];
+  
+  for (const fieldKey of fieldKeys) {
+    const classification = classifyDealField(fieldKey);
+    
+    if (classification === 'core') {
+      coreIdentity.push(fieldKey);
+    } else if (classification === 'system') {
+      system.push(fieldKey);
+    } else {
+      // Participation field - group by app scope
+      if (!participation[classification]) {
+        participation[classification] = [];
+      }
+      participation[classification].push(fieldKey);
+    }
+  }
+  
+  return { coreIdentity, participation, system };
+}
+
+/**
+ * Check if a field should be excluded from Quick Create
+ * Based on architecture: only essential fields are eligible
+ */
+export function isExcludedFromDealQuickCreate(fieldName: string): boolean {
+  const metadata = getDealFieldMetadata(fieldName);
+  
+  if (!metadata) {
+    // Unknown fields are excluded
+    return true;
+  }
+  
+  // System fields are always excluded
+  if (metadata.owner === 'system') {
+    return true;
+  }
+  
+  // Participation fields with allowOnCreate: false are excluded
+  if (metadata.owner === 'participation' && metadata.allowOnCreate === false) {
+    return true;
+  }
+  
+  return false;
+}
+
+// =============================================================================
+// EXPORTS FOR BACKWARD COMPATIBILITY
+// =============================================================================
+
+/**
+ * Array of all deal field metadata objects.
+ * @deprecated Use DEAL_FIELD_METADATA directly or FieldRegistry functions
+ */
+export const DEAL_FIELDS: DealFieldMetadata[] = Object.entries(DEAL_FIELD_METADATA)
+  .map(([fieldName, metadata]) => ({
+    ...metadata,
+    fieldKey: fieldName,
+  } as DealFieldMetadata & { fieldKey: string }))
+  .map(({ fieldKey, ...metadata }) => metadata as DealFieldMetadata);
