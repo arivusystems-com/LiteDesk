@@ -7,41 +7,14 @@
       </p>
     </div>
 
-    <ListView
-      title="Items"
-      description="Manage products, services, and inventory"
+    <!-- Registry-Driven ModuleList -->
+    <ModuleList
       module-key="items"
-      create-label="New Item"
-      search-placeholder="Search items..."
-      :data="items"
-      :columns="columns"
-      :loading="loading"
-      :statistics="statistics"
-      :stats-config="[
-        { name: 'Total Items', key: 'totalItems', formatter: 'number' },
-        { name: 'Active', key: 'activeItems', formatter: 'number' },
-        { name: 'Products', key: 'products', formatter: 'number' },
-        { name: 'Services', key: 'services', formatter: 'number' }
-      ]"
-      :pagination="{ currentPage: pagination.currentPage, totalPages: pagination.totalPages, totalRecords: pagination.totalItems, limit: pagination.itemsPerPage }"
-      :sort-field="sortField"
-      :sort-order="sortOrder"
-      :filter-config="filterConfig"
-      table-id="items-table"
-      row-key="_id"
-      empty-title="No items yet"
-      empty-message="Items are products and services you sell. Add them here to use in deals, quotes, and invoices across all apps."
+      app-key="PLATFORM"
       @create="openCreateModal"
       @import="showImportModal = true"
       @export="exportItems"
-      @update:searchQuery="handleSearchQueryUpdate"
-      @update:filters="(newFilters) => { Object.assign(filters, newFilters); fetchItems(); }"
-      @update:sort="({ sortField: key, sortOrder: order }) => { handleSort({ key, order }); }"
-      @update:pagination="(p) => { pagination.currentPage = p.currentPage; pagination.itemsPerPage = p.limit || pagination.itemsPerPage; fetchItems(); }"
-      @fetch="fetchItems"
-      @row-click="viewItem"
-      @edit="editItem"
-      @delete="handleDelete"
+      @row-click="handleRowClick"
       @bulk-action="handleBulkAction"
     >
       <!-- Custom Item Name Cell -->
@@ -140,7 +113,7 @@
       <!-- Custom Vendor Cell -->
       <template #cell-vendor="{ row }">
         <span v-if="row.vendor" class="text-sm text-gray-700 dark:text-gray-300">
-          {{ row.vendor.name }}
+          {{ typeof row.vendor === 'object' ? row.vendor.name : row.vendor }}
         </span>
         <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
       </template>
@@ -162,7 +135,12 @@
         <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
       </template>
 
-    </ListView>
+      <!-- Custom Created Date Cell -->
+      <template #cell-createdAt="{ value }">
+        <DateCell :value="value" format="short" />
+      </template>
+
+    </ModuleList>
 
     <!-- Item Form Modal -->
     <CreateRecordDrawer 
@@ -184,211 +162,51 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { useAuthStore } from '../stores/auth';
-import { useBulkActions } from '@/composables/useBulkActions';
+import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';
-import apiClient from '../utils/apiClient';
-import ListView from '@/components/common/ListView.vue';
-import BadgeCell from '../components/common/table/BadgeCell.vue';
+import apiClient from '@/utils/apiClient';
+import ModuleList from '@/components/module-list/ModuleList.vue';
+import BadgeCell from '@/components/common/table/BadgeCell.vue';
+import DateCell from '@/components/common/table/DateCell.vue';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
-import CSVImportModal from '../components/import/CSVImportModal.vue';
+import CSVImportModal from '@/components/import/CSVImportModal.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
 const { openTab } = useTabs();
 
 // State
-const items = ref([]);
-const loading = ref(false);
-const searchQuery = ref('');
 const showFormModal = ref(false);
 const showImportModal = ref(false);
 const editingItem = ref(null);
 
-const filters = reactive({
-  status: '',
-  item_type: '',
-  category: '',
-  low_stock: false,
-  out_of_stock: false
-});
-
-const pagination = ref({
-  currentPage: 1,
-  totalPages: 1,
-  totalItems: 0,
-  itemsPerPage: 20
-});
-
-const statistics = ref({
-  totalItems: 0,
-  activeItems: 0,
-  inactiveItems: 0,
-  products: 0,
-  services: 0,
-  serializedProducts: 0,
-  nonStockProducts: 0,
-  totalStockValue: 0
-});
-
-const sortField = ref('createdAt');
-const sortOrder = ref('desc');
-
-// Column definitions
-const columns = computed(() => [
-  { key: 'item_name', label: 'Item Name', sortable: true, minWidth: '200px' },
-  { key: 'item_code', label: 'Item Code', sortable: true, minWidth: '120px' },
-  { key: 'item_type', label: 'Type', sortable: true, minWidth: '130px' },
-  { key: 'category', label: 'Category', sortable: true, minWidth: '120px' },
-  { key: 'status', label: 'Status', sortable: true, minWidth: '100px' },
-  { key: 'stock_quantity', label: 'Stock', sortable: true, minWidth: '120px' },
-  { key: 'selling_price', label: 'Price', sortable: true, minWidth: '120px' },
-  { key: 'vendor', label: 'Vendor', sortable: false, minWidth: '150px' },
-  { key: 'tags', label: 'Tags', sortable: false, minWidth: '150px' }
-]);
-
-// Filter configuration
-const filterConfig = computed(() => [
-  {
-    key: 'status',
-    label: 'All Status',
-    options: [
-      { value: 'Active', label: 'Active' },
-      { value: 'Inactive', label: 'Inactive' }
-    ]
-  },
-  {
-    key: 'item_type',
-    label: 'All Types',
-    options: [
-      { value: 'Product', label: 'Product' },
-      { value: 'Service', label: 'Service' },
-      { value: 'Serialized Product', label: 'Serialized Product' },
-      { value: 'Non-Stock Product', label: 'Non-Stock Product' }
-    ]
-  },
-  {
-    key: 'low_stock',
-    label: 'Stock Status',
-    options: [
-      { value: 'true', label: 'Low Stock' },
-      { value: 'false', label: 'All Stock Levels' }
-    ]
-  }
-]);
-
-// Use bulk actions composable
-const { bulkActions } = useBulkActions('items');
-
-// Methods
-const fetchItems = async () => {
-  loading.value = true;
-  
-  try {
-    const params = new URLSearchParams();
-    params.append('page', pagination.value.currentPage);
-    params.append('limit', pagination.value.itemsPerPage);
-    params.append('sortBy', sortField.value);
-    params.append('sortOrder', sortOrder.value);
-    
-    if (searchQuery.value) params.append('search', searchQuery.value);
-    if (filters.status) params.append('status', filters.status);
-    if (filters.item_type) params.append('item_type', filters.item_type);
-    if (filters.category) params.append('category', filters.category);
-    if (filters.low_stock) params.append('low_stock', 'true');
-    if (filters.out_of_stock) params.append('out_of_stock', 'true');
-
-    const data = await apiClient(`/items?${params.toString()}`, {
-      method: 'GET'
-    });
-    
-    if (data.success) {
-      items.value = data.data;
-      pagination.value = data.pagination;
-      statistics.value = data.statistics || statistics.value;
-    }
-  } catch (err) {
-    console.error('Error fetching items:', err);
-    items.value = [];
-  } finally {
-    loading.value = false;
-  }
-};
-
-const handleSearchQueryUpdate = (query) => {
-  searchQuery.value = query;
-  pagination.value.currentPage = 1;
-  fetchItems();
-};
-
-const handleSort = ({ key, order }) => {
-  if (!key) {
-    sortField.value = 'createdAt';
-    sortOrder.value = 'desc';
-  } else {
-    sortField.value = key;
-    sortOrder.value = order;
-  }
-  fetchItems();
-};
-
-const viewItem = (item) => {
-  const itemData = typeof item === 'object' ? item : items.value.find(i => i._id === item);
-  const title = itemData ? itemData.item_name : 'Item Detail';
-  
-  openTab(`/items/${itemData._id}`, {
-    title,
-    icon: 'cube',
-    params: { name: title }
-  });
-};
-
+// Modal handlers
 const openCreateModal = () => {
   editingItem.value = null;
   showFormModal.value = true;
 };
 
-const editItem = (item) => {
-  editingItem.value = item;
-  showFormModal.value = true;
-};
-
-const closeFormModal = () => {
-  showFormModal.value = false;
-  editingItem.value = null;
-};
-
-const handleItemSave = () => {
-  closeFormModal();
-  fetchItems();
-};
-
-const handleDelete = async (itemId) => {
-  if (!confirm('Are you sure you want to delete this item?')) return;
-  
-  try {
-    await apiClient(`/items/${itemId}`, {
-      method: 'DELETE'
-    });
-    fetchItems();
-  } catch (error) {
-    console.error('Error deleting item:', error);
-    alert('Failed to delete item');
-  }
+const handleRowClick = (row) => {
+  // Navigate to item detail if route exists
+  openTab(`/items/${row._id}`, {
+    title: row.item_name || 'Item Detail',
+    icon: 'cube',
+    background: false
+  });
 };
 
 const handleBulkAction = async (actionId, selectedRows) => {
   const itemIds = selectedRows.map(item => item._id);
   
   try {
-    if (actionId === 'bulk-delete' || actionId === 'delete') {
+    if (actionId === 'delete' || actionId === 'bulk-delete') {
       await Promise.all(itemIds.map(id => 
         apiClient(`/items/${id}`, { method: 'DELETE' })
       ));
-      fetchItems();
-    } else if (actionId === 'bulk-export' || actionId === 'export') {
+      window.location.reload(); // Temporary - ModuleList should emit refresh event
+    } else if (actionId === 'export' || actionId === 'bulk-export') {
       exportItemsToCSV(selectedRows);
     }
   } catch (error) {
@@ -397,19 +215,29 @@ const handleBulkAction = async (actionId, selectedRows) => {
   }
 };
 
+// Export items
 const exportItems = async () => {
   try {
-    // Fetch all items for export
-    const data = await apiClient('/items?limit=10000', {
-      method: 'GET'
+    const response = await fetch('/api/csv/export/items', {
+      headers: {
+        'Authorization': `Bearer ${authStore.user?.token}`
+      }
     });
     
-    if (data.success) {
-      exportItemsToCSV(data.data);
-    }
+    if (!response.ok) throw new Error('Export failed');
+    
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `items_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
   } catch (error) {
     console.error('Error exporting items:', error);
-    alert('Failed to export items');
+    alert('Error exporting items. Please try again.');
   }
 };
 
@@ -425,7 +253,7 @@ const exportItemsToCSV = (itemsToExport) => {
       item.stock_quantity || 0,
       item.selling_price || 0,
       item.cost_price || 0,
-      item.vendor?.name || ''
+      typeof item.vendor === 'object' ? item.vendor?.name || '' : item.vendor || ''
     ].join(','))
   ].join('\n');
   
@@ -440,9 +268,21 @@ const exportItemsToCSV = (itemsToExport) => {
 
 const handleImportComplete = () => {
   showImportModal.value = false;
-  fetchItems();
+  window.location.reload(); // Temporary - ModuleList should emit refresh event
 };
 
+const handleItemSave = () => {
+  showFormModal.value = false;
+  editingItem.value = null;
+  window.location.reload(); // Temporary - ModuleList should emit refresh event
+};
+
+const closeFormModal = () => {
+  showFormModal.value = false;
+  editingItem.value = null;
+};
+
+// Utility functions
 const formatCurrency = (amount) => {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -460,10 +300,5 @@ const getInitials = (name) => {
   }
   return name.substring(0, 2).toUpperCase();
 };
-
-// Lifecycle
-onMounted(() => {
-  fetchItems();
-});
 </script>
 

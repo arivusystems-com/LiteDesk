@@ -128,7 +128,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['create', 'import', 'export', 'row-click', 'edit', 'delete', 'bulk-action']);
+const emit = defineEmits(['create', 'import', 'export', 'row-click', 'edit', 'delete', 'bulk-action', 'filters-changed', 'search-changed']);
 
 const route = useRoute();
 const router = useRouter();
@@ -1005,12 +1005,6 @@ const fetchData = async () => {
       params.search = searchQuery.value.trim();
     }
 
-    // Debug: Log search parameter for organizations
-    if (props.moduleKey === 'organizations' && searchQuery.value) {
-      console.log('[ModuleList] Search query:', searchQuery.value);
-      console.log('[ModuleList] Search param in request:', params.search);
-    }
-
     // Clean up params - remove null/undefined/empty values (except when explicitly needed)
     // assignedTo: null is valid when filtering for 'unassigned' or null (from saved views)
     // Only remove if it's not explicitly set in filters
@@ -1038,6 +1032,13 @@ const fetchData = async () => {
     if (props.moduleKey === 'people' || props.moduleKey === 'organizations') {
       console.log('[ModuleList] API request params:', JSON.stringify(params, null, 2));
       console.log('[ModuleList] Filters state:', JSON.stringify(filters.value, null, 2));
+    }
+    
+    // Debug: Log params for events module
+    if (props.moduleKey === 'events') {
+      console.log('[ModuleList] Events API request params:', JSON.stringify(params, null, 2));
+      console.log('[ModuleList] Events filters state:', JSON.stringify(filters.value, null, 2));
+      console.log('[ModuleList] Events searchQuery state:', searchQuery.value);
     }
     
     const response = await apiClient.get(endpoint, { params });
@@ -1083,6 +1084,16 @@ const fetchData = async () => {
       console.log('[ModuleList] API response (full):', logData);
     }
 
+    // Debug: Log API response for events module (only when search is active)
+    if (props.moduleKey === 'events' && searchQuery.value) {
+      console.log('[ModuleList] Events API response with search:', {
+        success: response.success,
+        dataLength: response.data?.length || 0,
+        total: response.total || 0,
+        searchParam: params.search
+      });
+    }
+    
     if (response.success) {
       let fetchedData = response.data || [];
       
@@ -1144,6 +1155,35 @@ const fetchData = async () => {
       // Force reactivity by creating a new array reference
       // This ensures Vue detects the change even if the array contents are similar
       data.value = [...fetchedData];
+      
+      // Debug: Log data assignment for events (only when search is active)
+      if (props.moduleKey === 'events' && searchQuery.value) {
+        const searchTerm = searchQuery.value?.toLowerCase() || '';
+        const matchingEvents = data.value.filter(e => {
+          if (!searchTerm) return true;
+          const eventName = String(e.eventName || '').toLowerCase();
+          // notes is an array of objects with 'text' field
+          const notesText = Array.isArray(e.notes) 
+            ? e.notes.map(n => String(n?.text || '')).join(' ').toLowerCase()
+            : String(e.notes || '').toLowerCase();
+          const location = String(e.location || '').toLowerCase();
+          return eventName.includes(searchTerm) || notesText.includes(searchTerm) || location.includes(searchTerm);
+        });
+        
+        console.log('[ModuleList] Events search results:', {
+          dataLength: data.value.length,
+          searchQuery: searchQuery.value,
+          matchingCount: matchingEvents.length,
+          sampleEventNames: data.value.slice(0, 5).map(e => e.eventName)
+        });
+        
+        if (searchTerm && matchingEvents.length !== data.value.length) {
+          console.warn('[ModuleList] WARNING: Some events in response do not match search term!', {
+            totalReturned: data.value.length,
+            matchingCount: matchingEvents.length
+          });
+        }
+      }
       
       // Handle pagination from response (check both pagination and meta objects)
       if (response.pagination) {
@@ -1279,6 +1319,7 @@ const handleAction = (route) => {
 const handleSearchQueryUpdate = (query) => {
   searchQuery.value = query;
   pagination.value.currentPage = 1;
+  emit('search-changed', query);
   fetchData();
 };
 
@@ -1371,6 +1412,8 @@ const handleFiltersUpdate = async (newFilters) => {
   // Create a new object to ensure reactivity
   filters.value = { ...newFilters };
   pagination.value.currentPage = 1;
+  
+  emit('filters-changed', filters.value);
   
   // Wait for next tick to ensure filters are properly set before checking saved views
   await nextTick();
@@ -1510,6 +1553,92 @@ const handleStatClick = (statItem) => {
         newFilters.overdue = true;
         break;
     }
+  } else if (props.moduleKey === 'items') {
+    // Map stat key to filter for Items module
+    switch (statItem.key) {
+      case 'totalItems':
+        // Clear all filters - show all items
+        break; // newFilters stays empty
+        
+      case 'activeItems':
+        // Filter: status = 'Active'
+        newFilters.status = 'Active';
+        break;
+        
+      case 'products':
+        // Filter: item_type = 'Product'
+        newFilters.item_type = 'Product';
+        break;
+        
+      case 'services':
+        // Filter: item_type = 'Service'
+        newFilters.item_type = 'Service';
+        break;
+        
+      case 'lowStock':
+        // Filter: low_stock = true
+        newFilters.low_stock = true;
+        break;
+        
+      case 'outOfStock':
+        // Filter: out_of_stock = true
+        newFilters.out_of_stock = true;
+        break;
+    }
+  } else if (props.moduleKey === 'events') {
+    // Map stat key to filter for Events module
+    // The API expects startDateTime and endDateTime as ISO date strings
+    // It will build MongoDB queries: startDateTime.$gte and startDateTime.$lte
+    switch (statItem.key) {
+      case 'totalEvents':
+        // Clear all filters - show all events
+        break; // newFilters stays empty
+        
+      case 'upcoming':
+        // Filter: startDateTime >= now
+        // API will interpret startDateTime as $gte
+        newFilters.startDateTime = new Date().toISOString();
+        break;
+        
+      case 'past':
+        // Filter: startDateTime < now
+        // Note: API uses endDateTime for $lte on startDateTime field
+        // For "past", we need events where startDateTime < now
+        // We'll use a workaround: set endDateTime to now (but this gives $lte, not $lt)
+        // Better approach: let the API handle this or use a different filter
+        // For now, we'll skip this stat click or handle it client-side
+        // TODO: Add API support for $lt operator or handle past events differently
+        break;
+        
+      case 'myEvents':
+        // Filter: eventOwnerId = currentUser
+        // Use 'me' string so it matches the filter dropdown option
+        newFilters.eventOwnerId = 'me';
+        break;
+        
+      case 'today':
+        // Filter: startDateTime is today
+        // API will use startDateTime for $gte and endDateTime for $lte
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        newFilters.startDateTime = today.toISOString();
+        newFilters.endDateTime = tomorrow.toISOString();
+        break;
+        
+      case 'thisWeek':
+        // Filter: startDateTime is this week
+        const nowWeek = new Date();
+        const startOfWeek = new Date(nowWeek);
+        startOfWeek.setDate(nowWeek.getDate() - nowWeek.getDay());
+        startOfWeek.setHours(0, 0, 0, 0);
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 7);
+        newFilters.startDateTime = startOfWeek.toISOString();
+        newFilters.endDateTime = endOfWeek.toISOString();
+        break;
+    }
   }
   
   // Use handleFiltersUpdate to properly sync filters with ListView
@@ -1536,7 +1665,9 @@ const handleSavedViewsUpdated = (customViews) => {
 // Handle saved view selection
 const handleSavedViewSelected = (view) => {
   const moduleConfig = getModuleListConfig(props.moduleKey);
-  if (!moduleConfig) return;
+  if (!moduleConfig) {
+    return;
+  }
   
   // Set active saved view (will be persisted via watch)
   activeSavedViewId.value = view?.id || null;
@@ -1548,8 +1679,26 @@ const handleSavedViewSelected = (view) => {
   }
   
   // Apply view filters
-  const viewFilters = view.filters ? { ...view.filters } : {};
+  let viewFilters = view.filters ? { ...view.filters } : {};
   const currentUserId = authStore.user?._id;
+  
+  // Handle special date filters for events module (upcoming/past)
+  if (props.moduleKey === 'events') {
+    if (view.id === 'upcoming') {
+      // Upcoming: startDateTime >= now
+      viewFilters = { startDateTime: new Date().toISOString() };
+    } else if (view.id === 'past') {
+      // Past: startDateTime < now
+      // API uses endDateTime to set startDateTime.$lte
+      // Subtract 1 second to ensure we get events strictly before now
+      const now = new Date();
+      now.setSeconds(now.getSeconds() - 1);
+      viewFilters = { endDateTime: now.toISOString() };
+    } else if (viewFilters._special) {
+      // Remove special marker if present
+      delete viewFilters._special;
+    }
+  }
   
   // Normalize filters using registry function if available
   const normalizedFilters = moduleConfig.normalizeViewFilters
@@ -1639,6 +1788,15 @@ onMounted(() => {
   if (authStore.user && authStore.isAuthenticated) {
     buildList();
   }
+});
+
+// Expose methods and data for parent components
+defineExpose({
+  refresh: fetchData,
+  filters: filters,
+  searchQuery: searchQuery,
+  getFilters: () => filters.value,
+  getSearchQuery: () => searchQuery.value
 });
 </script>
 

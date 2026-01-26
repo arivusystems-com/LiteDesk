@@ -26,19 +26,19 @@
                   <MenuItem
                     v-for="view in savedViews"
                     :key="view.id"
-                    v-slot="{ active }"
+                    v-slot="{ active, close }"
                   >
                     <div class="group flex items-center justify-between">
-                    <button
-                      @click="handleSavedViewClick(view)"
-                      :class="[
-                        active ? 'bg-gray-100 dark:bg-gray-700' : '',
-                        activeSavedViewId === view.id ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100',
-                        'flex-1 block w-full text-left px-4 py-2 text-sm'
-                      ]"
-                    >
-                      {{ view.label }}
-                    </button>
+                      <button
+                        @click="() => { handleSavedViewClick(view); close(); }"
+                        :class="[
+                          active ? 'bg-gray-100 dark:bg-gray-700' : '',
+                          activeSavedViewId === view.id ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100',
+                          'flex-1 block w-full text-left px-4 py-2 text-sm'
+                        ]"
+                      >
+                        {{ view.label }}
+                      </button>
                       <!-- Edit/Delete actions for custom views only -->
                       <div v-if="!isSystemView(view.id)" class="flex items-center gap-1 pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
@@ -369,6 +369,7 @@
           <div
             v-for="filter in filterConfig"
             :key="filter.key"
+            :data-filter-key="filter.key"
             class="relative"
           >
             <!-- All Filters: Dropdown (including boolean) -->
@@ -461,6 +462,38 @@
             </svg>
             Clear
           </button>
+          
+          <!-- Suggested Filters Section (Feature-flagged, opt-in only) -->
+          <!-- 
+            ARCHITECTURE NOTE: This section is informational only.
+            - Does NOT auto-apply filters
+            - Does NOT modify filter state
+            - User must explicitly click to open filter configuration
+            - Controlled by ENABLE_DEFAULT_FILTERS flag in useDefaultListFilters
+            See: /composables/useDefaultListFilters.ts
+          -->
+          <div 
+            v-if="suggestedFiltersEnabled && hasSuggestedFilters && !hasActiveFilters"
+            class="flex items-center gap-2 ml-2 pl-2 border-l border-gray-200 dark:border-gray-700"
+          >
+            <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap" title="Suggestions based on common usage. Nothing is applied automatically.">
+              Suggested:
+            </span>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <button
+                v-for="filterKey in suggestedFilters"
+                :key="filterKey"
+                @click="handleSuggestedFilterClick(filterKey)"
+                class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 border border-dashed border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-400 dark:hover:border-gray-500 transition-colors cursor-pointer"
+                :title="`Click to configure ${getSuggestedFilterLabel(filterKey)} filter`"
+              >
+                <span>{{ getSuggestedFilterLabel(filterKey) }}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3 h-3 opacity-50">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- Customize Button (Desktop/Tablet) -->
@@ -1062,6 +1095,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
 import { getFieldMetadata, PEOPLE_FIELD_METADATA } from '@/platform/fields/peopleFieldModel';
+import { useDefaultListFilters } from '@/composables/useDefaultListFilters';
 
 const authStore = useAuthStore();
 const { activeTabId } = useTabs();
@@ -1216,6 +1250,16 @@ const emit = defineEmits([
 
 // Use bulk actions composable
 const { bulkActions: massActions } = useBulkActions(props.moduleKey);
+
+// Use default list filters composable (opt-in, feature-flagged)
+// This provides suggested filters based on field metadata
+// See: /platform/fields/DefaultFilterPolicy.ts
+const {
+  isEnabled: suggestedFiltersEnabled,
+  defaultFilters: suggestedFilters,
+  hasDefaultFilters: hasSuggestedFilters,
+  isDefaultFilter: isSuggestedFilter,
+} = useDefaultListFilters(props.moduleKey);
 
 // State
 const searchQuery = ref('');
@@ -2052,6 +2096,62 @@ const getFilterLabel = (filter, value) => {
   if (!value) return null;
   const option = filter.options.find(opt => opt.value === value);
   return option ? (option.label || option.value) : null;
+};
+
+// =============================================================================
+// SUGGESTED FILTERS (Feature-flagged, opt-in only)
+// =============================================================================
+
+/**
+ * Get display label for a suggested filter field key.
+ * Looks up the label from filterConfig or falls back to formatted field key.
+ * 
+ * @param fieldKey - The field key from suggested filters
+ * @returns Human-readable label for the filter
+ */
+const getSuggestedFilterLabel = (fieldKey) => {
+  // Try to find the filter in filterConfig
+  const filter = props.filterConfig?.find(f => f.key === fieldKey);
+  if (filter?.label) {
+    return filter.label;
+  }
+  
+  // Fallback: format the field key as a readable label
+  // e.g., 'assignedTo' -> 'Assigned To', 'do_not_contact' -> 'Do Not Contact'
+  return fieldKey
+    .replace(/_/g, ' ')
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^\w/, c => c.toUpperCase())
+    .trim();
+};
+
+/**
+ * Handle click on a suggested filter chip.
+ * Opens the filter configuration UI for the selected field.
+ * 
+ * IMPORTANT: This does NOT apply the filter automatically.
+ * It only opens the filter dropdown so the user can select a value.
+ * 
+ * @param fieldKey - The field key to configure
+ */
+const handleSuggestedFilterClick = (fieldKey) => {
+  // Find the filter in filterConfig
+  const filterIndex = props.filterConfig?.findIndex(f => f.key === fieldKey);
+  
+  if (filterIndex === -1 || filterIndex === undefined) {
+    console.warn(`[ListView] Suggested filter "${fieldKey}" not found in filterConfig`);
+    return;
+  }
+  
+  // Focus the filter dropdown to open it
+  // The filter dropdowns are rendered with data-filter-key attribute
+  // We use nextTick to ensure DOM is ready
+  nextTick(() => {
+    const filterButton = document.querySelector(`[data-filter-key="${fieldKey}"] button`);
+    if (filterButton) {
+      filterButton.click();
+    }
+  });
 };
 
 // Handle stat click (works for all modules with statsConfig)

@@ -87,6 +87,7 @@
 import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import { XMarkIcon } from '@heroicons/vue/24/outline';
 import GenericEventCreateSurface from './GenericEventCreateSurface.vue';
+import { useTabs } from '@/composables/useTabs';
 
 const props = defineProps({
   isOpen: {
@@ -101,11 +102,32 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'saved']);
 
+const { openTab } = useTabs();
+
 const handleClose = () => {
   emit('close');
 };
 
 const handleCreated = (event: any) => {
+  // Open the saved event in a new tab
+  if (event) {
+    const eventId = event.eventId || event._id;
+    if (eventId) {
+      const eventTitle = event.eventName || event.title || 'Event';
+      openTab(`/events/${eventId}`, {
+        title: eventTitle,
+        icon: '📅'
+      });
+    }
+  }
+  
+  // Dispatch global event to refresh calendar/list views
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('litedesk:event-created', {
+      detail: { event }
+    }));
+  }
+  
   emit('saved', event);
   handleClose();
 };

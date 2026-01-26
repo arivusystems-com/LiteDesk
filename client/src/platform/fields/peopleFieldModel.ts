@@ -40,61 +40,62 @@
  * ============================================================================
  */
 
+import type {
+  BaseFieldMetadata,
+  BaseFieldOwner,
+  BaseFieldIntent,
+  BaseFieldScope,
+  BaseFilterType,
+} from './BaseFieldModel';
+import { validateBaseFieldMetadata } from './BaseFieldModel';
+
+// =============================================================================
+// PEOPLE-SPECIFIC TYPE ALIASES (for backward compatibility)
+// =============================================================================
+
 /**
- * Field metadata structure
+ * Field ownership classification for People.
+ * @deprecated Use BaseFieldOwner from BaseFieldModel.ts
  */
-export type FieldOwner = 'core' | 'participation' | 'system';
+export type FieldOwner = BaseFieldOwner;
+
+/**
+ * Field intent classification for People.
+ * People module uses 'identity' for core fields instead of 'primary'.
+ */
 export type FieldIntent = 'identity' | 'state' | 'detail' | 'system';
-export type FieldScope = 'CORE' | 'SALES' | string; // CORE = platform, SALES = Sales app, future: other apps
 
-export type FilterType = 'text' | 'select' | 'multi-select' | 'boolean' | 'user' | 'entity' | 'date';
+/**
+ * Field scope classification for People.
+ * @deprecated Use BaseFieldScope from BaseFieldModel.ts
+ */
+export type FieldScope = BaseFieldScope;
 
-export interface FieldMetadata {
-  owner: FieldOwner;
-  intent: FieldIntent; // Required for all fields (system fields use 'system')
-  fieldScope: FieldScope; // Required for all fields
-  editable: boolean; // Explicit editability flag
+/**
+ * Filter type classification for People.
+ * @deprecated Use BaseFilterType from BaseFieldModel.ts
+ */
+export type FilterType = BaseFilterType;
+
+// =============================================================================
+// PEOPLE FIELD METADATA INTERFACE
+// =============================================================================
+
+/**
+ * People-specific field metadata interface.
+ * Extends BaseFieldMetadata with People-specific intent types.
+ */
+export interface FieldMetadata extends Omit<BaseFieldMetadata, 'intent'> {
   /**
-   * Declarative app-level field requirement.
-   * 
-   * ⚠️ DECLARATIVE ONLY - This property declares expectation, not enforcement.
-   * 
-   * - Indicates which apps expect this field to be populated
-   * - Does NOT block creation or editing
-   * - Does NOT trigger validation errors
-   * - Will be used in future for warnings, momentum signals, and contextual enforcement
-   * 
-   * Only allowed on participation fields.
-   * Values must match the field's fieldScope.
+   * Field intent classification.
+   * People uses 'identity' for core fields (vs 'primary' in base model).
    */
-  requiredFor?: string[]; // Optional: array of app keys that require this field
-  /**
-   * Declarative creation-time visibility flag.
-   * 
-   * ⚠️ DECLARATIVE ONLY - This property controls creation-time visibility only.
-   * 
-   * - Indicates whether a field should be shown and editable at record creation time
-   * - Does NOT imply editability after creation
-   * - Does NOT imply requirement
-   * - Is NOT admin-configurable
-   * - Exists to prevent Quick Create leakage of system fields
-   * 
-   * Only allowed on system fields.
-   * Absence means "not allowed at creation".
-   * Core identity fields are implicitly allowed at creation (no need to declare).
-   */
-  allowOnCreate?: boolean; // Optional: allows field at creation time (system fields only)
-  
-  /**
-   * Filter metadata - schema-driven filter configuration
-   * 
-   * Controls whether and how a field appears as a filter in list views.
-   * Default: filterable = false (fields are NOT filterable by default)
-   */
-  filterable?: boolean; // Optional: whether this field can be used as a filter
-  filterType?: FilterType; // Optional: type of filter UI to render
-  filterPriority?: number; // Optional: sort order for filters (lower = higher priority, default visible filters are top N)
+  intent: FieldIntent;
 }
+
+// =============================================================================
+// FIELD METADATA DEFINITIONS
+// =============================================================================
 
 /**
  * Field metadata map - single source of truth
@@ -159,6 +160,12 @@ export const PEOPLE_FIELD_METADATA: Record<string, FieldMetadata> = {
     editable: false,
   },
   attachments: {
+    owner: 'system',
+    intent: 'system',
+    fieldScope: 'CORE',
+    editable: false,
+  },
+  derivedStatus: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
@@ -319,135 +326,40 @@ export const PEOPLE_FIELD_METADATA: Record<string, FieldMetadata> = {
   },
 };
 
-/**
- * ============================================================================
- * VALIDATION & GUARDRAILS
- * ============================================================================
- */
+// =============================================================================
+// VALIDATION & GUARDRAILS
+// =============================================================================
 
 /**
- * Validates field metadata for correctness
- * Throws if invalid combinations are detected
+ * Validates People-specific field metadata for correctness.
+ * Extends base validation with People-specific rules.
+ * Throws if invalid combinations are detected.
  */
-function validateFieldMetadata(fieldName: string, metadata: FieldMetadata): void {
-  const { owner, intent, fieldScope, editable, requiredFor, allowOnCreate } = metadata;
+function validatePeopleFieldMetadata(fieldName: string, metadata: FieldMetadata): void {
+  // Run base validation first (cast to BaseFieldMetadata for compatibility)
+  validateBaseFieldMetadata(fieldName, metadata as unknown as BaseFieldMetadata);
 
-  // All fields must have explicit intent
-  if (!intent) {
-    throw new Error(
-      `Field "${fieldName}": All fields must have explicit intent`
-    );
-  }
+  const { owner, intent, allowOnCreate } = metadata;
 
-  // All fields must have explicit fieldScope
-  if (!fieldScope) {
-    throw new Error(
-      `Field "${fieldName}": All fields must have explicit fieldScope`
-    );
-  }
-
-  // All fields must have explicit editable flag
-  if (typeof editable !== 'boolean') {
-    throw new Error(
-      `Field "${fieldName}": All fields must have explicit editable flag (boolean)`
-    );
-  }
-
-  // System fields must use 'system' intent
-  if (owner === 'system' && intent !== 'system') {
-    throw new Error(
-      `Field "${fieldName}": System fields must have intent: 'system'. Found: ${intent}`
-    );
-  }
-
-  // System fields must have fieldScope: 'CORE'
-  if (owner === 'system' && fieldScope !== 'CORE') {
-    throw new Error(
-      `Field "${fieldName}": System fields must have fieldScope: 'CORE'. Found: ${fieldScope}`
-    );
-  }
-
-  // System fields must not be editable (unless allowOnCreate is true)
-  if (owner === 'system' && editable !== false && allowOnCreate !== true) {
-    throw new Error(
-      `Field "${fieldName}": System fields must have editable: false (unless allowOnCreate: true)`
-    );
-  }
-
-  // Core fields must have fieldScope: 'CORE'
-  if (owner === 'core' && fieldScope !== 'CORE') {
-    throw new Error(
-      `Field "${fieldName}": Core fields must have fieldScope: 'CORE'. Found: ${fieldScope}`
-    );
-  }
-
-  // Core fields must have intent: 'identity'
+  // People-specific: Core fields must have intent: 'identity'
   if (owner === 'core' && intent !== 'identity') {
     throw new Error(
-      `Field "${fieldName}": Core fields must have intent: 'identity'. Found: ${intent}`
+      `Field "${fieldName}": People core fields must have intent: 'identity'. Found: ${intent}`
     );
   }
 
-  // Participation fields must have app-scoped fieldScope (not 'CORE')
-  if (owner === 'participation' && fieldScope === 'CORE') {
-    throw new Error(
-      `Field "${fieldName}": Participation fields must have app-scoped fieldScope (e.g. 'SALES'), not 'CORE'`
-    );
-  }
-
-  // Participation fields must have intent: 'state' or 'detail'
+  // People-specific: Participation fields must have intent: 'state' or 'detail'
   if (owner === 'participation' && intent !== 'state' && intent !== 'detail') {
     throw new Error(
-      `Field "${fieldName}": Participation fields must have intent: 'state' or 'detail'. Found: ${intent}`
+      `Field "${fieldName}": People participation fields must have intent: 'state' or 'detail'. Found: ${intent}`
     );
   }
 
-  // ==========================================================================
-  // allowOnCreate validation (metadata structure only, NOT runtime enforcement)
-  // ==========================================================================
-
-  // allowOnCreate is only allowed on system fields
+  // People-specific: allowOnCreate is only allowed on system fields
   if (allowOnCreate !== undefined && owner !== 'system') {
     throw new Error(
       `Field "${fieldName}": allowOnCreate is only allowed on system fields. Found on: ${owner}`
     );
-  }
-
-  // ==========================================================================
-  // requiredFor validation (metadata structure only, NOT field value enforcement)
-  // ==========================================================================
-
-  // requiredFor is only allowed on participation fields
-  if (requiredFor !== undefined && owner !== 'participation') {
-    throw new Error(
-      `Field "${fieldName}": requiredFor is only allowed on participation fields. Found on: ${owner}`
-    );
-  }
-
-  // If requiredFor is present, it must be a non-empty array
-  if (requiredFor !== undefined) {
-    if (!Array.isArray(requiredFor) || requiredFor.length === 0) {
-      throw new Error(
-        `Field "${fieldName}": requiredFor must be a non-empty array of app keys`
-      );
-    }
-
-    // All values in requiredFor must match the field's fieldScope
-    // (A field can only be required for apps that own it)
-    if (owner === 'participation' && !requiredFor.includes(fieldScope)) {
-      throw new Error(
-        `Field "${fieldName}": requiredFor must include the field's fieldScope "${fieldScope}". Found: [${requiredFor.join(', ')}]`
-      );
-    }
-
-    // Ensure all values in requiredFor are strings
-    for (const appKey of requiredFor) {
-      if (typeof appKey !== 'string' || !appKey.trim()) {
-        throw new Error(
-          `Field "${fieldName}": requiredFor must contain only non-empty string app keys. Found invalid value: ${appKey}`
-        );
-      }
-    }
   }
 }
 
@@ -457,21 +369,16 @@ function validateFieldMetadata(fieldName: string, metadata: FieldMetadata): void
  */
 function validateAllMetadata(): void {
   for (const [fieldName, metadata] of Object.entries(PEOPLE_FIELD_METADATA)) {
-    validateFieldMetadata(fieldName, metadata);
+    validatePeopleFieldMetadata(fieldName, metadata);
   }
 }
 
 // Run validation on module load
 validateAllMetadata();
 
-/**
- * ============================================================================
- * HELPER UTILITIES
- * ============================================================================
- * 
- * These functions derive behavior from metadata only.
- * No hardcoded field names.
- */
+// =============================================================================
+// HELPER UTILITIES
+// =============================================================================
 
 /**
  * Get metadata for a field
@@ -543,4 +450,3 @@ export function getDetailFields(appKey: string): string[] {
     )
     .map(([fieldName]) => fieldName);
 }
-

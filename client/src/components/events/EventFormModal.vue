@@ -453,6 +453,7 @@ import apiClient from '@/utils/apiClient';
 import dateUtils from '@/utils/dateUtils';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
 import { useAuthStore } from '@/stores/auth';
+import { useTabs } from '@/composables/useTabs';
 import { useProjectionCreate } from '@/composables/useProjectionCreate';
 import { isAuditEventType, filterNonAuditEventTypes, NON_AUDIT_EVENT_TYPES } from '@/utils/eventUtils';
 
@@ -470,6 +471,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'saved']);
 
 const authStore = useAuthStore();
+const { openTab, activeTab } = useTabs();
 const currentUser = computed(() => authStore.user || {});
 
 const saving = ref(false);
@@ -1141,6 +1143,35 @@ const handleSubmit = async (e) => {
     
     if (response.success) {
       emit('saved', response.data);
+      
+      // Open the saved event in a new tab
+      if (response.data) {
+        const eventId = response.data.eventId || response.data._id;
+        if (eventId) {
+          const eventTitle = response.data.eventName || response.data.title || 'Event';
+          const recordPath = `/events/${eventId}`;
+          
+          // Check if we're already viewing this event
+          const currentPath = activeTab.value?.path || '';
+          const isAlreadyViewing = currentPath === recordPath || currentPath.includes(`/${eventId}`);
+          
+          // Open tab for new events, or if not already viewing for edits
+          if (!isEditing.value || !isAlreadyViewing) {
+            openTab(recordPath, {
+              title: eventTitle,
+              icon: '📅'
+            });
+          }
+        }
+      }
+      
+      // Dispatch global event to refresh calendar/list views
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('litedesk:event-created', {
+          detail: { event: response.data }
+        }));
+      }
+      
       close();
     } else {
       console.error('Event save failed:', response);

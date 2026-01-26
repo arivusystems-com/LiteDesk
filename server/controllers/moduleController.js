@@ -2091,6 +2091,14 @@ exports.listModules = async (req, res) => {
                     console.log('📋 Tasks: Applying canonical default Quick Create:', finalQuickCreate);
                 }
                 
+                // ARCHITECTURE NOTE: Items Quick Create default: item_name (required), item_type, category, selling_price
+                // If Items quickCreate is empty, apply canonical default
+                // See: client/src/platform/fields/itemFieldModel.ts getItemQuickCreateFields()
+                if (sys.key === 'items' && (!finalQuickCreate || finalQuickCreate.length === 0)) {
+                    finalQuickCreate = ['item_name', 'item_type', 'category', 'selling_price'];
+                    console.log('📋 Items: Applying canonical default Quick Create:', finalQuickCreate);
+                }
+                
                 console.log('✅ Final quickCreate:', {
                     value: finalQuickCreate,
                     length: finalQuickCreate?.length || 0,
@@ -2368,6 +2376,13 @@ exports.listModules = async (req, res) => {
                 // See: docs/architecture/task-settings.md Section 3.5
                 if (sys.key === 'tasks') {
                     defaultQuickCreate = ['title', 'dueDate', 'priority', 'assignedTo', 'relatedTo'];
+                }
+                
+                // ARCHITECTURE NOTE: Items Quick Create default: item_name (required), item_type, category, selling_price
+                // Essential fields for fast item creation. Other fields (inventory, tax, relationships) excluded.
+                // See: client/src/platform/fields/itemFieldModel.ts getItemQuickCreateFields()
+                if (sys.key === 'items') {
+                    defaultQuickCreate = ['item_name', 'item_type', 'category', 'selling_price'];
                 }
 
                 merged.push({ 

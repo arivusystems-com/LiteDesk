@@ -386,6 +386,49 @@ function applyProjectionFilter({ appKey, moduleKey, baseQuery = {}, projectionMe
       }
     }
 
+    // Check if baseQuery has $or from search or other filters (but not from typeField handling above)
+    // If so, we need to combine it with projectionFilter using $and
+    if (baseQuery.$or && !baseQuery[typeField]) {
+      // baseQuery has $or (likely from search) but no typeField filter
+      // Combine search $or with projection $or using $and
+      if (baseQuery.$and && Array.isArray(baseQuery.$and)) {
+        // If $and already exists, add search $or and projection filter to it
+        const combinedQuery = {
+          ...baseQuery,
+          $and: [
+            ...baseQuery.$and,
+            { $or: baseQuery.$or },
+            projectionFilter
+          ]
+        };
+        delete combinedQuery.$or;
+        return combinedQuery;
+      } else {
+        // Create new $and to combine search $or with projection filter
+        const combinedQuery = {
+          ...baseQuery,
+          $and: [
+            { $or: baseQuery.$or },
+            projectionFilter
+          ]
+        };
+        delete combinedQuery.$or;
+        return combinedQuery;
+      }
+    }
+
+    // Check if baseQuery already has $and (from previous combinations)
+    // If so, add projectionFilter to the $and array
+    if (baseQuery.$and && Array.isArray(baseQuery.$and)) {
+      return {
+        ...baseQuery,
+        $and: [
+          ...baseQuery.$and,
+          projectionFilter
+        ]
+      };
+    }
+
     // Apply projection filter to baseQuery
     const filteredQuery = {
       ...baseQuery,
@@ -396,6 +439,17 @@ function applyProjectionFilter({ appKey, moduleKey, baseQuery = {}, projectionMe
   } catch (error) {
     // SAFETY: Never throw - always return baseQuery unchanged on error
     console.error('[appProjectionQuery] Error applying projection filter:', error);
+    console.error('[appProjectionQuery] Error stack:', error.stack);
+    try {
+      console.error('[appProjectionQuery] baseQuery:', JSON.stringify(baseQuery, null, 2));
+      if (typeof projectionFilter !== 'undefined') {
+        console.error('[appProjectionQuery] projectionFilter:', JSON.stringify(projectionFilter, null, 2));
+      } else {
+        console.error('[appProjectionQuery] projectionFilter: not defined yet');
+      }
+    } catch (logError) {
+      console.error('[appProjectionQuery] Error logging debug info:', logError);
+    }
     return baseQuery;
   }
 }
