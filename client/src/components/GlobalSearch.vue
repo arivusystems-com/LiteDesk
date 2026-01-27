@@ -639,8 +639,13 @@ const handlePeopleDrawerClose = () => {
 
 const handlePeopleDrawerSaved = (person: any) => {
   showPeopleDrawer.value = false;
-  // Optionally navigate to the created person if needed
-  // For now, just close the drawer
+  
+  // Dispatch global event to refresh list views
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('litedesk:record-created', {
+      detail: { moduleKey: 'people', record: person }
+    }));
+  }
 };
 
 /**
@@ -1248,6 +1253,13 @@ const handleCreateDrawerSaved = async (savedRecord?: any) => {
   // ARCHITECTURAL INTENT: Organization Quick Create handles auto-linking internally
   // This handler is for other modules or fallback cases
   const moduleKey = createDrawerModuleKey.value;
+  
+  // Dispatch global event to refresh list views for all modules
+  if (typeof window !== 'undefined' && savedRecord) {
+    window.dispatchEvent(new CustomEvent('litedesk:record-created', {
+      detail: { moduleKey, record: savedRecord }
+    }));
+  }
   
   // If we have auto-link context and a saved record, auto-link it
   if (createDrawerAutoLinkContext.value && savedRecord?._id) {

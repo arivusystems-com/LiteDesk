@@ -106,6 +106,10 @@ const props = defineProps({
   fieldsOverride: {
     type: Array,
     default: null // STEP 3: Optional field list override (bypasses module config)
+  },
+  moduleOverride: {
+    type: Object,
+    default: null // When provided, use this module instead of fetching (skips API call)
   }
 });
 
@@ -715,8 +719,26 @@ watch(() => props.formData, (newData) => {
 }, { deep: true });
 
 
+function applyModule(mod) {
+  if (!mod) return;
+  moduleDefinition.value = mod;
+  loading.value = false;
+  error.value = null;
+  if (!mod.quickCreate) mod.quickCreate = [];
+  if (!mod.quickCreateLayout) mod.quickCreateLayout = { version: 1, rows: [] };
+  emit('ready', mod);
+}
+
 // Fetch module definition
 const fetchModule = async () => {
+  if (props.moduleOverride) {
+    console.log('🔍 [DynamicForm] Using moduleOverride (skip fetch):', {
+      moduleKey: props.moduleOverride?.key,
+      quickCreateLength: props.moduleOverride?.quickCreate?.length
+    });
+    applyModule(props.moduleOverride);
+    return;
+  }
   loading.value = true;
   error.value = null;
   try {
@@ -842,8 +864,7 @@ const fetchModule = async () => {
           });
         }
         
-        moduleDefinition.value = targetModule;
-        emit('ready', targetModule);
+        applyModule(targetModule);
       } else {
         error.value = `Module "${props.moduleKey}" not found`;
         console.error('Module not found:', props.moduleKey, 'Available modules:', data.data.map(m => m.key));
@@ -864,11 +885,20 @@ onMounted(() => {
     moduleKey: props.moduleKey,
     quickCreateMode: props.quickCreateMode,
     showAllFields: props.showAllFields,
-    formDataKeys: Object.keys(props.formData || {})
+    formDataKeys: Object.keys(props.formData || {}),
+    hasModuleOverride: !!props.moduleOverride
   });
   fetchModule();
   localFormData.value = { ...props.formData };
 });
+
+// When moduleOverride is provided async (e.g. drawer fetches then passes), apply it
+watch(() => props.moduleOverride, (ov) => {
+  if (ov) {
+    console.log('🔍 [DynamicForm] moduleOverride updated, applying:', { key: ov.key, quickCreateLength: ov.quickCreate?.length });
+    applyModule(ov);
+  }
+}, { immediate: false });
 
 // Watch props to debug
 watch(() => [props.quickCreateMode, props.showAllFields], ([quickCreateMode, showAllFields]) => {

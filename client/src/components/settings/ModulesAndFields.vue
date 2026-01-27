@@ -5474,6 +5474,7 @@ import {
 } from '@/platform/forms/formTypeRegistry';
 import {
   PEOPLE_FIELD_METADATA,
+  PEOPLE_QUICK_CREATE_DEFAULT,
   getFieldMetadata,
   getCoreIdentityFields,
   getParticipationFields,
@@ -8218,67 +8219,20 @@ const fetchModules = async () => {
           }
         }
         
-        // For People module: enforce default configuration when no saved config exists
+        // For People module: use canonical default when no saved config (kept in sync with drawer / GET people/quick-create)
         if (isPeopleModule.value) {
-          // If no saved config exists, initialize with default eligible fields and order
           if (!quickKeysInit || quickKeysInit.length === 0) {
-            // Get all eligible fields from metadata (core identity + system fields with allowOnCreate)
-            const allEligibleKeysFromMetadata = [];
-            const allFieldKeys = Object.keys(PEOPLE_FIELD_METADATA);
-            
-            for (const key of allFieldKeys) {
+            const editKeys = new Set((editFields.value || []).map(f => (f.key || '').toLowerCase()));
+            quickKeysInit = PEOPLE_QUICK_CREATE_DEFAULT.filter(key => {
+              if (!key) return false;
               try {
-                if (isFieldEligibleForQuickCreate(key)) {
-                  allEligibleKeysFromMetadata.push(key);
-                }
-              } catch (err) {
-                console.warn(`Skipping field "${key}" for default Quick Create:`, err.message);
+                if (!isFieldEligibleForQuickCreate(key)) return false;
+              } catch {
+                return false;
               }
-            }
-            
-            // Get fields that exist in editFields (module configuration)
-            const eligibleKeysInEditFields = editFields.value
-              .filter(f => f.key && isFieldEligibleForQuickCreate(f.key))
-              .map(f => f.key);
-            
-            // Combine: fields from editFields + eligible system fields from metadata (like assignedTo)
-            // This ensures system fields with allowOnCreate are included even if not in editFields yet
-            const allEligibleKeys = Array.from(new Set([
-              ...eligibleKeysInEditFields,
-              ...allEligibleKeysFromMetadata.filter(key => {
-                // Include system fields with allowOnCreate even if not in editFields
-                try {
-                  const metadata = getFieldMetadata(key);
-                  return metadata.owner === 'system' && metadata.allowOnCreate === true;
-                } catch {
-                  return false;
-                }
-              })
-            ]));
-            
-            // Default field order (only include fields that are eligible)
-            const defaultOrder = [
-              'first_name',
-              'last_name',
-              'email',
-              'phone',
-              'mobile',
-              'organization',
-              'do_not_contact',
-              'tags',
-              'assignedTo'
-            ];
-            
-            // Filter default order to only include eligible fields
-            const orderedDefaults = defaultOrder.filter(key => allEligibleKeys.includes(key));
-            
-            // Add any remaining eligible fields that aren't in the default order
-            const remainingFields = allEligibleKeys.filter(key => !orderedDefaults.includes(key));
-            
-            // Combine: ordered defaults first, then remaining fields
-            quickKeysInit = [...orderedDefaults, ...remainingFields];
+              return editKeys.has(key.toLowerCase());
+            });
           } else {
-            // Config exists - filter to only eligible fields (preserve admin customizations)
             quickKeysInit = quickKeysInit.filter(key => {
               try {
                 return isFieldEligibleForQuickCreate(key);
@@ -8840,10 +8794,23 @@ const selectModule = (mod, preferFieldKey = null) => {
   hydratePipelineSettingsFromModule(mod);
   // Choose selection source based on mode: advanced -> layout, simple -> quickCreate
   const layoutKeys = extractLayoutKeys(quickLayout.value);
-  // Use quickCreate from module definition - NO hardcoding, all config comes from Settings UI
   let quickKeys = mod.quickCreate || [];
-  
-  // fallback to locally stored quick selection if server returns empty (for other modules)
+
+  // People: use canonical default when no saved config (kept in sync with drawer / GET people/quick-create)
+  if (mod.key?.toLowerCase() === 'people' && (!quickKeys || quickKeys.length === 0)) {
+    const editKeys = new Set((editFields.value || []).map(f => (f.key || '').toLowerCase()));
+    quickKeys = PEOPLE_QUICK_CREATE_DEFAULT.filter(key => {
+      if (!key) return false;
+      try {
+        if (!isFieldEligibleForQuickCreate(key)) return false;
+      } catch {
+        return false;
+      }
+      return editKeys.has(key.toLowerCase());
+    });
+  }
+
+  // Fallback to locally stored quick selection if server returns empty (for other modules)
   if (!layoutKeys.length && !quickKeys.length) {
     try {
       const cached = JSON.parse(localStorage.getItem(`litedesk-modfields-quick-${mod.key}`) || '[]');
@@ -8853,7 +8820,6 @@ const selectModule = (mod, preferFieldKey = null) => {
   const useLayout = false; // Advanced mode hidden for now // (quickMode.value === 'advanced' && layoutKeys.length > 0);
   const baseKeys = useLayout ? layoutKeys : quickKeys;
   // Normalize baseKeys to match actual field keys in editFields (case-insensitive match)
-  // This ensures keys like "event-type" or "eventType" both match the actual field key
   const normalizedBaseKeys = baseKeys.map(key => {
     if (!key) return null;
     // Try exact match first

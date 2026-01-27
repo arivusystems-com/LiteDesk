@@ -90,8 +90,17 @@ class UICompositionService {
       });
 
       // Phase 0F: Use access resolution service to filter apps
-      // Owner sees all enabled apps (ADMIN access), non-owners see only apps with EXECUTION access
       // CONTROL_PLANE is explicitly excluded (platform-only, never shown to tenants)
+      //
+      // Short-circuit: organization owners should see all enabled apps in the switcher.
+      // Detailed per-app access (roles, subscriptions) is still enforced deeper in each app.
+      if (user && (user.isOwner === true || user.role === 'owner')) {
+        console.log(`[UIComposition] Owner detected (isOwner: ${user.isOwner}, role: ${user.role}), returning all ${uiApps.length} enabled apps`);
+        return uiApps.filter(app => app.appKey.toUpperCase() !== 'CONTROL_PLANE');
+      }
+      
+      console.log(`[UIComposition] Non-owner user, checking access for ${uiApps.length} apps`);
+
       const accessibleApps = [];
       for (const app of uiApps) {
         // Skip CONTROL_PLANE - it's platform-only, never shown to tenants
@@ -137,10 +146,34 @@ class UICompositionService {
     try {
       const appKeyLower = appKey.toLowerCase();
 
-      // Get all module definitions for this app
-      const moduleDefinitions = await ModuleDefinition.find({
-        appKey: appKeyLower
+      // Get module definitions for this app
+      // Priority: platform-level modules (organizationId: null) first, then organization-specific
+      // Note: appKey filter already excludes platform modules (appKey: 'platform')
+      const platformModules = await ModuleDefinition.find({
+        appKey: appKeyLower,
+        organizationId: null // Platform-level modules
       });
+      
+      const orgSpecificModules = await ModuleDefinition.find({
+        appKey: appKeyLower,
+        organizationId: organizationId // Organization-specific modules for this tenant
+      });
+      
+      // Combine: prefer platform-level, but include org-specific if platform doesn't exist
+      // Use a Map to deduplicate by moduleKey (platform takes precedence)
+      const moduleMap = new Map();
+      
+      // First add organization-specific modules
+      orgSpecificModules.forEach(module => {
+        moduleMap.set(module.moduleKey, module);
+      });
+      
+      // Then add platform modules (will overwrite org-specific if same moduleKey)
+      platformModules.forEach(module => {
+        moduleMap.set(module.moduleKey, module);
+      });
+      
+      const moduleDefinitions = Array.from(moduleMap.values());
 
       // Get tenant module configurations
       const tenantConfigs = await TenantModuleConfiguration.find({
@@ -157,8 +190,44 @@ class UICompositionService {
 
       // Compose UI metadata for each enabled module
       const uiModules = [];
+      const seenModuleKeys = new Set(); // Track seen moduleKeys to prevent duplicates
 
       for (const moduleDef of moduleDefinitions) {
+        // Skip if we've already processed this moduleKey (deduplication)
+        if (seenModuleKeys.has(moduleDef.moduleKey)) {
+          console.warn(`[UIComposition] Duplicate moduleKey ${moduleDef.moduleKey} for app ${appKey}, skipping duplicate`);
+          continue;
+        }
+
+        // If requesting platform modules (for /ui/entities endpoint), include them
+        // Otherwise, skip platform modules - they belong in Core Modules section, not app navigation
+        const isPlatformRequest = appKeyLower === 'platform';
+        
+        if (!isPlatformRequest) {
+          // Skip platform modules - they belong in Core Modules section, not app navigation
+          if (moduleDef.appKey && moduleDef.appKey.toLowerCase() === 'platform') {
+            continue;
+          }
+
+          // Skip core platform entities - these should never appear in app navigation
+          // Core entities: people, organizations, tasks, events, items, forms
+          const coreEntityKeys = ['people', 'organizations', 'tasks', 'events', 'items', 'forms'];
+          if (coreEntityKeys.includes(moduleDef.moduleKey?.toLowerCase())) {
+            console.warn(`[UIComposition] Skipping core entity ${moduleDef.moduleKey} from app ${appKey} - it belongs in Core Modules section`);
+            continue;
+          }
+
+          // Skip modules explicitly marked to exclude from apps (navigation intent: Entities section only)
+          if (moduleDef.ui && moduleDef.ui.excludeFromApps === true) {
+            continue;
+          }
+
+          // Skip modules marked as navigation entities (they belong in Entities section, not Apps)
+          if (moduleDef.ui && moduleDef.ui.navigationEntity === true) {
+            continue;
+          }
+        }
+
         const tenantConfig = tenantConfigMap[moduleDef.moduleKey];
 
         // Skip if tenant has explicitly disabled this module
@@ -192,6 +261,7 @@ class UICompositionService {
         };
 
         uiModules.push(uiModule);
+        seenModuleKeys.add(moduleDef.moduleKey); // Mark as seen
       }
 
       // Sort by sidebarOrder

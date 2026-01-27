@@ -404,6 +404,18 @@ export function isSystemField(fieldName: string): boolean {
 }
 
 /**
+ * Canonical People Quick Create default. Kept in sync with server (moduleController.js).
+ * Used by Settings → People → Quick Create and Create people drawer when no config saved.
+ */
+export const PEOPLE_QUICK_CREATE_DEFAULT = [
+  'first_name',
+  'last_name',
+  'email',
+  'phone',
+  'organization',
+];
+
+/**
  * Get all core identity fields
  */
 export function getCoreIdentityFields(): string[] {

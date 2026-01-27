@@ -153,19 +153,29 @@
                           <!-- 
                             ARCHITECTURAL INTENT: Quick Create Mode
                             - Render ONLY fields defined in Settings → People → Quick Create
-                            - Fields are fully settings-driven
+                            - Drawer fetches people module with context=platform when open, passes as moduleOverride
+                            - Ensures correct quickCreate config regardless of route/app context
                           -->
-                          <!-- STEP 2: Drive DynamicForm props from formMode -->
-                          <DynamicForm
-                            moduleKey="people"
-                            :formData="formData"
-                            :errors="errors"
-                            :quickCreateMode="formMode === 'quick'"
-                            :showAllFields="formMode === 'full'"
-                            :fieldsOverride="null"
-                            @update:formData="updateFormData"
-                            @ready="onFormReady"
-                          />
+                          <div v-if="peopleModuleLoading" class="flex justify-center py-12">
+                            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+                          </div>
+                          <template v-else-if="peopleModuleOverride">
+                            <DynamicForm
+                              moduleKey="people"
+                              :formData="formData"
+                              :errors="errors"
+                              :quickCreateMode="true"
+                              :showAllFields="false"
+                              :fieldsOverride="quickCreateFieldsOverride"
+                              :moduleOverride="peopleModuleOverride"
+                              context="platform"
+                              @update:formData="updateFormData"
+                              @ready="onFormReady"
+                            />
+                          </template>
+                          <p v-else class="text-sm text-amber-600 dark:text-amber-400">
+                            Could not load People module. Please try again.
+                          </p>
                         </template>
 
                         <!-- FULL FORM MODE: Intent-gated progressive disclosure -->
@@ -425,6 +435,34 @@ watch(mode, (newMode) => {
   formMode.value = newMode;
 }, { immediate: true });
 const intent = ref<CreatePersonIntentContext | null>(props.intentContext || null);
+
+// People module fetched with context=platform when drawer opens (ensures Settings Quick Create always used)
+const peopleModuleOverride = ref<any>(null);
+const peopleModuleLoading = ref(false);
+
+// Fetch people module from quick-create endpoint (single source: Settings → People → Quick Create).
+watch(() => props.isOpen, async (open) => {
+  if (!open) {
+    peopleModuleOverride.value = null;
+    peopleModuleLoading.value = false;
+    return;
+  }
+  peopleModuleLoading.value = true;
+  peopleModuleOverride.value = null;
+  try {
+    const res = await apiClient.get('/modules/people/quick-create');
+    if (res?.success && res?.data) {
+      const mod = res.data;
+      if (!mod.quickCreate) mod.quickCreate = [];
+      if (!mod.quickCreateLayout) mod.quickCreateLayout = { version: 1, rows: [] };
+      peopleModuleOverride.value = mod;
+    }
+  } catch (e) {
+    console.error('[PeopleQuickCreateDrawer] Failed to fetch people module:', e);
+  } finally {
+    peopleModuleLoading.value = false;
+  }
+}, { immediate: true });
 
 // Sync intent from props if provided
 watch(() => props.intentContext, (newIntent) => {
@@ -721,6 +759,13 @@ const QUICK_CREATE_FIELDS = computed(() => {
   return (moduleDefinition.value.quickCreate as any[]).map((f: any) => {
     return typeof f === 'string' ? f : (f.key || f);
   });
+});
+
+// Use only Settings → People → Quick Create; no client-side default.
+const quickCreateFieldsOverride = computed(() => {
+  const mod = peopleModuleOverride.value;
+  if (!mod?.quickCreate?.length) return null;
+  return (mod.quickCreate as any[]).map((f: any) => (typeof f === 'string' ? f : (f?.key ?? f)));
 });
 
 // STEP 2: Core intent fields for full form (core identity fields)
@@ -1638,6 +1683,14 @@ const handleSubmit = async () => {
         }
         
         emit('saved', createdPerson);
+        
+        // Dispatch global event to refresh list views
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('litedesk:record-created', {
+            detail: { moduleKey: 'people', record: createdPerson }
+          }));
+        }
+        
         saving.value = false; // Reset saving state before closing
         closeDrawer();
       } else {
@@ -1733,6 +1786,14 @@ const handleSubmit = async () => {
         }
         
         emit('saved', createdPerson);
+        
+        // Dispatch global event to refresh list views
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('litedesk:record-created', {
+            detail: { moduleKey: 'people', record: createdPerson }
+          }));
+        }
+        
         saving.value = false; // Reset saving state before closing
         closeDrawer();
       } else {

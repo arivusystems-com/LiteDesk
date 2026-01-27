@@ -40,29 +40,37 @@ async function initializeSales(organizationId) {
 
         // Initialize People Module Definition with dependencies
         try {
+            console.log(`[SalesInitializer] Starting People module initialization for organization: ${organizationId}`);
             await updatePeopleModuleFields(organizationId);
             results.initialized.push('People module');
             console.log(`[SalesInitializer] ✅ People module initialized for organization: ${organizationId}`);
         } catch (moduleError) {
             results.errors.push({
                 module: 'People',
-                error: moduleError.message
+                error: moduleError.message,
+                stack: moduleError.stack
             });
-            console.error(`[SalesInitializer] ❌ Failed to initialize People module:`, moduleError.message);
+            console.error(`[SalesInitializer] ❌ Failed to initialize People module for organization: ${organizationId}`);
+            console.error(`[SalesInitializer] Error message:`, moduleError.message);
+            console.error(`[SalesInitializer] Error stack:`, moduleError.stack);
             // Continue with other initializations even if one fails
         }
 
         // Initialize Pipeline Entity Module Definition with standardized fields
         try {
+            console.log(`[SalesInitializer] Starting Pipeline Entity module initialization for organization: ${organizationId}`);
             await updateDealsModuleFields(organizationId);
             results.initialized.push('Pipeline Entity module');
             console.log(`[SalesInitializer] ✅ Pipeline Entity module initialized for organization: ${organizationId}`);
         } catch (moduleError) {
             results.errors.push({
                 module: 'Pipeline Entity',
-                error: moduleError.message
+                error: moduleError.message,
+                stack: moduleError.stack
             });
-            console.error(`[SalesInitializer] ❌ Failed to initialize Pipeline Entity module:`, moduleError.message);
+            console.error(`[SalesInitializer] ❌ Failed to initialize Pipeline Entity module for organization: ${organizationId}`);
+            console.error(`[SalesInitializer] Error message:`, moduleError.message);
+            console.error(`[SalesInitializer] Error stack:`, moduleError.stack);
             // Continue with other initializations even if one fails
         }
 
@@ -75,11 +83,14 @@ async function initializeSales(organizationId) {
 
         return results;
     } catch (error) {
-        console.error(`[SalesInitializer] ❌ Fatal error during Sales initialization:`, error);
+        console.error(`[SalesInitializer] ❌ Fatal error during Sales initialization for organization: ${organizationId}`);
+        console.error(`[SalesInitializer] Error message:`, error.message);
+        console.error(`[SalesInitializer] Error stack:`, error.stack);
         results.success = false;
         results.errors.push({
             module: 'General',
-            error: error.message
+            error: error.message,
+            stack: error.stack
         });
         throw error;
     }
@@ -97,12 +108,18 @@ async function isSalesInitialized(organizationId) {
         
         const peopleModule = await ModuleDefinition.findOne({
             organizationId,
-            key: 'people'
+            $or: [
+                { moduleKey: 'people' },
+                { key: 'people' } // Backward compatibility
+            ]
         });
 
         const dealsModule = await ModuleDefinition.findOne({
             organizationId,
-            key: 'deals'
+            $or: [
+                { moduleKey: 'deals' },
+                { key: 'deals' } // Backward compatibility
+            ]
         });
 
         return !!(peopleModule && dealsModule);

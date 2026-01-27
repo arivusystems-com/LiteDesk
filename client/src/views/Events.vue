@@ -789,6 +789,35 @@ watch(() => document.documentElement.classList.contains('dark'), (newVal) => {
   isDarkMode.value = newVal;
 }, { immediate: true });
 
+// Handle record creation events to refresh views
+const handleRecordCreated = (event) => {
+  const { moduleKey, record } = event.detail || {};
+  
+  // Only refresh if it's an events record
+  if (moduleKey === 'events') {
+    // Refresh calendar view if active
+    if (currentView.value === 'calendar') {
+      fetchCalendarEvents();
+    }
+    // Refresh list view
+    if (moduleListRef.value && moduleListRef.value.refresh) {
+      moduleListRef.value.refresh();
+    }
+  }
+};
+
+// Handle legacy event-created event
+const handleEventCreated = () => {
+  // Refresh calendar view if active
+  if (currentView.value === 'calendar') {
+    fetchCalendarEvents();
+  }
+  // Refresh list view
+  if (moduleListRef.value && moduleListRef.value.refresh) {
+    moduleListRef.value.refresh();
+  }
+};
+
 onMounted(() => {
   checkDarkMode();
   initializeView();
@@ -819,6 +848,20 @@ onMounted(() => {
     attributes: true,
     attributeFilter: ['class']
   });
+  
+  // Listen for record creation events
+  if (typeof window !== 'undefined') {
+    window.addEventListener('litedesk:record-created', handleRecordCreated);
+    window.addEventListener('litedesk:event-created', handleEventCreated);
+  }
+});
+
+onUnmounted(() => {
+  // Clean up event listeners
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('litedesk:record-created', handleRecordCreated);
+    window.removeEventListener('litedesk:event-created', handleEventCreated);
+  }
 });
 </script>
 

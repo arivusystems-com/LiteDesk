@@ -194,10 +194,27 @@ const loadQuickAccessApps = async () => {
         return appKeyUpper !== 'CONTROL_PLANE' && authStore.hasAppAccess(app.appKey);
       })
       .slice(0, 6) // Limit to 6 apps
-      .map(app => ({
-        ...app,
-        route: app.defaultRoute || getDefaultRouteForApp(app.appKey)
-      }));
+      .map(app => {
+        // Normalize defaultRoute to dashboard format if needed
+        let route = app.defaultRoute || getDefaultRouteForApp(app.appKey);
+        
+        // Convert legacy routes to standard dashboard format
+        if (route && !route.startsWith('/dashboard') && !route.startsWith('/audit') && !route.startsWith('/portal') && !route.startsWith('/helpdesk') && !route.startsWith('/projects')) {
+          const appKeyLower = app.appKey?.toLowerCase();
+          if (route.startsWith(`/${appKeyLower}/`)) {
+            // Convert /sales/people -> /dashboard/sales
+            route = `/dashboard/${appKeyLower}`;
+          } else if (route === `/${appKeyLower}`) {
+            // Convert /sales -> /dashboard/sales
+            route = `/dashboard/${appKeyLower}`;
+          }
+        }
+        
+        return {
+          ...app,
+          route
+        };
+      });
     
     quickAccessApps.value = appsWithAccess;
   } catch (error) {
@@ -210,7 +227,7 @@ const getDefaultRouteForApp = (appKey) => {
   const upperKey = appKey?.toUpperCase();
   switch (upperKey) {
     case 'SALES':
-      return '/dashboard';
+      return '/dashboard/sales';
     case 'HELPDESK':
       return '/helpdesk/cases';
     case 'PROJECTS':
@@ -288,7 +305,17 @@ const navigateToEvent = (event) => {
 };
 
 const navigateToApp = (app) => {
-  router.push(app.route);
+  // For Audit app, open in a new internal tab
+  // Other apps can navigate in the same tab or open in new tab as needed
+  const appKeyUpper = app.appKey?.toUpperCase();
+  if (appKeyUpper === 'AUDIT') {
+    openTab(app.route, {
+      title: app.name || 'Audit Dashboard',
+      icon: 'document'
+    });
+  } else {
+    router.push(app.route);
+  }
 };
 
 // Load all data

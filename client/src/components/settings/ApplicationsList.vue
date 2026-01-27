@@ -1,11 +1,19 @@
 <template>
   <div class="space-y-6">
     <!-- Header -->
-    <div>
-      <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Applications</h2>
-      <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-        Manage the business applications available to your organization
-      </p>
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Applications</h2>
+        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          Manage the business applications available to your organization
+        </p>
+      </div>
+      <button
+        @click="viewAppManagement"
+        class="px-4 py-2 text-sm font-medium text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/20 rounded-lg hover:bg-brand-100 dark:hover:bg-brand-900/30 transition-colors border border-brand-200 dark:border-brand-800"
+      >
+        Enable/Disable Apps
+      </button>
     </div>
 
     <!-- Loading State -->
@@ -161,6 +169,10 @@ const fetchApplications = async () => {
 
 const viewApplicationDetail = (appKey) => {
   router.push({ path: '/settings', query: { tab: 'applications', appKey: appKey } });
+};
+
+const viewAppManagement = () => {
+  router.push({ path: '/settings', query: { tab: 'applications', view: 'management' } });
 };
 
 const getStatusLabel = (status) => {

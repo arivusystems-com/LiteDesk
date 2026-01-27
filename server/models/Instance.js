@@ -25,16 +25,16 @@ const InstanceSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Organization',
     required: true,
-    unique: true,
-    index: true
+    unique: true
+    // index: true removed - using explicit index below instead
   },
 
   // Lifecycle Status
   status: {
     type: String,
     enum: Object.values(INSTANCE_STATUS),
-    default: INSTANCE_STATUS.DEMO,
-    index: true
+    default: INSTANCE_STATUS.DEMO
+    // index: true removed - using explicit index below instead
   },
 
   // Lifecycle Timestamps
@@ -52,8 +52,8 @@ const InstanceSchema = new mongoose.Schema({
   // Link to Demo Request (if created from demo request)
   demoRequestId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'DemoRequest',
-    index: true
+    ref: 'DemoRequest'
+    // index: true removed - using explicit index below instead
   },
 
   // Phase 0J.1: Internal Instance Flag
@@ -63,8 +63,8 @@ const InstanceSchema = new mongoose.Schema({
   // - Enables god-mode execution for internal operations
   isInternal: {
     type: Boolean,
-    default: false,
-    index: true
+    default: false
+    // index: true removed - using explicit index below instead
   }
 }, {
   timestamps: true

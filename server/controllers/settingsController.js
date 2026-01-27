@@ -428,8 +428,10 @@ exports.getApplications = async (req, res) => {
             });
         }
 
-        // Valid apps registry
-        const VALID_APPS = ['SALES', 'HELPDESK', 'PROJECTS', 'PORTAL', 'AUDIT', 'LMS'];
+        // Valid apps registry (platform apps currently supported for tenants)
+        // NOTE: Helpdesk, Projects, and LMS have been removed from the platform
+        // for this deployment. Keep this list in sync with AppDefinition seeds.
+        const VALID_APPS = ['SALES', 'PORTAL', 'AUDIT'];
         
         // App metadata (in a real implementation, this would come from AppDefinition model)
         const appMetadata = {
@@ -437,16 +439,6 @@ exports.getApplications = async (req, res) => {
                 name: 'Sales',
                 description: 'Manage your sales pipeline, deals, and customer relationships',
                 icon: 'sales'
-            },
-            'HELPDESK': {
-                name: 'Helpdesk',
-                description: 'Customer support and ticket management',
-                icon: 'helpdesk'
-            },
-            'PROJECTS': {
-                name: 'Projects',
-                description: 'Project management and task tracking',
-                icon: 'projects'
             },
             'PORTAL': {
                 name: 'Portal',
@@ -457,11 +449,6 @@ exports.getApplications = async (req, res) => {
                 name: 'Audit',
                 description: 'Audit management and compliance tracking',
                 icon: 'audit'
-            },
-            'LMS': {
-                name: 'LMS',
-                description: 'Learning Management System',
-                icon: 'lms'
             }
         };
 
@@ -562,7 +549,8 @@ exports.getApplication = async (req, res) => {
         }
 
         // Validate app key
-        const VALID_APPS = ['SALES', 'HELPDESK', 'PROJECTS', 'PORTAL', 'AUDIT', 'LMS'];
+        // Keep in sync with getApplications VALID_APPS
+        const VALID_APPS = ['SALES', 'PORTAL', 'AUDIT'];
         const appKeyUpper = appKey.toUpperCase();
         if (!VALID_APPS.includes(appKeyUpper)) {
             return res.status(400).json({

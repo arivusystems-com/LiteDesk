@@ -163,6 +163,7 @@
           <CoreModuleDetail v-else-if="activeTab === 'core-modules' && route.query.moduleKey" />
           <ApplicationDetail v-else-if="activeTab === 'applications' && route.query.appKey && !route.query.app" />
           <AppsSettings v-else-if="activeTab === 'applications' && route.query.app" />
+          <AppManagement v-else-if="activeTab === 'applications' && route.query.view === 'management'" />
           <SubscriptionDetail v-else-if="activeTab === 'subscriptions' && route.query.appKey" />
           <component v-else-if="activeTab === 'notifications' || route.path.includes('/notifications')" :is="currentTabComponent" />
           <component v-else :is="currentTabComponent" />
@@ -189,6 +190,7 @@ import CoreModulesList from '@/components/settings/CoreModulesList.vue';
 import CoreModuleDetail from '@/components/settings/CoreModuleDetail.vue';
 import ApplicationsList from '@/components/settings/ApplicationsList.vue';
 import ApplicationDetail from '@/components/settings/ApplicationDetail.vue';
+import AppManagement from '@/components/settings/AppManagement.vue';
 import SubscriptionsList from '@/components/settings/SubscriptionsList.vue';
 import SubscriptionDetail from '@/components/settings/SubscriptionDetail.vue';
 import NotificationSettings from '@/components/settings/NotificationSettings.vue';

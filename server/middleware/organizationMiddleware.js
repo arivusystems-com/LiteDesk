@@ -84,7 +84,7 @@ const organizationIsolation = async (req, res, next) => {
             return res.status(401).json({ message: 'Authentication required' });
         }
 
-        // Get organization from user
+        // Get organization from user (fresh from database to ensure latest state)
         const organization = await Organization.findById(req.user.organizationId);
         
         if (!organization) {
@@ -96,6 +96,17 @@ const organizationIsolation = async (req, res, next) => {
             return res.status(403).json({ 
                 message: 'Organization is inactive. Please contact support.',
                 code: 'ORG_INACTIVE'
+            });
+        }
+
+        // Debug: Log organization state
+        if (process.env.NODE_ENV === 'development') {
+            console.log('[OrganizationIsolation] Organization loaded:', {
+                orgId: organization._id,
+                isTenant: organization.isTenant,
+                enabledApps: organization.enabledApps,
+                hasFeatureTasks: organization.hasFeature('tasks'),
+                hasFeatureEvents: organization.hasFeature('events')
             });
         }
 
@@ -172,13 +183,28 @@ const checkFeatureAccess = (featureName) => {
                 return res.status(500).json({ message: 'Organization not loaded. Use organizationIsolation middleware first.' });
             }
 
+            // Debug logging
+            console.log(`[FeatureAccess] Checking feature: ${featureName}`, {
+                organizationId: organization._id,
+                isTenant: organization.isTenant,
+                enabledApps: organization.enabledApps,
+                hasFeature: organization.hasFeature(featureName),
+                path: req.path
+            });
+
             // Check if feature is enabled
             if (!organization.hasFeature(featureName)) {
+                console.warn(`[FeatureAccess] Feature ${featureName} not available for organization ${organization._id}`, {
+                    isTenant: organization.isTenant,
+                    enabledApps: organization.enabledApps,
+                    enabledModules: organization.enabledModules,
+                    hasAppSALES: organization.hasApp('SALES')
+                });
                 return res.status(403).json({ 
                     message: `This feature is not available in your current plan.`,
                     code: 'FEATURE_NOT_AVAILABLE',
                     feature: featureName,
-                    currentTier: organization.subscription.tier,
+                    currentTier: organization.subscription?.tier,
                     upgradeRequired: true
                 });
             }

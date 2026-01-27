@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useAppShellStore } from '@/stores/appShell';
+import { useTabs } from '@/composables/useTabs';
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/vue';
 import { XMarkIcon } from '@heroicons/vue/24/outline';
 import apiClient from '@/utils/apiClient';
@@ -19,6 +20,7 @@ import {
 const router = useRouter();
 const authStore = useAuthStore();
 const appShellStore = useAppShellStore();
+const { openTab } = useTabs();
 
 const loading = ref(true);
 const enabledApps = ref([]);
@@ -231,8 +233,30 @@ function handleAppClick(app) {
   
   if (cta.action === 'open') {
     // Navigate to app's default route
-    const route = app.defaultRoute || getDefaultRouteForApp(app.appKey);
-    router.push(route);
+    let route = app.defaultRoute || getDefaultRouteForApp(app.appKey);
+    
+    // Normalize legacy routes to standard dashboard format
+    if (route && !route.startsWith('/dashboard') && !route.startsWith('/audit') && !route.startsWith('/portal') && !route.startsWith('/helpdesk') && !route.startsWith('/projects')) {
+      const appKeyLower = app.appKey?.toLowerCase();
+      if (route.startsWith(`/${appKeyLower}/`)) {
+        // Convert /sales/people -> /dashboard/sales
+        route = `/dashboard/${appKeyLower}`;
+      } else if (route === `/${appKeyLower}`) {
+        // Convert /sales -> /dashboard/sales
+        route = `/dashboard/${appKeyLower}`;
+      }
+    }
+    
+    // For Audit app, open in a new internal tab
+    const appKeyUpper = app.appKey?.toUpperCase();
+    if (appKeyUpper === 'AUDIT') {
+      openTab(route, {
+        title: app.name || 'Audit Dashboard',
+        icon: 'document'
+      });
+    } else {
+      router.push(route);
+    }
   } else if (cta.action === 'view') {
     // Show app detail modal
     selectedApp.value = app;
@@ -245,7 +269,7 @@ function getDefaultRouteForApp(appKey) {
   const upperKey = appKey?.toUpperCase();
   switch (upperKey) {
     case 'SALES':
-      return '/dashboard';
+      return '/sales/dashboard';
     case 'HELPDESK':
       return '/helpdesk/cases';
     case 'PROJECTS':
@@ -255,7 +279,7 @@ function getDefaultRouteForApp(appKey) {
     case 'PORTAL':
       return '/portal/dashboard';
     default:
-      return '/dashboard';
+      return '/sales/dashboard';
   }
 }
 

@@ -9,8 +9,8 @@ const InstanceRegistrySchema = new mongoose.Schema({
   subdomain: {
     type: String,
     required: true,
-    unique: true,
     lowercase: true
+    // unique: true removed - using explicit unique index below instead
   },
   customDomain: String,
   

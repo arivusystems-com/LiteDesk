@@ -388,12 +388,24 @@ const organizationTypes = ['Customer', 'Partner', 'Vendor', 'Distributor', 'Deal
 // ============================================================================
 //
 // QUICK_CREATE_FIELDS: Must exactly match Settings → Organizations → Quick Create
-// Currently: ['name'] (only name is configured in Quick Create)
+// Loaded from module definition (moduleDefinition.value.quickCreate)
 //
 // FULL_CREATE_FIELDS: Locked list of business organization fields
 // May be expanded later, but this list is authoritative
 //
-const QUICK_CREATE_FIELDS = ['name'];
+const QUICK_CREATE_FIELDS = computed(() => {
+  if (!moduleDefinition.value || !moduleDefinition.value.quickCreate) {
+    // Fallback to default if module definition not loaded yet
+    return ['name'];
+  }
+  
+  // Quick Create: Only fields from Settings → Organizations → Quick Create
+  const quickCreate = moduleDefinition.value.quickCreate || [];
+  return quickCreate.map((f) => {
+    return typeof f === 'string' ? f : (f.key || f);
+  });
+});
+
 const FULL_CREATE_FIELDS = [
   'name',
   'types',
@@ -449,6 +461,7 @@ const onFormReady = (module) => {
   if (module) {
     moduleDefinition.value = module;
     console.log('[OrganizationQuickCreate] Module ready, quickCreate fields:', module.quickCreate);
+    console.log('[OrganizationQuickCreate] QUICK_CREATE_FIELDS computed:', QUICK_CREATE_FIELDS.value);
   }
 };
 
@@ -524,7 +537,7 @@ const handleDialogClose = () => {
  */
 function buildCreateOrganizationPayload(formState) {
   const allowedFields = createMode.value === 'quick'
-    ? QUICK_CREATE_FIELDS
+    ? QUICK_CREATE_FIELDS.value
     : FULL_CREATE_FIELDS;
 
   const payload = {};
@@ -642,6 +655,14 @@ const handleSubmit = async () => {
       }
       
       emit('saved', createdOrg);
+      
+      // Dispatch global event to refresh list views
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('litedesk:record-created', {
+          detail: { moduleKey: 'organizations', record: createdOrg }
+        }));
+      }
+      
       closeDrawer();
     } else {
       errors.value._general = response.message || 'Failed to create organization';

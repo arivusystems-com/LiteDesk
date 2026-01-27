@@ -52,14 +52,20 @@ const routes = [
     }),
     meta: { requiresAuth: true }
   },
+  // Sales Dashboard - specific route to prevent tab switching issues
   {
-    path: '/dashboard',
-    name: 'dashboard',
+    path: '/sales/dashboard',
+    name: 'sales-dashboard',
     component: () => import('@/components/dashboard/AppDashboard.vue'),
-    props: (route) => ({ 
-      appKey: route.query.appKey || 'SALES' // Get appKey from query param, default to SALES
+    props: () => ({ 
+      appKey: 'SALES'
     }),
     meta: { requiresAuth: true }
+  },
+  // Backward compatibility: redirect /dashboard to /sales/dashboard
+  {
+    path: '/dashboard',
+    redirect: '/sales/dashboard'
   },
   {
     path: '/inbox',
@@ -598,7 +604,7 @@ router.beforeEach((to, from, next) => {
   }
   
   // Also block direct access to Sales dashboard for audit-only and portal-only users
-  if (to.name === 'dashboard') {
+  if (to.name === 'sales-dashboard' || to.name === 'dashboard') {
     // Use hasAppAccess getter which checks enabledApps for owners
     const hasSalesAccess = authStore.hasAppAccess('SALES');
     const hasAuditAccess = authStore.hasAppAccess('AUDIT');

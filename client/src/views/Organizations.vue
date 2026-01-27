@@ -9,6 +9,7 @@
 
     <!-- Registry-Driven ModuleList -->
     <ModuleList
+      ref="moduleListRef"
       module-key="organizations"
       app-key="PLATFORM"
       @create="openCreateModal"
@@ -208,7 +209,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';
@@ -224,6 +225,7 @@ const authStore = useAuthStore();
 const { openTab } = useTabs();
 
 // State
+const moduleListRef = ref(null);
 const showImportModal = ref(false);
 const deleting = ref(false);
 
@@ -318,7 +320,22 @@ const openCreateModal = () => {
 
 const handleImportComplete = () => {
   showImportModal.value = false;
-  window.location.reload(); // Temporary - ModuleList should emit refresh event
+  // Refresh ModuleList
+  if (moduleListRef.value && moduleListRef.value.refresh) {
+    moduleListRef.value.refresh();
+  }
+};
+
+// Handle record creation events to refresh list view
+const handleRecordCreated = (event) => {
+  const { moduleKey, record } = event.detail || {};
+  
+  // Only refresh if it's an organizations record
+  if (moduleKey === 'organizations') {
+    if (moduleListRef.value && moduleListRef.value.refresh) {
+      moduleListRef.value.refresh();
+    }
+  }
 };
 
 // Bulk action handler
@@ -502,6 +519,18 @@ const getUserDisplayName = (user) => {
 // Lifecycle
 onMounted(async () => {
   await loadUsers();
+  
+  // Listen for record creation events
+  if (typeof window !== 'undefined') {
+    window.addEventListener('litedesk:record-created', handleRecordCreated);
+  }
+});
+
+onUnmounted(() => {
+  // Clean up event listeners
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('litedesk:record-created', handleRecordCreated);
+  }
 });
 
 </script>

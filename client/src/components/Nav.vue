@@ -266,7 +266,7 @@ const logoSrc = computed(() => {
 
               <!-- Mobile Sidebar component -->
               <div class="relative flex grow flex-col overflow-y-auto bg-white dark:bg-gray-900 ring ring-gray-200 dark:ring-white/10 before:pointer-events-none before:absolute before:inset-0 before:bg-gray-50 dark:before:bg-black/10">
-                <div class="relative flex flex-1 flex-col">
+                <div class="relative flex grow">
                   <AppSidebar
                     v-if="sidebarStructure"
                     :sidebar-structure="sidebarStructure"

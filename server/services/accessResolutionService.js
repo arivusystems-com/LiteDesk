@@ -119,7 +119,7 @@ async function resolveAppAccess({ user, organization, appKey, intent }) {
     // - There's a bug in role configuration
     // - A bad seed script grants access
     // - There's a misconfiguration
-    if (appDefinition.capabilities?.tenantVisible === false) {
+    if (appDefinition && appDefinition.capabilities?.tenantVisible === false) {
         const isPlatformAdmin = user.isPlatformAdmin === true;
         
         if (!isPlatformAdmin) {
@@ -198,24 +198,40 @@ async function resolveAppAccess({ user, organization, appKey, intent }) {
     // STEP 2: Get Organization Object
     // ============================================================================
     // Ensure we have the full organization object (handle both object and ID)
-    const organizationId = organization._id || organization;
     let org = null;
+    let organizationId = null;
     
-    // If organization is already a full object with enabledApps, use it directly
-    // Otherwise, query from database
-    if (organization && organization.enabledApps && Array.isArray(organization.enabledApps)) {
-        // Use the passed organization object if it has enabledApps
-        org = organization;
+    // Check if organization is an object with _id or enabledApps
+    if (organization && typeof organization === 'object') {
+        organizationId = organization._id || organization;
+        // If organization has enabledApps, use it directly
+        if (organization.enabledApps && Array.isArray(organization.enabledApps)) {
+            org = organization;
+        } else {
+            // Organization object passed but missing enabledApps, query from database
+            org = await Organization.findById(organizationId);
+        }
     } else {
-        // Query from database
+        // Organization is just an ID (string or ObjectId)
+        organizationId = organization;
         org = await Organization.findById(organizationId);
     }
     
     if (!org) {
+        console.error(`[AccessResolution] Organization not found:`, {
+            organizationId: organizationId,
+            organizationType: typeof organization,
+            organization: organization
+        });
         result.reason = 'ORGANIZATION_NOT_FOUND';
         addFeedbackToResult(result);
         logAccessDecision(user, appKey, intent, result);
         return result;
+    }
+    
+    // Ensure organizationId is set
+    if (!organizationId) {
+        organizationId = org._id;
     }
 
     // Ensure enabledApps exists (initialize if missing)

@@ -284,6 +284,33 @@ mongoose.connect(masterUri)
     await dbConnectionManager.initializeMasterConnection();
     console.log('✅ Database connection manager initialized');
     
+    // 1.5. Check and seed platform definitions if needed
+    try {
+      const AppDefinition = require('./models/AppDefinition');
+      const ModuleDefinition = require('./models/ModuleDefinition');
+      
+      // Check if platform definitions exist
+      const salesApp = await AppDefinition.findOne({ appKey: 'sales' });
+      const platformModule = await ModuleDefinition.findOne({ 
+        appKey: 'platform', 
+        organizationId: null,
+        moduleKey: 'people' // Check for a specific platform module
+      });
+      
+      if (!salesApp || !platformModule) {
+        console.log('📦 Platform definitions not found, seeding...');
+        const seedPlatformDefinitionsWithUI = require('./scripts/seedPlatformDefinitionsWithUI');
+        // Pass true to use existing connection (don't connect/disconnect)
+        await seedPlatformDefinitionsWithUI(true);
+        console.log('✅ Platform definitions seeded successfully');
+      } else {
+        console.log('✅ Platform definitions already exist, skipping seed');
+      }
+    } catch (seedError) {
+      console.warn('⚠️  Failed to check/seed platform definitions:', seedError.message);
+      // Don't block server startup if seeding fails
+    }
+    
     // 2. Start Monitoring Services (if enabled)
     if (process.env.ENABLE_HEALTH_CHECKER !== 'false') {
       const healthChecker = require('./services/monitoring/healthChecker');

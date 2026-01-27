@@ -62,6 +62,7 @@ router.use((req, res, next) => {
 router.use(organizationIsolation);
 
 // Settings permission (reuse settings.edit to manage modules)
+router.get('/people/quick-create', checkPermission('settings', 'edit'), controller.getPeopleQuickCreate);
 router.get('/', checkPermission('settings', 'edit'), controller.listModules);
 router.post('/', checkPermission('settings', 'edit'), controller.createModule);
 router.delete('/:id', checkPermission('settings', 'edit'), controller.deleteModule);

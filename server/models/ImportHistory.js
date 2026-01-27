@@ -5,14 +5,14 @@ const ImportHistorySchema = new Schema({
   organizationId: {
     type: Schema.Types.ObjectId,
     ref: 'Organization',
-    required: true,
-    index: true
+    required: true
+    // index: true removed - using compound indexes below instead
   },
   module: {
     type: String,
     enum: ['contacts', 'deals', 'tasks', 'organizations'],
-    required: true,
-    index: true
+    required: true
+    // index: true removed - using compound indexes below instead
   },
   fileName: {
     type: String,
@@ -26,8 +26,8 @@ const ImportHistorySchema = new Schema({
   status: {
     type: String,
     enum: ['processing', 'completed', 'failed', 'partial'],
-    default: 'processing',
-    index: true
+    default: 'processing'
+    // index: true removed - using compound indexes below instead
   },
   stats: {
     total: { type: Number, default: 0 },
@@ -40,10 +40,10 @@ const ImportHistorySchema = new Schema({
     created: [{ type: Schema.Types.ObjectId }],
     updated: [{ type: Schema.Types.ObjectId }]
   },
-  errors: [{
+  importErrors: [{
     row: Number,
     error: String
-  }],
+  }], // Renamed from 'errors' to avoid reserved pathname warning
   duplicateCheckEnabled: {
     type: Boolean,
     default: true

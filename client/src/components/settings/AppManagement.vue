@@ -1,5 +1,16 @@
 <template>
   <div class="space-y-6">
+    <!-- Back Button -->
+    <button
+      @click="goBack"
+      class="flex items-center gap-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors mb-4"
+    >
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+      </svg>
+      <span>Back to Applications</span>
+    </button>
+
     <!-- Header -->
     <div>
       <h2 class="text-2xl font-bold text-gray-900 dark:text-white">App Management</h2>
@@ -139,7 +150,10 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
+
+const router = useRouter();
 
 const loading = ref(true);
 const error = ref('');
@@ -319,6 +333,10 @@ const handleDisable = async (app) => {
   } finally {
     processing.value = null;
   }
+};
+
+const goBack = () => {
+  router.push({ path: '/settings', query: { tab: 'applications' } });
 };
 </script>
 
