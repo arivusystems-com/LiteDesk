@@ -68,19 +68,45 @@ export async function getAppRegistry(): Promise<AppRegistry> {
         icon: app.icon
       });
       
+      // Normalize dashboardRoute to expected format: /dashboard or /dashboard/:appKey
+      let dashboardRoute = app.defaultRoute || `/${app.appKey.toLowerCase()}`;
+      
+      // Preserve special app routes that have their own routing structure
+      // (Audit, Portal, Helpdesk, Projects use their own route prefixes)
+      const appKeyLower = app.appKey.toLowerCase();
+      const specialAppRoutes = ['/audit/', '/portal/', '/helpdesk/', '/projects/'];
+      const isSpecialAppRoute = specialAppRoutes.some(prefix => dashboardRoute.startsWith(prefix));
+      
+      if (isSpecialAppRoute) {
+        // Preserve special app routes as-is (e.g., /audit/dashboard, /portal/dashboard)
+        // These apps have their own routing structure and layouts
+      } else if (dashboardRoute.startsWith(`/${appKeyLower}/`)) {
+        // Convert /sales/people -> /dashboard/sales
+        dashboardRoute = `/dashboard/${appKeyLower}`;
+      } else if (dashboardRoute === `/${appKeyLower}`) {
+        // Convert /sales -> /dashboard/sales
+        dashboardRoute = `/dashboard/${appKeyLower}`;
+      } else if (dashboardRoute !== '/dashboard' && !dashboardRoute.startsWith('/dashboard/')) {
+        // For any other unexpected route, default to /dashboard/:appKey
+        dashboardRoute = `/dashboard/${appKeyLower}`;
+      }
+      
       registry[app.appKey] = {
         appKey: app.appKey,
         label: app.name || app.appKey,
-        dashboardRoute: app.defaultRoute || `/${app.appKey.toLowerCase()}`,
+        dashboardRoute,
         modules,
         icon: app.icon,
         order: app.sidebarOrder || 0,
       };
       
-      // Warn if dashboardRoute is not /dashboard or /dashboard/:appKey
+      // Warn if dashboardRoute is still not /dashboard or /dashboard/:appKey (shouldn't happen after normalization)
+      // Exclude special app routes (Audit, Portal, Helpdesk, Projects) which have their own routing structure
       const entry = registry[app.appKey];
+      const isSpecialRoute = specialAppRoutes.some(prefix => entry.dashboardRoute.startsWith(prefix));
       if (
         entry &&
+        !isSpecialRoute &&
         entry.dashboardRoute !== '/dashboard' &&
         !entry.dashboardRoute.startsWith('/dashboard/')
       ) {

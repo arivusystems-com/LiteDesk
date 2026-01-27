@@ -24,9 +24,9 @@ const RelationshipDefinitionSchema = new mongoose.Schema({
   relationshipKey: {
     type: String,
     required: true,
-    unique: true,
     trim: true,
     lowercase: true
+    // unique: true removed - using explicit unique index below instead
   },
 
   source: {

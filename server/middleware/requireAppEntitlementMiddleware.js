@@ -18,6 +18,7 @@
  * ============================================================================
  */
 
+const mongoose = require('mongoose');
 const { APP_KEYS, isValidAppKey } = require('../constants/appKeys');
 const Organization = require('../models/Organization');
 const { validateUserTypeForApp } = require('../utils/appAccessUtils');
@@ -105,9 +106,39 @@ const requireAppEntitlement = async (req, res, next) => {
     try {
         // Get organization (needed for access resolution)
         // Note: enabledApps should be included by default unless explicitly excluded
-        const organization = await Organization.findById(organizationId);
+        let organization;
+        try {
+            // Ensure organizationId is a valid ObjectId
+            const orgId = mongoose.Types.ObjectId.isValid(organizationId) 
+                ? (typeof organizationId === 'string' ? new mongoose.Types.ObjectId(organizationId) : organizationId)
+                : organizationId;
+            
+            organization = await Organization.findById(orgId);
+            
+            if (!organization) {
+                // Try as string if ObjectId didn't work
+                organization = await Organization.findById(organizationId);
+            }
+        } catch (queryError) {
+            console.error(`[AppEntitlement] ❌ Error querying organization:`, {
+                error: queryError.message,
+                stack: queryError.stack,
+                organizationId: organizationId,
+                organizationIdType: typeof organizationId,
+                isValidObjectId: mongoose.Types.ObjectId.isValid(organizationId),
+                userEmail: req.user?.email,
+                userId: req.user?._id
+            });
+            throw queryError;
+        }
+        
         if (!organization) {
-            console.warn(`[AppEntitlement] Organization not found: orgId=${organizationId}`);
+            console.warn(`[AppEntitlement] Organization not found: orgId=${organizationId}`, {
+                organizationId: organizationId,
+                organizationIdType: typeof organizationId,
+                userEmail: req.user?.email,
+                userId: req.user?._id
+            });
             return res.status(403).json({
                 success: false,
                 message: 'Organization not found',
@@ -172,18 +203,32 @@ const requireAppEntitlement = async (req, res, next) => {
         // Convert user and organization to plain objects if they're Mongoose documents
         // This ensures all fields are available to resolveAppAccess
         const userForAccess = req.user.toObject ? req.user.toObject() : req.user;
+        
         // Pass the organization object directly (resolveAppAccess will handle it)
         // Ensure _id is available for the query inside resolveAppAccess
-        const orgForAccess = organization.toObject ? organization.toObject() : organization;
-        
-        // Ensure organization has _id field (required by resolveAppAccess)
-        if (!orgForAccess._id && organization._id) {
-            orgForAccess._id = organization._id;
-        }
-        
-        // Ensure enabledApps is included in orgForAccess (critical for access resolution)
-        if (organization.enabledApps) {
-            orgForAccess.enabledApps = organization.enabledApps;
+        let orgForAccess;
+        if (organization && typeof organization === 'object') {
+            // Convert to plain object if it's a Mongoose document
+            if (organization.toObject && typeof organization.toObject === 'function') {
+                orgForAccess = organization.toObject({ virtuals: false });
+            } else {
+                // Already a plain object, create a copy to avoid mutations
+                orgForAccess = { ...organization };
+            }
+            
+            // Ensure _id is set (critical for resolveAppAccess)
+            if (!orgForAccess._id) {
+                orgForAccess._id = organization._id || organizationId;
+            }
+            
+            // Ensure enabledApps is included (critical for access resolution)
+            if (!orgForAccess.enabledApps && organization.enabledApps) {
+                orgForAccess.enabledApps = organization.enabledApps;
+            }
+        } else {
+            // Organization is not an object (might be just an ID), pass as-is
+            // resolveAppAccess will query it from the database
+            orgForAccess = organization || organizationId;
         }
         
         // Debug: Log organization state before access resolution
@@ -200,12 +245,25 @@ const requireAppEntitlement = async (req, res, next) => {
         }
         
         // Use unified access resolution service
-        const accessResult = await resolveAppAccess({
-            user: userForAccess,
-            organization: orgForAccess,
-            appKey: req.appKey,
-            intent: intent
-        });
+        let accessResult;
+        try {
+            accessResult = await resolveAppAccess({
+                user: userForAccess,
+                organization: orgForAccess,
+                appKey: req.appKey,
+                intent: intent
+            });
+        } catch (accessError) {
+            console.error(`[AppEntitlement] ❌ Error in resolveAppAccess:`, {
+                error: accessError.message,
+                stack: accessError.stack,
+                appKey: req.appKey,
+                organizationId: organizationId,
+                userEmail: req.user?.email,
+                intent: intent
+            });
+            throw accessError; // Re-throw to be caught by outer catch
+        }
 
         // Check access result
         if (!accessResult.allowed) {
@@ -481,7 +539,7 @@ const requireAppEntitlement = async (req, res, next) => {
         }
     } catch (error) {
         // Hard fail - cannot verify org enablement
-        console.error(`[AppEntitlement] Error checking organization enablement:`, {
+        console.error(`[AppEntitlement] ❌ Error checking organization enablement:`, {
             error: error.message,
             stack: error.stack,
             userId: req.user?._id,
@@ -489,13 +547,24 @@ const requireAppEntitlement = async (req, res, next) => {
             organizationId: req.user?.organizationId,
             appKey: req.appKey,
             path: req.path,
+            method: req.method,
             errorName: error.name,
-            errorCode: error.code
+            errorCode: error.code,
+            errorType: error.constructor?.name
         });
         
         // Log the full error for debugging
-        if (process.env.NODE_ENV === 'development' || process.env.ACCESS_DEBUG === 'true') {
-            console.error(`[AppEntitlement] Full error details:`, error);
+        console.error(`[AppEntitlement] Full error object:`, error);
+        if (error.stack) {
+            console.error(`[AppEntitlement] Error stack trace:`, error.stack);
+        }
+        
+        // Additional debugging for common issues
+        if (error.message?.includes('Cast to ObjectId')) {
+            console.error(`[AppEntitlement] ⚠️  Possible ObjectId casting issue with organizationId:`, req.user?.organizationId);
+        }
+        if (error.message?.includes('Cannot read property')) {
+            console.error(`[AppEntitlement] ⚠️  Possible null/undefined property access`);
         }
         
         return res.status(403).json({
@@ -509,7 +578,11 @@ const requireAppEntitlement = async (req, res, next) => {
                 errorMessage: error.message,
                 errorName: error.name,
                 errorCode: error.code,
-                stack: error.stack
+                errorType: error.constructor?.name,
+                stack: error.stack,
+                organizationId: req.user?.organizationId,
+                appKey: req.appKey,
+                path: req.path
             } : undefined
         });
     }

@@ -224,8 +224,8 @@ const FormSchema = new Schema({
     organizationId: {
         type: Schema.Types.ObjectId,
         ref: 'Organization',
-        required: true,
-        index: true
+        required: true
+        // index: true removed - using compound indexes below instead
     },
 
     // 📋 FORM IDENTIFICATION
@@ -365,10 +365,10 @@ const FormSchema = new Schema({
         },
         slug: {
             type: String,
-            unique: true,
             sparse: true,
             trim: true,
             lowercase: true
+            // unique: true removed - using explicit unique index below instead
         }
     },
 

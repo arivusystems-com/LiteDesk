@@ -155,7 +155,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
-import apiClient from '@/utils/apiClient';
+import portalApiClient from '@/utils/portalApiClient';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -225,24 +225,10 @@ const fetchDashboardData = async () => {
   error.value = null;
 
   try {
-    // Fetch dashboard summary
-    // Portal routes are at /portal/* and are proxied by Vite
-    const response = await fetch('/portal/audits?summary=true', {
-      headers: {
-        'Authorization': `Bearer ${authStore.user?.token}`,
-        'Content-Type': 'application/json'
-      }
+    // Fetch dashboard summary using portalApiClient
+    const data = await portalApiClient.get('/portal/audits', {
+      params: { summary: true }
     });
-
-    if (!response.ok) {
-      if (response.status === 402) {
-        error.value = 'Portal access is not active. Please contact your administrator.';
-        return;
-      }
-      throw new Error(`Failed to fetch dashboard data: ${response.status}`);
-    }
-
-    const data = await response.json();
 
     if (data.success) {
       // Update stats
@@ -273,7 +259,25 @@ const fetchDashboardData = async () => {
     }
   } catch (err) {
     console.error('Error fetching dashboard data:', err);
-    error.value = 'Failed to load dashboard data. Please try again later.';
+    
+    // Show the actual error message from the backend if available
+    if (err.response?.data) {
+      const errorData = err.response.data;
+      error.value = errorData.message || errorData.error || 'Failed to load dashboard data. Please contact your administrator.';
+      
+      // Handle specific error codes
+      if (errorData.code === 'APP_NOT_ENABLED' || errorData.code === 'APP_ENTITLEMENT_REQUIRED') {
+        error.value = 'Portal access is not enabled for your account. Please contact your administrator to enable Portal access.';
+      } else if (errorData.code === 'PORTAL_APP_REQUIRED') {
+        error.value = 'This endpoint requires Portal application access. Please access from the Portal application.';
+      }
+    } else if (err.status === 402) {
+      error.value = 'Portal access is not active. Please contact your administrator.';
+    } else if (err.status === 403) {
+      error.value = 'Access denied. You may not have permission to access the Portal application. Please contact your administrator.';
+    } else {
+      error.value = err.message || 'Failed to load dashboard data. Please try again later.';
+    }
   } finally {
     loading.value = false;
   }

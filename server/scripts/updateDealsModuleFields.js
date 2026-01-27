@@ -707,23 +707,74 @@ async function updateDealsModuleFields(organizationId = null) {
       const uri = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/litedesk_master';
       await mongoose.connect(uri);
       shouldDisconnect = true;
-      console.log('Connected to MongoDB');
+      console.log(`[updateDealsModuleFields] Connected to MongoDB: ${mongoose.connection.name}`);
+    } else {
+      console.log(`[updateDealsModuleFields] Using existing MongoDB connection: ${mongoose.connection.name}`);
     }
 
-    const orgQuery = organizationId ? { _id: organizationId } : {};
+    let orgQuery;
+    if (organizationId) {
+      // Convert to ObjectId if it's a string
+      const orgId = mongoose.Types.ObjectId.isValid(organizationId) 
+        ? (typeof organizationId === 'string' ? new mongoose.Types.ObjectId(organizationId) : organizationId)
+        : organizationId;
+      
+      console.log(`[updateDealsModuleFields] Looking for organization with ID: ${organizationId} (type: ${typeof organizationId})`);
+      orgQuery = { _id: orgId };
+    } else {
+      orgQuery = {};
+    }
+    
     const organizations = await Organization.find(orgQuery).select('_id name');
 
-    console.log(`Updating deals module definition for ${organizations.length} organization(s)`);
+    console.log(`[updateDealsModuleFields] Updating deals module definition for ${organizations.length} organization(s)`);
+
+    if (organizationId && organizations.length === 0) {
+      // Try as string if ObjectId didn't work
+      const retryOrgs = await Organization.find({ _id: organizationId }).select('_id name');
+      if (retryOrgs.length === 0) {
+        const errorMsg = `Organization not found with ID: ${organizationId}. Database: ${mongoose.connection.name}`;
+        console.error(`[updateDealsModuleFields] ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+      organizations.push(...retryOrgs);
+    }
+
+    if (organizations.length === 0) {
+      throw new Error('No organizations found to process');
+    }
+    
+    if (organizationId && organizations.length > 0) {
+      console.log(`[updateDealsModuleFields] Found organization: ${organizations[0]?.name || organizations[0]?._id || 'N/A'}`);
+    }
 
     for (const org of organizations) {
-      const existing = await ModuleDefinition.findOne({
+      // Check for existing module by moduleKey or key, or by organizationId with null key (legacy)
+      let existing = await ModuleDefinition.findOne({
         organizationId: org._id,
-        key: 'deals'
+        $or: [
+          { moduleKey: 'deals' },
+          { key: 'deals' } // Backward compatibility
+        ]
       });
+      
+      // Also check for modules with null key (legacy modules that might cause duplicate key errors)
+      if (!existing) {
+        existing = await ModuleDefinition.findOne({
+          organizationId: org._id,
+          key: null,
+          moduleKey: 'deals'
+        });
+      }
 
       if (existing) {
         existing.fields = cloneFields();
-        existing.name = 'Deals';
+        existing.label = existing.label || 'Deal';
+        existing.pluralLabel = existing.pluralLabel || 'Deals';
+        existing.moduleKey = existing.moduleKey || existing.key || 'deals';
+        existing.key = existing.key || existing.moduleKey || 'deals'; // Legacy field
+        existing.entityType = existing.entityType || 'TRANSACTION';
+        existing.name = existing.name || 'Deals'; // Legacy field
         existing.type = 'system';
         existing.enabled = existing.enabled !== false;
         existing.quickCreate = [...quickCreateDefault];
@@ -731,13 +782,22 @@ async function updateDealsModuleFields(organizationId = null) {
         existing.relationships = Array.isArray(existing.relationships) ? existing.relationships : [];
         existing.pipelineSettings = clonePipelineSettings();
         existing.markModified('pipelineSettings');
+        // Ensure appKey is set for Sales app
+        if (!existing.appKey) {
+          existing.appKey = 'sales';
+        }
         await existing.save();
         console.log(`✓ Updated deals module for organization: ${org.name || org._id}`);
       } else {
         await ModuleDefinition.create({
           organizationId: org._id,
-          key: 'deals',
-          name: 'Deals',
+          moduleKey: 'deals',
+          key: 'deals', // Legacy field for backward compatibility
+          appKey: 'sales', // Sales app module
+          label: 'Deal',
+          pluralLabel: 'Deals',
+          entityType: 'TRANSACTION',
+          name: 'Deals', // Legacy field
           type: 'system',
           enabled: true,
           fields: cloneFields(),

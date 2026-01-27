@@ -139,21 +139,24 @@ const lazySalesInitialization = async (req, res, next) => {
                     return next();
                 } else {
                     // Initialization failed
+                    console.error(`[LazySalesInit] ❌ Sales initialization failed for org: ${orgIdString} (waited for ongoing init)`);
                     return res.status(503).json({
                         success: false,
-                        message: 'Sales is initializing. Please retry.',
-                        code: 'SALES_INITIALIZATION_IN_PROGRESS',
+                        message: 'Sales initialization failed. Please check server logs for details.',
+                        code: 'SALES_INITIALIZATION_FAILED',
                         retryAfter: 5 // seconds
                     });
                 }
             } catch (error) {
                 // Initialization failed
-                console.error(`[LazySalesInit] Initialization failed for org: ${orgIdString}:`, error.message);
+                console.error(`[LazySalesInit] ❌ Sales initialization error for org: ${orgIdString}:`, error.message);
+                console.error(`[LazySalesInit] Full error stack:`, error.stack);
                 return res.status(503).json({
                     success: false,
-                    message: 'Sales is initializing. Please retry.',
+                    message: 'Sales initialization failed. Please check server logs for details.',
                     code: 'SALES_INITIALIZATION_FAILED',
-                    retryAfter: 5
+                    retryAfter: 5,
+                    error: process.env.NODE_ENV === 'development' ? error.message : undefined
                 });
             }
         }
@@ -195,9 +198,10 @@ const lazySalesInitialization = async (req, res, next) => {
             }
             
             // Still not initialized, return 503
+            console.warn(`[LazySalesInit] ⚠️  Sales initialization still in progress for org: ${orgIdString} after waiting`);
             return res.status(503).json({
                 success: false,
-                message: 'Sales is initializing. Please retry.',
+                message: 'Sales initialization is in progress. Please retry in a few seconds.',
                 code: 'SALES_INITIALIZATION_IN_PROGRESS',
                 retryAfter: 5
             });
@@ -205,24 +209,42 @@ const lazySalesInitialization = async (req, res, next) => {
 
         // STEP 4: This pod claimed initialization - proceed
         console.log(`[LazySalesInit] Starting Sales initialization for org: ${orgIdString} (claimed by this pod)`);
+        console.log(`[LazySalesInit] Organization details:`, {
+            id: organizationId,
+            idString: orgIdString,
+            idType: typeof organizationId,
+            name: organization?.name,
+            enabledApps: organization?.enabledApps
+        });
         
         // Create initialization promise and store in lock map (optimization)
         initPromise = (async () => {
             try {
+                console.log(`[LazySalesInit] Calling salesInitializer.initializeSales with organizationId:`, organizationId);
                 const result = await salesInitializer.initializeSales(organizationId);
                 
-                if (result.success) {
+                // Verify that BOTH modules were actually created before setting flag
+                const isActuallyInitialized = await salesInitializer.isSalesInitialized(organizationId);
+                
+                if (result.success && isActuallyInitialized) {
                     // Atomically set crmInitialized = true after successful initialization
+                    // Only set if BOTH modules exist
                     await Organization.findByIdAndUpdate(
                         organizationId,
                         { $set: { crmInitialized: true } },
                         { runValidators: false }
                     );
                     console.log(`[LazySalesInit] ✅ Sales initialized successfully for org: ${orgIdString}`);
+                    console.log(`[LazySalesInit] Verified both People and Deals modules exist`);
                     return true;
                 } else {
-                    // Initialization failed - log but don't set flag
-                    console.error(`[LazySalesInit] ❌ Sales initialization failed for org: ${orgIdString}:`, result.errors);
+                    // Initialization failed or incomplete - log but don't set flag
+                    console.error(`[LazySalesInit] ❌ Sales initialization failed or incomplete for org: ${orgIdString}`);
+                    console.error(`[LazySalesInit] result.success: ${result.success}`);
+                    console.error(`[LazySalesInit] isActuallyInitialized: ${isActuallyInitialized}`);
+                    console.error(`[LazySalesInit] Initialization errors:`, JSON.stringify(result.errors, null, 2));
+                    console.error(`[LazySalesInit] Initialized modules:`, result.initialized);
+                    
                     // Reset the flag so it can be retried
                     await Organization.findByIdAndUpdate(
                         organizationId,
@@ -232,7 +254,8 @@ const lazySalesInitialization = async (req, res, next) => {
                     return false;
                 }
             } catch (error) {
-                console.error(`[LazySalesInit] ❌ Sales initialization failed for org: ${orgIdString}:`, error.message);
+                console.error(`[LazySalesInit] ❌ Sales initialization exception for org: ${orgIdString}:`, error.message);
+                console.error(`[LazySalesInit] Full error stack:`, error.stack);
                 // Reset the flag so it can be retried
                 await Organization.findByIdAndUpdate(
                     organizationId,
@@ -257,32 +280,41 @@ const lazySalesInitialization = async (req, res, next) => {
             if (success) {
                 return next();
             } else {
+                console.error(`[LazySalesInit] ❌ Sales initialization failed for org: ${orgIdString} (result.success = false)`);
                 return res.status(503).json({
                     success: false,
-                    message: 'Sales is initializing. Please retry.',
+                    message: 'Sales initialization failed. Please check server logs for details.',
                     code: 'SALES_INITIALIZATION_FAILED',
                     retryAfter: 5
                 });
             }
         } catch (error) {
             // Initialization failed
-            console.error(`[LazySalesInit] Initialization error for org: ${orgIdString}:`, error.message);
+            console.error(`[LazySalesInit] ❌ Sales initialization exception for org: ${orgIdString}:`, error.message);
+            console.error(`[LazySalesInit] Full error stack:`, error.stack);
             return res.status(503).json({
                 success: false,
-                message: 'Sales is initializing. Please retry.',
+                message: 'Sales initialization failed. Please check server logs for details.',
                 code: 'SALES_INITIALIZATION_FAILED',
-                retryAfter: 5
+                retryAfter: 5,
+                error: process.env.NODE_ENV === 'development' ? error.message : undefined
             });
         }
 
     } catch (error) {
         // Unexpected error during initialization check
-        console.error(`[LazySalesInit] Unexpected error during Sales initialization check for org: ${orgIdString}:`, error);
+        console.error(`[LazySalesInit] ❌ Unexpected error during Sales initialization check for org: ${orgIdString}:`, error);
+        console.error(`[LazySalesInit] Error details:`, {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        });
         return res.status(503).json({
             success: false,
-            message: 'Sales is initializing. Please retry.',
+            message: 'Sales initialization error occurred. Please check server logs for details.',
             code: 'SALES_INITIALIZATION_ERROR',
-            retryAfter: 5
+            retryAfter: 5,
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };

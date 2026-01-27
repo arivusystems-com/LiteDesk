@@ -26,8 +26,8 @@ const UserSchema = new mongoose.Schema({
     organizationId: { 
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'Organization',
-        required: true,
-        index: true
+        required: true
+        // index: true removed - using compound index below instead
     },
     
     // Basic Information

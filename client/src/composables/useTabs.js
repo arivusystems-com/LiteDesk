@@ -29,6 +29,8 @@ let isProgrammaticNavigation = false;
 let lastProgrammaticPath = null;
 // Flag to track browser navigation (popstate) to prevent route watcher from interfering
 let isBrowserNavigation = false;
+// Flag to prevent concurrent calls to createDefaultTab
+let isCreatingHomeTab = false;
 
 // Icon mapping for serialization/deserialization
 const iconMap = {
@@ -130,6 +132,31 @@ const loadTabsFromStorage = () => {
         }
       }
       
+      // Deduplicate home tabs before setting tabs.value
+      // Keep only the first home tab found (by ID or path)
+      const homeTabs = loadedTabs.filter(tab => tab.id === 'home' || tab.path === '/platform/home');
+      if (homeTabs.length > 1) {
+        console.warn('⚠️ [loadTabsFromStorage] Found', homeTabs.length, 'duplicate home tabs, removing duplicates');
+        // Keep the first home tab, remove the rest
+        const firstHomeTabIndex = loadedTabs.findIndex(tab => tab.id === 'home' || tab.path === '/platform/home');
+        const firstHomeTab = loadedTabs[firstHomeTabIndex];
+        const removedHomeTabIds = homeTabs.slice(1).map(tab => tab.id);
+        
+        loadedTabs = loadedTabs.filter((tab, index) => {
+          const isHomeTab = tab.id === 'home' || tab.path === '/platform/home';
+          // Keep if it's not a home tab, or if it's the first home tab
+          return !isHomeTab || index === firstHomeTabIndex;
+        });
+        
+        // If the active tab was one of the removed duplicates, update it to the remaining home tab
+        if (loadedActiveTabId && removedHomeTabIds.includes(loadedActiveTabId)) {
+          console.log('🔄 [loadTabsFromStorage] Active tab was a duplicate home tab, updating to remaining home tab');
+          loadedActiveTabId = firstHomeTab.id;
+        }
+        
+        console.log('✅ [loadTabsFromStorage] Removed duplicate home tabs, remaining tabs:', loadedTabs.length);
+      }
+      
       tabs.value = loadedTabs;
       activeTabId.value = loadedActiveTabId;
       
@@ -145,42 +172,43 @@ const loadTabsFromStorage = () => {
           tab.icon = getIconComponent(tab.icon);
         }
         
-        // Migrate old dashboard tab to home tab
+        // Migrate old dashboard tab to sales dashboard tab
         if (tab.id === 'dashboard' || tab.path === '/dashboard') {
-          console.log('🔄 Migrating dashboard tab to home tab');
-          tab.id = 'home';
-          tab.path = '/platform/home';
-          tab.title = 'Home';
+          console.log('🔄 Migrating dashboard tab to sales dashboard tab');
+          tab.id = generateTabId(); // Generate new ID since it's not the home tab
+          tab.path = '/sales/dashboard';
+          tab.title = 'Sales Dashboard';
           tab.icon = getIconComponent('home');
-          tab.closable = false;
+          tab.closable = true; // Dashboard tabs are closable
         }
       });
       
-      // Update activeTabId if it was 'dashboard'
+      // Update activeTabId if it was 'dashboard' - find the migrated tab
       if (activeTabId.value === 'dashboard') {
-        activeTabId.value = 'home';
+        const migratedTab = tabs.value.find(tab => tab.path === '/sales/dashboard');
+        if (migratedTab) {
+          activeTabId.value = migratedTab.id;
+        } else {
+          // If migration didn't happen, clear it
+          activeTabId.value = null;
+        }
       }
       
-      // If no tabs, create home tab
+      // Don't create home tab here - let setupRouteWatcher decide based on current route
+      // This prevents creating unnecessary home tabs when on dashboard routes
       if (tabs.value.length === 0) {
-        console.log('🔄 [loadTabsFromStorage] No tabs found, creating home tab');
-        createDefaultTab();
-        // Immediately save to localStorage
-        saveTabsToStorage();
+        console.log('🔄 [loadTabsFromStorage] No tabs found, will be created by setupRouteWatcher based on route');
       } else {
         console.log('✅ [loadTabsFromStorage] Loaded', tabs.value.length, 'tabs from storage');
       }
     } else {
-      console.log('🔄 [loadTabsFromStorage] No stored tabs, creating home tab');
-      createDefaultTab();
-      // Immediately save to localStorage
-      saveTabsToStorage();
+      // No stored tabs - don't create home tab here, let setupRouteWatcher decide
+      console.log('🔄 [loadTabsFromStorage] No stored tabs, will be created by setupRouteWatcher based on route');
     }
   } catch (e) {
     console.error('❌ [loadTabsFromStorage] Error loading tabs:', e);
-    createDefaultTab();
-    // Immediately save to localStorage
-    saveTabsToStorage();
+    // Don't create home tab on error either - let setupRouteWatcher handle it
+    console.log('🔄 [loadTabsFromStorage] Error occurred, will create tab based on route in setupRouteWatcher');
   }
 };
 
@@ -222,20 +250,42 @@ watch([tabs, activeTabId], () => {
 
 // Create default home tab (platform home)
 const createDefaultTab = () => {
+  // Prevent concurrent calls
+  if (isCreatingHomeTab) {
+    console.log('🔒 [createDefaultTab] Already creating home tab, skipping concurrent call');
+    return;
+  }
+  
   // Check if home tab already exists to avoid duplicates
-  const existingHomeTab = tabs.value.find(tab => tab.id === 'home' || tab.path === '/platform/home');
+  // Check both by ID and by path to catch all cases
+  // Use a more thorough check to prevent any duplicates
+  const existingHomeTabById = tabs.value.find(tab => tab.id === 'home');
+  const existingHomeTabByPath = tabs.value.find(tab => tab.path === '/platform/home' || tab.path?.startsWith('/platform/home'));
+  const existingHomeTab = existingHomeTabById || existingHomeTabByPath;
+  
   if (existingHomeTab) {
-    console.log('🔄 [createDefaultTab] Home tab already exists, updating it');
+    console.log('🔄 [createDefaultTab] Home tab already exists (id:', existingHomeTab.id, 'path:', existingHomeTab.path, '), updating it (not creating duplicate). Current tabs:', tabs.value.length);
     existingHomeTab.id = 'home';
     existingHomeTab.path = '/platform/home';
     existingHomeTab.title = 'Home';
     existingHomeTab.icon = getIconComponent('home');
     existingHomeTab.closable = false;
-    activeTabId.value = 'home';
+    // Don't force set activeTabId here - let the caller decide
+    // activeTabId.value = 'home';
     // Force reactive update by reassigning the array
     tabs.value = [...tabs.value];
     return;
   }
+  
+  // Additional safeguard: Count existing home tabs to detect duplicates
+  const homeTabCount = tabs.value.filter(tab => tab.id === 'home' || tab.path === '/platform/home').length;
+  if (homeTabCount > 0) {
+    console.warn('⚠️ [createDefaultTab] Found', homeTabCount, 'existing home tab(s) but check above failed. Not creating duplicate.');
+    return;
+  }
+  
+  // Set flag to prevent concurrent calls
+  isCreatingHomeTab = true;
   
   const homeTab = {
     id: 'home',
@@ -270,6 +320,9 @@ const createDefaultTab = () => {
     console.warn('⚠️ [createDefaultTab] Storage not configured, cannot save tab');
   }
   
+  // Reset flag after creation
+  isCreatingHomeTab = false;
+  
   // Force Vue to recognize the change immediately
   // This ensures TabBar component sees the new tab right away
   nextTick(() => {
@@ -286,6 +339,8 @@ const generateTabId = () => {
 const getIconForPath = (path) => {
   const icons = {
     '/platform/home': 'home',
+    '/sales/dashboard': 'home',
+    '/dashboard': 'home', // backward compat
     '/contacts': 'users',
     '/people': 'users',
     '/organizations': 'building',
@@ -299,15 +354,20 @@ const getIconForPath = (path) => {
     '/instances': 'computer'
   };
   
+  // Check for exact match first
+  if (icons[path]) return icons[path];
+  
   // Check for base path
   const basePath = '/' + path.split('/')[1];
-  return icons[basePath] || icons[path] || 'document';
+  return icons[basePath] || 'document';
 };
 
 // Get title for route
 const getTitleForPath = (path, params = {}) => {
   const titles = {
     '/platform/home': 'Home',
+    '/sales/dashboard': 'Sales Dashboard',
+    '/dashboard': 'Dashboard', // backward compat
     '/contacts': 'Contacts',
     '/organizations': 'Organizations',
     '/deals': 'Deals',
@@ -338,6 +398,11 @@ const getTitleForPath = (path, params = {}) => {
   // Check for base path
   const basePath = '/' + path.split('/')[1];
   const segments = path.split('/');
+  
+  // Special case: Sales dashboard route
+  if (path === '/sales/dashboard' || path.startsWith('/sales/dashboard')) {
+    return 'Sales Dashboard';
+  }
   
   // Special case: Control Plane routes (handle detail pages)
   if (path.startsWith('/control/')) {
@@ -371,6 +436,12 @@ const getTitleForPath = (path, params = {}) => {
     return 'Audit';
   }
   
+  // Special case: Dashboard routes (backward compat)
+  // Routes like /dashboard or /dashboard/:appKey should just be "Dashboard"
+  if (segments[1] === 'dashboard') {
+    return 'Dashboard';
+  }
+  
   // Special case: Form Response detail view
   // Route shape: /forms/:formId/responses/:responseId
   if (segments[1] === 'forms' && segments[3] === 'responses' && segments[4]) {
@@ -379,7 +450,7 @@ const getTitleForPath = (path, params = {}) => {
 
   // If it's a detail page (has ID), customize title
   // But skip if it's an audit route or control route (handled above)
-  if (path.split('/').length > 2 && !path.startsWith('/audit/') && !path.startsWith('/control/')) {
+  if (path.split('/').length > 2 && !path.startsWith('/audit/') && !path.startsWith('/control/') && segments[1] !== 'dashboard') {
     const module = segments[1];
     
     // Capitalize module name
@@ -533,6 +604,22 @@ export function useTabs() {
       console.log('✨ Creating tab for browser navigation:', path);
       // Home tab should not be closable
       const isHome = path === '/platform/home';
+      
+      // CRITICAL: Check if home tab already exists before creating a new one
+      // This prevents duplicate home tabs when syncTabWithRoute is called
+      if (isHome) {
+        const existingHomeTab = tabs.value.find(tab => tab.id === 'home' || tab.path === '/platform/home');
+        if (existingHomeTab) {
+          console.log('🔄 [syncTabWithRoute] Home tab already exists, switching to it instead of creating duplicate');
+          activeTabId.value = existingHomeTab.id;
+          // Update path if it differs (e.g., query params)
+          if (existingHomeTab.path !== path) {
+            existingHomeTab.path = path;
+          }
+          return;
+        }
+      }
+      
       const newTab = {
         id: isHome ? 'home' : generateTabId(),
         title: getTitleForPath(path),
@@ -562,20 +649,16 @@ export function useTabs() {
     console.log('🔄 [initTabs] Starting tab initialization...');
     loadTabsFromStorage();
     
-    // Ensure home tab exists immediately after loading (synchronously)
-    // This handles the case where tabs are empty or don't have a home tab
+    // Don't create home tab here - let setupRouteWatcher decide based on current route
+    // This prevents creating unnecessary home tabs when on dashboard routes
+    // setupRouteWatcher will create the appropriate tab (home or dashboard) based on the route
     if (tabs.value.length === 0) {
-      console.log('🔄 [initTabs] No tabs found after load, creating home tab immediately');
-      createDefaultTab();
-      console.log('✅ [initTabs] Home tab created, tabs count:', tabs.value.length);
+      console.log('🔄 [initTabs] No tabs found after load, setupRouteWatcher will create appropriate tab based on route');
     } else {
-      // Check if home tab exists, if not create it
+      // Check if home tab exists, but don't force-create it if we have other tabs
+      // setupRouteWatcher will handle creating it if needed when navigating to platform home
       const homeTab = tabs.value.find(tab => tab.id === 'home' || tab.path === '/platform/home');
-      if (!homeTab) {
-        console.log('🔄 [initTabs] Home tab missing, creating it');
-        createDefaultTab();
-        console.log('✅ [initTabs] Home tab created, tabs count:', tabs.value.length);
-      } else {
+      if (homeTab) {
         // Ensure home tab is properly configured
         if (homeTab.path !== '/platform/home' || homeTab.id !== 'home') {
           console.log('🔄 [initTabs] Migrating existing tab to home tab');
@@ -596,6 +679,10 @@ export function useTabs() {
           activeTabId.value = 'home';
         }
         console.log('✅ [initTabs] Home tab exists and configured, tabs count:', tabs.value.length);
+      } else {
+        // Home tab doesn't exist, but we have other tabs
+        // Don't force-create it here - setupRouteWatcher will create it only if needed
+        console.log('✅ [initTabs] Tabs exist but no home tab - will be created by setupRouteWatcher if needed');
       }
     }
     
@@ -636,12 +723,8 @@ export function useTabs() {
     
     console.log('✅ Setting up route watcher for path:', routeToWatch.path);
     
-    // Ensure home tab exists (should have been created in initTabs, but double-check)
-    const homeTab = tabs.value.find(tab => tab.id === 'home' || tab.path === '/platform/home');
-    if (!homeTab) {
-      console.log('🔄 [setupRouteWatcher] Home tab missing, creating it');
-      createDefaultTab();
-    }
+    // Don't force-create home tab here - only create it when actually needed
+    // (when navigating to platform home or when tabs are empty)
     
     // Sync active tab with current route on initialization  
     const currentPath = routeToWatch.path;
@@ -693,7 +776,8 @@ export function useTabs() {
     
     // If we're on root, login, or any non-excluded path, navigate to platform home
     // BUT skip this if we just restored a tab from storage
-    if (!tabWasRestored && (currentPath === '/' || (currentPath !== '/platform/home' && currentPath !== '/login' && !currentPath.startsWith('/settings') && !currentPath.startsWith('/audit/') && !currentPath.startsWith('/portal/')))) {
+    // Exclude dashboard routes and sales dashboard - they should be handled by tab restoration or syncTabWithRoute
+    if (!tabWasRestored && (currentPath === '/' || (currentPath !== '/platform/home' && currentPath !== '/login' && !currentPath.startsWith('/settings') && !currentPath.startsWith('/audit/') && !currentPath.startsWith('/portal/') && !currentPath.startsWith('/dashboard') && !currentPath.startsWith('/sales/dashboard')))) {
       console.log('🔄 [setupRouteWatcher] Navigating to platform home from', currentPath);
       // Navigate to platform home to show it by default (without page refresh)
       const currentRouter = getRouter();
@@ -748,31 +832,40 @@ export function useTabs() {
         }
       }
     } else {
-      // On a different route, sync tabs with route
-      // Tabs exist - check if active tab matches current route
-      const activeTab = tabs.value.find(tab => tab.id === activeTabId.value);
-      if (activeTab && activeTab.path !== routeToWatch.path) {
-        console.log('🔄 Initial sync: active tab path', activeTab.path, 'does not match route', routeToWatch.path);
-        // Check if a tab exists for the current route
-        const routeTab = findTabByPath(routeToWatch.path);
-        if (routeTab) {
-          // Switch to existing tab for this route
-          activeTabId.value = routeTab.id;
-        } else {
-          // Create a new tab for the current route
-          const wasProgrammatic = isProgrammaticNavigation;
-          isProgrammaticNavigation = false;
-          syncTabWithRoute(routeToWatch.path);
-          isProgrammaticNavigation = wasProgrammatic;
-        }
-      } else if (!activeTab) {
-        console.log('🔄 Initial sync: no active tab found, syncing to route', routeToWatch.path);
+      // On a different route (e.g., dashboard route)
+      // If tabs are empty, create a tab for the current route
+      if (tabs.value.length === 0) {
+        console.log('🔄 [setupRouteWatcher] Tabs are empty, creating tab for current route:', routeToWatch.path);
         const wasProgrammatic = isProgrammaticNavigation;
         isProgrammaticNavigation = false;
         syncTabWithRoute(routeToWatch.path);
         isProgrammaticNavigation = wasProgrammatic;
       } else {
-        console.log('✅ Initial sync: active tab matches route, no sync needed');
+        // Tabs exist - check if active tab matches current route
+        const activeTab = tabs.value.find(tab => tab.id === activeTabId.value);
+        if (activeTab && activeTab.path !== routeToWatch.path) {
+          console.log('🔄 Initial sync: active tab path', activeTab.path, 'does not match route', routeToWatch.path);
+          // Check if a tab exists for the current route
+          const routeTab = findTabByPath(routeToWatch.path);
+          if (routeTab) {
+            // Switch to existing tab for this route
+            activeTabId.value = routeTab.id;
+          } else {
+            // Create a new tab for the current route
+            const wasProgrammatic = isProgrammaticNavigation;
+            isProgrammaticNavigation = false;
+            syncTabWithRoute(routeToWatch.path);
+            isProgrammaticNavigation = wasProgrammatic;
+          }
+        } else if (!activeTab) {
+          console.log('🔄 Initial sync: no active tab found, syncing to route', routeToWatch.path);
+          const wasProgrammatic = isProgrammaticNavigation;
+          isProgrammaticNavigation = false;
+          syncTabWithRoute(routeToWatch.path);
+          isProgrammaticNavigation = wasProgrammatic;
+        } else {
+          console.log('✅ Initial sync: active tab matches route, no sync needed');
+        }
       }
     }
     

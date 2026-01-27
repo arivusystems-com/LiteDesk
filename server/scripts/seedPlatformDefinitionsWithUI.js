@@ -47,78 +47,6 @@ const APP_DEFINITIONS = [
     }
   },
   {
-    appKey: 'sales',
-    name: 'Sales',
-    description: 'Sales application for managing sales pipeline, opportunities, and customer relationships',
-    icon: '💰',
-    category: 'BUSINESS',
-    owner: 'PLATFORM',
-    enabled: true,
-    order: 2,
-    capabilities: {
-      usesPeople: true,
-      usesOrganization: true,
-      usesTransactions: true,
-      usesAutomation: true
-    },
-    settingsSchema: null,
-    // Phase 2D: UI Metadata
-    ui: {
-      sidebarOrder: 2,
-      icon: '💰',
-      defaultRoute: '/sales/people',
-      showInAppSwitcher: true
-    }
-  },
-  {
-    appKey: 'helpdesk',
-    name: 'Helpdesk',
-    description: 'Helpdesk application for managing support cases and customer service',
-    icon: '🎧',
-    category: 'BUSINESS',
-    owner: 'PLATFORM',
-    enabled: true,
-    order: 3,
-    capabilities: {
-      usesPeople: true,
-      usesOrganization: true,
-      usesTransactions: false,
-      usesAutomation: true
-    },
-    settingsSchema: null,
-    // Phase 2D: UI Metadata
-    ui: {
-      sidebarOrder: 3,
-      icon: '🎧',
-      defaultRoute: '/helpdesk/cases',
-      showInAppSwitcher: true
-    }
-  },
-  {
-    appKey: 'projects',
-    name: 'Projects',
-    description: 'Projects application for managing projects, tasks, and operations',
-    icon: '📁',
-    category: 'BUSINESS',
-    owner: 'PLATFORM',
-    enabled: true,
-    order: 4,
-    capabilities: {
-      usesPeople: true,
-      usesOrganization: true,
-      usesTransactions: false,
-      usesAutomation: true
-    },
-    settingsSchema: null,
-    // Phase 2D: UI Metadata
-    ui: {
-      sidebarOrder: 4,
-      icon: '📁',
-      defaultRoute: '/projects/projects',
-      showInAppSwitcher: true
-    }
-  },
-  {
     appKey: 'audit',
     name: 'Audit',
     description: 'Audit management application for managing audit visits, findings, and corrective actions',
@@ -126,7 +54,7 @@ const APP_DEFINITIONS = [
     category: 'BUSINESS',
     owner: 'PLATFORM',
     enabled: true,
-    order: 5,
+    order: 2,
     capabilities: {
       usesPeople: false,
       usesOrganization: true,
@@ -136,7 +64,7 @@ const APP_DEFINITIONS = [
     settingsSchema: null,
     // Phase 2D: UI Metadata - Updated defaultRoute
     ui: {
-      sidebarOrder: 5,
+      sidebarOrder: 2,
       icon: '📋',
       defaultRoute: '/audit/dashboard',
       showInAppSwitcher: true
@@ -150,7 +78,7 @@ const APP_DEFINITIONS = [
     category: 'BUSINESS',
     owner: 'PLATFORM',
     enabled: true,
-    order: 6,
+    order: 3,
     capabilities: {
       usesPeople: true,
       usesOrganization: false,
@@ -160,7 +88,7 @@ const APP_DEFINITIONS = [
     settingsSchema: null,
     // Phase 2D: UI Metadata - Updated defaultRoute
     ui: {
-      sidebarOrder: 6,
+      sidebarOrder: 3,
       icon: '🌐',
       defaultRoute: '/portal/dashboard',
       showInAppSwitcher: true
@@ -586,15 +514,18 @@ const MODULE_DEFINITIONS = [
   }
 ];
 
-async function seedPlatformDefinitionsWithUI() {
+async function seedPlatformDefinitionsWithUI(useExistingConnection = false) {
   try {
     console.log('🚀 Seeding Platform App & Module Definitions with UI Metadata (Phase 0D)...\n');
 
-    // Get master database URI (always uses litedesk_master)
-    const masterUri = getMasterDatabaseUri();
-    console.log('🔗 Connecting to MongoDB master database (litedesk_master)...');
-    await mongoose.connect(masterUri);
-    console.log('✅ Connected to MongoDB master database (litedesk_master)\n');
+    // Connect to database if not using existing connection
+    if (!useExistingConnection) {
+      // Get master database URI (always uses litedesk_master)
+      const masterUri = getMasterDatabaseUri();
+      console.log('🔗 Connecting to MongoDB master database (litedesk_master)...');
+      await mongoose.connect(masterUri);
+      console.log('✅ Connected to MongoDB master database (litedesk_master)\n');
+    }
 
     // Seed Apps
     console.log('📦 Seeding App Definitions...');
@@ -611,15 +542,21 @@ async function seedPlatformDefinitionsWithUI() {
           { $set: appData }
         );
         appsUpdated++;
-        console.log(`  ✅ Updated app: ${appData.appKey} (${appData.name})`);
+        if (!useExistingConnection) {
+          console.log(`  ✅ Updated app: ${appData.appKey} (${appData.name})`);
+        }
       } else {
         await AppDefinition.create(appData);
         appsCreated++;
-        console.log(`  ✅ Created app: ${appData.appKey} (${appData.name})`);
+        if (!useExistingConnection) {
+          console.log(`  ✅ Created app: ${appData.appKey} (${appData.name})`);
+        }
       }
     }
 
-    console.log(`\n📊 Apps: ${appsCreated} created, ${appsUpdated} updated\n`);
+    if (!useExistingConnection) {
+      console.log(`\n📊 Apps: ${appsCreated} created, ${appsUpdated} updated\n`);
+    }
 
     // Seed Modules
     console.log('📦 Seeding Module Definitions...');
@@ -629,44 +566,61 @@ async function seedPlatformDefinitionsWithUI() {
     for (const moduleData of MODULE_DEFINITIONS) {
       const existingModule = await ModuleDefinition.findOne({
         appKey: moduleData.appKey,
-        moduleKey: moduleData.moduleKey
+        moduleKey: moduleData.moduleKey,
+        organizationId: moduleData.organizationId || null
       });
       
       if (existingModule) {
         // Update existing module, preserving any custom fields
         await ModuleDefinition.updateOne(
-          { appKey: moduleData.appKey, moduleKey: moduleData.moduleKey },
+          { appKey: moduleData.appKey, moduleKey: moduleData.moduleKey, organizationId: moduleData.organizationId || null },
           { $set: moduleData }
         );
         modulesUpdated++;
-        console.log(`  ✅ Updated module: ${moduleData.appKey}.${moduleData.moduleKey} (${moduleData.label})`);
+        if (!useExistingConnection) {
+          console.log(`  ✅ Updated module: ${moduleData.appKey}.${moduleData.moduleKey} (${moduleData.label})`);
+        }
       } else {
         await ModuleDefinition.create(moduleData);
         modulesCreated++;
-        console.log(`  ✅ Created module: ${moduleData.appKey}.${moduleData.moduleKey} (${moduleData.label})`);
+        if (!useExistingConnection) {
+          console.log(`  ✅ Created module: ${moduleData.appKey}.${moduleData.moduleKey} (${moduleData.label})`);
+        }
       }
     }
 
-    console.log(`\n📊 Modules: ${modulesCreated} created, ${modulesUpdated} updated\n`);
+    if (!useExistingConnection) {
+      console.log(`\n📊 Modules: ${modulesCreated} created, ${modulesUpdated} updated\n`);
+    }
 
     // Summary
-    console.log('✅ Platform definitions with UI metadata seeded successfully!');
-    console.log(`\n📈 Summary:`);
-    console.log(`   - Apps: ${appsCreated + appsUpdated} total`);
-    console.log(`   - Modules: ${modulesCreated + modulesUpdated} total`);
-    console.log(`\n💡 Next Steps:`);
-    console.log(`   1. Ensure organizations have enabledApps set (default: ['SALES'])`);
-    console.log(`   2. Create TenantModuleConfiguration records for enabled modules`);
-    console.log(`   3. Test UI composition by logging in and checking /api/ui/sidebar\n`);
+    if (!useExistingConnection) {
+      console.log('✅ Platform definitions with UI metadata seeded successfully!');
+      console.log(`\n📈 Summary:`);
+      console.log(`   - Apps: ${appsCreated + appsUpdated} total`);
+      console.log(`   - Modules: ${modulesCreated + modulesUpdated} total`);
+      console.log(`\n💡 Next Steps:`);
+      console.log(`   1. Ensure organizations have enabledApps set (default: ['SALES'])`);
+      console.log(`   2. Create TenantModuleConfiguration records for enabled modules`);
+      console.log(`   3. Test UI composition by logging in and checking /api/ui/sidebar\n`);
+    }
 
-    await mongoose.connection.close();
-    console.log('🔌 Disconnected from MongoDB');
-    process.exit(0);
+    // Only close connection if we opened it
+    if (!useExistingConnection) {
+      await mongoose.connection.close();
+      console.log('🔌 Disconnected from MongoDB');
+      process.exit(0);
+    }
+
+    return { appsCreated, appsUpdated, modulesCreated, modulesUpdated };
 
   } catch (error) {
     console.error('❌ Error seeding platform definitions:', error);
-    await mongoose.connection.close();
-    process.exit(1);
+    if (!useExistingConnection) {
+      await mongoose.connection.close();
+      process.exit(1);
+    }
+    throw error; // Re-throw if using existing connection
   }
 }
 

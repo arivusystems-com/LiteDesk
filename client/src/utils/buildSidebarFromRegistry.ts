@@ -27,6 +27,7 @@ import { memoizeBuilder } from '@/utils/builderCache';
 import { validateAppRegistryOrThrow } from '@/utils/validateAppRegistry';
 import { assertValidSidebarStructure } from '@/utils/assertValidSidebarStructure';
 import apiClient from '@/utils/apiClient';
+import { getActivePinia } from 'pinia';
 
 const LAST_ACTIVE_APP_ID_KEY = 'litedesk-sidebar-last-active-app-id';
 
@@ -162,21 +163,17 @@ async function buildCoreModules(snapshot: PermissionSnapshot): Promise<SidebarIt
       return [];
     }
 
-    // Try to use apiClient, but handle cases where Pinia might not be initialized
-    let response;
-    try {
-      response = await apiClient('/settings/core-modules', { method: 'GET' });
-    } catch (apiError: any) {
-      // If Pinia is not initialized or API call fails, return empty array
-      // This can happen during dev self-tests or before the app is fully initialized
-      if (apiError?.message?.includes('Pinia') || apiError?.message?.includes('getActivePinia')) {
-        if (import.meta.env.DEV) {
-          console.warn('[buildSidebarFromRegistry] Pinia not initialized, skipping core modules fetch');
-        }
-        return [];
-      }
-      throw apiError; // Re-throw other errors
+    // Check if Pinia is initialized before making API calls
+    // apiClient uses Pinia stores, so we need Pinia to be active
+    const pinia = getActivePinia();
+    if (!pinia) {
+      // Pinia not initialized - this is expected during dev self-tests or before app initialization
+      // Silently return empty array (no warning needed as this is expected behavior)
+      return [];
     }
+
+    // Try to use apiClient - Pinia is now guaranteed to be initialized
+    const response = await apiClient('/settings/core-modules', { method: 'GET' });
 
     const modules = response?.modules || [];
 
@@ -244,7 +241,9 @@ function buildAppSwitcherApps(appRegistry: AppRegistry, snapshot: PermissionSnap
         return true;
       });
 
-      const hasAnyAccess = modules.some((m) => hasPermission(m.permission, snapshot));
+      // If app has modules, check if user has access to any of them
+      // If app has no modules (dashboard-only app), include it anyway
+      const hasAnyAccess = modules.length === 0 || modules.some((m) => hasPermission(m.permission, snapshot));
       return { app, hasAnyAccess };
     })
     .filter((x) => x.hasAnyAccess)

@@ -27,7 +27,7 @@ const DEFAULT_ADMIN = {
     username: 'Admin User',
     firstName: 'Admin',
     lastName: 'User',
-    organizationName: 'LiteDesk Master',
+    organizationName: 'Arivu',
     industry: 'Technology'
 };
 
@@ -75,6 +75,7 @@ const masterUri = `${baseUri}/${masterDbName}${connectionQuery}`;
             name: DEFAULT_ADMIN.organizationName,
             industry: DEFAULT_ADMIN.industry,
             isActive: true,
+            isTenant: true, // Mark as tenant organization (required for feature checks)
             subscription: {
                 status: 'active',
                 tier: 'paid', // Updated to match new subscription tiers
@@ -98,9 +99,17 @@ const masterUri = `${baseUri}/${masterDbName}${connectionQuery}`;
                 'demo_requests',
                 'instances'
             ],
-            // Master organization starts with CRM enabled
+            // Master organization starts with Sales, Audit, and Portal enabled
             enabledApps: [{
-                appKey: 'CRM',
+                appKey: 'SALES',
+                status: 'ACTIVE',
+                enabledAt: new Date()
+            }, {
+                appKey: 'AUDIT',
+                status: 'ACTIVE',
+                enabledAt: new Date()
+            }, {
+                appKey: 'PORTAL',
                 status: 'ACTIVE',
                 enabledAt: new Date()
             }]
@@ -134,10 +143,28 @@ const masterUri = `${baseUri}/${masterDbName}${connectionQuery}`;
         const { APP_KEYS } = require('../constants/appKeys');
         const { validateAppRole } = require('../utils/appAccessUtils');
         
-        // Ensure owner has CRM: ADMIN access
-        const crmRoleKey = 'ADMIN';
-        if (!validateAppRole(APP_KEYS.SALES, crmRoleKey)) {
-            throw new Error(`Invalid CRM roleKey: ${crmRoleKey}`);
+        // Ensure Sales app is present in enabledApps (preserve any other enabled apps like AUDIT/PORTAL)
+        if (!organization.enabledApps || !organization.enabledApps.some(app => {
+            const appKey = typeof app === 'string' ? app : app.appKey;
+            return appKey === APP_KEYS.SALES;
+        })) {
+            const existingApps = Array.isArray(organization.enabledApps) ? organization.enabledApps : [];
+            organization.enabledApps = [
+                ...existingApps,
+                {
+                    appKey: APP_KEYS.SALES,
+                    status: 'ACTIVE',
+                    enabledAt: new Date()
+                }
+            ];
+            await organization.save();
+            console.log('✅ Ensured organization.enabledApps includes SALES (existing apps preserved)');
+        }
+        
+        // Ensure owner has Sales: ADMIN access
+        const salesRoleKey = 'ADMIN';
+        if (!validateAppRole(APP_KEYS.SALES, salesRoleKey)) {
+            throw new Error(`Invalid Sales roleKey: ${salesRoleKey}`);
         }
 
         const adminUser = new User({
@@ -153,7 +180,7 @@ const masterUri = `${baseUri}/${masterDbName}${connectionQuery}`;
             userType: 'INTERNAL',
             appAccess: [{
                 appKey: APP_KEYS.SALES,
-                roleKey: crmRoleKey, // Owner must have CRM: ADMIN
+                roleKey: salesRoleKey, // Owner must have Sales: ADMIN
                 status: 'ACTIVE',
                 addedAt: new Date()
             }],
@@ -168,41 +195,6 @@ const masterUri = `${baseUri}/${masterDbName}${connectionQuery}`;
         console.log(`   Name: ${adminUser.firstName} ${adminUser.lastName}`);
         console.log(`   Email: ${adminUser.email}`);
         console.log(`   Role: ${adminUser.role}`);
-
-        // Create/Update CRM organization record (optional, for demo purposes)
-        try {
-            const crmOrg = {
-                legacyOrganizationId: organization._id,
-                name: organization.name,
-                types: ['Customer'],
-                industry: organization.industry,
-                website: process.env.DEFAULT_ORG_WEBSITE || '',
-                phone: process.env.DEFAULT_ORG_PHONE || '',
-                address: process.env.DEFAULT_ORG_ADDRESS || '',
-                // Customer-specific defaults for master org
-                customerStatus: 'Active',
-                customerTier: 'Gold',
-                slaLevel: process.env.DEFAULT_ORG_SLA || '',
-                paymentTerms: process.env.DEFAULT_ORG_PAYMENT_TERMS || '',
-                creditLimit: Number(process.env.DEFAULT_ORG_CREDIT_LIMIT || 0),
-                accountManager: adminUser._id,
-                annualRevenue: Number(process.env.DEFAULT_ORG_ANNUAL_REVENUE || 0),
-                numberOfEmployees: Number(process.env.DEFAULT_ORG_EMPLOYEES || 0),
-                // Ownership/links
-                assignedTo: adminUser._id,
-                primaryContact: null,
-                isTenant: false // Mark as CRM organization
-            };
-
-            await Organization.updateOne(
-                { legacyOrganizationId: organization._id, isTenant: false },
-                { $set: crmOrg },
-                { upsert: true }
-            );
-            console.log('✅ CRM organization record created/updated');
-        } catch (crmErr) {
-            console.warn('⚠️  Failed to create CRM organization record:', crmErr.message);
-        }
 
         // Success summary
         console.log('\n' + '='.repeat(60));

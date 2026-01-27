@@ -173,19 +173,38 @@ async function updatePeopleModuleFields(organizationId = null) {
   try {
     // Connect to MongoDB if not already connected
     if (mongoose.connection.readyState === 0) {
-      const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/litedesk';
+      const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/litedesk';
       await mongoose.connect(mongoUri);
-      console.log('Connected to MongoDB');
+      console.log(`[updatePeopleModuleFields] Connected to MongoDB: ${mongoose.connection.name}`);
+    } else {
+      console.log(`[updatePeopleModuleFields] Using existing MongoDB connection: ${mongoose.connection.name}`);
     }
 
     // Get organizations to process (specific one or all)
     let organizations;
     if (organizationId) {
-      organizations = await Organization.find({ _id: organizationId });
-      console.log(`Found 1 organization (filtered by ID)`);
+      // Convert to ObjectId if it's a string
+      const orgId = mongoose.Types.ObjectId.isValid(organizationId) 
+        ? (typeof organizationId === 'string' ? new mongoose.Types.ObjectId(organizationId) : organizationId)
+        : organizationId;
+      
+      console.log(`[updatePeopleModuleFields] Looking for organization with ID: ${organizationId} (type: ${typeof organizationId})`);
+      organizations = await Organization.find({ _id: orgId });
+      
+      if (organizations.length === 0) {
+        // Try as string if ObjectId didn't work
+        organizations = await Organization.find({ _id: organizationId });
+        if (organizations.length === 0) {
+          const errorMsg = `Organization not found with ID: ${organizationId}. Database: ${mongoose.connection.name}`;
+          console.error(`[updatePeopleModuleFields] ${errorMsg}`);
+          throw new Error(errorMsg);
+        }
+      }
+      console.log(`[updatePeopleModuleFields] Found ${organizations.length} organization(s) (filtered by ID: ${organizationId})`);
+      console.log(`[updatePeopleModuleFields] Organization name: ${organizations[0]?.name || 'N/A'}`);
     } else {
       organizations = await Organization.find({});
-      console.log(`Found ${organizations.length} organizations`);
+      console.log(`[updatePeopleModuleFields] Found ${organizations.length} organizations`);
     }
 
     // Get People model schema
@@ -399,10 +418,17 @@ async function updatePeopleModuleFields(organizationId = null) {
     let updated = 0;
     let created = 0;
 
+    if (organizations.length === 0) {
+      throw new Error('No organizations found to process');
+    }
+
     for (const org of organizations) {
       const existing = await ModuleDefinition.findOne({
         organizationId: org._id,
-        key: 'people'
+        $or: [
+          { moduleKey: 'people' },
+          { key: 'people' } // Backward compatibility
+        ]
       });
 
       if (existing && existing.fields && existing.fields.length > 0) {
@@ -497,9 +523,18 @@ async function updatePeopleModuleFields(organizationId = null) {
         mergedFields.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
         existing.fields = mergedFields;
-        existing.name = 'People';
+        existing.label = existing.label || 'Person';
+        existing.pluralLabel = existing.pluralLabel || 'People';
+        existing.moduleKey = existing.moduleKey || existing.key || 'people';
+        existing.key = existing.key || existing.moduleKey || 'people'; // Legacy field
+        existing.entityType = existing.entityType || 'CORE';
+        existing.name = existing.name || 'People'; // Legacy field
         existing.type = 'system';
         existing.enabled = existing.enabled !== false;
+        // Ensure appKey is set for Sales app
+        if (!existing.appKey) {
+          existing.appKey = 'sales';
+        }
         await existing.save();
         updated++;
         console.log(`✓ Updated People module for organization: ${org.name || org._id} (preserved field order)`);
@@ -507,8 +542,12 @@ async function updatePeopleModuleFields(organizationId = null) {
         // Create new - use default order
         await ModuleDefinition.create({
           organizationId: org._id,
-          key: 'people',
-          name: 'People',
+          moduleKey: 'people',
+          key: 'people', // Legacy field for backward compatibility
+          appKey: 'sales', // Sales app module
+          label: 'Person',
+          pluralLabel: 'People',
+          entityType: 'CORE',
           type: 'system',
           enabled: true,
           fields: fields,

@@ -248,15 +248,15 @@ const ModuleDefinitionSchema = new mongoose.Schema({
   organizationId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Organization',
-    index: true,
     sparse: true // Allow null for platform-level definitions
+    // index: true removed - using explicit indexes below instead
   },
   key: {
     type: String,
     trim: true,
     lowercase: true,
-    index: true,
     sparse: true // Allow null for platform-level definitions
+    // index: true removed - using explicit indexes below instead
   },
   type: {
     type: String,
@@ -292,8 +292,9 @@ const ModuleDefinitionSchema = new mongoose.Schema({
   strict: false // Allow additional fields for tenant-specific overrides
 });
 
-// Compound unique index for appKey + moduleKey (platform-level)
-ModuleDefinitionSchema.index({ appKey: 1, moduleKey: 1 }, { unique: true });
+// Compound unique index for appKey + moduleKey (platform-level only)
+// Partial: only applies when organizationId is null (platform-level modules)
+ModuleDefinitionSchema.index({ appKey: 1, moduleKey: 1 }, { unique: true, partialFilterExpression: { organizationId: null } });
 ModuleDefinitionSchema.index({ appKey: 1 });
 
 // Indexes for tenant-specific overrides

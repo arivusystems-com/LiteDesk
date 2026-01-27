@@ -48,12 +48,12 @@ function getFallbackColumns(moduleKey: string): Array<{
 }> {
   const fallbacks: Record<string, Array<any>> = {
     people: [
-      { key: 'name', label: 'Name', dataType: 'text', sortable: true, order: 1 },
+      { key: 'name', label: 'Name', dataType: 'text', sortable: true, order: 1 }, // Computed from first_name + last_name
       { key: 'email', label: 'Email', dataType: 'text', sortable: true, order: 2 },
       { key: 'phone', label: 'Phone', dataType: 'text', sortable: false, order: 3 },
       { key: 'organization', label: 'Organization', dataType: 'text', sortable: true, order: 4 },
-      { key: 'lifecycle_stage', label: 'Stage', dataType: 'status', sortable: true, order: 5 },
-      { key: 'owner_id', label: 'Owner', dataType: 'user', sortable: true, order: 6 },
+      { key: 'type', label: 'Type', dataType: 'status', sortable: true, order: 5 }, // Use 'type' instead of 'lifecycle_stage'
+      { key: 'assignedTo', label: 'Owner', dataType: 'user', sortable: true, order: 6 }, // Use 'assignedTo' instead of 'owner_id'
     ],
     deals: [
       { key: 'name', label: 'Deal Name', dataType: 'text', sortable: true, order: 1 },
@@ -157,11 +157,23 @@ function isFieldTableEligible(
     return true; // For other modules, allow all fields
   }
 
+  // Known computed/virtual fields that don't exist in metadata but are valid
+  // These are computed from actual fields (e.g., "name" = first_name + last_name)
+  const computedFields = new Set(['name']);
+  
+  if (computedFields.has(fieldKey)) {
+    // Computed fields are always eligible (they're derived from metadata fields)
+    return true;
+  }
+
   // Get field metadata (fail-safe: if field not in metadata, allow it)
   const metadata = PEOPLE_FIELD_METADATA[fieldKey];
   if (!metadata) {
     // Field not in metadata - log warning but allow it (graceful degradation)
-    console.warn(`[buildModuleListFromRegistry] Field "${fieldKey}" not found in PEOPLE_FIELD_METADATA`);
+    // Only warn in dev mode to reduce noise
+    if (import.meta.env.DEV) {
+      console.warn(`[buildModuleListFromRegistry] Field "${fieldKey}" not found in PEOPLE_FIELD_METADATA`);
+    }
     return true;
   }
 

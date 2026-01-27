@@ -202,8 +202,8 @@ const FormResponseSchema = new Schema({
     // **********************************
     submittedBy: {
         type: Schema.Types.ObjectId,
-        ref: 'User',
-        index: true
+        ref: 'User'
+        // index: true removed - using explicit index below instead
     },
     submittedAt: {
         type: Date,

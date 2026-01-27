@@ -1,6 +1,6 @@
 <template>
   <nav
-    class="sidebar-nav flex flex-col h-full bg-white dark:bg-gray-900 border-r border-[#EAEEF4] dark:border-gray-700"
+    class="sidebar-nav flex grow flex-col h-full bg-white dark:bg-gray-900 border-r border-[#EAEEF4] dark:border-gray-700"
     :class="[
       // Responsive width: calculated as px ÷ 12 (Figma base), then scaled via CSS
       // 190px ÷ 12 = 15.833rem, 60px ÷ 12 = 5rem

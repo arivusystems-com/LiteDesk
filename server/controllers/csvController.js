@@ -1001,7 +1001,7 @@ const importTasks = async (req, res) => {
       'stats.failed': results.errors.length,
       'recordIds.created': results.createdIds,
       'recordIds.updated': results.updatedIds,
-      errors: results.errors,
+      importErrors: results.errors, // Renamed from 'errors' to avoid reserved pathname warning
       processingTime
     });
 

@@ -1,6 +1,8 @@
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, getCurrentInstance } from 'vue';
 
 const colorMode = ref('light'); // Global state shared across the app
+let initialized = false; // Track if color mode has been initialized
+let systemListener = null; // Store the system listener reference
 
 // Inside src/composables/useColorMode.js
 
@@ -13,7 +15,7 @@ const applyMode = (mode) => {
   // 1. **CRITICAL STEP:** Remove the 'dark' class (and 'light', if used)
   // This ensures a clean slate, especially important when switching FROM dark TO light.
   root.classList.remove('dark', 'light'); 
-
+  
   // 2. Conditionally apply the 'dark' class based on the mode
   if (mode === 'system') {
     // Check OS preference and apply 'dark' if preferred
@@ -38,19 +40,44 @@ const applyMode = (mode) => {
   // and Tailwind defaults to the base (light mode) styles.
 };
 
-// ... the rest of your useColorMode logic ...
+// Initialize color mode from localStorage (runs synchronously)
+const initializeColorMode = () => {
+  if (initialized || typeof window === 'undefined') {
+    return;
+  }
+  
+  const storedMode = localStorage.getItem('color-mode');
+  console.log('Stored color mode:', storedMode);
+  if (['light', 'dark', 'system'].includes(storedMode)) {
+    colorMode.value = storedMode;
+    console.log('Using stored mode:', storedMode);
+  } else {
+    console.log('Using default mode:', colorMode.value);
+  }
+  
+  applyMode(colorMode.value);
+  initialized = true;
+};
 
 // Listen for system preference changes while in 'system' mode
 const setupSystemListener = () => {
+  if (typeof window === 'undefined' || systemListener) {
+    return;
+  }
+  
   const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-  mediaQuery.addEventListener('change', () => {
+  const handler = () => {
     if (colorMode.value === 'system') {
       applyMode('system');
     }
-  });
+  };
+  mediaQuery.addEventListener('change', handler);
+  systemListener = { mediaQuery, handler };
 };
 
 export function useColorMode() {
+  // Initialize color mode immediately if not already initialized (works outside components)
+  initializeColorMode();
   
   const toggleColorMode = (mode) => {
     console.log('toggleColorMode called with:', mode);
@@ -64,20 +91,20 @@ export function useColorMode() {
     applyMode(mode);
   };
 
-  // Initial setup: check local storage and apply mode
-  onMounted(() => {
-    const storedMode = localStorage.getItem('color-mode');
-    console.log('Stored color mode:', storedMode);
-    if (['light', 'dark', 'system'].includes(storedMode)) {
-      colorMode.value = storedMode;
-      console.log('Using stored mode:', storedMode);
-    } else {
-      console.log('Using default mode:', colorMode.value);
+  // Only use onMounted if we're in a component context
+  // This allows the composable to work both in components and in main.ts
+  const instance = getCurrentInstance();
+  if (instance) {
+    // We're in a component, so we can use onMounted for setting up the system listener
+    onMounted(() => {
+      setupSystemListener();
+    });
+  } else {
+    // We're not in a component (e.g., called from main.ts), set up listener immediately
+    if (typeof window !== 'undefined') {
+      setupSystemListener();
     }
-    
-    applyMode(colorMode.value);
-    setupSystemListener();
-  });
+  }
 
   // Watch for manual changes via the switcher and apply
   watch(colorMode, (newMode) => {

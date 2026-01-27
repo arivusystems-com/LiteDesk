@@ -22,9 +22,9 @@ const AppDefinitionSchema = new mongoose.Schema({
   appKey: {
     type: String,
     required: true,
-    unique: true,
     trim: true,
     lowercase: true
+    // unique: true removed - using explicit index below instead
   },
 
   name: {

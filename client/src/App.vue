@@ -44,8 +44,7 @@ const hideShell = computed(() => {
   if (route.path.startsWith('/login') || route.path.startsWith('/auth/')) return true;
   // Hide for audit routes (they use AuditLayout)
   if (route.path.startsWith('/audit/')) return true;
-  // Hide for portal routes (they use PortalLayout)
-  if (route.path.startsWith('/portal/')) return true;
+  // Portal routes now use standard PlatformShell layout
   // Platform routes show the shell
   return false;
 });
@@ -193,11 +192,12 @@ onMounted(async () => {
       appShellStore.setActiveApp(detectedApp);
     }
 
-    // Only initialize tabs system for CRM routes (not audit or portal apps)
-    // Audit and Portal apps have their own layouts and don't use the tabs system
+    // Only initialize tabs system for CRM routes (not audit, portal, or settings)
+    // Audit, Portal, and Settings have their own layouts and don't use the tabs system
     const isAuditRoute = route.path.startsWith('/audit/');
     const isPortalRoute = route.path.startsWith('/portal/');
-    if (!isAuditRoute && !isPortalRoute) {
+    const isSettingsRoute = route.path.startsWith('/settings');
+    if (!isAuditRoute && !isPortalRoute && !isSettingsRoute) {
       // Configure per-instance, per-user storage key for tab persistence
       // Tabs are scoped by instanceId + userId to prevent leakage across instances/users.
       const instanceId = authStore.organization?._id || authStore.organization?.instanceId;
@@ -229,7 +229,7 @@ onMounted(async () => {
         });
       }
     } else {
-      console.log('📋 Audit/Portal route detected, skipping tabs initialization');
+      console.log('📋 Audit/Portal/Settings route detected, skipping tabs initialization');
     }
 
     // Note: We don't need a router.beforeEach guard here because:
@@ -287,8 +287,9 @@ watch(
         // Use 'route' from useRoute() (same as onMounted) instead of router.currentRoute.value
         const isAuditRoute = route.path.startsWith('/audit/');
         const isPortalRoute = route.path.startsWith('/portal/');
+        const isSettingsRoute = route.path.startsWith('/settings');
         
-        if (!isAuditRoute && !isPortalRoute) {
+        if (!isAuditRoute && !isPortalRoute && !isSettingsRoute) {
           configureTabsStorage({ instanceId, userId });
           initTabs();
           
@@ -315,7 +316,7 @@ watch(
             console.warn('⚠️ [App] After login - setupRouteWatcher did not return cleanup function');
           }
         } else {
-          console.log('📋 [App] After login - Audit/Portal route detected, skipping tabs initialization');
+          console.log('📋 [App] After login - Audit/Portal/Settings route detected, skipping tabs initialization');
         }
       }
     }
