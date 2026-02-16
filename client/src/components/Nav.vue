@@ -216,7 +216,7 @@ const toggleColorModeFromMenu = () => {
 // Menu items for the user dropdown
 const userMenuItems = computed(() => [
     { name: 'Your Profile', action: () => router.push('/profile') },
-    { name: 'Settings', action: () => window.open('/settings', '_blank') },
+    { name: 'Settings', action: () => window.open(router.resolve('/settings').href, '_blank') },
     { 
         name: colorMode.value === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode', 
         action: toggleColorModeFromMenu, 

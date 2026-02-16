@@ -1,7 +1,7 @@
 <template>
   <div class="mx-auto w-full">
     <!-- Header -->
-    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
+    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4 sm:mb-4">
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-3">
           <!-- View Selector Dropdown (People module only) -->
@@ -201,6 +201,8 @@
           </div>
         </div>
 
+        <slot name="search-actions" />
+
         <!-- Mobile & Tablet Filters Button -->
         <Popover v-if="filterConfig && filterConfig.length > 0" class="relative">
           <PopoverButton
@@ -327,12 +329,12 @@
 
         <!-- Customize Button (Mobile & Tablet) -->
         <button
-          @click="showColumnSettings = !showColumnSettings"
+          @click="handleCustomizeClick"
           class="inline-flex h-10 items-center gap-2 px-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors text-sm cursor-pointer"
-          title="Customize View"
+          :title="customizeButtonLabel"
         >
           <Cog6ToothIcon class="w-4 h-4" />
-          <span class="hidden sm:inline">Customize</span>
+          <span class="hidden sm:inline">{{ customizeButtonLabel }}</span>
         </button>
       </div>
 
@@ -363,6 +365,8 @@
             </button>
           </div>
         </div>
+
+        <slot name="search-actions" />
 
         <!-- Filters (Desktop/Tablet) - Type-based rendering -->
         <div class="flex flex-wrap items-center gap-3 flex-1">
@@ -499,12 +503,12 @@
         <!-- Customize Button (Desktop/Tablet) -->
         <div class="flex items-center">
           <button
-            @click="showColumnSettings = !showColumnSettings"
+            @click="handleCustomizeClick"
             class="inline-flex items-center h-10 gap-2 px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-medium transition-colors text-sm cursor-pointer"
-            title="Customize View"
+            :title="customizeButtonLabel"
           >
             <Cog6ToothIcon class="w-4 h-4" />
-            <span>Customize</span>
+            <span>{{ customizeButtonLabel }}</span>
           </button>
         </div>
       </div>
@@ -1053,6 +1057,259 @@
       </Transition>
     </Teleport>
 
+    <!-- Customize Kanban Drawer -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition-opacity duration-300 ease-out"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition-opacity duration-300 ease-in"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="showKanbanSettings"
+          @click="showKanbanSettings = false"
+          class="fixed inset-0 bg-black/20 dark:bg-black/40 z-[9998]"
+        ></div>
+      </Transition>
+      <Transition
+        enter-active-class="transition-transform ease-out duration-300"
+        enter-from-class="translate-x-full"
+        enter-to-class="translate-x-0"
+        leave-active-class="transition-transform ease-in duration-300"
+        leave-from-class="translate-x-0"
+        leave-to-class="translate-x-full"
+      >
+        <div
+          v-if="showKanbanSettings"
+          @click.stop
+          class="fixed right-0 top-0 h-full w-full max-w-xs bg-white dark:bg-gray-900 shadow-2xl flex flex-col z-[9999]"
+        >
+          <div class="flex items-center justify-between px-6 pr-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Customize Kanban</h3>
+            <button
+              @click="showKanbanSettings = false"
+              class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors cursor-pointer"
+            >
+              <XMarkIcon class="w-5 h-5 text-gray-500 dark:text-gray-400" />
+            </button>
+          </div>
+          <div class="flex-1 overflow-y-auto">
+            <!-- Kanban options -->
+            <div class="border-b border-gray-200 dark:border-gray-700">
+              <button
+                @click="kanbanOptionsExpanded = !kanbanOptionsExpanded"
+                class="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+              >
+                <div class="flex items-center gap-3">
+                  <ViewColumnsIcon class="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                  <span class="text-sm font-medium text-gray-900 dark:text-white">Kanban options</span>
+                </div>
+                <ChevronDownIcon
+                  :class="['w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform', kanbanOptionsExpanded ? 'rotate-180' : '']"
+                />
+              </button>
+              <div v-if="kanbanOptionsExpanded" class="pb-4 space-y-0 px-3">
+                <Menu as="div" class="relative">
+                  <MenuButton class="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors cursor-pointer">
+                    <span>Card size</span>
+                    <div class="flex items-center gap-2">
+                      <span class="text-gray-500 dark:text-gray-400">{{ kanbanCardSizeLabels[kanbanCardSize] || kanbanCardSize }}</span>
+                      <ChevronRightIcon class="w-4 h-4" />
+                    </div>
+                  </MenuButton>
+                  <Transition
+                    enter-active-class="transition duration-100 ease-out"
+                    enter-from-class="transform scale-95 opacity-0"
+                    enter-to-class="transform scale-100 opacity-100"
+                    leave-active-class="transition duration-75 ease-in"
+                    leave-from-class="transform scale-100 opacity-100"
+                    leave-to-class="transform scale-95 opacity-0"
+                  >
+                    <MenuItems class="absolute right-0 z-10 mt-2 w-40 origin-top-right rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg focus:outline-none">
+                      <div class="py-1">
+                        <MenuItem
+                          v-for="(label, value) in kanbanCardSizeLabels"
+                          :key="value"
+                          v-slot="{ active }"
+                        >
+                          <button
+                            @click="setKanbanCardSize(value)"
+                            :class="[
+                              active ? 'bg-gray-100 dark:bg-gray-700' : '',
+                              kanbanCardSize === value ? 'text-indigo-600 dark:text-indigo-400 font-medium' : 'text-gray-700 dark:text-gray-300',
+                              'block w-full text-left px-4 py-2 text-sm cursor-pointer'
+                            ]"
+                          >
+                            {{ label }}
+                          </button>
+                        </MenuItem>
+                      </div>
+                    </MenuItems>
+                  </Transition>
+                </Menu>
+                <div class="flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
+                  <span>Stack fields</span>
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" v-model="kanbanStackFields" @change="saveKanbanOptions()" class="sr-only peer">
+                    <div class="w-9 h-5 bg-gray-200 dark:bg-gray-600 rounded-full peer peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                  </label>
+                </div>
+                <div class="flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
+                  <span>Collapse empty columns</span>
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" v-model="kanbanCollapseEmptyColumns" @change="saveKanbanOptions()" class="sr-only peer">
+                    <div class="w-9 h-5 bg-gray-200 dark:bg-gray-600 rounded-full peer peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                  </label>
+                </div>
+                <div class="flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
+                  <span>Show empty fields</span>
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" v-model="kanbanShowEmptyFields" @change="saveKanbanOptions()" class="sr-only peer">
+                    <div class="w-9 h-5 bg-gray-200 dark:bg-gray-600 rounded-full peer peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                  </label>
+                </div>
+                <div class="flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
+                  <span>Show closed records</span>
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" v-model="kanbanClosedTasks" @change="saveKanbanOptions()" class="sr-only peer">
+                    <div class="w-9 h-5 bg-gray-200 dark:bg-gray-600 rounded-full peer peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                  </label>
+                </div>
+                <!-- Reset -->
+                <Menu as="div" class="relative px-3">
+                  <MenuButton class="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors cursor-pointer">
+                    <span>Reset</span>
+                    <ChevronRightIcon class="w-4 h-4" />
+                  </MenuButton>
+                  <Transition
+                    enter-active-class="transition duration-100 ease-out"
+                    enter-from-class="transform scale-95 opacity-0"
+                    enter-to-class="transform scale-100 opacity-100"
+                    leave-active-class="transition duration-75 ease-in"
+                    leave-from-class="transform scale-100 opacity-100"
+                    leave-to-class="transform scale-95 opacity-0"
+                  >
+                    <MenuItems class="absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg focus:outline-none">
+                      <div class="py-1">
+                        <MenuItem v-slot="{ active }">
+                          <button
+                            @click="resetKanbanToDefault"
+                            :class="[
+                              active ? 'bg-gray-100 dark:bg-gray-700' : '',
+                              'block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer'
+                            ]"
+                          >
+                            Default view
+                          </button>
+                        </MenuItem>
+                      </div>
+                    </MenuItems>
+                  </Transition>
+                </Menu>
+              </div>
+            </div>
+            <!-- Manage fields -->
+            <div>
+              <button
+                @click="kanbanManageFieldsExpanded = !kanbanManageFieldsExpanded"
+                class="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+              >
+                <div class="flex items-center gap-3">
+                  <PencilSquareIcon class="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                  <span class="text-sm font-medium text-gray-900 dark:text-white">Manage fields</span>
+                </div>
+                <ChevronDownIcon
+                  :class="['w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform', kanbanManageFieldsExpanded ? 'rotate-180' : '']"
+                />
+              </button>
+              <div v-if="kanbanManageFieldsExpanded" class="pb-4 space-y-4">
+                <div class="relative px-6">
+                  <MagnifyingGlassIcon class="absolute left-9 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    v-model="kanbanFieldSearchQuery"
+                    type="text"
+                    placeholder="Search fields"
+                    class="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+                  />
+                </div>
+                <div>
+                  <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3 px-6">
+                    Shown ({{ kanbanShownFields.length }})
+                  </h4>
+                  <div class="space-y-1 px-3">
+                    <div
+                      v-for="(field, index) in kanbanShownFields"
+                      :key="field.key"
+                      :draggable="!field.locked"
+                      @dragstart="handleKanbanDragStart($event, index)"
+                      @dragover.prevent="handleKanbanDragOver"
+                      @dragenter.prevent="handleKanbanDragEnter($event, index)"
+                      @dragleave.prevent="handleKanbanDragLeave"
+                      @drop.prevent="handleKanbanDrop($event, index)"
+                      @dragend="handleKanbanDragEnd"
+                      :class="[
+                        'flex items-center gap-3 px-2 py-2 rounded-lg transition-colors',
+                        field.locked ? 'cursor-not-allowed opacity-70' : 'cursor-move hover:bg-gray-100 dark:hover:bg-gray-800',
+                        kanbanDragOverIndex === index ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
+                      ]"
+                    >
+                      <!-- Grip handle icon (6 dots vertical) - same as Customize List -->
+                      <svg class="w-5 h-5 text-gray-400 flex-shrink-0 cursor-move" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="9" cy="5" r="1.5" />
+                        <circle cx="9" cy="12" r="1.5" />
+                        <circle cx="9" cy="19" r="1.5" />
+                        <circle cx="15" cy="5" r="1.5" />
+                        <circle cx="15" cy="12" r="1.5" />
+                        <circle cx="15" cy="19" r="1.5" />
+                      </svg>
+                      <component :is="getFieldIcon(field.dataType)" class="w-4 h-4 text-gray-500 dark:text-gray-400 flex-shrink-0" />
+                      <span class="flex-1 text-sm text-gray-900 dark:text-white">{{ field.label || field.key }}</span>
+                      <span v-if="field.locked" class="text-xs text-gray-500 dark:text-gray-400 mr-2">Locked</span>
+                      <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                        <input
+                          type="checkbox"
+                          :checked="field.visible"
+                          @change="toggleKanbanFieldVisibility(field.key)"
+                          :disabled="field.locked"
+                          :class="['sr-only peer', field.locked ? 'cursor-not-allowed opacity-50' : '']"
+                        >
+                        <div :class="[
+                          'w-9 h-5 bg-indigo-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-indigo-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600',
+                          field.locked ? 'opacity-50 cursor-not-allowed' : ''
+                        ]"></div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3 px-6">
+                    Hidden
+                  </h4>
+                  <div class="space-y-1 px-3">
+                    <div
+                      v-for="field in kanbanHiddenFields"
+                      :key="field.key"
+                      class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <component :is="getFieldIcon(field.dataType)" class="w-4 h-4 text-gray-500 dark:text-gray-400 flex-shrink-0" />
+                      <span class="flex-1 text-sm text-gray-900 dark:text-white">{{ field.label || field.key }}</span>
+                      <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                        <input type="checkbox" :checked="false" @change="toggleKanbanFieldVisibility(field.key)" class="sr-only peer">
+                        <div class="w-9 h-5 bg-gray-200 dark:bg-gray-600 rounded-full peer peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                      </label>
+                    </div>
+                    <div v-if="kanbanHiddenFields.length === 0" class="text-sm text-gray-500 dark:text-gray-400 py-2 text-center">No hidden fields</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <!-- Quick Preview Drawer -->
     <QuickPreviewDrawer
       v-if="activeTabId"
@@ -1073,7 +1330,7 @@ import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from
 import { useRouter } from 'vue-router';
 import { ArrowUpIcon, ArrowDownIcon } from '@heroicons/vue/20/solid';
 import { Listbox, ListboxButton, ListboxOptions, ListboxOption, Popover, PopoverButton, PopoverPanel, Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue';
-import { ChevronUpDownIcon, CheckIcon, Cog6ToothIcon, FunnelIcon, ChartBarIcon, XMarkIcon, WrenchScrewdriverIcon, ChevronDownIcon, ChevronRightIcon, PencilSquareIcon, MagnifyingGlassIcon, PlusIcon, TrashIcon, ArrowDownTrayIcon, DocumentDuplicateIcon, ArrowUpTrayIcon, ArchiveBoxIcon, ArrowPathIcon, ArrowRightIcon, StarIcon, PuzzlePieceIcon, RectangleStackIcon } from '@heroicons/vue/24/outline';
+import { ChevronUpDownIcon, CheckIcon, Cog6ToothIcon, FunnelIcon, ChartBarIcon, XMarkIcon, WrenchScrewdriverIcon, ChevronDownIcon, ChevronRightIcon, PencilSquareIcon, MagnifyingGlassIcon, PlusIcon, TrashIcon, ArrowDownTrayIcon, DocumentDuplicateIcon, ArrowUpTrayIcon, ArchiveBoxIcon, ArrowPathIcon, ArrowRightIcon, StarIcon, PuzzlePieceIcon, RectangleStackIcon, ViewColumnsIcon } from '@heroicons/vue/24/outline';
 import { 
   DocumentTextIcon, 
   UserIcon, 
@@ -1225,6 +1482,11 @@ const props = defineProps({
   externalFilters: {
     type: Object,
     default: () => ({})
+  },
+  /** When 'kanban', show "Customize Kanban" and open Kanban options drawer; otherwise "Customize List" and list column drawer */
+  viewMode: {
+    type: String,
+    default: null
   }
 });
 
@@ -1245,7 +1507,8 @@ const emit = defineEmits([
   'row-updated',
   'saved-view-selected',
   'stat-click',
-  'saved-views-updated'
+  'saved-views-updated',
+  'kanban-settings-changed'
 ]);
 
 // Use bulk actions composable
@@ -1264,11 +1527,24 @@ const {
 // State
 const searchQuery = ref('');
 const showColumnSettings = ref(false);
+const showKanbanSettings = ref(false);
 const visibleColumns = ref([]);
 const layoutOptionsExpanded = ref(true);
 const manageFieldsExpanded = ref(true);
 const fieldSearchQuery = ref('');
 const dragOverIndex = ref(null);
+// Kanban customize state
+const kanbanOptionsExpanded = ref(true);
+const kanbanManageFieldsExpanded = ref(true);
+const kanbanFieldSearchQuery = ref('');
+const kanbanCardSize = ref('medium');
+const kanbanStackFields = ref(true);
+const kanbanCollapseEmptyColumns = ref(false);
+const kanbanShowEmptyFields = ref(true);
+const kanbanClosedTasks = ref(true);
+const kanbanVisibleColumns = ref([]);
+const kanbanDragOverIndex = ref(null);
+const kanbanDragStartIndex = ref(null);
 const backendModuleConfig = ref(null); // Store backend module configuration with all fields
 const resetWidthsTrigger = ref(0); // Trigger to reset column widths in TableView
 const showDeleteModal = ref(false);
@@ -1366,6 +1642,21 @@ const deleteRecordName = computed(() => {
   
   return '';
 });
+
+// Customize button label and click (List vs Kanban)
+const customizeButtonLabel = computed(() =>
+  props.viewMode === 'kanban' ? 'Customize Kanban' : 'Customize List'
+);
+const handleCustomizeClick = () => {
+  if (props.viewMode === 'kanban') {
+    showKanbanSettings.value = !showKanbanSettings.value;
+    if (showKanbanSettings.value) {
+      loadKanbanSettings();
+    }
+  } else {
+    showColumnSettings.value = !showColumnSettings.value;
+  }
+};
 
 // Row height - load from localStorage
 const rowHeightStorageKey = computed(() => `${STORAGE_PREFIX}-${props.moduleKey}-row-height`);
@@ -1480,6 +1771,251 @@ const saveColumnSettings = () => {
   }
 };
 
+// Kanban customize: load/save options and card fields
+const loadKanbanSettings = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    const optsRaw = localStorage.getItem(kanbanOptionsStorageKey.value);
+    if (optsRaw) {
+      const opts = JSON.parse(optsRaw);
+      if (opts.cardSize) kanbanCardSize.value = opts.cardSize;
+      if (typeof opts.stackFields === 'boolean') kanbanStackFields.value = opts.stackFields;
+      if (typeof opts.collapseEmptyColumns === 'boolean') kanbanCollapseEmptyColumns.value = opts.collapseEmptyColumns;
+      if (typeof opts.showEmptyFields === 'boolean') kanbanShowEmptyFields.value = opts.showEmptyFields;
+      if (typeof opts.closedTasks === 'boolean') kanbanClosedTasks.value = opts.closedTasks;
+    }
+    const fieldsRaw = localStorage.getItem(kanbanFieldsStorageKey.value);
+    if (fieldsRaw) {
+      const parsed = JSON.parse(fieldsRaw);
+      if (parsed && Array.isArray(parsed) && parsed.length > 0) {
+        kanbanVisibleColumns.value = normalizeKanbanColumnsForTitle(parsed.map(c => ({ ...c, sortable: c.sortable !== false })));
+        return;
+      }
+    }
+    // Default: for deals use fixed card order; otherwise copy from list visible columns or props.columns
+    const source = visibleColumns.value.length > 0 ? visibleColumns.value : props.columns.map(c => ({ ...c, visible: c.visible !== false, showInTable: c.showInTable !== false }));
+    if (props.moduleKey === 'deals') {
+      kanbanVisibleColumns.value = buildDealsDefaultKanbanColumns(source);
+    } else {
+      kanbanVisibleColumns.value = normalizeKanbanColumnsForTitle(source.map(col => ({
+        key: col.key,
+        label: col.label || col.key,
+        visible: col.visible !== false,
+        dataType: col.dataType,
+        sortable: col.sortable !== false,
+        showInTable: col.showInTable !== false
+      })));
+    }
+  } catch (e) {
+    console.warn('Failed to load kanban settings', e);
+    const source = visibleColumns.value.length > 0 ? visibleColumns.value : props.columns.map(c => ({ ...c, visible: c.visible !== false, showInTable: c.showInTable !== false }));
+    if (props.moduleKey === 'deals') {
+      kanbanVisibleColumns.value = buildDealsDefaultKanbanColumns(source);
+    } else {
+      kanbanVisibleColumns.value = normalizeKanbanColumnsForTitle(source.map(col => ({
+        key: col.key,
+        label: col.label || col.key,
+        visible: col.visible !== false,
+        dataType: col.dataType,
+        sortable: col.sortable !== false,
+        showInTable: col.showInTable !== false
+      })));
+    }
+  }
+};
+const saveKanbanOptions = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(kanbanOptionsStorageKey.value, JSON.stringify({
+      cardSize: kanbanCardSize.value,
+      stackFields: kanbanStackFields.value,
+      collapseEmptyColumns: kanbanCollapseEmptyColumns.value,
+      showEmptyFields: kanbanShowEmptyFields.value,
+      closedTasks: kanbanClosedTasks.value
+    }));
+    emit('kanban-settings-changed');
+  } catch (e) {
+    console.warn('Failed to save kanban options', e);
+  }
+};
+const saveKanbanFields = () => {
+  if (typeof window === 'undefined' || kanbanVisibleColumns.value.length === 0) return;
+  try {
+    const normalized = normalizeKanbanColumnsForTitle(kanbanVisibleColumns.value);
+    const toSave = normalized.map(col => ({
+      key: col.key,
+      label: col.label,
+      visible: col.visible,
+      dataType: col.dataType,
+      showInTable: col.showInTable
+    }));
+    localStorage.setItem(kanbanFieldsStorageKey.value, JSON.stringify(toSave));
+    emit('kanban-settings-changed');
+  } catch (e) {
+    console.warn('Failed to save kanban fields', e);
+  }
+};
+// Record title field is always first, visible, and cannot be reordered or disabled (name or title)
+const KANBAN_TITLE_KEYS = ['name', 'title'];
+const isKanbanTitleField = (key) => key && KANBAN_TITLE_KEYS.includes(key);
+const normalizeKanbanColumnsForTitle = (cols) => {
+  if (!Array.isArray(cols) || cols.length === 0) return cols;
+  const titleKey = cols.find(c => isKanbanTitleField(c.key))?.key;
+  if (!titleKey) return cols;
+  const titleCol = cols.find(c => c.key === titleKey);
+  if (!titleCol) return cols;
+  const rest = cols.filter(c => c.key !== titleKey);
+  return [{ ...titleCol, visible: true, showInTable: true }, ...rest];
+};
+
+// Default Kanban card field order for deals: Title, Amount, Expected Close Date, Probability, Priority, Organization, Deal Owner
+const DEALS_KANBAN_DEFAULT_VISIBLE_KEYS = ['name', 'amount', 'expectedCloseDate', 'probability', 'priority', 'accountId', 'ownerId'];
+const DEALS_KANBAN_DEFAULT_LABELS = { accountId: 'Organization', ownerId: 'Deal Owner' };
+// Labels for synthetic list columns (when backend/props don't include the key, e.g. accountId)
+const DEALS_LIST_DEFAULT_LABELS = { accountId: 'Organization', ownerId: 'Deal Owner' };
+/** Ensure every key in defaultVisibleColumns exists in the column map (add synthetic columns if missing). */
+function ensureDefaultColumnsInMap(moduleKey, defaultVisibleColumns, columnMap) {
+  if (!defaultVisibleColumns || !columnMap) return;
+  const labelMap = moduleKey === 'deals' ? DEALS_LIST_DEFAULT_LABELS : {};
+  defaultVisibleColumns.forEach((key) => {
+    if (!columnMap.has(key)) {
+      columnMap.set(key, {
+        key,
+        label: labelMap[key] || key,
+        dataType: 'Lookup',
+        sortable: false,
+        showInTable: true
+      });
+    }
+  });
+}
+function buildDealsDefaultKanbanColumns(sourceColumns) {
+  const byKey = new Map(sourceColumns.map(c => [c.key, c]));
+  const ordered = [];
+  const added = new Set();
+  DEALS_KANBAN_DEFAULT_VISIBLE_KEYS.forEach(key => {
+    const col = byKey.get(key);
+    if (col) {
+      ordered.push({ ...col, key: col.key, label: col.label || DEALS_KANBAN_DEFAULT_LABELS[key] || col.key, visible: true, dataType: col.dataType, sortable: col.sortable !== false, showInTable: true });
+      added.add(key);
+    } else {
+      // Column not in list definition (e.g. accountId) - add synthetic column so it shows on card
+      ordered.push({
+        key,
+        label: DEALS_KANBAN_DEFAULT_LABELS[key] || key,
+        visible: true,
+        dataType: 'Lookup',
+        sortable: false,
+        showInTable: true
+      });
+      added.add(key);
+    }
+  });
+  sourceColumns.forEach(col => {
+    if (!added.has(col.key)) {
+      ordered.push({ ...col, key: col.key, label: col.label || col.key, visible: false, dataType: col.dataType, sortable: col.sortable !== false, showInTable: false });
+    }
+  });
+  return normalizeKanbanColumnsForTitle(ordered);
+}
+const kanbanShownFields = computed(() => {
+  const q = kanbanFieldSearchQuery.value.trim().toLowerCase();
+  const shown = kanbanVisibleColumns.value.filter(c => c.visible && (!q || (c.label || c.key).toLowerCase().includes(q)));
+  return shown.map(c => ({ ...c, locked: isKanbanTitleField(c.key) }));
+});
+const kanbanHiddenFields = computed(() => {
+  const q = kanbanFieldSearchQuery.value.trim().toLowerCase();
+  return kanbanVisibleColumns.value.filter(c => !c.visible && !isKanbanTitleField(c.key) && (!q || (c.label || c.key).toLowerCase().includes(q)));
+});
+const toggleKanbanFieldVisibility = (fieldKey) => {
+  if (isKanbanTitleField(fieldKey)) return;
+  const col = kanbanVisibleColumns.value.find(c => c.key === fieldKey);
+  if (!col) return;
+  col.visible = !col.visible;
+  col.showInTable = col.visible;
+  saveKanbanFields();
+};
+const kanbanCardSizeLabels = { small: 'Small', medium: 'Medium', large: 'Large' };
+const setKanbanCardSize = (value) => {
+  kanbanCardSize.value = value;
+  saveKanbanOptions();
+};
+
+const resetKanbanToDefault = () => {
+  kanbanCardSize.value = 'medium';
+  kanbanStackFields.value = true;
+  kanbanCollapseEmptyColumns.value = false;
+  kanbanShowEmptyFields.value = true;
+  kanbanClosedTasks.value = true;
+  const source = visibleColumns.value.length > 0 ? visibleColumns.value : props.columns.map(c => ({ ...c, visible: c.visible !== false, showInTable: c.showInTable !== false }));
+  if (props.moduleKey === 'deals') {
+    kanbanVisibleColumns.value = buildDealsDefaultKanbanColumns(source);
+  } else {
+    kanbanVisibleColumns.value = normalizeKanbanColumnsForTitle(source.map(col => ({
+      key: col.key,
+      label: col.label || col.key,
+      visible: col.visible !== false,
+      dataType: col.dataType,
+      sortable: col.sortable !== false,
+      showInTable: col.showInTable !== false
+    })));
+  }
+  saveKanbanOptions();
+  saveKanbanFields();
+};
+
+// Drag-and-drop reorder for Kanban Shown fields
+const handleKanbanDragStart = (event, index) => {
+  if (kanbanShownFields.value[index]?.locked) return;
+  kanbanDragStartIndex.value = index;
+  event.dataTransfer.effectAllowed = 'move';
+  if (event.target) event.target.style.opacity = '0.5';
+};
+const handleKanbanDragOver = (event) => {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+};
+const handleKanbanDragEnter = (event, index) => {
+  event.preventDefault();
+  if (kanbanShownFields.value[index]?.locked) return;
+  kanbanDragOverIndex.value = index;
+};
+const handleKanbanDragLeave = () => {
+  kanbanDragOverIndex.value = null;
+};
+const handleKanbanDrop = (event, dropIndex) => {
+  event.preventDefault();
+  kanbanDragOverIndex.value = null;
+  const start = kanbanDragStartIndex.value;
+  if (start == null || start === dropIndex) {
+    kanbanDragStartIndex.value = null;
+    return;
+  }
+  const shown = kanbanShownFields.value;
+  if (shown[start]?.locked) {
+    kanbanDragStartIndex.value = null;
+    return;
+  }
+  const visibleCols = kanbanVisibleColumns.value.filter(c => c.visible);
+  const hiddenCols = kanbanVisibleColumns.value.filter(c => !c.visible);
+  if (start < 0 || start >= visibleCols.length || dropIndex < 0 || dropIndex >= visibleCols.length) {
+    kanbanDragStartIndex.value = null;
+    return;
+  }
+  const dragged = visibleCols[start];
+  visibleCols.splice(start, 1);
+  const insertIndex = start < dropIndex ? dropIndex - 1 : dropIndex;
+  visibleCols.splice(Math.max(0, Math.min(insertIndex, visibleCols.length)), 0, dragged);
+  kanbanVisibleColumns.value = normalizeKanbanColumnsForTitle([...visibleCols, ...hiddenCols]);
+  saveKanbanFields();
+  kanbanDragStartIndex.value = null;
+};
+const handleKanbanDragEnd = (event) => {
+  if (event.target) event.target.style.opacity = '1';
+  kanbanDragStartIndex.value = null;
+  kanbanDragOverIndex.value = null;
+};
+
 // Fetch field configuration from backend and sync visibility
 const fetchFieldConfiguration = async () => {
   try {
@@ -1590,7 +2126,10 @@ const initializeColumns = async () => {
     // Use saved settings, but also fetch backend config to include all fields
     const moduleConfig = await fetchFieldConfiguration();
     const backendFields = moduleConfig?.fields || [];
-    
+    const { getModuleListConfig } = await import('@/platform/modules/moduleListRegistry').catch(() => ({ getModuleListConfig: () => null }));
+    const moduleListConfig = getModuleListConfig(props.moduleKey);
+    const lockedColumnKey = moduleListConfig?.defaultColumns?.lockedColumn ?? 'name';
+
     // Create maps for quick lookup
     const savedMap = new Map(savedSettings.map(s => [s.key, s]));
     const backendFieldsMap = new Map(backendFields.map(f => [f.key, f]));
@@ -1611,7 +2150,8 @@ const initializeColumns = async () => {
           visible: saved.visible !== undefined ? saved.visible : false,
           sortable: originalCol?.sortable !== false,
           dataType: saved.dataType || originalCol?.dataType || backendField?.dataType || 'Text',
-          showInTable: saved.showInTable !== undefined ? saved.showInTable : (saved.visible !== false)
+          showInTable: saved.showInTable !== undefined ? saved.showInTable : (saved.visible !== false),
+          locked: saved.key === lockedColumnKey
         });
         processedKeys.add(saved.key);
       }
@@ -1627,7 +2167,8 @@ const initializeColumns = async () => {
           visible: false, // Not in saved settings, so hidden
           sortable: propsCol?.sortable !== false,
           dataType: field.dataType || propsCol?.dataType || 'Text',
-          showInTable: field.visibility?.list !== false
+          showInTable: field.visibility?.list !== false,
+          locked: field.key === lockedColumnKey
         });
         processedKeys.add(field.key);
       }
@@ -1642,7 +2183,8 @@ const initializeColumns = async () => {
           visible: col.visible !== false,
           sortable: col.sortable !== false,
           dataType: col.dataType || 'Text',
-          showInTable: col.showInTable !== false
+          showInTable: col.showInTable !== false,
+          locked: col.key === lockedColumnKey
         });
       }
     });
@@ -1674,14 +2216,16 @@ const initializeColumns = async () => {
         });
       }
     });
-    const allAvailableColumns = Array.from(allAvailableColumnsMap.values());
-
     // Check if module has registry configuration for default columns
     const { getModuleListConfig, buildDefaultColumns } = await import('@/platform/modules/moduleListRegistry').catch(() => ({ getModuleListConfig: () => null, buildDefaultColumns: () => [] }));
     const moduleListConfig = getModuleListConfig(props.moduleKey);
-    
     if (moduleListConfig?.defaultColumns) {
-      // Use registry defaults
+      ensureDefaultColumnsInMap(props.moduleKey, moduleListConfig.defaultColumns.defaultVisibleColumns, allAvailableColumnsMap);
+    }
+    const allAvailableColumns = Array.from(allAvailableColumnsMap.values());
+
+    if (moduleListConfig?.defaultColumns) {
+      // Use registry defaults (Title, Organization, Amount, etc. in same order for all new instances)
       const defaultColumns = buildDefaultColumns(allAvailableColumns, moduleListConfig.defaultColumns);
       visibleColumns.value = normalizeColumnOrder(defaultColumns);
       saveColumnSettings();
@@ -1917,6 +2461,8 @@ const filterStorageKey = computed(() => `${STORAGE_PREFIX}-${props.moduleKey}-fi
 const searchStorageKey = computed(() => `${STORAGE_PREFIX}-${props.moduleKey}-search`);
 const sortStorageKey = computed(() => `${STORAGE_PREFIX}-${props.moduleKey}-sort`);
 const columnsStorageKey = computed(() => `${STORAGE_PREFIX}-${props.moduleKey}-columns`);
+const kanbanOptionsStorageKey = computed(() => `${STORAGE_PREFIX}-${props.moduleKey}-kanban-options`);
+const kanbanFieldsStorageKey = computed(() => `${STORAGE_PREFIX}-${props.moduleKey}-kanban-fields`);
 
 const searchTerm = computed(() => searchQuery.value.trim());
 
@@ -2515,14 +3061,23 @@ const resetColumnSettings = async () => {
           showInTable: col.showInTable !== false,
         });
       });
+      ensureDefaultColumnsInMap(props.moduleKey, moduleListConfig.defaultColumns.defaultVisibleColumns, allAvailableColumnsMap);
       const allAvailableColumns = Array.from(allAvailableColumnsMap.values());
       const defaultColumns = buildDefaultColumns(allAvailableColumns, moduleListConfig.defaultColumns);
       visibleColumns.value = normalizeColumnOrder(defaultColumns);
       saveColumnSettings();
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(rowHeightStorageKey.value);
+      }
+      if (props.tableId) {
+        localStorage.removeItem(`table-column-widths-${props.tableId}`);
+      }
+      rowHeight.value = 'medium';
+      resetWidthsTrigger.value++;
       return;
     }
   }
-  
+
   // Fallback: make all columns visible with 'name' locked if it exists
   // This applies to all modules that don't have registry config
   visibleColumns.value = props.columns.map(col => ({

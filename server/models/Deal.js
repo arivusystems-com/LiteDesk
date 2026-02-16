@@ -43,6 +43,11 @@ const DealSchema = new Schema({
         trim: true,
         required: true
     },
+    /** Order within the same stage (for Kanban same-column reorder). Lower = higher in column. */
+    stageOrder: {
+        type: Number,
+        default: 0
+    },
     probability: {
         type: Number,
         min: 0,

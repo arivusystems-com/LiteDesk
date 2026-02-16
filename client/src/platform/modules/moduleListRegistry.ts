@@ -896,7 +896,8 @@ export const MODULE_LIST_REGISTRY: Record<string, ModuleListConfig> = {
 
   deals: {
     defaultColumns: {
-      defaultVisibleColumns: ['name', 'amount', 'stage', 'contactId', 'ownerId', 'expectedCloseDate', 'probability', 'priority'],
+      // Title, Organization, Amount, Probability, Expected Close Date, Priority, Deal Owner
+      defaultVisibleColumns: ['name', 'accountId', 'amount', 'probability', 'expectedCloseDate', 'priority', 'ownerId'],
       lockedColumn: 'name',
       excludedFromDefault: []
     },

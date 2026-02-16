@@ -163,7 +163,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';
@@ -187,6 +187,11 @@ const editingItem = ref(null);
 const refreshList = () => {
   moduleListRef.value?.refresh?.();
 };
+
+// When switching back to this tab (keep-alive), refetch so data is current
+onActivated(() => {
+  refreshList();
+});
 
 // Modal handlers
 const openCreateModal = () => {

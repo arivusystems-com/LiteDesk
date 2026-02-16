@@ -2197,7 +2197,7 @@ const getUserDisplayName = (user) => {
 
 // Navigate to manage fields in a new tab
 const goToManageFields = () => {
-  window.open(`/settings?tab=modules&module=${props.recordType}`, '_blank');
+  window.open(router.resolve(`/settings?tab=modules&module=${props.recordType}`).href, '_blank');
 };
 
 // GridStack

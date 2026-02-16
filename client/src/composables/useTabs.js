@@ -1123,26 +1123,31 @@ export function useTabs() {
     // Wait a bit to ensure router is fully initialized
     let routerAfterEachUnregister = null;
     
+    const routerDebug = () => import.meta.env.DEV;
     const registerRouterHook = () => {
       const currentRouter = getRouter();
-      console.log('🔍 Router available for afterEach?', !!currentRouter);
-      console.log('🔍 Router object:', currentRouter);
+      if (routerDebug()) {
+        console.log('🔍 Router available for afterEach?', !!currentRouter);
+        console.log('🔍 Router object:', currentRouter);
+      }
       
       if (currentRouter && !routerAfterEachUnregister) {
-        console.log('🔍 Registering router.afterEach hook...');
+        if (routerDebug()) console.log('🔍 Registering router.afterEach hook...');
         routerAfterEachUnregister = currentRouter.afterEach((to, from) => {
-        console.log('🔄🔄🔄 Router afterEach FIRED:', {
-          to: to.path,
-          from: from.path,
-          toFullPath: to.fullPath,
-          fromFullPath: from.fullPath,
-          isProgrammaticNavigation,
-          activeTabId: activeTabId.value
-        });
+        if (routerDebug()) {
+          console.log('🔄🔄🔄 Router afterEach FIRED:', {
+            to: to.path,
+            from: from.path,
+            toFullPath: to.fullPath,
+            fromFullPath: from.fullPath,
+            isProgrammaticNavigation,
+            activeTabId: activeTabId.value
+          });
+        }
         
         // Only handle if this is browser navigation (not programmatic)
         if (isProgrammaticNavigation) {
-          console.log('🔒 Router afterEach: Skipping - programmatic navigation');
+          if (routerDebug()) console.log('🔒 Router afterEach: Skipping - programmatic navigation');
           return;
         }
         
@@ -1151,30 +1156,30 @@ export function useTabs() {
         
         // Skip if paths are the same
         if (toPath === fromPath) {
-          console.log('⏭️ Router afterEach: Paths are the same, skipping');
+          if (routerDebug()) console.log('⏭️ Router afterEach: Paths are the same, skipping');
           return;
         }
         
-        console.log('🔄 Router afterEach: Browser navigation detected:', fromPath, '→', toPath);
+        if (routerDebug()) console.log('🔄 Router afterEach: Browser navigation detected:', fromPath, '→', toPath);
         
         // Find tab for the new route
         const targetTab = findTabByPath(to.fullPath) || findTabByPath(toPath);
-        console.log('🔄 Router afterEach: Target tab found?', !!targetTab, targetTab ? { id: targetTab.id, path: targetTab.path } : null);
+        if (routerDebug()) console.log('🔄 Router afterEach: Target tab found?', !!targetTab, targetTab ? { id: targetTab.id, path: targetTab.path } : null);
         
         if (targetTab && activeTabId.value !== targetTab.id) {
-          console.log('🔄 Router afterEach: Switching to tab:', targetTab.id, 'from:', activeTabId.value);
+          if (routerDebug()) console.log('🔄 Router afterEach: Switching to tab:', targetTab.id, 'from:', activeTabId.value);
           activeTabId.value = targetTab.id;
           saveTabsToStorage(); // Force save to override localStorage
-          console.log('✅ Router afterEach: Tab switched to:', targetTab.id, 'new activeTabId:', activeTabId.value);
+          if (routerDebug()) console.log('✅ Router afterEach: Tab switched to:', targetTab.id, 'new activeTabId:', activeTabId.value);
         } else if (targetTab) {
-          console.log('🔒 Router afterEach: Tab already active');
+          if (routerDebug()) console.log('🔒 Router afterEach: Tab already active');
         } else {
-          console.log('⚠️ Router afterEach: No tab found for route:', toPath);
+          if (routerDebug()) console.log('⚠️ Router afterEach: No tab found for route:', toPath);
         }
       });
-        console.log('✅ Router afterEach hook registered, unregister function:', typeof routerAfterEachUnregister === 'function');
+        if (routerDebug()) console.log('✅ Router afterEach hook registered, unregister function:', typeof routerAfterEachUnregister === 'function');
       } else if (!currentRouter) {
-        console.warn('⚠️ Router not available yet, will retry...');
+        if (routerDebug()) console.warn('⚠️ Router not available yet, will retry...');
         // Retry after a short delay
         setTimeout(registerRouterHook, 100);
       }

@@ -413,13 +413,21 @@ function validate() {
   const primaryCustomers = orgs.filter((o) => o.isPrimary && o.role === 'customer');
   const activeCustomers = orgs.filter((o) => o.role === 'customer');
 
-  if (primaryContacts.length !== 1) {
+  // When both lists are empty, allow save (user can add relationships later when editing)
+  if (people.length === 0 && orgs.length === 0) {
+    emit('validate', true);
+    return true;
+  }
+
+  if (people.length > 0 && primaryContacts.length !== 1) {
     validationErrors.value.primaryContact = 'There must be exactly one primary contact (role: Primary contact).';
   }
-  if (activeCustomers.length < 1) {
-    validationErrors.value.activeCustomer = 'There must be at least one active customer organization.';
-  } else if (primaryCustomers.length !== 1) {
-    validationErrors.value.activeCustomer = 'There must be exactly one primary customer organization.';
+  if (orgs.length > 0) {
+    if (activeCustomers.length < 1) {
+      validationErrors.value.activeCustomer = 'There must be at least one active customer organization.';
+    } else if (primaryCustomers.length !== 1) {
+      validationErrors.value.activeCustomer = 'There must be exactly one primary customer organization.';
+    }
   }
 
   const valid = !validationErrors.value.primaryContact && !validationErrors.value.activeCustomer;
