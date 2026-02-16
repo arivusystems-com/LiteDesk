@@ -17,7 +17,7 @@
           <table
             ref="tableRef"
             class="divide-y divide-gray-200 text-sm text-gray-900 dark:divide-white/15 dark:text-gray-200"
-            :style="{ width: tableMinWidth, minWidth: tableMinWidth, display: 'table', tableLayout: 'auto' }"
+            :style="{ width: '100%', minWidth: tableMinWidth, display: 'table', tableLayout: 'auto' }"
           >
             <colgroup>
               <col v-if="selectable" style="width: 48px" />

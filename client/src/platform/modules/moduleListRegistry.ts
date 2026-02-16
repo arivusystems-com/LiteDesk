@@ -550,6 +550,83 @@ function normalizeEventsViewFilters(filters: Record<string, any>, currentUserId?
 }
 
 /**
+ * Compute Deals statistics (from list data; server may also return stats)
+ */
+function computeDealsStatistics(data: any[], currentUserId?: string): Record<string, number> {
+  const stats = {
+    pipelineValue: 0,
+    activeDeals: 0,
+    wonValue: 0,
+    winRate: 0,
+    totalDeals: data.length,
+    myDeals: 0
+  };
+
+  let wonCount = 0;
+  let lostCount = 0;
+
+  data.forEach(deal => {
+    const ownerId = typeof deal.ownerId === 'object' && deal.ownerId?._id ? deal.ownerId._id : deal.ownerId;
+    if (ownerId === currentUserId) {
+      stats.myDeals++;
+    }
+    if (deal.status !== 'Won' && deal.status !== 'Lost') {
+      stats.activeDeals++;
+      stats.pipelineValue += Number(deal.amount) || 0;
+    } else if (deal.status === 'Won') {
+      wonCount++;
+      stats.wonValue += Number(deal.amount) || 0;
+    } else if (deal.status === 'Lost') {
+      lostCount++;
+    }
+  });
+
+  const totalClosed = wonCount + lostCount;
+  stats.winRate = totalClosed > 0 ? Math.round((wonCount / totalClosed) * 100) : 0;
+  return stats;
+}
+
+/**
+ * Normalize Deals filters
+ */
+function normalizeDealsFilters(filters: Record<string, any>, currentUserId?: string): Record<string, any> {
+  const normalized = { ...filters };
+
+  if ('ownerId' in normalized) {
+    if (normalized.ownerId === 'me' && currentUserId) {
+      normalized.ownerId = currentUserId;
+    } else if (normalized.ownerId === 'unassigned') {
+      normalized.ownerId = null;
+    }
+  }
+
+  ['stage', 'status', 'priority'].forEach(key => {
+    if (key in normalized && normalized[key] === '') {
+      delete normalized[key];
+    }
+  });
+
+  return normalized;
+}
+
+/**
+ * Normalize Deals view filters (from saved views)
+ */
+function normalizeDealsViewFilters(filters: Record<string, any>, currentUserId?: string): Record<string, any> {
+  const normalized = { ...filters };
+
+  if ('ownerId' in normalized) {
+    if (normalized.ownerId === currentUserId) {
+      normalized.ownerId = 'me';
+    } else if (normalized.ownerId === null) {
+      normalized.ownerId = 'unassigned';
+    }
+  }
+
+  return normalized;
+}
+
+/**
  * Compute Items statistics
  */
 function computeItemsStatistics(data: any[], currentUserId?: string): Record<string, number> {
@@ -815,6 +892,33 @@ export const MODULE_LIST_REGISTRY: Record<string, ModuleListConfig> = {
     apiEndpoint: '/events',
     normalizeFilters: normalizeEventsFilters,
     normalizeViewFilters: normalizeEventsViewFilters
+  },
+
+  deals: {
+    defaultColumns: {
+      defaultVisibleColumns: ['name', 'amount', 'stage', 'contactId', 'ownerId', 'expectedCloseDate', 'probability', 'priority'],
+      lockedColumn: 'name',
+      excludedFromDefault: []
+    },
+    statistics: {
+      stats: [
+        { name: 'Pipeline Value', key: 'pipelineValue', formatter: 'currency' },
+        { name: 'Open Deals', key: 'activeDeals', formatter: 'number' },
+        { name: 'Won This Month', key: 'wonValue', formatter: 'currency' },
+        { name: 'Win Rate', key: 'winRate', formatter: 'percentage' }
+      ],
+      computeFunction: computeDealsStatistics
+    },
+    systemViews: [
+      { id: 'all', name: 'All Deals', filters: {}, isDefault: true },
+      { id: 'my-deals', name: 'My Deals', filters: { ownerId: 'me' } },
+      { id: 'open', name: 'Open', filters: { status: 'Open' } },
+      { id: 'won', name: 'Won', filters: { status: 'Won' } },
+      { id: 'lost', name: 'Lost', filters: { status: 'Lost' } }
+    ],
+    apiEndpoint: '/deals',
+    normalizeFilters: normalizeDealsFilters,
+    normalizeViewFilters: normalizeDealsViewFilters
   },
 
   /*

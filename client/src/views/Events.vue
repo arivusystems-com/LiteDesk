@@ -1,5 +1,5 @@
 <template>
-  <div class="mx-auto" :data-view="currentView">
+  <div class="mx-auto w-full" :data-view="currentView">
     <!-- Entity Description -->
     <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
       <p class="text-sm text-gray-700 dark:text-gray-300">
@@ -20,37 +20,31 @@
       @filters-changed="handleFiltersChanged"
       @search-changed="handleSearchChanged"
     >
-      <!-- Custom Header Slot - Add View Switcher -->
+      <!-- Custom Header Slot - View Switcher (segmented control with sliding pill) -->
       <template #header-actions>
         <div class="flex gap-3 items-center">
-          <!-- View Toggle Buttons - Mac Style Tabs -->
-          <div class="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-            <button 
-              @click="switchView('calendar')" 
-              :class="[
-                'flex items-center gap-2 px-4 py-2 rounded-md font-medium transition-all relative',
-                currentView === 'calendar' 
-                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm' 
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-              ]"
+          <!-- View Toggle - Segmented control with sliding pill (h-10 to match header buttons) -->
+          <div class="relative flex h-10 items-stretch rounded-xl bg-gray-100 dark:bg-gray-700/90 p-[0.1rem] border border-gray-200/80 dark:border-gray-600 shadow-inner min-w-[200px]">
+            <!-- <div
+              class="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-600 transition-all duration-200 ease-out pointer-events-none"
+              :style="{ left: currentView === 'calendar' ? '4px' : 'calc(50% + 2px)' }"
+            /> -->
+            <button
+              type="button"
+              @click="switchView('calendar')"
+              class="relative z-10 flex-1 flex items-center justify-center gap-2 pl-3 pr-3 py-0 rounded-lg text-sm font-semibold transition-colors duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-100 dark:ring-offset-gray-800 overflow-visible"
+              :class="currentView === 'calendar' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-600/50'"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-4 h-4">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
+              <CalendarIcon class="w-5 h-5 shrink-0" />
               Calendar
             </button>
-            <button 
-              @click="switchView('list')" 
-              :class="[
-                'flex items-center gap-2 px-4 py-2 rounded-md font-medium transition-all relative',
-                currentView === 'list' 
-                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm' 
-                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-              ]"
+            <button
+              type="button"
+              @click="switchView('list')"
+              class="relative z-10 flex-1 flex items-center justify-center gap-2 pl-3 pr-3 py-0 rounded-lg text-sm font-semibold transition-colors duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-100 dark:ring-offset-gray-800 overflow-visible"
+              :class="currentView === 'list' ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-600/50'"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-4 h-4">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
+              <ListBulletIcon class="w-5 h-5 shrink-0" />
               List
             </button>
           </div>
@@ -125,7 +119,7 @@
     <!-- Calendar View (shown when Calendar tab is selected, replaces table) -->
     <div 
       v-if="currentView === 'calendar'" 
-      class="calendar-view-container mt-4 px-4 sm:px-6 lg:px-8"
+      class="calendar-view-container mt-4"
       style="min-height: 400px;"
     >
       <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -154,9 +148,7 @@
               @click="closeEventModal"
               class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
             >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <XMarkIcon class="w-5 h-5" />
             </button>
           </div>
 
@@ -251,7 +243,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { ref, computed, onMounted, onActivated, onUnmounted, watch, nextTick } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import FullCalendar from '@fullcalendar/vue3';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -267,6 +259,7 @@ import DateCell from '@/components/common/table/DateCell.vue';
 import Avatar from '@/components/common/Avatar.vue';
 import CSVImportModal from '@/components/import/CSVImportModal.vue';
 import { getModuleListConfig } from '@/platform/modules/moduleListRegistry';
+import { CalendarIcon, ListBulletIcon, XMarkIcon } from '@heroicons/vue/24/outline';
 
 const router = useRouter();
 const route = useRoute();
@@ -308,30 +301,30 @@ const eventForm = ref({
   description: ''
 });
 
-// Initialize view from route query or localStorage
+// Initialize view from route query or localStorage (persist so returning to page keeps list/calendar)
 const initializeView = () => {
   const viewParam = route.query.view;
   if (viewParam === 'list') {
     currentView.value = 'list';
+    try { localStorage.setItem(viewStorageKey, 'list'); } catch (_) {}
   } else if (viewParam === undefined) {
-    // Only check localStorage if route doesn't specify (to avoid overriding URL)
     const savedView = localStorage.getItem(viewStorageKey);
     if (savedView === 'list') {
       currentView.value = 'list';
+      try { localStorage.setItem(viewStorageKey, 'list'); } catch (_) {}
       router.replace({ query: { ...route.query, view: 'list' } });
     } else {
       currentView.value = 'calendar';
+      try { localStorage.setItem(viewStorageKey, 'calendar'); } catch (_) {}
     }
   } else {
-    // No view param and not 'list', default to calendar
     currentView.value = 'calendar';
+    try { localStorage.setItem(viewStorageKey, 'calendar'); } catch (_) {}
     const newQuery = { ...route.query };
     delete newQuery.view;
     router.replace({ query: newQuery });
   }
   
-  // Immediately hide/show table based on view (synchronous)
-  // Use nextTick to ensure DOM is ready, but don't wait for setTimeout
   nextTick(() => {
     toggleTableView(currentView.value === 'list');
   });
@@ -358,11 +351,14 @@ const switchView = async (view) => {
   toggleTableView(view === 'list');
 };
 
-// Watch route query changes
+// Watch route query changes (when URL has no view param, sync from localStorage — do not force calendar)
 watch(() => route.query.view, (newView) => {
   if (newView === 'list' && currentView.value !== 'list') {
     switchView('list');
-  } else if (!newView && currentView.value !== 'calendar') {
+  } else if (newView === undefined) {
+    // Returning to /events without ?view= — restore from localStorage so list view persists
+    initializeView();
+  } else if (newView !== 'list' && currentView.value !== 'calendar') {
     switchView('calendar');
   }
 });
@@ -856,6 +852,19 @@ onMounted(() => {
     window.addEventListener('litedesk:record-created', handleRecordCreated);
     window.addEventListener('litedesk:event-created', handleEventCreated);
   }
+});
+
+// When returning to Events tab (keep-alive), re-sync view and refetch so UI loads correctly
+onActivated(() => {
+  initializeView();
+  if (currentView.value === 'calendar') {
+    fetchCalendarEvents();
+  } else if (moduleListRef.value?.refresh) {
+    moduleListRef.value.refresh();
+  }
+  nextTick(() => {
+    setTimeout(() => toggleTableView(currentView.value === 'list'), 80);
+  });
 });
 
 onUnmounted(() => {
