@@ -32,6 +32,7 @@
       :title="listDefinition.title"
       :description="listDefinition.description"
       :module-key="listDefinition.moduleKey"
+      :view-mode="viewMode"
       :create-label="getCreateLabel()"
       :search-placeholder="`Search ${listDefinition.title.toLowerCase()}...`"
       :data="data"
@@ -65,6 +66,7 @@
       @edit="handleEdit"
       @delete="handleDelete"
       @bulk-action="handleBulkAction"
+      @kanban-settings-changed="$emit('kanban-settings-changed')"
     >
       <!-- Pass through all slots for custom cell rendering -->
       <template v-for="(_, slotName) in $slots" #[slotName]="slotProps">
@@ -85,7 +87,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';
@@ -125,10 +127,15 @@ const props = defineProps({
   appKey: {
     type: String,
     required: true
+  },
+  /** When provided (e.g. 'list' | 'kanban'), ListView shows "Customize List" vs "Customize Kanban" and the appropriate drawer */
+  viewMode: {
+    type: String,
+    default: null
   }
 });
 
-const emit = defineEmits(['create', 'import', 'export', 'row-click', 'edit', 'delete', 'bulk-action', 'filters-changed', 'search-changed']);
+const emit = defineEmits(['create', 'import', 'export', 'row-click', 'edit', 'delete', 'bulk-action', 'filters-changed', 'search-changed', 'kanban-settings-changed']);
 
 const route = useRoute();
 const router = useRouter();
@@ -1757,12 +1764,16 @@ const handleBulkAction = (action, rows) => {
   emit('bulk-action', action, rows);
 };
 
-// Watch for user changes
-watch(() => authStore.user, () => {
-  if (authStore.user && authStore.isAuthenticated) {
-    buildList();
-  }
-}, { immediate: true });
+// Only rebuild when login state or user identity changes — not on every reactive touch of authStore.user
+watch(
+  () => (authStore.isAuthenticated ? (authStore.user?._id ?? '') : ''),
+  (userId) => {
+    if (userId && authStore.user && authStore.isAuthenticated) {
+      buildList();
+    }
+  },
+  { immediate: true }
+);
 
 // Watch for moduleKey/appKey changes
 watch(() => [props.moduleKey, props.appKey], () => {
@@ -1783,12 +1794,7 @@ watch(() => activeSavedViewId.value, (newValue) => {
   }
 });
 
-// Build on mount
-onMounted(() => {
-  if (authStore.user && authStore.isAuthenticated) {
-    buildList();
-  }
-});
+// Initial build is handled by auth user watcher (immediate: true) — no duplicate buildList() on mount
 
 // Expose methods and data for parent components
 defineExpose({

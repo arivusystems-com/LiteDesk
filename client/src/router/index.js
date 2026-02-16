@@ -535,6 +535,16 @@ router.beforeEach((to, from, next) => {
   
   // Redirect authenticated users from landing page
   if (to.name === 'landing' && authStore.isAuthenticated) {
+    // If the browser URL is /settings (e.g. new tab opened to settings but initial load hit landing), go to settings instead of home
+    const pathname = typeof window !== 'undefined' ? window.location.pathname : ''
+    if (pathname.startsWith('/settings')) {
+      const query = typeof window !== 'undefined' && window.location.search
+        ? Object.fromEntries(new URLSearchParams(window.location.search))
+        : {}
+      console.log('Redirecting: Landing but URL is /settings, preserving settings route')
+      next({ path: pathname, query })
+      return
+    }
     console.log('Redirecting: Already authenticated')
     next(getDefaultRoute(authStore))
     return

@@ -182,10 +182,12 @@ exports.getDeals = async (req, res) => {
             }
         }
         
-        // Sorting
+        // Sorting (use stage + stageOrder for pipeline/Kanban order)
         const sortBy = req.query.sortBy || 'createdAt';
         const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
-        const sort = { [sortBy]: sortOrder };
+        const sort = sortBy === 'stage'
+            ? { stage: sortOrder, stageOrder: 1 }
+            : { [sortBy]: sortOrder };
         
         // Execute query
         const deals = await Deal.find(query)
@@ -626,7 +628,7 @@ exports.getPipelineSummary = async (req, res) => {
 // @access  Private
 exports.updateStage = async (req, res) => {
     try {
-        const { stage } = req.body;
+        const { stage, order } = req.body;
         const appKey = req.appKey || req.query.appKey || 'SALES';
 
         const deal = await Deal.findOne({
@@ -658,10 +660,19 @@ exports.updateStage = async (req, res) => {
         }
 
         const previousSnapshot = deal.toObject ? deal.toObject() : { ...deal };
+        const stageChanged = deal.stage !== stage;
 
         deal.stage = stage;
-        deal.stageHistory.push({ stage, changedBy: req.user._id });
-        deal.modifiedBy = req.user._id;
+        if (typeof order === 'number' && order >= 0) {
+            deal.stageOrder = order;
+        }
+        if (stageChanged) {
+            if (!Array.isArray(deal.stageHistory)) deal.stageHistory = [];
+            const historyEntry = { stage, changedAt: new Date() };
+            if (req.user && req.user._id) historyEntry.changedBy = req.user._id;
+            deal.stageHistory.push(historyEntry);
+        }
+        deal.modifiedBy = req.user?._id ?? null;
 
         const computedDerivedStatus = await computeAndSetDerivedStatus('deal', deal, appKey);
         const configExists = await hasConfiguration('deal', appKey);
@@ -670,14 +681,42 @@ exports.updateStage = async (req, res) => {
         }
         await deal.save();
 
-        const { emitDealEvents } = require('../services/domainEventHelpers');
-        await emitDealEvents({
-            previous: previousSnapshot,
-            current: deal.toObject ? deal.toObject() : deal,
-            appKey,
-            triggeredBy: req.user?._id ?? null,
-            organizationId: req.user?.organizationId ?? null
-        });
+        // Renormalize stageOrder so the moved deal is at index `order` and the rest are 0,1,2,...
+        const inStage = await Deal.find({
+            organizationId: req.user.organizationId,
+            stage: deal.stage
+        })
+            .sort({ stageOrder: 1, _id: 1 })
+            .select('_id')
+            .lean();
+        const movedId = deal._id.toString();
+        if (typeof order === 'number' && order >= 0 && inStage.length > 0) {
+            const idx = inStage.findIndex((d) => d._id.toString() === movedId);
+            if (idx !== -1) {
+                const [moved] = inStage.splice(idx, 1);
+                const newIndex = Math.min(order, inStage.length);
+                inStage.splice(newIndex, 0, moved);
+            }
+        }
+        for (let i = 0; i < inStage.length; i++) {
+            await Deal.updateOne(
+                { _id: inStage[i]._id, organizationId: req.user.organizationId },
+                { $set: { stageOrder: i } }
+            );
+        }
+
+        try {
+            const { emitDealEvents } = require('../services/domainEventHelpers');
+            await emitDealEvents({
+                previous: previousSnapshot,
+                current: deal.toObject ? deal.toObject() : deal,
+                appKey,
+                triggeredBy: req.user?._id ?? null,
+                organizationId: req.user?.organizationId ?? null
+            });
+        } catch (emitErr) {
+            console.error('Update stage: emitDealEvents failed (stage was saved):', emitErr);
+        }
 
         const updatedDeal = await Deal.findById(deal._id)
             .populate('contactId', 'first_name last_name email')

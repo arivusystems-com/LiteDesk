@@ -91,6 +91,9 @@ async function getLifecycles(entityTypeKey, appKey = null) {
  */
 async function getLifecycleStatusMappings(lifecycleKey, appKey = null) {
   try {
+    if (lifecycleKey == null || typeof lifecycleKey !== 'string') {
+      return [];
+    }
     const query = {
       lifecycleKey: lifecycleKey.toLowerCase(),
       isActive: true

@@ -209,7 +209,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';
@@ -526,6 +526,11 @@ onMounted(async () => {
   if (typeof window !== 'undefined') {
     window.addEventListener('litedesk:record-created', handleRecordCreated);
   }
+});
+
+// When switching back to this tab (keep-alive), refetch list so data is current
+onActivated(() => {
+  moduleListRef.value?.refresh?.();
 });
 
 onUnmounted(() => {

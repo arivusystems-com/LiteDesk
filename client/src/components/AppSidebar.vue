@@ -589,7 +589,7 @@ const profileMenuItems = computed<ProfileMenuItem[]>(() => {
   }
   
   items.push(
-    { name: 'Settings', action: () => { window.open('/settings', '_blank'); } },
+    { name: 'Settings', action: () => { window.open(router.resolve('/settings').href, '_blank'); } },
     { 
       name: colorMode.value === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode', 
       action: () => {
