@@ -92,7 +92,7 @@ const hasPermission = computed(() => {
 
 // Button classes based on variant
 const buttonClasses = computed(() => {
-  const base = 'inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-lg text-sm sm:text-base font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+  const base = 'inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-lg text-sm sm:text-base font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed';
   
   switch (props.variant) {
     case 'primary':

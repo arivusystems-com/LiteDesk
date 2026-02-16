@@ -1,5 +1,5 @@
 <template>
-  <section class="record-state-section mb-8 mt-8" aria-labelledby="record-state-heading">
+  <section class="record-state-section mb-8 mt-4" aria-labelledby="record-state-heading">
     <h2 id="record-state-heading" class="sr-only">{{ heading }}</h2>
     <div v-if="hasConfiguredFields" class="grid grid-cols-1 xl:grid-cols-2 gap-x-8 gap-y-2">
       <div class="space-y-1">

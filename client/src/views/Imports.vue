@@ -1,5 +1,5 @@
 <template>
-  <div class="mx-auto">
+  <div class="mx-auto w-full">
     <ListView
       title="Import History"
       description="View and manage all data imports"

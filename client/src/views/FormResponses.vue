@@ -1,5 +1,5 @@
 <template>
-  <div class="mx-auto">
+  <div class="mx-auto w-full">
     <ListView
       :title="form?.name || 'Form Responses'"
       :description="form?.description || `Responses for ${form?.formId || 'this form'}`"
