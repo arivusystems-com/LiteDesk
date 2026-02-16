@@ -65,6 +65,13 @@ const RelationshipDefinitionSchema = new mongoose.Schema({
     required: true
   },
 
+  // Optional alias (for compatibility with module relationship specs)
+  relationshipType: {
+    type: String,
+    enum: ['ONE_TO_ONE', 'ONE_TO_MANY', 'MANY_TO_ONE', 'MANY_TO_MANY'],
+    default: null
+  },
+
   ownership: {
     type: String,
     enum: ['SOURCE', 'TARGET'],
@@ -74,6 +81,55 @@ const RelationshipDefinitionSchema = new mongoose.Schema({
   required: {
     type: Boolean,
     default: false
+  },
+
+  // Optional local/foreign field metadata (for field-based relationships)
+  localField: {
+    type: String,
+    trim: true
+  },
+  foreignField: {
+    type: String,
+    trim: true
+  },
+
+  // Relationship classification / linkability
+  userLinkable: {
+    type: Boolean,
+    default: true
+  },
+
+  display: {
+    coreFields: { type: Boolean, default: false },
+    relatedSummary: { type: Boolean, default: true },
+    relatedExplorer: { type: Boolean, default: true },
+    linkRecord: { type: Boolean, default: true }
+  },
+
+  constraints: {
+    preventCircular: { type: Boolean, default: false },
+    maxDepth: { type: Number, default: null }
+  },
+
+  isDefault: {
+    type: Boolean,
+    default: false
+  },
+
+  isAdvanced: {
+    type: Boolean,
+    default: false
+  },
+
+  activateWhenModuleExists: {
+    type: Boolean,
+    default: false
+  },
+
+  status: {
+    type: String,
+    enum: ['ACTIVE', 'PENDING'],
+    default: 'ACTIVE'
   },
 
   cascade: {
@@ -146,4 +202,3 @@ RelationshipDefinitionSchema.index({ 'target.appKey': 1, 'target.moduleKey': 1 }
 RelationshipDefinitionSchema.index({ enabled: 1 });
 
 module.exports = mongoose.model('RelationshipDefinition', RelationshipDefinitionSchema);
-

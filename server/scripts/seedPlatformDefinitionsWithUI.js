@@ -18,6 +18,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const mongoose = require('mongoose');
 const AppDefinition = require('../models/AppDefinition');
 const ModuleDefinition = require('../models/ModuleDefinition');
+const { registerDefaultTaskRelationships } = require('../services/taskRelationshipInitializer');
 const getMasterDatabaseUri = require('../utils/getMasterDatabaseUri');
 
 // Platform App Definitions with UI Metadata (Phase 0D)
@@ -593,6 +594,9 @@ async function seedPlatformDefinitionsWithUI(useExistingConnection = false) {
       console.log(`\n📊 Modules: ${modulesCreated} created, ${modulesUpdated} updated\n`);
     }
 
+    // Register default Task relationships (safe/idempotent)
+    await registerDefaultTaskRelationships();
+
     // Summary
     if (!useExistingConnection) {
       console.log('✅ Platform definitions with UI metadata seeded successfully!');
@@ -630,4 +634,3 @@ if (require.main === module) {
 }
 
 module.exports = seedPlatformDefinitionsWithUI;
-

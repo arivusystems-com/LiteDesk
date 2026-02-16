@@ -629,7 +629,7 @@ const isDragging = ref(false);
 const editingTemplateId = ref(null);
 const editingTemplateName = ref('');
 const showBrandingSettings = ref(false);
-let templateNameInput = null;
+const templateNameInput = null;
 
 // Get metrics enabled from Step 3
 const metricsEnabled = computed(() => {

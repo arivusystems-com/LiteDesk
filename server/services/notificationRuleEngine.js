@@ -233,7 +233,7 @@ async function evaluateRules({ eventType, entity, organizationId, triggeredBy, s
     // Determine appKey from sourceAppKey or infer from moduleKey
     let appKey = sourceAppKey;
     if (!appKey) {
-      // Default to CRM for most modules
+      // Default to SALES for most modules
       if (moduleKey === 'audit') {
         appKey = 'AUDIT';
       } else if (moduleKey === 'corrective_action') {

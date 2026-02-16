@@ -525,8 +525,10 @@ const bulkDeletePeople = async (selectedRows) => {
       return;
     }
     
-    // All succeeded - reload list
-    window.location.reload(); // Temporary - ModuleList should emit refresh event
+    // All succeeded - refresh list
+    if (moduleListRef.value?.refresh) {
+      moduleListRef.value.refresh();
+    }
   } catch (error) {
     console.error('Error bulk deleting people:', error);
     alert(`Error deleting people: ${error.message || 'Unknown error'}`);

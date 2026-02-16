@@ -312,7 +312,7 @@ function normalizePipelineSettings(settings = []) {
 
   const seenKeys = new Set();
   normalized.forEach((pipeline, index) => {
-    let baseKey = pipeline.key;
+    const baseKey = pipeline.key;
     while (seenKeys.has(pipeline.key)) {
       pipeline.key = `${baseKey}-${index}`;
     }
@@ -486,7 +486,7 @@ function addStageToPipeline(pipeline) {
   const stageIndex = pipeline.stages.length;
   const baseDef = { name: `Stage ${stageIndex + 1}`, probability: 0, status: 'open' };
   const status = 'open';
-  let probability = 0;
+  const probability = 0;
   const key = slugify(`${pipeline.key}-${baseDef.name}-${stageIndex}`) || `${pipeline.key}-stage-${stageIndex + 1}`;
   const newStage = {
     key,

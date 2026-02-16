@@ -19,8 +19,8 @@ const {
 router.use(protect);
 router.use(resolveAppContext);
 router.use(requireAppEntitlement); // Check user's app entitlements
-router.use(lazySalesInitialization); // Lazy initialize CRM if needed
-router.use(requireSalesApp); // Enforce CRM-only access
+router.use(lazySalesInitialization); // Lazy initialize Sales app if needed
+router.use(requireSalesApp); // Enforce Sales app access
 router.use(organizationIsolation);
 
 router.get('/', listRules);

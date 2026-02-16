@@ -5,7 +5,7 @@ const { aggregateDigest } = require('./notificationDigestService');
 
 /**
  * Resolve semantic recipient keys into concrete user records.
- * This stays app-aware to prevent data leakage across CRM/AUDIT/PORTAL.
+ * This stays app-aware to prevent data leakage across SALES/AUDIT/PORTAL.
  */
 async function resolveRecipients(recipientKeys, context) {
   const recipients = [];
@@ -127,7 +127,7 @@ function determineAppKeyFromContext(user) {
   if (user.allowedApps && Array.isArray(user.allowedApps) && user.allowedApps.length > 0) {
     return user.allowedApps[0]; // Use first app
   }
-  return 'CRM'; // Default
+  return 'SALES'; // Default
 }
 
 module.exports = resolveRecipients;

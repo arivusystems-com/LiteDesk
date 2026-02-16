@@ -1736,7 +1736,7 @@ watch(() => props.columns, async () => {
     if (newColumns.length > 0) {
       // Add new columns to the end
       newColumns.forEach(col => {
-        let isVisible = col.visible !== false;
+        const isVisible = col.visible !== false;
         
         // Check registry for default column visibility
         let shouldBeVisible = isVisible;

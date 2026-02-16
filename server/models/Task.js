@@ -119,6 +119,22 @@ const TaskSchema = new Schema({
     default: false
   },
 
+  // Activity logs (field-level change history)
+  activityLogs: [{
+    user: { type: String, required: true },
+    userId: { type: Schema.Types.ObjectId, ref: 'User' },
+    action: { type: String, required: true },
+    details: { type: Schema.Types.Mixed, default: {} },
+    timestamp: { type: Date, default: Date.now, required: true }
+  }],
+
+  // Description version history (for restore); retained up to 365 days
+  descriptionVersions: [{
+    content: { type: String, default: '' },
+    createdAt: { type: Date, default: Date.now, required: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User' }
+  }],
+
   // Metadata
   createdBy: {
     type: Schema.Types.ObjectId,
@@ -189,4 +205,3 @@ TaskSchema.set('toJSON', { virtuals: true });
 TaskSchema.set('toObject', { virtuals: true });
 
 module.exports = mongoose.model('Task', TaskSchema);
-

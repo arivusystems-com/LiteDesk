@@ -3311,7 +3311,7 @@ const loadDefaultWidgets = () => {
   // Default widgets based on record type
   // First row: Key Fields, Lifecycle Stage, and Metrics (all in one row)
   // Then followed by related widgets
-  let defaultWidgets = [];
+  const defaultWidgets = [];
   let yPosition = 0;
   
   // First row: Key Fields (25%), Lifecycle Stage (50%), Metrics (25%)
@@ -3970,7 +3970,7 @@ const isWidgetAdded = (widgetType) => {
 
 // Get the default widget layout for the current record type
 const getDefaultWidgetLayout = () => {
-  let defaultWidgets = [];
+  const defaultWidgets = [];
   let yPosition = 0;
   
   // First row: Key Fields (25%), Lifecycle Stage (50%), Metrics (25%)

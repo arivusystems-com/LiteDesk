@@ -505,7 +505,7 @@ const editRule = (rule, index) => {
 };
 
 const addRule = (ruleType) => {
-  showAddRuleMenu = false;
+  showAddRuleMenu.value = false;
   // Create a new rule node
   const newNodeId = `rule_${Date.now()}`;
   const newNode = {

@@ -478,7 +478,6 @@ export function useTabs() {
     if (instance) {
       router = useRouter();
       route = useRoute();
-      console.log('[useTabs] Router initialized successfully');
     }
   } catch (e) {
     // Not in setup context, will try lazily
@@ -492,7 +491,6 @@ export function useTabs() {
         const instance = getCurrentInstance();
         if (instance) {
           router = useRouter();
-          console.log('[useTabs] Router lazy-loaded successfully');
         } else {
           // Cannot get router without Vue instance context
           console.warn('[useTabs] Cannot get router: No Vue instance available');
@@ -774,10 +772,10 @@ export function useTabs() {
       }
     }
     
-    // If we're on root, login, or any non-excluded path, navigate to platform home
-    // BUT skip this if we just restored a tab from storage
-    // Exclude dashboard routes and sales dashboard - they should be handled by tab restoration or syncTabWithRoute
-    if (!tabWasRestored && (currentPath === '/' || (currentPath !== '/platform/home' && currentPath !== '/login' && !currentPath.startsWith('/settings') && !currentPath.startsWith('/audit/') && !currentPath.startsWith('/portal/') && !currentPath.startsWith('/dashboard') && !currentPath.startsWith('/sales/dashboard')))) {
+    // Only auto-navigate to platform home from root.
+    // Keep deep-link routes (for example /tasks/:id) on refresh so record pages don't get replaced.
+    // Skip this if we restored a tab from storage.
+    if (!tabWasRestored && currentPath === '/') {
       console.log('🔄 [setupRouteWatcher] Navigating to platform home from', currentPath);
       // Navigate to platform home to show it by default (without page refresh)
       const currentRouter = getRouter();

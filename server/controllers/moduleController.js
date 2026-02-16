@@ -1,4 +1,5 @@
 const ModuleDefinition = require('../models/ModuleDefinition');
+const { buildTaskDefaultRelationshipsForSettings } = require('../utils/taskRelationshipSettings');
 const { filterFieldsByReadAccess, filterFieldsByWriteAccess, validateFieldWrite } = require('../utils/fieldAccessControl');
 
 /**
@@ -82,7 +83,10 @@ function validateFieldMutations(oldFields, newFields, user) {
     // Check for rename (key changed)
     // Note: This is detected as a delete + add, handled above
     // But we also need to check if the field key itself was modified
-    if (oldField.key !== newField.key) {
+        if (
+            String(oldField.key || '').toLowerCase() !==
+            String(newField.key || '').toLowerCase()
+        ) {
       if (owner === 'platform') {
         violations.push({
           field: oldField.key,
@@ -156,6 +160,8 @@ function getDefaultNotificationMetadata(moduleKey) {
     supportedConditions: []
   };
 }
+
+ 
 
 // Utility to count fields from a Mongoose model schema (excluding system fields)
 function getSchemaFieldCount(model) {
@@ -381,6 +387,15 @@ function getFieldDataType(key, fieldName, path) {
 
 function getBaseFieldsForKey(key) {
     try {
+        const taskDefaultFieldOrder = [
+            'title',
+            'status',
+            'priority',
+            'startDate',
+            'dueDate',
+            'assignedTo',
+            'estimatedHours'
+        ];
         const modelByKey = {
             people: require('../models/People'),
             organizations: require('../models/Organization'),
@@ -426,7 +441,15 @@ function getBaseFieldsForKey(key) {
         }
         // Access both paths and tree to get enum values reliably
         const schemaTree = model.schema.tree || {};
-        return Object.entries(model.schema.paths)
+        const taskDefaultKeyFields = new Set([
+            'status',
+            'assignedTo',
+            'startDate',
+            'dueDate',
+            'priority',
+            'estimatedHours'
+        ]);
+        const baseFields = Object.entries(model.schema.paths)
             .filter(([name]) => {
                 // Exclude if the field name is in the excluded set
                 if (excluded.has(name)) return false;
@@ -486,8 +509,13 @@ function getBaseFieldsForKey(key) {
                         options = [...treeDef[0].enum];
                     }
                 }
-                // Custom label for eventOwnerId / reviewerId / audit roles
-                let fieldLabel = name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                // Generate human-readable label from field key (supports snake_case + camelCase)
+                let fieldLabel = String(name || '')
+                    .replace(/_/g, ' ')
+                    .replace(/([a-z\d])([A-Z])/g, '$1 $2')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .replace(/\b\w/g, c => c.toUpperCase());
                 if (name === 'eventOwnerId') fieldLabel = 'Event Owner';
                 // UX normalization: hide technical relationship naming in Events module UI
                 if (key === 'events' && name === 'relatedToId') fieldLabel = 'Organization';
@@ -853,6 +881,7 @@ function getBaseFieldsForKey(key) {
                     key: name,
                     label: fieldLabel,
                     dataType: dataType,
+                    keyField: key === 'tasks' && taskDefaultKeyFields.has(name),
                     // IMPORTANT: Some schema fields are conditionally required (function-based required).
                     // For dependency-driven required fields (like events.reviewerId), the module definition must NOT mark them required globally.
                     required: (key === 'events' && name === 'reviewerId') ? false : !!path.isRequired,
@@ -875,6 +904,29 @@ function getBaseFieldsForKey(key) {
                     context: 'global'   // Default: global context (not app-specific)
                 };
             });
+
+        if (key !== 'tasks') {
+            return baseFields;
+        }
+
+        const sortedTaskFields = [...baseFields].sort((a, b) => {
+            const aKey = String(a?.key || '');
+            const bKey = String(b?.key || '');
+            const aPinnedIndex = taskDefaultFieldOrder.indexOf(aKey);
+            const bPinnedIndex = taskDefaultFieldOrder.indexOf(bKey);
+            const aPinned = aPinnedIndex !== -1;
+            const bPinned = bPinnedIndex !== -1;
+
+            if (aPinned && bPinned) return aPinnedIndex - bPinnedIndex;
+            if (aPinned) return -1;
+            if (bPinned) return 1;
+            return 0;
+        });
+
+        return sortedTaskFields.map((field, index) => ({
+            ...field,
+            order: index
+        }));
     } catch (e) {
         return [];
     }
@@ -1417,7 +1469,7 @@ exports.listModules = async (req, res) => {
                     label: 'Linked Form',
                     description: 'Link audit forms to events for audit event types'
                 }
-            ] : m.key === 'items' ? [
+            ] : m.key === 'tasks' ? buildTaskDefaultRelationshipsForSettings() : m.key === 'items' ? [
                 {
                     name: 'Vendor',
                     type: 'lookup',
@@ -1710,9 +1762,59 @@ exports.listModules = async (req, res) => {
                         
                         // Update dataType from base (schema is source of truth for system modules)
                         savedField.dataType = baseField.dataType;
-                        // Update options if base has them (for picklists)
+                        // Update options if base has them (for picklists), but preserve saved option metadata
+                        // such as color/label/enabled when values still exist in base schema options.
                         if (baseField.options && baseField.options.length > 0) {
-                            savedField.options = baseField.options;
+                            const baseOptionValues = baseField.options
+                                .map((opt) => {
+                                    if (opt && typeof opt === 'object') {
+                                        return String(opt.value ?? opt.key ?? '').trim();
+                                    }
+                                    return String(opt || '').trim();
+                                })
+                                .filter(Boolean);
+
+                            const savedOptionMetaByValue = new Map(
+                                (Array.isArray(savedField.options) ? savedField.options : [])
+                                    .map((opt) => {
+                                        if (opt && typeof opt === 'object') {
+                                            const value = String(opt.value ?? opt.key ?? '').trim();
+                                            return value ? [value, opt] : null;
+                                        }
+                                        const value = String(opt || '').trim();
+                                        return value ? [value, { value }] : null;
+                                    })
+                                    .filter(Boolean)
+                            );
+
+                            savedField.options = baseOptionValues.map((value) => {
+                                const baseMeta = (Array.isArray(baseField.options)
+                                    ? baseField.options.find((opt) => {
+                                        if (opt && typeof opt === 'object') {
+                                            return String(opt.value ?? opt.key ?? '').trim() === value;
+                                        }
+                                        return String(opt || '').trim() === value;
+                                    })
+                                    : null) || null;
+                                const savedMeta = savedOptionMetaByValue.get(value) || null;
+
+                                if (baseMeta && typeof baseMeta === 'object') {
+                                    return {
+                                        ...baseMeta,
+                                        ...(savedMeta && typeof savedMeta === 'object' ? savedMeta : {}),
+                                        value
+                                    };
+                                }
+
+                                if (savedMeta && typeof savedMeta === 'object') {
+                                    return {
+                                        ...savedMeta,
+                                        value
+                                    };
+                                }
+
+                                return { value };
+                            });
                         }
                         // Update required from base (schema is source of truth for system modules)
                         savedField.required = baseField.required;
@@ -3477,5 +3579,3 @@ exports.updateSystemModule = async (req, res) => {
         res.status(500).json({ success: false, message: 'Error updating system module', error: error.message });
     }
 };
-
-

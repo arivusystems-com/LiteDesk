@@ -91,7 +91,7 @@ const fetchData = async () => {
       
       // Count failures per question
       const questionFailures = {};
-      let totalResponses = responses.length;
+      const totalResponses = responses.length;
       
       responses.forEach(r => {
         if (r.responseDetails && Array.isArray(r.responseDetails)) {

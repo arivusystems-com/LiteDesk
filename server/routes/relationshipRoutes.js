@@ -6,6 +6,7 @@
  * Routes for relationship management:
  * - POST /api/relationships/link - Link two records
  * - POST /api/relationships/unlink - Unlink two records
+ * - GET /api/relationships/links - Get raw relationship links for a record
  * - GET /api/relationships/record-context - Get record context with relationships
  * 
  * ⚠️ Platform-level routes - app-agnostic
@@ -19,6 +20,7 @@ const express = require('express');
 const {
   linkRecords,
   unlinkRecords,
+  getRecordLinks,
   getRecordContext
 } = require('../controllers/relationshipController');
 const { protect } = require('../middleware/authMiddleware');
@@ -40,8 +42,10 @@ router.post('/link', linkRecords);
 // Unlink records
 router.post('/unlink', unlinkRecords);
 
+// Get raw links for a record
+router.get('/links', getRecordLinks);
+
 // Get record context
 router.get('/record-context', getRecordContext);
 
 module.exports = router;
-

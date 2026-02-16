@@ -310,6 +310,15 @@ mongoose.connect(masterUri)
       console.warn('⚠️  Failed to check/seed platform definitions:', seedError.message);
       // Don't block server startup if seeding fails
     }
+
+    // 1.6. Register default Task relationships + seed settings defaults (safe to run repeatedly)
+    try {
+      const { registerDefaultTaskRelationships } = require('./services/taskRelationshipInitializer');
+      await registerDefaultTaskRelationships();
+      console.log('✅ Task relationship defaults registered');
+    } catch (relError) {
+      console.warn('⚠️  Failed to register default Task relationships:', relError.message);
+    }
     
     // 2. Start Monitoring Services (if enabled)
     if (process.env.ENABLE_HEALTH_CHECKER !== 'false') {
