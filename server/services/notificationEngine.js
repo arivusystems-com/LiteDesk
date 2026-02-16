@@ -247,7 +247,7 @@ async function emitNotification({ eventType, entity, organizationId, triggeredBy
  * Publish notifications to SSE hub (fire-and-forget).
  * 
  * FAILURE ISOLATION: Any error here is caught and logged but never throws.
- * Business flows (audit execution, CRM workflows, portal actions) continue unaffected.
+ * Business flows (audit execution, Sales workflows, portal actions) continue unaffected.
  */
 async function publishToSSE(notifications) {
   try {

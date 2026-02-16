@@ -1416,9 +1416,7 @@ onMounted(async () => {
   await fetchPreferences();
 
   // Open all groups by default for better discoverability on larger screens
-  let appKey = currentAppKey.value || 'CRM';
-  // Map SALES to CRM for GROUP_DEFINITIONS lookup (legacy compatibility)
-  if (appKey === 'SALES') appKey = 'CRM';
+  const appKey = currentAppKey.value || 'SALES';
   const defs = GROUP_DEFINITIONS[appKey] || [];
   const initial = new Set(defs.map((g) => g.id));
   if (defs.length > 0) {

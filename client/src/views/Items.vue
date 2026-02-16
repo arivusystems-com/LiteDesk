@@ -9,6 +9,7 @@
 
     <!-- Registry-Driven ModuleList -->
     <ModuleList
+      ref="moduleListRef"
       module-key="items"
       app-key="PLATFORM"
       @create="openCreateModal"
@@ -178,9 +179,14 @@ const authStore = useAuthStore();
 const { openTab } = useTabs();
 
 // State
+const moduleListRef = ref(null);
 const showFormModal = ref(false);
 const showImportModal = ref(false);
 const editingItem = ref(null);
+
+const refreshList = () => {
+  moduleListRef.value?.refresh?.();
+};
 
 // Modal handlers
 const openCreateModal = () => {
@@ -205,7 +211,7 @@ const handleBulkAction = async (actionId, selectedRows) => {
       await Promise.all(itemIds.map(id => 
         apiClient(`/items/${id}`, { method: 'DELETE' })
       ));
-      window.location.reload(); // Temporary - ModuleList should emit refresh event
+      refreshList();
     } else if (actionId === 'export' || actionId === 'bulk-export') {
       exportItemsToCSV(selectedRows);
     }
@@ -268,13 +274,13 @@ const exportItemsToCSV = (itemsToExport) => {
 
 const handleImportComplete = () => {
   showImportModal.value = false;
-  window.location.reload(); // Temporary - ModuleList should emit refresh event
+  refreshList();
 };
 
 const handleItemSave = () => {
   showFormModal.value = false;
   editingItem.value = null;
-  window.location.reload(); // Temporary - ModuleList should emit refresh event
+  refreshList();
 };
 
 const closeFormModal = () => {

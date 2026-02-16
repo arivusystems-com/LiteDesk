@@ -9,6 +9,7 @@
 
     <!-- Registry-Driven ModuleList -->
     <ModuleList
+      ref="moduleListRef"
       module-key="tasks"
       app-key="PLATFORM"
       @create="openCreateModal"
@@ -138,9 +139,14 @@ const authStore = useAuthStore();
 const { openTab } = useTabs();
 
 // State
+const moduleListRef = ref(null);
 const showFormModal = ref(false);
 const showImportModal = ref(false);
 const editingTask = ref(null);
+
+const refreshList = () => {
+  moduleListRef.value?.refresh?.();
+};
 
 // Helper functions for dates
 const isOverdue = (dueDate) => {
@@ -167,8 +173,7 @@ const toggleTaskStatus = async (task) => {
   try {
     const newStatus = task.status === 'completed' ? 'todo' : 'completed';
     await apiClient.patch(`/tasks/${task._id}/status`, { status: newStatus });
-    // ModuleList will automatically refresh the data
-    window.location.reload(); // Temporary - ModuleList should emit refresh event
+    refreshList();
   } catch (error) {
     console.error('Error toggling task status:', error);
   }
@@ -194,7 +199,7 @@ const handleBulkAction = async (action, rows) => {
   try {
     if (action === 'delete') {
       await Promise.all(taskIds.map(id => apiClient.delete(`/tasks/${id}`)));
-      window.location.reload(); // Temporary - ModuleList should emit refresh event
+      refreshList();
     } else if (action === 'export') {
       // Export functionality handled by ModuleList
     }
@@ -232,13 +237,13 @@ const exportTasks = async () => {
 
 const handleImportComplete = () => {
   showImportModal.value = false;
-  window.location.reload(); // Temporary - ModuleList should emit refresh event
+  refreshList();
 };
 
 const handleTaskSave = () => {
   showFormModal.value = false;
   editingTask.value = null;
-  window.location.reload(); // Temporary - ModuleList should emit refresh event
+  refreshList();
 };
 
 const closeFormModal = () => {

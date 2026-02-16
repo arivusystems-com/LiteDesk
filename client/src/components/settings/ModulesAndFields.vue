@@ -757,7 +757,7 @@
                   ]">
                 <div v-if="!isSystemField(f) && !isFixedPositionField(f, selectedModule?.key)" class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
                 <div v-else class="mr-2 text-xs text-purple-600 dark:text-purple-400" :title="isSystemField(f) ? 'System field' : 'Fixed position field'">🔒</div>
-                <button class="flex-1 text-left truncate" @click="selectField(idx)">{{ f.label || f.key || 'Untitled field' }}</button>
+                <button class="flex-1 text-left truncate" @click="selectField(idx)">{{ formatFieldLabelForDisplay(f.label, f.key) || 'Untitled field' }}</button>
                 <span class="text-xs text-gray-500 dark:text-gray-400">{{ f.dataType }}</span>
               </div>
             </li>
@@ -919,11 +919,12 @@
                 <div>
                   <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Label</label>
                   <input 
-                    v-model="currentField.label" 
-                    :disabled="isSystemField(currentField) || (isPeopleModule && getPeopleFieldMetadata(currentField.key)?.owner === 'system')" 
+                    :value="isFieldLabelReadOnly(currentField) ? formatFieldLabelForDisplay(currentField?.label, currentField?.key) : (currentField?.label || '')"
+                    @input="onFieldLabelInput"
+                    :disabled="isFieldLabelReadOnly(currentField)" 
                     class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10" 
                   />
-                  <p v-if="isPeopleModule && getPeopleFieldMetadata(currentField.key)?.owner === 'system'" class="mt-1 text-xs text-gray-500 dark:text-gray-400">System field labels cannot be modified</p>
+                  <p v-if="isFieldLabelReadOnly(currentField)" class="mt-1 text-xs text-gray-500 dark:text-gray-400">Platform/System field labels cannot be modified</p>
                 </div>
                 <div>
                   <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Key</label>
@@ -1102,17 +1103,29 @@
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     {{ currentField.dataType === 'Multi-Picklist' ? 'Picklist Options (Multi-Select)' : currentField.dataType === 'Radio Button' ? 'Radio Button Options' : 'Picklist Options' }}
                   </label>
-                  <button v-if="!isSystemField(currentField)" @click="showAddOption = true" class="px-3 py-1.5 bg-brand-600 text-white rounded text-xs hover:bg-brand-700">Add Option</button>
+                  <button v-if="!isSystemField(currentField) && !isTaskLifecycleField(currentField)" @click="showAddOption = true" class="px-3 py-1.5 bg-brand-600 text-white rounded text-xs hover:bg-brand-700">Add Option</button>
+                </div>
+                <div v-if="isTaskLifecycleField(currentField)" class="mb-3 flex items-start justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 dark:border-blue-800 dark:bg-blue-900/20">
+                  <p class="text-xs text-blue-800 dark:text-blue-300">
+                    Task lifecycle values are managed in <strong>Status &amp; Priority</strong>. This tab is read-only for task lifecycle options.
+                  </p>
+                  <button
+                    type="button"
+                    class="shrink-0 rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                    @click="openTaskStatusPriorityLens"
+                  >
+                    Open tab
+                  </button>
                 </div>
                 <div v-if="!currentField.options || currentField.options.length === 0" class="text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-white/5 border border-dashed border-gray-200 dark:border-white/10 rounded-lg p-4 text-center">
-                  No options defined. Click "Add Option" to add values.
+                  {{ isTaskLifecycleField(currentField) ? 'No options defined. Use Status & Priority to manage lifecycle values.' : 'No options defined. Click "Add Option" to add values.' }}
                 </div>
                 <div v-else class="space-y-2">
                   <div v-for="(option, optIdx) in normalizedOptions" :key="optIdx" class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-white/5 rounded border border-gray-200 dark:border-white/10">
                     <!-- Color Picker -->
                     <div class="flex items-center gap-2">
                       <input 
-                        v-if="!isSystemField(currentField)"
+                        v-if="!isSystemField(currentField) && !isTaskLifecycleField(currentField)"
                         type="color" 
                         :value="getOptionColor(option)" 
                         @input="updateOptionColor(optIdx, $event.target.value)"
@@ -1134,11 +1147,11 @@
                     >
                       {{ getOptionValue(option) }}
                     </div>
-                    <button v-if="!isSystemField(currentField)" @click="removeOption(optIdx)" class="px-2 py-1 text-red-600 dark:text-red-400 text-xs hover:bg-red-50 dark:hover:bg-red-900/20 rounded">Remove</button>
+                    <button v-if="!isSystemField(currentField) && !isTaskLifecycleField(currentField)" @click="removeOption(optIdx)" class="px-2 py-1 text-red-600 dark:text-red-400 text-xs hover:bg-red-50 dark:hover:bg-red-900/20 rounded">Remove</button>
                   </div>
                 </div>
                 <!-- Add Option Modal -->
-                <div v-if="showAddOption" class="fixed inset-0 z-50 flex items-center justify-center">
+                <div v-if="showAddOption && !isTaskLifecycleField(currentField)" class="fixed inset-0 z-50 flex items-center justify-center">
                   <div class="absolute inset-0 bg-black/50" @click="showAddOption = false"></div>
                   <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 w-full max-w-md mx-4">
                     <div class="p-4 border-b border-gray-200 dark:border-gray-700">
@@ -2586,7 +2599,7 @@
         <!-- Status & Priority Tab (Tasks module only) -->
         <!-- 
           ARCHITECTURE NOTE: Tasks Settings configure structure only, never work.
-          This tab configures status and priority picklists for Tasks.
+          This tab configures task lifecycle values (status and priority).
           The 'completed' status is system-locked and cannot be modified.
           See: docs/architecture/task-settings.md Section 3.3
         -->
@@ -2596,7 +2609,7 @@
             <div class="mb-6">
               <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Status & Priority</h3>
               <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                Configure task status and priority picklists. Status controls task lifecycle. Completion is system-managed.
+                Configure task lifecycle values (status and priority). Completion is system-managed.
               </p>
               <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
                 <p class="text-xs text-blue-800 dark:text-blue-400">
@@ -2606,13 +2619,13 @@
               </div>
             </div>
 
-            <!-- Status Picklist Section -->
+            <!-- Status Lifecycle Values Section -->
             <div class="mb-8">
               <div class="flex items-center justify-between mb-4">
                 <div>
-                  <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Status Picklist</h4>
+                  <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Status Lifecycle Values</h4>
                   <p class="text-sm text-gray-500 dark:text-gray-400">
-                    Configure available task status values. The "Completed" status is system-locked.
+                    Configure available task status lifecycle values. The "Completed" status is system-locked.
                   </p>
                 </div>
                 <button
@@ -2628,7 +2641,7 @@
               
               <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
                 <div v-if="taskStatusPicklist.length === 0" class="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
-                  Loading status values...
+                  Loading status lifecycle values...
                 </div>
                 <div v-else class="space-y-2">
                   <div
@@ -2662,6 +2675,15 @@
                       </span>
                     </div>
                     <div class="flex items-center gap-2">
+                      <label class="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                        <span>Color</span>
+                        <input
+                          v-model="status.color"
+                          type="color"
+                          class="h-7 w-9 cursor-pointer rounded border border-gray-300 bg-white p-0.5 dark:border-gray-600 dark:bg-gray-800"
+                          :aria-label="`Color for ${status.label}`"
+                        />
+                      </label>
                       <div 
                         v-if="status.value !== 'completed'"
                         class="group relative inline-flex w-9 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-in-out outline-offset-2 outline-indigo-600"
@@ -2700,18 +2722,18 @@
                   </div>
                 </div>
                 <div class="text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                  Status values control task lifecycle. The "Completed" status is system-controlled and cannot be modified.
+                  Status lifecycle values control task progression. The "Completed" status is system-controlled and cannot be modified.
                 </div>
               </div>
             </div>
 
-            <!-- Priority Picklist Section -->
+            <!-- Priority Lifecycle Values Section -->
             <div>
               <div class="flex items-center justify-between mb-4">
                 <div>
-                  <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Priority Picklist</h4>
+                  <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Priority Lifecycle Values</h4>
                   <p class="text-sm text-gray-500 dark:text-gray-400">
-                    Configure available task priority values.
+                    Configure available task priority lifecycle values.
                   </p>
                 </div>
                 <button
@@ -2727,7 +2749,7 @@
               
               <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
                 <div v-if="taskPriorityPicklist.length === 0" class="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
-                  Loading priority values...
+                  Loading priority lifecycle values...
                 </div>
                 <div v-else class="space-y-2">
                   <div
@@ -2749,6 +2771,15 @@
                       <span v-else class="text-sm font-medium text-gray-900 dark:text-white">{{ priority.label }}</span>
                     </div>
                     <div class="flex items-center gap-2">
+                      <label class="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                        <span>Color</span>
+                        <input
+                          v-model="priority.color"
+                          type="color"
+                          class="h-7 w-9 cursor-pointer rounded border border-gray-300 bg-white p-0.5 dark:border-gray-600 dark:bg-gray-800"
+                          :aria-label="`Color for ${priority.label}`"
+                        />
+                      </label>
                       <div 
                         class="group relative inline-flex w-9 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-in-out outline-offset-2 outline-indigo-600"
                         :class="priority.enabled ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'"
@@ -2786,7 +2817,7 @@
                   </div>
                 </div>
                 <div class="text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                  Priority values control task urgency. At least one priority value must remain enabled.
+                  Priority lifecycle values control task urgency. At least one priority value must remain enabled.
                 </div>
               </div>
             </div>
@@ -6117,7 +6148,7 @@ function normalizePipelineSettings(settings = []) {
 
   const seenKeys = new Set();
   normalized.forEach((pipeline, index) => {
-    let baseKey = pipeline.key;
+    const baseKey = pipeline.key;
     while (seenKeys.has(pipeline.key)) {
       pipeline.key = `${baseKey}-${index}`;
     }
@@ -6738,6 +6769,36 @@ const subTabs = [
 const activeSubTab = ref('general');
 const fieldSearch = ref('');
 const showTenantFields = ref(false); // Hide tenant fields by default
+const TASK_FIELD_CONFIGURATION_ORDER = Object.freeze([
+  'title',
+  'status',
+  'priority',
+  'startDate',
+  'dueDate',
+  'assignedTo',
+  'estimatedHours'
+]);
+
+const sortTaskFieldConfiguration = (fields = []) => {
+  return [...fields].sort((a, b) => {
+    const aKey = String(a?.key || '');
+    const bKey = String(b?.key || '');
+    const aPinnedIndex = TASK_FIELD_CONFIGURATION_ORDER.indexOf(aKey);
+    const bPinnedIndex = TASK_FIELD_CONFIGURATION_ORDER.indexOf(bKey);
+    const aPinned = aPinnedIndex !== -1;
+    const bPinned = bPinnedIndex !== -1;
+
+    if (aPinned && bPinned) return aPinnedIndex - bPinnedIndex;
+    if (aPinned) return -1;
+    if (bPinned) return 1;
+    return (a?.order ?? 0) - (b?.order ?? 0);
+  });
+};
+
+const normalizeTaskFieldConfigurationOrder = (moduleKey, fields = []) => {
+  if (String(moduleKey || '').toLowerCase() !== 'tasks') return fields;
+  return sortTaskFieldConfiguration(fields);
+};
 
 const filteredFields = computed(() => {
   let fields = editFields.value;
@@ -6768,6 +6829,8 @@ const filteredFields = computed(() => {
       if (bKey === 'name') return 1;
       return (a.order ?? 0) - (b.order ?? 0);
     });
+  } else if (selectedModule.value?.key === 'tasks') {
+    fields = sortTaskFieldConfiguration(fields);
   } else {
     // Normal sorting by order
     fields = fields.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -7375,10 +7438,37 @@ function selectFieldByKey(fieldKey) {
   }
 }
 
+function formatFieldLabelForDisplay(label, fieldKey = '') {
+  const fallback = String(fieldKey || '').trim();
+  const source = String(label || fallback || '').trim();
+  if (!source) return source;
+
+  return source
+    .replace(/_/g, ' ')
+    .replace(/([a-z\d])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function isFieldLabelReadOnly(field) {
+  if (!field) return true;
+  const owner = field?.owner || 'platform';
+  if (owner === 'platform' || owner === 'app') return true;
+  if (isSystemField(field)) return true;
+  if (isPeopleModule.value && getPeopleFieldMetadata(field.key)?.owner === 'system') return true;
+  return false;
+}
+
+function onFieldLabelInput(event) {
+  if (!currentField.value || isFieldLabelReadOnly(currentField.value)) return;
+  currentField.value.label = event?.target?.value ?? '';
+}
+
 // Helper: Get field label
 function getFieldLabel(fieldKey) {
   const field = editFields.value.find(f => f.key === fieldKey);
-  return field?.label || fieldKey || 'Untitled field';
+  return formatFieldLabelForDisplay(field?.label, fieldKey) || 'Untitled field';
 }
 
 // Helper: Get field data type
@@ -7904,14 +7994,68 @@ function loadFieldSettings() {
 }
 
 // Add picklist option
+const TASK_STATUS_OPTION_DEFAULT_COLORS = Object.freeze({
+  todo: '#6B7280',
+  in_progress: '#2563EB',
+  waiting: '#D97706',
+  completed: '#16A34A',
+  cancelled: '#DC2626'
+});
+
+const TASK_PRIORITY_OPTION_DEFAULT_COLORS = Object.freeze({
+  low: '#6B7280',
+  medium: '#2563EB',
+  high: '#D97706',
+  urgent: '#DC2626'
+});
+
+function normalizePicklistColorKey(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+function isTaskStatusField(field = currentField.value) {
+  return isTasksModule.value && String(field?.key || '').toLowerCase() === 'status';
+}
+
+function isTaskPriorityField(field = currentField.value) {
+  return isTasksModule.value && String(field?.key || '').toLowerCase() === 'priority';
+}
+
+function isTaskLifecycleField(field = currentField.value) {
+  if (!isTasksModule.value) return false;
+  const key = String(field?.key || '').toLowerCase();
+  return key === 'status' || key === 'priority';
+}
+
+function openTaskStatusPriorityLens() {
+  activeTopTab.value = 'status-priority';
+  showAddOption.value = false;
+}
+
+function getDefaultOptionColor(optionValue, field = currentField.value) {
+  if (isTaskStatusField(field)) {
+    return TASK_STATUS_OPTION_DEFAULT_COLORS[normalizePicklistColorKey(optionValue)] || '#6B7280';
+  }
+  if (isTaskPriorityField(field)) {
+    return TASK_PRIORITY_OPTION_DEFAULT_COLORS[normalizePicklistColorKey(optionValue)] || '#6B7280';
+  }
+  return '#3B82F6';
+}
+
 // Normalize options - convert strings to objects for backward compatibility
 const normalizedOptions = computed(() => {
   if (!currentField.value?.options || !Array.isArray(currentField.value.options)) return [];
   return currentField.value.options.map(opt => {
     if (typeof opt === 'string') {
-      return { value: opt, color: '#3B82F6' }; // Default blue for old string options
+      return { value: opt, color: getDefaultOptionColor(opt, currentField.value) };
     }
-    return opt; // Already an object
+    if (opt && typeof opt === 'object') {
+      return {
+        ...opt,
+        color: opt.color || getDefaultOptionColor(opt.value, currentField.value)
+      };
+    }
+    return opt;
   });
 });
 
@@ -7923,12 +8067,13 @@ function getOptionValue(option) {
 
 // Get option color (with default)
 function getOptionColor(option) {
-  if (typeof option === 'string') return '#3B82F6'; // Default blue for old string options
-  return option?.color || '#3B82F6';
+  if (typeof option === 'string') return getDefaultOptionColor(option, currentField.value);
+  return option?.color || getDefaultOptionColor(getOptionValue(option), currentField.value);
 }
 
 // Update option color
 function updateOptionColor(index, color) {
+  if (isTaskLifecycleField(currentField.value)) return;
   if (!currentField.value.options || !Array.isArray(currentField.value.options)) return;
   
   const option = currentField.value.options[index];
@@ -7947,13 +8092,14 @@ function updateOptionColor(index, color) {
 }
 
 function addOption() {
+  if (isTaskLifecycleField(currentField.value)) return;
   if (!newOptionValue.value.trim()) return;
   if (!currentField.value.options) {
     currentField.value.options = [];
   }
   
   const optionValue = newOptionValue.value.trim();
-  const optionColor = newOptionColor.value || '#3B82F6';
+  const optionColor = newOptionColor.value || getDefaultOptionColor(optionValue, currentField.value);
   
   // Check for duplicates (compare values, not colors)
   const existingValues = currentField.value.options.map(opt => 
@@ -7969,12 +8115,13 @@ function addOption() {
   }
   
   newOptionValue.value = '';
-  newOptionColor.value = '#3B82F6'; // Reset to default
+  newOptionColor.value = getDefaultOptionColor('', currentField.value);
   showAddOption.value = false;
 }
 
 // Remove picklist option
 function removeOption(index) {
+  if (isTaskLifecycleField(currentField.value)) return;
   if (currentField.value.options && Array.isArray(currentField.value.options)) {
     currentField.value.options.splice(index, 1);
   }
@@ -8002,6 +8149,7 @@ const fetchModules = async () => {
         const sorted = initial.sort((a,b) => (a.order ?? 0) - (b.order ?? 0));
         let normalizedFields = filterSystemFields(uniqueFieldsByKey(sorted));
         normalizedFields = normalizeFormsFields(normalizedFields, initialMod.key);
+        normalizedFields = normalizeTaskFieldConfigurationOrder(initialMod.key, normalizedFields);
         
         // DEBUG: Log fields for items module
         if (initialMod.key?.toLowerCase() === 'items') {
@@ -8486,6 +8634,7 @@ const fetchModules = async () => {
             const sorted = initial.sort((a,b) => (a.order ?? 0) - (b.order ?? 0));
             let normalizedFields = filterSystemFields(uniqueFieldsByKey(sorted));
             normalizedFields = normalizeFormsFields(normalizedFields, storedMod.key);
+            normalizedFields = normalizeTaskFieldConfigurationOrder(storedMod.key, normalizedFields);
             
             // Initialize filter metadata for People module fields based on metadata
             if (storedMod.key?.toLowerCase() === 'people') {
@@ -8558,7 +8707,7 @@ const fetchModules = async () => {
             // now derive selection based on mode
             const layoutKeysInit = extractLayoutKeys(quickLayout.value);
             // Use quickCreate from module definition - NO hardcoding, all config comes from Settings UI
-            let quickKeysInit = storedMod.quickCreate || [];
+            const quickKeysInit = storedMod.quickCreate || [];
             
             const useLayout = false; // Advanced mode hidden for now // (quickMode.value === 'advanced' && layoutKeysInit.length > 0);
             const baseKeys = useLayout ? layoutKeysInit : quickKeysInit;
@@ -8620,6 +8769,7 @@ const selectModule = (mod, preferFieldKey = null) => {
   const sorted = initial.sort((a,b) => (a.order ?? 0) - (b.order ?? 0));
   let normalizedFields = filterSystemFields(uniqueFieldsByKey(sorted));
   normalizedFields = normalizeFormsFields(normalizedFields, mod.key);
+  normalizedFields = normalizeTaskFieldConfigurationOrder(mod.key, normalizedFields);
   
   // People module: Validate all fields have metadata
   if (mod.key?.toLowerCase() === 'people') {
@@ -9004,7 +9154,51 @@ const saveModule = async () => {
   isSaving.value = true;
   try {
     // Deduplicate fields before saving
-    const deduplicatedFields = uniqueFieldsByKey(editFields.value);
+    let deduplicatedFields = uniqueFieldsByKey(editFields.value);
+
+    // For system modules, preserve platform-field identity from existing module definition.
+    // This prevents accidental key-case drift (e.g., dueDate vs duedate) and accidental
+    // omission of protected platform fields from triggering mutation violations.
+    if (mod.type === 'system') {
+      const existingFields = Array.isArray(mod.fields) ? mod.fields : [];
+      const existingByLowerKey = new Map();
+      existingFields.forEach((field) => {
+        const key = String(field?.key || '').trim();
+        if (!key) return;
+        existingByLowerKey.set(key.toLowerCase(), field);
+      });
+
+      deduplicatedFields = deduplicatedFields.map((field) => {
+        const fieldKey = String(field?.key || '').trim();
+        if (!fieldKey) return field;
+        const existing = existingByLowerKey.get(fieldKey.toLowerCase());
+        if (!existing?.key) return field;
+        if (existing.key === fieldKey) return field;
+        return { ...field, key: existing.key };
+      });
+
+      const payloadLowerKeys = new Set(
+        deduplicatedFields
+          .map((field) => String(field?.key || '').trim().toLowerCase())
+          .filter(Boolean)
+      );
+
+      // Ensure platform fields are never dropped from payload.
+      for (const existing of existingFields) {
+        const existingKey = String(existing?.key || '').trim();
+        if (!existingKey) continue;
+        const lower = existingKey.toLowerCase();
+        const owner = existing?.owner || 'platform';
+        if (owner === 'platform' && !payloadLowerKeys.has(lower)) {
+          deduplicatedFields.push({ ...existing });
+          payloadLowerKeys.add(lower);
+        }
+      }
+    }
+    if (mod.key === 'tasks') {
+      deduplicatedFields = sortTaskFieldConfiguration(deduplicatedFields);
+    }
+
     // Update order after deduplication
     deduplicatedFields.forEach((f, i) => { f.order = i; });
     
@@ -9155,7 +9349,7 @@ const selectField = (idx) => {
 };
 
 const currentField = computed(() => editFields.value[selectedFieldIdx.value]);
-const currentFieldTitle = computed(() => currentField.value?.label || currentField.value?.key || 'Field');
+const currentFieldTitle = computed(() => formatFieldLabelForDisplay(currentField.value?.label, currentField.value?.key) || 'Field');
 
 // Form Type editing (Forms module)
 const newFormTypeKey = ref('');
@@ -9491,15 +9685,35 @@ watch(optionsBuffer, (v) => {
         return existingValue === value;
       });
       if (existing && typeof existing === 'object') {
-        return existing; // Keep existing object with color
+        return {
+          ...existing,
+          color: existing.color || getDefaultOptionColor(existing.value || value, currentField.value)
+        };
       }
-      return { value: value, color: '#3B82F6' }; // New option, default color
+      return { value: value, color: getDefaultOptionColor(value, currentField.value) };
     });
   } else {
     // New options, create as objects with default color
-    currentField.value.options = arr.map(value => ({ value: value, color: '#3B82F6' }));
+    currentField.value.options = arr.map(value => ({ value: value, color: getDefaultOptionColor(value, currentField.value) }));
   }
 });
+
+watch(currentField, (field) => {
+  newOptionColor.value = getDefaultOptionColor('', field);
+
+  if (!isTaskStatusField(field) || !Array.isArray(field?.options)) return;
+
+  field.options = field.options.map((option) => {
+    if (typeof option === 'string') {
+      return { value: option, color: getDefaultOptionColor(option, field) };
+    }
+    if (!option || typeof option !== 'object') return option;
+    return {
+      ...option,
+      color: option.color || getDefaultOptionColor(option.value, field)
+    };
+  });
+}, { immediate: true });
 
 const clearSelection = () => {
   selectedModuleId.value = null;
@@ -10951,22 +11165,125 @@ const lastSaveTimestamp = ref(0); // Track when we last saved to prevent refetch
 // The 'completed' status is system-locked and cannot be modified.
 // See: docs/architecture/task-settings.md Section 3.3
 const taskStatusPicklist = ref([
-  { value: 'todo', label: 'To Do', enabled: true, editing: false },
-  { value: 'in_progress', label: 'In Progress', enabled: true, editing: false },
-  { value: 'waiting', label: 'Waiting', enabled: true, editing: false },
-  { value: 'completed', label: 'Completed', enabled: true, editing: false, systemLocked: true },
-  { value: 'cancelled', label: 'Cancelled', enabled: true, editing: false }
+  { value: 'todo', label: 'To Do', enabled: true, editing: false, color: '#6B7280' },
+  { value: 'in_progress', label: 'In Progress', enabled: true, editing: false, color: '#2563EB' },
+  { value: 'waiting', label: 'Waiting', enabled: true, editing: false, color: '#D97706' },
+  { value: 'completed', label: 'Completed', enabled: true, editing: false, color: '#16A34A', systemLocked: true },
+  { value: 'cancelled', label: 'Cancelled', enabled: true, editing: false, color: '#DC2626' }
 ]);
 
 const taskPriorityPicklist = ref([
-  { value: 'low', label: 'Low', enabled: true, editing: false },
-  { value: 'medium', label: 'Medium', enabled: true, editing: false },
-  { value: 'high', label: 'High', enabled: true, editing: false },
-  { value: 'urgent', label: 'Urgent', enabled: true, editing: false }
+  { value: 'low', label: 'Low', enabled: true, editing: false, color: '#6B7280' },
+  { value: 'medium', label: 'Medium', enabled: true, editing: false, color: '#2563EB' },
+  { value: 'high', label: 'High', enabled: true, editing: false, color: '#D97706' },
+  { value: 'urgent', label: 'Urgent', enabled: true, editing: false, color: '#DC2626' }
 ]);
 
 const savingTaskStatusPriority = ref(false);
-const taskStatusPriorityOriginalSnapshot = ref('');
+
+function toHumanLabelFromValue(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized) return '';
+  return normalized
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function getTaskPicklistFieldFromConfig(fieldKey) {
+  const normalizedFieldKey = String(fieldKey || '').toLowerCase();
+  return editFields.value.find(field => String(field?.key || '').toLowerCase() === normalizedFieldKey);
+}
+
+function normalizeTaskStatusOption(option) {
+  const value = String(typeof option === 'string' ? option : (option?.value || '')).trim();
+  if (!value) return null;
+
+  return {
+    value,
+    label: String(option?.label || toHumanLabelFromValue(value) || value),
+    enabled: option?.enabled !== undefined ? option.enabled : true,
+    color: option?.color || getDefaultOptionColor(value, { key: 'status' })
+  };
+}
+
+function normalizeTaskPriorityOption(option) {
+  const value = String(typeof option === 'string' ? option : (option?.value || '')).trim();
+  if (!value) return null;
+
+  return {
+    value,
+    label: String(option?.label || toHumanLabelFromValue(value) || value),
+    enabled: option?.enabled !== undefined ? option.enabled : true,
+    color: option?.color || getDefaultOptionColor(value, { key: 'priority' })
+  };
+}
+
+function normalizeTaskStatusLensRows(rows) {
+  return (rows || [])
+    .map(normalizeTaskStatusOption)
+    .filter(Boolean)
+    .map(row => ({
+      ...row,
+      editing: false,
+      systemLocked: row.value === 'completed'
+    }));
+}
+
+function normalizeTaskPriorityLensRows(rows) {
+  return (rows || [])
+    .map(normalizeTaskPriorityOption)
+    .filter(Boolean)
+    .map(row => ({
+      ...row,
+      editing: false
+    }));
+}
+
+function getNormalizedTaskStatusFromFieldConfig() {
+  const statusField = getTaskPicklistFieldFromConfig('status');
+  const configured = normalizeTaskStatusLensRows(Array.isArray(statusField?.options) ? statusField.options : []);
+  if (configured.length > 0) return configured;
+  return normalizeTaskStatusLensRows(taskStatusPicklist.value);
+}
+
+function getNormalizedTaskPriorityFromFieldConfig() {
+  const priorityField = getTaskPicklistFieldFromConfig('priority');
+  const configured = normalizeTaskPriorityLensRows(Array.isArray(priorityField?.options) ? priorityField.options : []);
+  if (configured.length > 0) return configured;
+  return normalizeTaskPriorityLensRows(taskPriorityPicklist.value);
+}
+
+function syncTaskStatusPriorityLensFromFieldConfig() {
+  if (!isTasksModule.value) return;
+  taskStatusPicklist.value = getNormalizedTaskStatusFromFieldConfig();
+  taskPriorityPicklist.value = getNormalizedTaskPriorityFromFieldConfig();
+}
+
+function applyTaskStatusPriorityLensToFieldConfig() {
+  const statusField = getTaskPicklistFieldFromConfig('status');
+  if (statusField) {
+    statusField.options = normalizeTaskStatusLensRows(taskStatusPicklist.value).map(status => ({
+      value: status.value,
+      label: status.label || status.value,
+      enabled: status.enabled !== undefined ? status.enabled : true,
+      color: status.color || getDefaultOptionColor(status.value, statusField)
+    }));
+  }
+
+  const priorityField = getTaskPicklistFieldFromConfig('priority');
+  if (priorityField) {
+    priorityField.options = normalizeTaskPriorityLensRows(taskPriorityPicklist.value).map(priority => ({
+      value: priority.value,
+      label: priority.label || priority.value,
+      enabled: priority.enabled !== undefined ? priority.enabled : true,
+      color: priority.color || getDefaultOptionColor(priority.value, priorityField)
+    }));
+  }
+}
 
 // Items Status & Types state
 const itemTypes = ref([
@@ -11215,22 +11532,39 @@ function initializeEventStatusSnapshot() {
 
 // Computed: Check if task status/priority configuration is dirty
 const taskStatusPriorityDirty = computed(() => {
-  if (!taskStatusPriorityOriginalSnapshot.value) return false;
-  
+  if (!isTasksModule.value) return false;
+
   const current = JSON.stringify({
-    status: taskStatusPicklist.value.map(s => ({
+    status: normalizeTaskStatusLensRows(taskStatusPicklist.value).map(s => ({
       value: s.value,
       label: s.label || s.value,
-      enabled: s.enabled !== undefined ? s.enabled : true
+      enabled: s.enabled !== undefined ? s.enabled : true,
+      color: s.color || getDefaultOptionColor(s.value, { key: 'status' })
     })),
-    priority: taskPriorityPicklist.value.map(p => ({
+    priority: normalizeTaskPriorityLensRows(taskPriorityPicklist.value).map(p => ({
       value: p.value,
       label: p.label || p.value,
-      enabled: p.enabled !== undefined ? p.enabled : true
+      enabled: p.enabled !== undefined ? p.enabled : true,
+      color: p.color || getDefaultOptionColor(p.value, { key: 'priority' })
     }))
   });
-  
-  return current !== taskStatusPriorityOriginalSnapshot.value;
+
+  const fromFieldConfig = JSON.stringify({
+    status: getNormalizedTaskStatusFromFieldConfig().map(s => ({
+      value: s.value,
+      label: s.label || s.value,
+      enabled: s.enabled !== undefined ? s.enabled : true,
+      color: s.color || getDefaultOptionColor(s.value, { key: 'status' })
+    })),
+    priority: getNormalizedTaskPriorityFromFieldConfig().map(p => ({
+      value: p.value,
+      label: p.label || p.value,
+      enabled: p.enabled !== undefined ? p.enabled : true,
+      color: p.color || getDefaultOptionColor(p.value, { key: 'priority' })
+    }))
+  });
+
+  return current !== fromFieldConfig;
 });
 
 // Tasks Status & Priority functions
@@ -11240,6 +11574,7 @@ function addTaskStatusValue() {
     value: newValue,
     label: 'New Status',
     enabled: true,
+    color: '#6B7280',
     editing: true,
     editValue: 'New Status'
   });
@@ -11286,6 +11621,7 @@ function addTaskPriorityValue() {
     value: newValue,
     label: 'New Priority',
     enabled: true,
+    color: '#6B7280',
     editing: true,
     editValue: 'New Priority'
   });
@@ -11404,27 +11740,11 @@ async function saveTaskStatusPriority() {
   
   savingTaskStatusPriority.value = true;
   try {
-    // TODO: Implement API endpoint for saving task status/priority configuration
-    // For now, just update the snapshot
-    const snapshotData = {
-      status: taskStatusPicklist.value.map(s => ({
-        value: s.value,
-        label: s.label || s.value,
-        enabled: s.enabled !== undefined ? s.enabled : true
-      })),
-      priority: taskPriorityPicklist.value.map(p => ({
-        value: p.value,
-        label: p.label || p.value,
-        enabled: p.enabled !== undefined ? p.enabled : true
-      }))
-    };
-    
-    taskStatusPriorityOriginalSnapshot.value = JSON.stringify(snapshotData);
-    
-    // TODO: Call API endpoint when available
-    // await apiClient.patch(`/settings/core-modules/tasks/status-priority`, snapshotData);
-    
-    console.log('[Task Status Priority] Save successful (local only for now)');
+    // Status & Priority is a lens over Field Configurations (single source of truth).
+    applyTaskStatusPriorityLensToFieldConfig();
+    await saveModule();
+    syncTaskStatusPriorityLensFromFieldConfig();
+    console.log('[Task Status Priority] Saved via Field Configurations');
   } catch (err) {
     console.error('Failed to save task status/priority:', err);
     alert(err.message || 'Failed to save task status/priority. Please try again.');
@@ -12215,6 +12535,9 @@ watch(() => [selectedModule.value?.key, activeTopTab.value], async ([moduleKey, 
       // This ensures data is refreshed on page reload
       console.log('[Status Types] Fetching status types for organizations module...');
       await fetchStatusTypes();
+    } else if (moduleKey === 'tasks' && tab === 'status-priority') {
+      await nextTick();
+      syncTaskStatusPriorityLensFromFieldConfig();
     } else if (moduleKey === 'events' && tab === 'status') {
       // Initialize event status snapshot when status tab is opened
       // ARCHITECTURE NOTE: Event statuses are system-locked, but we initialize the snapshot for consistency.
@@ -12286,6 +12609,11 @@ watch([organizationTypes, statusPicklists], () => {
   }
 }, { deep: true });
 
+watch(editFields, () => {
+  if (!isTasksModule.value) return;
+  syncTaskStatusPriorityLensFromFieldConfig();
+}, { deep: true });
+
 onMounted(async () => {
   await fetchModules();
   
@@ -12296,25 +12624,10 @@ onMounted(async () => {
     await fetchStatusTypes();
   }
   
-  // After modules are loaded, if we're on the tasks status-priority tab, initialize snapshot
-  // ARCHITECTURE NOTE: Tasks Settings configure structure only, never work.
-  // See: docs/architecture/task-settings.md Section 3.3
+  // After modules are loaded, if we're on the tasks status-priority tab, sync lens from fields
   if (selectedModule.value?.key === 'tasks' && activeTopTab.value === 'status-priority') {
     await nextTick();
-    // Initialize snapshot with current values
-    const snapshotData = {
-      status: taskStatusPicklist.value.map(s => ({
-        value: s.value,
-        label: s.label || s.value,
-        enabled: s.enabled !== undefined ? s.enabled : true
-      })),
-      priority: taskPriorityPicklist.value.map(p => ({
-        value: p.value,
-        label: p.label || p.value,
-        enabled: p.enabled !== undefined ? p.enabled : true
-      }))
-    };
-    taskStatusPriorityOriginalSnapshot.value = JSON.stringify(snapshotData);
+    syncTaskStatusPriorityLensFromFieldConfig();
   }
   
   // After modules are loaded, if we're on the items status-types tab, initialize snapshot
@@ -12447,7 +12760,7 @@ function onStageDrop(pipelineKey, stageIndex) {
     resetStageDrag();
     return;
   }
-  let from = source.index;
+  const from = source.index;
   let to = stageIndex;
   if (to > pipeline.stages.length) to = pipeline.stages.length;
   if (from === to) {

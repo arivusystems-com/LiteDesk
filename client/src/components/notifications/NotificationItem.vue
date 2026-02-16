@@ -35,6 +35,12 @@
         <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate">
           {{ entityLabel }}
         </p>
+        <p
+          v-if="item.body"
+          class="mt-0.5 text-xs text-gray-500 dark:text-gray-400 line-clamp-2"
+        >
+          {{ item.body }}
+        </p>
         <p class="mt-0.5 text-[11px] text-gray-400 dark:text-gray-500">
           {{ relativeTime }}
         </p>
@@ -399,7 +405,7 @@ onMounted(() => {
   if (typeof window === 'undefined' || !window.matchMedia) return;
   coarseMedia = window.matchMedia('(pointer: coarse)');
   syncCoarsePointer();
-  // eslint-disable-next-line no-unused-vars
+   
   const handler = () => syncCoarsePointer();
   coarseMedia.addEventListener?.('change', handler);
   // Safari fallback
@@ -408,7 +414,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (!coarseMedia) return;
-  // eslint-disable-next-line no-unused-vars
+   
   const handler = () => syncCoarsePointer();
   coarseMedia.removeEventListener?.('change', handler);
   coarseMedia.removeListener?.(handler);

@@ -122,9 +122,19 @@ async function getRecordContext(organizationId, appKey, moduleKey, recordId, opt
         label: uiConfig.label || rel.relationshipKey,
         direction,
         cardinality: rel.cardinality,
+        relationshipType: rel.relationshipType || rel.cardinality,
         required: rel.required,
         requiredSatisfied,
         ownership: rel.ownership,
+        userLinkable: rel.userLinkable !== undefined ? rel.userLinkable : true,
+        display: rel.display || null,
+        constraints: rel.constraints || null,
+        isDefault: !!rel.isDefault,
+        isAdvanced: !!rel.isAdvanced,
+        activateWhenModuleExists: !!rel.activateWhenModuleExists,
+        status: rel.status || 'ACTIVE',
+        localField: rel.localField || null,
+        foreignField: rel.foreignField || null,
         cascade: rel.cascade,
         target: target,
         records: related ? related.records : [],
@@ -600,4 +610,3 @@ module.exports = {
   getRecordContextForUI,
   getResponseContext
 };
-

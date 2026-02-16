@@ -758,7 +758,7 @@ const formatActivitySummary = (activity) => {
   // Remove ObjectIds from action before processing
   // ObjectIds are 24-character hexadecimal strings
   const objectIdPattern = /['"]?[0-9a-fA-F]{24}['"]?/g;
-  let cleanAction = action.replace(objectIdPattern, '').trim();
+  const cleanAction = action.replace(objectIdPattern, '').trim();
   
   // Get human-friendly action description
   let formattedAction = actionMap[cleanAction.toLowerCase()] || cleanAction;
@@ -856,7 +856,7 @@ const getActivitySummaryBeforePerson = (activity) => {
 const getActivitySummaryAfterPerson = (activity) => {
   if (!activity || !activity.personName) return '';
   
-  let summary = formatActivitySummary(activity);
+  const summary = formatActivitySummary(activity);
   
   // Check if this is a person creation action
   const isPersonCreation = activity.action && 

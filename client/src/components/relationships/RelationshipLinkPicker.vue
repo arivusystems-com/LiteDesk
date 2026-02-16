@@ -211,7 +211,7 @@ const fetchItems = async () => {
     const res = await apiClient.get(endpoint, { params });
     
     if (res.success) {
-      let rows = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+      const rows = Array.isArray(res.data) ? res.data : (res.data?.data || []);
       items.value = rows;
     } else {
       items.value = [];

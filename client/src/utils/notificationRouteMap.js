@@ -15,14 +15,15 @@
  * - null - no route available
  */
 const NOTIFICATION_ROUTE_MAP = {
-  CRM: {
+  SALES: {
     EVENT: (entityId) => ({
       name: 'event-detail',
       params: { id: entityId }
     }),
-    // Future: Add more CRM entity types as needed
-    // DEAL: (entityId) => ({ name: 'deal-detail', params: { id: entityId } }),
-    // TASK: (entityId) => ({ name: 'task-detail', params: { id: entityId } }),
+    TASK: (entityId) => ({
+      name: 'task-detail',
+      params: { id: entityId }
+    }),
   },
   
   AUDIT: {
@@ -46,7 +47,7 @@ const NOTIFICATION_ROUTE_MAP = {
 /**
  * Get route for a notification based on appKey and entity.
  * 
- * @param {string} appKey - 'CRM' | 'AUDIT' | 'PORTAL'
+ * @param {string} appKey - 'SALES' | 'AUDIT' | 'PORTAL'
  * @param {Object} entity - { type: string, id: string }
  * @returns {Object|null} Route definition or null if no route available
  */
@@ -110,7 +111,7 @@ export function validateRoute(router, route) {
  * Get all supported entity types for an app.
  * Useful for debugging or UI hints.
  * 
- * @param {string} appKey - 'CRM' | 'AUDIT' | 'PORTAL'
+ * @param {string} appKey - 'SALES' | 'AUDIT' | 'PORTAL'
  * @returns {string[]} Array of supported entity types
  */
 export function getSupportedEntityTypes(appKey) {

@@ -153,7 +153,7 @@ const allSignals = computed(() => {
 
 // Filter out dismissed signals and gate actions by permissions
 const signals = computed(() => {
-  let filteredSignals = allSignals.value.filter(signal => !dismissedSignalIds.value.has(signal.id));
+  const filteredSignals = allSignals.value.filter(signal => !dismissedSignalIds.value.has(signal.id));
   
   // Gate actions by permissions - remove action if user doesn't have permission
   // Signal card always renders, but action button only if permission passes

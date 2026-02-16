@@ -654,9 +654,11 @@ const handleBulkAction = async (action, rows) => {
   try {
     if (action === 'delete') {
       await Promise.all(eventIds.map(id => apiClient.delete(`/events/${id}`)));
-      // Refresh both views
+      // Refresh both calendar and list views
       await fetchCalendarEvents();
-      window.location.reload();
+      if (moduleListRef.value?.refresh) {
+        moduleListRef.value.refresh();
+      }
     } else if (action === 'export') {
       // Export functionality handled by ModuleList
     }

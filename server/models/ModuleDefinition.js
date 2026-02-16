@@ -301,4 +301,26 @@ ModuleDefinitionSchema.index({ appKey: 1 });
 ModuleDefinitionSchema.index({ organizationId: 1, key: 1 }, { unique: true, sparse: true });
 ModuleDefinitionSchema.index({ organizationId: 1 });
 
+// Auto-activate pending default relationships when modules become available
+ModuleDefinitionSchema.post('save', async function(doc) {
+  try {
+    if (!doc || doc.organizationId || doc.enabled === false) {
+      return;
+    }
+
+    const {
+      registerDefaultTaskRelationships,
+      activatePendingRelationshipsForModule
+    } = require('../services/taskRelationshipInitializer');
+
+    if (doc.appKey === 'platform' && doc.moduleKey === 'tasks') {
+      await registerDefaultTaskRelationships();
+    }
+
+    await activatePendingRelationshipsForModule(doc.appKey, doc.moduleKey);
+  } catch (error) {
+    console.error('[ModuleDefinition] Error handling relationship activation:', error);
+  }
+});
+
 module.exports = mongoose.model('ModuleDefinition', ModuleDefinitionSchema);

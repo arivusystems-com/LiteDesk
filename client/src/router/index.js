@@ -275,7 +275,7 @@ const routes = [
   {
     path: '/tasks/:id',
     name: 'task-detail',
-    component: () => import('@/views/TaskDetail.vue'),
+    component: () => import('@/pages/tasks/TaskRecordPage.vue'),
     meta: { requiresAuth: true, requiresPermission: { module: 'tasks', action: 'view' } }
   },
   {

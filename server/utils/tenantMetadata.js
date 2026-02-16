@@ -252,8 +252,18 @@ async function getEffectiveRelationships(organizationId, appKey, moduleKey) {
           ...(tenantConfig?.uiOverride?.target?.label === undefined ? { label: platformRel.ui.target.label } : {})
         },
         cardinality: platformRel.cardinality,
+        relationshipType: platformRel.relationshipType || platformRel.cardinality,
         ownership: platformRel.ownership,
         required: tenantConfig?.requiredOverride !== null ? tenantConfig.requiredOverride : platformRel.required,
+        localField: platformRel.localField || null,
+        foreignField: platformRel.foreignField || null,
+        userLinkable: platformRel.userLinkable !== undefined ? platformRel.userLinkable : true,
+        display: platformRel.display || null,
+        constraints: platformRel.constraints || null,
+        isDefault: !!platformRel.isDefault,
+        isAdvanced: !!platformRel.isAdvanced,
+        activateWhenModuleExists: !!platformRel.activateWhenModuleExists,
+        status: platformRel.status || 'ACTIVE',
         cascade: platformRel.cascade,
         ui: {
           source: {
@@ -334,4 +344,3 @@ module.exports = {
   isAppEnabledForTenant,
   isModuleEnabledForTenant
 };
-

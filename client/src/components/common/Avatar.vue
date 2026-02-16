@@ -11,7 +11,8 @@
       v-else
       :class="['flex items-center justify-center font-medium rounded-lg', colorClasses.bg, colorClasses.text, sizeClass]"
     >
-      {{ getInitial(recordObj) }}
+      <component v-if="icon" :is="icon" :class="iconSizeClass" />
+      <template v-else>{{ getInitial(recordObj) }}</template>
     </div>
   </div>
 </template>
@@ -32,6 +33,11 @@ const props = defineProps({
     type: String,
     default: 'md', // 'sm', 'md', 'lg'
     validator: (value) => ['sm', 'md', 'lg'].includes(value)
+  },
+  icon: {
+    type: [Object, Function],
+    required: false,
+    default: null
   }
 });
 
@@ -44,6 +50,15 @@ const sizeClass = computed(() => {
     sm: 'w-6 h-6 text-xs',
     md: 'w-8 h-8 text-sm',
     lg: 'w-12 h-12 text-xl'
+  };
+  return sizes[props.size] || sizes.md;
+});
+
+const iconSizeClass = computed(() => {
+  const sizes = {
+    sm: 'w-3.5 h-3.5',
+    md: 'w-4 h-4',
+    lg: 'w-6 h-6'
   };
   return sizes[props.size] || sizes.md;
 });

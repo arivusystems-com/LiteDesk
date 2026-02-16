@@ -15,18 +15,20 @@
       <!-- Tab Bar - Hidden on mobile, visible on tablet and up -->
       <TabBar class="hidden md:block" />
       
-      <!-- Content wrapper with padding -->
+      <!-- Content wrapper with padding; min-h-0 so record pages can fill and use internal scroll -->
       <div
         ref="contentWrapperRef"
-        class="flex-1 p-4 lg:p-6 overflow-y-auto overflow-x-hidden mt-16 md:mt-30 lg:mt-14"
+        class="flex-1 min-h-0 flex flex-col p-4 lg:p-6 overflow-y-auto overflow-x-hidden mt-16 md:mt-30 lg:mt-14"
         :style="{ '--table-sticky-offset': tableStickyOffset }"
       >
-        <!-- Router view for dynamic routes -->
-        <RouterView v-slot="{ Component }">
-          <keep-alive :max="10">
-            <component :is="Component" :key="$route.fullPath" />
-          </keep-alive>
-        </RouterView>
+        <!-- Router view for dynamic routes; flex-1 min-h-0 so full-height record pages get a defined height -->
+        <div class="flex-1 min-h-0 flex flex-col">
+          <RouterView v-slot="{ Component }">
+            <keep-alive :max="10">
+              <component :is="Component" :key="$route.fullPath" />
+            </keep-alive>
+          </RouterView>
+        </div>
       </div>
     </main>
   </div>
@@ -61,6 +63,40 @@ const EXTRA_OFFSET_LIGHT = '2rem';
 const EXTRA_OFFSET_LARGE = '2rem';
 const contentWrapperRef = ref(null);
 const tableStickyOffset = ref(`calc(${DEFAULT_CONTENT_OFFSET}px + ${EXTRA_OFFSET_LIGHT})`);
+const TABLET_RECORD_COLLAPSE_MAX_WIDTH = 1024;
+
+const RECORD_DETAIL_ROUTE_NAMES = new Set([
+  'person-detail',
+  'organization-detail',
+  'deal-detail',
+  'task-detail',
+  'event-detail',
+  'item-detail',
+  'import-detail',
+  'group-detail',
+  'response-detail',
+  'form-response-detail'
+]);
+
+const isRecordDetailRoute = () => {
+  const routeName = typeof route.name === 'string' ? route.name : '';
+  if (RECORD_DETAIL_ROUTE_NAMES.has(routeName)) return true;
+
+  const path = route.path || '';
+  return /^\/(people|deals|tasks|events|items|imports|organizations|groups|responses)\/[^/]+$/.test(path)
+    || /^\/forms\/[^/]+\/responses\/[^/]+$/.test(path);
+};
+
+const collapseSidebarForRecordOnTablet = () => {
+  if (window.innerWidth > TABLET_RECORD_COLLAPSE_MAX_WIDTH) return;
+  if (!isRecordDetailRoute()) return;
+  if (sidebarCollapsed.value) return;
+
+  sidebarCollapsed.value = true;
+  window.dispatchEvent(new CustomEvent('sidebar-toggle', {
+    detail: { collapsed: true, reason: 'record-open-tablet' }
+  }));
+};
 
 const updateContentOffset = () => {
   const el = contentWrapperRef.value;
@@ -86,6 +122,7 @@ const queueContentOffsetUpdate = () => {
 watch(
   () => route.fullPath,
   () => {
+    collapseSidebarForRecordOnTablet();
     queueContentOffsetUpdate();
   }
 );
@@ -99,6 +136,7 @@ const handleResize = () => {
 };
 
 onMounted(() => {
+  collapseSidebarForRecordOnTablet();
   queueContentOffsetUpdate();
   window.addEventListener('resize', handleResize, { passive: true });
 });

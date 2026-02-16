@@ -1324,7 +1324,7 @@ const loadSavedWidgets = (savedLayout) => {
 const loadDefaultWidgets = () => {
   if (!gridStack) return;
   
-  let defaultWidgets = [];
+  const defaultWidgets = [];
   let yPosition = 0;
   
   defaultWidgets.push(

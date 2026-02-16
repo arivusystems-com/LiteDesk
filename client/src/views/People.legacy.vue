@@ -27,6 +27,7 @@
     <!-- Removed: Hardcoded columns, filters, actions, permission checks -->
     <!-- Replaced with: buildModuleListFromRegistry + ModuleList component -->
     <ModuleList
+      ref="moduleListRef"
       module-key="people"
       app-key="PLATFORM"
       @create="openCreateModal"
@@ -267,10 +268,15 @@ const authStore = useAuthStore();
 const { openTab } = useTabs();
 
 // State
+const moduleListRef = ref(null);
 const showFormModal = ref(false);
 const showImportModal = ref(false);
 const editingContact = ref(null);
 const contacts = ref([]);
+
+const refreshList = () => {
+  moduleListRef.value?.refresh?.();
+};
 
 // User management (for display names)
 const usersById = ref({});
@@ -400,13 +406,12 @@ const closeFormModal = () => {
 
 const handleContactSaved = () => {
   closeFormModal();
-  // ModuleList will handle refresh via its own data fetching
-  window.location.reload(); // Temporary - ModuleList should emit refresh event
+  refreshList();
 };
 
 const handleImportComplete = () => {
   showImportModal.value = false;
-  window.location.reload(); // Temporary - ModuleList should emit refresh event
+  refreshList();
 };
 
 const deleteContact = async (contactId) => {
@@ -414,7 +419,7 @@ const deleteContact = async (contactId) => {
     await apiClient(`/people/${contactId}`, {
       method: 'DELETE'
     });
-    window.location.reload(); // Temporary - ModuleList should emit refresh event
+    refreshList();
   } catch (error) {
     console.error('Error deleting contact:', error);
     alert('Failed to delete contact');
@@ -427,7 +432,7 @@ const bulkDelete = async (selectedRows) => {
     for (const id of idsToDelete) {
       await apiClient(`/people/${id}`, { method: 'DELETE' });
     }
-    window.location.reload(); // Temporary - ModuleList should emit refresh event
+    refreshList();
   } catch (error) {
     console.error('Error bulk deleting contacts:', error);
     alert('Failed to delete contacts');

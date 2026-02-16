@@ -17,6 +17,15 @@
     "lint": "run-s lint:*"
   },
   "dependencies": {
+    "@tiptap/extension-bubble-menu": "^2.18.0",
+    "@tiptap/extension-heading": "^2.18.0",
+    "@tiptap/extension-link": "^2.18.0",
+    "@tiptap/extension-placeholder": "^2.18.0",
+    "@tiptap/suggestion": "^2.18.0",
+    "@tiptap/pm": "^2.18.0",
+    "@tiptap/starter-kit": "^2.18.0",
+    "@tiptap/vue-3": "^2.18.0",
+    "dompurify": "^3.2.3",
     "@fullcalendar/core": "^6.1.19",
     "@fullcalendar/daygrid": "^6.1.19",
     "@fullcalendar/interaction": "^6.1.19",

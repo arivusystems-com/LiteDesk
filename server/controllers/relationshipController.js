@@ -24,9 +24,16 @@
 const RelationshipInstance = require('../models/RelationshipInstance');
 const RelationshipDefinition = require('../models/RelationshipDefinition');
 const TenantRelationshipConfiguration = require('../models/TenantRelationshipConfiguration');
+const Task = require('../models/Task');
 const { validateCardinality } = require('../services/relationshipEnforcement');
 const { getRecordContextForUI } = require('../services/recordContextService');
 const { getEffectiveRelationships } = require('../utils/tenantMetadata');
+
+const getActorName = (user) => {
+  if (!user) return 'System';
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+  return fullName || user.username || user.email || 'System';
+};
 
 /**
  * Link two records with a relationship
@@ -82,6 +89,14 @@ exports.linkRecords = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: `Relationship '${relationshipKey}' not found or disabled`
+      });
+    }
+
+    // Enforce linkability (PRIMARY/SYSTEM relationships are not user-linkable)
+    if (relDef.userLinkable === false || relDef.display?.linkRecord === false) {
+      return res.status(403).json({
+        success: false,
+        message: `Relationship '${relationshipKey}' is not user-linkable`
       });
     }
 
@@ -161,6 +176,56 @@ exports.linkRecords = async (req, res) => {
       createdBy: req.user._id
     });
 
+    const taskLinkTargets = [];
+    if (normalizedSource.moduleKey === 'tasks') {
+      taskLinkTargets.push({
+        taskId: normalizedSource.recordId,
+        relatedModuleKey: normalizedTarget.moduleKey,
+        relatedRecordId: normalizedTarget.recordId
+      });
+    }
+    if (normalizedTarget.moduleKey === 'tasks') {
+      taskLinkTargets.push({
+        taskId: normalizedTarget.recordId,
+        relatedModuleKey: normalizedSource.moduleKey,
+        relatedRecordId: normalizedSource.recordId
+      });
+    }
+
+    if (taskLinkTargets.length > 0) {
+      const actorName = getActorName(req.user);
+      const seenTaskIds = new Set();
+
+      for (const item of taskLinkTargets) {
+        const taskId = String(item.taskId || '');
+        if (!taskId || seenTaskIds.has(taskId)) continue;
+        seenTaskIds.add(taskId);
+
+        try {
+          await Task.updateOne(
+            { _id: taskId, organizationId },
+            {
+              $push: {
+                activityLogs: {
+                  user: actorName,
+                  userId: req.user._id,
+                  action: 'record_linked',
+                  details: {
+                    relationshipKey: normalizedRelKey,
+                    relatedModuleKey: item.relatedModuleKey,
+                    relatedRecordId: String(item.relatedRecordId || '')
+                  },
+                  timestamp: new Date()
+                }
+              }
+            }
+          );
+        } catch (activityErr) {
+          console.warn('[relationshipController] Failed to append task link activity log:', activityErr?.message || activityErr);
+        }
+      }
+    }
+
     res.status(201).json({
       success: true,
       data: relationshipInstance
@@ -179,6 +244,78 @@ exports.linkRecords = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error linking records',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+/**
+ * Get raw relationship links for a record (metadata-agnostic)
+ * GET /api/relationships/links
+ */
+exports.getRecordLinks = async (req, res) => {
+  try {
+    const { organizationId } = req.user;
+    const { appKey, moduleKey, recordId } = req.query;
+
+    if (!appKey || !moduleKey || !recordId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required query parameters: appKey, moduleKey, recordId'
+      });
+    }
+
+    const normalizedAppKey = String(appKey).toLowerCase();
+    const normalizedModuleKey = String(moduleKey).toLowerCase();
+
+    const links = await RelationshipInstance.find({
+      organizationId,
+      $or: [
+        {
+          'source.appKey': normalizedAppKey,
+          'source.moduleKey': normalizedModuleKey,
+          'source.recordId': recordId
+        },
+        {
+          'target.appKey': normalizedAppKey,
+          'target.moduleKey': normalizedModuleKey,
+          'target.recordId': recordId
+        }
+      ]
+    }).lean();
+
+    const data = (links || []).map((link) => {
+      const isSource =
+        link?.source?.appKey === normalizedAppKey &&
+        link?.source?.moduleKey === normalizedModuleKey &&
+        String(link?.source?.recordId) === String(recordId);
+
+      const relatedRecord = isSource ? link?.target : link?.source;
+
+      return {
+        relationshipKey: link?.relationshipKey,
+        direction: isSource ? 'SOURCE' : 'TARGET',
+        source: link?.source,
+        target: link?.target,
+        relatedRecord: relatedRecord
+          ? {
+              appKey: relatedRecord.appKey,
+              moduleKey: relatedRecord.moduleKey,
+              recordId: relatedRecord.recordId
+            }
+          : null
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      data
+    });
+  } catch (error) {
+    console.error('[relationshipController] Error getting record links:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error getting record links',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -297,4 +434,3 @@ exports.getRecordContext = async (req, res) => {
     });
   }
 };
-

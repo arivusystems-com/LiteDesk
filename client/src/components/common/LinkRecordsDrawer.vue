@@ -13,8 +13,19 @@
                 <div class="relative flex h-full flex-col divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800 shadow-xl">
                   <!-- Header -->
                   <div class="flex items-center justify-between px-6 py-4 bg-indigo-700 dark:bg-indigo-800">
-                    <DialogTitle class="text-base font-semibold text-white">{{ computedTitle }}</DialogTitle>
-                    <button type="button" class="rounded-md text-indigo-200 hover:text-white" @click="closeDrawer">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <button
+                        v-if="showTypeSelector && selectedModuleKey"
+                        type="button"
+                        class="shrink-0 p-1 rounded text-indigo-200 hover:text-white"
+                        aria-label="Back to record type"
+                        @click="selectedModuleKey = ''"
+                      >
+                        <ChevronLeftIcon class="size-5" />
+                      </button>
+                      <DialogTitle class="text-base font-semibold text-white truncate">{{ computedTitle }}</DialogTitle>
+                    </div>
+                    <button type="button" class="rounded-md text-indigo-200 hover:text-white shrink-0" @click="closeDrawer">
                       <span class="sr-only">Close panel</span>
                       <XMarkIcon class="size-6" />
                     </button>
@@ -22,6 +33,23 @@
 
                   <!-- Body -->
                   <div class="flex-1 overflow-hidden flex flex-col">
+                    <!-- Record type selector (when no moduleKey and no type selected yet) -->
+                    <div v-if="showTypeSelector && !effectiveModuleKey" class="flex-1 overflow-auto p-4">
+                      <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Select a record type to link</p>
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <button
+                          v-for="opt in recordTypeOptions"
+                          :key="opt.key"
+                          type="button"
+                          class="flex items-center gap-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700/50 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                          @click="selectedModuleKey = opt.key"
+                        >
+                          <span class="text-base font-medium text-gray-900 dark:text-white">{{ opt.label }}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <template v-else>
                     <!-- Search -->
                     <div class="p-4 border-b border-gray-200 dark:border-gray-700">
                       <input v-model="searchQuery" type="text" placeholder="Search..." class="block w-full rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-sm outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 dark:focus:bg-gray-800 dark:outline-white/10" />
@@ -67,10 +95,11 @@
                         </ul>
                       </div>
                     </div>
+                    </template>
                   </div>
 
-                  <!-- Footer -->
-                  <div class="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                  <!-- Footer (only when list view) -->
+                  <div v-if="effectiveModuleKey" class="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
                     <div class="text-xs text-gray-500 dark:text-gray-400" v-if="multiple">{{ deltaCount }} selected</div>
                     <div class="ml-auto flex gap-3">
                       <button 
@@ -98,16 +127,25 @@
 <script setup>
 import { ref, watch, computed } from 'vue';
 import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
-import { XMarkIcon } from '@heroicons/vue/24/outline';
+import { XMarkIcon, ChevronLeftIcon } from '@heroicons/vue/24/outline';
 import apiClient from '@/utils/apiClient';
 import { useAuthStore } from '@/stores/auth';
 
+const RECORD_TYPE_OPTIONS_DEFAULT = [
+  { key: 'organizations', label: 'Organization' },
+  { key: 'people', label: 'Contact' },
+  { key: 'deals', label: 'Deal' },
+  { key: 'tasks', label: 'Task' },
+  { key: 'events', label: 'Event' }
+];
+
 const props = defineProps({
   isOpen: { type: Boolean, default: false },
-  moduleKey: { type: String, required: true },
+  moduleKey: { type: String, default: '' }, // When empty, show record type selector first
+  recordTypes: { type: Array, default: null }, // Optional override for type selector (e.g. [{ key: 'project', label: 'Project' }, ...])
   multiple: { type: Boolean, default: true },
   title: { type: String, default: null },
-  context: { type: Object, default: () => ({}) }, // e.g., { organizationId, contactId }
+  context: { type: Object, default: () => ({}) }, // e.g., { organizationId, contactId, taskId }
   preselectedIds: { type: Array, default: () => [] }, // already linked IDs
   allowCreate: { type: Boolean, default: false } // If true, show "Create New" button
 });
@@ -119,7 +157,36 @@ const items = ref([]);
 const searchQuery = ref('');
 const selectedIds = ref(new Set());
 const prelinkedIds = ref(new Set());
+const selectedModuleKey = ref(''); // When moduleKey prop is empty, user selects type first
 let searchDebounce = null;
+
+const MODULE_KEY_ALIASES = Object.freeze({
+  organization: 'organizations',
+  organizations: 'organizations',
+  contact: 'people',
+  contacts: 'people',
+  person: 'people',
+  people: 'people',
+  deal: 'deals',
+  deals: 'deals',
+  event: 'events',
+  events: 'events',
+  task: 'tasks',
+  tasks: 'tasks',
+  form: 'forms',
+  forms: 'forms',
+  project: 'projects',
+  projects: 'projects'
+});
+
+const normalizeModuleKey = (moduleKey) => {
+  const normalized = (moduleKey || '').toLowerCase().trim();
+  return MODULE_KEY_ALIASES[normalized] || normalized;
+};
+
+const showTypeSelector = computed(() => !props.moduleKey);
+const effectiveModuleKey = computed(() => normalizeModuleKey(props.moduleKey || selectedModuleKey.value));
+const recordTypeOptions = computed(() => props.recordTypes && props.recordTypes.length ? props.recordTypes : RECORD_TYPE_OPTIONS_DEFAULT);
 
 // Auth role
 const authStore = useAuthStore();
@@ -135,7 +202,11 @@ const deltaSelectedIds = computed(() => {
 
 const deltaCount = computed(() => deltaSelectedIds.value.size);
 
-const computedTitle = computed(() => props.title || `Link ${capitalize(props.moduleKey)}`);
+const computedTitle = computed(() => {
+  if (props.title) return props.title;
+  if (effectiveModuleKey.value) return `Link ${capitalize(effectiveModuleKey.value)}`;
+  return 'Link Record';
+});
 
 const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
 
@@ -152,10 +223,10 @@ const visibleItems = computed(() => {
 
 const closeDrawer = () => {
   emit('close');
-  // reset selection when closing
   selectedIds.value = new Set();
   searchQuery.value = '';
   prelinkedIds.value = new Set();
+  selectedModuleKey.value = '';
 };
 
 const handleCreate = () => {
@@ -171,11 +242,12 @@ const handleDialogClose = () => {
 };
 
 const endpointForModule = (moduleKey) => {
-  // Always use tenant-scoped endpoints for data isolation
-  if (moduleKey === 'organizations' || moduleKey === 'organization') {
-    return '/v2/organization';
-  }
-  return `/${moduleKey}`;
+  const normalized = normalizeModuleKey(moduleKey);
+  if (normalized === 'organizations') return '/v2/organization';
+  if (normalized === 'projects') return '/projects';
+  if (normalized === 'events') return '/events';
+  if (normalized === 'forms') return '/forms';
+  return `/${normalized}`;
 };
 
 // Build params to fetch already-linked records for the current context
@@ -204,13 +276,19 @@ const buildLinkedFilterParams = (moduleKey, context) => {
 
 const fetchPrelinked = async () => {
   try {
+    const modKey = effectiveModuleKey.value;
+    if (!modKey) return;
+    // When context is task (or other "link to this record") we already have preselectedIds from parent; don't overwrite with a full list fetch
+    if (props.context?.taskId) {
+      return;
+    }
     // Special case: when linking organizations to a contact, fetch the contact to get its current organization
-    if (props.moduleKey === 'organizations' && props.context?.contactId) {
+    if (modKey === 'organizations' && props.context?.contactId) {
       try {
         const contactRes = await apiClient.get(`/people/${props.context.contactId}`);
         if (contactRes?.success && contactRes.data?.organization) {
-          const orgId = typeof contactRes.data.organization === 'object' 
-            ? contactRes.data.organization._id 
+          const orgId = typeof contactRes.data.organization === 'object'
+            ? contactRes.data.organization._id
             : contactRes.data.organization;
           if (orgId) {
             prelinkedIds.value = new Set([orgId]);
@@ -222,12 +300,11 @@ const fetchPrelinked = async () => {
       }
       return;
     }
-    
-    const params = buildLinkedFilterParams(props.moduleKey, props.context);
-    // If params is null, we've already handled it above
+
+    const params = buildLinkedFilterParams(modKey, props.context);
     if (params === null) return;
-    
-    const endpoint = endpointForModule(props.moduleKey);
+
+    const endpoint = endpointForModule(modKey);
     const res = await apiClient.get(endpoint, { params });
     let rows = [];
     if (res?.success) rows = Array.isArray(res.data) ? res.data : (res.data?.data || []);
@@ -240,18 +317,19 @@ const fetchPrelinked = async () => {
 };
 
 const fetchItems = async () => {
+  const modKey = effectiveModuleKey.value;
+  if (!modKey) return;
   loading.value = true;
   try {
     const params = { limit: 50 };
     if (searchQuery.value && searchQuery.value.trim()) {
       params.search = searchQuery.value.trim();
     }
-    const endpoint = endpointForModule(props.moduleKey);
+    const endpoint = endpointForModule(modKey);
     const res = await apiClient.get(endpoint, { params });
     if (res.success) {
       let rows = Array.isArray(res.data) ? res.data : (res.data?.data || []);
-      // Non-admin organizations endpoint returns a single organization object
-      if ((props.moduleKey === 'organizations' || props.moduleKey === 'organization') && !isAdmin.value && !Array.isArray(res.data) && res.data && res.data._id) {
+      if ((modKey === 'organizations' || modKey === 'organization') && !isAdmin.value && !Array.isArray(res.data) && res.data && res.data._id) {
         rows = [res.data];
       }
       items.value = rows;
@@ -270,24 +348,36 @@ const fetchItems = async () => {
   }
 };
 
-watch(() => props.isOpen, async (open) => { 
+watch(() => props.isOpen, async (open) => {
   if (open) {
-    // seed prelinked from prop
     prelinkedIds.value = new Set(props.preselectedIds || []);
     selectedIds.value = new Set(props.preselectedIds || []);
-    // additionally fetch prelinked from server based on context
+    if (!showTypeSelector.value || selectedModuleKey.value) {
+      await fetchPrelinked();
+      await fetchItems();
+    }
+  } else {
+    selectedModuleKey.value = '';
+  }
+});
+
+watch(effectiveModuleKey, async (key) => {
+  if (key && props.isOpen) {
+    prelinkedIds.value = new Set(props.preselectedIds || []);
+    selectedIds.value = new Set(props.preselectedIds || []);
     await fetchPrelinked();
     await fetchItems();
   }
 });
 
 watch(searchQuery, () => {
+  if (!effectiveModuleKey.value) return;
   if (searchDebounce) clearTimeout(searchDebounce);
   searchDebounce = setTimeout(() => fetchItems(), 250);
 });
 
-const getDisplayName = (item) => item.name || item.title || `${item.first_name || ''} ${item.last_name || ''}`.trim() || item.email || item._id;
-const getSecondaryText = (item) => item.email || item.status || '';
+const getDisplayName = (item) => item.name || item.title || item.eventName || `${item.first_name || ''} ${item.last_name || ''}`.trim() || item.email || item._id;
+const getSecondaryText = (item) => item.email || item.status || (item.startDateTime ? new Date(item.startDateTime).toLocaleDateString() : '') || '';
 
 const isSelected = (id) => selectedIds.value.has(id);
 const isPrelinked = (id) => prelinkedIds.value.has(id);
@@ -302,12 +392,11 @@ const selectSingle = (item) => { if (isPrelinked(item._id)) return; selectedIds.
 const confirmLink = () => {
   const idsToLink = Array.from(deltaSelectedIds.value);
   if (props.multiple && idsToLink.length === 0) return;
-  emit('linked', { moduleKey: props.moduleKey, ids: idsToLink, context: props.context });
+  emit('linked', { moduleKey: effectiveModuleKey.value, ids: idsToLink, context: props.context });
   closeDrawer();
 };
 </script>
 
 <style scoped>
 </style>
-
 

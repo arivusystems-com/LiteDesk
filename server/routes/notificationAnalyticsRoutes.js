@@ -19,7 +19,7 @@ const {
  * All routes require:
  * - Authentication (protect)
  * - Organization isolation
- * - CRM ADMIN role (requireAdmin)
+ * - Admin role (requireAdmin)
  * - App context (resolveAppContext)
  */
 
@@ -27,7 +27,7 @@ const {
 router.use(protect);
 router.use(organizationIsolation);
 router.use(resolveAppContext);
-// Require admin role (CRM admin only)
+// Require admin role
 router.use((req, res, next) => {
   // Check if user is admin or owner
   const user = req.user;

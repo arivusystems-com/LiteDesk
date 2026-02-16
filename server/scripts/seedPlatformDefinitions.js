@@ -16,6 +16,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const mongoose = require('mongoose');
 const AppDefinition = require('../models/AppDefinition');
 const ModuleDefinition = require('../models/ModuleDefinition');
+const { registerDefaultTaskRelationships } = require('../services/taskRelationshipInitializer');
 
 // Support both MONGODB_URI and MONGO_URI
 const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || process.env.MONGO_URI_LOCAL;
@@ -639,6 +640,9 @@ async function seedPlatformDefinitions() {
 
     console.log(`\n📊 Modules: ${modulesCreated} created, ${modulesUpdated} updated\n`);
 
+    // Register default Task relationships (safe/idempotent)
+    await registerDefaultTaskRelationships();
+
     // Summary
     console.log('✅ Platform definitions seeded successfully!');
     console.log(`\n📈 Summary:`);
@@ -662,4 +666,3 @@ if (require.main === module) {
 }
 
 module.exports = seedPlatformDefinitions;
-
