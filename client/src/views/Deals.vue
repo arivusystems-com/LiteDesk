@@ -76,8 +76,10 @@
       @filters-changed="handleFiltersChanged"
       @search-changed="handleSearchChanged"
       @kanban-settings-changed="refreshKanbanSettings"
+      @stats-visibility-changed="(val) => (statsOpen = val)"
     >
-      <!-- Group: Stage button next to search (kanban view only) -->
+      <!-- Group by: Stage button (kanban view) – commented for now; may use in the future -->
+      <!--
       <template #search-actions>
         <button
           v-if="currentView === 'kanban'"
@@ -88,6 +90,7 @@
           Group: Stage
         </button>
       </template>
+      -->
 
       <!-- Custom Header Slot - View Switcher + Actions -->
       <template #header-actions>
@@ -241,6 +244,8 @@
         :get-column-stats="(s) => ({ value: getStageValue(s) })"
         :get-stage-color="getStageColor"
         :card-size="kanbanCardSize"
+        :collapse-empty-columns="kanbanCollapseEmptyColumns"
+        :stats-open="statsOpen"
         @update="handleKanbanUpdate"
         @card-click="({ item, event }) => viewDeal(item._id, event)"
       >
@@ -319,10 +324,15 @@
                   <span class="truncate">{{ deal.accountId?.name ?? deal.account?.name ?? '—' }}</span>
                 </div>
                 <div v-else-if="key === 'ownerId'" class="flex items-center gap-1.5 min-w-0">
-                  <div class="w-6 h-6 rounded-full bg-gray-600 dark:bg-gray-500 text-white flex items-center justify-center text-[10px] font-semibold flex-shrink-0">
-                    {{ getInitials(deal.ownerId) }}
-                  </div>
-                  <span class="truncate">{{ deal.ownerId?.firstName || 'Unassigned' }}</span>
+                  <Avatar
+                    :user="{
+                      firstName: deal.ownerId?.firstName,
+                      lastName: deal.ownerId?.lastName,
+                      avatar: deal.ownerId?.avatar
+                    }"
+                    size="sm"
+                  />
+                  <span class="truncate text-xs">{{ getUserDisplayName(deal.ownerId) }}</span>
                 </div>
                 <div v-else-if="key === 'contactId'" class="flex items-center gap-1 truncate">
                   <UserIcon class="w-3.5 h-3.5 flex-shrink-0" />
@@ -403,8 +413,9 @@ const moduleListRef = ref(null);
 const { openTab } = useTabs();
 const authStore = useAuthStore();
 
-// View state - same pattern as Events
+// View state (module-specific URL param so Tasks and Deals don't affect each other)
 const viewStorageKey = 'litedesk-deals-view';
+const VIEW_QUERY_KEY = 'dealsView';
 const getInitialView = () => {
   try {
     const savedView = localStorage.getItem(viewStorageKey);
@@ -445,6 +456,16 @@ const kanbanMetaFieldKeys = computed(() =>
 const kanbanSettingsVersion = ref(0);
 const refreshKanbanSettings = () => { kanbanSettingsVersion.value++; };
 
+// Stats panel open/closed (from ListView); when closed, Kanban column height increases
+const getInitialStatsOpen = () => {
+  try {
+    return localStorage.getItem('litedesk-stats-visible-deals') !== 'false';
+  } catch {
+    return true;
+  }
+};
+const statsOpen = ref(getInitialStatsOpen());
+
 const kanbanCardSize = computed(() => {
   kanbanSettingsVersion.value; // dependency
   try {
@@ -478,6 +499,17 @@ const kanbanShowEmptyFields = computed(() => {
   } catch (_) {}
   return true;
 });
+const kanbanCollapseEmptyColumns = computed(() => {
+  kanbanSettingsVersion.value;
+  try {
+    const raw = localStorage.getItem(KANBAN_OPTIONS_KEY);
+    if (raw) {
+      const opts = JSON.parse(raw);
+      if (typeof opts.collapseEmptyColumns === 'boolean') return opts.collapseEmptyColumns;
+    }
+  } catch (_) {}
+  return false;
+});
 const kanbanShownFieldKeys = computed(() => {
   kanbanSettingsVersion.value;
   try {
@@ -501,27 +533,28 @@ const kanbanShownFieldKeys = computed(() => {
 
 // Initialize view from route query or localStorage (persist so reload keeps pipeline/list)
 const initializeView = () => {
-  const viewParam = route.query.view;
+  const viewParam = route.query[VIEW_QUERY_KEY];
   if (viewParam === 'list') {
     currentView.value = 'list';
     try { localStorage.setItem(viewStorageKey, 'list'); } catch (_) {}
+  } else if (viewParam === 'kanban') {
+    currentView.value = 'kanban';
+    try { localStorage.setItem(viewStorageKey, 'kanban'); } catch (_) {}
   } else if (viewParam === undefined) {
     const savedView = localStorage.getItem(viewStorageKey);
     if (savedView === 'list') {
       currentView.value = 'list';
-      router.replace({ query: { ...route.query, view: 'list' } });
+      router.replace({ query: { ...route.query, [VIEW_QUERY_KEY]: 'list' } });
     } else {
       currentView.value = 'kanban';
       try { localStorage.setItem(viewStorageKey, 'kanban'); } catch (_) {}
+      router.replace({ query: { ...route.query, [VIEW_QUERY_KEY]: 'kanban' } });
     }
   } else {
     currentView.value = 'kanban';
     try { localStorage.setItem(viewStorageKey, 'kanban'); } catch (_) {}
-    const newQuery = { ...route.query };
-    delete newQuery.view;
-    router.replace({ query: newQuery });
+    router.replace({ query: { ...route.query, [VIEW_QUERY_KEY]: 'kanban' } });
   }
-  
   nextTick(() => {
     toggleTableView(currentView.value === 'list');
   });
@@ -529,27 +562,21 @@ const initializeView = () => {
 
 // Switch view
 const switchView = async (view) => {
+  if (currentView.value === view) return;
   currentView.value = view;
   localStorage.setItem(viewStorageKey, view);
-  
-  if (view === 'list') {
-    router.replace({ query: { ...route.query, view: 'list' } });
-  } else {
-    const newQuery = { ...route.query };
-    delete newQuery.view;
-    router.replace({ query: newQuery });
+  router.replace({ query: { ...route.query, [VIEW_QUERY_KEY]: view } });
+  if (view === 'kanban') {
     await fetchKanbanDeals();
   }
-  
   await nextTick();
   toggleTableView(view === 'list');
 };
 
-// Watch route query
-watch(() => route.query.view, (newView) => {
+watch(() => route.query[VIEW_QUERY_KEY], (newView) => {
   if (newView === 'list' && currentView.value !== 'list') {
     switchView('list');
-  } else if (!newView && currentView.value !== 'kanban') {
+  } else if (newView === 'kanban' && currentView.value !== 'kanban') {
     switchView('kanban');
   }
 });
@@ -913,11 +940,15 @@ onMounted(() => {
   }
 });
 
-// When switching back to this tab (keep-alive), refetch so data is current
+// When switching back to this tab (keep-alive), refetch and sync URL to current view so session persists
 onActivated(() => {
-  if (currentView.value === 'kanban') fetchKanbanDeals();
+  const view = currentView.value;
+  if (route.query[VIEW_QUERY_KEY] !== view) {
+    router.replace({ query: { ...route.query, [VIEW_QUERY_KEY]: view } });
+  }
+  if (view === 'kanban') fetchKanbanDeals();
   if (moduleListRef.value?.refresh) moduleListRef.value.refresh();
-  nextTick(() => setTimeout(() => toggleTableView(currentView.value === 'list'), 80));
+  nextTick(() => setTimeout(() => toggleTableView(view === 'list'), 80));
 });
 
 onUnmounted(() => {
