@@ -1178,7 +1178,7 @@
                   </label>
                 </div>
                 <!-- Reset -->
-                <Menu as="div" class="relative px-3">
+                <Menu as="div" class="relative">
                   <MenuButton class="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors cursor-pointer">
                     <span>Reset</span>
                     <ChevronRightIcon class="w-4 h-4" />
@@ -1508,7 +1508,8 @@ const emit = defineEmits([
   'saved-view-selected',
   'stat-click',
   'saved-views-updated',
-  'kanban-settings-changed'
+  'kanban-settings-changed',
+  'stats-visibility-changed'
 ]);
 
 // Use bulk actions composable
@@ -1706,9 +1707,10 @@ const saveStatsPreference = () => {
   }
 };
 
-// Watch for changes to showStats and save to localStorage
-watch(showStats, () => {
+// Watch for changes to showStats and save to localStorage; emit so parent (e.g. Deals) can adjust Kanban height
+watch(showStats, (val) => {
   saveStatsPreference();
+  emit('stats-visibility-changed', val);
 });
 
 // Update window width on resize
@@ -1792,10 +1794,12 @@ const loadKanbanSettings = () => {
         return;
       }
     }
-    // Default: for deals use fixed card order; otherwise copy from list visible columns or props.columns
+    // Default: for deals/tasks use fixed card order; otherwise copy from list visible columns or props.columns
     const source = visibleColumns.value.length > 0 ? visibleColumns.value : props.columns.map(c => ({ ...c, visible: c.visible !== false, showInTable: c.showInTable !== false }));
     if (props.moduleKey === 'deals') {
       kanbanVisibleColumns.value = buildDealsDefaultKanbanColumns(source);
+    } else if (props.moduleKey === 'tasks') {
+      kanbanVisibleColumns.value = buildTasksDefaultKanbanColumns(source);
     } else {
       kanbanVisibleColumns.value = normalizeKanbanColumnsForTitle(source.map(col => ({
         key: col.key,
@@ -1811,6 +1815,8 @@ const loadKanbanSettings = () => {
     const source = visibleColumns.value.length > 0 ? visibleColumns.value : props.columns.map(c => ({ ...c, visible: c.visible !== false, showInTable: c.showInTable !== false }));
     if (props.moduleKey === 'deals') {
       kanbanVisibleColumns.value = buildDealsDefaultKanbanColumns(source);
+    } else if (props.moduleKey === 'tasks') {
+      kanbanVisibleColumns.value = buildTasksDefaultKanbanColumns(source);
     } else {
       kanbanVisibleColumns.value = normalizeKanbanColumnsForTitle(source.map(col => ({
         key: col.key,
@@ -1871,6 +1877,10 @@ const normalizeKanbanColumnsForTitle = (cols) => {
 // Default Kanban card field order for deals: Title, Amount, Expected Close Date, Probability, Priority, Organization, Deal Owner
 const DEALS_KANBAN_DEFAULT_VISIBLE_KEYS = ['name', 'amount', 'expectedCloseDate', 'probability', 'priority', 'accountId', 'ownerId'];
 const DEALS_KANBAN_DEFAULT_LABELS = { accountId: 'Organization', ownerId: 'Deal Owner' };
+
+// Default Kanban card field order for tasks: Title, Assigned to, Due Date, Priority
+const TASKS_KANBAN_DEFAULT_VISIBLE_KEYS = ['title', 'assignedTo', 'dueDate', 'priority'];
+const TASKS_KANBAN_DEFAULT_LABELS = { assignedTo: 'Assigned to', dueDate: 'Due Date' };
 // Labels for synthetic list columns (when backend/props don't include the key, e.g. accountId)
 const DEALS_LIST_DEFAULT_LABELS = { accountId: 'Organization', ownerId: 'Deal Owner' };
 /** Ensure every key in defaultVisibleColumns exists in the column map (add synthetic columns if missing). */
@@ -1918,6 +1928,44 @@ function buildDealsDefaultKanbanColumns(sourceColumns) {
   });
   return normalizeKanbanColumnsForTitle(ordered);
 }
+
+function buildTasksDefaultKanbanColumns(sourceColumns) {
+  const byKey = new Map(sourceColumns.map(c => [c.key, c]));
+  const ordered = [];
+  const added = new Set();
+  TASKS_KANBAN_DEFAULT_VISIBLE_KEYS.forEach(key => {
+    const col = byKey.get(key);
+    if (col) {
+      ordered.push({
+        ...col,
+        key: col.key,
+        label: col.label || TASKS_KANBAN_DEFAULT_LABELS[key] || col.key,
+        visible: true,
+        dataType: col.dataType,
+        sortable: col.sortable !== false,
+        showInTable: true
+      });
+      added.add(key);
+    } else {
+      ordered.push({
+        key,
+        label: TASKS_KANBAN_DEFAULT_LABELS[key] || key,
+        visible: true,
+        dataType: key === 'assignedTo' ? 'user' : key === 'dueDate' ? 'date' : 'text',
+        sortable: false,
+        showInTable: true
+      });
+      added.add(key);
+    }
+  });
+  sourceColumns.forEach(col => {
+    if (!added.has(col.key)) {
+      ordered.push({ ...col, key: col.key, label: col.label || col.key, visible: false, dataType: col.dataType, sortable: col.sortable !== false, showInTable: false });
+    }
+  });
+  return normalizeKanbanColumnsForTitle(ordered);
+}
+
 const kanbanShownFields = computed(() => {
   const q = kanbanFieldSearchQuery.value.trim().toLowerCase();
   const shown = kanbanVisibleColumns.value.filter(c => c.visible && (!q || (c.label || c.key).toLowerCase().includes(q)));
@@ -1950,6 +1998,8 @@ const resetKanbanToDefault = () => {
   const source = visibleColumns.value.length > 0 ? visibleColumns.value : props.columns.map(c => ({ ...c, visible: c.visible !== false, showInTable: c.showInTable !== false }));
   if (props.moduleKey === 'deals') {
     kanbanVisibleColumns.value = buildDealsDefaultKanbanColumns(source);
+  } else if (props.moduleKey === 'tasks') {
+    kanbanVisibleColumns.value = buildTasksDefaultKanbanColumns(source);
   } else {
     kanbanVisibleColumns.value = normalizeKanbanColumnsForTitle(source.map(col => ({
       key: col.key,

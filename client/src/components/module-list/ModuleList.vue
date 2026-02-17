@@ -67,6 +67,7 @@
       @delete="handleDelete"
       @bulk-action="handleBulkAction"
       @kanban-settings-changed="$emit('kanban-settings-changed')"
+      @stats-visibility-changed="(val) => $emit('stats-visibility-changed', val)"
     >
       <!-- Pass through all slots for custom cell rendering -->
       <template v-for="(_, slotName) in $slots" #[slotName]="slotProps">
@@ -135,7 +136,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['create', 'import', 'export', 'row-click', 'edit', 'delete', 'bulk-action', 'filters-changed', 'search-changed', 'kanban-settings-changed']);
+const emit = defineEmits(['create', 'import', 'export', 'row-click', 'edit', 'delete', 'bulk-action', 'filters-changed', 'search-changed', 'kanban-settings-changed', 'stats-visibility-changed']);
 
 const route = useRoute();
 const router = useRouter();

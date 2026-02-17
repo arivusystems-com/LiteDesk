@@ -3,6 +3,16 @@
  */
 
 /**
+ * Strip HTML tags and normalize whitespace to get plain text (e.g. for Rich Text in list/kanban).
+ * @param {string} html - HTML string
+ * @returns {string} Plain text
+ */
+export const getPlainTextFromHtml = (html) => {
+  if (!html || typeof html !== 'string') return '';
+  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+};
+
+/**
  * Get key fields from a module definition
  * @param {Object} moduleDefinition - The module definition object
  * @returns {Array} Array of key field definitions
@@ -56,6 +66,10 @@ export const getFieldValue = (fieldDef, record) => {
         return value.name || value.title || value.firstName || value.first_name || value.label || value._id;
       }
       return value;
+    case 'Rich Text':
+    case 'Text-Area':
+      // Strip HTML for list/table display so we show plain text, not raw tags
+      return getPlainTextFromHtml(value) || null;
     default:
       return value;
   }
