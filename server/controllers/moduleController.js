@@ -121,6 +121,31 @@ function validateFieldMutations(oldFields, newFields, user) {
 }
 
 /**
+ * When saving module field config, "removed" platform/app fields are re-added as hidden
+ * so validation passes and the UI no longer shows them. This avoids 403 on save.
+ *
+ * @param {Array} oldFields - Existing fields from database
+ * @param {Array} newFields - New fields from request (may omit some fields)
+ * @returns {Array} - newFields with any missing platform/app fields re-added as hidden
+ */
+function mergeRemovedPlatformOrAppFieldsAsHidden(oldFields, newFields) {
+  if (!Array.isArray(oldFields) || !Array.isArray(newFields)) return newFields;
+  const newKeys = new Set(newFields.filter(f => f && f.key).map(f => f.key.toLowerCase()));
+  const merged = [...newFields];
+  for (const oldField of oldFields) {
+    if (!oldField || !oldField.key) continue;
+    const owner = (oldField.owner || 'platform').toLowerCase();
+    if (owner !== 'platform' && owner !== 'app') continue;
+    if (newKeys.has(oldField.key.toLowerCase())) continue;
+    merged.push({
+      ...oldField,
+      visibility: { list: false, detail: false }
+    });
+  }
+  return merged;
+}
+
+/**
  * Get default notification metadata for system modules.
  * Phase 17: Notification Rules - Default configuration for rule-eligible modules.
  */
@@ -380,7 +405,15 @@ function getFieldDataType(key, fieldName, path) {
     if (key === 'items' && itemFieldMappings[fieldName]) {
         return itemFieldMappings[fieldName];
     }
-    
+    // Tasks: status/priority are Picklists (options from module config); relatedTo is Lookup
+    const taskFieldMappings = {
+        'status': 'Picklist',
+        'priority': 'Picklist',
+        'relatedTo': 'Lookup (Relationship)'
+    };
+    if (key === 'tasks' && taskFieldMappings[fieldName]) {
+        return taskFieldMappings[fieldName];
+    }
     // Fall back to inference based on schema type
     return inferDataType(path);
 }
@@ -394,6 +427,7 @@ function getBaseFieldsForKey(key) {
             'startDate',
             'dueDate',
             'assignedTo',
+            'relatedTo',
             'estimatedHours'
         ];
         const modelByKey = {
@@ -453,6 +487,8 @@ function getBaseFieldsForKey(key) {
             .filter(([name]) => {
                 // Exclude if the field name is in the excluded set
                 if (excluded.has(name)) return false;
+                // Tasks: expose only the single "relatedTo" field, not nested relatedTo.type / relatedTo.id
+                if (key === 'tasks' && (name === 'relatedTo.type' || name === 'relatedTo.id')) return false;
                 // Exclude nested paths (e.g., "kpiMetrics.compliancePercentage" should be excluded if "kpiMetrics" is excluded)
                 for (const excludedField of excluded) {
                     if (name.startsWith(excludedField + '.')) {
@@ -492,6 +528,13 @@ function getBaseFieldsForKey(key) {
                 // Note: getFieldDataType already handles field-specific mappings, so we just check if it's still Text
                 if (options.length > 0 && dataType === 'Text') {
                     dataType = 'Picklist';
+                }
+                
+                // Tasks status/priority: provide default options when schema has no enum (allows custom values)
+                if (key === 'tasks' && (name === 'status' || name === 'priority') && options.length === 0) {
+                    options = name === 'status'
+                        ? [{ value: 'todo', label: 'To Do', enabled: true, color: '#6B7280' }, { value: 'in_progress', label: 'In Progress', enabled: true, color: '#2563EB' }, { value: 'waiting', label: 'Waiting', enabled: true, color: '#D97706' }, { value: 'completed', label: 'Completed', enabled: true, color: '#16A34A' }, { value: 'cancelled', label: 'Cancelled', enabled: true, color: '#DC2626' }]
+                        : [{ value: 'low', label: 'Low', enabled: true, color: '#6B7280' }, { value: 'medium', label: 'Medium', enabled: true, color: '#2563EB' }, { value: 'high', label: 'High', enabled: true, color: '#D97706' }, { value: 'urgent', label: 'Urgent', enabled: true, color: '#DC2626' }];
                 }
                 
                 // Special handling for array fields (like tags, interest_products)
@@ -930,6 +973,33 @@ function getBaseFieldsForKey(key) {
     } catch (e) {
         return [];
     }
+}
+
+/**
+ * Normalize tasks module fields: expose only the single "Related To" field.
+ * Removes legacy relatedToType / relatedToId and nested relatedTo.* from the list; ensures "relatedTo" exists.
+ */
+function normalizeTasksModuleFields(fields) {
+    if (!Array.isArray(fields)) return fields;
+    const keyLower = (f) => String((f && f.key) || '').toLowerCase().trim();
+    const filtered = fields.filter((f) => {
+        const k = keyLower(f);
+        if (k === 'relatedtotype' || k === 'relatedtoid') return false;
+        if (k.startsWith('relatedto.')) return false;
+        return true;
+    });
+    const hasRelatedTo = filtered.some((f) => keyLower(f) === 'relatedto');
+    if (!hasRelatedTo) {
+        const insertOrder = 6; // after assignedTo in taskDefaultFieldOrder
+        filtered.push({
+            key: 'relatedTo',
+            label: 'Related To',
+            dataType: 'Lookup (Relationship)',
+            required: false,
+            order: insertOrder
+        });
+    }
+    return filtered;
 }
 
 const PLAYBOOK_ACTION_TYPES = new Set(['task', 'event', 'alert', 'document', 'call', 'meeting', 'email', 'approval', 'other']);
@@ -1764,62 +1834,93 @@ exports.listModules = async (req, res) => {
                         savedField.dataType = baseField.dataType;
                         // Update options if base has them (for picklists), but preserve saved option metadata
                         // such as color/label/enabled when values still exist in base schema options.
+                        // For tasks status/priority, saved options are source of truth so org-configured lifecycle values persist.
                         if (baseField.options && baseField.options.length > 0) {
-                            const baseOptionValues = baseField.options
-                                .map((opt) => {
-                                    if (opt && typeof opt === 'object') {
-                                        return String(opt.value ?? opt.key ?? '').trim();
-                                    }
-                                    return String(opt || '').trim();
-                                })
-                                .filter(Boolean);
+                            const savedOptions = Array.isArray(savedField.options) ? savedField.options : [];
+                            const isTaskStatusOrPriority = sys.key === 'tasks' && (savedField.key === 'status' || savedField.key === 'priority');
 
-                            const savedOptionMetaByValue = new Map(
-                                (Array.isArray(savedField.options) ? savedField.options : [])
+                            if (isTaskStatusOrPriority && savedOptions.length > 0) {
+                                // Use saved options as source of truth; enrich with base metadata for matching values
+                                const baseOptionByValue = new Map(
+                                    (Array.isArray(baseField.options) ? baseField.options : [])
+                                        .map((opt) => {
+                                            const v = opt && typeof opt === 'object'
+                                                ? String(opt.value ?? opt.key ?? '').trim()
+                                                : String(opt || '').trim();
+                                            return v ? [v, opt] : null;
+                                        })
+                                        .filter(Boolean)
+                                );
+                                savedField.options = savedOptions.map((opt) => {
+                                    const value = opt && typeof opt === 'object'
+                                        ? String(opt.value ?? opt.key ?? '').trim()
+                                        : String(opt || '').trim();
+                                    if (!value) return null;
+                                    const baseMeta = baseOptionByValue.get(value) || null;
+                                    const merged = baseMeta && typeof baseMeta === 'object'
+                                        ? { ...baseMeta, ...(opt && typeof opt === 'object' ? opt : {}), value }
+                                        : (opt && typeof opt === 'object' ? { ...opt, value } : { value });
+                                    return merged;
+                                }).filter(Boolean);
+                            } else {
+                                const baseOptionValues = baseField.options
                                     .map((opt) => {
                                         if (opt && typeof opt === 'object') {
-                                            const value = String(opt.value ?? opt.key ?? '').trim();
-                                            return value ? [value, opt] : null;
+                                            return String(opt.value ?? opt.key ?? '').trim();
                                         }
-                                        const value = String(opt || '').trim();
-                                        return value ? [value, { value }] : null;
+                                        return String(opt || '').trim();
                                     })
-                                    .filter(Boolean)
-                            );
+                                    .filter(Boolean);
 
-                            savedField.options = baseOptionValues.map((value) => {
-                                const baseMeta = (Array.isArray(baseField.options)
-                                    ? baseField.options.find((opt) => {
-                                        if (opt && typeof opt === 'object') {
-                                            return String(opt.value ?? opt.key ?? '').trim() === value;
-                                        }
-                                        return String(opt || '').trim() === value;
-                                    })
-                                    : null) || null;
-                                const savedMeta = savedOptionMetaByValue.get(value) || null;
+                                const savedOptionMetaByValue = new Map(
+                                    savedOptions
+                                        .map((opt) => {
+                                            if (opt && typeof opt === 'object') {
+                                                const value = String(opt.value ?? opt.key ?? '').trim();
+                                                return value ? [value, opt] : null;
+                                            }
+                                            const value = String(opt || '').trim();
+                                            return value ? [value, { value }] : null;
+                                        })
+                                        .filter(Boolean)
+                                );
 
-                                if (baseMeta && typeof baseMeta === 'object') {
-                                    return {
-                                        ...baseMeta,
-                                        ...(savedMeta && typeof savedMeta === 'object' ? savedMeta : {}),
-                                        value
-                                    };
-                                }
+                                savedField.options = baseOptionValues.map((value) => {
+                                    const baseMeta = (Array.isArray(baseField.options)
+                                        ? baseField.options.find((opt) => {
+                                            if (opt && typeof opt === 'object') {
+                                                return String(opt.value ?? opt.key ?? '').trim() === value;
+                                            }
+                                            return String(opt || '').trim() === value;
+                                        })
+                                        : null) || null;
+                                    const savedMeta = savedOptionMetaByValue.get(value) || null;
 
-                                if (savedMeta && typeof savedMeta === 'object') {
-                                    return {
-                                        ...savedMeta,
-                                        value
-                                    };
-                                }
+                                    if (baseMeta && typeof baseMeta === 'object') {
+                                        return {
+                                            ...baseMeta,
+                                            ...(savedMeta && typeof savedMeta === 'object' ? savedMeta : {}),
+                                            value
+                                        };
+                                    }
 
-                                return { value };
-                            });
+                                    if (savedMeta && typeof savedMeta === 'object') {
+                                        return {
+                                            ...savedMeta,
+                                            value
+                                        };
+                                    }
+
+                                    return { value };
+                                });
+                            }
                         }
-                        // Update required from base (schema is source of truth for system modules)
-                        savedField.required = baseField.required;
-                        // Use base label if saved label is empty or is a technical/internal default.
-                        // This prevents exposing keys like relatedToId/linkedFormId in the UI.
+                        // Preserve saved "Required in Form" from Settings; only fall back to base when not set
+                        if (savedField.required === undefined) {
+                            savedField.required = baseField.required;
+                        }
+                        // Use base label if saved label is empty, technical default, or same as key (e.g. camelCase key stored as label).
+                        // Ensures UI always gets human-readable labels from field configuration.
                         if (baseField.label) {
                             const savedLabelLower = String(savedField.label || '').toLowerCase().trim();
                             const isTechnicalDefault = [
@@ -1834,7 +1935,10 @@ exports.listModules = async (req, res) => {
                                 'organization id',
                                 'organizationid'
                             ].includes(savedLabelLower);
-                            if (!savedField.label || isTechnicalDefault) {
+                            const keyNorm = String(savedField.key || '').replace(/\s+/g, '').toLowerCase();
+                            const labelNorm = String(savedField.label || '').replace(/\s+/g, '').toLowerCase();
+                            const isLabelSameAsKey = keyNorm && labelNorm === keyNorm;
+                            if (!savedField.label || isTechnicalDefault || isLabelSameAsKey) {
                                 savedField.label = baseField.label;
                             }
                         }
@@ -2502,9 +2606,10 @@ exports.listModules = async (req, res) => {
                     }
                 }
                 
+                const finalFields = sys.key === 'tasks' ? normalizeTasksModuleFields(saved) : saved;
                 merged.push({ 
                     ...sys, 
-                    fields: saved,
+                    fields: finalFields,
                     quickCreate: finalQuickCreate,
                     quickCreateLayout: finalQuickCreateLayout,
                     relationships: override.relationships !== undefined ? override.relationships : (sys.relationships || []),
@@ -2563,9 +2668,10 @@ exports.listModules = async (req, res) => {
                     defaultQuickCreate = ['item_name', 'item_type', 'category', 'selling_price'];
                 }
 
+                const taskFields = sys.key === 'tasks' ? normalizeTasksModuleFields(withOrder) : withOrder;
                 merged.push({ 
                     ...sys, 
-                    fields: withOrder,
+                    fields: taskFields,
                     quickCreate: defaultQuickCreate,
                     quickCreateLayout: { version: 1, rows: [] },
                     relationships: sys.relationships || [],
@@ -2737,10 +2843,16 @@ exports.updateModule = async (req, res) => {
             quickCreateLayoutValue: quickCreateLayout
         });
         
-        // Validate field mutations based on ownership
+        // When user "removes" platform/app fields from config, re-add them as hidden so save succeeds (no 403)
+        let fieldsToSave = fields;
         if (Array.isArray(fields)) {
             const oldFields = Array.isArray(mod.fields) ? mod.fields : [];
-            const validation = validateFieldMutations(oldFields, fields, req.user);
+            fieldsToSave = mergeRemovedPlatformOrAppFieldsAsHidden(oldFields, fields);
+        }
+        // Validate field mutations based on ownership
+        if (Array.isArray(fieldsToSave)) {
+            const oldFields = Array.isArray(mod.fields) ? mod.fields : [];
+            const validation = validateFieldMutations(oldFields, fieldsToSave, req.user);
             
             if (!validation.valid) {
                 return res.status(403).json({
@@ -2754,11 +2866,13 @@ exports.updateModule = async (req, res) => {
         
         if (name !== undefined) mod.name = String(name).trim();
         if (enabled !== undefined) mod.enabled = !!enabled;
-        if (Array.isArray(fields)) {
+        if (Array.isArray(fieldsToSave)) {
             // Events: strip deprecated/alias fields from saved config
-            const sanitizedFields = (mod.key === 'events')
-                ? fields.filter(f => !deprecatedEventAliasKeys.has(String(f?.key || '').toLowerCase()))
-                : fields;
+            let sanitizedFields = (mod.key === 'events')
+                ? fieldsToSave.filter(f => !deprecatedEventAliasKeys.has(String(f?.key || '').toLowerCase()))
+                : fieldsToSave;
+            // Tasks: expose only single "relatedTo" field; strip relatedToType/relatedToId from persisted config
+            if (mod.key === 'tasks') sanitizedFields = normalizeTasksModuleFields(sanitizedFields);
             mod.fields = sanitizedFields;
         }
         
@@ -2779,6 +2893,19 @@ exports.updateModule = async (req, res) => {
             let newQuickCreate = Array.isArray(quickCreate) ? quickCreate : [];
             if (mod.key === 'events') {
                 newQuickCreate = newQuickCreate.filter(k => !deprecatedEventAliasKeys.has(String(k || '').toLowerCase()));
+            }
+            // Tasks: normalize quickCreate to use "relatedTo" instead of relatedToType/relatedToId
+            if (mod.key === 'tasks') {
+                const qcLower = newQuickCreate.map(k => String(k || '').toLowerCase().trim());
+                if (qcLower.includes('relatedtotype') || qcLower.includes('relatedtoid')) {
+                    newQuickCreate = newQuickCreate.filter(k => {
+                        const kk = String(k || '').toLowerCase().trim();
+                        return kk !== 'relatedtotype' && kk !== 'relatedtoid';
+                    });
+                    if (!newQuickCreate.some(k => String(k || '').toLowerCase().trim() === 'relatedto')) {
+                        newQuickCreate.push('relatedTo');
+                    }
+                }
             }
             console.log('📝 Setting quickCreate:', {
                 from: mod.quickCreate,
@@ -3024,10 +3151,16 @@ exports.updateSystemModule = async (req, res) => {
             key: key.toLowerCase()
         }).select('+quickCreate +quickCreateLayout +fields +relationships +pipelineSettings');
         
-        // Validate field mutations based on ownership
+        // When user "removes" platform/app fields from config, re-add them as hidden so save succeeds (no 403)
+        let fieldsToSave = fields;
         if (Array.isArray(fields) && existingMod) {
             const oldFields = Array.isArray(existingMod.fields) ? existingMod.fields : [];
-            const validation = validateFieldMutations(oldFields, fields, req.user);
+            fieldsToSave = mergeRemovedPlatformOrAppFieldsAsHidden(oldFields, fields);
+        }
+        // Validate field mutations based on ownership
+        if (Array.isArray(fieldsToSave) && existingMod) {
+            const oldFields = Array.isArray(existingMod.fields) ? existingMod.fields : [];
+            const validation = validateFieldMutations(oldFields, fieldsToSave, req.user);
             
             if (!validation.valid) {
                 return res.status(403).json({
@@ -3046,10 +3179,10 @@ exports.updateSystemModule = async (req, res) => {
         
         if (name !== undefined) updateObj.name = String(name).trim();
         if (enabled !== undefined) updateObj.enabled = !!enabled;
-        if (Array.isArray(fields)) {
+        if (Array.isArray(fieldsToSave)) {
             updateObj.fields = (key === 'events')
-                ? fields.filter(f => !deprecatedEventAliasKeys.has(String(f?.key || '').toLowerCase()))
-                : fields;
+                ? fieldsToSave.filter(f => !deprecatedEventAliasKeys.has(String(f?.key || '').toLowerCase()))
+                : fieldsToSave;
         }
         if (Array.isArray(relationships)) updateObj.relationships = relationships;
         if (pipelineSettings !== undefined) {

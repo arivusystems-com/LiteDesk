@@ -230,6 +230,10 @@ app.use('/api/uploads', express.static(path.join(__dirname, 'uploads'), {
         if (filePath.endsWith('.pdf')) {
             res.setHeader('Content-Type', 'application/pdf');
         }
+        // Set appropriate content type for SVGs (required for inline display)
+        if (filePath.endsWith('.svg')) {
+            res.setHeader('Content-Type', 'image/svg+xml');
+        }
         // Set appropriate content type for Excel files
         if (filePath.endsWith('.xlsx')) {
             res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

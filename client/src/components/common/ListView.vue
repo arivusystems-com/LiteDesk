@@ -1351,6 +1351,7 @@ import { useBulkActions } from '@/composables/useBulkActions';
 import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
+import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
 import { getFieldMetadata, PEOPLE_FIELD_METADATA } from '@/platform/fields/peopleFieldModel';
 import { useDefaultListFilters } from '@/composables/useDefaultListFilters';
 
@@ -2213,7 +2214,7 @@ const initializeColumns = async () => {
         const propsCol = propsColumnsMap.get(field.key);
         orderedColumns.push({
           key: field.key,
-          label: field.label || propsCol?.label || field.key,
+          label: getFieldDisplayLabel(field) || propsCol?.label || field.key,
           visible: false, // Not in saved settings, so hidden
           sortable: propsCol?.sortable !== false,
           dataType: field.dataType || propsCol?.dataType || 'Text',
@@ -2248,7 +2249,7 @@ const initializeColumns = async () => {
     const allAvailableColumnsMap = new Map();
     backendFields.forEach(field => allAvailableColumnsMap.set(field.key, {
       key: field.key,
-      label: field.label || field.key,
+      label: getFieldDisplayLabel(field) || field.key,
       dataType: field.dataType,
       sortable: true, // Assume sortable by default from backend
       showInTable: field.visibility?.list !== false,
@@ -2476,13 +2477,14 @@ const computedStats = computed(() => {
 
 
 
-// Computed columns based on visible columns
+// Computed columns based on visible columns (preserve locked for title column width in TableView)
 const computedColumns = computed(() => {
   return visibleColumns.value
     .filter(col => col.visible)
     .map(col => {
       const originalCol = props.columns.find(c => c.key === col.key);
-      return originalCol || col;
+      const merged = originalCol ? { ...originalCol, locked: col.locked } : { ...col };
+      return merged;
     });
 });
 
@@ -2939,7 +2941,7 @@ const allFields = computed(() => {
       const propsCol = propsColumns.find(c => c.key === field.key);
       allFieldsMap.set(field.key, {
         key: field.key,
-        label: field.label || propsCol?.label || field.key,
+        label: getFieldDisplayLabel(field) || propsCol?.label || field.key,
         visible: false, // Will be set from visibleColumns
         sortable: propsCol?.sortable !== false,
         dataType: field.dataType || propsCol?.dataType || 'Text',
@@ -3185,7 +3187,7 @@ const toggleFieldVisibility = async (fieldKey) => {
     if (backendField || propsCol) {
       const newColumn = {
         key: fieldKey,
-        label: backendField?.label || propsCol?.label || fieldKey,
+        label: getFieldDisplayLabel(backendField) || propsCol?.label || fieldKey,
         visible: true, // Toggling on, so make it visible
         sortable: propsCol?.sortable !== false,
         dataType: backendField?.dataType || propsCol?.dataType || 'Text',

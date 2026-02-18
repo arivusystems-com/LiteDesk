@@ -17,6 +17,8 @@
       @import="showImportModal = true"
       @export="exportTasks"
       @row-click="handleRowClick"
+      @edit="handleEditFromList"
+      @delete="handleDeleteTask"
       @bulk-action="handleBulkAction"
       @filters-changed="handleFiltersChanged"
       @search-changed="handleSearchChanged"
@@ -276,6 +278,15 @@
       @close="showImportModal = false"
       @import-complete="handleImportComplete"
     />
+
+    <!-- Edit Task Drawer (from list view edit icon) -->
+    <TaskEditDrawer
+      v-if="editTaskForDrawer"
+      :isOpen="showEditDrawer"
+      :record="editTaskForDrawer"
+      @close="closeEditDrawer"
+      @saved="handleEditDrawerSaved"
+    />
   </div>
 </template>
 
@@ -290,6 +301,7 @@ import ModuleActions from '@/components/common/ModuleActions.vue';
 import BadgeCell from '@/components/common/table/BadgeCell.vue';
 import DateCell from '@/components/common/table/DateCell.vue';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
+import TaskEditDrawer from '@/components/tasks/TaskEditDrawer.vue';
 import CSVImportModal from '@/components/import/CSVImportModal.vue';
 import Avatar from '@/components/common/Avatar.vue';
 import KanbanBoard from '@/components/common/KanbanBoard.vue';
@@ -413,6 +425,8 @@ const moduleListRef = ref(null);
 const showFormModal = ref(false);
 const showImportModal = ref(false);
 const editingTask = ref(null);
+const editTaskForDrawer = ref(null);
+const showEditDrawer = ref(false);
 const currentSearchQuery = ref('');
 
 const refreshList = () => {
@@ -689,12 +703,26 @@ const handleRowClick = (row) => {
   });
 };
 
+const handleDeleteTask = async (row) => {
+  const id = row?._id;
+  if (!id) return;
+  try {
+    await apiClient.delete(`/tasks/${id}`);
+    if (currentView.value === 'kanban') fetchKanbanTasks();
+    refreshList();
+  } catch (error) {
+    console.error('Error deleting task:', error);
+    alert(error?.response?.data?.message || error?.message || 'Failed to delete task.');
+  }
+};
+
 const handleBulkAction = async (action, rows) => {
   const taskIds = rows.map(task => task._id);
   
   try {
-    if (action === 'delete') {
+    if (action === 'delete' || action === 'bulk-delete') {
       await Promise.all(taskIds.map(id => apiClient.delete(`/tasks/${id}`)));
+      if (currentView.value === 'kanban') fetchKanbanTasks();
       refreshList();
     } else if (action === 'export') {
       // Export functionality handled by ModuleList
@@ -741,6 +769,22 @@ const handleTaskSave = () => {
   showFormModal.value = false;
   editingTask.value = null;
   createInitialData.value = {};
+  if (currentView.value === 'kanban') fetchKanbanTasks();
+  refreshList();
+};
+
+const handleEditFromList = (row) => {
+  editTaskForDrawer.value = row;
+  showEditDrawer.value = true;
+};
+
+const closeEditDrawer = () => {
+  showEditDrawer.value = false;
+  editTaskForDrawer.value = null;
+};
+
+const handleEditDrawerSaved = () => {
+  closeEditDrawer();
   if (currentView.value === 'kanban') fetchKanbanTasks();
   refreshList();
 };

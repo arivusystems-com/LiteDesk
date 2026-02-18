@@ -17,7 +17,7 @@
           <table
             ref="tableRef"
             class="divide-y divide-gray-200 text-sm text-gray-900 dark:divide-white/15 dark:text-gray-200"
-            :style="{ width: '100%', minWidth: tableMinWidth, display: 'table', tableLayout: 'auto' }"
+            :style="{ width: '100%', minWidth: tableMinWidth, display: 'table', tableLayout: 'fixed' }"
           >
             <colgroup>
               <col v-if="selectable" style="width: 48px" />
@@ -62,7 +62,7 @@
                   :aria-sort="ariaSortForColumn(column)"
                   :class="[
                     'group sticky border-b border-gray-200 bg-white text-left text-xs font-semibold uppercase tracking-wide text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-white relative after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-gray-200 after:content-[\'\'] dark:after:bg-gray-700',
-                    columnIndex === 0 ? 'z-15 sticky-column-border' : 'z-10',
+                    columnIndex === 0 ? 'title-column-cell z-15 sticky-column-border' : 'z-10',
                     // Apply border-radius only to columns at visible edges
                     (selectable ? columnIndex + 1 : columnIndex) === leftEdgeColumnIndex ? 'rounded-tl-xl' : '',
                     (selectable ? columnIndex + 1 : columnIndex) === rightEdgeColumnIndex ? 'rounded-tr-xl' : '',
@@ -286,20 +286,20 @@
                       v-for="(column, columnIndex) in displayColumns"
                       :key="cellKey(column)"
                       :class="[
-                        'px-5 text-sm text-gray-700 align-middle whitespace-nowrap dark:text-gray-200',
+                        'px-5 text-sm text-gray-700 align-middle dark:text-gray-200',
                         rowHeightClass,
                         columnIndex === 0 ? [
-                          'sticky z-20 transition-colors sticky-column-border',
+                          'title-column-cell sticky z-20 transition-colors sticky-column-border',
                           isRowSelected(row) ? 'bg-gray-50 dark:bg-indigo-950' : 'bg-white dark:bg-gray-900',
                           isRowSelected(row) ? '' : 'group-hover:bg-gray-100 dark:group-hover:bg-gray-800',
                           isScrolledHorizontally ? 'sticky-column-scrolled' : ''
-                        ].join(' ') : ''
+                        ].join(' ') : 'whitespace-nowrap'
                       ]"
                       :style="columnCellStyle(column)"
                     >
                       <!-- First column: Show content and actions side by side -->
                       <div v-if="columnIndex === 0 && hasActions" class="flex items-center justify-between gap-3">
-                        <div class="flex-1 min-w-0">
+                        <div class="flex-1 min-w-0 truncate">
                           <slot
                             :name="`cell-${columnKey(column)}`"
                             :column="column"
@@ -318,9 +318,22 @@
                           <slot name="actions" :row="row" />
                         </div>
                       </div>
-                      <!-- Other columns: Normal rendering -->
+                      <!-- Other columns: Normal rendering; first column content truncates -->
                       <template v-else>
+                        <div v-if="columnIndex === 0" class="min-w-0 truncate">
+                          <slot
+                            :name="`cell-${columnKey(column)}`"
+                            :column="column"
+                            :row="row"
+                            :value="resolveValue(row, column)"
+                          >
+                            <slot name="cell" :column="column" :row="row" :value="resolveValue(row, column)">
+                              {{ resolveValue(row, column) }}
+                            </slot>
+                          </slot>
+                        </div>
                         <slot
+                          v-else
                           :name="`cell-${columnKey(column)}`"
                           :column="column"
                           :row="row"
@@ -366,6 +379,7 @@ type ColumnObjectDef = {
   sortable?: boolean
   sortKey?: string
   resizable?: boolean
+  locked?: boolean
 }
 type ColumnDef = ColumnObjectDef | string
 type RowData = Record<string, unknown>
@@ -373,6 +387,10 @@ type RowData = Record<string, unknown>
 const DEFAULT_STICKY_OFFSET = 72
 const DEFAULT_COLUMN_WIDTH = 200
 const DEFAULT_MIN_COLUMN_WIDTH = 120
+// First (frozen/title) column constraints
+const TITLE_COLUMN_MIN = 260
+const TITLE_COLUMN_DEFAULT = 360
+const TITLE_COLUMN_MAX = 480
 type SortOrder = 'asc' | 'desc'
 type SortState = SortOrder | null
 
@@ -527,7 +545,16 @@ const isColumnSortable = (column: ColumnDef) => {
   return Boolean(sortKeyForColumn(column))
 }
 
+// Title/frozen column: first in list or explicitly locked (by key so it works with merged column objects)
+const isFirstColumn = (column: ColumnDef) => {
+  if (displayColumns.value.length === 0) return false
+  const first = displayColumns.value[0]
+  if (typeof column === 'object' && column && (column as ColumnObjectDef).locked) return true
+  return columnKey(first) === columnKey(column)
+}
+
 const getColumnMinWidth = (column: ColumnDef) => {
+  if (isFirstColumn(column)) return TITLE_COLUMN_MIN
   const configuredMin =
     typeof column === 'string'
       ? undefined
@@ -537,7 +564,13 @@ const getColumnMinWidth = (column: ColumnDef) => {
   return Math.max(baseline, DEFAULT_MIN_COLUMN_WIDTH)
 }
 
+const getColumnMaxWidth = (column: ColumnDef) => {
+  if (isFirstColumn(column)) return TITLE_COLUMN_MAX
+  return undefined
+}
+
 const getColumnDefaultWidth = (column: ColumnDef) => {
+  if (isFirstColumn(column)) return TITLE_COLUMN_DEFAULT
   const configuredWidth =
     typeof column === 'string'
       ? undefined
@@ -552,40 +585,52 @@ const getColumnWidth = (column: ColumnDef) => {
   const key = columnKey(column)
   const stored = columnWidths.value[key]
   const minWidth = getColumnMinWidth(column)
+  const maxWidth = getColumnMaxWidth(column)
 
+  let width: number
   if (stored && stored > 0) {
-    return Math.max(stored, minWidth)
+    width = Math.max(stored, minWidth)
+  } else {
+    width = Math.max(getColumnDefaultWidth(column), minWidth)
   }
-
-  return Math.max(getColumnDefaultWidth(column), minWidth)
+  if (maxWidth != null) {
+    width = Math.min(width, maxWidth)
+  }
+  return width
 }
 
 const columnColStyle = (column: ColumnDef) => {
   const width = getColumnWidth(column)
   const minWidth = getColumnMinWidth(column)
+  const maxWidth = getColumnMaxWidth(column)
   if (!width) return { minWidth: `${minWidth}px` }
-  return { width: `${width}px`, minWidth: `${minWidth}px` }
+  const style: Record<string, string> = { width: `${width}px`, minWidth: `${minWidth}px` }
+  if (maxWidth != null) style.maxWidth = `${maxWidth}px`
+  return style
 }
 
 const columnHeaderStyle = (column: ColumnDef) => {
   const width = getColumnWidth(column)
   const minWidth = Math.max(width, getColumnMinWidth(column))
-  const isFirstColumn = displayColumns.value[0] === column
+  const maxWidth = getColumnMaxWidth(column)
+  const isFirstCol = isFirstColumn(column)
   const checkboxWidth = 48 // Width of checkbox column
-  
+
   const style: Record<string, string> = {
     width: `${width}px`,
     minWidth: `${minWidth}px`
   }
-  
+  if (maxWidth != null) style.maxWidth = `${maxWidth}px`
+  if (isFirstCol) style.overflow = 'hidden'
+
   // Make first data column sticky horizontally
   // Header needs higher z-index (25) than cells (20) to stay on top when scrolling
   // Border and shadow are handled via CSS class (sticky-column-border) for better visibility
-  if (isFirstColumn && props.selectable) {
+  if (isFirstCol && props.selectable) {
     style.position = 'sticky'
     style.left = `${checkboxWidth}px`
     style.zIndex = '25' // Higher than cell z-index (20)
-  } else if (isFirstColumn && !props.selectable) {
+  } else if (isFirstCol && !props.selectable) {
     style.position = 'sticky'
     style.left = '0px'
     style.zIndex = '25' // Higher than cell z-index (20)
@@ -606,27 +651,31 @@ const rowHeightClass = computed(() => rowHeightClasses[props.rowHeight] || rowHe
 const columnCellStyle = (column: ColumnDef) => {
   const width = getColumnWidth(column)
   const minWidth = Math.max(width, getColumnMinWidth(column))
-  const isFirstColumn = displayColumns.value[0] === column
+  const maxWidth = getColumnMaxWidth(column)
+  const isFirstCol = isFirstColumn(column)
   const checkboxWidth = 48 // Width of checkbox column
-  
+
   const style: Record<string, string> = {
     width: `${width}px`,
     minWidth: `${minWidth}px`
   }
-  
+  if (maxWidth != null) style.maxWidth = `${maxWidth}px`
+  // Enforce width: clip overflow so column cannot grow and title truncates
+  if (isFirstCol) style.overflow = 'hidden'
+
   // Make first data column sticky horizontally
   // Cells use z-20 (set via class), so don't override z-index here
   // Border and shadow are handled via CSS class (sticky-column-border) for better visibility
-  if (isFirstColumn && props.selectable) {
+  if (isFirstCol && props.selectable) {
     style.position = 'sticky'
     style.left = `${checkboxWidth}px`
     // z-index is set via class (z-20), don't override
-  } else if (isFirstColumn && !props.selectable) {
+  } else if (isFirstCol && !props.selectable) {
     style.position = 'sticky'
     style.left = '0px'
     // z-index is set via class (z-20), don't override
   }
-  
+
   return style
 }
 
@@ -666,8 +715,11 @@ const ensureColumnWidths = () => {
   displayColumns.value.forEach((column) => {
     const key = columnKey(column)
     const existing = columnWidths.value[key]
-    const width = existing && existing > 0 ? existing : getColumnDefaultWidth(column)
-    next[key] = Math.max(width, getColumnMinWidth(column))
+    let width = existing && existing > 0 ? existing : getColumnDefaultWidth(column)
+    width = Math.max(width, getColumnMinWidth(column))
+    const maxW = getColumnMaxWidth(column)
+    if (maxW != null) width = Math.min(width, maxW)
+    next[key] = width
   })
   columnWidths.value = next
 }
@@ -681,9 +733,13 @@ const loadStoredWidths = () => {
     const parsed = JSON.parse(raw)
     if (parsed && typeof parsed === 'object') {
       const sanitized: ColumnWidths = {}
+      const firstKey = displayColumns.value[0] ? columnKey(displayColumns.value[0]) : null
       Object.entries(parsed as Record<string, number | string>).forEach(([key, value]) => {
-        const width = parseWidthValue(value)
+        let width = parseWidthValue(value)
         if (width && width > 0) {
+          if (firstKey && key === firstKey) {
+            width = Math.min(TITLE_COLUMN_MAX, Math.max(TITLE_COLUMN_MIN, width))
+          }
           sanitized[key] = width
         }
       })
@@ -885,7 +941,9 @@ const handleColumnResize = (event: MouseEvent) => {
 
   const delta = event.clientX - state.startX
   const minWidth = getColumnMinWidth(state.column)
-  const nextWidth = Math.max(minWidth, Math.round(state.startWidth + delta))
+  const maxWidth = getColumnMaxWidth(state.column)
+  let nextWidth = Math.max(minWidth, Math.round(state.startWidth + delta))
+  if (maxWidth != null) nextWidth = Math.min(nextWidth, maxWidth)
 
   columnWidths.value = {
     ...columnWidths.value,
@@ -1164,6 +1222,28 @@ watch(() => props.clearSelectionTrigger, (newVal) => {
 :global(.dark) .table-scroll-container thead th.sticky-column-scrolled,
 :global(.dark) .table-scroll-container tbody td.sticky-column-scrolled {
   box-shadow: 4px 0 6px -2px rgba(0, 0, 0, 0.25), 2px 0 4px -1px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Title (first) column: enforce width and truncate long content */
+.table-scroll-container .title-column-cell > div {
+  min-width: 0;
+  overflow: hidden;
+}
+.table-scroll-container .title-column-cell .flex {
+  min-width: 0;
+}
+/* Truncate the text part of title cell (e.g. flex with checkbox + span) */
+.table-scroll-container .title-column-cell .flex > *:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+/* When title cell has no .flex (plain slot), truncate direct content */
+.table-scroll-container .title-column-cell > div:not(.flex) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 </style>

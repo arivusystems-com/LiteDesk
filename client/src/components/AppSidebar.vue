@@ -486,9 +486,12 @@ import {
   BriefcaseIcon,
   CheckCircleIcon,
   CalendarIcon,
+  CalendarDaysIcon,
   CogIcon,
   Squares2X2Icon,
   ClipboardDocumentIcon,
+  ClipboardDocumentListIcon,
+  FolderIcon,
   CubeIcon,
   ArrowDownTrayIcon,
 } from '@heroicons/vue/24/outline';
@@ -589,7 +592,7 @@ const profileMenuItems = computed<ProfileMenuItem[]>(() => {
   }
   
   items.push(
-    { name: 'Settings', action: () => { window.open(router.resolve('/settings').href, '_blank'); } },
+    { name: 'Settings', action: () => { window.open(router.resolve({ path: '/platform/home', query: { redirect: '/settings' } }).href, '_blank'); } },
     { 
       name: colorMode.value === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode', 
       action: () => {
@@ -803,11 +806,16 @@ function getFigmaNavIcon(item: any) {
     if (item.id === 'inbox') return FigmaInboxIcon;
   }
   if (item?.kind === 'coreModule') {
-    // Use icon from item, or fallback based on moduleKey
     const moduleKey = item.moduleKey?.toLowerCase() || item.id?.toLowerCase() || '';
-    if (moduleKey === 'people') return FigmaPeopleIcon;
-    if (moduleKey === 'organizations') return BuildingOfficeIcon;
-    // Fallback to icon from item or heroicon mapping
+    const coreModuleIcons: Record<string, any> = {
+      people: FigmaPeopleIcon,
+      organizations: BuildingOfficeIcon,
+      tasks: wrapHeroIcon(CheckCircleIcon),
+      events: wrapHeroIcon(CalendarDaysIcon),
+      items: wrapHeroIcon(FolderIcon),
+      forms: wrapHeroIcon(ClipboardDocumentListIcon),
+    };
+    if (coreModuleIcons[moduleKey]) return coreModuleIcons[moduleKey];
     return wrapHeroIcon(getIconComponent(item?.icon));
   }
   if (item?.kind === 'app') {

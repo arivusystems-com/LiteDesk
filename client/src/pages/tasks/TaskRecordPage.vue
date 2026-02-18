@@ -41,6 +41,15 @@
         <template #pageActions>
           <button
             type="button"
+            @click="showEditDrawer = true"
+            class="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            aria-label="Edit task"
+            title="Edit task"
+          >
+            <PencilSquareIcon class="w-5 h-5" />
+          </button>
+          <button
+            type="button"
             ref="tagHeaderButtonRef"
             @click="handleTagIconClick($event)"
             :class="[
@@ -936,6 +945,49 @@
                   <span v-else class="text-gray-400 dark:text-gray-500">Empty</span>
                 </div>
               </div>
+
+              <div
+                v-else-if="fieldKey === 'relatedTo'"
+                class="editable-labeled-value editable-labeled-value--row group/relatedTo flex items-center gap-3 py-2 pl-0 pr-4 min-h-[3rem]"
+              >
+                <span class="editable-labeled-value__icon flex-shrink-0 text-gray-400 dark:text-gray-500 w-4 flex items-center justify-center" aria-hidden="true">
+                  <LinkIcon class="w-4 h-4 shrink-0" />
+                </span>
+                <span class="editable-labeled-value__label text-sm text-gray-700 dark:text-gray-300 flex-shrink-0 min-w-[12rem]">{{ getFieldLabel(fieldKey) }}</span>
+                <template v-if="canEditTask">
+                  <div class="editable-labeled-value__value flex-1 min-w-0 min-h-8 flex items-center text-left text-sm rounded px-2 py-1 -mx-2 -my-1 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <RouterLink
+                      v-if="getRelatedToRecordPath(task)"
+                      :to="getRelatedToRecordPath(task)"
+                      @click.stop
+                      class="text-gray-900 dark:text-white group-hover/relatedTo:text-indigo-600 dark:group-hover/relatedTo:text-indigo-400 truncate transition-colors cursor-pointer min-w-0"
+                    >
+                      {{ getRelatedToDisplay(task) }}
+                    </RouterLink>
+                    <button
+                      v-else
+                      type="button"
+                      @click="openRelatedToPopover($event)"
+                      class="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer"
+                    >
+                      —
+                    </button>
+                    <button
+                      v-if="getRelatedToRecordPath(task)"
+                      type="button"
+                      @click="openRelatedToPopover($event)"
+                      class="flex-1 min-w-0 min-h-6 cursor-pointer"
+                      aria-label="Edit Related To"
+                    />
+                  </div>
+                </template>
+                <div
+                  v-else
+                  class="editable-labeled-value__value flex-1 min-w-0 min-h-8 flex items-center text-sm text-gray-900 dark:text-white"
+                >
+                  <span>{{ getRelatedToDisplay(task) || '—' }}</span>
+                </div>
+              </div>
             </template>
           </template>
         </RecordFieldsSection>
@@ -1601,7 +1653,19 @@
                               >
                                 <ArrowDownTrayIcon class="h-5 w-5" />
                               </button>
-                              <img :src="getAttachmentUrl(attachment)" :alt="getAttachmentName(attachment)" class="block max-h-[240px] w-full object-contain" loading="lazy" />
+                              <object
+                                v-if="isSvgAttachment(attachment)"
+                                :data="getAttachmentUrl(attachment)"
+                                type="image/svg+xml"
+                                class="block max-h-[240px] w-full object-contain"
+                              />
+                              <img
+                                v-else
+                                :src="getAttachmentUrl(attachment)"
+                                :alt="getAttachmentName(attachment)"
+                                class="block max-h-[240px] w-full object-contain"
+                                loading="lazy"
+                              />
                               <div class="flex items-center justify-between gap-2 border-t border-gray-100 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-800">
                                 <span class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{{ getAttachmentName(attachment) }}</span>
                                 <span v-if="attachment.size" class="text-xs text-gray-500 dark:text-gray-400">{{ formatFileSize(attachment.size) }}</span>
@@ -2312,6 +2376,73 @@
       </div>
     </div>
   </Teleport>
+
+  <!-- Related To field popover (details section inline edit) -->
+  <Teleport to="body">
+    <div
+      v-if="showRelatedToPopover"
+      ref="relatedToPopoverRef"
+      :style="relatedToPopoverStyle"
+      class="fixed z-[120] w-[min(440px,calc(100vw-24px))] rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl"
+    >
+      <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+        <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Related To</h3>
+        <button
+          type="button"
+          class="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          aria-label="Close"
+          @click="closeRelatedToPopover"
+        >
+          <XMarkIcon class="w-5 h-5" />
+        </button>
+      </div>
+      <div class="p-4">
+        <TaskRelatedToField
+          :model-value="relatedToPopoverValue"
+          label=""
+          :required="false"
+          :error="relatedToPopoverError"
+          @update:model-value="relatedToPopoverValue = $event"
+        />
+        <div class="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            class="rounded-md px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 cursor-pointer"
+            @click="closeRelatedToPopover"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="relatedToSaving || !hasRelatedToPopoverChanges"
+            @click="saveRelatedToFromPopover"
+          >
+            {{ relatedToSaving ? 'Saving...' : 'Save' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- Edit task drawer (Quick Edit / Full Edit progressive disclosure) -->
+  <TaskEditDrawer
+    v-if="task"
+    :isOpen="showEditDrawer"
+    :record="task"
+    @close="showEditDrawer = false"
+    @saved="handleTaskEditSaved"
+  />
+
+  <!-- Delete Confirmation Modal -->
+  <DeleteConfirmationModal
+    :show="showDeleteModal"
+    :record-name="task?.title || ''"
+    record-type="tasks"
+    :deleting="deleting"
+    @close="showDeleteModal = false"
+    @confirm="confirmDeleteTask"
+  />
 </template>
 
 <script setup>
@@ -2333,6 +2464,9 @@ import CommentContent from '@/components/record-page/CommentContent.vue';
 import EditableTitle from '@/components/record-page/EditableTitle.vue';
 import TaskDescriptionEditor from '@/components/record-page/TaskDescriptionEditor.vue';
 import LinkRecordsDrawer from '@/components/common/LinkRecordsDrawer.vue';
+import TaskEditDrawer from '@/components/tasks/TaskEditDrawer.vue';
+import TaskRelatedToField from '@/components/tasks/TaskRelatedToField.vue';
+import DeleteConfirmationModal from '@/components/common/DeleteConfirmationModal.vue';
 import DOMPurify from 'dompurify';
 import {
   ChatBubbleLeftRightIcon,
@@ -2391,6 +2525,8 @@ const loading = ref(false);
 const error = ref(null);
 const isFollowing = ref(false);
 const showDeleteModal = ref(false);
+const deleting = ref(false);
+const showEditDrawer = ref(false);
 const taskEvents = ref([]);
 const taskDeals = ref([]);
 const taskForms = ref([]);
@@ -2677,6 +2813,15 @@ const isEditingTimeEstimate = ref(false);
 const localTimeEstimate = ref(0);
 const timeEstimateInputRef = ref(null);
 
+const relatedToPopoverAnchorEl = ref(null);
+const relatedToPopoverRef = ref(null);
+const showRelatedToPopover = ref(false);
+const relatedToPopoverStyle = ref({ top: '0px', left: '0px' });
+const relatedToPopoverValue = ref({ type: 'none', id: null });
+const relatedToPopoverInitialValue = ref({ type: 'none', id: null });
+const relatedToPopoverError = ref('');
+const relatedToSaving = ref(false);
+
 const tagHeaderButtonRef = ref(null);
 const tagFieldButtonRef = ref(null);
 const tagPopoverRef = ref(null);
@@ -2748,22 +2893,6 @@ const TAG_COLOR_OPTIONS = [
   }
 ];
 
-// Field label mapping (human-readable labels for field keys)
-const FIELD_LABELS = {
-  assignedTo: 'Assigned To',
-  dueDate: 'Due Date',
-  startDate: 'Start Date',
-  priority: 'Priority',
-  estimatedHours: 'Estimated Hours',
-  actualHours: 'Actual Hours',
-  tags: 'Tags',
-  status: 'Status',
-  description: 'Description',
-  title: 'Title',
-  relatedTo: 'Related To',
-  projectId: 'Project',
-};
-
 const toReadableFieldLabel = (label, key = '') => {
   const fallback = String(key || '').trim();
   const source = String(label || fallback || '').trim();
@@ -2777,9 +2906,12 @@ const toReadableFieldLabel = (label, key = '') => {
     .replace(/\b\w/g, c => c.toUpperCase());
 };
 
-// Get field label from metadata or fallback to FIELD_LABELS
+// Get field label from module field configuration (so labels match create/edit and settings)
 const getFieldLabel = (fieldKey) => {
-  return toReadableFieldLabel(FIELD_LABELS[fieldKey], fieldKey);
+  const moduleField = taskModuleDefinition.value?.fields?.find(
+    (f) => (f.key || '').toLowerCase() === (fieldKey || '').toLowerCase()
+  );
+  return toReadableFieldLabel(moduleField?.label, fieldKey);
 };
 
 // Get field type for EditableLabeledValue component based on field metadata
@@ -3012,6 +3144,7 @@ const getKeyFieldDisplayValue = (fieldKey) => {
   if (fieldKey === 'tags') {
     return Array.isArray(task.value.tags) && task.value.tags.length > 0 ? task.value.tags.join(', ') : 'Empty';
   }
+  if (fieldKey === 'relatedTo') return getRelatedToDisplay(task.value) || 'Empty';
 
   const rawValue = task.value[fieldKey];
   if (rawValue == null || rawValue === '') return 'Empty';
@@ -3020,6 +3153,44 @@ const getKeyFieldDisplayValue = (fieldKey) => {
   }
   return String(rawValue);
 };
+
+function getRelatedToDisplay(t) {
+  if (!t) return null;
+  const rt = t.relatedTo ?? (t.relatedToType != null || t.relatedToId != null ? { type: t.relatedToType || 'none', id: t.relatedToId } : null);
+  if (!rt || rt.type === 'none' || !rt.id) return null;
+  const typeLabel = { contact: 'People', deal: 'Deal', organization: 'Organization', project: 'Project' }[rt.type] || rt.type;
+  // Prefer display name: populated object (name/title), or stored name (e.g. from popover save), else raw id
+  let nameVal = null;
+  if (rt.id && typeof rt.id === 'object') {
+    nameVal = rt.id.name || rt.id.title || rt.id._id;
+  } else if (rt.name) {
+    nameVal = rt.name;
+  } else {
+    nameVal = rt.id;
+  }
+  return nameVal ? `${typeLabel}: ${nameVal}` : typeLabel;
+}
+
+function getNormalizedRelatedTo(t) {
+  if (!t) return { type: 'none', id: null };
+  const rt = t.relatedTo ?? (t.relatedToType != null || t.relatedToId != null ? { type: t.relatedToType || 'none', id: t.relatedToId } : null);
+  if (!rt || typeof rt !== 'object') return { type: 'none', id: null };
+  const id = rt.id != null && typeof rt.id === 'object' && rt.id._id != null ? rt.id._id : (rt.id ?? null);
+  return { type: rt.type || 'none', id };
+}
+
+function getRelatedToRecordPath(t) {
+  const rt = getNormalizedRelatedTo(t);
+  if (!rt || rt.type === 'none' || !rt.id) return null;
+  const routes = {
+    contact: '/people',
+    deal: '/deals',
+    organization: '/organizations',
+    project: '/projects'
+  };
+  const base = routes[rt.type];
+  return base ? `${base}/${rt.id}` : null;
+}
 
 const keyFieldDisplayValues = computed(() => {
   const values = {};
@@ -3030,7 +3201,7 @@ const keyFieldDisplayValues = computed(() => {
 });
 
 const detailsSectionExcludedFields = computed(() => {
-  const baseExcluded = ['title', 'description', 'subtasks', 'relatedTo', 'projectId'];
+  const baseExcluded = ['title', 'description', 'subtasks', 'projectId'];
   return Array.from(new Set([...baseExcluded, ...keyFieldKeys.value]));
 });
 
@@ -3051,18 +3222,29 @@ const detailGroupFieldsMap = computed(() => {
     return metadata && metadata.intent === 'tracking';
   });
 
-  if (displayableFields.includes('tags')) {
+  const relationships = displayableFields.filter((field) => {
+    const metadata = getTaskFieldMetadata(field);
+    return metadata && metadata.intent === 'detail';
+  });
+
+  // Add tags to planning only if not already in another group (tags has intent 'detail' so it appears in relationships)
+  if (displayableFields.includes('tags') && !relationships.includes('tags') && !planning.includes('tags')) {
     planning.push('tags');
   }
 
   return {
     core: Array.from(new Set(core)),
-    planning: Array.from(new Set(planning))
+    planning: Array.from(new Set(planning)),
+    relationships: Array.from(new Set(relationships))
   };
 });
 
 const detailFieldsOrdered = computed(() => {
-  const ordered = [...detailGroupFieldsMap.value.core, ...detailGroupFieldsMap.value.planning];
+  const ordered = [
+    ...detailGroupFieldsMap.value.core,
+    ...detailGroupFieldsMap.value.planning,
+    ...(detailGroupFieldsMap.value.relationships || [])
+  ];
   return Array.from(new Set(ordered));
 });
 
@@ -3111,9 +3293,15 @@ const fieldGroups = computed(() => {
     const metadata = getTaskFieldMetadata(field);
     return metadata && metadata.intent === 'tracking';
   });
+
+  // Relationships group (detail intent: relatedTo, tags, etc.)
+  const relationshipsGroupFields = displayableFields.filter(field => {
+    const metadata = getTaskFieldMetadata(field);
+    return metadata && metadata.intent === 'detail';
+  });
   
-  // Also include tags in planning group
-  if (displayableFields.includes('tags')) {
+  // Only add tags to planning if not already in relationships (tags has intent 'detail')
+  if (displayableFields.includes('tags') && !relationshipsGroupFields.includes('tags') && !planningGroupFields.includes('tags')) {
     planningGroupFields.push('tags');
   }
   
@@ -3122,6 +3310,14 @@ const fieldGroups = computed(() => {
       key: 'planning',
       label: 'Planning',
       fields: planningGroupFields
+    });
+  }
+  
+  if (relationshipsGroupFields.length > 0) {
+    groups.push({
+      key: 'relationships',
+      label: 'Relationships',
+      fields: relationshipsGroupFields
     });
   }
   
@@ -3565,6 +3761,96 @@ const handleTagPopoverOutsideClick = (event) => {
   closeTagPopover();
 };
 
+const updateRelatedToPopoverPosition = () => {
+  if (!showRelatedToPopover.value) return;
+  const anchor = relatedToPopoverAnchorEl.value;
+  if (!anchor || typeof anchor.getBoundingClientRect !== 'function') return;
+  const rect = anchor.getBoundingClientRect();
+  const width = 440;
+  const margin = 12;
+  const gap = 8;
+  const popoverEl = relatedToPopoverRef.value;
+  const popoverHeight = popoverEl?.offsetHeight || 280;
+  // Fixed positioning uses viewport coordinates (no scroll offset)
+  const left = Math.min(
+    Math.max(rect.left, margin),
+    window.innerWidth - width - margin
+  );
+  const belowTop = rect.bottom + gap;
+  const aboveTop = rect.top - popoverHeight - gap;
+  const canPlaceBelow = rect.bottom + popoverHeight + margin <= window.innerHeight;
+  const top = canPlaceBelow ? belowTop : Math.max(margin, aboveTop);
+  relatedToPopoverStyle.value = { top: `${top}px`, left: `${left}px` };
+};
+
+const openRelatedToPopover = (event) => {
+  if (!task.value) return;
+  const el = event?.currentTarget;
+  if (el && typeof el.getBoundingClientRect === 'function') {
+    relatedToPopoverAnchorEl.value = el;
+  } else {
+    relatedToPopoverAnchorEl.value = null;
+  }
+  const initial = getNormalizedRelatedTo(task.value);
+  relatedToPopoverValue.value = { ...initial };
+  relatedToPopoverInitialValue.value = { type: initial.type, id: initial.id };
+  relatedToPopoverError.value = '';
+  showRelatedToPopover.value = true;
+  nextTick(() => {
+    updateRelatedToPopoverPosition();
+    requestAnimationFrame(updateRelatedToPopoverPosition);
+  });
+};
+
+const hasRelatedToPopoverChanges = computed(() => {
+  const current = relatedToPopoverValue.value;
+  const initial = relatedToPopoverInitialValue.value;
+  const currentType = current?.type || 'none';
+  const initialType = initial?.type || 'none';
+  const currentId = current?.id != null && current?.id !== '' ? String(current.id) : null;
+  const initialId = initial?.id != null && initial?.id !== '' ? String(initial.id) : null;
+  return currentType !== initialType || currentId !== initialId;
+});
+
+const closeRelatedToPopover = () => {
+  showRelatedToPopover.value = false;
+  relatedToPopoverAnchorEl.value = null;
+};
+
+const saveRelatedToFromPopover = async () => {
+  if (!task.value || !canEditTask.value) return;
+  relatedToPopoverError.value = '';
+  relatedToSaving.value = true;
+  try {
+    const payload = { type: relatedToPopoverValue.value?.type || 'none', id: relatedToPopoverValue.value?.id ?? null };
+    const response = await apiClient.put(`/tasks/${task.value._id}`, { relatedTo: payload });
+    if (response.success && response.data) {
+      const displayName = relatedToPopoverValue.value?.displayLabel;
+      task.value.relatedTo = displayName ? { ...payload, name: displayName } : payload;
+      if (!displayName && payload.id) await resolveRelatedToDisplayName();
+      closeRelatedToPopover();
+    } else {
+      relatedToPopoverError.value = response.message || 'Failed to save';
+    }
+  } catch (e) {
+    relatedToPopoverError.value = e?.message || 'Failed to save';
+  } finally {
+    relatedToSaving.value = false;
+  }
+};
+
+const handleRelatedToPopoverOutsideClick = (event) => {
+  if (!showRelatedToPopover.value) return;
+  const target = event?.target;
+  if (!target) return;
+  const popoverEl = relatedToPopoverRef.value;
+  const clickedInsidePopover = popoverEl && popoverEl.contains(target);
+  const anchorEl = relatedToPopoverAnchorEl.value;
+  const clickedAnchor = anchorEl && anchorEl.contains(target);
+  if (clickedInsidePopover || clickedAnchor) return;
+  closeRelatedToPopover();
+};
+
 // Available modules for linking
 const linkableModules = [
   { key: 'projects', label: 'Project', endpoint: '/projects' },
@@ -3916,6 +4202,36 @@ const contextRelatedGroups = computed(() => {
 });
 
 // Fetch task data
+/** When task.relatedTo has type+id but no display name, fetch the record and set relatedTo.name so details show name instead of raw id */
+const resolveRelatedToDisplayName = async () => {
+  const t = task.value;
+  if (!t?.relatedTo) return;
+  const rt = t.relatedTo;
+  if (rt.type === 'none' || !rt.id) return;
+  if (rt.name) return;
+  if (rt.id && typeof rt.id === 'object' && (rt.id.name || rt.id.title)) return;
+  const id = typeof rt.id === 'object' ? rt.id._id : rt.id;
+  if (!id) return;
+  const endpoints = {
+    contact: (id) => apiClient.get(`/people/${id}`),
+    deal: (id) => apiClient.get(`/deals/${id}`),
+    organization: (id) => apiClient.get(`/v2/organization/${id}`),
+    project: (id) => apiClient.get(`/projects/${id}`)
+  };
+  const fetchFn = endpoints[rt.type];
+  if (!fetchFn) return;
+  try {
+    const res = await fetchFn(id);
+    const data = res?.data?.data ?? res?.data;
+    const name = data?.name || data?.title || (data?.first_name && data?.last_name ? `${data.first_name} ${data.last_name}`.trim() : null) || data?.email;
+    if (name && task.value?.relatedTo) {
+      task.value.relatedTo = { ...task.value.relatedTo, name };
+    }
+  } catch {
+    // non-fatal
+  }
+};
+
 const fetchTask = async () => {
   loading.value = true;
   error.value = null;
@@ -3932,6 +4248,7 @@ const fetchTask = async () => {
         fetchUsers(),
         fetchInstanceTagDefinitions()
       ]);
+      await resolveRelatedToDisplayName();
     }
   } catch (err) {
     console.error('Error fetching task:', err);
@@ -4512,6 +4829,9 @@ const handleAddComment = async (payload) => {
             mimetype: result.mimetype || file.type
           });
         }
+      } else {
+        const errData = await uploadRes.json().catch(() => ({}));
+        console.error('Comment attachment upload failed:', uploadRes.status, errData.error || errData.message || uploadRes.statusText);
       }
     }
     const response = await apiClient.post(`/tasks/${task.value._id}/comments`, {
@@ -4651,6 +4971,9 @@ const saveEditComment = async (submitPayload) => {
             mimetype: result.mimetype || file.type
           });
         }
+      } else {
+        const errData = await uploadRes.json().catch(() => ({}));
+        console.error('Comment attachment upload failed:', uploadRes.status, errData.error || errData.message || uploadRes.statusText);
       }
     }
 
@@ -5351,6 +5674,14 @@ const isImageAttachment = (attachment) => {
   if (mimeType.startsWith('image/')) return true;
   const name = getAttachmentName(attachment).toLowerCase();
   return /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name);
+};
+
+const isSvgAttachment = (attachment) => {
+  if (!attachment) return false;
+  const mimeType = (attachment.mimetype || attachment.mimeType || '').toLowerCase();
+  if (mimeType === 'image/svg+xml') return true;
+  const name = getAttachmentName(attachment).toLowerCase();
+  return name.endsWith('.svg');
 };
 
 const getAttachmentLabel = (attachment) => {
@@ -6080,20 +6411,27 @@ const handleExport = () => {
 
 const handleDelete = () => {
   if (!task.value) return;
-  if (confirm(`Are you sure you want to delete "${task.value.title}"? This action cannot be undone.`)) {
-    deleteTask();
-  }
+  showDeleteModal.value = true;
 };
 
-const deleteTask = async () => {
+const confirmDeleteTask = async () => {
   if (!task.value) return;
+  deleting.value = true;
   try {
     await apiClient.delete(`/tasks/${task.value._id}`);
+    showDeleteModal.value = false;
     router.push('/tasks');
   } catch (err) {
     console.error('Error deleting task:', err);
     alert('Error deleting task. Please try again.');
+  } finally {
+    deleting.value = false;
   }
+};
+
+const handleTaskEditSaved = async () => {
+  showEditDrawer.value = false;
+  await fetchTask();
 };
 
 watch(() => task.value?._id, (taskId) => {
@@ -6170,11 +6508,14 @@ onMounted(() => {
   window.addEventListener('scroll', updateCommentReactionPickerPosition, true);
   window.addEventListener('scroll', updateCommentReactionTooltipPosition, true);
   window.addEventListener('scroll', updateTagPopoverPosition, true);
+  window.addEventListener('scroll', updateRelatedToPopoverPosition, true);
   window.addEventListener('resize', updateCommentReactionPickerPosition);
   window.addEventListener('resize', updateCommentReactionTooltipPosition);
   window.addEventListener('resize', updateTagPopoverPosition);
+  window.addEventListener('resize', updateRelatedToPopoverPosition);
   document.addEventListener('click', handleCommentReactionPickerOutsideClick);
   document.addEventListener('click', handleTagPopoverOutsideClick);
+  document.addEventListener('click', handleRelatedToPopoverOutsideClick);
 });
 
 onUnmounted(() => {
@@ -6184,11 +6525,14 @@ onUnmounted(() => {
   window.removeEventListener('scroll', updateCommentReactionPickerPosition, true);
   window.removeEventListener('scroll', updateCommentReactionTooltipPosition, true);
   window.removeEventListener('scroll', updateTagPopoverPosition, true);
+  window.removeEventListener('scroll', updateRelatedToPopoverPosition, true);
   window.removeEventListener('resize', updateCommentReactionPickerPosition);
   window.removeEventListener('resize', updateCommentReactionTooltipPosition);
   window.removeEventListener('resize', updateTagPopoverPosition);
+  window.removeEventListener('resize', updateRelatedToPopoverPosition);
   document.removeEventListener('click', handleCommentReactionPickerOutsideClick);
   document.removeEventListener('click', handleTagPopoverOutsideClick);
+  document.removeEventListener('click', handleRelatedToPopoverOutsideClick);
   commentReactionButtonRefs.clear();
 });
 
