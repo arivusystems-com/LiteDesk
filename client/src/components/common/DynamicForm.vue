@@ -21,7 +21,21 @@
           :class="getSpanClass(col.span)"
           v-if="col.fieldKey && getFieldByKey(col.fieldKey) && shouldShowField(getFieldByKey(col.fieldKey))"
         >
-          <DynamicFormField 
+          <template v-if="props.moduleKey === 'tasks' && col.fieldKey === 'description'">
+            <label :for="`field-${col.fieldKey}`" class="block text-sm font-medium text-gray-900 dark:text-white mb-1">
+              {{ getFieldDisplayLabel(getFieldByKey(col.fieldKey)) || 'Description' }}
+              <span v-if="getFieldByKey(col.fieldKey)?.required" class="text-red-500">*</span>
+            </label>
+            <TaskDescriptionEditor
+              :model-value="localFormData[col.fieldKey] || ''"
+              placeholder="Write or type '/' for commands"
+              class="w-full"
+              @update:model-value="(v) => updateField(col.fieldKey, v)"
+            />
+            <p v-if="errors[col.fieldKey]" class="mt-1 text-sm text-red-600 dark:text-red-400">{{ errors[col.fieldKey] }}</p>
+          </template>
+          <DynamicFormField
+            v-else
             :field="getFieldByKey(col.fieldKey)"
             :value="localFormData[col.fieldKey]"
             @update:value="updateField(col.fieldKey, $event)"
@@ -39,9 +53,27 @@
         <div 
           v-for="field in orderedFields" 
           :key="field.key"
-          :class="field.dataType === 'Text-Area' || field.dataType === 'Rich Text' || field.dataType === 'Image' ? 'md:col-span-2' : ''"
+          :class="[
+            field.dataType === 'Text-Area' || field.dataType === 'Rich Text' || field.dataType === 'Image' ? 'md:col-span-2' : '',
+            props.moduleKey === 'tasks' && field.key === 'description' ? 'md:col-span-2 w-full' : ''
+          ]"
         >
-          <DynamicFormField 
+          <!-- Task description: full-width TipTap editor (same as edit drawer) -->
+          <template v-if="props.moduleKey === 'tasks' && field.key === 'description'">
+            <label :for="`field-${field.key}`" class="block text-sm font-medium text-gray-900 dark:text-white mb-1">
+              {{ getFieldDisplayLabel(field) || 'Description' }}
+              <span v-if="field.required" class="text-red-500">*</span>
+            </label>
+            <TaskDescriptionEditor
+              :model-value="localFormData[field.key] || ''"
+              placeholder="Write or type '/' for commands"
+              class="w-full"
+              @update:model-value="(v) => updateField(field.key, v)"
+            />
+            <p v-if="errors[field.key]" class="mt-1 text-sm text-red-600 dark:text-red-400">{{ errors[field.key] }}</p>
+          </template>
+          <DynamicFormField
+            v-else
             :field="field"
             :value="localFormData[field.key]"
             @update:value="updateField(field.key, $event)"
@@ -59,8 +91,10 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue';
 import DynamicFormField from './DynamicFormField.vue';
+import TaskDescriptionEditor from '@/components/record-page/TaskDescriptionEditor.vue';
 import apiClient from '@/utils/apiClient';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
+import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
 import { useAuthStore } from '@/stores/auth';
 import { useRoute } from 'vue-router';
 import { getCurrentContext, filterFieldsByContext } from '@/utils/fieldContextFilter';
@@ -231,15 +265,14 @@ const orderedFields = computed(() => {
   // Filter fields by context first
   const allFields = filterFieldsByContext(moduleDefinition.value.fields || [], currentContext.value);
   
-    // Exclude system fields and hidden fields
+    // Exclude system fields and hidden fields (module-aware: status only for Events)
     // assignedTo should be visible in Quick Create forms (admin can assign)
-    // Note: activitylogs is NOT in this list so it's available in edit forms
     // Note: createdby is excluded from Quick Create (set by backend automatically)
-    // Note: status is system-controlled for Events (not user-editable)
+    // Note: status is system-controlled only for Events; for Tasks it is user-editable and can be in Quick Create
     const systemFieldKeys = [
       'organizationid', 'createdat', 'updatedat', '_id', '__v', 'createdby',
-      // Events-specific system fields (status is system-controlled, not user-editable)
-      'eventid', 'createdtime', 'modifiedby', 'modifiedtime', 'audithistory', 'status'
+      'eventid', 'createdtime', 'modifiedby', 'modifiedtime', 'audithistory',
+      ...(props.moduleKey?.toLowerCase() === 'events' ? ['status'] : [])
     ];
   
   // Access localFormData.value to ensure Vue tracks this dependency for reactivity
@@ -625,13 +658,11 @@ const shouldShowField = (field) => {
     }
   }
   
-  // Exclude system fields - assignedTo should be visible in Quick Create, createdby should not
-  // Note: createdby is excluded from Quick Create (set by backend automatically)
-  // Note: status is system-controlled for Events (not user-editable)
+  // Exclude system fields (module-aware: status only for Events; Tasks status is user-editable and can be in Quick Create)
   const systemFieldKeys = [
     'organizationid', 'createdat', 'updatedat', '_id', '__v', 'createdby',
-    // Events-specific system fields (status is system-controlled, not user-editable)
-    'eventid', 'createdtime', 'modifiedby', 'modifiedtime', 'audithistory', 'status'
+    'eventid', 'createdtime', 'modifiedby', 'modifiedtime', 'audithistory',
+    ...(props.moduleKey?.toLowerCase() === 'events' ? ['status'] : [])
   ];
   if (systemFieldKeys.includes(field.key.toLowerCase())) return false;
   

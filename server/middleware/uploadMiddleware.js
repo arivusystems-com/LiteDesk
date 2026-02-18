@@ -49,7 +49,9 @@ const fileFilter = (req, file, cb) => {
     'image/png',
     'image/gif',
     'image/webp',
+    'image/svg+xml',
     'application/pdf',
+    'application/x-pdf',
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.ms-excel',
@@ -73,9 +75,26 @@ const upload = multer({
   }
 });
 
-// Middleware for single file upload
+// Middleware for single file upload (wraps errors to return JSON instead of HTML)
 exports.uploadSingle = (fieldName = 'file') => {
-  return upload.single(fieldName);
+  const mw = upload.single(fieldName);
+  return (req, res, next) => {
+    mw(req, res, (err) => {
+      if (!err) return next();
+
+      const message =
+        err.message ||
+        (err.code ? `Upload error (${err.code})` : 'Upload failed');
+
+      const status = (err.name === 'MulterError' || err.message?.includes('not allowed')) ? 400 : 500;
+
+      return res.status(status).json({
+        success: false,
+        message: 'File upload failed.',
+        error: message
+      });
+    });
+  };
 };
 
 // Middleware for multiple file uploads

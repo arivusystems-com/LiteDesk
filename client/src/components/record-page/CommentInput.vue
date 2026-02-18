@@ -82,7 +82,7 @@
           type="file"
           multiple
           class="hidden"
-          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv"
+          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.svg"
           @change="handleFileSelect"
         />
         <button
@@ -816,19 +816,31 @@ const triggerFileSelect = () => {
   fileInputRef.value?.click();
 };
 
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+  'application/pdf', 'application/x-pdf',
+  'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv'
+];
+const ALLOWED_EXTENSIONS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'jpeg', 'jpg', 'png', 'gif', 'webp', 'svg'];
+
+const isFileTypeAllowed = (file) => {
+  if (ALLOWED_MIME_TYPES.includes(file.type)) return true;
+  // Fallback: some browsers (e.g. Safari) report empty string for PDF and other types
+  if ((!file.type || file.type === '') && file.name) {
+    const ext = file.name.toLowerCase().split('.').pop();
+    return ALLOWED_EXTENSIONS.includes(ext);
+  }
+  return false;
+};
+
 const handleFileSelect = (e) => {
   const files = e.target.files ? Array.from(e.target.files) : [];
   const maxSize = 10 * 1024 * 1024; // 10MB
-  const allowedTypes = [
-    'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
-    'application/pdf',
-    'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'text/csv'
-  ];
   for (const file of files) {
     if (file.size > maxSize) continue;
-    if (!allowedTypes.includes(file.type)) continue;
+    if (!isFileTypeAllowed(file)) continue;
     if (selectedFiles.value.some(f => f.name === file.name && f.size === file.size)) continue;
     selectedFiles.value.push(file);
   }

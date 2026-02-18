@@ -3,6 +3,39 @@
  */
 
 /**
+ * Format a field key (camelCase or snake_case) to a human-readable label (Title Case with spaces).
+ * @param {string} key - Field key, e.g. "assignedTo", "start_date"
+ * @returns {string} Human-readable label, e.g. "Assigned To", "Start Date"
+ */
+export function formatKeyToLabel(key) {
+  if (key == null || key === '') return '';
+  return String(key)
+    .replace(/_/g, ' ')
+    .replace(/([a-z\d])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Get display label for a field from its configuration.
+ * Uses field.label when present and not the same as the key (e.g. not raw camelCase);
+ * otherwise formats field.key to a readable label. Use everywhere we show field labels.
+ * @param {{ key?: string, label?: string }|null} field - Field definition with key and optional label
+ * @returns {string} Human-readable label to show in UI
+ */
+export function getFieldDisplayLabel(field) {
+  if (!field) return '';
+  const label = String(field.label || '').trim();
+  const key = String(field.key || '').trim();
+  if (!label) return formatKeyToLabel(key);
+  const keyNorm = key.replace(/\s+/g, '').toLowerCase();
+  const labelNorm = label.replace(/\s+/g, '').toLowerCase();
+  if (keyNorm && labelNorm === keyNorm) return formatKeyToLabel(key);
+  return label;
+}
+
+/**
  * Strip HTML tags and normalize whitespace to get plain text (e.g. for Rich Text in list/kanban).
  * @param {string} html - HTML string
  * @returns {string} Plain text
@@ -86,7 +119,7 @@ export const getKeyFieldValues = (moduleDefinition, record) => {
   return keyFields.map(fieldDef => ({
     fieldDef,
     value: getFieldValue(fieldDef, record),
-    label: fieldDef.label || fieldDef.key
+    label: getFieldDisplayLabel(fieldDef) || fieldDef.key
   }));
 };
 

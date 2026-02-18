@@ -1,5 +1,5 @@
 <template>
-  <div class="task-description-editor rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500">
+  <div class="task-description-editor rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 overflow-hidden outline-1 -outline-offset-1 outline-gray-300/20 dark:outline-white/10 focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-indigo-500 dark:focus-within:outline-indigo-500">
     <!-- Bubble menu (Notion-style: appears on text selection) -->
     <BubbleMenu
       v-if="editor"

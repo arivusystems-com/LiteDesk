@@ -34,7 +34,7 @@
       @input="updateValue($event.target.value)"
       @blur="$emit('blur')"
       @keydown.enter="$event.target.blur()"
-      :placeholder="field.placeholder || `Enter ${field.label || field.key}`"
+      :placeholder="field.placeholder || `Enter ${displayLabel}`"
       :required="isRequired"
       :disabled="isReadOnly"
       :class="[
@@ -54,7 +54,7 @@
       @input="updateValue($event.target.value)"
       @blur="$emit('blur')"
       @keydown.enter.ctrl="$event.target.blur()"
-      :placeholder="field.placeholder || `Enter ${field.label || field.key}`"
+      :placeholder="field.placeholder || `Enter ${displayLabel}`"
       :required="isRequired"
       :disabled="isReadOnly"
       :rows="field.textSettings?.rows || 4"
@@ -104,7 +104,7 @@
       @input="updateValue($event.target.value)"
       @blur="$emit('blur')"
       @keydown.enter="$event.target.blur()"
-      :placeholder="field.placeholder || `Enter ${field.label || field.key}`"
+      :placeholder="field.placeholder || `Enter ${displayLabel}`"
       :required="isRequired"
       :disabled="isReadOnly"
       :min="field.numberSettings?.min"
@@ -121,11 +121,12 @@
       type="date"
       :value="formatDateForInput(value)"
       @input="updateValue($event.target.value)"
+      @click="openDatePicker($event)"
       @blur="$emit('blur')"
       @keydown.enter="$event.target.blur()"
       :required="isRequired"
       :disabled="isReadOnly"
-      class="block w-full mt-2 rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+      class="block w-full mt-2 rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 cursor-pointer"
     />
     
     <!-- Date-Time -->
@@ -136,11 +137,12 @@
       type="datetime-local"
       :value="formatDateTimeForInput(value)"
       @input="updateValue($event.target.value)"
+      @click="openDatePicker($event)"
       @blur="$emit('blur')"
       @keydown.enter="$event.target.blur()"
       :required="isRequired"
       :disabled="isReadOnly"
-      class="block w-full mt-2 rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+      class="block w-full mt-2 rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 cursor-pointer"
     />
     
     <!-- Picklist (using Headless UI Combobox with search input inside dropdown) -->
@@ -162,7 +164,7 @@
           >
             <div class="flex items-center gap-2">
               <span v-if="getSelectedPicklistOptionColor() && value" class="w-3 h-3 rounded-full flex-shrink-0" :style="{ backgroundColor: getSelectedPicklistOptionColor() }"></span>
-              <span :class="['block truncate', !value && 'text-gray-500 dark:text-gray-500']">{{ getSelectedPicklistLabel() || (field.placeholder || `Select ${field.label || field.key}`) }}</span>
+              <span :class="['block truncate', !value && 'text-gray-500 dark:text-gray-500']">{{ getSelectedPicklistLabel() || (field.placeholder || `Select ${displayLabel}`) }}</span>
             </div>
             <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
               <ChevronUpDownIcon class="h-5 w-5 text-gray-400 dark:text-gray-500" aria-hidden="true" />
@@ -248,7 +250,7 @@
                 : ''
             ]"
           >
-            <span :class="['block truncate', !value && 'text-gray-500 dark:text-gray-500']">{{ getSelectedLabel() || (field.placeholder || `Select ${field.label || field.key}`) }}</span>
+            <span :class="['block truncate', !value && 'text-gray-500 dark:text-gray-500']">{{ getSelectedLabel() || (field.placeholder || `Select ${displayLabel}`) }}</span>
             <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
               <ChevronUpDownIcon class="h-5 w-5 text-gray-400 dark:text-gray-500" aria-hidden="true" />
             </span>
@@ -331,7 +333,7 @@
             v-else
             class="text-gray-500 dark:text-gray-500 text-base sm:text-sm/6 px-2"
           >
-            {{ field.placeholder || `Select ${field.label || field.key}...` }}
+            {{ field.placeholder || `Select ${displayLabel}...` }}
           </span>
         </div>
       </div>
@@ -407,7 +409,7 @@
         :for="field.key"
         class="text-sm text-gray-700 dark:text-gray-300"
       >
-        {{ field.label || field.key }}
+        {{ displayLabel }}
       </label>
     </div>
     
@@ -428,8 +430,8 @@
           <ComboboxButton
             @click="handleLookupButtonClick"
             :class="[
-              'block w-full rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500',
-              'relative cursor-default text-left',
+              'flex items-center w-full gap-1 rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500',
+              'cursor-default text-left min-w-0 h-[2.5rem]',
               isReadOnly
                 ? 'opacity-50 cursor-not-allowed'
                 : '',
@@ -438,24 +440,27 @@
                 : ''
             ]"
           >
-            <!-- Show selected user with avatar/initial for assignedTo -->
-            <div v-if="isAssignedToField && value && getSelectedLookupOption()" class="flex items-center gap-2">
-              <Avatar :user="getSelectedLookupOption()" size="sm" />
-              <span class="block truncate">{{ getLookupSelectedLabel() }}</span>
-            </div>
-            <!-- Default placeholder or non-user lookup -->
-            <span v-else :class="['block truncate', !value && 'text-gray-500 dark:text-gray-500']">{{ getLookupSelectedLabel() || `Select ${effectiveLabel}` }}</span>
-            <!-- Modal browse button -->
+            <!-- Label / selected value (flex-1 so it truncates) -->
+            <span class="flex-1 min-w-0 truncate text-left">
+              <!-- Show selected user with avatar/initial for assignedTo -->
+              <span v-if="isAssignedToField && value && getSelectedLookupOption()" class="flex items-center gap-2">
+                <Avatar :user="getSelectedLookupOption()" size="sm" />
+                <span class="block truncate">{{ getLookupSelectedLabel() }}</span>
+              </span>
+              <!-- Default placeholder or non-user lookup -->
+              <span v-else :class="['block truncate', !value && 'text-gray-500 dark:text-gray-500']">{{ getLookupSelectedLabel() || `Select ${effectiveLabel}` }}</span>
+            </span>
+            <!-- Modal browse button (not absolute) -->
             <button
               type="button"
               @click.stop="openLookupModal"
-              class="absolute inset-y-0 right-8 flex items-center justify-center px-2 w-8 text-gray-400 dark:text-gray-500 hover:text-brand-600 dark:hover:text-brand-400 transition-colors z-10"
+              class="flex-shrink-0 flex items-center justify-center p-1.5 rounded text-gray-400 dark:text-gray-500 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
               title="Browse records"
             >
               <MagnifyingGlassIcon class="w-5 h-5" />
             </button>
-            <!-- Dropdown arrow -->
-            <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+            <!-- Dropdown arrow (not absolute) -->
+            <span class="pointer-events-none flex-shrink-0 flex items-center p-1">
               <ChevronUpDownIcon class="h-5 w-5 text-gray-400 dark:text-gray-500" aria-hidden="true" />
             </span>
           </ComboboxButton>
@@ -638,7 +643,7 @@
       >
         <img 
           :src="value" 
-          :alt="field.label || field.key"
+          :alt="displayLabel"
           class="max-w-full h-32 object-contain rounded-lg border border-gray-300 dark:border-gray-600"
         />
         <button
@@ -696,6 +701,7 @@ import DataTable from '@/components/common/DataTable.vue';
 import Avatar from '@/components/common/Avatar.vue';
 import apiClient from '@/utils/apiClient';
 import { validateField } from '@/utils/fieldValidation';
+import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
 import { useAuthStore } from '@/stores/auth';
 
 // Note: Headless UI Listbox is still used for Lookup (Relationship) fields and Radio Button
@@ -761,8 +767,9 @@ const props = defineProps({
 
 const emit = defineEmits(['update:value', 'validation-error', 'blur']);
 
+const displayLabel = computed(() => getFieldDisplayLabel(props.field));
 const effectiveLabel = computed(() => {
-  return props.dependencyState?.label || props.field?.label || props.field?.key || '';
+  return props.dependencyState?.label || displayLabel.value || props.field?.key || '';
 });
 
 const isAuditRoleLookupField = computed(() => {
@@ -1133,11 +1140,11 @@ const handleLookupButtonClick = () => {
   });
 };
 
-// Helper function to normalize picklist option (handle both strings and objects)
+// Helper function to normalize picklist option for display (label first, like field settings)
 const normalizePicklistOption = (option) => {
   if (typeof option === 'string') return option;
   if (typeof option === 'object' && option !== null) {
-    return option.value || option.label || String(option);
+    return option.label || option.value || String(option);
   }
   return String(option);
 };
@@ -1169,6 +1176,17 @@ const formatDateForInput = (dateValue) => {
   if (typeof dateValue === 'string') return dateValue.split('T')[0];
   if (dateValue instanceof Date) return dateValue.toISOString().split('T')[0];
   return '';
+};
+
+const openDatePicker = (event) => {
+  const el = event?.target;
+  if (el && typeof el.showPicker === 'function') {
+    try {
+      el.showPicker();
+    } catch (_) {
+      // showPicker requires user gesture; ignore if it fails
+    }
+  }
 };
 
 const formatDateTimeForInput = (dateValue) => {

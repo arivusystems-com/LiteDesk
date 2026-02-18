@@ -709,10 +709,10 @@ const updateTaskStatus = async (req, res) => {
   try {
     const { status } = req.body;
 
-    if (!['todo', 'in_progress', 'waiting', 'completed', 'cancelled'].includes(status)) {
+    if (!status || typeof status !== 'string' || !status.trim()) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid status value'
+        message: 'Status is required'
       });
     }
 

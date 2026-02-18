@@ -208,7 +208,7 @@
             <span>Show Tenant Fields</span>
           </label>
         </div>
-        <div class="p-2" style="flex: 1 1 0%; min-height: 0; overflow-y: auto; overflow-x: auto; -webkit-overflow-scrolling: touch;">
+        <div class="modules-fields-list p-2" style="flex: 1 1 0%; min-height: 0; overflow-y: auto; overflow-x: auto; -webkit-overflow-scrolling: touch;">
           <!-- People module: Grouped by metadata -->
           <template v-if="isPeopleModule">
             <!-- Core Identity Fields -->
@@ -398,7 +398,9 @@
                   @dragover.prevent="onDragOver(getFieldIndex(fieldKey))"
                   @drop.prevent="onDrop(getFieldIndex(fieldKey))"
                 >
-                  <div :class="[
+                  <div
+                    :data-selected-idx="getFieldIndex(fieldKey) === selectedFieldIdx ? selectedFieldIdx : undefined"
+                    :class="[
                         'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
                         getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
                         dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
@@ -1103,55 +1105,68 @@
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     {{ currentField.dataType === 'Multi-Picklist' ? 'Picklist Options (Multi-Select)' : currentField.dataType === 'Radio Button' ? 'Radio Button Options' : 'Picklist Options' }}
                   </label>
-                  <button v-if="!isSystemField(currentField) && !isTaskLifecycleField(currentField)" @click="showAddOption = true" class="px-3 py-1.5 bg-brand-600 text-white rounded text-xs hover:bg-brand-700">Add Option</button>
+                  <button v-if="!isSystemField(currentField)" @click="showAddOption = true" class="px-3 py-1.5 bg-brand-600 text-white rounded text-xs hover:bg-brand-700">Add Option</button>
                 </div>
-                <div v-if="isTaskLifecycleField(currentField)" class="mb-3 flex items-start justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 dark:border-blue-800 dark:bg-blue-900/20">
-                  <p class="text-xs text-blue-800 dark:text-blue-300">
-                    Task lifecycle values are managed in <strong>Status &amp; Priority</strong>. This tab is read-only for task lifecycle options.
+                <div v-if="isTaskStatusField(currentField)" class="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-900/20">
+                  <p class="text-xs text-amber-800 dark:text-amber-300">
+                    <strong>Note:</strong> The "Completed" status is system-controlled and cannot be modified or removed.
                   </p>
-                  <button
-                    type="button"
-                    class="shrink-0 rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-                    @click="openTaskStatusPriorityLens"
-                  >
-                    Open tab
-                  </button>
                 </div>
                 <div v-if="!currentField.options || currentField.options.length === 0" class="text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-white/5 border border-dashed border-gray-200 dark:border-white/10 rounded-lg p-4 text-center">
-                  {{ isTaskLifecycleField(currentField) ? 'No options defined. Use Status & Priority to manage lifecycle values.' : 'No options defined. Click "Add Option" to add values.' }}
+                  No options defined. Click "Add Option" to add values.
                 </div>
                 <div v-else class="space-y-2">
-                  <div v-for="(option, optIdx) in normalizedOptions" :key="optIdx" class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-white/5 rounded border border-gray-200 dark:border-white/10">
+                  <div v-for="(option, optIdx) in normalizedOptions" :key="(getOptionValue(option) || optIdx)" class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-white/5 rounded border border-gray-200 dark:border-white/10">
+                    <!-- Drag handle or lock (status completed) -->
+                    <div v-if="isOptionSystemLocked(option)" class="text-gray-400 dark:text-gray-500" title="System-locked">🔒</div>
+                    <div v-else class="cursor-grab select-none text-gray-400 dark:text-gray-500" title="Drag to reorder">⋮⋮</div>
                     <!-- Color Picker -->
-                    <div class="flex items-center gap-2">
-                      <input 
-                        v-if="!isSystemField(currentField) && !isTaskLifecycleField(currentField)"
-                        type="color" 
-                        :value="getOptionColor(option)" 
+                    <label class="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                      <span>Color</span>
+                      <input
+                        type="color"
+                        :value="getOptionColor(option)"
                         @input="updateOptionColor(optIdx, $event.target.value)"
-                        class="w-10 h-10 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
-                        title="Pick color"
+                        class="h-7 w-9 cursor-pointer rounded border border-gray-300 bg-white p-0.5 dark:border-gray-600 dark:bg-gray-800"
+                        :aria-label="`Color for ${getOptionDisplayLabel(option)}`"
                       />
-                      <div 
-                        v-else
-                        class="w-10 h-10 rounded border border-gray-300 dark:border-gray-600 flex items-center justify-center"
-                        :style="{ backgroundColor: getOptionColor(option) }"
-                      ></div>
+                    </label>
+                    <!-- Option Value / Inline Edit -->
+                    <div class="flex-1 min-w-0">
+                      <input
+                        v-if="editingOptionIdx === optIdx && !isOptionSystemLocked(option)"
+                        v-model="editOptionValue"
+                        @blur="saveOptionEdit(optIdx)"
+                        @keyup.enter="saveOptionEdit(optIdx)"
+                        @keyup.esc="cancelOptionEdit(optIdx)"
+                        class="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        autofocus
+                      />
+                      <span v-else class="text-sm font-medium text-gray-900 dark:text-white">
+                        {{ getOptionDisplayLabel(option) }}
+                        <span v-if="isOptionSystemLocked(option)" class="ml-2 px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">System-Locked</span>
+                      </span>
                     </div>
-                    <!-- Option Value -->
-                    <span class="flex-1 text-sm text-gray-900 dark:text-white font-medium">{{ getOptionValue(option) }}</span>
                     <!-- Color Preview Badge -->
-                    <div 
-                      class="px-3 py-1 rounded-full text-xs font-medium text-white"
-                      :style="{ backgroundColor: getOptionColor(option) }"
-                    >
-                      {{ getOptionValue(option) }}
+                    <div class="px-3 py-1 rounded-full text-xs font-medium text-white" :style="{ backgroundColor: getOptionColor(option) }">
+                      {{ getOptionDisplayLabel(option) }}
                     </div>
-                    <button v-if="!isSystemField(currentField) && !isTaskLifecycleField(currentField)" @click="removeOption(optIdx)" class="px-2 py-1 text-red-600 dark:text-red-400 text-xs hover:bg-red-50 dark:hover:bg-red-900/20 rounded">Remove</button>
+                    <!-- Edit / Remove -->
+                    <button v-if="!isOptionSystemLocked(option)" @click="editingOptionIdx === optIdx ? saveOptionEdit(optIdx) : startOptionEdit(optIdx)" class="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded" :title="editingOptionIdx === optIdx ? 'Save' : 'Rename'">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                    </button>
+                    <!-- Enabled Toggle (status/priority) - before delete -->
+                    <div v-if="isTaskLifecycleField(currentField) && !isOptionSystemLocked(option)" class="group relative inline-flex w-9 shrink-0 rounded-full p-0.5 transition-colors duration-200 outline-offset-2 outline-indigo-600" :class="(option.enabled !== false ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700')">
+                      <span class="size-4 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200" :class="(option.enabled !== false ? 'translate-x-4' : 'translate-x-0')"></span>
+                      <input type="checkbox" class="absolute inset-0 size-full appearance-none focus:outline-hidden cursor-pointer" :aria-label="`${option.enabled !== false ? 'Disable' : 'Enable'} ${getOptionDisplayLabel(option)}`" :checked="option.enabled !== false" @change="updateOptionEnabled(optIdx, $event.target.checked)" />
+                    </div>
+                    <button v-if="!isOptionSystemLocked(option) && !(isTaskPriorityField(currentField) && currentField.options.length <= 1)" @click="removeOption(optIdx)" class="p-1.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200 rounded" title="Remove">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
                   </div>
                 </div>
                 <!-- Add Option Modal -->
-                <div v-if="showAddOption && !isTaskLifecycleField(currentField)" class="fixed inset-0 z-50 flex items-center justify-center">
+                <div v-if="showAddOption && !isSystemField(currentField)" class="fixed inset-0 z-50 flex items-center justify-center">
                   <div class="absolute inset-0 bg-black/50" @click="showAddOption = false"></div>
                   <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 w-full max-w-md mx-4">
                     <div class="p-4 border-b border-gray-200 dark:border-gray-700">
@@ -2596,242 +2611,49 @@
           </div>
         </div>
 
-        <!-- Status & Priority Tab (Tasks module only) -->
-        <!-- 
-          ARCHITECTURE NOTE: Tasks Settings configure structure only, never work.
-          This tab configures task lifecycle values (status and priority).
-          The 'completed' status is system-locked and cannot be modified.
-          See: docs/architecture/task-settings.md Section 3.3
-        -->
+        <!-- Status & Priority Tab (Tasks module only) - Summary view, edit in Field Configurations -->
         <div class="flex-1 overflow-y-auto" v-else-if="activeTopTab === 'status-priority' && isTasksModule">
           <div class="p-6">
-            <!-- Header -->
             <div class="mb-6">
               <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Status & Priority</h3>
               <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                Configure task lifecycle values (status and priority). Completion is system-managed.
+                Task lifecycle values are configured in Field Configurations. Select the Status or Priority field to edit options.
               </p>
               <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
                 <p class="text-xs text-blue-800 dark:text-blue-400">
-                  <strong>Note:</strong> The "Completed" status is system-controlled and cannot be modified or removed. 
-                  It triggers system behaviors (completion date, Inbox removal, etc.).
+                  <strong>Note:</strong> The "Completed" status is system-controlled and cannot be modified or removed.
                 </p>
               </div>
             </div>
-
-            <!-- Status Lifecycle Values Section -->
-            <div class="mb-8">
-              <div class="flex items-center justify-between mb-4">
-                <div>
-                  <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Status Lifecycle Values</h4>
-                  <p class="text-sm text-gray-500 dark:text-gray-400">
-                    Configure available task status lifecycle values. The "Completed" status is system-locked.
-                  </p>
-                </div>
-                <button
-                  @click="addTaskStatusValue"
-                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Status
-                </button>
-              </div>
-              
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
-                <div v-if="taskStatusPicklist.length === 0" class="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
-                  Loading status lifecycle values...
+                <div class="flex items-center justify-between mb-3">
+                  <h4 class="text-base font-semibold text-gray-900 dark:text-white">Status</h4>
+                  <button @click="openTaskStatusPriorityLens" class="px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg">
+                    Edit in Field Configurations
+                  </button>
                 </div>
-                <div v-else class="space-y-2">
-                  <div
-                    v-for="(status, index) in taskStatusPicklist"
-                    :key="status.value || index"
-                    class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg group"
-                  >
-                    <div 
-                      v-if="status.value !== 'completed'"
-                      class="cursor-grab select-none text-gray-400 dark:text-gray-500" 
-                      title="Drag to reorder"
-                    >⋮⋮</div>
-                    <div 
-                      v-else
-                      class="text-gray-400 dark:text-gray-500" 
-                      title="System-locked"
-                    >🔒</div>
-                    <div class="flex-1 min-w-0">
-                      <input
-                        v-if="status.editing && status.value !== 'completed'"
-                        v-model="status.editValue"
-                        @blur="saveTaskStatusValue(index)"
-                        @keyup.enter="saveTaskStatusValue(index)"
-                        @keyup.esc="cancelTaskStatusEdit(index)"
-                        class="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-brand-500"
-                        autofocus
-                      />
-                      <span v-else class="text-sm font-medium text-gray-900 dark:text-white">
-                        {{ status.label }}
-                        <span v-if="status.value === 'completed'" class="ml-2 px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">System-Locked</span>
-                      </span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <label class="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                        <span>Color</span>
-                        <input
-                          v-model="status.color"
-                          type="color"
-                          class="h-7 w-9 cursor-pointer rounded border border-gray-300 bg-white p-0.5 dark:border-gray-600 dark:bg-gray-800"
-                          :aria-label="`Color for ${status.label}`"
-                        />
-                      </label>
-                      <div 
-                        v-if="status.value !== 'completed'"
-                        class="group relative inline-flex w-9 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-in-out outline-offset-2 outline-indigo-600"
-                        :class="status.enabled ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'"
-                      >
-                        <span class="size-4 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out" :class="status.enabled ? 'translate-x-4' : 'translate-x-0'"></span>
-                        <input 
-                          type="checkbox" 
-                          class="absolute inset-0 size-full appearance-none focus:outline-hidden cursor-pointer" 
-                          :aria-label="`${status.enabled ? 'Disable' : 'Enable'} ${status.label}`"
-                          :checked="status.enabled"
-                          @change="status.enabled = !status.enabled"
-                        />
-                      </div>
-                      <button
-                        v-if="status.value !== 'completed'"
-                        @click="startTaskStatusEdit(index)"
-                        class="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors rounded"
-                        title="Rename"
-                      >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button
-                        v-if="status.value !== 'completed'"
-                        @click="removeTaskStatusValue(index)"
-                        class="p-1.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200 transition-colors rounded"
-                        title="Remove"
-                      >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <div class="text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                  Status lifecycle values control task progression. The "Completed" status is system-controlled and cannot be modified.
+                <div class="flex flex-wrap gap-2">
+                  <span v-for="opt in (getTaskPicklistFieldFromConfig('status')?.options || [])" :key="opt.value || opt" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-white" :style="{ backgroundColor: (opt.color || '#6B7280') }">
+                    {{ opt.label || opt.value || opt }}
+                  </span>
+                  <span v-if="!getTaskPicklistFieldFromConfig('status')?.options?.length" class="text-sm text-gray-500 dark:text-gray-400">No options defined</span>
                 </div>
               </div>
-            </div>
-
-            <!-- Priority Lifecycle Values Section -->
-            <div>
-              <div class="flex items-center justify-between mb-4">
-                <div>
-                  <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Priority Lifecycle Values</h4>
-                  <p class="text-sm text-gray-500 dark:text-gray-400">
-                    Configure available task priority lifecycle values.
-                  </p>
-                </div>
-                <button
-                  @click="addTaskPriorityValue"
-                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Priority
-                </button>
-              </div>
-              
               <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
-                <div v-if="taskPriorityPicklist.length === 0" class="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
-                  Loading priority lifecycle values...
+                <div class="flex items-center justify-between mb-3">
+                  <h4 class="text-base font-semibold text-gray-900 dark:text-white">Priority</h4>
+                  <button @click="openTaskPriorityInFieldConfig" class="px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg">
+                    Edit in Field Configurations
+                  </button>
                 </div>
-                <div v-else class="space-y-2">
-                  <div
-                    v-for="(priority, index) in taskPriorityPicklist"
-                    :key="priority.value || index"
-                    class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg group"
-                  >
-                    <div class="cursor-grab select-none text-gray-400 dark:text-gray-500" title="Drag to reorder">⋮⋮</div>
-                    <div class="flex-1 min-w-0">
-                      <input
-                        v-if="priority.editing"
-                        v-model="priority.editValue"
-                        @blur="saveTaskPriorityValue(index)"
-                        @keyup.enter="saveTaskPriorityValue(index)"
-                        @keyup.esc="cancelTaskPriorityEdit(index)"
-                        class="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-brand-500"
-                        autofocus
-                      />
-                      <span v-else class="text-sm font-medium text-gray-900 dark:text-white">{{ priority.label }}</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <label class="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                        <span>Color</span>
-                        <input
-                          v-model="priority.color"
-                          type="color"
-                          class="h-7 w-9 cursor-pointer rounded border border-gray-300 bg-white p-0.5 dark:border-gray-600 dark:bg-gray-800"
-                          :aria-label="`Color for ${priority.label}`"
-                        />
-                      </label>
-                      <div 
-                        class="group relative inline-flex w-9 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-in-out outline-offset-2 outline-indigo-600"
-                        :class="priority.enabled ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'"
-                      >
-                        <span class="size-4 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out" :class="priority.enabled ? 'translate-x-4' : 'translate-x-0'"></span>
-                        <input 
-                          type="checkbox" 
-                          class="absolute inset-0 size-full appearance-none focus:outline-hidden cursor-pointer" 
-                          :aria-label="`${priority.enabled ? 'Disable' : 'Enable'} ${priority.label}`"
-                          :checked="priority.enabled"
-                          @change="priority.enabled = !priority.enabled"
-                        />
-                      </div>
-                      <button
-                        @click="startTaskPriorityEdit(index)"
-                        class="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors rounded"
-                        title="Rename"
-                      >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button
-                        @click="removeTaskPriorityValue(index)"
-                        class="p-1.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200 transition-colors rounded"
-                        title="Remove"
-                        :disabled="taskPriorityPicklist.length <= 1"
-                        :class="taskPriorityPicklist.length <= 1 ? 'opacity-50 cursor-not-allowed' : ''"
-                      >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <div class="text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                  Priority lifecycle values control task urgency. At least one priority value must remain enabled.
+                <div class="flex flex-wrap gap-2">
+                  <span v-for="opt in (getTaskPicklistFieldFromConfig('priority')?.options || [])" :key="opt.value || opt" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-white" :style="{ backgroundColor: (opt.color || '#6B7280') }">
+                    {{ opt.label || opt.value || opt }}
+                  </span>
+                  <span v-if="!getTaskPicklistFieldFromConfig('priority')?.options?.length" class="text-sm text-gray-500 dark:text-gray-400">No options defined</span>
                 </div>
               </div>
-            </div>
-
-            <!-- Save Button -->
-            <div v-if="taskStatusPriorityDirty" class="mt-8 flex justify-end">
-              <button
-                @click="saveTaskStatusPriority"
-                :disabled="savingTaskStatusPriority"
-                class="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-              >
-                <div v-if="savingTaskStatusPriority" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                <span>{{ savingTaskStatusPriority ? 'Saving...' : 'Save Changes' }}</span>
-              </button>
             </div>
           </div>
         </div>
@@ -5642,6 +5464,8 @@ const displayModules = computed(() => {
   return filtered;
 });
 const optionsBuffer = ref('');
+const editingOptionIdx = ref(-1);
+const editOptionValue = ref('');
 const allowedValuesBuffers = ref({});
 const fieldTypes = [
   'Text',
@@ -6776,6 +6600,7 @@ const TASK_FIELD_CONFIGURATION_ORDER = Object.freeze([
   'startDate',
   'dueDate',
   'assignedTo',
+  'relatedTo',
   'estimatedHours'
 ]);
 
@@ -6799,6 +6624,29 @@ const normalizeTaskFieldConfigurationOrder = (moduleKey, fields = []) => {
   if (String(moduleKey || '').toLowerCase() !== 'tasks') return fields;
   return sortTaskFieldConfiguration(fields);
 };
+
+// Ensure Tasks module field list includes the combined "Related To" core field for Settings > Tasks > Field configurations.
+// If the schema only has relatedToType/relatedToId, show one "Related To" row and hide the legacy keys.
+function ensureTaskRelatedToField(moduleKey, fields = []) {
+  if (String(moduleKey || '').toLowerCase() !== 'tasks') return fields;
+  const keyNorm = (k) => String(k || '').toLowerCase().replace(/-/g, '');
+  let list = fields.filter((f) => {
+    const k = keyNorm(f?.key);
+    return k !== 'relatedtotype' && k !== 'relatedtoid';
+  });
+  if (list.some((f) => keyNorm(f.key) === 'relatedto')) return sortTaskFieldConfiguration(list);
+  const orderIndex = TASK_FIELD_CONFIGURATION_ORDER.indexOf('relatedTo');
+  const insertOrder = orderIndex >= 0 ? orderIndex : list.length;
+  list.push({
+    key: 'relatedTo',
+    label: 'Related To',
+    dataType: 'Lookup',
+    required: false,
+    order: insertOrder,
+    visibility: { list: true, detail: true }
+  });
+  return sortTaskFieldConfiguration(list);
+}
 
 const filteredFields = computed(() => {
   let fields = editFields.value;
@@ -6954,29 +6802,22 @@ if (process.env.NODE_ENV === 'development') {
   
 }
 
-// Computed: Fields available for Quick Create (People module: only core identity fields)
-// Helper: Check if a field is eligible for Quick Create
+// Helper: Check if a field is eligible for Quick Create (People module only; used elsewhere for validation)
 function isFieldEligibleForQuickCreate(fieldKey) {
   try {
     const metadata = getFieldMetadata(fieldKey);
-    
-    // Core identity fields: owner === 'core', intent === 'identity', editable === true
     const isCoreIdentity = (
       metadata.owner === 'core' &&
       metadata.intent === 'identity' &&
       metadata.editable === true
     );
-    
-    // System fields with allowOnCreate: owner === 'system', editable === true, allowOnCreate === true
     const isAllowedSystemField = (
       metadata.owner === 'system' &&
       metadata.editable === true &&
       metadata.allowOnCreate === true
     );
-    
     return isCoreIdentity || isAllowedSystemField;
   } catch (err) {
-    // Field not found in metadata - fail fast
     throw new Error(
       `Field "${fieldKey}" is not eligible for Quick Create. ` +
       `Creation eligibility must be declared in peopleFieldModel.ts. ` +
@@ -6985,169 +6826,60 @@ function isFieldEligibleForQuickCreate(fieldKey) {
   }
 }
 
+// Computed: Fields available for Quick Create — all fields except system fields (for selection in Settings)
+// System fields are excluded so they are not available for selection in the Quick Create section.
 const quickCreateAvailableFields = computed(() => {
-  // For People module, filter to only eligible fields and organize by type
+  // For People module: all fields except system, grouped by owner (core, participation)
   if (isPeopleModule.value) {
-    const eligibleFields = editFields.value.filter(f => {
+    const nonSystemFields = editFields.value.filter(f => {
       if (!f.key) return false;
-      
-      try {
-        // Validate eligibility (fail-fast)
-        return isFieldEligibleForQuickCreate(f.key);
-      } catch (err) {
-        // If metadata not found or field violates rules, exclude it and log error
-        console.error(`Skipping field "${f.key}" for Quick Create:`, err.message);
-        return false;
-      }
+      return !isSystemField(f);
     });
-    
-    // Group fields by owner type: core, participation, system
     const coreFields = [];
     const participationFields = [];
-    const systemFields = [];
-    
-    eligibleFields.forEach(field => {
+    nonSystemFields.forEach(field => {
       try {
         const metadata = getFieldMetadata(field.key);
         if (metadata.owner === 'core') {
           coreFields.push(field);
         } else if (metadata.owner === 'participation') {
           participationFields.push(field);
-        } else if (metadata.owner === 'system') {
-          systemFields.push(field);
         }
       } catch (err) {
-        // If metadata lookup fails, skip field
         console.warn(`Could not determine owner for field "${field.key}"`);
       }
     });
-    
-    // Return in order: core, participation, system
-    return [...coreFields, ...participationFields, ...systemFields];
+    return [...coreFields, ...participationFields];
   }
-  
-  // For Organizations module, enforce strict eligibility rules
-  // PLATFORM-LEVEL CANONICAL DEFAULT: Only core business fields are eligible for Quick Create
-  // Uses organizationFieldModel.ts for eligibility determination
-  // This is intentionally minimal - Organizations are contextual business entities, not primary workflow objects.
-  // Changes require updating: module-settings-doctrine.md, organization-settings.md
+
+  // For Organizations: all fields except system (and optionally tenant fields when hidden)
   if (isOrganizationsModule.value) {
-    const quickCreateFieldKeys = getOrganizationQuickCreateFields();
-    
-    const eligibleFields = editFields.value.filter(f => {
+    return editFields.value.filter(f => {
       if (!f.key) return false;
-      
-      const keyLower = f.key.toLowerCase();
-      
-      // Exclude tenant fields (if tenant fields are hidden)
+      if (isSystemField(f)) return false;
       if (!showTenantFields.value) {
+        const keyLower = f.key.toLowerCase();
         const tenantFieldPatterns = ['subscription.', 'limits.', 'settings.', 'slug', 'isactive', 'enabledmodules'];
         if (tenantFieldPatterns.some(pattern => keyLower.startsWith(pattern) || keyLower === pattern)) {
           return false;
         }
       }
-      
-      // Use organization field model to check eligibility
-      const metadata = getOrganizationFieldMetadata(f.key);
-      if (metadata?.allowOnCreate === true) return true;
-      if (metadata?.owner === 'core' && metadata?.intent === 'identity') return true;
-      return quickCreateFieldKeys.some(k => k.toLowerCase() === keyLower);
+      return true;
     });
-    
-    // Return core business fields only
-    return eligibleFields;
   }
-  
-  // For Tasks module, enforce strict Quick Create eligibility rules
-  // ARCHITECTURE NOTE: Tasks Settings configure structure only, never work.
-  // Quick Create is for fast task capture. Only essential fields appear.
-  // Eligible: title (required, locked), dueDate, priority, assignedTo, relatedTo
-  // Excluded: description, status, app participation fields, system fields, time tracking, subtasks, tags
-  // See: docs/architecture/task-settings.md Section 3.5
-  // Field eligibility is now driven by taskFieldModel.ts
+
+  // For Tasks: all fields except system
   if (isTasksModule.value) {
-    // Get Quick Create eligible fields from task field model
-    const quickCreateFieldKeys = getTaskQuickCreateFields();
-    
-    const eligibleFields = editFields.value.filter(f => {
-      if (!f.key) return false;
-      
-      const keyLower = f.key.toLowerCase();
-      
-      // Use task field model to check eligibility
-      const metadata = getTaskFieldMetadata(f.key);
-      
-      // If field is in metadata and has allowOnCreate: true, it's eligible
-      if (metadata?.allowOnCreate === true) {
-        return true;
-      }
-      
-      // Primary core fields are implicitly allowed
-      if (metadata?.owner === 'core' && metadata?.intent === 'primary') {
-        return true;
-      }
-      
-      // Fallback: check against the Quick Create field keys list
-      return quickCreateFieldKeys.some(k => k.toLowerCase() === keyLower);
-    });
-    
-    // Return eligible fields only (title, dueDate, priority, assignedTo, relatedTo)
-    return eligibleFields;
+    return editFields.value.filter(f => f.key && !isTaskSystemField(f.key));
   }
-  
-  // For Events module, enforce strict Quick Create eligibility rules
-  // ARCHITECTURE NOTE: Events Settings configure structure, constraints, and eligibility only.
-  // Quick Create is for fast event scheduling. Only minimal scheduling-safe fields appear.
-  // Eligible: eventName (required, locked), eventType, startDateTime, endDateTime, location
-  // Excluded: audit roles (auditorId, reviewerId, correctiveOwnerId), geo (geoRequired, geoLocation), 
-  // forms (linkedFormId), recurrence, multi-org routing (orgList, routeSequence), notes, metadata
-  // Rationale: Audit events require complex configuration (roles, forms, geo) and should not be created via Quick Create.
-  // Quick Create is for simple scheduling (Meeting / Appointment, Field Sales Beat), not audit workflows.
-  // See: docs/architecture/event-settings.md Section 7
+
+  // For Events: all fields except system
   if (isEventsModule.value) {
-    // Get Quick Create eligible fields from event field model
-    const quickCreateFieldKeys = getEventQuickCreateFields();
-    
-    const eligibleFields = editFields.value.filter(f => {
-      if (!f.key) return false;
-      
-      const keyLower = f.key.toLowerCase();
-      
-      // Use event field model to check eligibility
-      const metadata = getEventFieldMetadata(f.key);
-      
-      // If field is in metadata and has allowOnCreate: true, it's eligible
-      if (metadata?.allowOnCreate === true) {
-        return true;
-      }
-      
-      // Primary core fields are implicitly allowed
-      if (metadata?.owner === 'core' && metadata?.intent === 'primary') {
-        return true;
-      }
-      
-      // Fallback: check against the Quick Create field keys list
-      return quickCreateFieldKeys.some(k => k.toLowerCase() === keyLower);
-    });
-    
-    // Return eligible fields only (eventName, eventType, startDateTime, endDateTime, location)
-    return eligibleFields;
+    return editFields.value.filter(f => f.key && !isEventSystemField(f.key));
   }
-  
-  // For other modules, organize by system vs regular fields
-  const regularFields = [];
-  const systemFields = [];
-  
-  editFields.value.forEach(field => {
-    if (isSystemField(field)) {
-      systemFields.push(field);
-    } else {
-      regularFields.push(field);
-    }
-  });
-  
-  // Return in order: regular fields first, then system fields
-  return [...regularFields, ...systemFields];
+
+  // For other modules (Deals, Items, etc.): only non-system fields
+  return editFields.value.filter(f => f.key && !isSystemField(f));
 });
 
 // Grouped fields for People module (derived from metadata)
@@ -7270,7 +7002,12 @@ const groupedFields = computed(() => {
         // Tasks module: use task field model for classification
         // ARCHITECTURE NOTE: Tasks Settings configure structure only. See: docs/architecture/task-settings.md Section 3.2
         // Field classification is now driven by taskFieldModel.ts
-        const classification = classifyTaskField(fieldKey);
+        // Explicit: relatedTo is always core (combined type+id field); avoid any edge case classifying it as system
+        // Key may be "relatedTo" or "related-to" (kebab-case from form/API) - normalize for comparison
+        const keyNorm = String(fieldKey || '').trim().toLowerCase().replace(/-/g, '');
+        const classification = keyNorm === 'relatedto'
+          ? 'core'
+          : classifyTaskField(fieldKey);
         
         if (classification === 'core') {
           coreIdentity.push(fieldKey);
@@ -7397,17 +7134,42 @@ const groupedFields = computed(() => {
   return { coreIdentity, participation, system };
 });
 
-// Helper: Get field index by key (case-insensitive)
+// Normalize field key for comparison (handles relatedTo vs related-to etc.)
+function normalizeFieldKey(key) {
+  return String(key || '').trim().toLowerCase().replace(/-/g, '');
+}
+
+// Helper: Get field index by key (case-insensitive, ignores hyphens)
 function getFieldIndex(fieldKey) {
   if (!fieldKey) return -1;
-  return editFields.value.findIndex(f => f.key && f.key.toLowerCase() === fieldKey.toLowerCase());
+  const norm = normalizeFieldKey(fieldKey);
+  return editFields.value.findIndex(f => f.key && normalizeFieldKey(f.key) === norm);
 }
 
 // Helper: Select field by key
 function selectFieldByKey(fieldKey) {
   if (!fieldKey) return;
   
+  const keyLower = String(fieldKey || '').trim().toLowerCase();
+  
+  // For Tasks: clicks on legacy relatedToType/relatedToId should select the core relatedTo instead
+  if (isTasksModule.value && activeTopTab.value === 'fields' && (keyLower === 'relatedtotype' || keyLower === 'relatedtoid')) {
+    editFields.value = ensureTaskRelatedToField(selectedModule.value?.key, editFields.value);
+    fieldKey = 'relatedTo';
+  }
+  
   let idx = getFieldIndex(fieldKey);
+  
+  // For Tasks + relatedTo: only replace editFields when relatedTo is truly missing.
+  // Replacing when it already exists causes re-render/scroll that makes relatedTo appear to jump to System.
+  // Key may be "relatedTo" or "related-to" - use normalized check
+  if (idx < 0 && isTasksModule.value && activeTopTab.value === 'fields' && normalizeFieldKey(fieldKey) === 'relatedto') {
+    const hasRelatedTo = editFields.value.some((f) => normalizeFieldKey(f?.key) === 'relatedto');
+    if (!hasRelatedTo) {
+      editFields.value = ensureTaskRelatedToField(selectedModule.value?.key, editFields.value);
+    }
+    idx = getFieldIndex('relatedTo');
+  }
   
   // For Forms module: If field not found in editFields, check formSettingsMap and add it
   if (idx < 0 && isFormsModule.value && activeTopTab.value === 'fields') {
@@ -7936,6 +7698,14 @@ function loadFieldSettings() {
   if (!currentField.value) return;
   const field = currentField.value;
   
+  // Ensure visibility object exists (fields from server or ensureTaskRelatedToField may omit it)
+  if (!field.visibility || typeof field.visibility !== 'object') {
+    field.visibility = { list: true, detail: true };
+  } else {
+    if (typeof field.visibility.list === 'undefined') field.visibility.list = true;
+    if (typeof field.visibility.detail === 'undefined') field.visibility.detail = true;
+  }
+  
   // For Forms module: Initialize formType defaultValue if not set
   if (isFormsModule.value && field.key === 'formType') {
     // If defaultValue is not set, try to get it from value or set a default
@@ -8027,9 +7797,23 @@ function isTaskLifecycleField(field = currentField.value) {
   return key === 'status' || key === 'priority';
 }
 
+// System-locked: status "completed" cannot be edited or removed
+function isOptionSystemLocked(option) {
+  if (!isTaskStatusField(currentField.value)) return false;
+  const val = typeof option === 'string' ? option : (option?.value || '');
+  return String(val).toLowerCase() === 'completed';
+}
+
 function openTaskStatusPriorityLens() {
-  activeTopTab.value = 'status-priority';
-  showAddOption.value = false;
+  activeTopTab.value = 'fields';
+  const statusIdx = editFields.value.findIndex(f => String(f?.key || '').toLowerCase() === 'status');
+  if (statusIdx >= 0) selectField(statusIdx);
+}
+
+function openTaskPriorityInFieldConfig() {
+  activeTopTab.value = 'fields';
+  const priorityIdx = editFields.value.findIndex(f => String(f?.key || '').toLowerCase() === 'priority');
+  if (priorityIdx >= 0) selectField(priorityIdx);
 }
 
 function getDefaultOptionColor(optionValue, field = currentField.value) {
@@ -8065,6 +7849,12 @@ function getOptionValue(option) {
   return option?.value || '';
 }
 
+// Get option display label (label for status/priority, value for others)
+function getOptionDisplayLabel(option) {
+  if (typeof option === 'string') return option;
+  return option?.label ?? option?.value ?? '';
+}
+
 // Get option color (with default)
 function getOptionColor(option) {
   if (typeof option === 'string') return getDefaultOptionColor(option, currentField.value);
@@ -8073,26 +7863,27 @@ function getOptionColor(option) {
 
 // Update option color
 function updateOptionColor(index, color) {
-  if (isTaskLifecycleField(currentField.value)) return;
-  if (!currentField.value.options || !Array.isArray(currentField.value.options)) return;
-  
+  if (!currentField.value?.options || !Array.isArray(currentField.value.options)) return;
   const option = currentField.value.options[index];
-  
-  // If it's a string, convert to object
   if (typeof option === 'string') {
-    currentField.value.options[index] = { value: option, color: color };
-  } else {
-    // Update existing object
-    if (!currentField.value.options[index]) {
-      currentField.value.options[index] = { value: '', color: color };
-    } else {
-      currentField.value.options[index].color = color;
-    }
+    currentField.value.options[index] = { value: option, label: option, enabled: true, color };
+  } else if (option && typeof option === 'object') {
+    currentField.value.options[index] = { ...option, color };
+  }
+}
+
+// Update option enabled (status/priority lifecycle)
+function updateOptionEnabled(index, enabled) {
+  if (!currentField.value?.options || !Array.isArray(currentField.value.options)) return;
+  const option = currentField.value.options[index];
+  if (typeof option === 'string') {
+    currentField.value.options[index] = { value: option, label: option, enabled, color: getDefaultOptionColor(option, currentField.value) };
+  } else if (option && typeof option === 'object') {
+    currentField.value.options[index] = { ...option, enabled };
   }
 }
 
 function addOption() {
-  if (isTaskLifecycleField(currentField.value)) return;
   if (!newOptionValue.value.trim()) return;
   if (!currentField.value.options) {
     currentField.value.options = [];
@@ -8100,16 +7891,19 @@ function addOption() {
   
   const optionValue = newOptionValue.value.trim();
   const optionColor = newOptionColor.value || getDefaultOptionColor(optionValue, currentField.value);
+  const isLifecycle = isTaskLifecycleField(currentField.value);
+  const slug = optionValue.toLowerCase().replace(/\s+/g, '_');
+  const valueToUse = isLifecycle ? slug : optionValue;
   
-  // Check for duplicates (compare values, not colors)
   const existingValues = currentField.value.options.map(opt => 
-    typeof opt === 'string' ? opt : opt.value
+    typeof opt === 'string' ? opt : (opt.value || '')
   );
   
-  if (!existingValues.includes(optionValue)) {
-    // Add as object with value and color
+  if (!existingValues.includes(valueToUse)) {
     currentField.value.options.push({ 
-      value: optionValue, 
+      value: valueToUse,
+      label: optionValue,
+      enabled: isLifecycle ? true : undefined,
       color: optionColor 
     });
   }
@@ -8121,9 +7915,52 @@ function addOption() {
 
 // Remove picklist option
 function removeOption(index) {
-  if (isTaskLifecycleField(currentField.value)) return;
-  if (currentField.value.options && Array.isArray(currentField.value.options)) {
-    currentField.value.options.splice(index, 1);
+  if (!currentField.value?.options || !Array.isArray(currentField.value.options)) return;
+  const option = currentField.value.options[index];
+  if (isOptionSystemLocked(option)) return;
+  if (isTaskPriorityField(currentField.value) && currentField.value.options.length <= 1) return;
+  currentField.value.options.splice(index, 1);
+  if (editingOptionIdx.value === index) {
+    editingOptionIdx.value = -1;
+    editOptionValue.value = '';
+  } else if (editingOptionIdx.value > index) {
+    editingOptionIdx.value--;
+  }
+}
+
+// Inline edit for picklist options (status/priority lifecycle fields)
+function startOptionEdit(index) {
+  if (isOptionSystemLocked(currentField.value.options[index])) return;
+  const opt = currentField.value.options[index];
+  const label = typeof opt === 'object' && opt?.label ? opt.label : (typeof opt === 'string' ? opt : opt?.value || '');
+  editingOptionIdx.value = index;
+  editOptionValue.value = String(label || '');
+}
+
+function saveOptionEdit(index) {
+  if (editingOptionIdx.value !== index) return;
+  const opt = currentField.value.options[index];
+  const newLabel = editOptionValue.value.trim();
+  if (!newLabel) {
+    cancelOptionEdit(index);
+    return;
+  }
+  if (typeof opt === 'string') {
+    currentField.value.options[index] = { value: newLabel.toLowerCase().replace(/\s+/g, '_'), label: newLabel, enabled: true, color: getDefaultOptionColor(newLabel, currentField.value) };
+  } else if (opt && typeof opt === 'object') {
+    const newValue = (opt.value || '').toString().startsWith('status_') || (opt.value || '').toString().startsWith('priority_')
+      ? newLabel.toLowerCase().replace(/\s+/g, '_')
+      : (opt.value || opt.label || newLabel);
+    currentField.value.options[index] = { ...opt, value: newValue, label: newLabel };
+  }
+  editingOptionIdx.value = -1;
+  editOptionValue.value = '';
+}
+
+function cancelOptionEdit(index) {
+  if (editingOptionIdx.value === index) {
+    editingOptionIdx.value = -1;
+    editOptionValue.value = '';
   }
 }
 
@@ -8150,6 +7987,7 @@ const fetchModules = async () => {
         let normalizedFields = filterSystemFields(uniqueFieldsByKey(sorted));
         normalizedFields = normalizeFormsFields(normalizedFields, initialMod.key);
         normalizedFields = normalizeTaskFieldConfigurationOrder(initialMod.key, normalizedFields);
+        normalizedFields = ensureTaskRelatedToField(initialMod.key, normalizedFields);
         
         // DEBUG: Log fields for items module
         if (initialMod.key?.toLowerCase() === 'items') {
@@ -8478,7 +8316,8 @@ const fetchModules = async () => {
           });
         }
         
-        const combined = quickMode.value === 'simple' ? Array.from(new Set([...filteredBaseKeys, ...requiredKeys])) : filteredBaseKeys;
+        // Always include required fields in Quick Create selection
+        const combined = Array.from(new Set([...filteredBaseKeys, ...requiredKeys]));
         
         // For People module, ensure we only include eligible fields (core identity + system fields with allowOnCreate)
         let finalCombined = combined;
@@ -8635,6 +8474,7 @@ const fetchModules = async () => {
             let normalizedFields = filterSystemFields(uniqueFieldsByKey(sorted));
             normalizedFields = normalizeFormsFields(normalizedFields, storedMod.key);
             normalizedFields = normalizeTaskFieldConfigurationOrder(storedMod.key, normalizedFields);
+            normalizedFields = ensureTaskRelatedToField(storedMod.key, normalizedFields);
             
             // Initialize filter metadata for People module fields based on metadata
             if (storedMod.key?.toLowerCase() === 'people') {
@@ -8717,7 +8557,8 @@ const fetchModules = async () => {
               return field ? field.key : key;
             }).filter(key => key);
             const requiredKeys = editFields.value.filter(f => !!f.required && !!f.key).map(f => f.key);
-            const combined = quickMode.value === 'simple' ? Array.from(new Set([...normalizedBaseKeys, ...requiredKeys])) : normalizedBaseKeys;
+            // Always include required fields in Quick Create selection
+            const combined = Array.from(new Set([...normalizedBaseKeys, ...requiredKeys]));
             quickCreateSelected.value = new Set(combined);
             
             // Initialize field order from saved quickCreate array (preserves order)
@@ -8770,6 +8611,7 @@ const selectModule = (mod, preferFieldKey = null) => {
   let normalizedFields = filterSystemFields(uniqueFieldsByKey(sorted));
   normalizedFields = normalizeFormsFields(normalizedFields, mod.key);
   normalizedFields = normalizeTaskFieldConfigurationOrder(mod.key, normalizedFields);
+  normalizedFields = ensureTaskRelatedToField(mod.key, normalizedFields);
   
   // People module: Validate all fields have metadata
   if (mod.key?.toLowerCase() === 'people') {
@@ -8987,7 +8829,8 @@ const selectModule = (mod, preferFieldKey = null) => {
     return null;
   }).filter(key => key !== null);
   const requiredKeys = editFields.value.filter(f => !!f.required && !!f.key).map(f => f.key);
-  const combined = quickMode.value === 'simple' ? Array.from(new Set([...normalizedBaseKeys, ...requiredKeys])) : normalizedBaseKeys;
+  // Always include required fields in Quick Create selection
+  const combined = Array.from(new Set([...normalizedBaseKeys, ...requiredKeys]));
   quickCreateSelected.value = new Set(combined);
   
   // Initialize field order from saved quickCreate array (preserves order)
@@ -9029,6 +8872,7 @@ watch(activeTopTab, (tab) => {
   if (!pipelineTabEnabled.value) return;
   ensurePipelineSelection();
 });
+
 
 const openCreateModal = () => {
   editingModule.value = null;
@@ -9327,7 +9171,6 @@ const saveModule = async () => {
 const selectField = (idx) => {
   // Check if we were already dirty before selecting the field
   const wasDirtyBefore = isDirty.value;
-  
   selectedFieldIdx.value = idx;
   syncOptionsBuffer();
   loadFieldSettings(); // Load field-specific settings
@@ -9336,6 +9179,15 @@ const selectField = (idx) => {
     router.replace({ query: { ...route.query, module: mod.key, field: editFields.value[selectedFieldIdx.value]?.key || '', mode: activeTopTab.value, subtab: activeSubTab.value } });
     try { if (editFields.value[selectedFieldIdx.value]?.key) localStorage.setItem('litedesk-modfields-field', editFields.value[selectedFieldIdx.value].key); } catch (e) {}
   }
+  
+  // Keep the selected field row visible (prevents scroll jump when right panel focuses an input and scrolls the page)
+  // Defer so we run after any focus/scroll from the right panel config form
+  nextTick(() => {
+    setTimeout(() => {
+      const el = document.querySelector('.modules-fields-list [data-selected-idx]');
+      if (el) el.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+    }, 80);
+  });
   
   // If we weren't dirty before selecting the field, update the snapshot after selection
   // This prevents initialization changes from loadFieldSettings() from marking the form as dirty
@@ -10928,6 +10780,10 @@ async function saveQuickCreate() {
           return exists;
         });
     
+    // Always include required fields in saved Quick Create
+    const requiredKeysSave = editFields.value.filter(f => !!f.required && !!f.key).map(f => f.key);
+    allKeys = Array.from(new Set([...allKeys, ...requiredKeysSave]));
+    
     // For People module, filter to only eligible fields (core identity + system fields with allowOnCreate)
     if (isPeopleModule.value) {
       const coreIdentityFieldKeys = getCoreIdentityFields();
@@ -10993,70 +10849,27 @@ async function saveQuickCreate() {
       });
     }
     
-    // ARCHITECTURE NOTE: Tasks Settings configure structure only, never work.
-    // Ensure title is always selected and first in Quick Create (required, locked position)
-    // See: docs/architecture/task-settings.md Section 3.5
+    // Quick Create: save exactly what the user selected. No hardcoded field lists.
+    // Only enforce primary field first for modules that have one (title / eventName / name).
     if (isTasksModule.value) {
-      // Ensure 'title' is always in the selected keys
-      if (!allKeys.includes('title')) {
-        allKeys.unshift('title');
-      }
-      // Ensure 'title' is always first in the order
-      const titleIdx = allKeys.findIndex(k => k?.toLowerCase() === 'title');
-      if (titleIdx > 0) {
-        const titleKey = allKeys[titleIdx];
-        allKeys.splice(titleIdx, 1);
+      const titleKey = allKeys.find(k => k?.toLowerCase() === 'title');
+      if (titleKey && allKeys[0]?.toLowerCase() !== 'title') {
+        allKeys = allKeys.filter(k => k?.toLowerCase() !== 'title');
         allKeys.unshift(titleKey);
       }
-      // Filter to only eligible fields (title, dueDate, priority, assignedTo, relatedTo)
-      const eligibleFields = ['title', 'duedate', 'priority', 'assignedto', 'relatedto'];
-      allKeys = allKeys.filter(key => {
-        const keyLower = key?.toLowerCase();
-        return eligibleFields.includes(keyLower) || keyLower === 'title'; // Always include title
-      });
-      // Ensure title is still first after filtering
-      if (allKeys[0]?.toLowerCase() !== 'title') {
-        const titleKey = allKeys.find(k => k?.toLowerCase() === 'title');
-        if (titleKey) {
-          allKeys = allKeys.filter(k => k?.toLowerCase() !== 'title');
-          allKeys.unshift(titleKey);
-        } else {
-          allKeys.unshift('title');
-        }
-      }
     }
-    
-    // ARCHITECTURE NOTE: Events Settings configure structure, constraints, and eligibility only.
-    // Ensure eventName is always selected and first in Quick Create (required, locked position).
-    // Quick Create is for simple scheduling, not audit workflows.
-    // See: docs/architecture/event-settings.md Section 7
     if (isEventsModule.value) {
-      // Ensure 'eventName' is always in the selected keys
-      if (!allKeys.some(k => k?.toLowerCase() === 'eventname')) {
-        allKeys.unshift('eventName');
-      }
-      // Ensure 'eventName' is always first in the order
-      const eventNameIdx = allKeys.findIndex(k => k?.toLowerCase() === 'eventname');
-      if (eventNameIdx > 0) {
-        const eventNameKey = allKeys[eventNameIdx];
-        allKeys.splice(eventNameIdx, 1);
+      const eventNameKey = allKeys.find(k => k?.toLowerCase() === 'eventname');
+      if (eventNameKey && allKeys[0]?.toLowerCase() !== 'eventname') {
+        allKeys = allKeys.filter(k => k?.toLowerCase() !== 'eventname');
         allKeys.unshift(eventNameKey);
       }
-      // Filter to only eligible fields (eventName, eventType, startDateTime, endDateTime, location)
-      const eligibleFields = ['eventname', 'eventtype', 'startdatetime', 'enddatetime', 'location'];
-      allKeys = allKeys.filter(key => {
-        const keyLower = key?.toLowerCase();
-        return eligibleFields.includes(keyLower) || keyLower === 'eventname'; // Always include eventName
-      });
-      // Ensure eventName is still first after filtering
-      if (allKeys[0]?.toLowerCase() !== 'eventname') {
-        const eventNameKey = allKeys.find(k => k?.toLowerCase() === 'eventname');
-        if (eventNameKey) {
-          allKeys = allKeys.filter(k => k?.toLowerCase() !== 'eventname');
-          allKeys.unshift(eventNameKey);
-        } else {
-          allKeys.unshift('eventName');
-        }
+    }
+    if (isOrganizationsModule.value) {
+      const nameKey = allKeys.find(k => k?.toLowerCase() === 'name');
+      if (nameKey && allKeys[0]?.toLowerCase() !== 'name') {
+        allKeys = allKeys.filter(k => k?.toLowerCase() !== 'name');
+        allKeys.unshift(nameKey);
       }
     }
     
@@ -11159,130 +10972,10 @@ const statusTypesOriginalSnapshot = ref('');
 const isInitialLoad = ref(true); // Flag to prevent auto-save during initial load
 const lastSaveTimestamp = ref(0); // Track when we last saved to prevent refetching stale data
 
-// Tasks Status & Priority state
-// ARCHITECTURE NOTE: Tasks Settings configure structure only, never work.
-// Status and Priority picklists control task lifecycle options.
-// The 'completed' status is system-locked and cannot be modified.
-// See: docs/architecture/task-settings.md Section 3.3
-const taskStatusPicklist = ref([
-  { value: 'todo', label: 'To Do', enabled: true, editing: false, color: '#6B7280' },
-  { value: 'in_progress', label: 'In Progress', enabled: true, editing: false, color: '#2563EB' },
-  { value: 'waiting', label: 'Waiting', enabled: true, editing: false, color: '#D97706' },
-  { value: 'completed', label: 'Completed', enabled: true, editing: false, color: '#16A34A', systemLocked: true },
-  { value: 'cancelled', label: 'Cancelled', enabled: true, editing: false, color: '#DC2626' }
-]);
-
-const taskPriorityPicklist = ref([
-  { value: 'low', label: 'Low', enabled: true, editing: false, color: '#6B7280' },
-  { value: 'medium', label: 'Medium', enabled: true, editing: false, color: '#2563EB' },
-  { value: 'high', label: 'High', enabled: true, editing: false, color: '#D97706' },
-  { value: 'urgent', label: 'Urgent', enabled: true, editing: false, color: '#DC2626' }
-]);
-
-const savingTaskStatusPriority = ref(false);
-
-function toHumanLabelFromValue(value) {
-  const normalized = String(value || '').trim();
-  if (!normalized) return '';
-  return normalized
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .split(' ')
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
+// Tasks Status & Priority - edited in Field Configurations (status/priority fields)
 function getTaskPicklistFieldFromConfig(fieldKey) {
   const normalizedFieldKey = String(fieldKey || '').toLowerCase();
   return editFields.value.find(field => String(field?.key || '').toLowerCase() === normalizedFieldKey);
-}
-
-function normalizeTaskStatusOption(option) {
-  const value = String(typeof option === 'string' ? option : (option?.value || '')).trim();
-  if (!value) return null;
-
-  return {
-    value,
-    label: String(option?.label || toHumanLabelFromValue(value) || value),
-    enabled: option?.enabled !== undefined ? option.enabled : true,
-    color: option?.color || getDefaultOptionColor(value, { key: 'status' })
-  };
-}
-
-function normalizeTaskPriorityOption(option) {
-  const value = String(typeof option === 'string' ? option : (option?.value || '')).trim();
-  if (!value) return null;
-
-  return {
-    value,
-    label: String(option?.label || toHumanLabelFromValue(value) || value),
-    enabled: option?.enabled !== undefined ? option.enabled : true,
-    color: option?.color || getDefaultOptionColor(value, { key: 'priority' })
-  };
-}
-
-function normalizeTaskStatusLensRows(rows) {
-  return (rows || [])
-    .map(normalizeTaskStatusOption)
-    .filter(Boolean)
-    .map(row => ({
-      ...row,
-      editing: false,
-      systemLocked: row.value === 'completed'
-    }));
-}
-
-function normalizeTaskPriorityLensRows(rows) {
-  return (rows || [])
-    .map(normalizeTaskPriorityOption)
-    .filter(Boolean)
-    .map(row => ({
-      ...row,
-      editing: false
-    }));
-}
-
-function getNormalizedTaskStatusFromFieldConfig() {
-  const statusField = getTaskPicklistFieldFromConfig('status');
-  const configured = normalizeTaskStatusLensRows(Array.isArray(statusField?.options) ? statusField.options : []);
-  if (configured.length > 0) return configured;
-  return normalizeTaskStatusLensRows(taskStatusPicklist.value);
-}
-
-function getNormalizedTaskPriorityFromFieldConfig() {
-  const priorityField = getTaskPicklistFieldFromConfig('priority');
-  const configured = normalizeTaskPriorityLensRows(Array.isArray(priorityField?.options) ? priorityField.options : []);
-  if (configured.length > 0) return configured;
-  return normalizeTaskPriorityLensRows(taskPriorityPicklist.value);
-}
-
-function syncTaskStatusPriorityLensFromFieldConfig() {
-  if (!isTasksModule.value) return;
-  taskStatusPicklist.value = getNormalizedTaskStatusFromFieldConfig();
-  taskPriorityPicklist.value = getNormalizedTaskPriorityFromFieldConfig();
-}
-
-function applyTaskStatusPriorityLensToFieldConfig() {
-  const statusField = getTaskPicklistFieldFromConfig('status');
-  if (statusField) {
-    statusField.options = normalizeTaskStatusLensRows(taskStatusPicklist.value).map(status => ({
-      value: status.value,
-      label: status.label || status.value,
-      enabled: status.enabled !== undefined ? status.enabled : true,
-      color: status.color || getDefaultOptionColor(status.value, statusField)
-    }));
-  }
-
-  const priorityField = getTaskPicklistFieldFromConfig('priority');
-  if (priorityField) {
-    priorityField.options = normalizeTaskPriorityLensRows(taskPriorityPicklist.value).map(priority => ({
-      value: priority.value,
-      label: priority.label || priority.value,
-      enabled: priority.enabled !== undefined ? priority.enabled : true,
-      color: priority.color || getDefaultOptionColor(priority.value, priorityField)
-    }));
-  }
 }
 
 // Items Status & Types state
@@ -11530,136 +11223,6 @@ function initializeEventStatusSnapshot() {
   eventStatusOriginalSnapshot.value = JSON.stringify(snapshotData);
 }
 
-// Computed: Check if task status/priority configuration is dirty
-const taskStatusPriorityDirty = computed(() => {
-  if (!isTasksModule.value) return false;
-
-  const current = JSON.stringify({
-    status: normalizeTaskStatusLensRows(taskStatusPicklist.value).map(s => ({
-      value: s.value,
-      label: s.label || s.value,
-      enabled: s.enabled !== undefined ? s.enabled : true,
-      color: s.color || getDefaultOptionColor(s.value, { key: 'status' })
-    })),
-    priority: normalizeTaskPriorityLensRows(taskPriorityPicklist.value).map(p => ({
-      value: p.value,
-      label: p.label || p.value,
-      enabled: p.enabled !== undefined ? p.enabled : true,
-      color: p.color || getDefaultOptionColor(p.value, { key: 'priority' })
-    }))
-  });
-
-  const fromFieldConfig = JSON.stringify({
-    status: getNormalizedTaskStatusFromFieldConfig().map(s => ({
-      value: s.value,
-      label: s.label || s.value,
-      enabled: s.enabled !== undefined ? s.enabled : true,
-      color: s.color || getDefaultOptionColor(s.value, { key: 'status' })
-    })),
-    priority: getNormalizedTaskPriorityFromFieldConfig().map(p => ({
-      value: p.value,
-      label: p.label || p.value,
-      enabled: p.enabled !== undefined ? p.enabled : true,
-      color: p.color || getDefaultOptionColor(p.value, { key: 'priority' })
-    }))
-  });
-
-  return current !== fromFieldConfig;
-});
-
-// Tasks Status & Priority functions
-function addTaskStatusValue() {
-  const newValue = `status_${Date.now()}`;
-  taskStatusPicklist.value.push({
-    value: newValue,
-    label: 'New Status',
-    enabled: true,
-    color: '#6B7280',
-    editing: true,
-    editValue: 'New Status'
-  });
-}
-
-function startTaskStatusEdit(index) {
-  if (taskStatusPicklist.value[index].value === 'completed') return; // System-locked
-  taskStatusPicklist.value[index].editing = true;
-  taskStatusPicklist.value[index].editValue = taskStatusPicklist.value[index].label;
-}
-
-function saveTaskStatusValue(index) {
-  if (taskStatusPicklist.value[index].value === 'completed') return; // System-locked
-  const status = taskStatusPicklist.value[index];
-  if (status.editValue && status.editValue.trim()) {
-    status.label = status.editValue.trim();
-    if (status.value.startsWith('status_')) {
-      // New status - update value to match label (normalized)
-      status.value = status.label.toLowerCase().replace(/\s+/g, '_');
-    }
-  }
-  status.editing = false;
-  delete status.editValue;
-}
-
-function cancelTaskStatusEdit(index) {
-  const status = taskStatusPicklist.value[index];
-  status.editing = false;
-  delete status.editValue;
-  if (status.value.startsWith('status_')) {
-    // Remove new status if cancelled
-    taskStatusPicklist.value.splice(index, 1);
-  }
-}
-
-function removeTaskStatusValue(index) {
-  if (taskStatusPicklist.value[index].value === 'completed') return; // System-locked
-  taskStatusPicklist.value.splice(index, 1);
-}
-
-function addTaskPriorityValue() {
-  const newValue = `priority_${Date.now()}`;
-  taskPriorityPicklist.value.push({
-    value: newValue,
-    label: 'New Priority',
-    enabled: true,
-    color: '#6B7280',
-    editing: true,
-    editValue: 'New Priority'
-  });
-}
-
-function startTaskPriorityEdit(index) {
-  taskPriorityPicklist.value[index].editing = true;
-  taskPriorityPicklist.value[index].editValue = taskPriorityPicklist.value[index].label;
-}
-
-function saveTaskPriorityValue(index) {
-  const priority = taskPriorityPicklist.value[index];
-  if (priority.editValue && priority.editValue.trim()) {
-    priority.label = priority.editValue.trim();
-    if (priority.value.startsWith('priority_')) {
-      // New priority - update value to match label (normalized)
-      priority.value = priority.label.toLowerCase().replace(/\s+/g, '_');
-    }
-  }
-  priority.editing = false;
-  delete priority.editValue;
-}
-
-function cancelTaskPriorityEdit(index) {
-  const priority = taskPriorityPicklist.value[index];
-  priority.editing = false;
-  delete priority.editValue;
-  if (priority.value.startsWith('priority_')) {
-    // Remove new priority if cancelled
-    taskPriorityPicklist.value.splice(index, 1);
-  }
-}
-
-function removeTaskPriorityValue(index) {
-  if (taskPriorityPicklist.value.length <= 1) return; // Must have at least one
-  taskPriorityPicklist.value.splice(index, 1);
-}
-
 // Items Status & Types functions
 function addItemStatusValue() {
   const newValue = `status_${Date.now()}`;
@@ -11732,24 +11295,6 @@ async function saveItemStatusTypes() {
     alert(err.message || 'Failed to save item status/types. Please try again.');
   } finally {
     savingItemStatusTypes.value = false;
-  }
-}
-
-async function saveTaskStatusPriority() {
-  if (!isTasksModule.value || !selectedModule.value || savingTaskStatusPriority.value) return;
-  
-  savingTaskStatusPriority.value = true;
-  try {
-    // Status & Priority is a lens over Field Configurations (single source of truth).
-    applyTaskStatusPriorityLensToFieldConfig();
-    await saveModule();
-    syncTaskStatusPriorityLensFromFieldConfig();
-    console.log('[Task Status Priority] Saved via Field Configurations');
-  } catch (err) {
-    console.error('Failed to save task status/priority:', err);
-    alert(err.message || 'Failed to save task status/priority. Please try again.');
-  } finally {
-    savingTaskStatusPriority.value = false;
   }
 }
 
@@ -12535,9 +12080,6 @@ watch(() => [selectedModule.value?.key, activeTopTab.value], async ([moduleKey, 
       // This ensures data is refreshed on page reload
       console.log('[Status Types] Fetching status types for organizations module...');
       await fetchStatusTypes();
-    } else if (moduleKey === 'tasks' && tab === 'status-priority') {
-      await nextTick();
-      syncTaskStatusPriorityLensFromFieldConfig();
     } else if (moduleKey === 'events' && tab === 'status') {
       // Initialize event status snapshot when status tab is opened
       // ARCHITECTURE NOTE: Event statuses are system-locked, but we initialize the snapshot for consistency.
@@ -12609,10 +12151,6 @@ watch([organizationTypes, statusPicklists], () => {
   }
 }, { deep: true });
 
-watch(editFields, () => {
-  if (!isTasksModule.value) return;
-  syncTaskStatusPriorityLensFromFieldConfig();
-}, { deep: true });
 
 onMounted(async () => {
   await fetchModules();
@@ -12622,12 +12160,6 @@ onMounted(async () => {
     console.log('[Status Types] onMounted: Fetching status types after module load');
     await nextTick();
     await fetchStatusTypes();
-  }
-  
-  // After modules are loaded, if we're on the tasks status-priority tab, sync lens from fields
-  if (selectedModule.value?.key === 'tasks' && activeTopTab.value === 'status-priority') {
-    await nextTick();
-    syncTaskStatusPriorityLensFromFieldConfig();
   }
   
   // After modules are loaded, if we're on the items status-types tab, initialize snapshot

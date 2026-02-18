@@ -183,6 +183,30 @@ export const TASK_FIELD_METADATA: Record<string, TaskFieldMetadata> = {
     fieldScope: 'CORE',
     editable: false,
   },
+  activityLogs: {
+    owner: 'system',
+    intent: 'system',
+    fieldScope: 'CORE',
+    editable: false,
+  },
+  descriptionVersions: {
+    owner: 'system',
+    intent: 'system',
+    fieldScope: 'CORE',
+    editable: false,
+  },
+  relatedToType: {
+    owner: 'system',
+    intent: 'system',
+    fieldScope: 'CORE',
+    editable: false,
+  },
+  relatedToId: {
+    owner: 'system',
+    intent: 'system',
+    fieldScope: 'CORE',
+    editable: false,
+  },
 
   // ==========================================================================
   // CORE TASK FIELDS (platform-scoped, app-agnostic)
@@ -266,10 +290,10 @@ export const TASK_FIELD_METADATA: Record<string, TaskFieldMetadata> = {
     allowOnCreate: false, // Not essential for Quick Create
   },
   
-  // Relationship field
+  // Relationship field (core – single combined type + record)
   relatedTo: {
     owner: 'core',
-    intent: 'detail',
+    intent: 'scheduling',
     fieldScope: 'CORE',
     editable: true,
     allowOnCreate: true,

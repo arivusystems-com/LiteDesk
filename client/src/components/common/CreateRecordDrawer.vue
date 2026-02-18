@@ -64,10 +64,15 @@
                               </div>
                             </div>
                           </div>
-                          
-                          <!-- Dynamic Form -->
+                          <!-- Loading when fetching Quick Create config from Settings -->
+                          <div v-if="effectiveQuickCreateMode && moduleOverrideLoading && !moduleOverrideFromSettings" class="flex justify-center py-12">
+                            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+                          </div>
+                          <!-- Dynamic Form: moduleOverride from Settings when drawer opens so Quick Create fields match Settings -->
                           <DynamicForm
+                            v-else
                             :moduleKey="moduleKey"
+                            :moduleOverride="moduleOverrideFromSettings"
                             :formData="formData"
                             :errors="errors"
                             :excludeFields="effectiveExcludeFields"
@@ -86,6 +91,25 @@
                               :people="dealPeopleList"
                               :organizations="dealOrgList"
                               :read-only="false"
+                            />
+                          </div>
+                          <!-- Task Related To: only when selected as quick create in settings -->
+                          <div v-if="showTaskRelatedToField" class="pt-6 border-t border-gray-200 dark:border-gray-700">
+                            <TaskRelatedToField
+                              :model-value="normalizedTaskRelatedTo(formData.relatedTo)"
+                              label="Related To"
+                              :required="false"
+                              :error="errors.relatedTo"
+                              @update:model-value="(v) => updateFormData({ ...formData.value, relatedTo: v })"
+                            />
+                          </div>
+                          <!-- Task Subtasks: full width, same as edit drawer (only when selected in Quick Create) -->
+                          <div v-if="showTaskSubtasksField" class="w-full">
+                            <TaskSubtasksField
+                              :model-value="formData.subtasks || []"
+                              label="Subtasks"
+                              :error="errors.subtasks"
+                              @update:model-value="(v) => updateFormData({ ...formData.value, subtasks: v })"
                             />
                           </div>
                         </div>
@@ -124,11 +148,15 @@ import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } fro
 import { XMarkIcon } from '@heroicons/vue/24/outline';
 import DynamicForm from './DynamicForm.vue';
 import DealRelationshipEditor from '@/components/deals/DealRelationshipEditor.vue';
+import TaskRelatedToField from '@/components/tasks/TaskRelatedToField.vue';
+import TaskSubtasksField from '@/components/tasks/TaskSubtasksField.vue';
 import apiClient from '@/utils/apiClient';
+import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
 import { useAuthStore } from '@/stores/auth';
 import { isAuditEventType } from '@/utils/eventUtils';
 import { useTabs } from '@/composables/useTabs';
+import { getTaskSystemFields } from '@/platform/fields/taskFieldModel';
 
 const props = defineProps({
   isOpen: {
@@ -184,30 +212,13 @@ const authStore = useAuthStore();
 const { openTab, activeTab } = useTabs();
 const isEditing = computed(() => !!props.record);
 
-// ARCHITECTURAL INTENT: For Organizations, Tasks, and Items modules, default to Quick Create mode in create flows
-// This ensures CreateRecordDrawer respects Settings → Quick Create configuration
-// Note: OrganizationQuickCreateDrawer is preferred for Organizations, but this provides fallback compatibility
-// For Tasks, this ensures the create drawer shows only fields configured in Settings → Tasks → Quick Create
-// For Items, this ensures the create drawer shows only fields configured in Settings → Items → Quick Create
-// See: docs/architecture/task-settings.md Section 3.5
+// In create mode, use Quick Create when enabled so the drawer shows only fields selected in Settings → Quick Create.
 const effectiveQuickCreateMode = computed(() => {
-  if (props.moduleKey === 'organizations' && !isEditing.value) {
-    // Organizations create mode: always use Quick Create (respects Settings configuration)
-    return true;
-  }
-  if (props.moduleKey === 'tasks' && !isEditing.value) {
-    // Tasks create mode: always use Quick Create (respects Settings → Tasks → Quick Create configuration)
-    // This ensures only eligible fields appear: title, dueDate, priority, assignedTo, relatedTo
-    // See: docs/architecture/task-settings.md Section 3.5
-    return true;
-  }
-  if (props.moduleKey === 'items' && !isEditing.value) {
-    // Items create mode: always use Quick Create (respects Settings → Items → Quick Create configuration)
-    // This ensures only fields configured in Quick Create appear: item_name, item_type, category, selling_price
-    return true;
-  }
-  // Otherwise, use prop value
-  return props.quickCreateMode && !isEditing.value;
+  if (isEditing.value) return false;
+  if (props.quickCreateMode) return true;
+  // Default to quick create mode for these modules so the drawer follows Settings
+  const useQuickCreateByDefault = ['organizations', 'tasks', 'items'];
+  return useQuickCreateByDefault.includes(props.moduleKey?.toLowerCase());
 });
 
 // Module name mapping for titles
@@ -239,14 +250,53 @@ const effectiveExcludeFields = computed(() => {
   if (props.moduleKey === 'deals' && props.useDealRelationshipEditor) {
     return [...base, 'contactId', 'accountId'];
   }
+  if (props.moduleKey === 'tasks') {
+    const taskSystemFields = (getTaskSystemFields() || []).map((k) => String(k).toLowerCase());
+    return [...base, 'relatedTo', 'relatedToType', 'relatedToId', 'subtasks', ...taskSystemFields];
+  }
   return base;
 });
+
+const taskQuickCreateSet = computed(() => {
+  // Prefer module from Settings (drawer open fetch); fallback to form-ready module
+  const mod = moduleOverrideFromSettings.value || moduleDefinition.value;
+  if (props.moduleKey !== 'tasks') return new Set();
+  const qc = mod?.quickCreate || [];
+  return new Set(qc.map((k) => String(k).toLowerCase().trim()).filter(Boolean));
+});
+const showTaskRelatedToField = computed(() => taskQuickCreateSet.value.has('relatedto'));
+const showTaskSubtasksField = computed(() => taskQuickCreateSet.value.has('subtasks'));
+
+// Fetch module (including Quick Create from Settings) when drawer opens
+async function fetchModuleForDrawer() {
+  if (!props.moduleKey) return;
+  moduleOverrideLoading.value = true;
+  moduleOverrideFromSettings.value = null;
+  try {
+    const data = await apiClient.get('/modules');
+    if (!data?.data || !Array.isArray(data.data)) return;
+    const keyLower = (props.moduleKey || '').toLowerCase().trim();
+    const mod = data.data.find((m) => (m.key || '').toLowerCase().trim() === keyLower);
+    if (mod) {
+      if (!mod.quickCreate) mod.quickCreate = [];
+      if (!mod.quickCreateLayout) mod.quickCreateLayout = { version: 1, rows: [] };
+      moduleOverrideFromSettings.value = mod;
+    }
+  } catch (e) {
+    console.warn('[CreateRecordDrawer] Failed to fetch module for quick create:', e);
+  } finally {
+    moduleOverrideLoading.value = false;
+  }
+}
 
 const formData = ref({ ...props.initialData });
 const errors = ref({});
 const saving = ref(false);
 const moduleDefinition = ref(null);
 const initialSnapshot = ref({});
+// Module definition fetched when drawer opens so Quick Create fields come from Settings
+const moduleOverrideFromSettings = ref(null);
+const moduleOverrideLoading = ref(false);
 
 // Deal relationship editor state (when moduleKey=deals)
 const relationshipEditorRef = ref(null);
@@ -319,6 +369,12 @@ const updateFormData = (data) => {
   formData.value = { ...data };
 };
 
+function normalizedTaskRelatedTo(val) {
+  if (!val || typeof val !== 'object') return { type: 'none', id: null };
+  const id = val.id != null && typeof val.id === 'object' && val.id._id != null ? val.id._id : (val.id ?? null);
+  return { type: val.type || 'none', id };
+}
+
 const initializeForm = (module) => {
   if (!module) return;
   
@@ -375,6 +431,12 @@ const initializeForm = (module) => {
       formData.value = initialForm;
     }
   }
+  if (props.moduleKey === 'tasks') {
+    formData.value.relatedTo = normalizedTaskRelatedTo(formData.value?.relatedTo);
+    if (!Array.isArray(formData.value.subtasks)) {
+      formData.value.subtasks = [];
+    }
+  }
 
 };
 
@@ -401,6 +463,15 @@ watch(() => props.record, () => {
     };
   }
 }, { deep: true });
+
+// When drawer opens: fetch module so Quick Create fields come from Settings
+watch(() => [props.isOpen, props.moduleKey], ([open, key]) => {
+  if (open && key) {
+    fetchModuleForDrawer();
+  } else {
+    moduleOverrideFromSettings.value = null;
+  }
+}, { immediate: true });
 
 // Fetch people and organizations when opening deal form
 watch(() => [props.isOpen, props.moduleKey], async ([open, key]) => {
@@ -470,17 +541,16 @@ const handleSubmit = async () => {
   try {
     // Client-side validation (like ContactFormModal)
     if (moduleDefinition.value?.fields) {
-      // System fields that are auto-set by backend
-      // Note: 'status' is system-controlled for events (not user-editable)
+      // System fields that are auto-set by backend (status only for Events; Tasks status can be required)
       const systemFieldKeys = [
-        'organizationid', 
-        'createdby', 
-        'createdat', 
-        'updatedat', 
-        '_id', 
-        '__v', 
+        'organizationid',
+        'createdby',
+        'createdat',
+        'updatedat',
+        '_id',
+        '__v',
         'activitylogs',
-        'status' // System-controlled for events
+        ...(props.moduleKey === 'events' ? ['status'] : [])
       ];
       
       const allFields = moduleDefinition.value.fields || [];
@@ -503,7 +573,7 @@ const handleSubmit = async () => {
                        (Array.isArray(value) && value.length === 0);
         
         if (isEmpty) {
-          errors.value[field.key] = `${field.label || field.key} is required`;
+          errors.value[field.key] = `${getFieldDisplayLabel(field) || field.key} is required`;
         }
       }
       
@@ -763,12 +833,17 @@ const handleSubmit = async () => {
       delete submitData.legacyOrganizationId;
     }
     
-    // For tasks, ensure default status if not provided
+    // For tasks, ensure default status, normalized relatedTo, and strip system fields
     if (props.moduleKey === 'tasks') {
-      // Default to 'todo' if no status provided
-      if (!submitData.status) {
-        submitData.status = 'todo';
-      }
+      const taskSystemKeys = new Set((getTaskSystemFields() || []).map((k) => String(k).toLowerCase()));
+      Object.keys(submitData).forEach((key) => {
+        if (taskSystemKeys.has(key.toLowerCase())) delete submitData[key];
+      });
+      if (!submitData.status) submitData.status = 'todo';
+      const rt = normalizedTaskRelatedTo(formData.value?.relatedTo);
+      submitData.relatedTo = rt.type === 'none' ? { type: 'none', id: null } : { type: rt.type, id: rt.id || null };
+      delete submitData.relatedToType;
+      delete submitData.relatedToId;
     }
     
     // For events using Scheduling API, inject required fields

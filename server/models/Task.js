@@ -52,16 +52,14 @@ const TaskSchema = new Schema({
     ref: 'User'
   },
 
-  // Status & Priority
+  // Status & Priority (values from module field config, not hardcoded enum)
   status: {
     type: String,
-    enum: ['todo', 'in_progress', 'waiting', 'completed', 'cancelled'],
     default: 'todo',
     index: true
   },
   priority: {
     type: String,
-    enum: ['low', 'medium', 'high', 'urgent'],
     default: 'medium',
     index: true
   },

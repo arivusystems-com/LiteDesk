@@ -1745,6 +1745,11 @@ const handleRowClick = (row) => {
 };
 
 const handleEdit = (row) => {
+  // For tasks, always emit 'edit' so parent can open the edit drawer
+  if (props.moduleKey === 'tasks') {
+    emit('edit', row);
+    return;
+  }
   const editAction = listDefinition.value?.rowActions?.find(a => a.type === 'edit');
   if (editAction?.route) {
     const route = editAction.route.replace(':id', row._id);

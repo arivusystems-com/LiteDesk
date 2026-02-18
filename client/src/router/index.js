@@ -529,12 +529,44 @@ router.beforeEach((to, from, next) => {
   // Check authentication
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     console.log('Blocked: Authentication required')
+    // Preserve intended path so after rehydration (or when user logs in) we can redirect there.
+    // Important for new-tab flows (e.g. Settings opened in new tab before auth is ready).
+    if (typeof window !== 'undefined' && to.path) {
+      try {
+        sessionStorage.setItem('litedesk_redirect_after_login', to.fullPath || to.path)
+      } catch (_) {}
+    }
     next({ name: 'landing' })
     return
   }
-  
+
+  // Honoured when opening e.g. Settings in a new tab: open platform/home?redirect=/settings
+  // so the server always serves the SPA; then we redirect to /settings (works after clear cache).
+  const redirectPath = to.query && typeof to.query.redirect === 'string' ? to.query.redirect : null
+  if (authStore.isAuthenticated && redirectPath && redirectPath.startsWith('/') && !redirectPath.startsWith('//')) {
+    console.log('Redirecting: query.redirect to', redirectPath)
+    next({ path: redirectPath, query: {} })
+    return
+  }
+
   // Redirect authenticated users from landing page
   if (to.name === 'landing' && authStore.isAuthenticated) {
+    // Prefer saved redirect (e.g. /settings from new tab) over platform home
+    let redirect = null
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = sessionStorage.getItem('litedesk_redirect_after_login')
+        if (saved && saved.startsWith('/') && !saved.startsWith('//')) {
+          sessionStorage.removeItem('litedesk_redirect_after_login')
+          redirect = saved
+        }
+      } catch (_) {}
+    }
+    if (redirect) {
+      console.log('Redirecting: Landing with saved redirect to', redirect)
+      next(redirect)
+      return
+    }
     // If the browser URL is /settings (e.g. new tab opened to settings but initial load hit landing), go to settings instead of home
     const pathname = typeof window !== 'undefined' ? window.location.pathname : ''
     if (pathname.startsWith('/settings')) {

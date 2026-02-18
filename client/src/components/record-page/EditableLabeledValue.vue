@@ -101,9 +101,10 @@
           v-else-if="type === 'date'"
           ref="inputRef"
           v-model="localValue"
+          @click="openDatePicker"
           @blur="handleBlur"
           @keydown.esc="handleCancel"
-          class="w-full h-8 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          class="w-full h-8 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer"
           type="date"
         />
       </div>
@@ -229,9 +230,10 @@
           v-else-if="type === 'date'"
           ref="inputRef"
           v-model="localValue"
+          @click="openDatePicker"
           @blur="handleBlur"
           @keydown.esc="handleCancel"
-          class="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          class="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer"
           type="date"
         />
       </div>
@@ -463,6 +465,17 @@ const getUserDisplayName = (user) => {
   return name || user.username || user.email || user._id || 'Unknown';
 };
 
+const openDatePicker = (event) => {
+  const el = event?.target;
+  if (el && typeof el.showPicker === 'function') {
+    try {
+      el.showPicker();
+    } catch (_) {
+      // showPicker requires user gesture; ignore if it fails
+    }
+  }
+};
+
 const handleClick = () => {
   if (props.canEdit) {
     isEditing.value = true;
@@ -471,6 +484,10 @@ const handleClick = () => {
         inputRef.value.focus();
         if (props.type === 'text' || props.type === 'number') {
           inputRef.value.select();
+        } else if (props.type === 'date' && typeof inputRef.value.showPicker === 'function') {
+          try {
+            inputRef.value.showPicker();
+          } catch (_) {}
         }
       }
     });
