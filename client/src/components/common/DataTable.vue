@@ -417,7 +417,7 @@
                   {{ column.format(getCellValue(row, column.key), row) }}
                 </span>
                 <span v-else class="block truncate">
-                  {{ getCellValue(row, column.key) }}
+                  {{ formatRawValueForDisplay(getCellValue(row, column.key), column) }}
                 </span>
               </slot>
             </td>
@@ -506,6 +506,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { InformationCircleIcon, XMarkIcon, TrashIcon, PencilSquareIcon, ArrowDownTrayIcon, ArchiveBoxIcon, ChevronLeftIcon, ChevronRightIcon, ArrowsUpDownIcon, EyeIcon, MagnifyingGlassIcon, Cog6ToothIcon, BookmarkIcon, ArchiveBoxXMarkIcon, ChevronUpIcon, ChevronDownIcon } from '@heroicons/vue/24/outline';
 import BadgeCell from '@/components/common/table/BadgeCell.vue';
+import { formatRawValueForDisplay } from '@/utils/fieldDisplay';
 
 const props = defineProps({
   // Data
@@ -944,9 +945,9 @@ const getCellValue = (row, key) => {
   if (key.includes('.')) {
     return key.split('.').reduce((obj, k) => obj?.[k], row);
   }
-  
+
   const value = row[key];
-  
+
   // Handle populated relationship fields (lookup fields)
   // If value is an object with _id and a display field (name, title, etc.), extract the display value
   if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
@@ -955,10 +956,16 @@ const getCellValue = (row, key) => {
     if (value.title) return value.title;
     if (value.firstName && value.lastName) return `${value.firstName} ${value.lastName}`;
     if (value.first_name && value.last_name) return `${value.first_name} ${value.last_name}`;
-    // If it's just an object with _id, return the object itself (will be handled by custom cell templates)
-    if (value._id) return value;
+    if (value.label) return value.label;
+    if (value.email) return value.email;
+    if (value.username) return value.username;
+    // Object with only _id - never show raw ObjectId
+    if (value._id) return '—';
   }
-  
+
+  // Never show raw ObjectId strings
+  if (typeof value === 'string' && /^[0-9a-fA-F]{24}$/.test(value.trim())) return '—';
+
   return row[key];
 };
 
@@ -990,9 +997,14 @@ const getMultiPicklistArray = (row, key) => {
 // Helper to extract value from picklist item (handles both string and object formats)
 const getPicklistItemValue = (item) => {
   if (!item) return '';
-  if (typeof item === 'string') return item;
+  if (typeof item === 'string') {
+    if (/^[0-9a-fA-F]{24}$/.test(item.trim())) return '—';
+    return item;
+  }
   if (typeof item === 'object' && item !== null) {
-    return item.value || item.label || String(item);
+    const display = item.value || item.label || item.name || item.title;
+    if (display) return display;
+    return '—';
   }
   return String(item);
 };

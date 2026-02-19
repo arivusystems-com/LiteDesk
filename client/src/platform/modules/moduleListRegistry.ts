@@ -15,6 +15,7 @@
 
 import { useAuthStore } from '@/stores/auth';
 import { getItemFieldMetadata } from '@/platform/fields/itemFieldModel';
+import { dateFilterValueToParams } from '@/utils/dateFilterOptions';
 
 export interface DefaultColumnConfig {
   /** Column keys in display order */
@@ -362,6 +363,7 @@ export function getSystemViews(
 
 /**
  * Normalize Tasks filters
+ * Expands date filter objects (dueDate / due_date) into API params: dueDatePreset, dueDateOp, dueDateFrom, dueDateTo, dueDateDays
  */
 function normalizeTasksFilters(filters: Record<string, any>, currentUserId?: string): Record<string, any> {
   const normalized = { ...filters };
@@ -370,6 +372,19 @@ function normalizeTasksFilters(filters: Record<string, any>, currentUserId?: str
   if ('assignedTo' in normalized) {
     if (normalized.assignedTo === 'me' && currentUserId) {
       normalized.assignedTo = currentUserId;
+    }
+  }
+
+  // Expand date filter object for dueDate / due_date into API params (or remove when no filter)
+  const dateFieldKeys = ['dueDate', 'due_date'] as const;
+  for (const fieldKey of dateFieldKeys) {
+    const value = normalized[fieldKey];
+    if (value == null || value === '') {
+      delete normalized[fieldKey];
+    } else if (typeof value === 'object' && !Array.isArray(value) && (value.preset != null || value.op != null)) {
+      const params = dateFilterValueToParams(fieldKey, value);
+      delete normalized[fieldKey];
+      Object.assign(normalized, params);
     }
   }
 

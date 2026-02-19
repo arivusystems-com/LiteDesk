@@ -10,14 +10,18 @@
           @scroll="handleScroll"
         >
           <div
-            v-if="isResizing && resizeGuide !== null"
-            class="pointer-events-none absolute inset-y-0 z-[999] w-0.5 bg-indigo-500"
-            :style="{ left: `${resizeGuide}px` }"
+            v-if="isResizing && resizeGuideX !== null && resizeGuideBounds"
+            class="pointer-events-none fixed z-[999] w-0.5 bg-indigo-500"
+            :style="{
+              left: `${resizeGuideX}px`,
+              top: `${resizeGuideBounds.top}px`,
+              height: `${resizeGuideBounds.bottom - resizeGuideBounds.top}px`
+            }"
           />
           <table
             ref="tableRef"
             class="divide-y divide-gray-200 text-sm text-gray-900 dark:divide-white/15 dark:text-gray-200"
-            :style="{ width: '100%', minWidth: tableMinWidth, display: 'table', tableLayout: 'fixed' }"
+            :style="{ width: tableMinWidth, minWidth: tableMinWidth, display: 'table', tableLayout: 'fixed' }"
           >
             <colgroup>
               <col v-if="selectable" style="width: 48px" />
@@ -165,10 +169,12 @@
                   <span v-else class="block px-5 py-3.5 truncate">{{ columnLabel(column) }}</span>
                   <span
                     v-if="isColumnResizable(column)"
-                    class="absolute top-0 right-0 z-20 h-full w-3 translate-x-1/2 cursor-col-resize select-none bg-transparent"
+                    class="group/resize absolute top-0 right-0 z-20 h-full w-3 cursor-col-resize select-none flex items-center justify-center"
                     @mousedown.prevent.stop="startColumnResize(column, $event)"
                     aria-hidden="true"
-                  />
+                  >
+                    <!-- <span class="pointer-events-none absolute right-[-2px] top-0 bottom-0 w-1.5 bg-indigo-500 opacity-0 transition-opacity group-hover/resize:opacity-100" /> -->
+                  </span>
                 </th>
               </tr>
             </thead>
@@ -367,9 +373,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import { ArrowsUpDownIcon, ChevronDownIcon, ChevronUpIcon, CheckIcon, XMarkIcon } from '@heroicons/vue/20/solid'
+import { formatRawValueForDisplay } from '@/utils/fieldDisplay'
 
 type ColumnObjectDef = {
   key?: string
@@ -380,17 +387,13 @@ type ColumnObjectDef = {
   sortKey?: string
   resizable?: boolean
   locked?: boolean
+  dataType?: string
 }
 type ColumnDef = ColumnObjectDef | string
 type RowData = Record<string, unknown>
 
 const DEFAULT_STICKY_OFFSET = 72
 const DEFAULT_COLUMN_WIDTH = 200
-const DEFAULT_MIN_COLUMN_WIDTH = 120
-// First (frozen/title) column constraints
-const TITLE_COLUMN_MIN = 260
-const TITLE_COLUMN_DEFAULT = 360
-const TITLE_COLUMN_MAX = 480
 type SortOrder = 'asc' | 'desc'
 type SortState = SortOrder | null
 
@@ -468,8 +471,9 @@ const storageKey = computed(() =>
 
 const columnWidths = ref<ColumnWidths>({})
 const isResizing = ref(false)
-const activeResize = ref<{ key: string; startX: number; startWidth: number; column: ColumnDef } | null>(null)
-const resizeGuide = ref<number | null>(null)
+const activeResize = ref<{ key: string; startWidth: number; startEdgeX: number; column: ColumnDef } | null>(null)
+const resizeGuideX = ref<number | null>(null)
+const resizeGuideBounds = ref<{ top: number; bottom: number } | null>(null)
 let saveTimeout: ReturnType<typeof setTimeout> | undefined
 const tableRef = ref<HTMLTableElement | null>(null)
 const scrollContainerRef = ref<HTMLDivElement | null>(null)
@@ -497,7 +501,10 @@ const providedRows = computed<RowData[]>(() => {
 
 const displayColumns = computed(() => {
   const columns = Array.isArray(props.columns) ? props.columns : []
-  return columns.length > 0 ? columns : sampleColumns
+  // When tableId exists, never use sampleColumns - wait for real columns so we don't
+  // overwrite persisted widths with placeholder keys (id, name, email, status)
+  if (columns.length > 0) return columns
+  return props.tableId ? [] : sampleColumns
 })
 
 const displayRows = computed(() => providedRows.value)
@@ -507,19 +514,13 @@ const tableMinWidth = computed(() => {
     return '100%'
   }
 
-  // Start with checkbox column width if selectable
+  // Table width = exact sum of column widths so only the resized column changes
   let total = props.selectable ? 48 : 0
-  
-  // Add all column widths (use actual width if set, otherwise use default width)
-  // This ensures the table is wide enough to scroll
   displayColumns.value.forEach(column => {
-    const width = getColumnWidth(column)
-    total += width
+    total += getColumnWidth(column)
   })
 
-  // Ensure minimum width for scrolling to work
-  // Use a larger minimum to guarantee scrolling works
-  return `${Math.max(total, 1500)}px`
+  return `${total}px`
 })
 
 const columnKey = (column: ColumnDef) => {
@@ -547,80 +548,64 @@ const isColumnSortable = (column: ColumnDef) => {
 
 // Title/frozen column: first in list or explicitly locked (by key so it works with merged column objects)
 const isFirstColumn = (column: ColumnDef) => {
-  if (displayColumns.value.length === 0) return false
-  const first = displayColumns.value[0]
+  const cols = displayColumns.value
+  if (cols.length === 0) return false
+  const first = cols[0]
+  if (!first) return false
   if (typeof column === 'object' && column && (column as ColumnObjectDef).locked) return true
   return columnKey(first) === columnKey(column)
 }
 
-const getColumnMinWidth = (column: ColumnDef) => {
-  if (isFirstColumn(column)) return TITLE_COLUMN_MIN
-  const configuredMin =
-    typeof column === 'string'
-      ? undefined
-      : parseWidthValue(column.minWidth)
+const FIRST_COLUMN_MIN = 380
+const FIRST_COLUMN_MAX = 600
+const DEFAULT_COLUMN_MIN = 200
 
-  const baseline = configuredMin ?? DEFAULT_MIN_COLUMN_WIDTH
-  return Math.max(baseline, DEFAULT_MIN_COLUMN_WIDTH)
+const getColumnMinWidth = (column: ColumnDef) => {
+  return isFirstColumn(column) ? FIRST_COLUMN_MIN : DEFAULT_COLUMN_MIN
 }
 
 const getColumnMaxWidth = (column: ColumnDef) => {
-  if (isFirstColumn(column)) return TITLE_COLUMN_MAX
-  return undefined
+  return isFirstColumn(column) ? FIRST_COLUMN_MAX : undefined
 }
 
 const getColumnDefaultWidth = (column: ColumnDef) => {
-  if (isFirstColumn(column)) return TITLE_COLUMN_DEFAULT
   const configuredWidth =
     typeof column === 'string'
       ? undefined
       : parseWidthValue(column.width)
-
-  const minWidth = getColumnMinWidth(column)
-  const baseWidth = configuredWidth ?? DEFAULT_COLUMN_WIDTH
-  return Math.max(baseWidth, minWidth)
+  const base = configuredWidth ?? DEFAULT_COLUMN_WIDTH
+  return Math.max(base, getColumnMinWidth(column))
 }
 
 const getColumnWidth = (column: ColumnDef) => {
   const key = columnKey(column)
   const stored = columnWidths.value[key]
-  const minWidth = getColumnMinWidth(column)
-  const maxWidth = getColumnMaxWidth(column)
-
-  let width: number
-  if (stored && stored > 0) {
-    width = Math.max(stored, minWidth)
-  } else {
-    width = Math.max(getColumnDefaultWidth(column), minWidth)
-  }
-  if (maxWidth != null) {
-    width = Math.min(width, maxWidth)
-  }
-  return width
+  let width = stored && stored > 0 ? stored : getColumnDefaultWidth(column)
+  width = Math.max(width, getColumnMinWidth(column))
+  const maxW = getColumnMaxWidth(column)
+  return maxW !== undefined ? Math.min(width, maxW) : width
 }
 
 const columnColStyle = (column: ColumnDef) => {
   const width = getColumnWidth(column)
   const minWidth = getColumnMinWidth(column)
-  const maxWidth = getColumnMaxWidth(column)
-  if (!width) return { minWidth: `${minWidth}px` }
+  const maxW = getColumnMaxWidth(column)
   const style: Record<string, string> = { width: `${width}px`, minWidth: `${minWidth}px` }
-  if (maxWidth != null) style.maxWidth = `${maxWidth}px`
+  if (maxW !== undefined) style.maxWidth = `${maxW}px`
   return style
 }
 
 const columnHeaderStyle = (column: ColumnDef) => {
   const width = getColumnWidth(column)
-  const minWidth = Math.max(width, getColumnMinWidth(column))
-  const maxWidth = getColumnMaxWidth(column)
   const isFirstCol = isFirstColumn(column)
   const checkboxWidth = 48 // Width of checkbox column
 
   const style: Record<string, string> = {
     width: `${width}px`,
-    minWidth: `${minWidth}px`
+    minWidth: `${getColumnMinWidth(column)}px`
   }
-  if (maxWidth != null) style.maxWidth = `${maxWidth}px`
+  const maxW = getColumnMaxWidth(column)
+  if (maxW !== undefined) style.maxWidth = `${maxW}px`
   if (isFirstCol) style.overflow = 'hidden'
 
   // Make first data column sticky horizontally
@@ -650,17 +635,15 @@ const rowHeightClass = computed(() => rowHeightClasses[props.rowHeight] || rowHe
 
 const columnCellStyle = (column: ColumnDef) => {
   const width = getColumnWidth(column)
-  const minWidth = Math.max(width, getColumnMinWidth(column))
-  const maxWidth = getColumnMaxWidth(column)
   const isFirstCol = isFirstColumn(column)
   const checkboxWidth = 48 // Width of checkbox column
 
   const style: Record<string, string> = {
     width: `${width}px`,
-    minWidth: `${minWidth}px`
+    minWidth: `${getColumnMinWidth(column)}px`
   }
-  if (maxWidth != null) style.maxWidth = `${maxWidth}px`
-  // Enforce width: clip overflow so column cannot grow and title truncates
+  const maxW = getColumnMaxWidth(column)
+  if (maxW !== undefined) style.maxWidth = `${maxW}px`
   if (isFirstCol) style.overflow = 'hidden'
 
   // Make first data column sticky horizontally
@@ -687,6 +670,7 @@ const isColumnResizable = (column: ColumnDef) => {
 
 const queueSaveWidths = () => {
   if (!storageKey.value) return
+  if (Object.keys(columnWidths.value).length === 0) return // Don't overwrite stored with empty
   if (saveTimeout) clearTimeout(saveTimeout)
   saveTimeout = setTimeout(() => {
     try {
@@ -711,14 +695,17 @@ const flushColumnWidths = () => {
 }
 
 const ensureColumnWidths = () => {
+  const cols = displayColumns.value
+  if (cols.length === 0) return // Preserve stored widths when columns load async
   const next: ColumnWidths = {}
-  displayColumns.value.forEach((column) => {
+  cols.forEach((column) => {
     const key = columnKey(column)
+    const minW = getColumnMinWidth(column)
+    const maxW = getColumnMaxWidth(column)
     const existing = columnWidths.value[key]
     let width = existing && existing > 0 ? existing : getColumnDefaultWidth(column)
-    width = Math.max(width, getColumnMinWidth(column))
-    const maxW = getColumnMaxWidth(column)
-    if (maxW != null) width = Math.min(width, maxW)
+    width = Math.max(width, minW)
+    if (maxW !== undefined) width = Math.min(width, maxW)
     next[key] = width
   })
   columnWidths.value = next
@@ -733,12 +720,14 @@ const loadStoredWidths = () => {
     const parsed = JSON.parse(raw)
     if (parsed && typeof parsed === 'object') {
       const sanitized: ColumnWidths = {}
-      const firstKey = displayColumns.value[0] ? columnKey(displayColumns.value[0]) : null
       Object.entries(parsed as Record<string, number | string>).forEach(([key, value]) => {
         let width = parseWidthValue(value)
         if (width && width > 0) {
-          if (firstKey && key === firstKey) {
-            width = Math.min(TITLE_COLUMN_MAX, Math.max(TITLE_COLUMN_MIN, width))
+          const column = displayColumns.value.find((c) => columnKey(c) === key)
+          if (column) {
+            width = Math.max(width, getColumnMinWidth(column))
+            const maxW = getColumnMaxWidth(column)
+            if (maxW !== undefined) width = Math.min(width, maxW)
           }
           sanitized[key] = width
         }
@@ -815,9 +804,15 @@ const handleScroll = () => {
   }
 }
 
+const handleBeforeUnload = () => {
+  flushColumnWidths()
+}
+
 onMounted(() => {
   loadStoredWidths()
   ensureColumnWidths()
+  // Flush on page refresh/close so widths persist across sessions
+  window.addEventListener('beforeunload', handleBeforeUnload)
   // Initial check for edge columns and scroll position
   setTimeout(() => {
     updateEdgeColumns()
@@ -927,36 +922,74 @@ const scrollContainerStyles = computed(() => {
   return styles
 })
 
+let scrollBoundsHandler: (() => void) | null = null
+
 const cleanupResizeListeners = () => {
   window.removeEventListener('mousemove', handleColumnResize)
   window.removeEventListener('mouseup', stopColumnResize)
+  if (scrollBoundsHandler) {
+    window.removeEventListener('scroll', scrollBoundsHandler, true)
+    scrollContainerRef.value?.removeEventListener('scroll', scrollBoundsHandler)
+    scrollBoundsHandler = null
+  }
   document.body.style.cursor = ''
   document.body.style.removeProperty('user-select')
-  resizeGuide.value = null
+  resizeGuideX.value = null
+  resizeGuideBounds.value = null
+}
+
+const updateResizeGuideBounds = () => {
+  const container = scrollContainerRef.value
+  if (!container) return
+  const rect = container.getBoundingClientRect()
+  resizeGuideBounds.value = { top: rect.top, bottom: rect.bottom }
+}
+
+/** Get the header cell for a column by key (for guide positioning). */
+const getThForColumn = (key: string): HTMLElement | null => {
+  const table = tableRef.value
+  if (!table) return null
+  const colIndex = displayColumns.value.findIndex((c) => columnKey(c) === key)
+  if (colIndex < 0) return null
+  const thIndex = (props.selectable ? 1 : 0) + colIndex
+  const ths = table.querySelectorAll('thead tr th')
+  return (ths[thIndex] as HTMLElement) ?? null
 }
 
 const handleColumnResize = (event: MouseEvent) => {
+  event.preventDefault()
   const state = activeResize.value
   if (!state) return
 
-  const delta = event.clientX - state.startX
+  const delta = event.clientX - state.startEdgeX
+  // Skip update until user has actually moved (prevents jump on click)
+  if (Math.abs(delta) < 1) {
+    const th = getThForColumn(state.key)
+    if (th) {
+      resizeGuideX.value = th.getBoundingClientRect().right
+      updateResizeGuideBounds()
+    }
+    return
+  }
+
   const minWidth = getColumnMinWidth(state.column)
   const maxWidth = getColumnMaxWidth(state.column)
   let nextWidth = Math.max(minWidth, Math.round(state.startWidth + delta))
-  if (maxWidth != null) nextWidth = Math.min(nextWidth, maxWidth)
+  if (maxWidth !== undefined) nextWidth = Math.min(nextWidth, maxWidth)
 
   columnWidths.value = {
     ...columnWidths.value,
     [state.key]: nextWidth
   }
 
-  const tableRect = tableRef.value?.getBoundingClientRect()
-  if (tableRect) {
-    resizeGuide.value = Math.min(
-      tableRect.width,
-      Math.max(0, event.clientX - tableRect.left)
-    )
-  }
+  // Guide at actual rendered right edge (nextTick = after Vue updates DOM)
+  nextTick(() => {
+    const th = getThForColumn(state.key)
+    if (th) {
+      resizeGuideX.value = th.getBoundingClientRect().right
+      updateResizeGuideBounds()
+    }
+  })
 }
 
 const stopColumnResize = () => {
@@ -973,12 +1006,16 @@ const startColumnResize = (column: ColumnDef, event: MouseEvent) => {
 
   const key = columnKey(column)
   const th = (event.currentTarget as HTMLElement)?.closest('th') as HTMLElement | null
-  const startWidth = th?.getBoundingClientRect().width ?? getColumnWidth(column)
+  if (!th) return
+
+  const rect = th.getBoundingClientRect()
+  const startWidth = getColumnWidth(column)
+  const startEdgeX = rect.right
 
   activeResize.value = {
     key,
-    startX: event.clientX,
     startWidth,
+    startEdgeX,
     column
   }
 
@@ -986,27 +1023,33 @@ const startColumnResize = (column: ColumnDef, event: MouseEvent) => {
   document.body.style.cursor = 'col-resize'
   document.body.style.userSelect = 'none'
 
-  const tableRect = tableRef.value?.getBoundingClientRect()
-  if (tableRect) {
-    resizeGuide.value = Math.min(
-      tableRect.width,
-      Math.max(0, event.clientX - tableRect.left)
-    )
-  }
+  // Initial guide at actual rendered right edge (viewport X for fixed positioning)
+  resizeGuideX.value = th.getBoundingClientRect().right
+  updateResizeGuideBounds()
 
+  scrollBoundsHandler = () => {
+    if (activeResize.value) updateResizeGuideBounds()
+  }
   window.addEventListener('mousemove', handleColumnResize)
   window.addEventListener('mouseup', stopColumnResize)
+  window.addEventListener('scroll', scrollBoundsHandler, true)
+  scrollContainerRef.value?.addEventListener('scroll', scrollBoundsHandler)
 }
 
 onBeforeUnmount(() => {
   stopColumnResize()
   flushColumnWidths()
+  window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener('resize', updateEdgeColumns)
 })
 
 const resolveValue = (row: RowData, column: ColumnDef) => {
   const key = typeof column === 'string' ? column : column.key
-  return key ? row?.[key] ?? '' : ''
+  if (!key) return ''
+  const raw = row?.[key]
+  if (raw === null || raw === undefined || raw === '') return ''
+  const col = typeof column === 'object' ? column : null
+  return formatRawValueForDisplay(raw, col ?? undefined)
 }
 
 const handleRowClick = (row: RowData, event: MouseEvent) => {

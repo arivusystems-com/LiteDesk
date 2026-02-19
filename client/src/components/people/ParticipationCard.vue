@@ -430,10 +430,10 @@ const formatFieldValue = (fieldKey, value) => {
     return '-';
   }
   
-  // Handle arrays
+  // Handle arrays - format each item, never show raw
   if (Array.isArray(value)) {
     if (value.length === 0) return '-';
-    return value.join(', ');
+    return value.map((item) => formatFieldValue(fieldKey, item)).join(', ');
   }
   
   // Handle objects (shouldn't happen for detail fields, but handle gracefully)
@@ -443,20 +443,25 @@ const formatFieldValue = (fieldKey, value) => {
     if (value.firstName || value.lastName) {
       return `${value.firstName || ''} ${value.lastName || ''}`.trim();
     }
-    return JSON.stringify(value);
+    if (value.title) return value.title;
+    if (value.label) return value.label;
+    if (value.email) return value.email;
+    if (value.username) return value.username;
+    // Never show raw JSON or ObjectId
+    return '—';
   }
   
-  // Handle date fields
+  // Handle date fields (explicit list + any ISO date string)
   const dateFields = ['birthday', 'qualification_date'];
-  if (dateFields.includes(fieldKey)) {
+  const isDateField = dateFields.includes(fieldKey) || (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}(T[\d:.]+Z?)?$/.test(value.trim()));
+  if (isDateField) {
     try {
       const date = new Date(value);
       if (isNaN(date.getTime())) return String(value);
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
+      const isDateTime = typeof value === 'string' && value.includes('T');
+      return isDateTime
+        ? date.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     } catch (e) {
       return String(value);
     }
@@ -481,6 +486,11 @@ const formatFieldValue = (fieldKey, value) => {
     return String(value);
   }
   
+  // Never show raw ObjectIds
+  if (typeof value === 'string' && /^[0-9a-fA-F]{24}$/.test(value.trim())) {
+    return '—';
+  }
+
   // Default: return as string
   return String(value);
 };

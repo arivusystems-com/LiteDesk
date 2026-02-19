@@ -226,7 +226,18 @@ const rightFields = computed(() => {
 const getFieldValue = (field) => {
   if (!field) return null;
   const valueKey = field.valueKey || field.key;
-  return props.fieldValues?.[valueKey] ?? null;
+  const raw = props.fieldValues?.[valueKey] ?? null;
+  if (raw == null || raw === '') return raw;
+  if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}(T[\d:.]+Z?)?$/.test(raw.trim())) {
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      const isDateTime = raw.includes('T');
+      return isDateTime
+        ? d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+  }
+  return raw;
 };
 </script>
 

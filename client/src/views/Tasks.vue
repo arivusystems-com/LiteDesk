@@ -145,6 +145,11 @@
         <span class="line-clamp-2 text-gray-700 dark:text-gray-300">{{ getPlainTextFromHtml(value || '') || '—' }}</span>
       </template>
 
+      <!-- Related To: polymorphic lookup (contact, deal, organization, project) -->
+      <template #cell-relatedTo="{ row }">
+        <span class="text-sm text-gray-700 dark:text-gray-300">{{ formatRelatedToForDisplay(row?.relatedTo) ?? '—' }}</span>
+      </template>
+
     </ModuleList>
 
     <!-- Kanban View (shown when Board is selected) -->
@@ -230,6 +235,10 @@
                   <CheckCircleIcon class="w-3.5 h-3.5 flex-shrink-0 text-gray-500 dark:text-gray-400" />
                   <span>{{ formatStatus(task.status) }}</span>
                 </div>
+                <div v-else-if="key === 'relatedTo'" class="flex items-center gap-1.5 min-w-0 truncate">
+                  <LinkIcon class="w-3.5 h-3.5 flex-shrink-0 text-gray-500 dark:text-gray-400" />
+                  <span class="truncate">{{ formatRelatedToForDisplay(task.relatedTo) ?? '—' }}</span>
+                </div>
                 <div v-else class="flex items-center gap-1.5 min-w-0 truncate">
                   <HashtagIcon class="w-3.5 h-3.5 flex-shrink-0 text-gray-500 dark:text-gray-400" />
                   <span class="truncate">{{ formatTaskCardValue(task[key], key) }}</span>
@@ -306,8 +315,8 @@ import CSVImportModal from '@/components/import/CSVImportModal.vue';
 import Avatar from '@/components/common/Avatar.vue';
 import KanbanBoard from '@/components/common/KanbanBoard.vue';
 import { getModuleListConfig } from '@/platform/modules/moduleListRegistry';
-import { getPlainTextFromHtml } from '@/utils/fieldDisplay';
-import { ViewColumnsIcon, ListBulletIcon, CalendarDaysIcon, ClockIcon, HashtagIcon, CheckCircleIcon } from '@heroicons/vue/24/outline';
+import { getPlainTextFromHtml, formatRelatedToForDisplay } from '@/utils/fieldDisplay';
+import { ViewColumnsIcon, ListBulletIcon, CalendarDaysIcon, ClockIcon, HashtagIcon, CheckCircleIcon, LinkIcon } from '@heroicons/vue/24/outline';
 import { PlusIcon } from '@heroicons/vue/24/outline';
 import { FlagIcon as FlagIconSolid } from '@heroicons/vue/24/solid';
 
@@ -660,6 +669,8 @@ const isTaskFieldEmpty = (task, key) => {
       return !task.createdAt;
     case 'description':
       return task.description == null || task.description === '';
+    case 'relatedTo':
+      return !task.relatedTo || task.relatedTo.type === 'none' || !task.relatedTo.id;
     default:
       const v = task[key];
       return v == null || v === '';
@@ -668,6 +679,7 @@ const isTaskFieldEmpty = (task, key) => {
 
 const formatTaskCardValue = (value, key) => {
   if (value == null) return '—';
+  if (key === 'relatedTo' && typeof value === 'object' && value?.type) return formatRelatedToForDisplay(value) ?? '—';
   if (key === 'description' && typeof value === 'string') return getPlainTextFromHtml(value) || '—';
   if (key === 'assignedTo' && typeof value === 'object') return getUserDisplayName(value);
   if (typeof value === 'object' && value !== null && ('firstName' in value || 'first_name' in value))
