@@ -1,6 +1,9 @@
 const Task = require('../models/Task');
 const TaskComment = require('../models/TaskComment');
 const User = require('../models/User');
+const People = require('../models/People');
+const Deal = require('../models/Deal');
+const Organization = require('../models/Organization');
 const mongoose = require('mongoose');
 const { getFileUrl } = require('../middleware/uploadMiddleware');
 const { emitNotification } = require('../services/notificationEngine');
@@ -54,6 +57,66 @@ const getActorDisplayName = (user) => {
   const name = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
   return name || user.username || user.email || 'System';
 };
+
+/** Map relatedTo.type to model and display field(s) for population */
+const RELATED_TO_MODEL_MAP = {
+  contact: { model: People, displayFields: ['first_name', 'last_name'] },
+  deal: { model: Deal, displayFields: ['name'] },
+  organization: { model: Organization, displayFields: ['name'] },
+  project: null // No Project model; skip
+};
+
+/**
+ * Populate relatedTo.name for tasks so list/kanban can display record names.
+ * Fetches related records by type and attaches display name to each task.relatedTo.
+ * @param {Array} tasks - Task documents (mongoose docs or plain objects)
+ */
+async function populateRelatedToNames(tasks) {
+  if (!tasks || tasks.length === 0) return;
+  const idsByType = { contact: [], deal: [], organization: [], project: [] };
+  for (const task of tasks) {
+    const rt = task?.relatedTo;
+    if (!rt || rt.type === 'none' || !rt.id) continue;
+    const type = String(rt.type || '').toLowerCase();
+    const id = rt.id && typeof rt.id === 'object' ? rt.id._id : rt.id;
+    if (id && idsByType[type]) idsByType[type].push(id);
+  }
+  const idToName = new Map();
+  for (const [type, ids] of Object.entries(idsByType)) {
+    if (ids.length === 0) continue;
+    const config = RELATED_TO_MODEL_MAP[type];
+    if (!config?.model) continue;
+    const uniqueIds = [...new Set(ids.map((id) => String(id)))].filter(Boolean);
+    if (uniqueIds.length === 0) continue;
+    const select = config.displayFields.join(' ');
+    const docs = await config.model
+      .find({ _id: { $in: uniqueIds } })
+      .select(select)
+      .lean();
+    for (const doc of docs) {
+      const id = doc._id?.toString?.() || doc._id;
+      let name = '';
+      if (config.displayFields.includes('first_name') || config.displayFields.includes('last_name')) {
+        const first = doc.first_name || '';
+        const last = doc.last_name || '';
+        name = `${first} ${last}`.trim() || doc.name || doc.title || '';
+      } else {
+        name = doc.name || doc.title || '';
+      }
+      if (name) idToName.set(id, name);
+    }
+  }
+  for (const task of tasks) {
+    const rt = task.relatedTo;
+    if (!rt || rt.type === 'none' || !rt.id) continue;
+    const id = rt.id && typeof rt.id === 'object' ? rt.id._id : rt.id;
+    const idStr = id?.toString?.() || id;
+    const name = idToName.get(idStr);
+    if (name) {
+      task.relatedTo = { type: rt.type, id: rt.id, name };
+    }
+  }
+}
 
 const normalizeTaskComparableValue = (value) => {
   if (value === undefined || value === null) return null;
@@ -313,6 +376,111 @@ const createTask = async (req, res) => {
   }
 };
 
+// Helper: build dueDate query from list filter params (dueDatePreset, dueDateOp, dueDate, dueDateFrom, dueDateTo, dueDateDays)
+function buildDueDateQuery(queryParams) {
+  const now = new Date();
+  const preset = queryParams.dueDatePreset;
+  const op = queryParams.dueDateOp;
+  const rawSingle = queryParams.dueDate;
+  const singleDate = (rawSingle && String(rawSingle) !== 'null') ? rawSingle : null;
+  const from = (queryParams.dueDateFrom && String(queryParams.dueDateFrom) !== 'null') ? queryParams.dueDateFrom : null;
+  const to = (queryParams.dueDateTo && String(queryParams.dueDateTo) !== 'null') ? queryParams.dueDateTo : null;
+  const days = parseInt(queryParams.dueDateDays, 10);
+
+  if (preset) {
+    let start;
+    let end;
+    if (preset === 'today') {
+      start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      end.setMilliseconds(-1);
+    } else if (preset === 'thisWeek') {
+      const day = now.getDay();
+      start = new Date(now);
+      start.setDate(now.getDate() - day);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(start);
+      end.setDate(start.getDate() + 7);
+      end.setMilliseconds(-1);
+    } else if (preset === 'thisMonth') {
+      start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else if (preset === 'thisQuarter') {
+      const q = Math.floor(now.getMonth() / 3) + 1;
+      start = new Date(now.getFullYear(), (q - 1) * 3, 1, 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), q * 3, 0, 23, 59, 59, 999);
+    } else if (preset === 'thisYear') {
+      start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+    } else {
+      return null;
+    }
+    return { $gte: start, $lte: end };
+  }
+
+  if (op === 'empty') {
+    return 'EMPTY'; // applied as $and + $or in getTasks
+  }
+  if (op === 'notEmpty') {
+    return { $exists: true, $ne: null };
+  }
+  if (op === 'lastDays' && !Number.isNaN(days) && days >= 1) {
+    const end = new Date(now);
+    const start = new Date(now);
+    start.setDate(start.getDate() - days);
+    start.setHours(0, 0, 0, 0);
+    return { $gte: start, $lte: end };
+  }
+  if (op === 'nextDays' && !Number.isNaN(days) && days >= 1) {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(now);
+    end.setDate(end.getDate() + days);
+    end.setHours(23, 59, 59, 999);
+    return { $gte: start, $lte: end };
+  }
+  if (op === 'on' && singleDate) {
+    const d = new Date(singleDate);
+    const start = new Date(d);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(d);
+    end.setHours(23, 59, 59, 999);
+    return { $gte: start, $lte: end };
+  }
+  if (op === 'before' && (singleDate || to)) {
+    const dateStr = singleDate || to;
+    const d = new Date(dateStr);
+    d.setHours(23, 59, 59, 999);
+    return { $lte: d };
+  }
+  if (op === 'after' && (singleDate || from)) {
+    const dateStr = singleDate || from;
+    const d = new Date(dateStr);
+    d.setHours(0, 0, 0, 0);
+    return { $gte: d };
+  }
+  if (op === 'between' && from && to) {
+    const start = new Date(from);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(to);
+    end.setHours(23, 59, 59, 999);
+    return { $gte: start, $lte: end };
+  }
+
+  if (singleDate && !op) {
+    const date = new Date(singleDate);
+    if (Number.isNaN(date.getTime())) return null;
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(date);
+    end.setHours(23, 59, 59, 999);
+    return { $gte: start, $lte: end };
+  }
+  return null;
+}
+
 // @desc    Get all tasks (with filters)
 // @route   GET /api/tasks
 // @access  Private
@@ -326,6 +494,11 @@ const getTasks = async (req, res) => {
       contactId,
       organizationId,
       dueDate,
+      dueDatePreset,
+      dueDateOp,
+      dueDateFrom,
+      dueDateTo,
+      dueDateDays,
       overdue,
       search,
       page = 1,
@@ -341,7 +514,16 @@ const getTasks = async (req, res) => {
     if (status) query.status = status;
     if (priority) query.priority = priority;
     if (assignedTo) {
-      query.assignedTo = assignedTo === 'me' ? req.user._id : assignedTo;
+      if (assignedTo === 'unassigned') {
+        query = {
+          $and: [
+            query,
+            { $or: [{ assignedTo: null }, { assignedTo: { $exists: false } }] }
+          ]
+        };
+      } else {
+        query.assignedTo = assignedTo === 'me' ? req.user._id : assignedTo;
+      }
     }
     if (projectId) query.projectId = projectId;
     if (contactId) {
@@ -352,12 +534,23 @@ const getTasks = async (req, res) => {
       query['relatedTo.type'] = 'organization';
       query['relatedTo.id'] = organizationId;
     }
-    if (dueDate) {
-      const date = new Date(dueDate);
-      query.dueDate = {
-        $gte: new Date(date.setHours(0, 0, 0, 0)),
-        $lte: new Date(date.setHours(23, 59, 59, 999))
+    const dueDateCondition = buildDueDateQuery({
+      dueDatePreset,
+      dueDateOp,
+      dueDate,
+      dueDateFrom,
+      dueDateTo,
+      dueDateDays
+    });
+    if (dueDateCondition === 'EMPTY') {
+      query = {
+        $and: [
+          query,
+          { $or: [{ dueDate: null }, { dueDate: { $exists: false } }] }
+        ]
       };
+    } else if (dueDateCondition && dueDateCondition !== 'EMPTY') {
+      query.dueDate = dueDateCondition;
     }
     if (overdue === 'true') {
       query.dueDate = { $lt: new Date() };
@@ -393,14 +586,22 @@ const getTasks = async (req, res) => {
     const sortObject = {};
     sortObject[sortBy] = sortOrder === 'asc' ? 1 : -1;
 
-    // Execute query
+    // Execute query - use .lean() so we get plain objects for reliable relatedTo.name mutation
     const tasks = await Task.find(query)
       .populate('assignedTo', 'firstName lastName email avatar')
       .populate('assignedBy', 'firstName lastName')
       .populate('createdBy', 'firstName lastName')
       .sort(sortObject)
       .limit(parseInt(limit))
-      .skip(skip);
+      .skip(skip)
+      .lean();
+
+    // Populate relatedTo names for list/kanban display
+    try {
+      await populateRelatedToNames(tasks);
+    } catch (err) {
+      console.error('[getTasks] populateRelatedToNames error:', err);
+    }
 
     // Get total count
     const total = await Task.countDocuments(query);
@@ -851,10 +1052,19 @@ const toggleSubtask = async (req, res) => {
 const getTaskStats = async (req, res) => {
   try {
     const { assignedTo } = req.query;
-    const query = { organizationId: req.user.organizationId };
+    let query = { organizationId: req.user.organizationId };
 
     if (assignedTo) {
-      query.assignedTo = assignedTo === 'me' ? req.user._id : assignedTo;
+      if (assignedTo === 'unassigned') {
+        query = {
+          $and: [
+            query,
+            { $or: [{ assignedTo: null }, { assignedTo: { $exists: false } }] }
+          ]
+        };
+      } else {
+        query.assignedTo = assignedTo === 'me' ? req.user._id : assignedTo;
+      }
     }
 
     // Get counts by status

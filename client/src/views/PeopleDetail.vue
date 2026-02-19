@@ -499,18 +499,15 @@
                         :key="index"
                         class="inline-flex items-center px-2 py-2 rounded-full text-xs font-medium bg-secondary-100 text-secondary-800 dark:bg-secondary-900/40 dark:text-secondary-200"
                       >
-                        {{ item }}
+                        {{ formatRawValueForDisplay(item, { key: fieldKey }) }}
                       </span>
                     </div>
-                  </template>
-                  <template v-else-if="typeof value === 'object'">
-                    {{ JSON.stringify(value) }}
                   </template>
                   <template v-else-if="fieldKey === 'birthday' || fieldKey === 'qualification_date'">
                     {{ formatDate(value) }}
                   </template>
                   <template v-else>
-                    {{ value }}
+                    {{ formatRawValueForDisplay(value, { key: fieldKey }) }}
                   </template>
                 </dd>
               </div>
@@ -979,6 +976,7 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/utils/apiClient';
+import { formatRawValueForDisplay } from '@/utils/fieldDisplay';
 import ActivityTimeline from '@/components/ActivityTimeline.vue';
 import Notes from '@/components/Notes.vue';
 import Files from '@/components/Files.vue';

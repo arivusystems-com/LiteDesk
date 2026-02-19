@@ -5214,10 +5214,31 @@ const formatFieldName = (key) => {
   return key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
 };
 
-// Format field value
+// Format field value - never show raw ObjectIds or JSON
 const formatFieldValue = (value) => {
   if (value === null || value === undefined) return '-';
-  if (typeof value === 'object') return JSON.stringify(value);
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    const display = value.name || value.title || value.firstName || value.first_name || value.label || value.email || value.username;
+    if (display) return display;
+    return '—';
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '-';
+    return value.map(v => {
+      if (typeof v === 'object' && v !== null) return v.name || v.title || v.label || '—';
+      if (typeof v === 'string' && /^[0-9a-fA-F]{24}$/.test(v)) return '—';
+      return String(v);
+    }).join(', ');
+  }
+  if (typeof value === 'string' && /^[0-9a-fA-F]{24}$/.test(value.trim())) return '—';
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}(T[\d:.]+Z?)?$/.test(value.trim())) {
+    const d = new Date(value);
+    if (!isNaN(d.getTime())) {
+      return value.includes('T')
+        ? d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+  }
   return String(value);
 };
 

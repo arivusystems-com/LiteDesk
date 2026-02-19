@@ -236,8 +236,18 @@
                     {{ filter.label || filter.key }}
                   </label>
                   
-                  <!-- All Filters: Dropdown (including boolean) -->
+                  <!-- Date filter: grouped Quick / Relative / Specific / Data Status -->
+                  <DateFilterDropdown
+                    v-if="filter.filterType === 'date'"
+                    :model-value="filters[filter.key]"
+                    :filter-label="filter.label || filter.key"
+                    button-class="relative z-[26] inline-flex h-10 w-full items-center rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 px-3 text-gray-900 dark:text-white text-sm outline-1 -outline-offset-1 outline-gray-300/20 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 cursor-pointer text-left"
+                    options-class="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-sm shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none min-w-[200px]"
+                    @update:model-value="(value) => { filters[filter.key] = value; handleFilterChange(filter.key); }"
+                  />
+                  <!-- All other filters: Dropdown -->
                   <Listbox
+                    v-else
                     :model-value="filter.filterType === 'multi-select' ? (Array.isArray(filters[filter.key]) ? filters[filter.key] : []) : (filters[filter.key] || '')" 
                     @update:model-value="(value) => { filters[filter.key] = value; handleFilterChange(filter.key); }"
                     :multiple="filter.filterType === 'multi-select'"
@@ -376,8 +386,18 @@
             :data-filter-key="filter.key"
             class="relative"
           >
-            <!-- All Filters: Dropdown (including boolean) -->
+            <!-- Date filter: grouped Quick / Relative / Specific / Data Status -->
+            <DateFilterDropdown
+              v-if="filter.filterType === 'date'"
+              :model-value="filters[filter.key]"
+              :filter-label="filter.label || filter.key"
+              button-class="inline-flex h-10 items-center rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-3 text-gray-900 dark:text-white text-sm outline-1 -outline-offset-1 outline-gray-300/20 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 dark:focus:bg-gray-800 dark:outline-white/10 dark:focus:outline-indigo-500 cursor-pointer relative w-auto min-w-[140px] text-left leading-none"
+              options-class="absolute mt-1 max-h-60 w-full overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm min-w-[200px]"
+              @update:model-value="(value) => { filters[filter.key] = value; handleFilterChange(filter.key); }"
+            />
+            <!-- All other filters: Dropdown (select, multi-select, boolean, user, etc.) -->
             <Listbox
+              v-else
               :model-value="filter.filterType === 'multi-select' ? (Array.isArray(filters[filter.key]) ? filters[filter.key] : []) : (filters[filter.key] || '')" 
               @update:model-value="(value) => { filters[filter.key] = value; handleFilterChange(filter.key); }"
               :multiple="filter.filterType === 'multi-select'"
@@ -1353,7 +1373,14 @@ import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
 import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
 import { getFieldMetadata, PEOPLE_FIELD_METADATA } from '@/platform/fields/peopleFieldModel';
+import { isTaskSystemField } from '@/platform/fields/taskFieldModel';
+import { isOrganizationSystemField } from '@/platform/fields/organizationFieldModel';
+import { isDealSystemField } from '@/platform/fields/dealFieldModel';
+import { isEventSystemField } from '@/platform/fields/eventFieldModel';
+import { isItemSystemField } from '@/platform/fields/itemFieldModel';
 import { useDefaultListFilters } from '@/composables/useDefaultListFilters';
+import DateFilterDropdown from '@/components/common/DateFilterDropdown.vue';
+import { parseDateFilterValue, getDateFilterLabel } from '@/utils/dateFilterOptions';
 
 const authStore = useAuthStore();
 const { activeTabId } = useTabs();
@@ -1969,12 +1996,21 @@ function buildTasksDefaultKanbanColumns(sourceColumns) {
 
 const kanbanShownFields = computed(() => {
   const q = kanbanFieldSearchQuery.value.trim().toLowerCase();
-  const shown = kanbanVisibleColumns.value.filter(c => c.visible && (!q || (c.label || c.key).toLowerCase().includes(q)));
+  const shown = kanbanVisibleColumns.value.filter(c =>
+    c.visible &&
+    !isSystemFieldForList(props.moduleKey, c.key, c) &&
+    (!q || (c.label || c.key).toLowerCase().includes(q))
+  );
   return shown.map(c => ({ ...c, locked: isKanbanTitleField(c.key) }));
 });
 const kanbanHiddenFields = computed(() => {
   const q = kanbanFieldSearchQuery.value.trim().toLowerCase();
-  return kanbanVisibleColumns.value.filter(c => !c.visible && !isKanbanTitleField(c.key) && (!q || (c.label || c.key).toLowerCase().includes(q)));
+  return kanbanVisibleColumns.value.filter(c =>
+    !c.visible &&
+    !isKanbanTitleField(c.key) &&
+    !isSystemFieldForList(props.moduleKey, c.key, c) &&
+    (!q || (c.label || c.key).toLowerCase().includes(q))
+  );
 });
 const toggleKanbanFieldVisibility = (fieldKey) => {
   if (isKanbanTitleField(fieldKey)) return;
@@ -2691,8 +2727,11 @@ const clearSearch = () => {
 
 // Get filter label for display
 const getFilterLabel = (filter, value) => {
-  if (!value) return null;
-  const option = filter.options.find(opt => opt.value === value);
+  if (value === undefined || value === null || value === '') return null;
+  if (filter.filterType === 'date' && typeof value === 'object') {
+    return getDateFilterLabel(parseDateFilterValue(value)) || null;
+  }
+  const option = filter.options?.find(opt => opt.value === value);
   return option ? (option.label || option.value) : null;
 };
 
@@ -2925,6 +2964,26 @@ const clearFilters = () => {
   localStorage.removeItem(sortStorageKey.value);
 };
 
+// Helper: check if a field is a system field (should not appear in Customize List or Customize Kanban)
+function isSystemFieldForList(moduleKey, fieldKey, field) {
+  if (!fieldKey) return false;
+  if (field?.isSystem === true) return true;
+  try {
+    if (moduleKey === 'people') {
+      const metadata = getFieldMetadata(fieldKey);
+      return metadata?.owner === 'system';
+    }
+    if (moduleKey === 'organizations') return isOrganizationSystemField(fieldKey);
+    if (moduleKey === 'tasks') return isTaskSystemField(fieldKey);
+    if (moduleKey === 'deals') return isDealSystemField(fieldKey);
+    if (moduleKey === 'events') return isEventSystemField(fieldKey);
+    if (moduleKey === 'items') return isItemSystemField(fieldKey);
+  } catch (_) {
+    // Field not in metadata - not a system field
+  }
+  return false;
+}
+
 // Field management - sync with visibleColumns and backend configuration
 const allFields = computed(() => {
   // Start with all fields from backend configuration if available, otherwise use props.columns
@@ -2936,7 +2995,7 @@ const allFields = computed(() => {
   
   // First, add all fields from backend configuration
   backendFields.forEach(field => {
-    if (field.key) {
+    if (field.key && !isSystemFieldForList(props.moduleKey, field.key, field)) {
       // Find corresponding column from props for additional metadata
       const propsCol = propsColumns.find(c => c.key === field.key);
       allFieldsMap.set(field.key, {
@@ -2950,9 +3009,9 @@ const allFields = computed(() => {
     }
   });
   
-  // Then add any fields from props.columns that aren't in backend
+  // Then add any fields from props.columns that aren't in backend (skip system fields)
   propsColumns.forEach(col => {
-    if (!allFieldsMap.has(col.key)) {
+    if (!allFieldsMap.has(col.key) && !isSystemFieldForList(props.moduleKey, col.key, col)) {
       allFieldsMap.set(col.key, {
         key: col.key,
         label: col.label || col.key,
@@ -2968,20 +3027,6 @@ const allFields = computed(() => {
   let fields = Array.from(allFieldsMap.values()).map(field => {
     const visibleCol = visibleColumns.value.find(vc => vc.key === field.key);
     
-    // For modules with field metadata, check if it's a system field
-    // This is currently only implemented for people module, but can be extended
-    if (!visibleCol && props.moduleKey === 'people') {
-      try {
-        const metadata = getFieldMetadata(field.key);
-        if (metadata.owner === 'system') {
-          // Skip system fields - they shouldn't appear in Customize View
-          return null;
-        }
-      } catch (error) {
-        // Field not in metadata - include it but it will be hidden by default
-      }
-    }
-    
     // IMPORTANT: Use visibleColumns as source of truth for visibility
     // If field is not in visibleColumns, it defaults to hidden (false)
     const isVisible = visibleCol ? (visibleCol.visible === true) : false;
@@ -2993,7 +3038,7 @@ const allFields = computed(() => {
       // Include locked property if present
       locked: visibleCol?.locked || false
     };
-  }).filter(field => field !== null); // Filter out null fields (system fields)
+  });
   
   // Filter by search query
   if (fieldSearchQuery.value.trim()) {
@@ -3009,8 +3054,10 @@ const allFields = computed(() => {
 
 const shownFields = computed(() => {
   // Maintain order from visibleColumns (source of truth for order)
-  const visibleCols = visibleColumns.value.filter(col => col.visible);
-  const visibleKeys = new Set(visibleCols.map(col => col.key));
+  // Exclude system fields - they should not appear in Customize List
+  const visibleCols = visibleColumns.value.filter(
+    col => col.visible && !isSystemFieldForList(props.moduleKey, col.key, col)
+  );
   
   // Get fields from allFields but maintain the order from visibleColumns
   const orderedFields = visibleCols.map(col => {

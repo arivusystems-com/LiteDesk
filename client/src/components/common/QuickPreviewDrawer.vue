@@ -849,19 +849,25 @@ const normalizeValue = (value) => {
 };
 
 
-// Format value for activity log
+// Format value for activity log - never show raw ObjectIds or JSON
 const formatValueForActivityLog = (value, field) => {
   if (value === null || value === undefined || value === '') return 'empty';
   if (typeof value === 'object' && !Array.isArray(value)) {
-    if (value._id) {
-      // It's a populated object - try to get a display name
-      return value.name || value.firstName || value.email || value.title || `[${field}]`;
-    }
-    return JSON.stringify(value);
+    const display = value.name || value.title || value.firstName || value.first_name || value.label || value.email || value.username;
+    if (display) return display;
+    if (value._id) return '—';
+    return '—';
   }
   if (Array.isArray(value)) {
-    return value.map(v => typeof v === 'object' && v.name ? v.name : String(v)).join(', ');
+    return value.map(v => {
+      if (typeof v === 'object' && v !== null) {
+        return v.name || v.title || v.label || v.firstName || v.first_name || '—';
+      }
+      if (typeof v === 'string' && /^[0-9a-fA-F]{24}$/.test(v)) return '—';
+      return String(v);
+    }).join(', ');
   }
+  if (typeof value === 'string' && /^[0-9a-fA-F]{24}$/.test(value)) return '—';
   return String(value);
 };
 
@@ -1654,22 +1660,24 @@ const formatFieldValue = (row, column) => {
   const value = resolveValue(row, column);
   if (value === null || value === undefined || value === '') return null;
   
-  // Handle dates
+  const col = typeof column === 'object' ? column : null;
+  const dataType = col?.dataType;
+  const isDateTime = dataType === 'Date-Time' || dataType === 'DateTime' || (typeof value === 'string' && value.includes('T'));
+  
   if (value instanceof Date) {
-    return new Date(value).toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric',
-      year: 'numeric'
-    });
+    const d = value;
+    return isDateTime
+      ? d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
   
-  // Handle date strings
-  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
-    return new Date(value).toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric',
-      year: 'numeric'
-    });
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}(T[\d:.]+Z?)?$/.test(value.trim())) {
+    const d = new Date(value);
+    if (!isNaN(d.getTime())) {
+      return isDateTime
+        ? d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
   }
   
   return value;
