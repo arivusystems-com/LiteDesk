@@ -124,7 +124,8 @@
                     v-model="formData[question.questionId]"
                     type="date"
                     :required="question.mandatory"
-                    class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                    class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent cursor-pointer"
+                    @click="openDatePicker"
                   />
                   
                   <!-- File Upload -->
@@ -179,6 +180,7 @@ import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import SignaturePad from '@/components/forms/SignaturePad.vue';
 import apiClient from '@/utils/apiClient';
+import { openDatePicker } from '@/utils/dateUtils';
 
 const route = useRoute();
 const slug = route.params.slug;

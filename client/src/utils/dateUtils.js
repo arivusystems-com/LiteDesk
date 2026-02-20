@@ -182,6 +182,18 @@ export const dateUtils = {
   }
 };
 
+// Open native date/datetime picker on click (works when clicking anywhere in the input, not just the icon)
+export function openDatePicker(event) {
+  const el = event?.target;
+  if (el && typeof el.showPicker === 'function') {
+    try {
+      el.showPicker();
+    } catch (_) {
+      // showPicker requires user gesture; ignore if it fails
+    }
+  }
+}
+
 // Export as default for easy import
 export default dateUtils;
 

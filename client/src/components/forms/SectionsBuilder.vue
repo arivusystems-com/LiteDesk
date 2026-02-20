@@ -912,9 +912,10 @@
                       v-else-if="getConditionalQuestion()?.type === 'Date'"
                       v-model="currentQuestion.conditionalLogic.showIf.value"
                       type="date"
+                      @click="openDatePicker"
                       @focus="handleQuestionSettingsFocus"
                       @blur="handleQuestionSettingsBlur"
-                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500 cursor-pointer"
                     />
                     <!-- Text, Textarea, Email - show text input -->
                     <input
@@ -1630,6 +1631,7 @@
 
 <script setup>
 import { computed, ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { openDatePicker } from '@/utils/dateUtils';
 import FormPreviewDrawer from './FormPreviewDrawer.vue';
 import DuplicateFormDialog from './DuplicateFormDialog.vue';
 import {

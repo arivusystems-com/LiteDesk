@@ -392,10 +392,11 @@
                 ref="startDateInputRef"
                 v-model="localStartDate"
                 type="date"
+                @click="openDatePicker"
                 @blur="handleStartDateBlur"
                 @keydown.enter="handleStartDateBlur"
                 @keydown.esc="handleStartDateCancel"
-                class="text-xs h-8 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full"
+                class="text-xs h-8 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full cursor-pointer"
                 placeholder="Start date"
               />
               <span
@@ -428,10 +429,11 @@
                 ref="dueDateInputRef"
                 v-model="localDueDate"
                 type="date"
+                @click="openDatePicker"
                 @blur="handleDueDateBlur"
                 @keydown.enter="handleDueDateBlur"
                 @keydown.esc="handleDueDateCancel"
-                class="text-xs h-8 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full"
+                class="text-xs h-8 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full cursor-pointer"
                 placeholder="Due date"
               />
               <span
@@ -2508,6 +2510,7 @@ import Avatar from '@/components/common/Avatar.vue';
 import DateCell from '@/components/common/table/DateCell.vue';
 import { getKeyFields } from '@/utils/fieldDisplay';
 import apiClient from '@/utils/apiClient';
+import { openDatePicker } from '@/utils/dateUtils';
 import { useAuthStore } from '@/stores/auth';
 import { 
   TASK_FIELD_METADATA, 

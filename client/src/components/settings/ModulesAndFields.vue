@@ -1089,7 +1089,66 @@
                 
                 <div>
                   <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Default Value</label>
-                  <input v-model="currentField.defaultValue" :disabled="isSystemField(currentField) || currentField.dataType === 'Auto-Number' || currentField.dataType === 'Formula' || currentField.dataType === 'Rollup Summary'" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10" />
+                  <template v-if="!isSystemField(currentField) && currentField.dataType !== 'Auto-Number' && currentField.dataType !== 'Formula' && currentField.dataType !== 'Rollup Summary'">
+                    <!-- Picklist, Radio Button: dropdown -->
+                    <select
+                      v-if="['Picklist', 'Radio Button'].includes(currentField.dataType)"
+                      v-model="currentField.defaultValue"
+                      class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10"
+                    >
+                      <option value="">No default</option>
+                      <option v-for="opt in normalizedOptions" :key="getOptionValue(opt)" :value="getOptionValue(opt)">{{ getOptionDisplayLabel(opt) }}</option>
+                    </select>
+                    <!-- Multi-Picklist: multi-select dropdown -->
+                    <template v-else-if="currentField.dataType === 'Multi-Picklist'">
+                      <select
+                        v-model="defaultValueMultiPicklist"
+                        multiple
+                        class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 min-h-[80px]"
+                      >
+                        <option v-for="opt in normalizedOptions" :key="getOptionValue(opt)" :value="getOptionValue(opt)">{{ getOptionDisplayLabel(opt) }}</option>
+                      </select>
+                      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Hold Ctrl/Cmd to select multiple options</p>
+                    </template>
+                    <!-- Checkbox: checkbox -->
+                    <label v-else-if="currentField.dataType === 'Checkbox'" class="inline-flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" :checked="defaultValueCheckbox" @change="currentField.defaultValue = $event.target.checked" class="rounded border-gray-300 dark:border-gray-600" />
+                      <span class="text-sm">Default to checked</span>
+                    </label>
+                    <!-- Number fields: number input -->
+                    <input
+                      v-else-if="['Integer', 'Decimal', 'Currency'].includes(currentField.dataType)"
+                      v-model.number="currentField.defaultValue"
+                      type="number"
+                      :step="currentField.dataType === 'Integer' ? 1 : 0.01"
+                      class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10"
+                    />
+                    <!-- Date: date input -->
+                    <input
+                      v-else-if="currentField.dataType === 'Date'"
+                      v-model="currentField.defaultValue"
+                      type="date"
+                      class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 cursor-pointer"
+                      @click="openDatePicker"
+                    />
+                    <!-- Date-Time: datetime-local input -->
+                    <input
+                      v-else-if="currentField.dataType === 'Date-Time'"
+                      v-model="currentField.defaultValue"
+                      type="datetime-local"
+                      class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 cursor-pointer"
+                      @click="openDatePicker"
+                    />
+                    <!-- Text, Text-Area, Email, Phone, URL, Rich Text: text input -->
+                    <input
+                      v-else
+                      v-model="currentField.defaultValue"
+                      class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10"
+                    />
+                  </template>
+                  <div v-else class="w-full px-3 py-2 rounded bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 text-sm">
+                    {{ currentField.defaultValue ?? '(none)' }}
+                  </div>
                   <p v-if="currentField.dataType === 'Auto-Number' || currentField.dataType === 'Formula' || currentField.dataType === 'Rollup Summary'" class="mt-1 text-xs text-gray-500 dark:text-gray-400">This field type cannot have a default value</p>
                   <p v-if="isSystemField(currentField)" class="mt-1 text-xs text-gray-500 dark:text-gray-400">System fields cannot have default values</p>
                 </div>
@@ -1813,9 +1872,9 @@
                                 <option value="false">false</option>
                               </select>
                               <!-- Date -->
-                              <input v-else-if="getDependencyFieldType(c.fieldKey) === 'Date'" type="date" v-model="c.value" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm" />
+                              <input v-else-if="getDependencyFieldType(c.fieldKey) === 'Date'" type="date" v-model="c.value" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm cursor-pointer" @click="openDatePicker" />
                               <!-- Date-Time -->
-                              <input v-else-if="getDependencyFieldType(c.fieldKey) === 'Date-Time'" type="datetime-local" v-model="c.value" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm" />
+                              <input v-else-if="getDependencyFieldType(c.fieldKey) === 'Date-Time'" type="datetime-local" v-model="c.value" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm cursor-pointer" @click="openDatePicker" />
                               <!-- Number fields -->
                               <input v-else-if="['Integer', 'Decimal', 'Currency'].includes(getDependencyFieldType(c.fieldKey))" type="number" v-model.number="c.value" placeholder="Number" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm" />
                               <!-- Text input for 'in' or 'not_in' operators (for non-picklist fields) -->
@@ -5289,6 +5348,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { Switch } from '@headlessui/vue';
 import apiClient from '@/utils/apiClient';
+import { openDatePicker } from '@/utils/dateUtils';
 import ModuleFormModal from './ModuleFormModal.vue';
 import { ArrowsUpDownIcon } from '@heroicons/vue/24/outline';
 
@@ -9202,6 +9262,44 @@ const selectField = (idx) => {
 
 const currentField = computed(() => editFields.value[selectedFieldIdx.value]);
 const currentFieldTitle = computed(() => formatFieldLabelForDisplay(currentField.value?.label, currentField.value?.key) || 'Field');
+
+// Default value bindings for type-specific inputs
+const defaultValueMultiPicklist = computed({
+  get() {
+    const f = currentField.value;
+    if (!f || f.dataType !== 'Multi-Picklist') return [];
+    const v = f.defaultValue;
+    if (!v) return [];
+    if (Array.isArray(v)) return v;
+    if (typeof v === 'string') {
+      try {
+        const parsed = JSON.parse(v);
+        return Array.isArray(parsed) ? parsed : (v ? v.split(',').map(s => s.trim()).filter(Boolean) : []);
+      } catch {
+        return v ? v.split(',').map(s => s.trim()).filter(Boolean) : [];
+      }
+    }
+    return [];
+  },
+  set(val) {
+    const f = currentField.value;
+    if (f) f.defaultValue = Array.isArray(val) ? val : [];
+  }
+});
+
+const defaultValueCheckbox = computed({
+  get() {
+    const f = currentField.value;
+    if (!f || f.dataType !== 'Checkbox') return false;
+    const v = f.defaultValue;
+    if (v === true || v === 'true') return true;
+    return false;
+  },
+  set(val) {
+    const f = currentField.value;
+    if (f) f.defaultValue = !!val;
+  }
+});
 
 // Form Type editing (Forms module)
 const newFormTypeKey = ref('');

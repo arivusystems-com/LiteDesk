@@ -95,7 +95,8 @@
               <input
                 v-model="singleDateInput"
                 type="date"
-                class="block w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                class="block w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white cursor-pointer"
+                @click="openDatePicker"
                 @change="applySingleDateInput"
               />
             </div>
@@ -105,7 +106,8 @@
                 <input
                   v-model="fromDateInput"
                   type="date"
-                  class="block w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                  class="block w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white cursor-pointer"
+                  @click="openDatePicker"
                   @change="applyBetweenInput"
                 />
               </div>
@@ -114,7 +116,8 @@
                 <input
                   v-model="toDateInput"
                   type="date"
-                  class="block w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                  class="block w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white cursor-pointer"
+                  @click="openDatePicker"
                   @change="applyBetweenInput"
                 />
               </div>
@@ -135,6 +138,7 @@ import {
   parseDateFilterValue,
   getDateFilterLabel
 } from '@/utils/dateFilterOptions';
+import { openDatePicker } from '@/utils/dateUtils';
 
 const props = defineProps({
   modelValue: {
