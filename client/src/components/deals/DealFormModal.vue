@@ -53,7 +53,8 @@
                 v-model="form.expectedCloseDate" 
                 type="date" 
                 required
-                class="px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
+                class="px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all cursor-pointer"
+                @click="openDatePicker"
               />
             </div>
           </div>
@@ -263,7 +264,8 @@
               <input 
                 v-model="form.nextFollowUpDate" 
                 type="date"
-                class="px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
+                class="px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all cursor-pointer"
+                @click="openDatePicker"
               />
             </div>
           </div>
@@ -294,6 +296,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue';
 import apiClient from '@/utils/apiClient';
+import { openDatePicker } from '@/utils/dateUtils';
 import { useAuthStore } from '@/stores/auth';
 
 const props = defineProps({

@@ -125,7 +125,8 @@
                   v-model="form.startDateTime"
                   type="datetime-local"
                   required
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer"
+                  @click="openDatePicker"
                 />
               </div>
 
@@ -138,7 +139,8 @@
                   v-model="form.endDateTime"
                   type="datetime-local"
                   required
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer"
+                  @click="openDatePicker"
                 />
               </div>
             </div>
@@ -450,7 +452,7 @@
 <script setup>
 import { ref, watch, computed, onMounted, nextTick } from 'vue';
 import apiClient from '@/utils/apiClient';
-import dateUtils from '@/utils/dateUtils';
+import dateUtils, { openDatePicker } from '@/utils/dateUtils';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
 import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';

@@ -268,6 +268,7 @@ import {
   UserIcon
 } from '@heroicons/vue/24/outline';
 import apiClient from '@/utils/apiClient';
+import { openDatePicker } from '@/utils/dateUtils';
 
 const props = defineProps({
   label: {
@@ -463,17 +464,6 @@ const getUserDisplayName = (user) => {
     .join(' ')
     .trim();
   return name || user.username || user.email || user._id || 'Unknown';
-};
-
-const openDatePicker = (event) => {
-  const el = event?.target;
-  if (el && typeof el.showPicker === 'function') {
-    try {
-      el.showPicker();
-    } catch (_) {
-      // showPicker requires user gesture; ignore if it fails
-    }
-  }
 };
 
 const handleClick = () => {

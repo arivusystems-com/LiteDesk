@@ -551,7 +551,8 @@
                   v-else-if="fieldKey === 'birthday' || fieldKey === 'qualification_date'"
                   v-model="appEditForms[appKey][fieldKey]"
                   type="date"
-                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 cursor-pointer"
+                  @click="openDatePicker"
                 />
                 <!-- Textarea for notes -->
                 <textarea
@@ -976,6 +977,7 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/utils/apiClient';
+import { openDatePicker } from '@/utils/dateUtils';
 import { formatRawValueForDisplay } from '@/utils/fieldDisplay';
 import ActivityTimeline from '@/components/ActivityTimeline.vue';
 import Notes from '@/components/Notes.vue';

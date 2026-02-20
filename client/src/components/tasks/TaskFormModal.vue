@@ -67,7 +67,8 @@
             <input 
               v-model="formData.dueDate" 
               type="date"
-              class="input"
+              class="input cursor-pointer"
+              @click="openDatePicker"
             />
           </div>
 
@@ -158,6 +159,7 @@
 import { ref, reactive, watch, computed } from 'vue';
 import { useAuthStore } from '../../stores/auth';
 import apiClient from '../../utils/apiClient';
+import { openDatePicker } from '@/utils/dateUtils';
 
 const props = defineProps({
   task: {

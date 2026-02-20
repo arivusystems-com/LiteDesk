@@ -702,6 +702,7 @@ import Avatar from '@/components/common/Avatar.vue';
 import apiClient from '@/utils/apiClient';
 import { validateField } from '@/utils/fieldValidation';
 import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
+import { openDatePicker } from '@/utils/dateUtils';
 import { useAuthStore } from '@/stores/auth';
 
 // Note: Headless UI Listbox is still used for Lookup (Relationship) fields and Radio Button
@@ -1176,17 +1177,6 @@ const formatDateForInput = (dateValue) => {
   if (typeof dateValue === 'string') return dateValue.split('T')[0];
   if (dateValue instanceof Date) return dateValue.toISOString().split('T')[0];
   return '';
-};
-
-const openDatePicker = (event) => {
-  const el = event?.target;
-  if (el && typeof el.showPicker === 'function') {
-    try {
-      el.showPicker();
-    } catch (_) {
-      // showPicker requires user gesture; ignore if it fails
-    }
-  }
 };
 
 const formatDateTimeForInput = (dateValue) => {
