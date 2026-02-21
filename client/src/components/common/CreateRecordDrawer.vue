@@ -26,31 +26,34 @@
               leave-from="translate-x-0" 
               leave-to="translate-x-full"
             >
-              <DialogPanel class="pointer-events-auto w-screen max-w-2xl">
-                <form @submit.prevent="handleSubmit" class="relative flex h-full flex-col divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800 shadow-xl">
-                  <div class="h-0 flex-1 overflow-y-auto">
-                    <div class="bg-indigo-700 dark:bg-indigo-800 px-4 py-6 sm:px-6">
-                      <div class="flex items-center justify-between">
-                        <DialogTitle class="text-base font-semibold text-white">{{ computedTitle }}</DialogTitle>
-                        <div class="ml-3 flex h-7 items-center">
-                          <button 
-                            type="button" 
-                            class="relative rounded-md text-indigo-200 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white" 
-                            @click="closeDrawer"
-                          >
-                            <span class="absolute -inset-2.5"></span>
-                            <span class="sr-only">Close panel</span>
-                            <XMarkIcon class="size-6" aria-hidden="true" />
-                          </button>
-                        </div>
-                      </div>
-                      <div class="mt-1">
-                        <p class="text-sm text-indigo-300">{{ computedDescription }}</p>
-                      </div>
+              <div class="pointer-events-auto h-full flex">
+                <DialogPanel
+                  :class="[
+                    'flex h-full flex-col bg-white dark:bg-gray-800 shadow-xl max-w-[95vw] transition-[width] duration-200 ease-out',
+                    fullMode ? 'w-[60rem]' : 'w-[30rem]'
+                  ]"
+                >
+                <form @submit.prevent="handleSubmit" class="relative flex h-full flex-col divide-y divide-gray-200 dark:divide-gray-700">
+                  <!-- Header: fixed at top -->
+                  <div class="bg-indigo-700 dark:bg-indigo-800 px-4 py-6 sm:px-6 flex-shrink-0">
+                    <div class="flex items-center justify-between">
+                      <DialogTitle class="text-base font-semibold text-white">{{ computedTitle }}</DialogTitle>
+                      <button
+                        type="button"
+                        class="relative rounded-md text-indigo-200 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white cursor-pointer"
+                        @click="closeDrawer"
+                      >
+                        <span class="absolute -inset-2.5" />
+                        <span class="sr-only">Close panel</span>
+                        <XMarkIcon class="size-6" aria-hidden="true" />
+                      </button>
                     </div>
-                    <div class="flex flex-1 flex-col justify-between">
-                      <div class="divide-y divide-gray-200 dark:divide-gray-700 px-4 sm:px-6">
-                        <div class="space-y-6 pt-6 pb-5">
+                    <p class="mt-1 text-sm text-indigo-300">{{ computedDescription }}</p>
+                  </div>
+
+                  <!-- Body: scrollable -->
+                  <div class="h-0 flex-1 overflow-y-auto">
+                    <div class="px-4 sm:px-6 py-6 space-y-6">
                           <!-- General Error Message -->
                           <div v-if="errors._general" class="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
                             <div class="flex">
@@ -77,9 +80,11 @@
                             :errors="errors"
                             :excludeFields="effectiveExcludeFields"
                             :lockedFields="lockedFields"
-                            :showAllFields="isEditing || !effectiveQuickCreateMode"
+                            :showAllFields="isEditing || fullMode || !effectiveQuickCreateMode"
                             :quickCreateMode="effectiveQuickCreateMode"
-                            :useQuickCreateOrder="useQuickCreateOrder"
+                            :useQuickCreateOrder="(useQuickCreateOrder || effectiveQuickCreateMode) && !fullMode"
+                            :singleColumn="true"
+                            :quickCreateFirstWhenExpanded="effectiveQuickCreateMode"
                             @update:formData="updateFormData"
                             @ready="onFormReady"
                           />
@@ -93,47 +98,40 @@
                               :read-only="false"
                             />
                           </div>
-                          <!-- Task Related To: only when selected as quick create in settings -->
-                          <div v-if="showTaskRelatedToField" class="pt-6 border-t border-gray-200 dark:border-gray-700">
-                            <TaskRelatedToField
-                              :model-value="normalizedTaskRelatedTo(formData.relatedTo)"
-                              label="Related To"
-                              :required="false"
-                              :error="errors.relatedTo"
-                              @update:model-value="(v) => updateFormData({ ...formData.value, relatedTo: v })"
-                            />
-                          </div>
-                          <!-- Task Subtasks: full width, same as edit drawer (only when selected in Quick Create) -->
-                          <div v-if="showTaskSubtasksField" class="w-full">
-                            <TaskSubtasksField
-                              :model-value="formData.subtasks || []"
-                              label="Subtasks"
-                              :error="errors.subtasks"
-                              @update:model-value="(v) => updateFormData({ ...formData.value, subtasks: v })"
-                            />
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   </div>
-                  <div class="flex shrink-0 justify-end gap-3 px-4 py-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-                    <button 
-                      type="button" 
-                      class="rounded-md bg-white dark:bg-gray-800 px-3 py-2 text-sm font-semibold text-gray-900 dark:text-white shadow-xs ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer" 
-                      @click="closeDrawer"
+
+                  <!-- Footer: left toggle + right actions (same as edit drawer) -->
+                  <div class="flex shrink-0 flex items-center justify-between gap-3 px-4 py-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+                    <button
+                      v-if="showFullModeToggle"
+                      type="button"
+                      class="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 cursor-pointer"
+                      @click="toggleFullMode"
                     >
-                      Cancel
+                      {{ fullMode ? 'Back to quick create' : 'Show all fields' }}
                     </button>
-                    <button 
-                      type="submit" 
-                      :disabled="saving" 
-                      class="inline-flex justify-center rounded-md bg-indigo-600 dark:bg-indigo-500 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 dark:hover:bg-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                    >
-                      {{ saving ? 'Saving...' : (isEditing ? 'Update' : 'Save') }}
-                    </button>
+                    <span v-else />
+                    <div class="flex gap-3">
+                      <button
+                        type="button"
+                        class="rounded-md bg-white dark:bg-gray-800 px-3 py-2 text-sm font-semibold text-gray-900 dark:text-white shadow-xs ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                        @click="closeDrawer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        :disabled="saving"
+                        class="inline-flex justify-center rounded-md bg-indigo-600 dark:bg-indigo-500 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 dark:hover:bg-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        {{ saving ? 'Saving...' : (isEditing ? 'Update' : 'Save') }}
+                      </button>
+                    </div>
                   </div>
                 </form>
               </DialogPanel>
+              </div>
             </TransitionChild>
           </div>
         </div>
@@ -148,8 +146,6 @@ import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } fro
 import { XMarkIcon } from '@heroicons/vue/24/outline';
 import DynamicForm from './DynamicForm.vue';
 import DealRelationshipEditor from '@/components/deals/DealRelationshipEditor.vue';
-import TaskRelatedToField from '@/components/tasks/TaskRelatedToField.vue';
-import TaskSubtasksField from '@/components/tasks/TaskSubtasksField.vue';
 import apiClient from '@/utils/apiClient';
 import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
@@ -211,12 +207,22 @@ const emit = defineEmits(['close', 'saved']);
 const authStore = useAuthStore();
 const { openTab, activeTab } = useTabs();
 const isEditing = computed(() => !!props.record);
+const fullMode = ref(false);
 
-// In create mode, use Quick Create when enabled so the drawer shows only fields selected in Settings → Quick Create.
+// Two modes: Quick Create Mode (only quick create fields) | Full Form Mode (all fields from config except system)
+// Show toggle only when in quick create mode (limited fields)
+const showFullModeToggle = computed(() => effectiveQuickCreateMode.value && !isEditing.value);
+
+function toggleFullMode() {
+  fullMode.value = !fullMode.value;
+}
+
+// Quick Create Mode: show only fields from Settings → Quick Create
+// Full Form Mode: show all fields from module config (except system) in config order
 const effectiveQuickCreateMode = computed(() => {
   if (isEditing.value) return false;
   if (props.quickCreateMode) return true;
-  // Default to quick create mode for these modules so the drawer follows Settings
+  // Default to Quick Create Mode for these modules (drawer follows Settings)
   const useQuickCreateByDefault = ['organizations', 'tasks', 'items'];
   return useQuickCreateByDefault.includes(props.moduleKey?.toLowerCase());
 });
@@ -252,20 +258,12 @@ const effectiveExcludeFields = computed(() => {
   }
   if (props.moduleKey === 'tasks') {
     const taskSystemFields = (getTaskSystemFields() || []).map((k) => String(k).toLowerCase());
-    return [...base, 'relatedTo', 'relatedToType', 'relatedToId', 'subtasks', ...taskSystemFields];
+    // Exclude only system fields; relatedTo and subtasks stay in DynamicForm so they appear in config order (like edit drawer)
+    return [...base, 'relatedToType', 'relatedToId', ...taskSystemFields];
   }
   return base;
 });
 
-const taskQuickCreateSet = computed(() => {
-  // Prefer module from Settings (drawer open fetch); fallback to form-ready module
-  const mod = moduleOverrideFromSettings.value || moduleDefinition.value;
-  if (props.moduleKey !== 'tasks') return new Set();
-  const qc = mod?.quickCreate || [];
-  return new Set(qc.map((k) => String(k).toLowerCase().trim()).filter(Boolean));
-});
-const showTaskRelatedToField = computed(() => taskQuickCreateSet.value.has('relatedto'));
-const showTaskSubtasksField = computed(() => taskQuickCreateSet.value.has('subtasks'));
 
 // Fetch module (including Quick Create from Settings) when drawer opens
 async function fetchModuleForDrawer() {
@@ -344,6 +342,7 @@ const isDirty = computed(() => {
 
 const closeDrawer = () => {
   if (!saving.value) {
+    fullMode.value = false;
     emit('close');
     // Reset form after closing
     setTimeout(() => {
@@ -1107,6 +1106,7 @@ const handleSubmit = async () => {
 // Reset form when drawer opens/closes
 watch(() => props.isOpen, (isOpen) => {
   if (isOpen) {
+    fullMode.value = false;
     errors.value = {};
     // Capture an initial snapshot immediately on open to avoid race with module load
     initialSnapshot.value = JSON.parse(JSON.stringify(formData.value || {}));

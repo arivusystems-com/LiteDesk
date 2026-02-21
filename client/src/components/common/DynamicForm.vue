@@ -49,13 +49,118 @@
     
     <!-- Simple Mode (List-based) -->
     <template v-else>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <!-- Quick create first layout: quick fields at top, divider, remaining in 2-col (like edit drawer) -->
+      <template v-if="useQuickCreateFirstLayout">
+        <div class="space-y-4">
+          <div
+            v-for="field in quickCreateFields"
+            :key="field.key"
+            :class="['space-y-1', field.key === 'description' ? 'w-full' : '']"
+          >
+            <template v-if="props.moduleKey === 'tasks' && field.key === 'description'">
+              <label :for="`field-${field.key}`" class="block text-sm font-medium text-gray-900 dark:text-white mb-1">
+                {{ getFieldDisplayLabel(field) || 'Description' }}
+                <span v-if="field.required" class="text-red-500">*</span>
+              </label>
+              <TaskDescriptionEditor
+                :model-value="localFormData[field.key] || ''"
+                placeholder="Write or type '/' for commands"
+                class="w-full"
+                @update:model-value="(v) => updateField(field.key, v)"
+              />
+              <p v-if="errors[field.key]" class="mt-1 text-sm text-red-600 dark:text-red-400">{{ errors[field.key] }}</p>
+            </template>
+            <template v-else-if="props.moduleKey === 'tasks' && field.key === 'relatedTo'">
+              <TaskRelatedToField
+                :model-value="normalizedRelatedTo(localFormData[field.key])"
+                :label="getFieldDisplayLabel(field) || 'Related To'"
+                :required="!!field.required"
+                :error="errors[field.key]"
+                @update:model-value="(v) => updateField(field.key, v)"
+              />
+            </template>
+            <template v-else-if="props.moduleKey === 'tasks' && field.key === 'subtasks'">
+              <TaskSubtasksField
+                :model-value="localFormData.subtasks || []"
+                label="Subtasks"
+                :error="errors.subtasks"
+                @update:model-value="(v) => updateField('subtasks', v)"
+              />
+            </template>
+            <DynamicFormField
+              v-else
+              :field="field"
+              :value="localFormData[field.key]"
+              @update:value="updateField(field.key, $event)"
+              :errors="errors"
+              :dependency-state="getFieldState(field)"
+              :locked="props.lockedFields.includes(field.key)"
+            />
+          </div>
+        </div>
+        <hr v-if="remainingFields.length" class="border-gray-200 dark:border-gray-700" />
+        <div
+          v-if="remainingFields.length"
+          class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4"
+        >
+          <div
+            v-for="field in remainingFields"
+            :key="field.key"
+            :class="[
+              'space-y-1',
+              (field.dataType === 'Text-Area' || field.dataType === 'Rich Text' || field.dataType === 'Image' || (props.moduleKey === 'tasks' && (field.key === 'description' || field.key === 'subtasks'))) ? 'md:col-span-2' : ''
+            ]"
+          >
+            <template v-if="props.moduleKey === 'tasks' && field.key === 'description'">
+              <label :for="`field-${field.key}`" class="block text-sm font-medium text-gray-900 dark:text-white mb-1">
+                {{ getFieldDisplayLabel(field) || 'Description' }}
+                <span v-if="field.required" class="text-red-500">*</span>
+              </label>
+              <TaskDescriptionEditor
+                :model-value="localFormData[field.key] || ''"
+                placeholder="Write or type '/' for commands"
+                class="w-full"
+                @update:model-value="(v) => updateField(field.key, v)"
+              />
+              <p v-if="errors[field.key]" class="mt-1 text-sm text-red-600 dark:text-red-400">{{ errors[field.key] }}</p>
+            </template>
+            <template v-else-if="props.moduleKey === 'tasks' && field.key === 'relatedTo'">
+              <TaskRelatedToField
+                :model-value="normalizedRelatedTo(localFormData[field.key])"
+                :label="getFieldDisplayLabel(field) || 'Related To'"
+                :required="!!field.required"
+                :error="errors[field.key]"
+                @update:model-value="(v) => updateField(field.key, v)"
+              />
+            </template>
+            <template v-else-if="props.moduleKey === 'tasks' && field.key === 'subtasks'">
+              <TaskSubtasksField
+                :model-value="localFormData.subtasks || []"
+                label="Subtasks"
+                :error="errors.subtasks"
+                @update:model-value="(v) => updateField('subtasks', v)"
+              />
+            </template>
+            <DynamicFormField
+              v-else
+              :field="field"
+              :value="localFormData[field.key]"
+              @update:value="updateField(field.key, $event)"
+              :errors="errors"
+              :dependency-state="getFieldState(field)"
+              :locked="props.lockedFields.includes(field.key)"
+            />
+          </div>
+        </div>
+      </template>
+      <!-- Default: single or 2-col grid -->
+      <div v-else :class="['grid gap-4', props.singleColumn ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2']">
         <div 
           v-for="field in orderedFields" 
           :key="field.key"
           :class="[
-            field.dataType === 'Text-Area' || field.dataType === 'Rich Text' || field.dataType === 'Image' ? 'md:col-span-2' : '',
-            props.moduleKey === 'tasks' && field.key === 'description' ? 'md:col-span-2 w-full' : ''
+            (field.dataType === 'Text-Area' || field.dataType === 'Rich Text' || field.dataType === 'Image' || (props.moduleKey === 'tasks' && field.key === 'description')) && !props.singleColumn ? 'md:col-span-2' : '',
+            props.moduleKey === 'tasks' && field.key === 'description' ? 'w-full' : ''
           ]"
         >
           <!-- Task description: full-width TipTap editor (same as edit drawer) -->
@@ -71,6 +176,23 @@
               @update:model-value="(v) => updateField(field.key, v)"
             />
             <p v-if="errors[field.key]" class="mt-1 text-sm text-red-600 dark:text-red-400">{{ errors[field.key] }}</p>
+          </template>
+          <template v-else-if="props.moduleKey === 'tasks' && field.key === 'relatedTo'">
+            <TaskRelatedToField
+              :model-value="normalizedRelatedTo(localFormData[field.key])"
+              :label="getFieldDisplayLabel(field) || 'Related To'"
+              :required="!!field.required"
+              :error="errors[field.key]"
+              @update:model-value="(v) => updateField(field.key, v)"
+            />
+          </template>
+          <template v-else-if="props.moduleKey === 'tasks' && field.key === 'subtasks'">
+            <TaskSubtasksField
+              :model-value="localFormData.subtasks || []"
+              label="Subtasks"
+              :error="errors.subtasks"
+              @update:model-value="(v) => updateField('subtasks', v)"
+            />
           </template>
           <DynamicFormField
             v-else
@@ -92,6 +214,8 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import DynamicFormField from './DynamicFormField.vue';
 import TaskDescriptionEditor from '@/components/record-page/TaskDescriptionEditor.vue';
+import TaskRelatedToField from '@/components/tasks/TaskRelatedToField.vue';
+import TaskSubtasksField from '@/components/tasks/TaskSubtasksField.vue';
 import apiClient from '@/utils/apiClient';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
 import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
@@ -144,6 +268,14 @@ const props = defineProps({
   moduleOverride: {
     type: Object,
     default: null // When provided, use this module instead of fetching (skips API call)
+  },
+  singleColumn: {
+    type: Boolean,
+    default: false // If true, use single column layout (grid-cols-1) instead of 2-col grid
+  },
+  quickCreateFirstWhenExpanded: {
+    type: Boolean,
+    default: false // When true and showAllFields, render quick create fields at top, then divider, then remaining (like edit drawer)
   }
 });
 
@@ -193,21 +325,16 @@ const getFieldByKey = (key) => {
 };
 
 const layout = computed(() => moduleDefinition.value?.quickCreateLayout);
+// When showAllFields is true (e.g. "Show all fields" in create drawer), bypass advanced layout
+// so we can render ALL fields - advanced layout only shows fields in layout rows
 const useAdvancedLayout = computed(() => {
+  if (props.showAllFields) return false;
   return layout.value && layout.value.rows && layout.value.rows.length > 0;
 });
 
 const orderedFields = computed(() => {
   if (!moduleDefinition.value) return [];
   const quickCreate = moduleDefinition.value.quickCreate || [];
-  
-  // STEP 4: Hard stop quickCreate logic in full mode
-  if (props.showAllFields && props.quickCreateMode) {
-    console.warn('[DynamicForm] Invalid state: full form cannot be quickCreate', {
-      showAllFields: props.showAllFields,
-      quickCreateMode: props.quickCreateMode
-    });
-  }
   
   // STEP 3: Add fieldsOverride support (MANDATORY)
   // This must run before any quickCreate or module config logic
@@ -263,7 +390,18 @@ const orderedFields = computed(() => {
   });
   
   // Filter fields by context first
-  const allFields = filterFieldsByContext(moduleDefinition.value.fields || [], currentContext.value);
+  let allFields = filterFieldsByContext(moduleDefinition.value.fields || [], currentContext.value);
+  // For tasks: ensure relatedTo and subtasks are in the list (like edit drawer) so they render in config order
+  if (props.moduleKey?.toLowerCase() === 'tasks') {
+    const hasRelatedTo = allFields.some((f) => String(f?.key).toLowerCase() === 'relatedto');
+    if (!hasRelatedTo) {
+      allFields = [...allFields, { key: 'relatedTo', label: 'Related To', required: false }];
+    }
+    const hasSubtasks = allFields.some((f) => String(f?.key).toLowerCase() === 'subtasks');
+    if (!hasSubtasks) {
+      allFields = [...allFields, { key: 'subtasks', label: 'Subtasks', required: false, order: 999 }];
+    }
+  }
   
     // Exclude system fields and hidden fields (module-aware: status only for Events)
     // assignedTo should be visible in Quick Create forms (admin can assign)
@@ -289,16 +427,16 @@ const orderedFields = computed(() => {
     }
   }
   
-  // If showAllFields is true (edit mode), show all fields instead of just quickCreate
-  // CRITICAL: When quickCreateMode is true, we MUST respect quickCreate config even if showAllFields is false
-  // This ensures create forms only show fields configured in Settings
+  // If showAllFields is true (edit mode or expanded create), show all fields instead of just quickCreate
+  // CRITICAL: When quickCreateMode is true and showAllFields is false, we MUST respect quickCreate config
+  // When showAllFields is true (e.g. fullMode in create drawer), show all fields - useQuickCreateOrder handles ordering
   console.log('🔍 Checking showAllFields condition:', {
     showAllFields: props.showAllFields,
     quickCreateMode: props.quickCreateMode,
-    willShowAllFields: props.showAllFields && !props.quickCreateMode
+    willShowAllFields: props.showAllFields
   });
   
-  if (props.showAllFields && !props.quickCreateMode) {
+  if (props.showAllFields) {
     console.log('⚠️ showAllFields is true - showing ALL fields (edit mode)');
     const ordered = [];
     const seen = new Set();
@@ -377,10 +515,24 @@ const orderedFields = computed(() => {
         }
       }
       
-      return ordered;
+      // Full form mode: use config order (field.order from settings, or array index)
+      const configOrderMap = new Map();
+      allFields.forEach((f, idx) => {
+        if (f?.key) configOrderMap.set(f.key.toLowerCase(), idx);
+      });
+      return ordered.sort((a, b) => {
+        const orderA = a.order ?? configOrderMap.get(a.key?.toLowerCase()) ?? 999;
+        const orderB = b.order ?? configOrderMap.get(b.key?.toLowerCase()) ?? 999;
+        return orderA - orderB;
+      });
     }
     
     // Default: Add all fields (excluding system fields and excluded fields)
+    // Preserve config order: use array index so fields follow Settings → Fields configuration order
+    const configOrderMap = new Map();
+    allFields.forEach((f, idx) => {
+      if (f?.key) configOrderMap.set(f.key.toLowerCase(), idx);
+    });
     for (const field of allFields) {
       const fieldKeyLower = field.key?.toLowerCase();
       const isSystem = systemFieldKeys.includes(fieldKeyLower);
@@ -399,10 +551,10 @@ const orderedFields = computed(() => {
       }
     }
     
-    // Sort by field.order if available
+    // Sort by config order (field.order from settings, or array index as fallback)
     return ordered.sort((a, b) => {
-      const orderA = a.order ?? 999;
-      const orderB = b.order ?? 999;
+      const orderA = a.order ?? configOrderMap.get(a.key?.toLowerCase()) ?? 999;
+      const orderB = b.order ?? configOrderMap.get(b.key?.toLowerCase()) ?? 999;
       return orderA - orderB;
     });
   }
@@ -625,6 +777,28 @@ const orderedFields = computed(() => {
   return ordered;
 });
 
+// For quickCreateFirstWhenExpanded: split into quick create (top) and remaining (below divider)
+const quickCreateKeysForLayout = computed(() => {
+  const qc = moduleDefinition.value?.quickCreate || [];
+  return new Set(qc.map(k => String(k).toLowerCase().trim()).filter(Boolean));
+});
+
+const quickCreateFields = computed(() => {
+  if (!props.quickCreateFirstWhenExpanded || !props.showAllFields) return [];
+  const set = quickCreateKeysForLayout.value;
+  return orderedFields.value.filter(f => f?.key && set.has(f.key.toLowerCase()));
+});
+
+const remainingFields = computed(() => {
+  if (!props.quickCreateFirstWhenExpanded || !props.showAllFields) return [];
+  const set = quickCreateKeysForLayout.value;
+  return orderedFields.value.filter(f => f?.key && !set.has(f.key.toLowerCase()));
+});
+
+const useQuickCreateFirstLayout = computed(() =>
+  props.quickCreateFirstWhenExpanded && props.showAllFields && quickCreateKeysForLayout.value.size > 0
+);
+
 const getSpanClass = (span) => {
   const spanMap = {
     1: 'col-span-1',
@@ -694,6 +868,12 @@ const getFieldState = (field) => {
   const currentFormData = localFormData.value;
   return getFieldDependencyState(field, currentFormData, moduleDefinition.value?.fields || [], { currentUser: authStore.user });
 };
+
+function normalizedRelatedTo(val) {
+  if (!val || typeof val !== 'object') return { type: 'none', id: null };
+  const id = val.id != null && typeof val.id === 'object' && val.id._id != null ? val.id._id : (val.id ?? null);
+  return { type: val.type || 'none', id };
+}
 
 const updateField = (key, value) => {
   localFormData.value[key] = value;
