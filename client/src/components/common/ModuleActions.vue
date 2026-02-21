@@ -1,29 +1,5 @@
 <template>
-  <div class="flex flex-wrap gap-2 sm:gap-3 md:gap-4">
-    <!-- Import Button -->
-    <PermissionButton
-      v-if="showImport"
-      :module="module"
-      action="create"
-      variant="secondary"
-      icon="import"
-      @click="$emit('import')"
-    >
-      <span class="hidden sm:inline">Import</span>
-    </PermissionButton>
-
-    <!-- Export Button -->
-    <PermissionButton
-      v-if="showExport"
-      :module="module"
-      action="exportData"
-      variant="secondary"
-      icon="export"
-      @click="$emit('export')"
-    >
-      <span class="hidden sm:inline">Export</span>
-    </PermissionButton>
-
+  <div class="flex flex-wrap items-center gap-2 sm:gap-3 md:gap-4">
     <!-- Create Button -->
     <PermissionButton
       v-if="showCreate"
@@ -36,13 +12,64 @@
       <span class="sm:hidden">{{ createLabel.replace(/^New\s+/, '') }}</span>
       <span class="hidden sm:inline">{{ createLabel }}</span>
     </PermissionButton>
+
+    <!-- More Actions (Import/Export) Dropdown -->
+    <Menu v-if="hasImportOrExport" as="div" class="relative">
+      <MenuButton
+        class="inline-flex items-center justify-center p-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+        aria-label="More actions"
+      >
+        <EllipsisVerticalIcon class="w-5 h-5" />
+      </MenuButton>
+      <Transition
+        enter-active-class="transition ease-out duration-100"
+        enter-from-class="transform opacity-0 scale-95"
+        enter-to-class="transform opacity-100 scale-100"
+        leave-active-class="transition ease-in duration-75"
+        leave-from-class="transform opacity-100 scale-100"
+        leave-to-class="transform opacity-0 scale-95"
+      >
+        <MenuItems class="absolute right-0 z-50 mt-2 w-48 origin-top-right rounded-lg bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none">
+          <div class="py-1">
+            <MenuItem v-if="showImport && canImport" v-slot="{ active }">
+              <button
+                @click="$emit('import')"
+                :class="[
+                  active ? 'bg-gray-100 dark:bg-gray-700' : '',
+                  'flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300'
+                ]"
+              >
+                <ArrowDownTrayIcon class="w-4 h-4" />
+                Import
+              </button>
+            </MenuItem>
+            <MenuItem v-if="showExport && canExport" v-slot="{ active }">
+              <button
+                @click="$emit('export')"
+                :class="[
+                  active ? 'bg-gray-100 dark:bg-gray-700' : '',
+                  'flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300'
+                ]"
+              >
+                <ArrowUpTrayIcon class="w-4 h-4" />
+                Export
+              </button>
+            </MenuItem>
+          </div>
+        </MenuItems>
+      </Transition>
+    </Menu>
   </div>
 </template>
 
 <script setup>
+import { computed } from 'vue';
+import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue';
+import { EllipsisVerticalIcon, ArrowDownTrayIcon, ArrowUpTrayIcon } from '@heroicons/vue/24/outline';
 import PermissionButton from './PermissionButton.vue';
+import { useAuthStore } from '@/stores/auth';
 
-defineProps({
+const props = defineProps({
   module: {
     type: String,
     required: true
@@ -66,5 +93,12 @@ defineProps({
 });
 
 defineEmits(['create', 'import', 'export']);
+
+const authStore = useAuthStore();
+const canImport = computed(() => authStore.can(props.module, 'create'));
+const canExport = computed(() => authStore.can(props.module, 'exportData'));
+const hasImportOrExport = computed(() => {
+  return (props.showImport && canImport.value) || (props.showExport && canExport.value);
+});
 </script>
 
