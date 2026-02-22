@@ -24,7 +24,7 @@
         v-model="localForm.name"
         type="text"
         placeholder="Enter form name"
-        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
       />
     </div>
 
@@ -37,7 +37,7 @@
         v-model="localForm.description"
         rows="3"
         placeholder="Enter form description"
-        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
       ></textarea>
     </div>
 
@@ -48,7 +48,7 @@
       </label>
       <select
         v-model="localForm.formType"
-        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
       >
         <option value="Audit">Audit</option>
         <option value="Survey">Survey</option>
@@ -66,7 +66,7 @@
         </label>
         <select
           v-model="localForm.visibility"
-          class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+          class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
         >
           <option value="Internal">Internal</option>
           <option value="Partner">Partner</option>
@@ -80,7 +80,7 @@
         </label>
         <select
           v-model="localForm.status"
-          class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+          class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
         >
           <option value="Draft">Draft</option>
           <option value="Ready">Ready</option>
@@ -98,7 +98,7 @@
       <input
         v-model="localForm.expiryDate"
         type="date"
-        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent cursor-pointer"
+        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer"
         @click="openDatePicker"
       />
     </div>
@@ -112,12 +112,12 @@
         <span
           v-for="(tag, index) in localForm.tags"
           :key="index"
-          class="inline-flex items-center gap-1 px-3 py-1 bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded-full text-sm"
+          class="inline-flex items-center gap-1 px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-full text-sm"
         >
           {{ tag }}
           <button
             @click="removeTag(index)"
-            class="hover:text-brand-900 dark:hover:text-brand-100"
+            class="hover:text-indigo-900 dark:hover:text-indigo-100"
           >
             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -129,7 +129,7 @@
           @keyup.enter="addTag"
           type="text"
           placeholder="Add tag..."
-          class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+          class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
         />
       </div>
     </div>
@@ -140,7 +140,7 @@
         v-model="localForm.approvalRequired"
         type="checkbox"
         id="approvalRequired"
-        class="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+        class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
       />
       <label for="approvalRequired" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
         Approval Required
@@ -156,7 +156,7 @@
         v-model="localForm.notes"
         rows="4"
         placeholder="Internal notes about this form"
-        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
       ></textarea>
     </div>
   </div>

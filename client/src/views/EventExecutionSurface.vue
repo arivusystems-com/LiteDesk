@@ -91,7 +91,7 @@
     <!-- Loading State -->
     <div v-if="loading" class="flex items-center justify-center min-h-screen">
       <div class="text-center">
-        <div class="w-16 h-16 border-4 border-gray-200 dark:border-gray-700 border-t-brand-600 dark:border-t-brand-500 rounded-full animate-spin mx-auto mb-4"></div>
+        <div class="w-16 h-16 border-4 border-gray-200 dark:border-gray-700 border-t-indigo-600 dark:border-t-indigo-500 rounded-full animate-spin mx-auto mb-4"></div>
         <p class="text-gray-600 dark:text-gray-400 font-medium">Loading event execution context...</p>
       </div>
     </div>
@@ -104,7 +104,7 @@
         </svg>
         <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Error Loading Event</h2>
         <p class="text-gray-600 dark:text-gray-400 mb-6">{{ error }}</p>
-        <button @click="$router.push('/events')" class="px-6 py-3 bg-brand-600 text-white rounded-xl hover:bg-brand-700 font-medium">
+        <button @click="$router.push('/events')" class="px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium">
           Back to Events
         </button>
       </div>
@@ -261,10 +261,10 @@
           </div>
           
           <!-- NOT_STARTED State: Primary CTA -->
-          <div v-if="executionState === 'NOT_STARTED'" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 border-brand-200 dark:border-brand-800 p-8">
+          <div v-if="executionState === 'NOT_STARTED'" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 border-indigo-200 dark:border-indigo-800 p-8">
             <div class="text-center">
               <div class="mb-6">
-                <svg class="mx-auto h-16 w-16 text-brand-600 dark:text-brand-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="mx-auto h-16 w-16 text-indigo-600 dark:text-indigo-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -277,7 +277,7 @@
                 v-if="canStart"
                 @click="handleStartEvent"
                 :disabled="starting"
-                class="inline-flex items-center gap-3 px-8 py-4 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                class="inline-flex items-center gap-3 px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
               >
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
@@ -421,10 +421,10 @@
           </div>
           
           <!-- Ready to Start (Check In Required) -->
-          <div v-if="auditState === 'Ready to start'" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 border-brand-200 dark:border-brand-800 p-8">
+          <div v-if="auditState === 'Ready to start'" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 border-indigo-200 dark:border-indigo-800 p-8">
             <div class="text-center">
               <div class="mb-6">
-                <svg class="mx-auto h-16 w-16 text-brand-600 dark:text-brand-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="mx-auto h-16 w-16 text-indigo-600 dark:text-indigo-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
@@ -456,7 +456,7 @@
                 v-if="executionContext.userRole === 'AUDITOR'"
                 @click="handleCheckIn"
                 :disabled="checkingIn || (geoRequired && !currentLocation)"
-                class="inline-flex items-center gap-3 px-8 py-4 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                class="inline-flex items-center gap-3 px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
               >
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />

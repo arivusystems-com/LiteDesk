@@ -145,6 +145,7 @@ const approvalRoutes = require('./routes/approvalRoutes');
 const businessFlowRoutes = require('./routes/businessFlowRoutes');
 const businessFlowTemplateRoutes = require('./routes/businessFlowTemplateRoutes');
 const automationContextRoutes = require('./routes/automationContextRoutes');
+const trashRoutes = require('./routes/trashRoutes');
 
 // Route Linking
 app.use('/api/auth', authRoutes);
@@ -192,6 +193,7 @@ app.use('/api/public/forms', formRoutes); // Public form routes
 app.use('/api/forms', formRoutes.protected); // Protected form routes
 app.use('/api/reports', reportRoutes);
 app.use('/api/items', itemRoutes);
+app.use('/api/trash', trashRoutes);
 app.use('/api/upload', uploadRoutes);
 
 // Inbox Routes (Cross-app attention surface)

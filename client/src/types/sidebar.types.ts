@@ -46,7 +46,7 @@ export type AppSummary = {
 export type SidebarItem =
   | {
       kind: 'surface';
-      id: 'home' | 'inbox' | 'search';
+      id: 'home' | 'inbox' | 'search' | 'trash' | 'approvals';
       label: string;
       route: string;
       icon?: string;

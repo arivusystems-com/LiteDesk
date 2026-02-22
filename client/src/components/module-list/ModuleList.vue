@@ -1,7 +1,7 @@
 <template>
   <div v-if="loading" class="flex items-center justify-center min-h-screen">
     <div class="text-center">
-      <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+      <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
       <p class="text-gray-600 dark:text-gray-400 mt-4">Loading list...</p>
     </div>
   </div>
@@ -19,7 +19,7 @@
         <button
           v-if="listDefinition.emptyState.primaryAction"
           @click="handleAction(listDefinition.emptyState.primaryAction.route)"
-          class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-medium transition-colors"
+          class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors"
         >
           {{ listDefinition.emptyState.primaryAction.label }}
         </button>

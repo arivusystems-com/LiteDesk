@@ -13,7 +13,7 @@
 
     <!-- Loading State -->
     <div v-if="loading" class="flex items-center justify-center py-12">
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
     </div>
 
     <!-- Error State -->
@@ -36,7 +36,7 @@
         <div>
           <div class="flex items-center gap-3 mb-2">
             <!-- Module Icon -->
-            <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400">
+            <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
               </svg>
@@ -185,8 +185,8 @@
                           @update:model-value="() => handleToggleApp(app)"
                           :disabled="updatingApps.includes(app.appKey)"
                           :class="[
-                            app.enabled ? 'bg-brand-600 dark:bg-brand-500' : 'bg-gray-200 dark:bg-gray-700',
-                            'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2',
+                            app.enabled ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700',
+                            'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2',
                             updatingApps.includes(app.appKey) ? 'opacity-50 cursor-not-allowed' : ''
                           ]"
                         >
@@ -203,7 +203,7 @@
                           {{ app.enabled ? 'Enabled' : 'Disabled' }}
                         </span>
                         <div v-if="updatingApps.includes(app.appKey)" class="ml-2">
-                          <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-brand-600"></div>
+                          <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div>
                         </div>
                       </div>
                       <!-- Read-only Status (for required apps or when can't toggle) -->
@@ -249,7 +249,7 @@
         <div>
           <div class="flex items-center gap-3 mb-2">
             <!-- Module Icon -->
-            <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400">
+            <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
@@ -291,7 +291,7 @@
         <ModulesAndFields 
           :module-filter="organizationsModuleFilter" 
           :title="'Organizations'"
-          :hide-field-creation="true"
+          :hide-field-creation="false"
           :hide-header="true"
         >
           <template #details-extra>
@@ -438,7 +438,7 @@
         <div>
           <div class="flex items-center gap-3 mb-2">
             <!-- Module Icon -->
-            <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400">
+            <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
               </svg>
@@ -490,7 +490,7 @@
         <ModulesAndFields 
           :module-filter="tasksModuleFilter" 
           :title="'Tasks'"
-          :hide-field-creation="true"
+          :hide-field-creation="false"
           :hide-header="true"
         >
           <template #details-extra>
@@ -647,7 +647,7 @@
         <div>
           <div class="flex items-center gap-3 mb-2">
             <!-- Module Icon -->
-            <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400">
+            <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
@@ -730,7 +730,7 @@
         <ModulesAndFields 
           :module-filter="eventsModuleFilter" 
           :title="'Events'"
-          :hide-field-creation="true"
+          :hide-field-creation="false"
           :hide-header="true"
         >
           <template #details-extra>
@@ -886,7 +886,7 @@
         <div>
           <div class="flex items-center gap-3 mb-2">
             <!-- Module Icon -->
-            <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400">
+            <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
@@ -932,7 +932,7 @@
         <ModulesAndFields 
           :module-filter="formsModuleFilter" 
           :title="'Forms'"
-          :hide-field-creation="true"
+          :hide-field-creation="false"
           :hide-header="true"
         >
           <template #details-extra>
@@ -1098,7 +1098,7 @@
         <div>
           <div class="flex items-center gap-3 mb-2">
             <!-- Module Icon -->
-            <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400">
+            <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
               </svg>
@@ -1140,7 +1140,7 @@
         <ModulesAndFields 
           :module-filter="itemsModuleFilter" 
           :title="'Items'"
-          :hide-field-creation="true"
+          :hide-field-creation="false"
           :hide-header="true"
         >
           <template #details-extra>
@@ -1228,8 +1228,8 @@
                           @update:model-value="() => handleToggleApp(app)"
                           :disabled="updatingApps.includes(app.appKey)"
                           :class="[
-                            app.enabled ? 'bg-brand-600 dark:bg-brand-500' : 'bg-gray-200 dark:bg-gray-700',
-                            'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2',
+                            app.enabled ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700',
+                            'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2',
                             updatingApps.includes(app.appKey) ? 'opacity-50 cursor-not-allowed' : ''
                           ]"
                         >
@@ -1289,7 +1289,7 @@
       <div>
         <div class="flex items-center gap-3 mb-4">
           <!-- Module Icon -->
-          <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400">
+          <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
             </svg>
@@ -1490,8 +1490,8 @@
                     @update:model-value="() => handleToggleApp(app)"
                     :disabled="updatingApps.includes(app.appKey)"
                     :class="[
-                      app.enabled ? 'bg-brand-600 dark:bg-brand-500' : 'bg-gray-200 dark:bg-gray-700',
-                      'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2',
+                      app.enabled ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700',
+                      'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2',
                       updatingApps.includes(app.appKey) ? 'opacity-50 cursor-not-allowed' : ''
                     ]"
                   >
@@ -1508,7 +1508,7 @@
                     {{ app.enabled ? 'Enabled' : 'Disabled' }}
                   </span>
                   <div v-if="updatingApps.includes(app.appKey)" class="ml-2">
-                    <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-brand-600"></div>
+                    <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div>
                   </div>
                 </div>
                 <!-- Read-only Status (for required apps or when can't toggle) -->
@@ -1596,14 +1596,14 @@
             <button
               @click="confirmToggle"
               :disabled="updatingApps.includes(pendingAction?.app?.appKey)"
-              class="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-brand-600 text-sm font-medium text-white hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {{ pendingAction.newState ? 'Enable' : 'Disable' }}
             </button>
             <button
               @click="cancelToggle"
               :disabled="updatingApps.includes(pendingAction?.app?.appKey)"
-              class="inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>

@@ -2,6 +2,26 @@ const ModuleDefinition = require('../models/ModuleDefinition');
 const { buildTaskDefaultRelationshipsForSettings } = require('../utils/taskRelationshipSettings');
 const { filterFieldsByReadAccess, filterFieldsByWriteAccess, validateFieldWrite } = require('../utils/fieldAccessControl');
 
+/** Canonical key for field dedup: lowercase, trim, strip spaces and hyphens (so "deleted-by", "deletedBy", "Deleted By" all match) */
+function fieldKeyCanonical(k) {
+  return String(k || '').toLowerCase().trim().replace(/\s+/g, '').replace(/-/g, '');
+}
+
+/** Dedupe fields by canonical key, preferring programmatic keys (no spaces) */
+function dedupeFieldsByKey(fields) {
+  if (!Array.isArray(fields)) return fields;
+  const byCanonical = new Map();
+  for (const f of fields) {
+    const k = fieldKeyCanonical(f?.key);
+    if (!k) continue;
+    const existing = byCanonical.get(k);
+    if (!existing || ((f.key || '').indexOf(' ') === -1 && (existing.key || '').indexOf(' ') !== -1)) {
+      byCanonical.set(k, f);
+    }
+  }
+  return Array.from(byCanonical.values());
+}
+
 /**
  * Validate field mutations based on ownership rules
  * 
@@ -443,11 +463,14 @@ function getBaseFieldsForKey(key) {
         const model = modelByKey[key];
         if (!model) return [];
         // System fields that should be excluded from forms (auto-generated or system-managed)
+        // RULE: New system fields (e.g. trash: deletedAt, deletedBy, deletionReason) MUST be added here
+        // so they never appear in create/edit flows. See .cursor/rules/system-field-exclusion.mdc
         const excluded = new Set([
             '_id', 
             '__v', 
             'createdAt', 
             'updatedAt',
+            'customFields',   // Storage bucket for user-defined custom field values; not a configurable field
             'eventId',        // Auto-generated UUID
             'organizationId', // Auto-filled from user context (but keep for forms module)
             'createdBy',      // Keep for forms module (it's a valid field)
@@ -455,6 +478,10 @@ function getBaseFieldsForKey(key) {
             'modifiedBy',      // Keep for forms module (it's a valid field)
             'modifiedTime',   // Auto-filled on update
             'auditHistory',   // System-managed audit trail
+            // Trash (soft delete) - never show in create/edit
+            'deletedAt',
+            'deletedBy',
+            'deletionReason',
             // Form-specific nested objects that shouldn't be fields
             'sections',       // Nested structure
             'kpiMetrics',    // Nested object
@@ -1745,20 +1772,6 @@ exports.listModules = async (req, res) => {
             };
             return canonicalMap[normalized] || camel || raw;
         };
-        const dedupeFieldsByKey = (fields) => {
-            const seenLower = new Set();
-            const out = [];
-            for (const f of (Array.isArray(fields) ? fields : [])) {
-                const k = String(f?.key || '');
-                const lower = k.toLowerCase();
-                if (!lower) continue;
-                if (seenLower.has(lower)) continue;
-                seenLower.add(lower);
-                out.push(f);
-            }
-            return out;
-        };
-
         // Merge: system base + stored overrides for same key (both custom and system-typed docs are stored in ModuleDefinition)
         const merged = [];
         for (const sys of systemModules) {
@@ -1783,6 +1796,7 @@ exports.listModules = async (req, res) => {
                     .filter(f => {
                         const k = String(f?.key || '').toLowerCase();
                         if (k === 'correctiveactionowners') return false;
+                        if (k === 'customfields') return false; // Storage bucket, not a configurable field
                         // Remove legacy/alias event field keys that should not exist in UI config
                         if (sys.key === 'events' && deprecatedEventAliasKeys.has(k)) return false;
                         return true;
@@ -1796,32 +1810,36 @@ exports.listModules = async (req, res) => {
                     });
                     saved = dedupeFieldsByKey(saved);
                 }
+                // Dedupe Tasks fields (e.g. deletedBy can appear twice if Trash fields were added multiple times)
+                if (sys.key === 'tasks') {
+                    saved = dedupeFieldsByKey(saved);
+                }
                 saved.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
                 const seen = new Set(saved.map(f => f.key));
-                
-                // Create a map of base fields by key for quick lookup (case-insensitive)
+
+                // Create a map of base fields by key for quick lookup (case-insensitive, space-insensitive)
                 const baseFieldMap = new Map();
-                const baseFieldMapLower = new Map(); // Case-insensitive lookup
+                const baseFieldMapCanonical = new Map();
                 for (const f of sys.fields) {
                     if (f.key) {
                         baseFieldMap.set(f.key, f);
-                        baseFieldMapLower.set(f.key.toLowerCase(), f);
+                        baseFieldMapCanonical.set(fieldKeyCanonical(f.key), f);
                     }
                 }
-                
+
                 // Update saved fields with base field dataType and options (for system modules, schema is source of truth)
                 // BUT preserve saved labels and lookupSettings
                 for (const savedField of saved) {
                     if (!savedField.key) continue;
-                    
+
                     // Ensure owner and context are set (safe defaults for existing fields)
                     if (!savedField.owner) savedField.owner = 'platform';
                     if (!savedField.context) savedField.context = 'global';
-                    
-                    // Try exact match first, then case-insensitive match
+
+                    // Try exact match first, then canonical match (handles "Deleted By" -> deletedBy)
                     let baseField = baseFieldMap.get(savedField.key);
                     if (!baseField) {
-                        baseField = baseFieldMapLower.get(savedField.key.toLowerCase());
+                        baseField = baseFieldMapCanonical.get(fieldKeyCanonical(savedField.key));
                     }
                     
                     if (baseField) {
@@ -2297,10 +2315,10 @@ exports.listModules = async (req, res) => {
                     }
                 }
                 
-                // Add any new base fields not in saved (case-insensitive check)
+                // Add any new base fields not in saved (canonical key: handles "Deleted By" vs "deletedBy")
+                const savedCanonicalKeys = new Set(saved.map(f => fieldKeyCanonical(f.key)).filter(Boolean));
                 for (const baseField of sys.fields) {
-                    const baseKeyLower = baseField.key?.toLowerCase();
-                    const alreadyExists = saved.some(f => f.key && f.key.toLowerCase() === baseKeyLower);
+                    const alreadyExists = savedCanonicalKeys.has(fieldKeyCanonical(baseField.key));
                     if (!alreadyExists) {
                         // Ensure linkedFormId in events module has visibility dependency
                         let fieldToAdd = { ...baseField, order: saved.length };
@@ -2606,7 +2624,8 @@ exports.listModules = async (req, res) => {
                     }
                 }
                 
-                const finalFields = sys.key === 'tasks' ? normalizeTasksModuleFields(saved) : saved;
+                let finalFields = sys.key === 'tasks' ? normalizeTasksModuleFields(saved) : saved;
+                if (sys.key === 'tasks') finalFields = dedupeFieldsByKey(finalFields);
                 merged.push({ 
                     ...sys, 
                     fields: finalFields,
@@ -2668,7 +2687,8 @@ exports.listModules = async (req, res) => {
                     defaultQuickCreate = ['item_name', 'item_type', 'category', 'selling_price'];
                 }
 
-                const taskFields = sys.key === 'tasks' ? normalizeTasksModuleFields(withOrder) : withOrder;
+                let taskFields = sys.key === 'tasks' ? normalizeTasksModuleFields(withOrder) : withOrder;
+                if (sys.key === 'tasks') taskFields = dedupeFieldsByKey(taskFields);
                 merged.push({ 
                     ...sys, 
                     fields: taskFields,
@@ -3180,9 +3200,14 @@ exports.updateSystemModule = async (req, res) => {
         if (name !== undefined) updateObj.name = String(name).trim();
         if (enabled !== undefined) updateObj.enabled = !!enabled;
         if (Array.isArray(fieldsToSave)) {
-            updateObj.fields = (key === 'events')
+            let fieldsOut = (key === 'events')
                 ? fieldsToSave.filter(f => !deprecatedEventAliasKeys.has(String(f?.key || '').toLowerCase()))
                 : fieldsToSave;
+            if (key === 'tasks') {
+                fieldsOut = dedupeFieldsByKey(fieldsOut);
+                fieldsOut = normalizeTasksModuleFields(fieldsOut);
+            }
+            updateObj.fields = fieldsOut;
         }
         if (Array.isArray(relationships)) updateObj.relationships = relationships;
         if (pipelineSettings !== undefined) {

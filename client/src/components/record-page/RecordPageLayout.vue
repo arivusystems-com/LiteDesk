@@ -5,7 +5,7 @@
       <slot name="header" />
     </header>
     <!-- Body container - no scroll, only columns scroll -->
-    <div :class="['record-page-layout__body', 'flex', 'flex-1', 'min-h-0', 'gap-0', isMobile ? 'px-0' : 'px-6', 'pr-0', 'pt-6', 'overflow-hidden', 'record-page-layout__body--responsive', 'record-page-layout__body--with-header', 'record-page-layout__body--positioned', { 'transition-all duration-300 ease-in-out': allowTransition }]">
+    <div :class="['record-page-layout__body', 'flex', 'flex-1', 'min-h-0', 'gap-0', isMobile ? 'px-0' : 'px-6', 'pr-0', forceMobile ? 'pt-0' : 'pt-6', 'overflow-hidden', 'record-page-layout__body--responsive', !forceMobile && 'record-page-layout__body--with-header', 'record-page-layout__body--positioned', { 'transition-all duration-300 ease-in-out': allowTransition }]">
       <!-- Left column: Main content (2/3 width) - scrollable; on mobile/tablet hidden unless leftExpanded (e.g. version history) -->
       <div
         v-show="!isMobile || leftExpanded"
@@ -36,7 +36,7 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, nextTick, ref, provide } from 'vue';
+import { onMounted, onUnmounted, nextTick, ref, provide, computed } from 'vue';
 
 /**
  * RecordPageLayout – global record page structure.
@@ -52,7 +52,9 @@ import { onMounted, onUnmounted, nextTick, ref, provide } from 'vue';
 
 const props = defineProps({
   /** When true, left column is shown full-screen even on mobile/tablet (e.g. description version history). */
-  leftExpanded: { type: Boolean, default: false }
+  leftExpanded: { type: Boolean, default: false },
+  /** When true, force mobile layout (left hidden, Summary tab in right pane) - e.g. for embed in QuickPreviewDrawer */
+  forceMobile: { type: Boolean, default: false }
 });
 
 const allowTransition = ref(false);
@@ -64,11 +66,12 @@ const SCROLL_HIDE_DELAY = 800;
 // Mobile detection (< 1024px matches lg: breakpoint)
 const MOBILE_BREAKPOINT = 1024;
 const TABLET_MIN_WIDTH = 768;
-const isMobile = ref(window.innerWidth < MOBILE_BREAKPOINT);
+const windowIsMobile = ref(window.innerWidth < MOBILE_BREAKPOINT);
+const isMobile = computed(() => props.forceMobile || windowIsMobile.value);
 const summaryTeleportReady = ref(false);
 
-// Provide isMobile to child components (RecordRightPane)
-provide('recordLayoutIsMobile', isMobile);
+// Provide isMobile to child components (RecordRightPane) - must be ref-like for inject
+provide('recordLayoutIsMobile', computed(() => isMobile.value));
 provide('recordLayoutSummaryTeleportReady', summaryTeleportReady);
 
 function showLeftScrollbar() {
@@ -174,7 +177,7 @@ onMounted(async () => {
   window.addEventListener('resize', () => {
     updateHeaderHeight();
     updateHeaderPosition();
-    isMobile.value = window.innerWidth < MOBILE_BREAKPOINT;
+    windowIsMobile.value = window.innerWidth < MOBILE_BREAKPOINT;
   });
   
   // Listen for sidebar toggle events - transitions will be enabled by this point

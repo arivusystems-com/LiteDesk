@@ -6,7 +6,7 @@
     </div>
 
     <div v-if="loading" class="flex items-center justify-center py-12">
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
     </div>
 
     <div v-else-if="error" class="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -25,7 +25,7 @@
             :class="[
               'p-4 cursor-pointer transition-colors',
               selectedPipelineKey === pipeline.key
-                ? 'bg-brand-50 dark:bg-brand-900/20'
+                ? 'bg-indigo-50 dark:bg-indigo-900/20'
                 : 'hover:bg-gray-50 dark:hover:bg-white/5'
             ]"
             @click="selectedPipelineKey = pipeline.key"
@@ -38,7 +38,7 @@
                   <p class="text-xs text-gray-500 dark:text-gray-400">{{ pipeline.stages?.length || 0 }} stage{{ (pipeline.stages?.length || 0) === 1 ? '' : 's' }}</p>
                 </div>
               </div>
-              <span v-if="pipeline.isDefault" class="text-xs font-medium text-brand-600 dark:text-brand-300">Default</span>
+              <span v-if="pipeline.isDefault" class="text-xs font-medium text-indigo-600 dark:text-indigo-300">Default</span>
             </div>
           </div>
           <div v-if="!pipelineSettings.length" class="p-6 text-center text-sm text-gray-500 dark:text-gray-400">
@@ -65,7 +65,7 @@
             :class="[
               isSaving
                 ? 'bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed'
-                : 'bg-brand-600 hover:bg-brand-700 text-white shadow-sm hover:shadow'
+                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm hover:shadow'
             ]"
           >
             <svg v-if="isSaving" class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -103,7 +103,7 @@
                           type="checkbox"
                           v-model="stage.playbook.enabled"
                           @change="handlePlaybookToggle(stage)"
-                          class="rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500"
+                          class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                         />
                         <span>Enable</span>
                       </label>
@@ -147,7 +147,7 @@
                           </div>
                           <div>
                             <label class="inline-flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
-                              <input type="checkbox" v-model="stage.playbook.autoAdvance" @change="onPlaybookAutoAdvanceChange(stage)" class="rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500" />
+                              <input type="checkbox" v-model="stage.playbook.autoAdvance" @change="onPlaybookAutoAdvanceChange(stage)" class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500" />
                               Auto-move to next stage when criteria met
                             </label>
                             <p class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Automatically progress when conditions are satisfied.</p>
@@ -178,7 +178,7 @@
                         <p class="text-xs text-gray-500 dark:text-gray-400">Add and orchestrate the work your team completes in this stage.</p>
                       </div>
                       <button
-                        class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors shadow-sm hover:shadow"
+                        class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-sm hover:shadow"
                         @click="addPlaybookAction(stage)"
                         :disabled="!stage.playbook.enabled"
                         :class="!stage.playbook.enabled ? 'opacity-50 cursor-not-allowed' : ''"

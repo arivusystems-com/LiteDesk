@@ -106,18 +106,26 @@ export interface FieldMetadata extends Omit<BaseFieldMetadata, 'intent'> {
 export const PEOPLE_FIELD_METADATA: Record<string, FieldMetadata> = {
   // ==========================================================================
   // SYSTEM FIELDS (platform-managed, read-only, infrastructure-scoped)
+  // Type A: Infrastructure (never visible): organizationId, legacyContactId
+  // Type B: Audit (visible, read-only): createdAt, updatedAt, createdBy
+  // assignedTo: system but editable (special case for People)
+  // Type C: Computed: activityLogs, derivedStatus
   // ==========================================================================
   organizationId: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: false,
   },
   createdBy: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   assignedTo: {
     owner: 'system',
@@ -128,48 +136,66 @@ export const PEOPLE_FIELD_METADATA: Record<string, FieldMetadata> = {
     filterable: true,
     filterType: 'user',
     filterPriority: 1,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   legacyContactId: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: false,
   },
   createdAt: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   updatedAt: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   activityLogs: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isComputed: true,
+    isVisibleInConfig: false, // Managed internally, too verbose for config
   },
   notes: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   attachments: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   derivedStatus: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isComputed: true,
+    isVisibleInConfig: true,
   },
 
   // ==========================================================================

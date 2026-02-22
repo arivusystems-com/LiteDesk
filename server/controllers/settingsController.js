@@ -55,6 +55,21 @@ exports.getCoreModules = async (req, res) => {
             appKey: 'platform',
             moduleKey: { $in: coreModuleKeys }
         }).lean();
+
+        // Get org-specific display name overrides (saved via Settings → Module details)
+        const orgOverrides = await ModuleDefinition.find({
+            organizationId: req.user.organizationId,
+            key: { $in: coreModuleKeys }
+        })
+        .select('key name')
+        .lean();
+        const nameOverridesByKey = {};
+        for (const o of orgOverrides) {
+            const k = (o.key || '').toLowerCase();
+            if (o.name && typeof o.name === 'string' && o.name.trim()) {
+                nameOverridesByKey[k] = o.name.trim();
+            }
+        }
         
         // Sort modules according to the defined order (modules not in coreModuleOrder go to the end)
         const platformModules = platformModulesRaw.sort((a, b) => {
@@ -104,10 +119,11 @@ exports.getCoreModules = async (req, res) => {
             const orderIndex = coreModuleOrder.indexOf(module.moduleKey);
             const order = orderIndex === -1 ? 999 : orderIndex;
 
+            const displayName = nameOverridesByKey[module.moduleKey] || module.label || capitalizeFirst(module.moduleKey);
             return {
                 moduleKey: module.moduleKey,
-                name: module.label || capitalizeFirst(module.moduleKey),
-                description: module.description || `${module.label || capitalizeFirst(module.moduleKey)} - Shared platform capability`,
+                name: displayName,
+                description: module.description || `${displayName} - Shared platform capability`,
                 icon: 'module',
                 platformOwned: true,
                 order: order,
@@ -158,6 +174,17 @@ exports.getCoreModule = async (req, res) => {
             });
         }
 
+        // Get org-specific display name override (saved via Settings → Module details)
+        const orgOverride = await ModuleDefinition.findOne({
+            organizationId: req.user.organizationId,
+            key: moduleKey.toLowerCase()
+        })
+        .select('name')
+        .lean();
+        const displayName = (orgOverride?.name && typeof orgOverride.name === 'string' && orgOverride.name.trim())
+            ? orgOverride.name.trim()
+            : (module.label || capitalizeFirst(module.moduleKey));
+
         // Get enabled apps
         // Filter out invalid app keys
         const VALID_APPS = ['SALES', 'HELPDESK', 'PROJECTS', 'PORTAL', 'AUDIT', 'LMS'];
@@ -201,8 +228,8 @@ exports.getCoreModule = async (req, res) => {
         res.json({
             success: true,
             moduleKey: module.moduleKey,
-            name: module.label || capitalizeFirst(module.moduleKey),
-            description: module.description || `${module.label || capitalizeFirst(module.moduleKey)} - Shared platform capability`,
+            name: displayName,
+            description: module.description || `${displayName} - Shared platform capability`,
             icon: 'module',
             platformOwned: true,
             order: order,

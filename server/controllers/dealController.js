@@ -125,7 +125,7 @@ exports.createDeal = async (req, res) => {
 // @access  Private
 exports.getDeals = async (req, res) => {
     try {
-        const query = { organizationId: req.user.organizationId };
+        const query = { organizationId: req.user.organizationId, deletedAt: null };
         
         // Filter by user if needed
         if (req.filterByUser) {
@@ -204,7 +204,7 @@ exports.getDeals = async (req, res) => {
         
         // Get statistics
         const stats = await Deal.aggregate([
-            { $match: { organizationId: req.user.organizationId } },
+            { $match: { organizationId: req.user.organizationId, deletedAt: null } },
             {
                 $group: {
                     _id: null,
@@ -269,7 +269,8 @@ exports.getDealById = async (req, res) => {
     try {
         const deal = await Deal.findOne({ 
             _id: req.params.id, 
-            organizationId: req.user.organizationId 
+            organizationId: req.user.organizationId,
+            deletedAt: null
         })
         .populate('contactId', 'first_name last_name email phone')
         .populate('ownerId', 'firstName lastName email')
@@ -286,9 +287,10 @@ exports.getDealById = async (req, res) => {
             });
         }
         
+        const { flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
         res.status(200).json({
             success: true,
-            data: deal
+            data: flattenCustomFieldsForResponse(deal)
         });
     } catch (error) {
         console.error('Get deal error:', error);
@@ -382,13 +384,16 @@ exports.updateDeal = async (req, res) => {
         let previousDeal = null;
         if (shouldComputeDerivedStatus) {
             previousDeal = await Deal.findOne(
-                { _id: req.params.id, organizationId: req.user.organizationId }
+                { _id: req.params.id, organizationId: req.user.organizationId, deletedAt: null }
             ).lean();
         }
 
+        const { buildUpdateWithCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+        const $set = buildUpdateWithCustomFields(req.body, Deal);
+
         const updatedDeal = await Deal.findOneAndUpdate(
-            { _id: req.params.id, organizationId: req.user.organizationId },
-            req.body,
+            { _id: req.params.id, organizationId: req.user.organizationId, deletedAt: null },
+            { $set },
             { new: true, runValidators: true }
         )
             .populate('contactId', 'first_name last_name email')
@@ -447,7 +452,7 @@ exports.updateDeal = async (req, res) => {
             .populate('dealPeople.personId', 'first_name last_name email')
             .populate('dealOrganizations.organizationId', 'name');
 
-        res.status(200).json({ success: true, data: populatedDeal });
+        res.status(200).json({ success: true, data: flattenCustomFieldsForResponse(populatedDeal) });
     } catch (error) {
         console.error('Update deal error:', error);
         res.status(400).json({ 
@@ -458,50 +463,48 @@ exports.updateDeal = async (req, res) => {
     }
 };
 
-// @desc    Delete deal
+// @desc    Delete deal (move to trash)
 // @route   DELETE /api/deals/:id
 // @access  Private
 exports.deleteDeal = async (req, res) => {
     try {
-        // Validate deletion invariants
-        const { validateDelete } = require('../services/systemInvariants');
-        const invariantResult = await validateDelete({
+        const deletionService = require('../services/deletionService');
+        const result = await deletionService.moveToTrash({
             moduleKey: 'deals',
             recordId: req.params.id,
-            organizationId: req.user.organizationId
-        });
-        
-        if (!invariantResult.valid) {
-            return res.status(400).json({
-                success: false,
-                code: invariantResult.code,
-                message: invariantResult.message,
-                errors: invariantResult.errors
-            });
-        }
-        
-        const result = await Deal.findOneAndDelete({ 
-            _id: req.params.id, 
-            organizationId: req.user.organizationId 
+            organizationId: req.user.organizationId,
+            userId: req.user._id,
+            appKey: 'SALES',
+            reason: req.body?.reason,
+            cascadeConfirmed: !!req.body?.cascadeConfirmed
         });
 
-        if (!result) {
-            return res.status(404).json({ 
+        if (!result.ok) {
+            if (result.blocked) {
+                return res.status(400).json({
+                    success: false,
+                    blocked: true,
+                    dependencies: result.dependencies,
+                    message: result.message
+                });
+            }
+            return res.status(400).json({
                 success: false,
-                message: 'Deal not found or access denied.' 
+                message: result.message || 'Failed to delete deal.'
             });
         }
-        
+
         res.status(200).json({
             success: true,
-            message: 'Deal deleted successfully'
+            message: 'Deal moved to trash',
+            retentionExpiresAt: result.retentionExpiresAt
         });
     } catch (error) {
         console.error('Delete deal error:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
-            message: 'Error deleting deal.', 
-            error: error.message 
+            message: 'Error deleting deal.',
+            error: error.message
         });
     }
 };
@@ -523,7 +526,8 @@ exports.addNote = async (req, res) => {
         const deal = await Deal.findOneAndUpdate(
             { 
                 _id: req.params.id, 
-                organizationId: req.user.organizationId 
+                organizationId: req.user.organizationId,
+                deletedAt: null
             },
             {
                 $push: {
@@ -574,7 +578,8 @@ exports.getPipelineSummary = async (req, res) => {
             { 
                 $match: { 
                     organizationId: req.user.organizationId,
-                    status: { $in: ['Open', 'Active'] }
+                    status: { $in: ['Open', 'Active'] },
+                    deletedAt: null
                 } 
             },
             {
@@ -633,7 +638,8 @@ exports.updateStage = async (req, res) => {
 
         const deal = await Deal.findOne({
             _id: req.params.id,
-            organizationId: req.user.organizationId
+            organizationId: req.user.organizationId,
+            deletedAt: null
         });
 
         if (!deal) {
@@ -684,7 +690,8 @@ exports.updateStage = async (req, res) => {
         // Renormalize stageOrder so the moved deal is at index `order` and the rest are 0,1,2,...
         const inStage = await Deal.find({
             organizationId: req.user.organizationId,
-            stage: deal.stage
+            stage: deal.stage,
+            deletedAt: null
         })
             .sort({ stageOrder: 1, _id: 1 })
             .select('_id')

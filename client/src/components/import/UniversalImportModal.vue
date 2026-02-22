@@ -16,7 +16,7 @@
         <!-- Module Selection -->
         <div class="space-y-6">
           <div class="text-center">
-            <svg class="mx-auto h-16 w-16 text-brand-600 dark:text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="mx-auto h-16 w-16 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
             <h3 class="mt-4 text-xl font-semibold text-gray-900 dark:text-white">Select Module to Import</h3>
@@ -27,7 +27,7 @@
             <!-- Contacts -->
             <button
               @click="selectModule('Contacts')"
-              class="w-full p-6 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-lg hover:border-brand-500 dark:hover:border-brand-400 hover:shadow-lg transition-all text-left group"
+              class="w-full p-6 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-lg hover:border-indigo-500 dark:hover:border-indigo-400 hover:shadow-lg transition-all text-left group"
             >
               <div class="flex items-start gap-4">
                 <div class="w-16 h-16 rounded-lg flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-blue-500 to-blue-600">
@@ -36,7 +36,7 @@
                   </svg>
                 </div>
                 <div class="flex-1 text-left">
-                  <h4 class="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+                  <h4 class="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                     Contacts
                   </h4>
                   <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
@@ -46,7 +46,7 @@
                     Fields: Name, Email, Phone, Company, etc.
                   </p>
                 </div>
-                <svg class="w-6 h-6 text-gray-400 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-6 h-6 text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                 </svg>
               </div>
@@ -55,7 +55,7 @@
             <!-- Deals -->
             <button
               @click="selectModule('Deals')"
-              class="w-full p-6 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-lg hover:border-brand-500 dark:hover:border-brand-400 hover:shadow-lg transition-all text-left group"
+              class="w-full p-6 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-lg hover:border-indigo-500 dark:hover:border-indigo-400 hover:shadow-lg transition-all text-left group"
             >
               <div class="flex items-start gap-4">
                 <div class="w-16 h-16 rounded-lg flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-green-500 to-green-600">
@@ -64,7 +64,7 @@
                   </svg>
                 </div>
                 <div class="flex-1 text-left">
-                  <h4 class="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+                  <h4 class="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                     Deals
                   </h4>
                   <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
@@ -74,7 +74,7 @@
                     Fields: Name, Amount, Stage, Status, etc.
                   </p>
                 </div>
-                <svg class="w-6 h-6 text-gray-400 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-6 h-6 text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                 </svg>
               </div>
@@ -83,7 +83,7 @@
             <!-- Tasks -->
             <button
               @click="selectModule('Tasks')"
-              class="w-full p-6 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-lg hover:border-brand-500 dark:hover:border-brand-400 hover:shadow-lg transition-all text-left group"
+              class="w-full p-6 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-lg hover:border-indigo-500 dark:hover:border-indigo-400 hover:shadow-lg transition-all text-left group"
             >
               <div class="flex items-start gap-4">
                 <div class="w-16 h-16 rounded-lg flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-purple-500 to-purple-600">
@@ -92,7 +92,7 @@
                   </svg>
                 </div>
                 <div class="flex-1 text-left">
-                  <h4 class="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+                  <h4 class="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                     Tasks
                   </h4>
                   <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
@@ -102,7 +102,7 @@
                     Fields: Title, Description, Status, Priority, etc.
                   </p>
                 </div>
-                <svg class="w-6 h-6 text-gray-400 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-6 h-6 text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                 </svg>
               </div>
@@ -111,7 +111,7 @@
             <!-- Organizations -->
             <button
               @click="selectModule('Organizations')"
-              class="w-full p-6 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-lg hover:border-brand-500 dark:hover:border-brand-400 hover:shadow-lg transition-all text-left group"
+              class="w-full p-6 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-lg hover:border-indigo-500 dark:hover:border-indigo-400 hover:shadow-lg transition-all text-left group"
             >
               <div class="flex items-start gap-4">
                 <div class="w-16 h-16 rounded-lg flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-orange-500 to-orange-600">
@@ -120,7 +120,7 @@
                   </svg>
                 </div>
                 <div class="flex-1 text-left">
-                  <h4 class="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+                  <h4 class="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                     Organizations
                   </h4>
                   <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
@@ -130,7 +130,7 @@
                     Fields: Name, Industry, Website, Phone, etc.
                   </p>
                 </div>
-                <svg class="w-6 h-6 text-gray-400 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-6 h-6 text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                 </svg>
               </div>

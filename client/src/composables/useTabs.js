@@ -11,7 +11,9 @@ import {
   FolderIcon,
   BookOpenIcon,
   ComputerDesktopIcon,
-  DocumentTextIcon
+  DocumentTextIcon,
+  TrashIcon,
+  Cog6ToothIcon
 } from '@heroicons/vue/24/outline';
 
 // Tab state management
@@ -44,7 +46,9 @@ const iconMap = {
   'folder': FolderIcon,
   'book': BookOpenIcon,
   'computer': ComputerDesktopIcon,
-  'document': DocumentTextIcon
+  'trash': TrashIcon,
+  'document': DocumentTextIcon,
+  'cog': Cog6ToothIcon
 };
 
 // Map emoji icons to icon identifiers
@@ -350,8 +354,10 @@ const getIconForPath = (path) => {
     '/calendar': 'calendar', // backward compat
     '/imports': 'download',
     '/items': 'folder',
+    '/trash': 'trash',
     '/demo-requests': 'book',
-    '/instances': 'computer'
+    '/instances': 'computer',
+    '/settings': 'cog'
   };
   
   // Check for exact match first
@@ -376,8 +382,10 @@ const getTitleForPath = (path, params = {}) => {
     '/calendar': 'Events', // backward compat
     '/imports': 'Imports',
     '/items': 'Projects',
+    '/trash': 'Trash',
     '/demo-requests': 'Demo Requests',
     '/instances': 'Instances',
+    '/settings': 'Settings',
     // Control Plane routes
     '/control': 'Control Plane',
     '/control/demo-requests': 'Demo Requests',
@@ -565,9 +573,10 @@ export function useTabs() {
       return;
     }
     
-    // Skip if path is login, landing, settings, or audit app (no tabs)
+    // Skip if path is login, landing, or audit app (no tabs)
     // Audit app has its own layout and doesn't use the CRM tabs system
-    if (path === '/login' || path === '/' || path.startsWith('/settings') || path.startsWith('/audit/')) {
+    // Settings now uses internal tabs
+    if (path === '/login' || path === '/' || path.startsWith('/audit/')) {
       console.log('⏭️ Skipping sync for path:', path);
       return;
     }
@@ -713,9 +722,10 @@ export function useTabs() {
     console.log('🔧 Using route:', routeToWatch.path, routeToWatch.fullPath);
     console.log('🔧 Route is reactive?', route !== null);
     
-    // Skip audit and settings routes - they don't use tabs (have their own layout)
-    if (routeToWatch.path.startsWith('/audit/') || routeToWatch.path.startsWith('/settings')) {
-      console.log('⏭️ Audit/Settings route detected, skipping tab watcher setup');
+    // Skip audit routes - they have their own layout and don't use tabs
+    // Settings now uses internal tabs
+    if (routeToWatch.path.startsWith('/audit/')) {
+      console.log('⏭️ Audit route detected, skipping tab watcher setup');
       return;
     }
     
@@ -735,14 +745,15 @@ export function useTabs() {
     if (activeTabId.value) {
       const activeTab = tabs.value.find(tab => tab.id === activeTabId.value);
       if (activeTab) {
-        // Don't restore settings tabs - they should open in new tabs, not be restored
-        if (activeTab.path?.startsWith('/settings')) {
-          console.log('⏭️ [setupRouteWatcher] Skipping restoration of settings tab:', activeTab.id);
-          activeTabId.value = null;
-          // Continue to default navigation below
+        // If user loaded directly on Settings (e.g. bookmark), create Settings tab and stay
+        if (currentPath.startsWith('/settings')) {
+          console.log('🔄 [setupRouteWatcher] Loading on Settings, creating tab');
+          syncTabWithRoute(currentPath);
+          tabWasRestored = true;
         } else {
+          // Settings tabs are now supported - restore like any other tab
           console.log('🔄 [setupRouteWatcher] Restoring active tab from storage:', activeTab.id, activeTab.path);
-          tabWasRestored = true; // Mark that we restored a tab
+          tabWasRestored = true;
           
           // Navigate to the active tab's path if we're not already there
           if (currentPath !== activeTab.path) {
@@ -763,7 +774,6 @@ export function useTabs() {
               });
             }
           }
-          // Continue to set up the route watcher below (don't return)
         }
       } else {
         // Active tab ID exists but tab not found - clear it
@@ -931,10 +941,11 @@ export function useTabs() {
         return; // Don't continue processing
       }
       
-      // Skip routes that don't use tabs (login, landing, settings, audit app)
+      // Skip routes that don't use tabs (login, landing, audit app)
       // These routes should be handled by the router, not by tab syncing
       // Audit app has its own layout and doesn't use the CRM tabs system
-      if (newPath === '/login' || newPath === '/' || newPath.startsWith('/settings') || newPath.startsWith('/audit/')) {
+      // Settings now uses internal tabs
+      if (newPath === '/login' || newPath === '/' || newPath.startsWith('/audit/')) {
         console.log('⏭️ Route watcher: skipping tab sync for non-tab route:', newPath);
         return;
       }
@@ -1069,8 +1080,9 @@ export function useTabs() {
       }
       
       // Skip non-tab routes (but log it)
+      // Settings now uses internal tabs
       if (targetPathWithoutQuery === '/login' || targetPathWithoutQuery === '/' || 
-          targetPathWithoutQuery.startsWith('/settings') || targetPathWithoutQuery.startsWith('/audit/')) {
+          targetPathWithoutQuery.startsWith('/audit/')) {
         console.log('🔙 Skipping - non-tab route:', targetPathWithoutQuery);
         return;
       }

@@ -213,7 +213,7 @@
           </div>
           <div 
             v-else
-            class="w-6 h-6 rounded-full bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
+            class="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
           >
             {{ getUserInitials(row.lead) }}
           </div>

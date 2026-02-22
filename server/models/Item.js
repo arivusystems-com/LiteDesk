@@ -178,7 +178,12 @@ const ItemSchema = new Schema({
     customFields: {
         type: Schema.Types.Mixed,
         default: {}
-    }
+    },
+
+    // Trash (soft delete) - See docs/TRASH_IMPLEMENTATION_SPEC.md
+    deletedAt: { type: Date, default: null, index: true },
+    deletedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    deletionReason: { type: String, trim: true, maxlength: 500 }
 }, {
     timestamps: true // Automatically handles 'createdAt' and 'updatedAt'
 });
@@ -189,6 +194,7 @@ ItemSchema.index({ organizationId: 1, item_type: 1 });
 ItemSchema.index({ organizationId: 1, category: 1 });
 ItemSchema.index({ organizationId: 1, vendor: 1 });
 ItemSchema.index({ organizationId: 1, item_code: 1 }, { unique: true, sparse: true });
+ItemSchema.index({ organizationId: 1, deletedAt: 1 });
 
 // Pre-save middleware to auto-generate item_id
 ItemSchema.pre('save', async function(next) {
@@ -278,7 +284,7 @@ ItemSchema.statics.getItemStatistics = async function(organizationId) {
         : organizationId;
     
     return await this.aggregate([
-        { $match: { organizationId: orgId } },
+        { $match: { organizationId: orgId, deletedAt: null } },
         {
             $group: {
                 _id: null,

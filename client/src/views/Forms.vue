@@ -236,7 +236,7 @@
               class="group relative text-left rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition p-4 flex items-start gap-3"
             >
               <!-- Phase 2B: Show default indicator -->
-              <span v-if="defaultType && type.value === defaultType.modelValue" class="absolute top-2 right-2 text-xs px-2 py-1 bg-brand-100 dark:bg-brand-900 text-brand-700 dark:text-brand-300 rounded">
+              <span v-if="defaultType && type.value === defaultType.modelValue" class="absolute top-2 right-2 text-xs px-2 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded">
                 Default
               </span>
               <div

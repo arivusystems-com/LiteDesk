@@ -243,6 +243,45 @@ export interface BaseFieldMetadata {
    * Used in tooltips and documentation.
    */
   description?: string;
+
+  // ==========================================================================
+  // FIELD CAPABILITY FLAGS (metadata-driven behavior)
+  // Defaults: isSystem=false, isEditable=true, isVisibleInConfig=true,
+  //          isComputed=false, isHideable=true (for non-system fields)
+  // ==========================================================================
+
+  /**
+   * Whether this is a system field (platform-managed, infrastructure).
+   * System fields are typically read-only. Default: derived from owner === 'system'.
+   */
+  isSystem?: boolean;
+
+  /**
+   * Whether this field is user-editable.
+   * Alias for !editable for backward compatibility. Default: same as editable.
+   */
+  isEditable?: boolean;
+
+  /**
+   * Whether this field appears in Field Configuration UI.
+   * Infrastructure fields (_id, __v, organizationId) set false.
+   * Audit/computed fields (createdAt, updatedAt, etc.) set true.
+   * Default: true (except infrastructure fields).
+   */
+  isVisibleInConfig?: boolean;
+
+  /**
+   * Whether this field is computed/derived (not stored directly).
+   * Examples: derivedStatus, reminderSent, activityLogs.
+   * Default: false.
+   */
+  isComputed?: boolean;
+
+  /**
+   * Whether this field can be hidden by users in list/detail views.
+   * System fields are typically not hideable. Default: true for non-system.
+   */
+  isHideable?: boolean;
 }
 
 // =============================================================================
@@ -374,6 +413,16 @@ export function validateAllFieldMetadata<T extends BaseFieldMetadata>(
 // =============================================================================
 
 /**
+ * Normalize a field key for metadata lookup.
+ * Use in all get*FieldMetadata functions so API keys (e.g. "related-to") match
+ * metadata keys (e.g. "relatedTo"). Prevents misclassification as 'system'.
+ * @see .cursor/rules/field-configuration-selection.mdc
+ */
+export function normalizeFieldKeyForMetadataLookup(key: string): string {
+  return (key || '').toLowerCase().replace(/-/g, '');
+}
+
+/**
  * Check if a field is a system field.
  */
 export function isSystemFieldBase<T extends BaseFieldMetadata>(
@@ -427,6 +476,69 @@ export function isAllowedOnCreateBase<T extends BaseFieldMetadata>(
   }
   
   return false;
+}
+
+/**
+ * Get effective isSystem flag with fallback.
+ * Default: owner === 'system'.
+ */
+export function getIsSystemBase<T extends BaseFieldMetadata>(
+  metadata: T | undefined
+): boolean {
+  if (!metadata) return false;
+  return metadata.isSystem ?? metadata.owner === 'system';
+}
+
+/**
+ * Get effective isEditable flag with fallback.
+ * Default: same as editable.
+ */
+export function getIsEditableBase<T extends BaseFieldMetadata>(
+  metadata: T | undefined
+): boolean {
+  if (!metadata) return true;
+  return metadata.isEditable ?? metadata.editable;
+}
+
+/**
+ * Get effective isVisibleInConfig flag with fallback.
+ * Default: true except for infrastructure fields (_id, __v, organizationId).
+ */
+export function getIsVisibleInConfigBase<T extends BaseFieldMetadata>(
+  metadata: T | undefined,
+  fieldKey: string
+): boolean {
+  if (!metadata) return true;
+  if (metadata.isVisibleInConfig !== undefined) return metadata.isVisibleInConfig;
+  // Infrastructure fields: never visible in config
+  const keyLower = (fieldKey || '').toLowerCase();
+  if (keyLower === '_id' || keyLower === '__v' || keyLower === 'organizationid') {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Get effective isComputed flag with fallback.
+ * Default: false.
+ */
+export function getIsComputedBase<T extends BaseFieldMetadata>(
+  metadata: T | undefined
+): boolean {
+  if (!metadata) return false;
+  return metadata.isComputed ?? false;
+}
+
+/**
+ * Get effective isHideable flag with fallback.
+ * Default: true for non-system fields, false for system fields.
+ */
+export function getIsHideableBase<T extends BaseFieldMetadata>(
+  metadata: T | undefined
+): boolean {
+  if (!metadata) return true;
+  if (metadata.isHideable !== undefined) return metadata.isHideable;
+  return metadata.owner !== 'system';
 }
 
 /**

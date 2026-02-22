@@ -294,6 +294,9 @@ const createTask = async (req, res) => {
       }
     }
 
+    const { extractCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+    const { customFieldsSet } = extractCustomFields(req.body, Task);
+
     const task = await Task.create({
       organizationId: req.user.organizationId,
       title,
@@ -310,6 +313,7 @@ const createTask = async (req, res) => {
       subtasks,
       tags,
       reminderDate,
+      ...(Object.keys(customFieldsSet).length > 0 && { customFields: customFieldsSet }),
       createdBy: req.user._id,
       activityLogs: [{
         user: getActorDisplayName(req.user),
@@ -364,7 +368,7 @@ const createTask = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      data: populatedTask
+      data: flattenCustomFieldsForResponse(populatedTask)
     });
   } catch (error) {
     console.error('Create task error:', error);
@@ -508,7 +512,7 @@ const getTasks = async (req, res) => {
     } = req.query;
 
     // Build query
-    let query = { organizationId: req.user.organizationId };
+    let query = { organizationId: req.user.organizationId, deletedAt: null };
 
     // Filters
     if (status) query.status = status;
@@ -633,7 +637,8 @@ const getTaskById = async (req, res) => {
   try {
     const task = await Task.findOne({
       _id: req.params.id,
-      organizationId: req.user.organizationId
+      organizationId: req.user.organizationId,
+      deletedAt: null
     })
       .populate('assignedTo', 'firstName lastName email avatar')
       .populate('assignedBy', 'firstName lastName email')
@@ -647,9 +652,10 @@ const getTaskById = async (req, res) => {
       });
     }
 
+    const { flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
     res.status(200).json({
       success: true,
-      data: task
+      data: flattenCustomFieldsForResponse(task)
     });
   } catch (error) {
     console.error('Get task error:', error);
@@ -668,7 +674,8 @@ const updateTask = async (req, res) => {
   try {
     let task = await Task.findOne({
       _id: req.params.id,
-      organizationId: req.user.organizationId
+      organizationId: req.user.organizationId,
+      deletedAt: null
     });
 
     if (!task) {
@@ -808,6 +815,14 @@ const updateTask = async (req, res) => {
       task.activityLogs.push(...fieldChangeLogs);
     }
 
+    // Merge custom fields from payload (user-defined via Settings → Modules & Fields)
+    const { extractCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+    const { customFieldsSet } = extractCustomFields(req.body, Task);
+    if (Object.keys(customFieldsSet).length > 0) {
+      task.customFields = { ...(task.customFields || {}), ...customFieldsSet };
+      task.markModified('customFields');
+    }
+
     await task.save();
 
     const updatedTask = await Task.findById(task._id)
@@ -858,7 +873,7 @@ const updateTask = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: updatedTask
+      data: flattenCustomFieldsForResponse(updatedTask)
     });
   } catch (error) {
     console.error('Update task error:', error);
@@ -870,28 +885,41 @@ const updateTask = async (req, res) => {
   }
 };
 
-// @desc    Delete task
+// @desc    Delete task (move to trash)
 // @route   DELETE /api/tasks/:id
 // @access  Private
 const deleteTask = async (req, res) => {
   try {
-    const task = await Task.findOne({
-      _id: req.params.id,
-      organizationId: req.user.organizationId
+    const deletionService = require('../services/deletionService');
+    const result = await deletionService.moveToTrash({
+      moduleKey: 'tasks',
+      recordId: req.params.id,
+      organizationId: req.user.organizationId,
+      userId: req.user._id,
+      appKey: 'platform',
+      reason: req.body?.reason,
+      cascadeConfirmed: !!req.body?.cascadeConfirmed
     });
 
-    if (!task) {
-      return res.status(404).json({
+    if (!result.ok) {
+      if (result.blocked) {
+        return res.status(400).json({
+          success: false,
+          blocked: true,
+          dependencies: result.dependencies,
+          message: result.message
+        });
+      }
+      return res.status(400).json({
         success: false,
-        message: 'Task not found'
+        message: result.message || 'Failed to delete task'
       });
     }
 
-    await task.deleteOne();
-
     res.status(200).json({
       success: true,
-      message: 'Task deleted successfully'
+      message: 'Task moved to trash',
+      retentionExpiresAt: result.retentionExpiresAt
     });
   } catch (error) {
     console.error('Delete task error:', error);
@@ -919,7 +947,8 @@ const updateTaskStatus = async (req, res) => {
 
     const task = await Task.findOne({
       _id: req.params.id,
-      organizationId: req.user.organizationId
+      organizationId: req.user.organizationId,
+      deletedAt: null
     });
 
     if (!task) {
@@ -984,7 +1013,8 @@ const toggleSubtask = async (req, res) => {
 
     const task = await Task.findOne({
       _id: id,
-      organizationId: req.user.organizationId
+      organizationId: req.user.organizationId,
+      deletedAt: null
     });
 
     if (!task) {
@@ -1134,16 +1164,17 @@ const getTaskStats = async (req, res) => {
 // @access  Private
 const getTaskActivityLogs = async (req, res) => {
   try {
-    const task = await Task.findById(req.params.id)
+    const task = await Task.findOne({
+      _id: req.params.id,
+      organizationId: req.user.organizationId,
+      deletedAt: null
+    })
       .populate('createdBy', 'firstName lastName username')
       .populate('assignedTo', 'firstName lastName username')
       .populate('activityLogs.userId', 'firstName lastName username email')
       .lean();
     if (!task) {
       return res.status(404).json({ success: false, message: 'Task not found' });
-    }
-    if (task.organizationId.toString() !== req.user.organizationId.toString()) {
-      return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
     const logs = [];
@@ -1309,12 +1340,13 @@ const buildTaskCommentResponse = (comment, currentUserId = null) => {
 
 const getTaskComments = async (req, res) => {
   try {
-    const task = await Task.findById(req.params.id);
+    const task = await Task.findOne({
+      _id: req.params.id,
+      organizationId: req.user.organizationId,
+      deletedAt: null
+    });
     if (!task) {
       return res.status(404).json({ success: false, message: 'Task not found' });
-    }
-    if (task.organizationId.toString() !== req.user.organizationId.toString()) {
-      return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
     const comments = await TaskComment.find({ taskId: req.params.id })
@@ -1342,12 +1374,13 @@ const getTaskComments = async (req, res) => {
 // @access  Private
 const uploadTaskCommentAttachment = async (req, res) => {
   try {
-    const task = await Task.findById(req.params.id);
+    const task = await Task.findOne({
+      _id: req.params.id,
+      organizationId: req.user.organizationId,
+      deletedAt: null
+    });
     if (!task) {
       return res.status(404).json({ success: false, message: 'Task not found' });
-    }
-    if (task.organizationId.toString() !== req.user.organizationId.toString()) {
-      return res.status(403).json({ success: false, message: 'Access denied' });
     }
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
@@ -1376,12 +1409,13 @@ const uploadTaskCommentAttachment = async (req, res) => {
 // @access  Private
 const createTaskComment = async (req, res) => {
   try {
-    const task = await Task.findById(req.params.id);
+    const task = await Task.findOne({
+      _id: req.params.id,
+      organizationId: req.user.organizationId,
+      deletedAt: null
+    });
     if (!task) {
       return res.status(404).json({ success: false, message: 'Task not found' });
-    }
-    if (task.organizationId.toString() !== req.user.organizationId.toString()) {
-      return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
     const { content, attachments, parentCommentId } = req.body;
@@ -1679,7 +1713,8 @@ const getDescriptionVersions = async (req, res) => {
   try {
     const task = await Task.findOne({
       _id: req.params.id,
-      organizationId: req.user.organizationId
+      organizationId: req.user.organizationId,
+      deletedAt: null
     }).select('description descriptionVersions').lean();
 
     if (!task) {
@@ -1744,7 +1779,8 @@ const restoreDescriptionVersion = async (req, res) => {
   try {
     const task = await Task.findOne({
       _id: req.params.id,
-      organizationId: req.user.organizationId
+      organizationId: req.user.organizationId,
+      deletedAt: null
     });
 
     if (!task) {

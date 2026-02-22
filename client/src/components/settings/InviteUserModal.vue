@@ -38,7 +38,7 @@
                   v-model="form.firstName"
                   type="text"
                   required
-                  class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent transition-all"
+                  class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
                   placeholder="John"
                 />
               </div>
@@ -51,7 +51,7 @@
                   v-model="form.lastName"
                   type="text"
                   required
-                  class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent transition-all"
+                  class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
                   placeholder="Doe"
                 />
               </div>
@@ -66,7 +66,7 @@
                 v-model="form.email"
                 type="email"
                 required
-                class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent transition-all"
+                class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
                 placeholder="john.doe@company.com"
               />
             </div>
@@ -83,7 +83,7 @@
                     v-model="form.userType"
                     value="INTERNAL"
                     @change="onUserTypeChange"
-                    class="w-4 h-4 text-brand-600 focus:ring-brand-500"
+                    class="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
                   />
                   <span class="text-sm text-gray-700 dark:text-gray-300">Internal</span>
                 </label>
@@ -93,7 +93,7 @@
                     v-model="form.userType"
                     value="EXTERNAL"
                     @change="onUserTypeChange"
-                    class="w-4 h-4 text-brand-600 focus:ring-brand-500"
+                    class="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
                   />
                   <span class="text-sm text-gray-700 dark:text-gray-300">External</span>
                 </label>
@@ -131,7 +131,7 @@
                       :checked="isAppSelected(app.appKey)"
                       :disabled="!isAppEnabled(app)"
                       @change="toggleApp(app)"
-                      class="mt-1 w-4 h-4 text-brand-600 focus:ring-brand-500 rounded"
+                      class="mt-1 w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded"
                     />
                     <div class="flex-1">
                       <label
@@ -169,7 +169,7 @@
                         <select
                           v-model="selectedAppRoles[app.appKey]"
                           @change="updateAppRole(app.appKey, $event.target.value)"
-                          class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent transition-all"
+                          class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
                         >
                           <option v-for="roleKey in app.roles" :key="roleKey" :value="roleKey">
                             {{ getRoleDisplayName(app.appKey, roleKey) }}
@@ -197,7 +197,7 @@
               </label>
               <select
                 v-model="form.roleId"
-                class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent transition-all"
+                class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
               >
                 <option value="">Select a role</option>
                 <option v-for="role in availableRoles" :key="role._id" :value="role._id">
@@ -217,7 +217,7 @@
                     type="radio"
                     v-model="passwordOption"
                     value="auto"
-                    class="w-4 h-4 text-brand-600 focus:ring-brand-500"
+                    class="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
                   />
                   <span class="text-sm text-gray-700 dark:text-gray-300">Auto-generate</span>
                 </label>
@@ -226,7 +226,7 @@
                     type="radio"
                     v-model="passwordOption"
                     value="manual"
-                    class="w-4 h-4 text-brand-600 focus:ring-brand-500"
+                    class="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
                   />
                   <span class="text-sm text-gray-700 dark:text-gray-300">Set manually</span>
                 </label>
@@ -238,7 +238,7 @@
                 type="password"
                 required
                 minlength="8"
-                class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent transition-all"
+                class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
                 placeholder="Minimum 8 characters"
               />
               <p v-else class="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -252,7 +252,7 @@
                 type="checkbox"
                 v-model="form.sendEmail"
                 id="sendEmail"
-                class="w-4 h-4 text-brand-600 focus:ring-brand-500 rounded"
+                class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded"
               />
               <div class="flex-1">
                 <label for="sendEmail" class="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
@@ -281,7 +281,7 @@
               <button
                 type="submit"
                 :disabled="saving || !isFormValid"
-                class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 <svg v-if="saving" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>

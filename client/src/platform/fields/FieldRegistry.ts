@@ -57,6 +57,7 @@ import {
   getFieldsByScope,
   isAllowedOnCreateBase,
   classifyFieldBase,
+  normalizeFieldKeyForMetadataLookup,
 } from './BaseFieldModel';
 
 import { PEOPLE_FIELD_METADATA } from './peopleFieldModel';
@@ -92,6 +93,27 @@ export type ModuleKey = 'people' | 'tasks' | 'organization' | 'deal' | 'event' |
  * Used for iteration and validation.
  */
 export const MODULE_KEYS: readonly ModuleKey[] = ['people', 'tasks', 'organization', 'deal', 'event', 'item'] as const;
+
+/**
+ * Map UI module keys (plural) to registry keys (singular).
+ * Used when modules use 'deals' but registry uses 'deal'.
+ */
+const MODULE_KEY_ALIASES: Record<string, ModuleKey> = {
+  deals: 'deal',
+  organizations: 'organization',
+  events: 'event',
+  items: 'item',
+};
+
+/**
+ * Normalize module key for registry lookup.
+ * Handles plural forms (deals -> deal, etc.).
+ */
+export function normalizeModuleKeyForRegistry(moduleKey: string): ModuleKey | undefined {
+  const k = (moduleKey || '').toLowerCase().trim();
+  if (k in FIELD_REGISTRY) return k as ModuleKey;
+  return MODULE_KEY_ALIASES[k] ?? undefined;
+}
 
 // =============================================================================
 // FIELD REGISTRY
@@ -136,12 +158,14 @@ const FIELD_REGISTRY: FieldRegistryMap = {
 
 /**
  * Check if a module is registered in the field registry.
+ * Accepts both registry keys (deal) and UI keys (deals).
  * 
  * @param moduleKey - The module key to check
  * @returns true if the module is registered
  */
 export function isModuleRegistered(moduleKey: string): moduleKey is ModuleKey {
-  return moduleKey in FIELD_REGISTRY;
+  const resolved = normalizeModuleKeyForRegistry(moduleKey);
+  return resolved !== undefined && resolved in FIELD_REGISTRY;
 }
 
 /**
@@ -155,20 +179,21 @@ export function getRegisteredModules(): ModuleKey[] {
 
 /**
  * Get the raw field metadata map for a module.
+ * Accepts both registry keys (deal) and UI keys (deals).
  * 
  * ⚠️ INTERNAL USE ONLY: Prefer using specific query functions.
  * 
- * @param moduleKey - The module key
+ * @param moduleKey - The module key (e.g. 'tasks', 'deals', 'deal')
  * @returns The field metadata map, or undefined if not registered
  */
 export function getFieldMetadataMap(
-  moduleKey: ModuleKey
+  moduleKey: string
 ): Record<string, BaseFieldMetadata> | undefined {
-  if (!isModuleRegistered(moduleKey)) {
+  const resolved = normalizeModuleKeyForRegistry(moduleKey) ?? moduleKey;
+  if (!(resolved in FIELD_REGISTRY)) {
     return undefined;
   }
-  // Return as BaseFieldMetadata for type compatibility
-  return FIELD_REGISTRY[moduleKey] as Record<string, BaseFieldMetadata>;
+  return FIELD_REGISTRY[resolved as keyof typeof FIELD_REGISTRY] as Record<string, BaseFieldMetadata>;
 }
 
 /**
@@ -185,19 +210,30 @@ export function getFieldsForModule(moduleKey: ModuleKey): string[] {
 
 /**
  * Get field metadata for a specific field in a module.
+ * Accepts both registry keys (deal) and UI keys (deals).
+ * Uses case-insensitive field key lookup for robustness.
  * 
- * @param moduleKey - The module key
+ * @param moduleKey - The module key (e.g. 'tasks', 'deals')
  * @param fieldKey - The field key
  * @returns The field metadata, or undefined if not found
  */
-export function getFieldMetadata(
-  moduleKey: ModuleKey,
+export function getFieldMetadataFromRegistry(
+  moduleKey: string,
   fieldKey: string
 ): BaseFieldMetadata | undefined {
-  const metadata = getFieldMetadataMap(moduleKey);
-  if (!metadata) return undefined;
-  return metadata[fieldKey];
+  const metadataMap = getFieldMetadataMap(moduleKey);
+  if (!metadataMap) return undefined;
+  const exact = metadataMap[fieldKey];
+  if (exact) return exact;
+  const normalized = normalizeFieldKeyForMetadataLookup(fieldKey);
+  for (const [k, m] of Object.entries(metadataMap)) {
+    if (normalizeFieldKeyForMetadataLookup(k) === normalized) return m;
+  }
+  return undefined;
 }
+
+/** @deprecated Use getFieldMetadataFromRegistry. Kept for backward compatibility. */
+export const getFieldMetadata = getFieldMetadataFromRegistry;
 
 /**
  * Get all filterable field keys for a module.

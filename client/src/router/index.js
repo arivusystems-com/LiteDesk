@@ -74,6 +74,12 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/trash',
+    name: 'trash',
+    component: () => import('@/views/Trash.vue'),
+    meta: { requiresAuth: true, requiresPermission: { module: 'settings', action: 'view' } }
+  },
+  {
     path: '/approvals',
     name: 'approvals',
     component: () => import('@/views/ApprovalInbox.vue'),
@@ -89,7 +95,7 @@ const routes = [
     path: '/settings',
     name: 'settings',
     component: () => import('@/views/Settings.vue'),
-    meta: { requiresAuth: true, hideShell: true } // render without main nav/topbar
+    meta: { requiresAuth: true } // render with shell (internal tab, sidebar collapsed by default)
   },
   {
     path: '/settings/notifications/overview',

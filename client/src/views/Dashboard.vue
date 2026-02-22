@@ -120,13 +120,13 @@
       <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 lg:col-span-2">
         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Recent Contacts</h2>
-          <router-link to="/people" class="text-sm text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 font-medium transition-colors">
+          <router-link to="/people" class="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-medium transition-colors">
             View All
           </router-link>
         </div>
         
         <div v-if="loading" class="px-6 py-12 text-center">
-          <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+          <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
           <p class="text-gray-600 dark:text-gray-400 mt-4">Loading contacts...</p>
         </div>
 
@@ -227,7 +227,7 @@
 
           <div class="flex items-center justify-center gap-6">
             <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-              <span class="w-3 h-3 rounded-sm bg-brand-500"></span>
+              <span class="w-3 h-3 rounded-sm bg-indigo-500"></span>
               <span>Total Contacts</span>
             </div>
           </div>

@@ -26,7 +26,7 @@
                 <span class="text-xs text-gray-500 dark:text-gray-400">{{ roleLabel(entry.role, 'person') }}</span>
                 <span
                   v-if="entry.isPrimary"
-                  class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300"
+                  class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
                 >
                   Primary
                 </span>
@@ -44,10 +44,10 @@
                 type="button"
                 @click="setPrimaryPerson(entry)"
                 :disabled="entry.isPrimary"
-                class="p-1.5 rounded text-gray-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                class="p-1.5 rounded text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Set as primary contact"
               >
-                <StarIconSolid v-if="entry.isPrimary" class="w-4 h-4 text-brand-600" />
+                <StarIconSolid v-if="entry.isPrimary" class="w-4 h-4 text-indigo-600" />
                 <StarIcon v-else class="w-4 h-4" />
               </button>
               <button
@@ -69,7 +69,7 @@
             <div class="flex-1 min-w-[180px]">
               <select
                 v-model="addPersonForm.personId"
-                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500"
+                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">Select person...</option>
                 <option v-for="p in peopleOptions" :key="p._id" :value="p._id">
@@ -80,13 +80,13 @@
             <div class="w-36">
               <select
                 v-model="addPersonForm.role"
-                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500"
+                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
               >
                 <option v-for="r in personRoles" :key="r.value" :value="r.value">{{ r.label }}</option>
               </select>
             </div>
             <label class="flex items-center gap-2">
-              <input type="checkbox" v-model="addPersonForm.isPrimary" class="rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+              <input type="checkbox" v-model="addPersonForm.isPrimary" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
               <span class="text-sm text-gray-700 dark:text-gray-300">Primary</span>
             </label>
             <span v-if="addPersonForm.isPrimary" class="text-xs text-gray-500 self-center">(Primary contact)</span>
@@ -94,7 +94,7 @@
               type="button"
               @click="addPerson"
               :disabled="!addPersonForm.personId"
-              class="px-3 py-2 text-sm font-medium rounded-lg bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="px-3 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Add
             </button>
@@ -127,7 +127,7 @@
                 <span class="text-xs text-gray-500 dark:text-gray-400">{{ roleLabel(entry.role, 'org') }}</span>
                 <span
                   v-if="entry.isPrimary"
-                  class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300"
+                  class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300"
                 >
                   Primary
                 </span>
@@ -145,10 +145,10 @@
                 type="button"
                 @click="setPrimaryOrg(entry)"
                 :disabled="entry.isPrimary"
-                class="p-1.5 rounded text-gray-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                class="p-1.5 rounded text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Set as primary customer"
               >
-                <StarIconSolid v-if="entry.isPrimary" class="w-4 h-4 text-brand-600" />
+                <StarIconSolid v-if="entry.isPrimary" class="w-4 h-4 text-indigo-600" />
                 <StarIcon v-else class="w-4 h-4" />
               </button>
               <button
@@ -170,7 +170,7 @@
             <div class="flex-1 min-w-[180px]">
               <select
                 v-model="addOrgForm.organizationId"
-                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500"
+                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">Select organization...</option>
                 <option v-for="o in organizationOptions" :key="o._id" :value="o._id">
@@ -181,13 +181,13 @@
             <div class="w-32">
               <select
                 v-model="addOrgForm.role"
-                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500"
+                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
               >
                 <option v-for="r in orgRoles" :key="r.value" :value="r.value">{{ r.label }}</option>
               </select>
             </div>
             <label class="flex items-center gap-2" :class="{ 'opacity-50': addOrgForm.role !== 'customer' }">
-              <input type="checkbox" v-model="addOrgForm.isPrimary" :disabled="addOrgForm.role !== 'customer'" class="rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+              <input type="checkbox" v-model="addOrgForm.isPrimary" :disabled="addOrgForm.role !== 'customer'" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
               <span class="text-sm text-gray-700 dark:text-gray-300">Primary</span>
             </label>
             <span v-if="addOrgForm.role !== 'customer'" class="text-xs text-gray-500 self-center">(Customer only)</span>
@@ -195,7 +195,7 @@
               type="button"
               @click="addOrganization"
               :disabled="!addOrgForm.organizationId"
-              class="px-3 py-2 text-sm font-medium rounded-lg bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="px-3 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Add
             </button>

@@ -31,7 +31,7 @@
         <input
           type="checkbox"
           :checked="!!subtask.completed"
-          class="w-4 h-4 shrink-0 text-brand-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+          class="w-4 h-4 shrink-0 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
           @change="toggleCompleted(index)"
         />
         <input

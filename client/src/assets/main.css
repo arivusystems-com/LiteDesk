@@ -455,20 +455,9 @@ select {
 }
 
 
-/* Brand Colors - Kept for backward compatibility */
-/* These are now mapped to primary-* tokens via @theme above */
+/* Brand colors removed — use Tailwind indigo-* everywhere (e.g. indigo-600, indigo-500) */
+
 :root {
-  --color-brand-50: #f5f3ff;
-  --color-brand-100: #ede9fe;
-  --color-brand-200: #ddd6fe;
-  --color-brand-300: #c4b5fd;
-  --color-brand-400: #a78bfa;
-  --color-brand-500: #6049E7;
-  --color-brand-600: #5037d9;
-  --color-brand-700: #4527a0;
-  --color-brand-800: #3a1f8a;
-  --color-brand-900: #2e1872;
-  
   /* Success Colors - Kept for backward compatibility */
   --color-success-50: #f0fdf4;
   --color-success-500: #10b981;

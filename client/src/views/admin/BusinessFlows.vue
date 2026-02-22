@@ -14,13 +14,13 @@
         <!-- Always visible: Start with Template CTA -->
         <button
           @click="openTemplates"
-          class="px-4 py-2 text-sm font-medium text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 rounded-lg hover:bg-brand-100 dark:hover:bg-brand-900/30 transition-colors"
+          class="px-4 py-2 text-sm font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
         >
           Start with Template
         </button>
         <button
           @click="createFlow"
-          class="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors"
+          class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
         >
           Create from Scratch
         </button>
@@ -54,7 +54,7 @@
       <div class="flex items-center justify-center gap-3">
         <button
           @click="openTemplates"
-          class="px-5 py-2.5 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors"
+          class="px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
         >
           Start with a Template
         </button>
@@ -181,7 +181,7 @@
 
           <!-- Loading -->
           <div v-if="loadingTemplates" class="text-center py-8">
-            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
             <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Loading templates...</p>
           </div>
 
@@ -190,11 +190,11 @@
             <div
               v-for="template in templates"
               :key="template.key"
-              class="border border-gray-200 dark:border-gray-700 rounded-lg p-5 hover:shadow-md hover:border-brand-300 dark:hover:border-brand-600 transition-all cursor-pointer group"
+              class="border border-gray-200 dark:border-gray-700 rounded-lg p-5 hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-600 transition-all cursor-pointer group"
               @click="selectTemplate(template)"
             >
               <div class="flex items-start justify-between gap-3 mb-3">
-                <h4 class="font-semibold text-gray-900 dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+                <h4 class="font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                   {{ template.name }}
                 </h4>
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 flex-shrink-0">
@@ -225,7 +225,7 @@
               
               <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
                 <span>{{ template.processCount }} process{{ template.processCount !== 1 ? 'es' : '' }}</span>
-                <span class="text-brand-600 dark:text-brand-400 font-medium group-hover:underline">
+                <span class="text-indigo-600 dark:text-indigo-400 font-medium group-hover:underline">
                   Select →
                 </span>
               </div>
@@ -286,7 +286,7 @@
           <button
             @click="confirmImport"
             :disabled="importing"
-            class="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {{ importing ? 'Importing...' : 'Import Template' }}
           </button>

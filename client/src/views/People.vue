@@ -57,7 +57,7 @@
 
       <!-- Custom Email Cell -->
       <template #cell-email="{ value }">
-        <a :href="`mailto:${value}`" class="text-brand-600 dark:text-brand-400 hover:underline" @click.stop>
+        <a :href="`mailto:${value}`" class="text-indigo-600 dark:text-indigo-400 hover:underline" @click.stop>
           {{ value }}
         </a>
       </template>

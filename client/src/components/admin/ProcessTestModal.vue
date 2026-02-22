@@ -48,7 +48,7 @@
             </label>
             <select
               v-model="testData.entityType"
-              class="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-brand-500"
+              class="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-indigo-500"
             >
               <option value="">Select entity type...</option>
               <option value="people">People</option>
@@ -65,7 +65,7 @@
               v-model="testData.entityId"
               type="text"
               placeholder="Enter record ID or search..."
-              class="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-brand-500"
+              class="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-indigo-500"
             />
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
               Enter the ID of an existing {{ testData.entityType }} record
@@ -99,7 +99,7 @@
 
           <!-- Loading -->
           <div v-if="testLoading" class="text-center py-12">
-            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
             <p class="mt-4 text-sm text-gray-600 dark:text-gray-400">Running test...</p>
           </div>
 
@@ -237,7 +237,7 @@
             v-if="step === 1"
             @click="runTest"
             :disabled="!canRunTest || testLoading"
-            class="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Run Test
           </button>

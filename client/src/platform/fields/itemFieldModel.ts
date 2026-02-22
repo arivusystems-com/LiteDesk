@@ -55,6 +55,7 @@ import type {
 import {
   validateBaseFieldMetadata,
   classifyFieldBase,
+  normalizeFieldKeyForMetadataLookup,
 } from './BaseFieldModel';
 
 // =============================================================================
@@ -112,6 +113,9 @@ export interface ItemFieldMetadata extends Omit<BaseFieldMetadata, 'intent'> {
 export const ITEM_FIELD_METADATA: Record<string, ItemFieldMetadata> = {
   // ===========================================================================
   // SYSTEM FIELDS (Infrastructure, never user-editable)
+  // Type A: Infrastructure (never visible): _id, __v, organizationId
+  // Type B: Audit (visible, read-only): createdAt, updatedAt, createdBy, modifiedBy
+  // item_id: visible (identity), read-only
   // ===========================================================================
   
   organizationId: {
@@ -122,6 +126,8 @@ export const ITEM_FIELD_METADATA: Record<string, ItemFieldMetadata> = {
     isProtected: true,
     filterable: false,
     filterType: 'entity',
+    isSystem: true,
+    isVisibleInConfig: false,
   },
   
   item_id: {
@@ -132,6 +138,8 @@ export const ITEM_FIELD_METADATA: Record<string, ItemFieldMetadata> = {
     isProtected: true,
     filterable: true,
     filterType: 'text',
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   
   createdBy: {
@@ -142,6 +150,8 @@ export const ITEM_FIELD_METADATA: Record<string, ItemFieldMetadata> = {
     isProtected: true,
     filterable: true,
     filterType: 'user',
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   
   createdAt: {
@@ -153,6 +163,8 @@ export const ITEM_FIELD_METADATA: Record<string, ItemFieldMetadata> = {
     filterable: true,
     filterType: 'date',
     filterPriority: 2,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   
   modifiedBy: {
@@ -162,6 +174,8 @@ export const ITEM_FIELD_METADATA: Record<string, ItemFieldMetadata> = {
     editable: false,
     isProtected: true,
     filterable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   
   updatedAt: {
@@ -172,6 +186,8 @@ export const ITEM_FIELD_METADATA: Record<string, ItemFieldMetadata> = {
     isProtected: true,
     filterable: true,
     filterType: 'date',
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   
   _id: {
@@ -181,6 +197,8 @@ export const ITEM_FIELD_METADATA: Record<string, ItemFieldMetadata> = {
     editable: false,
     isProtected: true,
     filterable: false,
+    isSystem: true,
+    isVisibleInConfig: false,
   },
   
   __v: {
@@ -190,6 +208,8 @@ export const ITEM_FIELD_METADATA: Record<string, ItemFieldMetadata> = {
     editable: false,
     isProtected: true,
     filterable: false,
+    isSystem: true,
+    isVisibleInConfig: false,
   },
   
   // ===========================================================================
@@ -521,12 +541,10 @@ export function getItemFieldMetadata(fieldKey: string): ItemFieldMetadata | unde
     return ITEM_FIELD_METADATA[fieldKey];
   }
   
-  // Normalize field name for case-insensitive lookup
-  const normalizedName = fieldKey.toLowerCase();
+  const normalizedName = normalizeFieldKeyForMetadataLookup(fieldKey);
   
-  // Try case-insensitive match
   for (const [key, metadata] of Object.entries(ITEM_FIELD_METADATA)) {
-    if (key.toLowerCase() === normalizedName) {
+    if (normalizeFieldKeyForMetadataLookup(key) === normalizedName) {
       return metadata;
     }
   }

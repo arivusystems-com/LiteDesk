@@ -68,7 +68,7 @@ const iconPath = computed(() => {
 
 const variantClasses = computed(() => {
   const classes = {
-    primary: 'bg-brand-600 hover:bg-brand-700 text-white',
+    primary: 'bg-indigo-600 hover:bg-indigo-700 text-white',
     secondary: 'bg-gray-800 dark:bg-gray-700 hover:bg-gray-900 dark:hover:bg-gray-600 text-white border-2 border-gray-900 dark:border-gray-500',
     success: 'bg-success-600 hover:bg-success-700 text-white',
     warning: 'bg-warning-600 hover:bg-warning-700 text-white',

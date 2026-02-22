@@ -83,7 +83,7 @@
                 </div>
                 <button
                   @click.stop="viewExecutionDetails(execution)"
-                  class="px-4 py-2 text-sm font-medium text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-lg transition-colors"
+                  class="px-4 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
                 >
                   View Details
                 </button>

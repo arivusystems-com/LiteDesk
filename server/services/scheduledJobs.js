@@ -1,14 +1,17 @@
 const cron = require('node-cron');
 const { runDailyDigest, runWeeklyDigest } = require('./digestScheduler');
 const { tick: escalationTick } = require('./escalationResolver');
+const { purgeExpiredRetention } = require('./deletionService');
 
 const NOTIFICATION_DEBUG = process.env.NOTIFICATION_DEBUG === 'true';
 const ENABLE_DIGEST_SCHEDULER = process.env.ENABLE_DIGEST_SCHEDULER !== 'false'; // Default: enabled
 const ENABLE_ESCALATION_SCHEDULER = process.env.ENABLE_ESCALATION_SCHEDULER !== 'false'; // Default: enabled (Phase 3)
+const ENABLE_TRASH_RETENTION_SCHEDULER = process.env.ENABLE_TRASH_RETENTION_SCHEDULER !== 'false'; // Default: enabled
 
 let dailyDigestJob = null;
 let weeklyDigestJob = null;
 let escalationJob = null;
+let trashRetentionJob = null;
 
 /**
  * Initialize and start scheduled jobs for notification digests.
@@ -86,6 +89,26 @@ function startScheduledJobs() {
     console.log('[scheduledJobs] Escalation scheduler disabled (ENABLE_ESCALATION_SCHEDULER=false)');
   }
 
+  // Trash retention: purge items past retentionExpiresAt (excluding legal hold)
+  if (ENABLE_TRASH_RETENTION_SCHEDULER) {
+    trashRetentionJob = cron.schedule('0 3 * * *', async () => {
+      const startTime = new Date();
+      console.log(`[scheduledJobs] Running trash retention purge at ${startTime.toISOString()}`);
+      try {
+        const r = await purgeExpiredRetention();
+        const duration = Date.now() - startTime.getTime();
+        if (r.purged > 0 || r.failed > 0) {
+          console.log(`[scheduledJobs] Trash retention: purged=${r.purged} failed=${r.failed} skipped=${r.skipped} (${duration}ms)`);
+        }
+      } catch (err) {
+        console.error('[scheduledJobs] Trash retention job failed:', err.message);
+      }
+    }, { scheduled: true, timezone: process.env.DIGEST_TIMEZONE || 'UTC' });
+    console.log('[scheduledJobs]   - Trash retention: 3:00 AM every day');
+  } else {
+    console.log('[scheduledJobs] Trash retention scheduler disabled (ENABLE_TRASH_RETENTION_SCHEDULER=false)');
+  }
+
   console.log(`[scheduledJobs]   - Timezone: ${process.env.DIGEST_TIMEZONE || 'UTC'}`);
   if (NOTIFICATION_DEBUG) {
     console.log('[scheduledJobs]   - Debug mode: enabled');
@@ -113,6 +136,12 @@ function stopScheduledJobs() {
     escalationJob = null;
     console.log('[scheduledJobs] Escalation job stopped');
   }
+
+  if (trashRetentionJob) {
+    trashRetentionJob.stop();
+    trashRetentionJob = null;
+    console.log('[scheduledJobs] Trash retention job stopped');
+  }
 }
 
 /**
@@ -131,10 +160,19 @@ async function triggerWeeklyDigest() {
   await runWeeklyDigest();
 }
 
+/**
+ * Manually trigger trash retention purge (for testing or manual runs).
+ */
+async function triggerTrashRetention() {
+  console.log('[scheduledJobs] Manually triggering trash retention purge...');
+  return purgeExpiredRetention();
+}
+
 module.exports = {
   startScheduledJobs,
   stopScheduledJobs,
   triggerDailyDigest,
-  triggerWeeklyDigest
+  triggerWeeklyDigest,
+  triggerTrashRetention
 };
 

@@ -61,7 +61,7 @@
             :class="[
               'px-4 py-3 text-sm font-medium border-b-2 transition-colors',
               activeTab === 'rules'
-                ? 'border-brand-600 text-brand-600 dark:text-brand-400'
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
                 : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
             ]"
           >
@@ -72,7 +72,7 @@
             :class="[
               'px-4 py-3 text-sm font-medium border-b-2 transition-colors',
               activeTab === 'flow'
-                ? 'border-brand-600 text-brand-600 dark:text-brand-400'
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
                 : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
             ]"
           >
@@ -98,13 +98,13 @@
                 <div class="mt-2 flex items-center gap-4">
                   <button
                     @click="viewExecutions"
-                    class="text-sm text-brand-600 dark:text-brand-400 hover:underline"
+                    class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
                   >
                     View execution logs
                   </button>
                   <button
                     @click="testProcess"
-                    class="text-sm text-brand-600 dark:text-brand-400 hover:underline"
+                    class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
                   >
                     Test process
                   </button>
@@ -149,7 +149,7 @@
                 <div v-if="isEditable" class="flex items-center gap-2 shrink-0">
                   <button
                     @click="editRule(rule, index)"
-                    class="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-lg transition-colors"
+                    class="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
                     title="Edit"
                   >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -159,7 +159,7 @@
                   <button
                     v-if="index > 0"
                     @click="moveRule(index, 'up')"
-                    class="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-lg transition-colors"
+                    class="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
                     title="Move Up"
                   >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -169,7 +169,7 @@
                   <button
                     v-if="index < ruleCards.length - 1"
                     @click="moveRule(index, 'down')"
-                    class="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-lg transition-colors"
+                    class="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
                     title="Move Down"
                   >
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -193,7 +193,7 @@
             <button
               v-if="isEditable"
               @click="showAddRuleMenu = true"
-              class="w-full border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center hover:border-brand-600 dark:hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors"
+              class="w-full border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center hover:border-indigo-600 dark:hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
             >
               <svg class="w-6 h-6 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -228,7 +228,7 @@
           <button
             @click="saveProcess"
             :disabled="saving"
-            class="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <span v-if="saving">Saving...</span>
             <span v-else>Save Changes</span>
@@ -247,28 +247,28 @@
           <div class="space-y-3">
             <button
               @click="addRule('field_rule')"
-              class="w-full text-left p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-brand-600 dark:hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors"
+              class="w-full text-left p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-indigo-600 dark:hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
             >
               <div class="font-medium text-gray-900 dark:text-white">Control field behavior</div>
               <div class="text-sm text-gray-500 dark:text-gray-400 mt-1">Make fields mandatory, set defaults, or control visibility</div>
             </button>
             <button
               @click="addRule('ownership_rule')"
-              class="w-full text-left p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-brand-600 dark:hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors"
+              class="w-full text-left p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-indigo-600 dark:hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
             >
               <div class="font-medium text-gray-900 dark:text-white">Control ownership & assignment</div>
               <div class="text-sm text-gray-500 dark:text-gray-400 mt-1">Assign or reassign record ownership</div>
             </button>
             <button
               @click="addRule('status_guard')"
-              class="w-full text-left p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-brand-600 dark:hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors"
+              class="w-full text-left p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-indigo-600 dark:hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
             >
               <div class="font-medium text-gray-900 dark:text-white">Control status / stage transitions</div>
               <div class="text-sm text-gray-500 dark:text-gray-400 mt-1">Allow or block status changes</div>
             </button>
             <button
               @click="addRule('action')"
-              class="w-full text-left p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-brand-600 dark:hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors"
+              class="w-full text-left p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-indigo-600 dark:hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
             >
               <div class="font-medium text-gray-900 dark:text-white">Run actions</div>
               <div class="text-sm text-gray-500 dark:text-gray-400 mt-1">Create tasks, send notifications, or other automated actions</div>

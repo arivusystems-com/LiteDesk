@@ -189,7 +189,7 @@
                         :class="[
                           'w-full text-left px-4 py-2 text-sm transition-colors duration-150 flex items-center justify-between',
                           active ? 'bg-gray-100 dark:bg-gray-700' : '',
-                          getOptionIsSelected(field, option) ? 'text-brand-600 dark:text-brand-400 font-medium' : 'text-gray-700 dark:text-gray-300'
+                          getOptionIsSelected(field, option) ? 'text-indigo-600 dark:text-indigo-400 font-medium' : 'text-gray-700 dark:text-gray-300'
                         ]"
                       >
                         <div class="flex items-center gap-2">
@@ -672,7 +672,7 @@
                       <div v-if="fieldData.value.avatar" class="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
                         <img :src="fieldData.value.avatar" :alt="getUserDisplayName(fieldData.value)" class="w-full h-full object-cover" />
             </div>
-                      <div v-else class="w-8 h-8 rounded-full bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
+                      <div v-else class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
                         {{ getUserInitials(fieldData.value) }}
                       </div>
                       <span class="text-sm text-gray-900 dark:text-white">{{ getUserDisplayName(fieldData.value) }}</span>
@@ -1084,13 +1084,13 @@
                                 <li
                                   :class="[
                                     'relative cursor-default select-none py-2 pl-10 pr-4',
-                                    active ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-900 dark:text-brand-100' : 'text-gray-900 dark:text-gray-100'
+                                    active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100'
                                   ]"
                                 >
                                   <span :class="[selected ? 'font-medium' : 'font-normal', 'block truncate']">All Users</span>
                                   <span
                                     v-if="selected"
-                                    class="absolute inset-y-0 left-0 flex items-center pl-3 text-brand-600 dark:text-brand-400"
+                                    class="absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-600 dark:text-indigo-400"
                                   >
                                     <CheckIcon class="h-5 w-5" aria-hidden="true" />
                                   </span>
@@ -1105,13 +1105,13 @@
                                 <li
                                   :class="[
                                     'relative cursor-default select-none py-2 pl-10 pr-4',
-                                    active ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-900 dark:text-brand-100' : 'text-gray-900 dark:text-gray-100'
+                                    active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100'
                                   ]"
                                 >
                                   <span :class="[selected ? 'font-medium' : 'font-normal', 'block truncate']">{{ user }}</span>
                                   <span
                                     v-if="selected"
-                                    class="absolute inset-y-0 left-0 flex items-center pl-3 text-brand-600 dark:text-brand-400"
+                                    class="absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-600 dark:text-indigo-400"
                                   >
                                     <CheckIcon class="h-5 w-5" aria-hidden="true" />
                                   </span>
@@ -1147,13 +1147,13 @@
                                 <li
                                   :class="[
                                     'relative cursor-default select-none py-2 pl-10 pr-4',
-                                    active ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-900 dark:text-brand-100' : 'text-gray-900 dark:text-gray-100'
+                                    active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100'
                                   ]"
                                 >
                                   <span :class="[selected ? 'font-medium' : 'font-normal', 'block truncate']">All Types</span>
                                   <span
                                     v-if="selected"
-                                    class="absolute inset-y-0 left-0 flex items-center pl-3 text-brand-600 dark:text-brand-400"
+                                    class="absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-600 dark:text-indigo-400"
                                   >
                                     <CheckIcon class="h-5 w-5" aria-hidden="true" />
                                   </span>
@@ -1166,13 +1166,13 @@
                                 <li
                                   :class="[
                                     'relative cursor-default select-none py-2 pl-10 pr-4',
-                                    active ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-900 dark:text-brand-100' : 'text-gray-900 dark:text-gray-100'
+                                    active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100'
                                   ]"
                                 >
                                   <span :class="[selected ? 'font-medium' : 'font-normal', 'block truncate']">Comments</span>
                                   <span
                                     v-if="selected"
-                                    class="absolute inset-y-0 left-0 flex items-center pl-3 text-brand-600 dark:text-brand-400"
+                                    class="absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-600 dark:text-indigo-400"
                                   >
                                     <CheckIcon class="h-5 w-5" aria-hidden="true" />
                                   </span>
@@ -1185,13 +1185,13 @@
                                 <li
                                   :class="[
                                     'relative cursor-default select-none py-2 pl-10 pr-4',
-                                    active ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-900 dark:text-brand-100' : 'text-gray-900 dark:text-gray-100'
+                                    active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100'
                                   ]"
                                 >
                                   <span :class="[selected ? 'font-medium' : 'font-normal', 'block truncate']">Field Changes</span>
                                   <span
                                     v-if="selected"
-                                    class="absolute inset-y-0 left-0 flex items-center pl-3 text-brand-600 dark:text-brand-400"
+                                    class="absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-600 dark:text-indigo-400"
                                   >
                                     <CheckIcon class="h-5 w-5" aria-hidden="true" />
                                   </span>
@@ -1204,13 +1204,13 @@
                                 <li
                                   :class="[
                                     'relative cursor-default select-none py-2 pl-10 pr-4',
-                                    active ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-900 dark:text-brand-100' : 'text-gray-900 dark:text-gray-100'
+                                    active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100'
                                   ]"
                                 >
                                   <span :class="[selected ? 'font-medium' : 'font-normal', 'block truncate']">Tags</span>
                                   <span
                                     v-if="selected"
-                                    class="absolute inset-y-0 left-0 flex items-center pl-3 text-brand-600 dark:text-brand-400"
+                                    class="absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-600 dark:text-indigo-400"
                                   >
                                     <CheckIcon class="h-5 w-5" aria-hidden="true" />
                                   </span>

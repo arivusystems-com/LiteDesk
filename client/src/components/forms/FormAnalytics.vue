@@ -2,7 +2,7 @@
   <div class="space-y-6">
     <!-- Loading State -->
     <div v-if="loading" class="text-center py-12">
-      <div class="w-16 h-16 border-4 border-gray-200 dark:border-gray-700 border-t-brand-600 dark:border-t-brand-500 rounded-full animate-spin mx-auto mb-4"></div>
+      <div class="w-16 h-16 border-4 border-gray-200 dark:border-gray-700 border-t-indigo-600 dark:border-t-indigo-500 rounded-full animate-spin mx-auto mb-4"></div>
       <p class="text-gray-600 dark:text-gray-400">Loading analytics...</p>
     </div>
 

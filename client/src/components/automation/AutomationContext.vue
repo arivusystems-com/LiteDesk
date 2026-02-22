@@ -104,7 +104,7 @@
             <div v-if="isAdmin && explanation.type === 'process'" class="flex-shrink-0">
               <button
                 @click="viewProcess(explanation.id)"
-                class="text-xs text-brand-600 dark:text-brand-400 hover:underline"
+                class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
               >
                 View Process
               </button>

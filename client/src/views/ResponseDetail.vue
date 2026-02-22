@@ -3,7 +3,7 @@
     <!-- Loading State -->
     <div v-if="loading" class="flex items-center justify-center min-h-screen">
       <div class="text-center">
-        <div class="w-16 h-16 border-4 border-gray-200 dark:border-gray-700 border-t-brand-600 dark:border-t-brand-500 rounded-full animate-spin mx-auto mb-4"></div>
+        <div class="w-16 h-16 border-4 border-gray-200 dark:border-gray-700 border-t-indigo-600 dark:border-t-indigo-500 rounded-full animate-spin mx-auto mb-4"></div>
         <p class="text-gray-600 dark:text-gray-400 font-medium">Loading response...</p>
       </div>
     </div>
@@ -16,7 +16,7 @@
         </svg>
         <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Error Loading Response</h2>
         <p class="text-gray-600 dark:text-gray-400 mb-6">{{ error }}</p>
-        <button @click="$router.push('/forms')" class="px-6 py-3 bg-brand-600 text-white rounded-xl hover:bg-brand-700 font-medium">
+        <button @click="$router.push('/forms')" class="px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium">
           Back to Forms
         </button>
       </div>
@@ -67,8 +67,8 @@
         <!-- Left Column - Response Info -->
         <div class="lg:col-span-1 space-y-4">
           <!-- Response Header Card -->
-          <div class="bg-gradient-to-r from-brand-50 to-purple-50 dark:from-brand-900/20 dark:to-purple-900/20 border border-brand-200 dark:border-brand-800/50 rounded-xl p-4">
-            <div class="w-12 h-12 rounded-lg bg-brand-600 dark:bg-brand-500 flex items-center justify-center mb-3">
+          <div class="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-200 dark:border-indigo-800/50 rounded-xl p-4">
+            <div class="w-12 h-12 rounded-lg bg-indigo-600 dark:bg-indigo-500 flex items-center justify-center mb-3">
               <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>

@@ -55,7 +55,7 @@ const props = defineProps({
 const iconBgClass = computed(() => {
   const classes = {
     default: 'bg-gray-100 dark:bg-gray-700',
-    primary: 'bg-brand-100 dark:bg-brand-900/20',
+    primary: 'bg-indigo-100 dark:bg-indigo-900/20',
     secondary: 'bg-secondary-100 dark:bg-secondary-900/20',
     success: 'bg-success-100 dark:bg-success-900/20',
     warning: 'bg-warning-100 dark:bg-warning-900/20',
@@ -67,7 +67,7 @@ const iconBgClass = computed(() => {
 const iconClass = computed(() => {
   const classes = {
     default: 'text-gray-600 dark:text-gray-400',
-    primary: 'text-brand-600 dark:text-brand-400',
+    primary: 'text-indigo-600 dark:text-indigo-400',
     secondary: 'text-secondary-600 dark:text-secondary-400',
     success: 'text-success-600 dark:text-success-400',
     warning: 'text-warning-600 dark:text-warning-400',

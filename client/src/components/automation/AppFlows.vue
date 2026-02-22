@@ -31,7 +31,7 @@
       <button
         v-if="isAdmin"
         @click="goToBusinessFlows"
-        class="text-xs text-brand-600 dark:text-brand-400 font-medium hover:underline"
+        class="text-xs text-indigo-600 dark:text-indigo-400 font-medium hover:underline"
       >
         Go to Business Flows →
       </button>

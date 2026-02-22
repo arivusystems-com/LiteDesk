@@ -3,7 +3,7 @@
     <div class="max-w-3xl mx-auto">
       <!-- Loading State -->
       <div v-if="loading" class="text-center py-12">
-        <div class="w-16 h-16 border-4 border-gray-200 dark:border-gray-700 border-t-brand-600 dark:border-t-brand-500 rounded-full animate-spin mx-auto mb-4"></div>
+        <div class="w-16 h-16 border-4 border-gray-200 dark:border-gray-700 border-t-indigo-600 dark:border-t-indigo-500 rounded-full animate-spin mx-auto mb-4"></div>
         <p class="text-gray-600 dark:text-gray-400">Loading form...</p>
       </div>
 
@@ -51,7 +51,7 @@
                     v-model="formData[question.questionId]"
                     type="text"
                     :required="question.mandatory"
-                    class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                    class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   />
                   
                   <!-- Yes-No -->
@@ -63,7 +63,7 @@
                         :value="'Yes'"
                         v-model="formData[question.questionId]"
                         :required="question.mandatory"
-                        class="w-4 h-4 text-brand-600 border-gray-300 focus:ring-brand-500"
+                        class="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
                       />
                       <span class="ml-2 text-gray-700 dark:text-gray-300">Yes</span>
                     </label>
@@ -74,7 +74,7 @@
                         :value="'No'"
                         v-model="formData[question.questionId]"
                         :required="question.mandatory"
-                        class="w-4 h-4 text-brand-600 border-gray-300 focus:ring-brand-500"
+                        class="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
                       />
                       <span class="ml-2 text-gray-700 dark:text-gray-300">No</span>
                     </label>
@@ -85,7 +85,7 @@
                     v-else-if="question.type === 'Dropdown'"
                     v-model="formData[question.questionId]"
                     :required="question.mandatory"
-                    class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                    class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   >
                     <option value="">Select an option</option>
                     <option v-for="option in question.options" :key="option" :value="option">{{ option }}</option>
@@ -101,7 +101,7 @@
                       :class="[
                         'w-10 h-10 rounded-lg border-2 transition-colors',
                         formData[question.questionId] >= rating
-                          ? 'bg-brand-600 border-brand-600 text-white'
+                          ? 'bg-indigo-600 border-indigo-600 text-white'
                           : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300'
                       ]"
                     >
@@ -115,7 +115,7 @@
                     v-model="formData[question.questionId]"
                     :required="question.mandatory"
                     rows="4"
-                    class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                    class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   ></textarea>
                   
                   <!-- Date -->
@@ -124,7 +124,7 @@
                     v-model="formData[question.questionId]"
                     type="date"
                     :required="question.mandatory"
-                    class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent cursor-pointer"
+                    class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer"
                     @click="openDatePicker"
                   />
                   
@@ -134,7 +134,7 @@
                     type="file"
                     @change="handleFileUpload(question.questionId, $event)"
                     :required="question.mandatory"
-                    class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                    class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   />
                   
                   <!-- Signature -->
@@ -154,7 +154,7 @@
             <button
               type="submit"
               :disabled="submitting"
-              class="px-6 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              class="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span v-if="submitting">Submitting...</span>
               <span v-else>Submit Form</span>

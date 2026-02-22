@@ -137,7 +137,7 @@
         <div v-if="task.tags && task.tags.length > 0">
           <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Tags</h4>
           <div class="flex flex-wrap gap-2">
-            <span v-for="tag in task.tags" :key="tag" class="badge bg-brand-50 text-brand-700 dark:bg-brand-900/20 dark:text-brand-400">
+            <span v-for="tag in task.tags" :key="tag" class="badge bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-400">
               {{ tag }}
             </span>
           </div>
@@ -158,7 +158,7 @@
                 type="checkbox" 
                 :checked="subtask.completed"
                 @change="toggleSubtask(subtask)"
-                class="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
               />
               <span :class="['flex-1', subtask.completed ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white']">
                 {{ subtask.title }}

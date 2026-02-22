@@ -12,7 +12,7 @@
           </div>
         </div>
         <div class="flex items-center gap-2">
-          <button @click="openCreateModal" class="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 text-sm font-medium transition-colors">
+          <button @click="openCreateModal" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium transition-colors">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
@@ -25,7 +25,7 @@
           <h2 class="text-2xl font-bold text-gray-900 dark:text-white">{{ title }}</h2>
           <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">Manage modules and configure fields</p>
         </div>
-        <button @click="openCreateModal" class="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 text-sm font-medium transition-colors">
+        <button @click="openCreateModal" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium transition-colors">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
@@ -37,7 +37,7 @@
     <!-- If no module selected: show previous grid listing -->
     <div v-if="!selectedModuleId" class="flex-1 overflow-y-auto">
       <div v-if="loading" class="flex items-center justify-center py-12">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
       </div>
       <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <div v-for="mod in displayModules" :key="mod._id" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 cursor-pointer" @click="selectModule(mod)">
@@ -77,7 +77,7 @@
               @click="activeTopTab = tab.id"
               :class="[
                 activeTopTab === tab.id
-                  ? 'border-brand-600 text-brand-600 dark:text-brand-400'
+                  ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
                   : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600',
                 'whitespace-nowrap py-3 px-1 border-b-2 text-sm font-medium'
               ]"
@@ -183,9 +183,9 @@
           <div class="p-3 border-b border-gray-200 dark:border-white/10 flex items-center justify-between gap-2 flex-shrink-0">
             <div class="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate flex-1 min-w-0">{{ selectedModule?.name }}</div>
             <button 
-              v-if="selectedModule && !props.hideFieldCreation && !isPeopleModule && !isOrganizationsModule && !isTasksModule" 
+              v-if="selectedModule && !props.hideFieldCreation" 
               @click="openAddField" 
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 text-xs font-medium transition-colors flex-shrink-0 whitespace-nowrap"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-xs font-medium transition-colors flex-shrink-0 whitespace-nowrap"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -203,7 +203,7 @@
             <input 
               type="checkbox" 
               v-model="showTenantFields" 
-              class="rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500"
+              class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
             />
             <span>Show Tenant Fields</span>
           </label>
@@ -227,12 +227,13 @@
                   <div :class="[
                         'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
                         getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
-                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
                     <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
-                      <span class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
+                      <span v-if="isCustomField(fieldKey)" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Custom</span>
+                      <span v-else class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
                     </button>
                     <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
                   </div>
@@ -258,7 +259,7 @@
                   <div :class="[
                         'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
                         getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
-                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
                     <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
@@ -314,12 +315,13 @@
                   <div :class="[
                         'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
                         getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
-                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
                     <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
-                      <span class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
+                      <span v-if="isCustomField(fieldKey)" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Custom</span>
+                      <span v-else class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
                     </button>
                     <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
                   </div>
@@ -345,7 +347,7 @@
                   <div :class="[
                         'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
                         getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
-                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
                     <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
@@ -403,12 +405,13 @@
                     :class="[
                         'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
                         getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
-                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
                     <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
-                      <span class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
+                      <span v-if="isCustomField(fieldKey)" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Custom</span>
+                      <span v-else class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
                     </button>
                     <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
                   </div>
@@ -434,7 +437,7 @@
                   <div :class="[
                         'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
                         getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
-                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
                     <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
@@ -584,12 +587,13 @@
                   <div :class="[
                         'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
                         getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
-                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
                     <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
-                      <span class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
+                      <span v-if="isCustomField(fieldKey)" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Custom</span>
+                      <span v-else class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
                     </button>
                     <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
                   </div>
@@ -615,7 +619,7 @@
                   <div :class="[
                         'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
                         getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
-                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
                     <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
@@ -671,12 +675,13 @@
                   <div :class="[
                         'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
                         getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
-                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
                     <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
-                      <span class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
+                      <span v-if="isCustomField(fieldKey)" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Custom</span>
+                      <span v-else class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
                     </button>
                     <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
                   </div>
@@ -702,7 +707,7 @@
                   <div :class="[
                         'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
                         getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
-                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-brand-500 dark:ring-brand-400' : ''
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
                     <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
@@ -754,7 +759,7 @@
               <div :class="[
                     'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
                     selectedFieldIdx === idx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
-                    dragOverIdx === idx ? 'ring-2 ring-brand-500 dark:ring-brand-400' : '',
+                    dragOverIdx === idx ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : '',
                     isSystemField(f) ? 'opacity-75' : ''
                   ]">
                 <div v-if="!isSystemField(f) && !isFixedPositionField(f, selectedModule?.key)" class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
@@ -776,12 +781,14 @@
               <!-- People module: Use metadata-based badges -->
               <template v-if="isPeopleModule && currentField?.key">
                 <span v-if="getPeopleFieldMetadata(currentField.key)?.owner === 'system'" class="px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">System</span>
+                <span v-else-if="currentField?.owner === 'org'" class="px-2 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Custom</span>
                 <span v-else-if="getPeopleFieldMetadata(currentField.key)?.owner === 'core'" class="px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
                 <span v-else-if="getPeopleFieldMetadata(currentField.key)?.fieldScope" class="px-2 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">{{ getPeopleFieldMetadata(currentField.key)?.fieldScope }}</span>
               </template>
               <!-- Other modules: Legacy badges -->
               <template v-else>
                 <span v-if="isSystemField(currentField)" class="px-2 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">System</span>
+                <span v-else-if="currentField?.owner === 'org'" class="px-2 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Custom</span>
                 <span v-else-if="isFixedPositionField(currentField, selectedModule?.key)" class="px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Fixed Position</span>
                 <span v-else-if="isCoreField(currentField, selectedModule?.key)" class="px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
               </template>
@@ -802,7 +809,7 @@
           </div>
           <div class="flex items-center gap-2">
             <button v-if="selectedModule && isDirty" @click="saveModule" :disabled="isSaving" class="px-3 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors shadow-md">Save changes</button>
-            <button v-if="currentField && canDeleteField && !props.hideFieldCreation" @click="removeField(selectedFieldIdx)" class="px-3 py-2 bg-red-500 hover:bg-red-600 text-white dark:bg-red-600 dark:hover:bg-red-700 rounded-lg text-sm font-medium transition-colors shadow-sm">Delete Field</button>
+            <button v-if="currentField && canDeleteField && !props.hideFieldCreation" @click="openDeleteFieldConfirm" class="px-3 py-2 bg-red-500 hover:bg-red-600 text-white dark:bg-red-600 dark:hover:bg-red-700 rounded-lg text-sm font-medium transition-colors shadow-sm">Delete Field</button>
           </div>
         </div>
 
@@ -817,7 +824,7 @@
                   :disabled="isSystemField(currentField) && (tab.id !== 'general' && tab.id !== 'filters')"
                   :class="[
                     activeSubTab === tab.id
-                      ? 'border-brand-600 text-brand-600 dark:text-brand-400'
+                      ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
                       : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600',
                     'whitespace-nowrap py-3 px-1 border-b-2 text-sm font-medium',
                     isSystemField(currentField) && (tab.id !== 'general' && tab.id !== 'filters') ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
@@ -904,7 +911,7 @@
                       />
                       <button 
                         @click="handleAddCustomFormType"
-                        class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded text-sm font-medium transition-colors"
+                        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-sm font-medium transition-colors"
                       >
                         Add
                       </button>
@@ -1164,7 +1171,7 @@
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     {{ currentField.dataType === 'Multi-Picklist' ? 'Picklist Options (Multi-Select)' : currentField.dataType === 'Radio Button' ? 'Radio Button Options' : 'Picklist Options' }}
                   </label>
-                  <button v-if="!isSystemField(currentField)" @click="showAddOption = true" class="px-3 py-1.5 bg-brand-600 text-white rounded text-xs hover:bg-brand-700">Add Option</button>
+                  <button v-if="!isSystemField(currentField)" @click="showAddOption = true" class="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700">Add Option</button>
                 </div>
                 <div v-if="isTaskStatusField(currentField)" class="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-900/20">
                   <p class="text-xs text-amber-800 dark:text-amber-300">
@@ -1175,7 +1182,17 @@
                   No options defined. Click "Add Option" to add values.
                 </div>
                 <div v-else class="space-y-2">
-                  <div v-for="(option, optIdx) in normalizedOptions" :key="(getOptionValue(option) || optIdx)" class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-white/5 rounded border border-gray-200 dark:border-white/10">
+                  <div
+                    v-for="(option, optIdx) in normalizedOptions"
+                    :key="(getOptionValue(option) || optIdx)"
+                    class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-white/5 rounded border border-gray-200 dark:border-white/10"
+                    :class="dragOptionOverIdx === optIdx ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''"
+                    :draggable="!isOptionSystemLocked(option) && !isSystemField(currentField)"
+                    @dragstart="onOptionDragStart($event, optIdx)"
+                    @dragover.prevent="onOptionDragOver(optIdx)"
+                    @drop.prevent="onOptionDrop(optIdx)"
+                    @dragend="onOptionDragEnd"
+                  >
                     <!-- Drag handle or lock (status completed) -->
                     <div v-if="isOptionSystemLocked(option)" class="text-gray-400 dark:text-gray-500" title="System-locked">🔒</div>
                     <div v-else class="cursor-grab select-none text-gray-400 dark:text-gray-500" title="Drag to reorder">⋮⋮</div>
@@ -1198,7 +1215,7 @@
                         @blur="saveOptionEdit(optIdx)"
                         @keyup.enter="saveOptionEdit(optIdx)"
                         @keyup.esc="cancelOptionEdit(optIdx)"
-                        class="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        class="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         autofocus
                       />
                       <span v-else class="text-sm font-medium text-gray-900 dark:text-white">
@@ -1262,7 +1279,7 @@
                       </div>
                       <div class="flex justify-end gap-2">
                         <button @click="showAddOption = false" class="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 rounded">Cancel</button>
-                        <button @click="addOption" class="px-4 py-2 bg-brand-600 text-white rounded text-sm hover:bg-brand-700">Add</button>
+                        <button @click="addOption" class="px-4 py-2 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700">Add</button>
                       </div>
                     </div>
                   </div>
@@ -1418,7 +1435,7 @@
                     @click="addValidation" 
                     :disabled="(isPeopleModule && currentField?.key && getPeopleFieldMetadata(currentField.key)?.owner === 'participation') || (isEventsModule && currentField?.key && isEventsAppParticipationField(currentField.key))"
                     :class="[
-                      'px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2',
+                      'px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2',
                       ((isPeopleModule && currentField?.key && getPeopleFieldMetadata(currentField.key)?.owner === 'participation') || (isEventsModule && currentField?.key && isEventsAppParticipationField(currentField.key))) ? 'opacity-50 cursor-not-allowed' : ''
                     ]"
                   >
@@ -1570,7 +1587,7 @@
                       @click="addValidation" 
                       :disabled="isValidationDisabled()"
                       :class="[
-                        'px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm hover:shadow-md',
+                        'px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm hover:shadow-md',
                         isValidationDisabled() ? 'opacity-50 cursor-not-allowed' : ''
                       ]"
                     >
@@ -1629,7 +1646,7 @@
                         @change="handleFilterableChange"
                         class="sr-only peer"
                       />
-                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 dark:peer-focus:ring-brand-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-brand-600"></div>
+                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                     </label>
                   </div>
 
@@ -1756,7 +1773,7 @@
                       <div class="space-y-2">
                         <div class="flex items-center justify-between mb-2">
                           <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Conditions</label>
-                          <button @click="addDependencyCondition(di)" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded text-xs font-medium transition-colors flex items-center gap-1.5 shadow-sm hover:shadow-md">
+                          <button @click="addDependencyCondition(di)" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-medium transition-colors flex items-center gap-1.5 shadow-sm hover:shadow-md">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-4 h-4">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                             </svg>
@@ -1806,7 +1823,7 @@
                                   @focus="setDependencyDropdownOpen(di, ci, true)"
                                   @keydown.escape="setDependencyDropdownOpen(di, ci, false)"
                                   placeholder="Search and select values..."
-                                  class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                                  class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                 />
                                 
                                 <!-- Dropdown -->
@@ -1823,7 +1840,7 @@
                                     <div class="flex items-center gap-2">
                                       <button
                                         @click="selectAllDependencyValues(di, ci)"
-                                        class="text-xs text-brand-600 dark:text-brand-400 hover:underline"
+                                        class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
                                         type="button"
                                       >
                                         Select All
@@ -1850,7 +1867,7 @@
                                         type="checkbox"
                                         :checked="isDependencyValueSelected(di, ci, opt)"
                                         @change.stop="toggleDependencyValue(di, ci, opt)"
-                                        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500 pointer-events-none"
+                                        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 pointer-events-none"
                                       />
                                       <span class="text-sm text-gray-700 dark:text-gray-300 flex-1">{{ opt }}</span>
                                     </div>
@@ -1937,7 +1954,7 @@
                               :id="`picklist-option-${di}-${optIdx}`"
                               :checked="isPicklistOptionSelected(di, option)"
                               @change="togglePicklistOption(di, option)"
-                              class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500"
+                              class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                             />
                             <label :for="`picklist-option-${di}-${optIdx}`" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer flex items-center gap-2">
                               <span v-if="typeof option === 'object' && option.color" class="w-3 h-3 rounded-full flex-shrink-0" :style="{ backgroundColor: option.color }"></span>
@@ -1968,7 +1985,7 @@
                               :id="`popup-field-${di}-${f.key}`"
                               :checked="isPopupFieldSelected(di, f.key)"
                               @change="togglePopupField(di, f.key)"
-                              class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500"
+                              class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                             />
                             <label :for="`popup-field-${di}-${f.key}`" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer flex items-center gap-2">
                               <span>{{ f.label || f.key }}</span>
@@ -2048,7 +2065,7 @@
                         </label>
                         <select 
                           v-model="rule.parentFieldKey"
-                          class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                          class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         >
                           <option value="">Select picklist field...</option>
                           <option 
@@ -2120,7 +2137,7 @@
                                     type="checkbox"
                                     :checked="isMappingOptionSelected(mapping, option)"
                                     @change="toggleMappingOption(mapping, option)"
-                                    class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500"
+                                    class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                                   />
                                   <span class="text-xs text-gray-700 dark:text-gray-300">{{ normalizePicklistOption(option) }}</span>
                                 </label>
@@ -2142,7 +2159,7 @@
                           </div>
                           <button 
                             @click="addPicklistValueMapping(ruleIdx)"
-                            class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:border-brand-500 dark:hover:border-brand-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+                            class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:border-indigo-500 dark:hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-4 h-4">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -2156,7 +2173,7 @@
                     <!-- Add Rule Button -->
                     <button 
                       @click="addPicklistValueRule"
-                      class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:border-brand-500 dark:hover:border-brand-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+                      class="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:border-indigo-500 dark:hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-4 h-4">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -2436,7 +2453,7 @@
                   </div>
                   <button
                     @click="addStatusValue('customerStatus')"
-                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -2466,7 +2483,7 @@
                           @blur="saveStatusValue('customerStatus', index)"
                           @keyup.enter="saveStatusValue('customerStatus', index)"
                           @keyup.esc="cancelStatusEdit('customerStatus', index)"
-                          class="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-brand-500"
+                          class="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           autofocus
                         />
                         <span v-else class="text-sm font-medium text-gray-900 dark:text-white">{{ status.label }}</span>
@@ -2512,7 +2529,7 @@
                   </div>
                   <button
                     @click="addStatusValue('partnerStatus')"
-                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -2542,7 +2559,7 @@
                           @blur="saveStatusValue('partnerStatus', index)"
                           @keyup.enter="saveStatusValue('partnerStatus', index)"
                           @keyup.esc="cancelStatusEdit('partnerStatus', index)"
-                          class="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-brand-500"
+                          class="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           autofocus
                         />
                         <span v-else class="text-sm font-medium text-gray-900 dark:text-white">{{ status.label }}</span>
@@ -2588,7 +2605,7 @@
                   </div>
                   <button
                     @click="addStatusValue('vendorStatus')"
-                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -2618,7 +2635,7 @@
                           @blur="saveStatusValue('vendorStatus', index)"
                           @keyup.enter="saveStatusValue('vendorStatus', index)"
                           @keyup.esc="cancelStatusEdit('vendorStatus', index)"
-                          class="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-brand-500"
+                          class="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
                           autofocus
                         />
                         <span v-else class="text-sm font-medium text-gray-900 dark:text-white">{{ status.label }}</span>
@@ -2661,7 +2678,7 @@
               <button
                 @click="saveStatusTypes"
                 :disabled="savingStatusTypes"
-                class="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
               >
                 <div v-if="savingStatusTypes" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                 <span>{{ savingStatusTypes ? 'Saving...' : 'Save Changes' }}</span>
@@ -2688,7 +2705,7 @@
               <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
                 <div class="flex items-center justify-between mb-3">
                   <h4 class="text-base font-semibold text-gray-900 dark:text-white">Status</h4>
-                  <button @click="openTaskStatusPriorityLens" class="px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg">
+                  <button @click="openTaskStatusPriorityLens" class="px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">
                     Edit in Field Configurations
                   </button>
                 </div>
@@ -2702,7 +2719,7 @@
               <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
                 <div class="flex items-center justify-between mb-3">
                   <h4 class="text-base font-semibold text-gray-900 dark:text-white">Priority</h4>
-                  <button @click="openTaskPriorityInFieldConfig" class="px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg">
+                  <button @click="openTaskPriorityInFieldConfig" class="px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">
                     Edit in Field Configurations
                   </button>
                 </div>
@@ -2791,7 +2808,7 @@
                 </div>
                 <button
                   @click="addItemStatusValue"
-                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -2818,7 +2835,7 @@
                         @blur="saveItemStatusValue(index)"
                         @keyup.enter="saveItemStatusValue(index)"
                         @keyup.esc="cancelItemStatusEdit(index)"
-                        class="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        class="w-full px-2 py-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         autofocus
                       />
                       <span v-else class="text-sm font-medium text-gray-900 dark:text-white">{{ status.label }}</span>
@@ -2871,7 +2888,7 @@
               <button
                 @click="saveItemStatusTypes"
                 :disabled="savingItemStatusTypes"
-                class="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
               >
                 <div v-if="savingItemStatusTypes" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                 <span>{{ savingItemStatusTypes ? 'Saving...' : 'Save Changes' }}</span>
@@ -2972,7 +2989,7 @@
                 <div class="text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
                   <strong>System-Owned Statuses:</strong> Event statuses (Planned, Completed, Cancelled) are system-controlled and required for execution. 
                   These statuses cannot be deleted, renamed, or reordered. Status transitions happen via system actions in Work interfaces, not Settings.
-                  See: <a href="/docs/architecture/event-settings.md" target="_blank" class="text-brand-600 dark:text-brand-400 hover:underline">docs/architecture/event-settings.md</a>
+                  See: <a href="/docs/architecture/event-settings.md" target="_blank" class="text-indigo-600 dark:text-indigo-400 hover:underline">docs/architecture/event-settings.md</a>
                 </div>
               </div>
             </div>
@@ -3031,7 +3048,7 @@
                           type="checkbox"
                           :checked="eventRoleRules['Meeting / Appointment']?.auditorRequired || false"
                           @change="updateEventRoleRule('Meeting / Appointment', 'auditorRequired', $event.target.checked)"
-                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Auditor Required</span>
@@ -3045,7 +3062,7 @@
                           type="checkbox"
                           :checked="eventRoleRules['Meeting / Appointment']?.reviewerRequired || false"
                           @change="updateEventRoleRule('Meeting / Appointment', 'reviewerRequired', $event.target.checked)"
-                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Reviewer Required</span>
@@ -3059,7 +3076,7 @@
                           type="checkbox"
                           :checked="eventRoleRules['Meeting / Appointment']?.correctiveOwnerRequired || false"
                           @change="updateEventRoleRule('Meeting / Appointment', 'correctiveOwnerRequired', $event.target.checked)"
-                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Corrective Owner Required</span>
@@ -3080,7 +3097,7 @@
                           type="checkbox"
                           checked
                           disabled
-                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Auditor Required</span>
@@ -3095,7 +3112,7 @@
                           type="checkbox"
                           :checked="eventRoleRules['Internal Audit']?.reviewerRequired || false"
                           @change="updateEventRoleRule('Internal Audit', 'reviewerRequired', $event.target.checked)"
-                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Reviewer Required</span>
@@ -3109,7 +3126,7 @@
                           type="checkbox"
                           checked
                           disabled
-                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Corrective Owner Required</span>
@@ -3131,7 +3148,7 @@
                           type="checkbox"
                           checked
                           disabled
-                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Auditor Required</span>
@@ -3146,7 +3163,7 @@
                           type="checkbox"
                           checked
                           disabled
-                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Reviewer Required</span>
@@ -3161,7 +3178,7 @@
                           type="checkbox"
                           checked
                           disabled
-                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Corrective Owner Required</span>
@@ -3183,7 +3200,7 @@
                           type="checkbox"
                           checked
                           disabled
-                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Auditor Required</span>
@@ -3198,7 +3215,7 @@
                           type="checkbox"
                           :checked="eventRoleRules['External Audit Beat']?.reviewerRequired || false"
                           @change="updateEventRoleRule('External Audit Beat', 'reviewerRequired', $event.target.checked)"
-                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Reviewer Required</span>
@@ -3212,7 +3229,7 @@
                           type="checkbox"
                           checked
                           disabled
-                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Corrective Owner Required</span>
@@ -3234,7 +3251,7 @@
                           type="checkbox"
                           :checked="eventRoleRules['Field Sales Beat']?.auditorRequired || false"
                           @change="updateEventRoleRule('Field Sales Beat', 'auditorRequired', $event.target.checked)"
-                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Auditor Required</span>
@@ -3248,7 +3265,7 @@
                           type="checkbox"
                           :checked="eventRoleRules['Field Sales Beat']?.reviewerRequired || false"
                           @change="updateEventRoleRule('Field Sales Beat', 'reviewerRequired', $event.target.checked)"
-                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Reviewer Required</span>
@@ -3262,7 +3279,7 @@
                           type="checkbox"
                           :checked="eventRoleRules['Field Sales Beat']?.correctiveOwnerRequired || false"
                           @change="updateEventRoleRule('Field Sales Beat', 'correctiveOwnerRequired', $event.target.checked)"
-                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Corrective Owner Required</span>
@@ -3320,7 +3337,7 @@
                       <label
                         v-else
                         class="relative inline-flex w-11 h-6 items-center rounded-full transition-colors"
-                        :class="eventGeoRules[eventType] ? 'bg-brand-600 dark:bg-brand-500' : 'bg-gray-200 dark:bg-gray-700'"
+                        :class="eventGeoRules[eventType] ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'"
                       >
                         <input
                           type="checkbox"
@@ -3369,7 +3386,7 @@
                           :checked="eventFormRules[eventType]?.allowLinking !== false"
                           @change="updateEventFormRule(eventType, 'allowLinking', $event.target.checked)"
                           :disabled="isAuditEventType(eventType)"
-                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                           :class="isAuditEventType(eventType) ? 'opacity-50 cursor-not-allowed' : ''"
                         />
                         <div class="flex-1">
@@ -3398,7 +3415,7 @@
                           type="checkbox"
                           :checked="eventFormRules[eventType]?.requireOnCreation || false"
                           @change="updateEventFormRule(eventType, 'requireOnCreation', $event.target.checked)"
-                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Require Form on Creation</span>
@@ -3415,7 +3432,7 @@
                           type="checkbox"
                           :checked="eventFormRules[eventType]?.preventUnlinkingAfterStart || false"
                           @change="updateEventFormRule(eventType, 'preventUnlinkingAfterStart', $event.target.checked)"
-                          class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Prevent Unlinking After Start</span>
@@ -3435,7 +3452,7 @@
               <button
                 @click="saveEventRolesRules"
                 :disabled="savingEventRolesRules"
-                class="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
               >
                 <div v-if="savingEventRolesRules" class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                 <span>{{ savingEventRolesRules ? 'Saving...' : 'Save Changes' }}</span>
@@ -3787,7 +3804,7 @@
             </svg>
             <p class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">No relationships defined</p>
             <p class="text-xs text-gray-500 dark:text-gray-500 mb-4">Get started by adding your first relationship</p>
-            <button @click="addRelationship" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 mx-auto shadow-sm hover:shadow-md">
+            <button @click="addRelationship" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 mx-auto shadow-sm hover:shadow-md">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-4 h-4">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
               </svg>
@@ -3801,7 +3818,7 @@
               <!-- Relationship Header -->
               <div class="bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-white/5 dark:to-white/10 px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                  <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400">
+                  <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-4 h-4">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                     </svg>
@@ -3838,7 +3855,7 @@
                     <input 
                       v-model="r.name" 
                       placeholder="e.g., Primary Organization" 
-                      class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-400 focus:border-transparent transition-all" 
+                      class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-transparent transition-all" 
                     />
                     <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">A descriptive name for this relationship</p>
                   </div>
@@ -3849,7 +3866,7 @@
                     </label>
                     <select 
                       v-model="r.type" 
-                      class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-400 focus:border-transparent transition-all"
+                      class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-transparent transition-all"
                     >
                       <option value="one_to_one">One-to-One (1:1)</option>
                       <option value="one_to_many">One-to-Many (1:N)</option>
@@ -3869,7 +3886,7 @@
                     </label>
                     <select 
                       v-model="r.targetModuleKey" 
-                      class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-400 focus:border-transparent transition-all"
+                      class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-transparent transition-all"
                     >
                       <option value="">Select module</option>
                       <option v-for="m in modules" :key="m.key" :value="m.key">{{ m.name }}</option>
@@ -3884,7 +3901,7 @@
                     <input 
                       v-model="r.label" 
                       placeholder="e.g., Related Organizations" 
-                      class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-400 focus:border-transparent transition-all" 
+                      class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-transparent transition-all" 
                     />
                     <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Label shown in the UI</p>
                   </div>
@@ -3905,7 +3922,7 @@
                       </label>
                       <select 
                         v-model="r.localField" 
-                        class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-400 focus:border-transparent transition-all"
+                        class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-transparent transition-all"
                       >
                         <option value="">Select field</option>
                         <option v-for="field in editFields" :key="field.key" :value="field.key">
@@ -3922,7 +3939,7 @@
                       <input 
                         v-model="r.foreignField" 
                         placeholder="e.g., _id" 
-                        class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-400 focus:border-transparent transition-all" 
+                        class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-transparent transition-all" 
                       />
                       <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Field in target module</p>
                     </div>
@@ -3942,7 +3959,7 @@
                       <input 
                         type="checkbox" 
                         v-model="r.required" 
-                        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500 dark:focus:ring-brand-400"
+                        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-400"
                       />
                       <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Required</span>
                     </label>
@@ -3950,7 +3967,7 @@
                       <input 
                         type="checkbox" 
                         v-model="r.unique" 
-                        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500 dark:focus:ring-brand-400"
+                        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-400"
                       />
                       <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Unique</span>
                     </label>
@@ -3958,7 +3975,7 @@
                       <input 
                         type="checkbox" 
                         v-model="r.index" 
-                        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500 dark:focus:ring-brand-400"
+                        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-400"
                       />
                       <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Index</span>
                     </label>
@@ -3966,7 +3983,7 @@
                       <input 
                         type="checkbox" 
                         v-model="r.cascadeDelete" 
-                        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500 dark:focus:ring-brand-400"
+                        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-400"
                       />
                       <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Cascade Delete</span>
                     </label>
@@ -3978,7 +3995,7 @@
             <!-- Add Button -->
             <button 
               @click="addRelationship" 
-              class="w-full px-4 py-3 bg-white dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 hover:border-brand-500 dark:hover:border-brand-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors flex items-center justify-center gap-2"
+              class="w-full px-4 py-3 bg-white dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 hover:border-indigo-500 dark:hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center justify-center gap-2"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -3995,7 +4012,7 @@
             <aside class="w-full lg:w-80 flex-none bg-white dark:bg-gray-900/60 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
               <div class="p-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
                 <div class="text-sm font-semibold text-gray-800 dark:text-gray-200">Pipelines</div>
-                <button @click="addPipeline" class="px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors shadow-sm hover:shadow">
+                <button @click="addPipeline" class="px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-sm hover:shadow">
                   Add
                 </button>
               </div>
@@ -4006,7 +4023,7 @@
                   :class="[
                     'p-4 cursor-pointer transition-colors',
                     selectedPipelineKey === pipeline.key
-                      ? 'bg-brand-50 dark:bg-brand-900/20'
+                      ? 'bg-indigo-50 dark:bg-indigo-900/20'
                       : 'hover:bg-gray-50 dark:hover:bg-white/5'
                   ]"
                   @click="selectedPipelineKey = pipeline.key"
@@ -4019,14 +4036,14 @@
                         <p class="text-xs text-gray-500 dark:text-gray-400">{{ pipeline.stages?.length || 0 }} stage{{ (pipeline.stages?.length || 0) === 1 ? '' : 's' }}</p>
                       </div>
                     </div>
-                    <span v-if="pipeline.isDefault" class="text-xs font-medium text-brand-600 dark:text-brand-300">Default</span>
+                    <span v-if="pipeline.isDefault" class="text-xs font-medium text-indigo-600 dark:text-indigo-300">Default</span>
                   </div>
                   <div class="flex items-center gap-2 mt-3">
                     <label class="inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                       <input
                         type="radio"
                         name="default-pipeline"
-                        class="text-brand-600 border-gray-300 dark:border-gray-600 focus:ring-brand-500"
+                        class="text-indigo-600 border-gray-300 dark:border-gray-600 focus:ring-indigo-500"
                         :checked="pipeline.isDefault"
                         @change.stop="setDefaultPipeline(pipeline.key)"
                       />
@@ -4093,7 +4110,7 @@
                   :class="[
                     isSaving
                       ? 'bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed'
-                      : 'bg-brand-600 hover:bg-brand-700 text-white shadow-sm hover:shadow'
+                      : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm hover:shadow'
                   ]"
                 >
                   <svg v-if="isSaving" class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -4117,7 +4134,7 @@
                     </div>
                   </div>
                   <div class="md:col-span-2 flex items-center gap-3">
-                    <span v-if="currentPipeline.isDefault" class="px-2 py-0.5 text-xs font-medium bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded">Default pipeline</span>
+                    <span v-if="currentPipeline.isDefault" class="px-2 py-0.5 text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded">Default pipeline</span>
                     <button
                       v-else
                       @click="setDefaultPipeline(currentPipeline.key)"
@@ -4134,7 +4151,7 @@
                     <p class="text-xs text-gray-500 dark:text-gray-400">Configure the stages available in this pipeline.</p>
                   </div>
                   <div class="flex items-center gap-2">
-                  <button @click="addStageToPipeline(currentPipeline)" class="px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors shadow-sm hover:shadow">
+                  <button @click="addStageToPipeline(currentPipeline)" class="px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-sm hover:shadow">
                     Add Stage
                   </button>
                   </div>
@@ -4152,7 +4169,7 @@
                     @dragend="resetStageDrag"
                     :class="[
                       stageDragOver.pipelineKey === currentPipeline.key && stageDragOver.index === stageIndex
-                         ? 'ring-2 ring-brand-500/60 dark:ring-brand-400/70'
+                         ? 'ring-2 ring-indigo-500/60 dark:ring-indigo-400/70'
                          : ''
                      ]"
                    >
@@ -4191,7 +4208,7 @@
                   </div>
                   <div
                     class="border border-dashed border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50/40 dark:bg-white/5 text-center text-xs text-gray-500 dark:text-gray-400 py-4 transition-colors"
-                    :class="stageDragOver.pipelineKey === currentPipeline.key && stageDragOver.index === currentPipeline.stages.length ? 'border-brand-400 text-brand-600 dark:text-brand-300' : ''"
+                    :class="stageDragOver.pipelineKey === currentPipeline.key && stageDragOver.index === currentPipeline.stages.length ? 'border-indigo-400 text-indigo-600 dark:text-indigo-300' : ''"
                     @dragover.prevent="onStageDragOver(currentPipeline.key, currentPipeline.stages.length)"
                     @drop.prevent="onStageDrop(currentPipeline.key, currentPipeline.stages.length)"
                   >
@@ -4202,7 +4219,7 @@
               <div v-else class="flex-1 flex items-center justify-center text-sm text-gray-500 dark:text-gray-400">
                 <div class="text-center space-y-3">
                   <p>No pipeline selected.</p>
-                  <button @click="addPipeline" class="px-4 py-2 text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors">Create Pipeline</button>
+                  <button @click="addPipeline" class="px-4 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors">Create Pipeline</button>
                 </div>
               </div>
               <div v-if="!currentPipeline" class="flex-1 flex items-center justify-center p-6 text-sm text-gray-500 dark:text-gray-400">
@@ -4219,7 +4236,7 @@
             <aside class="w-full lg:w-80 flex-none bg-white dark:bg-gray-900/60 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
               <div class="p-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
                 <div class="text-sm font-semibold text-gray-800 dark:text-gray-200">Pipelines</div>
-                <button @click="addPipeline" class="px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors shadow-sm hover:shadow">
+                <button @click="addPipeline" class="px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-sm hover:shadow">
                   Add
                 </button>
               </div>
@@ -4230,7 +4247,7 @@
                   :class="[
                     'p-4 cursor-pointer transition-colors',
                     selectedPipelineKey === pipeline.key
-                      ? 'bg-brand-50 dark:bg-brand-900/20'
+                      ? 'bg-indigo-50 dark:bg-indigo-900/20'
                       : 'hover:bg-gray-50 dark:hover:bg-white/5'
                   ]"
                   @click="selectedPipelineKey = pipeline.key"
@@ -4243,14 +4260,14 @@
                         <p class="text-xs text-gray-500 dark:text-gray-400">{{ pipeline.stages?.length || 0 }} stage{{ (pipeline.stages?.length || 0) === 1 ? '' : 's' }}</p>
                       </div>
                     </div>
-                    <span v-if="pipeline.isDefault" class="text-xs font-medium text-brand-600 dark:text-brand-300">Default</span>
+                    <span v-if="pipeline.isDefault" class="text-xs font-medium text-indigo-600 dark:text-indigo-300">Default</span>
                   </div>
                   <div class="flex items-center gap-2 mt-3">
                     <label class="inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                       <input
                         type="radio"
                         name="default-playbook-pipeline"
-                        class="text-brand-600 border-gray-300 dark:border-gray-600 focus:ring-brand-500"
+                        class="text-indigo-600 border-gray-300 dark:border-gray-600 focus:ring-indigo-500"
                         :checked="pipeline.isDefault"
                         @change.stop="setDefaultPipeline(pipeline.key)"
                       />
@@ -4338,7 +4355,7 @@
                                 type="checkbox"
                                 v-model="stage.playbook.enabled"
                                 @change="handlePlaybookToggle(stage)"
-                                class="rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500"
+                                class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                               />
                               <span>Enable</span>
                             </label>
@@ -4382,7 +4399,7 @@
                                 </div>
                                 <div>
                                   <label class="inline-flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
-                                    <input type="checkbox" v-model="stage.playbook.autoAdvance" @change="onPlaybookAutoAdvanceChange(stage)" class="rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500" />
+                                    <input type="checkbox" v-model="stage.playbook.autoAdvance" @change="onPlaybookAutoAdvanceChange(stage)" class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500" />
                                     Auto-move to next stage when criteria met
                                   </label>
                                   <p class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Automatically progress when conditions are satisfied.</p>
@@ -4413,7 +4430,7 @@
                               <p class="text-xs text-gray-500 dark:text-gray-400">Add and orchestrate the work your team completes in this stage.</p>
                             </div>
                             <button
-                              class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors shadow-sm hover:shadow"
+                              class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-sm hover:shadow"
                               @click="addPlaybookAction(stage)"
                               :disabled="!stage.playbook.enabled"
                               :class="!stage.playbook.enabled ? 'opacity-50 cursor-not-allowed' : ''"
@@ -4435,7 +4452,7 @@
                               <div
                                 v-for="(action, actionIndex) in stage.playbook.actions"
                                 :key="action.key || actionIndex"
-                                class="group border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900/70 p-4 shadow-sm hover:border-brand-500/70 hover:shadow transition-colors cursor-pointer"
+                                class="group border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900/70 p-4 shadow-sm hover:border-indigo-500/70 hover:shadow transition-colors cursor-pointer"
                                 @click="openActionModal(stage, actionIndex)"
                               >
                                 <div class="flex items-start justify-between gap-2">
@@ -4522,7 +4539,7 @@
                 :class="[
                   'px-3 py-1.5',
                   quickMode === 'simple'
-                    ? 'bg-brand-600 text-white'
+                    ? 'bg-indigo-600 text-white'
                     : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'
                 ]"
               >
@@ -4533,7 +4550,7 @@
                 :class="[
                   'px-3 py-1.5',
                   quickMode === 'advanced'
-                    ? 'bg-brand-600 text-white'
+                    ? 'bg-indigo-600 text-white'
                     : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'
                 ]"
               >
@@ -4844,7 +4861,7 @@
                       'cursor-move': !(isOrganizationsModule && f.key?.toLowerCase() === 'name' && idx === 0) && !(isTasksModule && f.key?.toLowerCase() === 'title' && idx === 0) && !(isEventsModule && f.key?.toLowerCase() === 'eventname' && idx === 0),
                       'cursor-default': (isOrganizationsModule && f.key?.toLowerCase() === 'name' && idx === 0) || (isTasksModule && f.key?.toLowerCase() === 'title' && idx === 0) || (isEventsModule && f.key?.toLowerCase() === 'eventname' && idx === 0),
                       'opacity-50': quickCreateDragStartIdx === idx,
-                      'ring-2 ring-brand-500/50': quickCreateDragOverIdx === idx
+                      'ring-2 ring-indigo-500/50': quickCreateDragOverIdx === idx
                     }"
                   >
                     <ArrowsUpDownIcon 
@@ -4872,14 +4889,14 @@
                   <div class="text-sm font-semibold text-gray-800 dark:text-gray-200">Visual Builder (Rows / Columns)</div>
                   <div class="flex items-center gap-2">
                     <button @click="addRow" class="px-3 py-1.5 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/20 rounded text-xs transition-colors">Add Row</button>
-                    <button @click="openPreview()" class="px-3 py-1.5 bg-brand-600 text-white rounded text-xs">Preview</button>
+                    <button @click="openPreview()" class="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs">Preview</button>
                   </div>
                 </div>
                 <div class="p-4 space-y-4">
                   <div v-if="quickLayout.rows.length === 0" class="text-sm text-gray-600 dark:text-gray-400">No rows yet. Add a row to start.</div>
                   <div v-for="(row, ri) in quickLayout.rows" :key="ri"
                        class="border border-gray-200 dark:border-white/10 rounded-lg p-3 space-y-3"
-                       :class="dragRowOver===ri ? 'ring-2 ring-brand-500/50' : ''"
+                       :class="dragRowOver===ri ? 'ring-2 ring-indigo-500/50' : ''"
                        draggable="true"
                        @dragstart="onRowDragStart(ri)"
                        @dragover.prevent="onRowDragOver(ri)"
@@ -4898,7 +4915,7 @@
                            :class="[
                              'border border-dashed border-gray-300 dark:border-white/10 rounded-lg p-3',
                              spanClass(col.span),
-                             dragColOver.ri === ri && dragColOver.ci === ci ? 'ring-2 ring-brand-500/50' : ''
+                             dragColOver.ri === ri && dragColOver.ci === ci ? 'ring-2 ring-indigo-500/50' : ''
                            ]"
                            draggable="true"
                            @dragstart="onColDragStart(ri, ci)"
@@ -5056,11 +5073,11 @@
               </div>
               <div class="flex flex-wrap items-center gap-6">
                 <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-                  <input type="checkbox" v-model="actionModalAction.required" class="rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500" />
+                  <input type="checkbox" v-model="actionModalAction.required" class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500" />
                   Required to complete stage
                 </label>
                 <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-                  <input type="checkbox" v-model="actionModalAction.autoCreate" class="rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500" />
+                  <input type="checkbox" v-model="actionModalAction.autoCreate" class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500" />
                   Auto-create when stage starts
                 </label>
               </div>
@@ -5161,7 +5178,7 @@
                     type="checkbox"
                     :checked="actionModalAction.dependencies?.includes(option.value)"
                     @change="toggleActionDependency(actionModalStage, actionModalAction, option.value, $event.target.checked)"
-                    class="rounded border-gray-300 dark:border-gray-600 text-brand-600 focus:ring-brand-500"
+                    class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                   />
                   {{ option.label }}
                 </label>
@@ -5175,7 +5192,7 @@
               <div class="flex items-center justify-between">
                 <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">Alerts & Reminders</h3>
                 <button
-                  class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors shadow-sm hover:shadow"
+                  class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-sm hover:shadow"
                   @click="addActionAlert(actionModalStage, actionModalAction)"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -5258,7 +5275,7 @@
               <div class="flex items-center justify-between">
                 <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">Resources</h3>
                 <button
-                  class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors shadow-sm hover:shadow"
+                  class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-sm hover:shadow"
                   @click="addActionResource(actionModalStage, actionModalAction)"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -5336,6 +5353,57 @@
       @saved="handleModuleSaved"
     />
 
+    <AddCustomFieldDrawer
+      :is-open="showAddFieldDrawer"
+      :module-name="selectedModule?.name || ''"
+      :next-order="editFields.length"
+      @close="showAddFieldDrawer = false"
+      @save="handleAddFieldFromDrawer"
+    />
+
+    <TransitionRoot as="template" :show="showDeleteFieldConfirm">
+      <Dialog class="relative z-50" @close="showDeleteFieldConfirm = false">
+        <TransitionChild as="template" enter="ease-out duration-200" enter-from="opacity-0" enter-to="opacity-100" leave="ease-in duration-200" leave-from="opacity-100" leave-to="opacity-0">
+          <div class="fixed inset-0 bg-gray-500/75 dark:bg-gray-900/75" />
+        </TransitionChild>
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <TransitionChild as="template" enter="ease-out duration-200" enter-from="opacity-0 scale-95" enter-to="opacity-100 scale-100" leave="ease-in duration-200" leave-from="opacity-100 scale-100" leave-to="opacity-0 scale-95">
+            <DialogPanel class="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 p-6 shadow-xl">
+              <div class="flex gap-4">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/20">
+                  <ExclamationTriangleIcon class="h-6 w-6 text-red-600 dark:text-red-400" aria-hidden="true" />
+                </div>
+                <div class="flex-1">
+                  <DialogTitle as="h3" class="text-base font-semibold text-gray-900 dark:text-white">
+                    Delete field
+                  </DialogTitle>
+                  <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    Are you sure you want to delete "{{ currentField?.label || currentField?.key || 'this field' }}"?
+                    This action cannot be undone.
+                  </p>
+                  <div class="mt-4 flex justify-end gap-3">
+                    <button
+                      type="button"
+                      class="rounded-md bg-white dark:bg-gray-700 px-3 py-2 text-sm font-semibold text-gray-900 dark:text-white shadow-sm ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600"
+                      @click="showDeleteFieldConfirm = false"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
+                      @click="confirmDeleteField"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </DialogPanel>
+          </TransitionChild>
+        </div>
+      </Dialog>
+    </TransitionRoot>
   </div>
 </template>
 
@@ -5346,11 +5414,12 @@
 import { ref, onMounted, computed, watch, reactive, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
-import { Switch } from '@headlessui/vue';
+import { Switch, Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import apiClient from '@/utils/apiClient';
 import { openDatePicker } from '@/utils/dateUtils';
 import ModuleFormModal from './ModuleFormModal.vue';
-import { ArrowsUpDownIcon } from '@heroicons/vue/24/outline';
+import AddCustomFieldDrawer from './AddCustomFieldDrawer.vue';
+import { ArrowsUpDownIcon, ExclamationTriangleIcon } from '@heroicons/vue/24/outline';
 
 // DEV-only guards: Forms Settings must never support execution
 if (process.env.NODE_ENV === 'development') {
@@ -5392,8 +5461,7 @@ import {
   getCoreIdentityFields,
   getParticipationFields,
   getStateFields,
-  getDetailFields,
-  isSystemField as isSystemFieldFromModel
+  getDetailFields
 } from '@/platform/fields/peopleFieldModel';
 import {
   TASK_FIELD_METADATA,
@@ -5402,7 +5470,6 @@ import {
   getTaskSystemFields,
   getTaskParticipationFields,
   getTaskQuickCreateFields,
-  isTaskSystemField,
   isTaskCoreField,
   isTaskProtectedField,
   groupTaskFields,
@@ -5415,7 +5482,6 @@ import {
   getOrganizationSystemFields,
   getOrganizationParticipationFields,
   getOrganizationQuickCreateFields,
-  isOrganizationSystemField,
   isOrganizationCoreField,
   isOrganizationProtectedField,
   groupOrganizationFields,
@@ -5428,7 +5494,6 @@ import {
   getDealSystemFields,
   getDealParticipationFields,
   getDealQuickCreateFields,
-  isDealSystemField,
   isDealCoreField,
   isDealProtectedField,
   groupDealFields,
@@ -5441,7 +5506,6 @@ import {
   getEventSystemFields,
   getEventParticipationFields,
   getEventQuickCreateFields,
-  isEventSystemField,
   isEventCoreField,
   isEventProtectedField,
   groupEventFields,
@@ -5454,12 +5518,22 @@ import {
   getItemSystemFields,
   getItemParticipationFields,
   getItemQuickCreateFields,
-  isItemSystemField,
   isItemCoreField,
   isItemProtectedField,
   groupItemFields,
   classifyItemField
 } from '@/platform/fields/itemFieldModel';
+import { isSystemField as isSystemFieldFromEngine } from '@/platform/fields/fieldCapabilityEngine';
+import {
+  mergeFields,
+  filterToVisibleInConfig,
+  getFallbackMetadataForVisibleInConfig
+} from '@/platform/fields/fieldMerge';
+import {
+  getFieldMetadataMap,
+  getFieldMetadataFromRegistry,
+  isModuleRegistered
+} from '@/platform/fields/FieldRegistry';
 
 const props = defineProps({
   moduleFilter: {
@@ -5499,21 +5573,31 @@ const editingModule = ref(null);
 const editFields = ref([]);
 const selectedFieldIdx = ref(0);
 
-// System fields that should be excluded from quick create and field configuration
-const systemFieldKeys = [
-  'organizationid', 'createdat', 'updatedat', '_id', '__v', 'createdby',
-  // Events-specific system fields
-  'eventid', 'createdtime', 'modifiedby', 'modifiedtime', 'audithistory'
-];
-
-// Filter system fields from fields array
-const filterSystemFields = (fields) => {
+/**
+ * Normalize fields for Field Configuration UI.
+ * Metadata-driven: uses isVisibleInConfig; no hardcoded key lists.
+ * - For modules with metadata: merges metadata + backend, filters by isVisibleInConfig
+ * - For Forms/other: filters using fallback metadata for known infrastructure keys
+ */
+function normalizeFieldsForConfig(moduleKey, fields) {
   if (!Array.isArray(fields)) return fields;
-  return fields.filter(field => {
-    if (!field || !field.key) return true;
-    return !systemFieldKeys.includes(field.key.toLowerCase());
-  });
-};
+  const backendFields = fields.filter((f) => f?.key);
+
+  if (isModuleRegistered(moduleKey)) {
+    const metadataMap = getFieldMetadataMap(moduleKey);
+    if (metadataMap) {
+      const getMetadata = (key) => getFieldMetadataFromRegistry(moduleKey, key);
+      return mergeFields(metadataMap, backendFields, {
+        moduleKey,
+        getMetadata
+      });
+    }
+  }
+
+  // Forms and modules without metadata: filter by fallback
+  return filterToVisibleInConfig(backendFields, (key) => getFallbackMetadataForVisibleInConfig(key));
+}
+
 // Filter modules for display - exclude 'users' from main list (it's only for lookups)
 // Also apply optional moduleFilter prop if provided
 const displayModules = computed(() => {
@@ -5708,6 +5792,8 @@ const quickOriginalSnapshot = ref('');
 const dragColSrc = ref({ ri: null, ci: null });
 const dragColOver = ref({ ri: null, ci: null });
 const dragRowSrc = ref(null);
+const dragOptionStartIdx = ref(null);
+const dragOptionOverIdx = ref(null);
 const dragRowOver = ref(null);
 const quickCreateDragStartIdx = ref(null);
 const quickCreateDragOverIdx = ref(null);
@@ -6711,13 +6797,6 @@ function ensureTaskRelatedToField(moduleKey, fields = []) {
 const filteredFields = computed(() => {
   let fields = editFields.value;
   
-  // Filter out system fields that should never appear in the UI
-  fields = fields.filter(f => {
-    const keyLower = (f.key || '').toLowerCase();
-    // Exclude activityLogs - it's a system field managed internally
-    return keyLower !== 'activitylogs';
-  });
-  
   // Apply context filter if provided (e.g., for Sales → People)
   if (props.contextFilter) {
     console.log('[ModulesAndFields] Applying context filter. Fields before:', fields.length);
@@ -6930,12 +7009,12 @@ const quickCreateAvailableFields = computed(() => {
 
   // For Tasks: all fields except system
   if (isTasksModule.value) {
-    return editFields.value.filter(f => f.key && !isTaskSystemField(f.key));
+    return editFields.value.filter(f => f.key && !isSystemField(f));
   }
 
   // For Events: all fields except system
   if (isEventsModule.value) {
-    return editFields.value.filter(f => f.key && !isEventSystemField(f.key));
+    return editFields.value.filter(f => f.key && !isSystemField(f));
   }
 
   // For other modules (Deals, Items, etc.): only non-system fields
@@ -6988,6 +7067,13 @@ const groupedFields = computed(() => {
 
   for (const fieldKey of allFieldKeys) {
     try {
+      // Custom fields (owner: 'org') always go to core group, never system
+      const fieldObj = editFields.value.find(f => f.key === fieldKey);
+      if (fieldObj?.owner === 'org') {
+        coreIdentity.push(fieldKey);
+        continue;
+      }
+
       // For Items module, use item field model for classification
       // ARCHITECTURE NOTE: Items Settings configure structure only.
       // Field classification is now driven by itemFieldModel.ts
@@ -7199,6 +7285,12 @@ function normalizeFieldKey(key) {
   return String(key || '').trim().toLowerCase().replace(/-/g, '');
 }
 
+// Helper: Check if a field is a custom field (owner: 'org')
+function isCustomField(fieldKey) {
+  const field = editFields.value.find(f => f.key === fieldKey);
+  return field?.owner === 'org';
+}
+
 // Helper: Get field index by key (case-insensitive, ignores hyphens)
 function getFieldIndex(fieldKey) {
   if (!fieldKey) return -1;
@@ -7207,14 +7299,22 @@ function getFieldIndex(fieldKey) {
 }
 
 // Helper: Select field by key
+// ARCHITECTURE: Never mutate editFields here unless adding a genuinely missing field.
+// Replacing editFields triggers groupedFields recompute and causes fields to jump between
+// Core/System sections. See .cursor/rules/field-configuration-selection.mdc
 function selectFieldByKey(fieldKey) {
   if (!fieldKey) return;
   
   const keyLower = String(fieldKey || '').trim().toLowerCase();
   
-  // For Tasks: clicks on legacy relatedToType/relatedToId should select the core relatedTo instead
+  // For Tasks: clicks on legacy relatedToType/relatedToId should select the core relatedTo instead.
+  // Only replace editFields when relatedTo is missing; replacing when it exists causes re-render
+  // that makes fields appear to jump between Core and System sections.
   if (isTasksModule.value && activeTopTab.value === 'fields' && (keyLower === 'relatedtotype' || keyLower === 'relatedtoid')) {
-    editFields.value = ensureTaskRelatedToField(selectedModule.value?.key, editFields.value);
+    const hasRelatedTo = editFields.value.some((f) => normalizeFieldKey(f?.key) === 'relatedto');
+    if (!hasRelatedTo) {
+      editFields.value = ensureTaskRelatedToField(selectedModule.value?.key, editFields.value);
+    }
     fieldKey = 'relatedTo';
   }
   
@@ -7275,8 +7375,19 @@ function formatFieldLabelForDisplay(label, fieldKey = '') {
 
 function isFieldLabelReadOnly(field) {
   if (!field) return true;
-  const owner = field?.owner || 'platform';
+  // Resolve owner: backend often sets owner='platform' for all platform fields; use metadata for accurate classification
+  let owner = field?.owner;
+  if (selectedModule.value?.key && isModuleRegistered(selectedModule.value.key)) {
+    const meta = getFieldMetadataFromRegistry(selectedModule.value.key, field.key);
+    if (meta) {
+      owner = meta.owner; // Prefer metadata: 'system'|'core'|'participation' (accurate) over backend 'platform'
+    } else if (owner == null) {
+      owner = 'org'; // Custom field not in metadata → editable
+    }
+  }
+  owner = owner ?? (!isModuleRegistered(selectedModule.value?.key || '') ? 'org' : 'platform');
   if (owner === 'platform' || owner === 'app') return true;
+  if (owner === 'system') return true;
   if (isSystemField(field)) return true;
   if (isPeopleModule.value && getPeopleFieldMetadata(field.key)?.owner === 'system') return true;
   return false;
@@ -7513,81 +7624,27 @@ const lookupTargetFields = computed(() => {
 // Check if a field is a system field that cannot be modified
 function isSystemField(field) {
   if (!field || !field.key) return false;
-  
-  // For Tasks module, use task field model
-  if (isTasksModule.value) {
-    return isTaskSystemField(field.key);
-  }
-  
-  // For Organizations module, use organization field model
-  if (isOrganizationsModule.value) {
-    return isOrganizationSystemField(field.key);
-  }
-  
-  // For Deals module, use deal field model
-  if (selectedModule.value?.key === 'deals') {
-    return isDealSystemField(field.key);
-  }
-  
-  // For Events module, use event field model
-  if (isEventsModule.value) {
-    return isEventSystemField(field.key);
-  }
-  
-  // For Items module, use item field model
-  if (isItemsModule.value) {
-    return isItemSystemField(field.key);
-  }
-  
-  // For Forms module, check formSettingsMap for system field markers
+
+  // Forms module: use Forms-specific logic (not in registry)
   if (isFormsModule.value) {
+    if (field.key?.toLowerCase() === 'formtype') return false; // Form Type is CORE, not system
     try {
       const fieldMapping = getFieldMapping(field.key);
       if (fieldMapping?.isSystem) return true;
     } catch (err) {
       // Field not in mapping - fallback to legacy check
     }
-    // Legacy check for Forms system fields
-    // ARCHITECTURE NOTE: Form Type is a CORE domain field, not a system field.
-    // It is user-editable and intent-defining.
-    // See: client/src/platform/forms/formTypeRegistry.ts
     const formsSystemFields = ['formid', 'formversion', 'createdat', 'updatedat', 'createdby', 'modifiedby', 'organizationid', '_id', '__v'];
     return formsSystemFields.includes((field.key || '').toLowerCase()) || (field.key || '').toLowerCase().startsWith('_');
   }
-  
-  // For People module, use metadata
-  if (isPeopleModule.value) {
-    try {
-      const metadata = getFieldMetadata(field.key);
-      return metadata.owner === 'system';
-    } catch (err) {
-      // Field not in metadata - fallback to legacy check
-      const systemFieldKeys = ['createdby', 'organizationid', 'createdat', 'updatedat', 'activitylogs'];
-      return systemFieldKeys.includes((field.key || '').toLowerCase());
-    }
+
+  // Registered modules: use FieldCapabilityEngine
+  if (selectedModule.value?.key && isModuleRegistered(selectedModule.value.key)) {
+    return isSystemFieldFromEngine(selectedModule.value.key, field);
   }
-  
-  // For Events module, check event-specific system fields
-  // ARCHITECTURE NOTE: Events Settings configure structure only. System fields are read-only.
-  // See: docs/architecture/event-settings.md Section 6.3
-  if (isEventsModule.value) {
-    const eventSystemFields = ['status', 'createdby', 'createdtime', 'modifiedtime', 'modifiedby', 'organizationid', 
-                              'eventid', 'completedat', 'cancelledat', 'cancelledby', 'cancellationreason'];
-    return eventSystemFields.includes((field.key || '').toLowerCase()) || (field.key || '').toLowerCase().startsWith('_');
-  }
-  
-  // For Forms module, formType is NOT a system field
-  // ARCHITECTURE NOTE: Form Type is a CORE domain field.
-  // It is user-editable and intent-defining.
-  // Built-in types are protected from deletion, not from selection or change.
-  // See: client/src/platform/forms/formTypeRegistry.ts
-  if (isFormsModule.value && field.key?.toLowerCase() === 'formtype') {
-    return false; // Form Type is not a system field
-  }
-  
-  // Legacy check for other modules
-  const systemFieldKeys = ['createdby', 'organizationid', 'createdat', 'updatedat', 'activitylogs'];
-  return systemFieldKeys.includes((field.key || '').toLowerCase());
+
+  // Fallback for unknown modules: keys starting with _ are system
+  return (field.key || '').toLowerCase().startsWith('_');
 }
 
 // Check if a field is a core field that cannot be deleted
@@ -7988,6 +8045,48 @@ function removeOption(index) {
   }
 }
 
+// Move picklist option (reorder)
+function moveOption(from, to) {
+  if (!currentField.value?.options || !Array.isArray(currentField.value.options)) return;
+  if (from === to || from < 0 || to < 0 || from >= currentField.value.options.length || to >= currentField.value.options.length) return;
+  const option = currentField.value.options[from];
+  if (isOptionSystemLocked(option)) return;
+  currentField.value.options.splice(from, 1);
+  const insertIdx = from < to ? to - 1 : to;
+  currentField.value.options.splice(insertIdx, 0, option);
+  if (editingOptionIdx.value === from) {
+    editingOptionIdx.value = insertIdx;
+  } else if (editingOptionIdx.value > from && editingOptionIdx.value <= insertIdx) {
+    editingOptionIdx.value--;
+  } else if (editingOptionIdx.value < from && editingOptionIdx.value >= insertIdx) {
+    editingOptionIdx.value++;
+  }
+}
+
+function onOptionDragStart(event, optIdx) {
+  dragOptionStartIdx.value = optIdx;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', String(optIdx));
+}
+
+function onOptionDragOver(optIdx) {
+  dragOptionOverIdx.value = optIdx;
+}
+
+function onOptionDrop(optIdx) {
+  const from = dragOptionStartIdx.value;
+  const to = optIdx;
+  dragOptionStartIdx.value = null;
+  dragOptionOverIdx.value = null;
+  if (from === null || to === null || from === to) return;
+  moveOption(from, to);
+}
+
+function onOptionDragEnd() {
+  dragOptionStartIdx.value = null;
+  dragOptionOverIdx.value = null;
+}
+
 // Inline edit for picklist options (status/priority lifecycle fields)
 function startOptionEdit(index) {
   if (isOptionSystemLocked(currentField.value.options[index])) return;
@@ -8044,7 +8143,7 @@ const fetchModules = async () => {
         selectedModuleId.value = initialMod._id;
         const initial = JSON.parse(JSON.stringify(initialMod.fields || []));
         const sorted = initial.sort((a,b) => (a.order ?? 0) - (b.order ?? 0));
-        let normalizedFields = filterSystemFields(uniqueFieldsByKey(sorted));
+        let normalizedFields = normalizeFieldsForConfig(initialMod.key, uniqueFieldsByKey(sorted));
         normalizedFields = normalizeFormsFields(normalizedFields, initialMod.key);
         normalizedFields = normalizeTaskFieldConfigurationOrder(initialMod.key, normalizedFields);
         normalizedFields = ensureTaskRelatedToField(initialMod.key, normalizedFields);
@@ -8531,7 +8630,7 @@ const fetchModules = async () => {
             selectedModuleId.value = storedMod._id;
             const initial = JSON.parse(JSON.stringify(storedMod.fields || []));
             const sorted = initial.sort((a,b) => (a.order ?? 0) - (b.order ?? 0));
-            let normalizedFields = filterSystemFields(uniqueFieldsByKey(sorted));
+            let normalizedFields = normalizeFieldsForConfig(storedMod.key, uniqueFieldsByKey(sorted));
             normalizedFields = normalizeFormsFields(normalizedFields, storedMod.key);
             normalizedFields = normalizeTaskFieldConfigurationOrder(storedMod.key, normalizedFields);
             normalizedFields = ensureTaskRelatedToField(storedMod.key, normalizedFields);
@@ -8668,7 +8767,7 @@ const selectModule = (mod, preferFieldKey = null) => {
   selectedModuleId.value = mod._id;
   const initial = JSON.parse(JSON.stringify(mod.fields || []));
   const sorted = initial.sort((a,b) => (a.order ?? 0) - (b.order ?? 0));
-  let normalizedFields = filterSystemFields(uniqueFieldsByKey(sorted));
+  let normalizedFields = normalizeFieldsForConfig(mod.key, uniqueFieldsByKey(sorted));
   normalizedFields = normalizeFormsFields(normalizedFields, mod.key);
   normalizedFields = normalizeTaskFieldConfigurationOrder(mod.key, normalizedFields);
   normalizedFields = ensureTaskRelatedToField(mod.key, normalizedFields);
@@ -8966,25 +9065,33 @@ const deleteModule = async (mod) => {
   }
 };
 
+const showAddFieldDrawer = ref(false);
+const showDeleteFieldConfirm = ref(false);
+
 const openAddField = () => {
-  const newField = { 
-    key: '', 
-    label: '', 
-    dataType: 'Text', 
-    required: false, 
-    options: [], 
-    defaultValue: null, 
-    index: false, 
-    visibility: { list: true, detail: true }, 
+  showAddFieldDrawer.value = true;
+};
+
+const handleAddFieldFromDrawer = async (field) => {
+  const newField = {
+    ...field,
+    options: field.options || [],
+    defaultValue: field.defaultValue ?? null,
+    index: field.index ?? false,
     order: editFields.value.length,
-    owner: 'org',      // Org-created fields
-    context: 'global' // Default context
+    owner: 'org',
+    context: 'global'
   };
+  const newFieldKey = newField.key?.trim() || field.key?.trim();
   editFields.value.push(newField);
   selectedFieldIdx.value = editFields.value.length - 1;
   syncOptionsBuffer();
-  // Clear manual edit flag for new field
   fieldKeyManuallyEdited.value.delete(selectedFieldIdx.value);
+  showAddFieldDrawer.value = false;
+  if (selectedModule.value) {
+    await saveModule();
+    nextTick(() => selectFieldByKey(newFieldKey));
+  }
 };
 
 const moveField = (idx, delta) => {
@@ -9011,6 +9118,38 @@ const moveField = (idx, delta) => {
   arr.splice(newIdx, 0, item);
   arr.forEach((f, i) => f.order = i);
   if (selectedFieldIdx.value === idx) selectedFieldIdx.value = newIdx;
+};
+
+const openDeleteFieldConfirm = () => {
+  const field = editFields.value[selectedFieldIdx.value];
+  const mod = selectedModule.value;
+  const owner = field?.owner || 'platform';
+  if (owner === 'platform') {
+    alert('Platform fields cannot be deleted.');
+    return;
+  }
+  if (owner === 'app') {
+    alert('App-managed fields cannot be deleted by organization users.');
+    return;
+  }
+  if (isSystemField(field)) {
+    alert('System fields cannot be deleted.');
+    return;
+  }
+  if (isCoreField(field, mod?.key)) {
+    alert('Core fields cannot be deleted. These fields are essential for the module functionality.');
+    return;
+  }
+  showDeleteFieldConfirm.value = true;
+};
+
+const confirmDeleteField = async () => {
+  const idx = selectedFieldIdx.value;
+  showDeleteFieldConfirm.value = false;
+  removeField(idx);
+  if (selectedModule.value) {
+    await saveModule();
+  }
 };
 
 const removeField = (idx) => {
@@ -9128,8 +9267,10 @@ const saveModule = async () => {
       }
     }
     
-    // Update editFields to reflect deduplicated version (filter system fields)
-    editFields.value = filterSystemFields(deduplicatedFields);
+    // Filter to config-visible fields (metadata-driven: exclude infrastructure)
+    const getMeta = (key) => isModuleRegistered(mod.key) ? getFieldMetadataFromRegistry(mod.key, key) : getFallbackMetadataForVisibleInConfig(key);
+    const fieldsToSave = filterToVisibleInConfig(deduplicatedFields, getMeta);
+    editFields.value = fieldsToSave;
     const url = mod.type === 'system' ? `/api/modules/system/${mod.key}` : `/api/modules/${mod._id}`;
     // Get ordered keys from selected fields - these are the actual field keys from editFields
     const orderedKeys = orderedQuickCreate.value.map(f => f.key).filter(key => key);
@@ -9137,12 +9278,12 @@ const saveModule = async () => {
     const normalizedQuickCreate = (quickMode.value === 'simple' ? orderedKeys : Array.from(quickCreateSelected.value))
       .map(key => {
         // Find the actual field to get the correct key
-        const field = deduplicatedFields.find(f => f.key === key || (f.key && f.key.toLowerCase() === String(key).toLowerCase()));
+        const field = fieldsToSave.find(f => f.key === key || (f.key && f.key.toLowerCase() === String(key).toLowerCase()));
         return field ? field.key : key;
       })
       .filter(key => {
         // Only include keys that actually exist in fields
-        const exists = deduplicatedFields.some(f => f.key === key);
+        const exists = fieldsToSave.some(f => f.key === key);
         if (!exists) {
           console.warn(`⚠️  Removing invalid key "${key}" from quickCreate - field not found`);
         }
@@ -9150,7 +9291,7 @@ const saveModule = async () => {
       });
     
     // Ensure filter metadata is included for all fields
-    deduplicatedFields.forEach(field => {
+    fieldsToSave.forEach(field => {
       // Ensure filterable is explicitly set (default to false if not set)
       if (field.filterable === undefined) {
         field.filterable = false;
@@ -9160,7 +9301,7 @@ const saveModule = async () => {
     
     // Debug: Log filter metadata for People module
     if (mod.key?.toLowerCase() === 'people') {
-      const filterableFields = deduplicatedFields.filter(f => f.filterable === true);
+      const filterableFields = fieldsToSave.filter(f => f.filterable === true);
       console.log('[ModulesAndFields] Saving People module with filterable fields:', filterableFields.map(f => ({
         key: f.key,
         filterable: f.filterable,
@@ -9170,7 +9311,7 @@ const saveModule = async () => {
     }
     
     const payload = {
-      fields: deduplicatedFields,
+      fields: fieldsToSave,
       relationships: relationships.value,
       quickCreate: normalizedQuickCreate,
       quickCreateLayout: quickLayout.value,
@@ -9219,6 +9360,8 @@ const saveModule = async () => {
     // reset snapshot after successful save
     originalSnapshot.value = getSnapshot();
     quickOriginalSnapshot.value = getQuickSnapshot();
+    // Notify sidebar and other consumers to refresh (e.g. display name change)
+    window.dispatchEvent(new CustomEvent('litedesk:core-modules-updated'));
     console.log('Module saved successfully, relationships updated');
   } catch (e) {
     console.error('Save module failed', e);
@@ -9487,6 +9630,13 @@ const autoGenerateFieldKey = () => {
     !currentField.value.label
   ) {
     return;
+  }
+  
+  // Skip for platform-defined fields (in metadata). Editing their label must not change key,
+  // or the field gets misclassified (e.g. status -> st) and jumps to System section.
+  if (selectedModule.value?.key && isModuleRegistered(selectedModule.value.key)) {
+    const meta = getFieldMetadataFromRegistry(selectedModule.value.key, currentField.value.key);
+    if (meta) return;
   }
   
   isAutoGeneratingFieldKey.value = true;
@@ -10693,13 +10843,20 @@ function coerceValueForField(fieldKey, val) {
 function uniqueFieldsByKey(arr) {
   if (!Array.isArray(arr)) return [];
   const map = new Map();
-  // Process in order, keeping the last occurrence of each duplicate
-  // This preserves the most recent/complete version of the field
+  // Canonical key for dedup: lowercase, trim, strip spaces and hyphens (so "deleted-by", "deletedBy", "Deleted By" all match)
+  const canonical = (k) => String(k || '').toLowerCase().trim().replace(/\s+/g, '').replace(/-/g, '');
   for (const f of arr) {
-    const k = (f.key || '').toLowerCase().trim();
+    const k = canonical(f.key);
     if (!k) continue; // Skip fields without keys
-    // Always update to keep the last occurrence (which may have more complete data)
-    map.set(k, f);
+    const existing = map.get(k);
+    // Prefer programmatic key (no spaces) over label-style key ("Deleted By")
+    if (existing && !(f.key || '').includes(' ') && (existing.key || '').includes(' ')) {
+      map.set(k, f);
+    } else if (!existing) {
+      map.set(k, f);
+    } else {
+      map.set(k, f); // Keep last by default
+    }
   }
   // Return deduplicated array, preserving relative order
   const result = Array.from(map.values());

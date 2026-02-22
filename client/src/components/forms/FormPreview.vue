@@ -7,7 +7,7 @@
         <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">{{ form.name }}</h1>
         <p v-if="form.description" class="text-gray-600 dark:text-gray-400">{{ form.description }}</p>
         <div class="flex items-center gap-4 mt-2">
-          <span class="text-xs px-2 py-1 bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded">
+          <span class="text-xs px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded">
             {{ form.formType }}
           </span>
           <span
@@ -232,7 +232,7 @@
         <div v-if="!readOnly" class="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
           <button
             type="submit"
-            class="px-6 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-all"
+            class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-all"
           >
             Submit Form
           </button>

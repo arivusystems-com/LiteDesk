@@ -119,9 +119,9 @@
                 draggedRootQuestionIndex === qIdx
                   ? 'opacity-50 border-gray-300 dark:border-gray-600'
                   : dragOverRootQuestionIndex === qIdx
-                    ? 'border-brand-500 border-2 bg-brand-50 dark:bg-brand-900/20 shadow-lg'
+                    ? 'border-indigo-500 border-2 bg-indigo-50 dark:bg-indigo-900/20 shadow-lg'
                     : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600',
-                selectedQuestionIndex === qIdx && selectedRootQuestion ? 'ring-2 ring-brand-500 ring-offset-2 border-brand-500 shadow-lg bg-brand-50/30 dark:bg-brand-900/20' : ''
+                selectedQuestionIndex === qIdx && selectedRootQuestion ? 'ring-2 ring-indigo-500 ring-offset-2 border-indigo-500 shadow-lg bg-indigo-50/30 dark:bg-indigo-900/20' : ''
               ]"
               @click.stop="selectRootQuestion(qIdx)"
             >
@@ -202,7 +202,7 @@
                 @click="addRootQuestion(qt.type)"
                 class="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border text-sm font-medium transition-all duration-200 cursor-pointer shadow-sm hover:shadow"
                 :class="qt.primary
-                  ? 'border-brand-500 bg-brand-50 text-brand-700 dark:border-brand-400 dark:bg-brand-900/30 dark:text-brand-200 hover:bg-brand-100 dark:hover:bg-brand-900/40 hover:border-brand-600'
+                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-400 dark:bg-indigo-900/30 dark:text-indigo-200 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 hover:border-indigo-600'
                   : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-300 dark:hover:border-gray-600'"
               >
                 <span>{{ qt.label }}</span>
@@ -235,7 +235,7 @@
                         <input
                     v-model="selectedRootQuestion.questionText"
                           type="text"
-                    class="w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
+                    class="w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
                   />
                 </div>
                 <div>
@@ -243,7 +243,7 @@
                   <textarea
                     v-model="selectedRootQuestion.helpText"
                     rows="3"
-                    class="w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 resize-none transition-all"
+                    class="w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none transition-all"
                     placeholder="Optional hint or explanation shown under the question"
                   ></textarea>
                 </div>
@@ -252,7 +252,7 @@
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Type</label>
                         <select
                       v-model="selectedRootQuestion.type"
-                      class="w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all cursor-pointer"
+                      class="w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all cursor-pointer"
                         >
                           <option value="Text">Text</option>
                           <option value="Textarea">Textarea</option>
@@ -275,7 +275,7 @@
                       @change.stop
                       @focus="handleQuestionSettingsFocus"
                       @blur="handleQuestionSettingsBlur"
-                      class="w-4 h-4 text-brand-600 focus:ring-brand-500 border-gray-300 rounded cursor-pointer"
+                      class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
                           />
                     <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Required</span>
                         </label>
@@ -298,7 +298,7 @@
                     v-model="selectedRootQuestion.options[optIdx]"
                     type="text"
                     :placeholder="`Option ${optIdx + 1}`"
-                    class="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
+                    class="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
                   />
                     <button
                     @click="removeRootQuestionOption(optIdx)"
@@ -311,7 +311,7 @@
                 </div>
                 <button
                   @click="addRootQuestionOption"
-                  class="w-full inline-flex items-center justify-center gap-2 text-sm text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 px-3 py-2 rounded-lg border border-dashed border-brand-300 dark:border-brand-700 hover:bg-brand-50 dark:hover:bg-brand-900/30 transition-all duration-200 cursor-pointer font-medium"
+                  class="w-full inline-flex items-center justify-center gap-2 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 px-3 py-2 rounded-lg border border-dashed border-indigo-300 dark:border-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all duration-200 cursor-pointer font-medium"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -422,7 +422,7 @@
                 class="flex-1 flex items-center gap-2 px-2 py-1.5 cursor-pointer transition-colors"
                 :class="[
                   selectedSectionIndex === getActualSectionIndex(section) && selectedSubsectionIndex === null
-                    ? 'bg-brand-50 dark:bg-brand-900/20 border-l-2 border-brand-500'
+                    ? 'bg-indigo-50 dark:bg-indigo-900/20 border-l-2 border-indigo-500'
                     : 'hover:bg-gray-50 dark:hover:bg-gray-800'
                 ]"
               >
@@ -471,7 +471,7 @@
                 class="flex items-center gap-2 group/subsection rounded transition-colors"
                 :class="[
                   selectedSectionIndex === getActualSectionIndex(section) && selectedSubsectionIndex === subIdx
-                    ? 'bg-brand-50 dark:bg-brand-900/20'
+                    ? 'bg-indigo-50 dark:bg-indigo-900/20'
                     : 'hover:bg-gray-50 dark:hover:bg-gray-800'
                 ]"
               >
@@ -491,7 +491,7 @@
                   class="flex-1 flex items-center px-2 py-1.5 cursor-pointer"
                   :class="[
                     selectedSectionIndex === getActualSectionIndex(section) && selectedSubsectionIndex === subIdx
-                      ? 'border-l-2 border-brand-500'
+                      ? 'border-l-2 border-indigo-500'
                       : ''
                   ]"
                 >
@@ -504,7 +504,7 @@
                     class="flex-1 text-sm bg-transparent border-none focus:outline-none focus:ring-0 p-0 placeholder-gray-400 dark:placeholder-gray-500"
                     :class="[
                       selectedSectionIndex === getActualSectionIndex(section) && selectedSubsectionIndex === subIdx
-                        ? 'text-brand-600 dark:text-brand-400 font-medium'
+                        ? 'text-indigo-600 dark:text-indigo-400 font-medium'
                         : 'text-gray-600 dark:text-gray-400'
                     ]"
                     @click.stop="(e) => handleSubsectionInputClick(e, getActualSectionIndex(section), subIdx)"
@@ -528,7 +528,7 @@
                         console.error('Could not find section index for:', section);
                       }
                     }"
-                    class="px-2 py-1 text-xs text-gray-600 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors cursor-pointer"
+                    class="px-2 py-1 text-xs text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
                   >
                     + Add
                   </button>
@@ -571,7 +571,7 @@
                     }
                   }
                 }"
-                class="px-2 py-1 text-xs text-gray-500 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors cursor-pointer"
+                class="px-2 py-1 text-xs text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
               >
                 + Add subsection
               </button>
@@ -630,9 +630,9 @@
                     : dragOverQuestionIndex === qIdx &&
                       dragOverQuestionSubsectionIndex === selectedSubsectionIndex &&
                       dragOverQuestionSectionIndex === selectedSectionIndex
-                      ? 'border-brand-500 border-2'
+                      ? 'border-indigo-500 border-2'
                       : '',
-                  selectedQuestionIndex === qIdx ? 'border-brand-500 ring-1 ring-brand-500' : 'hover:border-gray-300 dark:hover:border-gray-600'
+                  selectedQuestionIndex === qIdx ? 'border-indigo-500 ring-1 ring-indigo-500' : 'hover:border-gray-300 dark:hover:border-gray-600'
                 ]"
                 @click.stop="selectQuestion(qIdx)"
               >
@@ -669,7 +669,7 @@
                   <div class="flex items-center gap-1">
                     <button
                       v-if="selectedQuestionIndex === qIdx"
-                      class="p-1.5 text-brand-600 dark:text-brand-400"
+                      class="p-1.5 text-indigo-600 dark:text-indigo-400"
                     >
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
@@ -750,7 +750,7 @@
                             type="text"
                     @focus="handleQuestionSettingsFocus"
                     @blur="handleQuestionSettingsBlur"
-                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                           />
                         </div>
                 <div>
@@ -760,7 +760,7 @@
                     type="text"
                     @focus="handleQuestionSettingsFocus"
                     @blur="handleQuestionSettingsBlur"
-                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     placeholder="Optional hint shown under question"
                           />
                         </div>
@@ -771,7 +771,7 @@
                       v-model="currentQuestion.type"
                       @focus="handleQuestionSettingsFocus"
                       @blur="handleQuestionSettingsBlur"
-                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500 cursor-pointer"
+                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
                         >
                           <option value="Text">Text</option>
                           <option value="Textarea">Textarea</option>
@@ -794,7 +794,7 @@
                       @change.stop
                       @focus="handleQuestionSettingsFocus"
                       @blur="handleQuestionSettingsBlur"
-                      class="w-4 h-4 text-brand-600 focus:ring-brand-500 border-gray-300 rounded cursor-pointer"
+                      class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
                           />
                     <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Required</span>
                         </label>
@@ -816,7 +816,7 @@
                           <select
                     :value="currentQuestion.conditionalLogic?.showIf?.questionId || ''"
                     @change="handleVisibilityQuestionChange"
-                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                   >
                     <option value="">Always visible</option>
                     <option
@@ -838,7 +838,7 @@
                       v-model="currentQuestion.conditionalLogic.showIf.operator"
                       @focus="handleQuestionSettingsFocus"
                       @blur="handleQuestionSettingsBlur"
-                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     >
                       <option value="equals">equals</option>
                       <option value="notEquals">does not equal</option>
@@ -857,7 +857,7 @@
                       v-model="currentQuestion.conditionalLogic.showIf.value"
                       @focus="handleQuestionSettingsFocus"
                       @blur="handleQuestionSettingsBlur"
-                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     >
                       <option value="">Select an option</option>
                       <option
@@ -874,7 +874,7 @@
                       v-model="currentQuestion.conditionalLogic.showIf.value"
                       @focus="handleQuestionSettingsFocus"
                       @blur="handleQuestionSettingsBlur"
-                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     >
                       <option value="">Select an option</option>
                       <option value="Yes">Yes</option>
@@ -886,7 +886,7 @@
                       v-model="currentQuestion.conditionalLogic.showIf.value"
                       @focus="handleQuestionSettingsFocus"
                       @blur="handleQuestionSettingsBlur"
-                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     >
                       <option value="">Select a rating</option>
                       <option
@@ -905,7 +905,7 @@
                       placeholder="Enter number"
                       @focus="handleQuestionSettingsFocus"
                       @blur="handleQuestionSettingsBlur"
-                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     />
                     <!-- Date question - show date input -->
                     <input
@@ -915,7 +915,7 @@
                       @click="openDatePicker"
                       @focus="handleQuestionSettingsFocus"
                       @blur="handleQuestionSettingsBlur"
-                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500 cursor-pointer"
+                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
                     />
                     <!-- Text, Textarea, Email - show text input -->
                     <input
@@ -925,7 +925,7 @@
                       :placeholder="getConditionalQuestion()?.type === 'Email' ? 'Enter email' : 'Enter value'"
                       @focus="handleQuestionSettingsFocus"
                       @blur="handleQuestionSettingsBlur"
-                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     />
                   </div>
                 </template>
@@ -949,7 +949,7 @@
                     :placeholder="`Option ${optIdx + 1}`"
                     @focus="handleQuestionSettingsFocus"
                     @blur="handleQuestionSettingsBlur"
-                    class="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                    class="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                         />
                         <button
                     @click="removeOption(selectedSectionIndex, selectedSubsectionIndex, selectedQuestionIndex, optIdx)"
@@ -962,7 +962,7 @@
                       </div>
                       <button
                   @click="addOption(selectedSectionIndex, selectedSubsectionIndex, selectedQuestionIndex)"
-                  class="w-full inline-flex items-center justify-center gap-2 text-sm text-brand-600 dark:text-brand-400 hover:text-brand-700 px-3 py-2 border border-dashed border-brand-300 dark:border-brand-700 rounded-md hover:bg-brand-50 dark:hover:bg-brand-900/30"
+                  class="w-full inline-flex items-center justify-center gap-2 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 px-3 py-2 border border-dashed border-indigo-300 dark:border-indigo-700 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
                       >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -1011,7 +1011,7 @@
                       type="checkbox"
                       @focus="handleQuestionSettingsFocus"
                       @blur="handleQuestionSettingsBlur"
-                      class="w-4 h-4 text-brand-600 focus:ring-brand-500 border-gray-300 rounded cursor-pointer"
+                      class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
                     />
                     <span>Enable scoring</span>
                   </label>
@@ -1031,7 +1031,7 @@
                         v-model="currentQuestion.scoring.passCondition.expectedValue"
                         @focus="handleQuestionSettingsFocus"
                         @blur="handleQuestionSettingsBlur"
-                        class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500 cursor-pointer"
+                        class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
                       >
                         <option value="Yes">Yes</option>
                         <option value="No">No</option>
@@ -1056,7 +1056,7 @@
                             @change="(e) => handleDropdownPassOptionChange(e, option)"
                             @focus="handleQuestionSettingsFocus"
                             @blur="handleQuestionSettingsBlur"
-                            class="w-4 h-4 text-brand-600 focus:ring-brand-500 border-gray-300 rounded cursor-pointer"
+                            class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
                           />
                           <span class="text-sm text-gray-700 dark:text-gray-300">{{ option }}</span>
                         </label>
@@ -1077,7 +1077,7 @@
                           max="5"
                           @focus="handleQuestionSettingsFocus"
                           @blur="handleQuestionSettingsBlur"
-                          class="w-20 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                          class="w-20 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                         />
                       </div>
                       <p class="text-xs text-gray-500 dark:text-gray-400">
@@ -1091,7 +1091,7 @@
                         v-model="currentQuestion.scoring.passCondition.rule"
                         @focus="handleQuestionSettingsFocus"
                         @blur="handleQuestionSettingsBlur"
-                        class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500 cursor-pointer"
+                        class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
                       >
                         <option value=">=">Greater than or equal to (≥)</option>
                         <option value="<=">Less than or equal to (≤)</option>
@@ -1106,7 +1106,7 @@
                           step="any"
                           @focus="handleQuestionSettingsFocus"
                           @blur="handleQuestionSettingsBlur"
-                          class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                          class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                           :placeholder="currentQuestion.scoring.passCondition.rule === '>=' ? 'Enter minimum value' : 'Enter maximum value'"
                         />
                       </div>
@@ -1119,7 +1119,7 @@
                           step="any"
                           @focus="handleQuestionSettingsFocus"
                           @blur="handleQuestionSettingsBlur"
-                          class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                          class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                           placeholder="Minimum value"
                         />
                         <input
@@ -1128,7 +1128,7 @@
                           step="any"
                           @focus="handleQuestionSettingsFocus"
                           @blur="handleQuestionSettingsBlur"
-                          class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                          class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                           placeholder="Maximum value"
                         />
                       </div>
@@ -1147,7 +1147,7 @@
                       step="1"
                       @focus="handleQuestionSettingsFocus"
                       @blur="handleQuestionSettingsBlur"
-                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                      class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                       placeholder="1"
                     />
                     <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -1163,7 +1163,7 @@
                         type="checkbox"
                         @focus="handleQuestionSettingsFocus"
                         @blur="handleQuestionSettingsBlur"
-                        class="w-4 h-4 text-brand-600 focus:ring-brand-500 border-gray-300 rounded cursor-pointer"
+                        class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
                       />
                       <span>Critical question</span>
                     </label>
@@ -1197,7 +1197,7 @@
                     @change.stop="(e) => handleEvidenceToggleChange(e)"
                     @click.stop
                     @mousedown.stop
-                    class="w-4 h-4 text-brand-600 focus:ring-brand-500 border-gray-300 rounded cursor-pointer"
+                    class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
                   />
                   <span @click.stop @mousedown.stop>Enable evidence capture</span>
                 </label>
@@ -1238,7 +1238,7 @@
                         @blur="handleQuestionSettingsBlur"
                         @click.stop
                         @mousedown.stop
-                        class="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                        class="w-full px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                       >
                         <option v-if="currentQuestion.type === 'Yes-No'" value="Yes">Yes</option>
                         <option v-if="currentQuestion.type === 'Yes-No'" value="No">No</option>
@@ -1258,7 +1258,7 @@
                           @blur="handleQuestionSettingsBlur"
                           @click.stop
                           @mousedown.stop
-                          class="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                          class="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                         >
                           <option value="hidden">Not required</option>
                           <option value="optional">Optional</option>
@@ -1275,7 +1275,7 @@
                           @blur="handleQuestionSettingsBlur"
                           @click.stop
                           @mousedown.stop
-                          class="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                          class="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                         >
                           <option value="hidden">Not required</option>
                           <option value="optional">Optional</option>
@@ -1292,7 +1292,7 @@
                           @blur="handleQuestionSettingsBlur"
                           @click.stop
                           @mousedown.stop
-                          class="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                          class="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                         >
                           <option value="hidden">Not required</option>
                           <option value="optional">Optional</option>
@@ -1308,7 +1308,7 @@
                   @click.stop="addEvidenceRule"
                   @mousedown.stop
                   type="button"
-                  class="w-full inline-flex items-center justify-center gap-2 text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 px-3 py-2 border border-dashed border-brand-300 dark:border-brand-700 rounded-md hover:bg-brand-50 dark:hover:bg-brand-900/30 transition-all"
+                  class="w-full inline-flex items-center justify-center gap-2 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 px-3 py-2 border border-dashed border-indigo-300 dark:border-indigo-700 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all"
                 >
                   <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -1375,7 +1375,7 @@
                     min="0"
                     @focus="handleQuestionSettingsFocus"
                     @blur="handleQuestionSettingsBlur"
-                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                   />
                   <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     Lower numbers appear first (0 = first)
@@ -1392,7 +1392,7 @@
                     rows="2"
                     @focus="handleQuestionSettingsFocus"
                     @blur="handleQuestionSettingsBlur"
-                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500 resize-none"
+                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
                     placeholder="Optional: Define what constitutes a pass or fail for this question"
                   ></textarea>
                 </div>
@@ -1408,7 +1408,7 @@
                         <input
                   v-model="currentQuestion.attachmentAllowance"
                           type="checkbox"
-                  class="w-4 h-4 text-brand-600 focus:ring-brand-500 border-gray-300 rounded cursor-pointer"
+                  class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
                         />
                 Allow multiple files
                       </label>
@@ -1432,7 +1432,7 @@
                     type="text"
                     @focus="handleQuestionSettingsFocus"
                     @blur="handleQuestionSettingsBlur"
-                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     placeholder="Enter subsection name"
                   />
                 </div>
@@ -1456,7 +1456,7 @@
                     step="1"
                     @focus="handleQuestionSettingsFocus"
                     @blur="handleQuestionSettingsBlur"
-                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     placeholder="1"
                   />
                   <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -1476,7 +1476,7 @@
                     step="1"
                     @focus="handleQuestionSettingsFocus"
                     @blur="handleQuestionSettingsBlur"
-                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     placeholder="100"
                   />
                   <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -1504,7 +1504,7 @@
                     type="text"
                     @focus="handleQuestionSettingsFocus"
                     @blur="handleQuestionSettingsBlur"
-                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     placeholder="Enter section name"
                   />
                 </div>
@@ -1528,7 +1528,7 @@
                     step="1"
                     @focus="handleQuestionSettingsFocus"
                     @blur="handleQuestionSettingsBlur"
-                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     placeholder="1"
                   />
                   <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -1548,7 +1548,7 @@
                     step="1"
                     @focus="handleQuestionSettingsFocus"
                     @blur="handleQuestionSettingsBlur"
-                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-brand-500 focus:border-brand-500"
+                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                     placeholder="100"
                   />
                   <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -1581,7 +1581,7 @@
               <button
           v-if="isFlatMode"
           @click="addRootQuestion('Text')"
-          class="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-medium text-sm transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md"
+          class="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium text-sm transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -1591,7 +1591,7 @@
           <button
           v-else
           @click="addSection"
-          class="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-medium text-sm transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md"
+          class="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium text-sm transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />

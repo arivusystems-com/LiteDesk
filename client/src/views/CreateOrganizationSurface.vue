@@ -156,7 +156,7 @@ Post-creation behavior is driven by invocation context via query params:
               v-model="formData.name"
               type="text"
               required
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               placeholder="Organization name"
             />
             <p v-if="validationErrors.name" class="mt-1 text-sm text-red-600 dark:text-red-400">
@@ -182,7 +182,7 @@ Post-creation behavior is driven by invocation context via query params:
                   :value="type"
                   v-model="formData.types"
                   :disabled="mode === 'edit' && typesReadOnly"
-                  class="w-4 h-4 text-brand-600 border-gray-300 dark:border-gray-600 rounded focus:ring-brand-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <span class="text-sm text-gray-700 dark:text-gray-300">{{ type }}</span>
               </label>
@@ -220,7 +220,7 @@ Post-creation behavior is driven by invocation context via query params:
             <select
               v-else
               v-model="formData.customerStatus"
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
             >
               <option :value="null">Select status...</option>
               <option
@@ -257,7 +257,7 @@ Post-creation behavior is driven by invocation context via query params:
             <select
               v-else
               v-model="formData.partnerStatus"
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
             >
               <option :value="null">Select status...</option>
               <option
@@ -294,7 +294,7 @@ Post-creation behavior is driven by invocation context via query params:
             <select
               v-else
               v-model="formData.vendorStatus"
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
             >
               <option :value="null">Select status...</option>
               <option
@@ -339,7 +339,7 @@ Post-creation behavior is driven by invocation context via query params:
             <input
               v-model="formData.industry"
               type="text"
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               placeholder="e.g., Technology, Healthcare, Manufacturing"
             />
             <p v-if="validationErrors.industry" class="mt-1 text-sm text-red-600 dark:text-red-400">
@@ -355,7 +355,7 @@ Post-creation behavior is driven by invocation context via query params:
             <input
               v-model="formData.website"
               type="url"
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               placeholder="https://example.com"
             />
             <p v-if="validationErrors.website" class="mt-1 text-sm text-red-600 dark:text-red-400">
@@ -371,7 +371,7 @@ Post-creation behavior is driven by invocation context via query params:
             <input
               v-model="formData.phone"
               type="tel"
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               placeholder="+1 (555) 123-4567"
             />
             <p v-if="validationErrors.phone" class="mt-1 text-sm text-red-600 dark:text-red-400">
@@ -387,7 +387,7 @@ Post-creation behavior is driven by invocation context via query params:
             <textarea
               v-model="formData.address"
               rows="3"
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               placeholder="Street address, city, state, zip"
             ></textarea>
             <p v-if="validationErrors.address" class="mt-1 text-sm text-red-600 dark:text-red-400">
@@ -409,7 +409,7 @@ Post-creation behavior is driven by invocation context via query params:
         <button
           type="submit"
           :disabled="submitting || !formData.name"
-          class="px-4 py-2 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <span v-if="submitting">{{ mode === 'edit' ? 'Saving...' : 'Creating...' }}</span>
           <span v-else>{{ mode === 'edit' ? 'Save Changes' : 'Create Organization' }}</span>

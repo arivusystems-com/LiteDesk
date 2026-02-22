@@ -85,7 +85,7 @@
               label="Email"
               :value="email"
             >
-              <a :href="`mailto:${email}`" class="text-brand-600 dark:text-brand-400 hover:underline">
+              <a :href="`mailto:${email}`" class="text-indigo-600 dark:text-indigo-400 hover:underline">
                 {{ email }}
               </a>
             </LabeledValue>
@@ -96,7 +96,7 @@
               label="Phone"
               :value="phone"
             >
-              <a :href="`tel:${phone}`" class="text-brand-600 dark:text-brand-400 hover:underline">
+              <a :href="`tel:${phone}`" class="text-indigo-600 dark:text-indigo-400 hover:underline">
                 {{ phone }}
               </a>
             </LabeledValue>
@@ -108,7 +108,7 @@
                 <button
                   v-if="organizationId"
                   @click="viewOrganization"
-                  class="text-brand-600 dark:text-brand-400 hover:underline text-left"
+                  class="text-indigo-600 dark:text-indigo-400 hover:underline text-left"
                 >
                   {{ organization }}
                 </button>

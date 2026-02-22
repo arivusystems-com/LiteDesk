@@ -1,7 +1,7 @@
 <template>
   <div v-if="loading" class="flex items-center justify-center min-h-screen">
     <div class="text-center">
-      <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+      <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
       <p class="text-gray-600 dark:text-gray-400 mt-4">Loading dashboard...</p>
     </div>
   </div>
@@ -19,7 +19,7 @@
         <button
           v-if="dashboardDefinition.emptyState.primaryAction"
           @click="handleAction(dashboardDefinition.emptyState.primaryAction.route)"
-          class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-medium transition-colors"
+          class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors"
         >
           {{ dashboardDefinition.emptyState.primaryAction.label }}
         </button>
@@ -46,7 +46,7 @@
             :class="[
               'px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2',
               action.variant === 'primary'
-                ? 'bg-brand-600 hover:bg-brand-700 text-white'
+                ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
                 : action.variant === 'secondary'
                 ? 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white'
                 : 'bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600'

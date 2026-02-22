@@ -74,10 +74,14 @@ exports.create = async (req, res) => {
       (user.firstName || user.lastName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : user.username) || 'User' 
       : 'System';
     
+    const { extractCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+    const { standardPayload, customFieldsSet } = extractCustomFields(strippedBody, People);
+
     const body = {
-      ...strippedBody, // Use stripped body (no participation fields)
+      ...standardPayload,
       organizationId: req.user.organizationId,
       createdBy: req.user._id,
+      ...(Object.keys(customFieldsSet).length > 0 && { customFields: customFieldsSet }),
       // Add initial activity log for record creation
       activityLogs: [{
         user: userName,
@@ -99,7 +103,7 @@ exports.create = async (req, res) => {
       await record.save();
     }
     
-    res.status(201).json({ success: true, data: record });
+    res.status(201).json({ success: true, data: flattenCustomFieldsForResponse(record) });
   } catch (error) {
     console.error('Error creating people record:', error);
     console.error('Error name:', error.name);
@@ -198,7 +202,7 @@ exports.list = async (req, res) => {
       ? new mongoose.Types.ObjectId(userOrgId) 
       : userOrgId;
     
-    let query = { organizationId: orgIdObjectId };
+    let query = { organizationId: orgIdObjectId, deletedAt: null };
     
     // Debug logging
     console.log('[PeopleController] Filtering by organizationId:', {
@@ -534,14 +538,15 @@ exports.list = async (req, res) => {
 // Get by ID
 exports.getById = async (req, res) => {
   try {
-    const record = await People.findOne({ _id: req.params.id, organizationId: req.user.organizationId })
+    const { flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+    const record = await People.findOne({ _id: req.params.id, organizationId: req.user.organizationId, deletedAt: null })
       .populate('organization', 'name industry status email phone website')
       .populate('assignedTo', 'firstName lastName email avatar')
       .populate('createdBy', 'firstName lastName email avatar username')
       .populate('lead_owner', 'firstName lastName email avatar username')
       .populate('notes.created_by', 'firstName lastName');
     if (!record) return res.status(404).json({ success: false, message: 'Not found' });
-    res.json({ success: true, data: record });
+    res.json({ success: true, data: flattenCustomFieldsForResponse(record) });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error fetching record', error: error.message });
   }
@@ -675,13 +680,16 @@ exports.update = async (req, res) => {
     let previous = null;
     if (shouldComputeDerivedStatus) {
       previous = await People.findOne(
-        { _id: req.params.id, organizationId: req.user.organizationId }
+        { _id: req.params.id, organizationId: req.user.organizationId, deletedAt: null }
       ).lean();
     }
 
+    const { buildUpdateWithCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+    const $set = buildUpdateWithCustomFields(updateData, People);
+
     const updated = await People.findOneAndUpdate(
-      { _id: req.params.id, organizationId: req.user.organizationId },
-      { $set: updateData },
+      { _id: req.params.id, organizationId: req.user.organizationId, deletedAt: null },
+      { $set },
       { new: true, runValidators: true }
     );
     if (!updated) return res.status(404).json({ success: false, message: 'Not found' });
@@ -738,36 +746,42 @@ exports.update = async (req, res) => {
       assignedToKeys: populatedRecord.assignedTo && typeof populatedRecord.assignedTo === 'object' ? Object.keys(populatedRecord.assignedTo) : null
     });
     
-    res.json({ success: true, data: populatedRecord });
+    res.json({ success: true, data: flattenCustomFieldsForResponse(populatedRecord) });
   } catch (error) {
     console.error('❌ Error updating People record:', error);
     res.status(400).json({ success: false, message: 'Error updating record', error: error.message });
   }
 };
 
-// Delete
+// Delete (move to trash)
 exports.remove = async (req, res) => {
   try {
-    // Validate deletion invariants
-    const { validateDelete } = require('../services/systemInvariants');
-    const invariantResult = await validateDelete({
+    const deletionService = require('../services/deletionService');
+    const result = await deletionService.moveToTrash({
       moduleKey: 'people',
       recordId: req.params.id,
-      organizationId: req.user.organizationId
+      organizationId: req.user.organizationId,
+      userId: req.user._id,
+      appKey: req.body?.appKey || 'SALES',
+      reason: req.body?.reason,
+      cascadeConfirmed: !!req.body?.cascadeConfirmed
     });
-    
-    if (!invariantResult.valid) {
+
+    if (!result.ok) {
+      if (result.blocked) {
+        return res.status(400).json({
+          success: false,
+          blocked: true,
+          dependencies: result.dependencies,
+          message: result.message
+        });
+      }
       return res.status(400).json({
         success: false,
-        code: invariantResult.code,
-        message: invariantResult.message,
-        errors: invariantResult.errors
+        message: result.message || 'Failed to delete record'
       });
     }
-    
-    const deleted = await People.findOneAndDelete({ _id: req.params.id, organizationId: req.user.organizationId });
-    if (!deleted) return res.status(404).json({ success: false, message: 'Not found' });
-    res.json({ success: true, data: deleted._id });
+    res.json({ success: true, data: req.params.id, message: 'Moved to trash', retentionExpiresAt: result.retentionExpiresAt });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error deleting record', error: error.message });
   }
@@ -788,7 +802,8 @@ exports.addNote = async (req, res) => {
     const person = await People.findOneAndUpdate(
       { 
         _id: req.params.id, 
-        organizationId: req.user.organizationId 
+        organizationId: req.user.organizationId,
+        deletedAt: null
       },
       {
         $push: {
@@ -831,7 +846,8 @@ exports.getActivityLogs = async (req, res) => {
   try {
     const person = await People.findOne({ 
       _id: req.params.id, 
-      organizationId: req.user.organizationId 
+      organizationId: req.user.organizationId,
+      deletedAt: null
     }).select('activityLogs');
     
     if (!person) {
@@ -917,7 +933,8 @@ exports.addActivityLog = async (req, res) => {
     const person = await People.findOneAndUpdate(
       { 
         _id: req.params.id, 
-        organizationId: req.user.organizationId 
+        organizationId: req.user.organizationId,
+        deletedAt: null
       },
       {
         $push: {

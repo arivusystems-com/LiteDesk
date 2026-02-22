@@ -63,7 +63,7 @@
     <!-- Loading State -->
     <div v-if="loading" class="flex items-center justify-center py-12">
       <div class="text-center">
-        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600 dark:border-brand-400"></div>
+        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
         <p class="mt-4 text-sm text-gray-600 dark:text-gray-400">Resolving app context...</p>
       </div>
     </div>
@@ -100,7 +100,7 @@
           v-for="intent in availableIntents"
           :key="intent.id"
           @click="selectIntent(intent)"
-          class="px-4 py-3 text-left rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-brand-500 dark:hover:border-brand-500 transition-colors"
+          class="px-4 py-3 text-left rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-indigo-500 dark:hover:border-indigo-500 transition-colors"
         >
           <div class="font-medium text-gray-900 dark:text-white">
             {{ intent.label }}

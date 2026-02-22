@@ -133,6 +133,17 @@ const TaskSchema = new Schema({
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' }
   }],
 
+  // Custom fields (user-defined via Settings → Modules & Fields)
+  customFields: {
+    type: Schema.Types.Mixed,
+    default: {}
+  },
+
+  // Trash (soft delete) - See docs/TRASH_IMPLEMENTATION_SPEC.md
+  deletedAt: { type: Date, default: null, index: true },
+  deletedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+  deletionReason: { type: String, trim: true, maxlength: 500 },
+
   // Metadata
   createdBy: {
     type: Schema.Types.ObjectId,
@@ -155,6 +166,7 @@ TaskSchema.index({ organizationId: 1, assignedTo: 1, status: 1 });
 TaskSchema.index({ organizationId: 1, dueDate: 1, status: 1 });
 TaskSchema.index({ organizationId: 1, priority: 1, status: 1 });
 TaskSchema.index({ organizationId: 1, projectId: 1 });
+TaskSchema.index({ organizationId: 1, deletedAt: 1 });
 
 // Virtual for overdue status
 TaskSchema.virtual('isOverdue').get(function() {

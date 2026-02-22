@@ -591,8 +591,13 @@ const profileMenuItems = computed<ProfileMenuItem[]>(() => {
     items.push({ name: 'Control Panel', action: () => { router.push('/control'); } });
   }
   
+  items.push({ name: 'Settings', action: () => { openTab('/settings', { title: 'Settings' }); } });
+
+  if (authStore.can('settings', 'view')) {
+    items.push({ name: 'Trash', action: () => { router.push('/trash'); } });
+  }
+
   items.push(
-    { name: 'Settings', action: () => { window.open(router.resolve({ path: '/platform/home', query: { redirect: '/settings' } }).href, '_blank'); } },
     { 
       name: colorMode.value === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode', 
       action: () => {

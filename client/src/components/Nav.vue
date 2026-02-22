@@ -1,5 +1,6 @@
 <script setup>
 import { useRouter, useRoute } from 'vue-router';
+import { useTabs } from '@/composables/useTabs';
 import { useAuthStore } from '@/stores/auth';
 import { useAppShellStore } from '@/stores/appShell';
 import NotificationBell from '@/components/notifications/NotificationBell.vue';
@@ -35,6 +36,7 @@ const emit = defineEmits(['update:modelValue']);
 
 const router = useRouter();
 const route = useRoute();
+const { openTab } = useTabs();
 const showDrawer = ref(false);
 const isCollapsed = computed({
   get: () => props.modelValue,
@@ -169,11 +171,23 @@ watch(() => authStore.isAuthenticated, (isAuthenticated) => {
 // are now handled by GlobalSurfacesProvider in App.vue
 // This component can dispatch custom events if needed for UI triggers
 
+// Refresh sidebar when core module display names or config change (e.g. Settings → Module details)
+const onCoreModulesUpdated = () => {
+  if (authStore.user && authStore.isAuthenticated) {
+    buildSidebar();
+  }
+};
+
 // Build sidebar on mount
 onMounted(() => {
   if (authStore.user && authStore.isAuthenticated) {
     buildSidebar();
   }
+  window.addEventListener('litedesk:core-modules-updated', onCoreModulesUpdated);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('litedesk:core-modules-updated', onCoreModulesUpdated);
 });
 
 const handleNotificationClick = () => {
@@ -216,7 +230,7 @@ const toggleColorModeFromMenu = () => {
 // Menu items for the user dropdown
 const userMenuItems = computed(() => [
     { name: 'Your Profile', action: () => router.push('/profile') },
-    { name: 'Settings', action: () => window.open(router.resolve({ path: '/platform/home', query: { redirect: '/settings' } }).href, '_blank') },
+    { name: 'Settings', action: () => openTab('/settings', { title: 'Settings' }) },
     { 
         name: colorMode.value === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode', 
         action: toggleColorModeFromMenu, 

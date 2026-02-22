@@ -67,7 +67,7 @@ const renderChart = () => {
         {
           label: 'Compliance %',
           data: chartData.value.compliance,
-          borderColor: '#4F46E5', // brand-600
+          borderColor: '#4F46E5', // indigo-600
           backgroundColor: 'rgba(79, 70, 229, 0.1)',
           tension: 0.3,
           fill: true,

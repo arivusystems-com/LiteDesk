@@ -1,7 +1,7 @@
 <template>
   <div v-if="loadingDefinition" class="flex items-center justify-center min-h-screen">
     <div class="text-center">
-      <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+      <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
       <p class="text-gray-600 dark:text-gray-400 mt-4">Loading...</p>
     </div>
   </div>

@@ -29,14 +29,14 @@
             v-for="option in salesOptions"
             :key="option.id"
             @click="navigateToOption(option.id)"
-            class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md hover:border-brand-500 dark:hover:border-brand-400 transition-all cursor-pointer group"
+            class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md hover:border-indigo-500 dark:hover:border-indigo-400 transition-all cursor-pointer group"
           >
             <div class="flex items-start gap-4">
-              <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 group-hover:bg-brand-100 dark:group-hover:bg-brand-900/30 transition-colors flex-shrink-0">
+              <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/30 transition-colors flex-shrink-0">
                 <component :is="option.icon" class="w-6 h-6" />
               </div>
               <div class="flex-1 min-w-0">
-                <h4 class="text-base font-semibold text-gray-900 dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors mb-1">
+                <h4 class="text-base font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors mb-1">
                   {{ option.name }}
                 </h4>
                 <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
@@ -44,7 +44,7 @@
                 </p>
               </div>
             </div>
-            <div class="mt-4 flex items-center gap-2 text-xs text-brand-600 dark:text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div class="mt-4 flex items-center gap-2 text-xs text-indigo-600 dark:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">
               <span>Configure</span>
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -67,7 +67,7 @@
               @click="activeSalesTab = 'options'"
               :class="[
                 activeSalesTab === 'options'
-                  ? 'border-brand-600 text-brand-600 dark:text-brand-400'
+                  ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
                   : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600',
                 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors'
               ]"
@@ -80,7 +80,7 @@
             @click="activeSalesTab = tab.id"
             :class="[
               activeSalesTab === tab.id
-                ? 'border-brand-600 text-brand-600 dark:text-brand-400'
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
                 : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600',
               'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors'
             ]"
@@ -108,15 +108,15 @@
         <div
           v-for="option in getAppOptions(selectedApp)"
           :key="option.id"
-          class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md hover:border-brand-500 dark:hover:border-brand-400 transition-all cursor-pointer group"
+          class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md hover:border-indigo-500 dark:hover:border-indigo-400 transition-all cursor-pointer group"
           :class="{ 'opacity-50 cursor-not-allowed': !option.available }"
         >
           <div class="flex items-start gap-4">
-            <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 group-hover:bg-brand-100 dark:group-hover:bg-brand-900/30 transition-colors flex-shrink-0">
+            <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/30 transition-colors flex-shrink-0">
               <component :is="option.icon" class="w-6 h-6" />
             </div>
             <div class="flex-1 min-w-0">
-              <h4 class="text-base font-semibold text-gray-900 dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors mb-1">
+              <h4 class="text-base font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors mb-1">
                 {{ option.name }}
                 <span v-if="!option.available" class="ml-2 text-xs text-gray-500 dark:text-gray-400">(Coming Soon)</span>
               </h4>

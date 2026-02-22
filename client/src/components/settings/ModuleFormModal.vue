@@ -65,7 +65,7 @@
             <button 
               type="submit" 
               :disabled="saving || !form.name || !form.key" 
-              class="px-6 py-2.5 rounded-lg bg-brand-600 dark:bg-brand-700 text-white font-medium hover:bg-brand-700 dark:hover:bg-brand-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              class="px-6 py-2.5 rounded-lg bg-indigo-600 dark:bg-indigo-700 text-white font-medium hover:bg-indigo-700 dark:hover:bg-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {{ saving ? 'Creating...' : 'Create Module' }}
             </button>

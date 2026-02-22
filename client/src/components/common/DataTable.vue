@@ -31,7 +31,7 @@
     <!-- Bulk Actions Floating Bar -->
     <Transition name="slide-up">
       <div v-if="selectable && selectedRows.length > 0" class="bulk-actions-bar">
-        <div class="bg-brand-600 dark:bg-brand-700 text-white px-6 py-4 rounded-xl shadow-2xl border-2 border-brand-700 dark:border-brand-800">
+        <div class="bg-indigo-600 dark:bg-indigo-700 text-white px-6 py-4 rounded-xl shadow-2xl border-2 border-indigo-700 dark:border-indigo-800">
           <div class="flex items-center gap-6">
             <!-- Selection Count -->
             <div class="flex items-center gap-2">
@@ -101,7 +101,7 @@
           v-model="searchQuery"
           type="text"
           :placeholder="searchPlaceholder"
-          class="w-full pl-11 pr-4 py-2.5 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 dark:focus:ring-brand-600 transition-all shadow-sm"
+          class="w-full pl-11 pr-4 py-2.5 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:focus:ring-indigo-600 transition-all shadow-sm"
           @input="handleSearch"
         />
       </div>
@@ -177,7 +177,7 @@
                       :checked="isColumnVisible(column.key)"
                       @change="toggleColumnVisibility(column.key)"
                       @click.stop
-                      class="w-4 h-4 text-brand-600 dark:text-brand-500 border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 cursor-pointer flex-shrink-0"
+                      class="w-4 h-4 text-indigo-600 dark:text-indigo-500 border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 cursor-pointer flex-shrink-0"
                     />
                     
                     <!-- Column Label -->
@@ -192,8 +192,8 @@
                       :class="[
                         'p-1.5 rounded-lg transition-all flex-shrink-0',
                         isColumnFrozen(column.key)
-                          ? 'text-brand-600 dark:text-brand-400 bg-brand-100 dark:bg-brand-900/30'
-                          : 'text-gray-400 dark:text-gray-500 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/20',
+                          ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/30'
+                          : 'text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20',
                         !isColumnFrozen(column.key) && frozenColumns.length >= 2 ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'
                       ]"
                       :title="isColumnFrozen(column.key) ? 'Unfreeze column' : frozenColumns.length >= 2 ? 'Maximum 2 columns can be frozen' : 'Freeze column'"
@@ -212,7 +212,7 @@
                     <!-- Frozen Badge -->
                     <span
                       v-if="isColumnFrozen(column.key)"
-                      class="text-xs px-2 py-1 bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded-full flex-shrink-0"
+                      class="text-xs px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-full flex-shrink-0"
                     >
                       Frozen
                     </span>
@@ -238,7 +238,7 @@
                 </button>
                 <button
                   @click="applyColumnSettings"
-                  class="px-4 py-2 text-sm font-medium text-white bg-brand-600 dark:bg-brand-700 hover:bg-brand-700 dark:hover:bg-brand-800 rounded-lg transition-colors"
+                  class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 dark:bg-indigo-700 hover:bg-indigo-700 dark:hover:bg-indigo-800 rounded-lg transition-colors"
                 >
                   Apply
                 </button>
@@ -255,7 +255,7 @@
       <div class="overflow-x-auto">
       <!-- Loading State -->
       <div v-if="loading" class="flex flex-col items-center justify-center py-16">
-        <div class="animate-spin rounded-full h-14 w-14 border-4 border-gray-200 dark:border-gray-700 border-t-brand-600 dark:border-t-brand-500"></div>
+        <div class="animate-spin rounded-full h-14 w-14 border-4 border-gray-200 dark:border-gray-700 border-t-indigo-600 dark:border-t-indigo-500"></div>
         <p class="mt-5 text-base font-medium text-gray-600 dark:text-gray-400">{{ loadingText }}</p>
       </div>
 
@@ -281,7 +281,7 @@
                 type="checkbox"
                 :checked="allSelected"
                 @change="toggleSelectAll"
-                class="w-4 h-4 text-brand-600 dark:text-brand-500 border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 cursor-pointer transition-all"
+                class="w-4 h-4 text-indigo-600 dark:text-indigo-500 border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 cursor-pointer transition-all"
               />
             </th>
 
@@ -310,7 +310,7 @@
                 <!-- Sort Icon -->
                 <span v-if="column.sortable !== false" class="flex items-center ml-auto">
                   <!-- Active sort -->
-                  <span v-if="sortBy === column.key" class="text-brand-600 dark:text-brand-500">
+                  <span v-if="sortBy === column.key" class="text-indigo-600 dark:text-indigo-500">
                     <ChevronUpIcon v-if="sortOrder === 'asc'" class="w-4 h-4" />
                     <ChevronDownIcon v-else class="w-4 h-4" />
                   </span>
@@ -343,7 +343,7 @@
             :key="getRowKey(row, index)"
             :class="[
               'hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-150 cursor-pointer group',
-              isSelected(row) ? 'bg-brand-50 dark:bg-brand-900/30 hover:bg-brand-100 dark:hover:bg-brand-900/40' : '',
+              isSelected(row) ? 'bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/40' : '',
               rowClass
             ]"
             @click="handleRowClick(row, $event)"
@@ -355,7 +355,7 @@
               class="sticky-selection-cell px-4 py-4 text-sm text-gray-900 dark:text-white bg-inherit"
               :class="{
                 'bg-white dark:bg-gray-800': !isSelected(row),
-                'bg-brand-50 dark:bg-brand-900/30': isSelected(row)
+                'bg-indigo-50 dark:bg-indigo-900/30': isSelected(row)
               }"
             >
               <input
@@ -363,7 +363,7 @@
                 :checked="isSelected(row)"
                 @change="toggleSelect(row)"
                 @click.stop
-                class="w-4 h-4 text-brand-600 dark:text-brand-500 border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 cursor-pointer transition-all"
+                class="w-4 h-4 text-indigo-600 dark:text-indigo-500 border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 cursor-pointer transition-all"
               />
             </td>
 
@@ -376,7 +376,7 @@
                 column.cellClass,
                 isColumnFrozen(column.key) ? 'frozen-column-cell' : '',
                 isColumnFrozen(column.key) && !isSelected(row) ? 'bg-white dark:bg-gray-800' : '',
-                isColumnFrozen(column.key) && isSelected(row) ? 'bg-brand-50 dark:bg-brand-900/30' : ''
+                isColumnFrozen(column.key) && isSelected(row) ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''
               ]"
               :style="{ 
                 width: columnWidths[column.key] || column.width || 'auto',
@@ -481,7 +481,7 @@
             :class="[
               'min-w-[40px] px-3 py-2 text-sm font-medium rounded-lg transition-all shadow-sm',
               page === currentPage
-                ? 'bg-gradient-to-r from-brand-600 to-brand-700 text-white border-brand-600 hover:from-brand-700 hover:to-brand-800 shadow-md'
+                ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white border-indigo-600 hover:from-indigo-700 hover:to-indigo-800 shadow-md'
                 : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 hover:border-gray-400 dark:hover:border-gray-500 hover:shadow-md hover:scale-105'
             ]"
           >
