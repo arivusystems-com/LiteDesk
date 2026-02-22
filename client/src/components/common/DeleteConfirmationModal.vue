@@ -103,7 +103,9 @@ const recordTypeLabel = computed(() => {
     'deals': 'Deal',
     'tasks': 'Task',
     'groups': 'Group',
-    'events': 'Event'
+    'events': 'Event',
+    'item': 'Item',
+    'trash item': 'Trash item'
   };
   return labels[type] || type.charAt(0).toUpperCase() + type.slice(1);
 });
@@ -118,7 +120,9 @@ const recordTypeLabelPlural = computed(() => {
     'deals': 'Deals',
     'tasks': 'Tasks',
     'groups': 'Groups',
-    'events': 'Events'
+    'events': 'Events',
+    'item': 'Items',
+    'trash item': 'Trash items'
   };
   return labels[type] || (recordTypeLabel.value + 's');
 });

@@ -42,7 +42,7 @@
     <!-- Loading State -->
     <div v-if="loading" class="flex items-center justify-center min-h-screen">
       <div class="text-center">
-        <div class="w-16 h-16 border-4 border-gray-200 dark:border-gray-700 border-t-brand-600 dark:border-t-brand-500 rounded-full animate-spin mx-auto mb-4"></div>
+        <div class="w-16 h-16 border-4 border-gray-200 dark:border-gray-700 border-t-indigo-600 dark:border-t-indigo-500 rounded-full animate-spin mx-auto mb-4"></div>
         <p class="text-gray-600 dark:text-gray-400 font-medium">Loading event...</p>
       </div>
     </div>
@@ -55,7 +55,7 @@
         </svg>
         <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Error Loading Event</h2>
         <p class="text-gray-600 dark:text-gray-400 mb-6">{{ error }}</p>
-        <button @click="$router.push('/events')" class="px-6 py-3 bg-brand-600 text-white rounded-xl hover:bg-brand-700 font-medium">
+        <button @click="$router.push('/events')" class="px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium">
           Back to Events
         </button>
       </div>
@@ -90,7 +90,7 @@
           <div class="flex flex-col items-end gap-1">
             <button
               @click="goToExecution"
-              class="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-colors"
+              class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors"
             >
               Open Execution
             </button>
@@ -138,7 +138,7 @@
                Always shown. Displays core event information regardless of event type.
                ============================================================================ -->
           <!-- Event Header Card -->
-          <div class="bg-gradient-to-r from-brand-50 to-purple-50 dark:from-brand-900/20 dark:to-purple-900/20 border border-brand-200 dark:border-brand-800/50 rounded-xl p-4">
+          <div class="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-200 dark:border-indigo-800/50 rounded-xl p-4">
             <div :style="{ backgroundColor: event.color }" class="w-12 h-12 rounded-lg flex items-center justify-center mb-3">
               <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -252,7 +252,7 @@
               </svg>
               <div class="flex-1">
                 <div class="text-xs text-gray-500 dark:text-gray-400">Meeting Link</div>
-                <a :href="event.location" target="_blank" class="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline mt-0.5 block truncate">
+                <a :href="event.location" target="_blank" class="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline mt-0.5 block truncate">
                   {{ event.location }}
                 </a>
               </div>
@@ -279,7 +279,7 @@
               <div class="flex-1">
                 <div class="text-xs text-gray-500 dark:text-gray-400">{{ primaryOwnerLabel }}</div>
                 <div class="flex items-center gap-2 mt-1">
-                  <div class="w-6 h-6 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white text-xs font-medium">
+                  <div class="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white text-xs font-medium">
                     {{ getInitials(primaryOwnerUser) }}
                   </div>
                   <div class="text-sm font-medium text-gray-900 dark:text-white">
@@ -769,10 +769,10 @@
                 v-model="newNote"
                 rows="3"
                 placeholder="Add a note..."
-                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               ></textarea>
               <div class="flex items-center gap-2 mt-2">
-                <button @click="addNote" :disabled="!newNote.trim()" class="px-3 py-1.5 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                <button @click="addNote" :disabled="!newNote.trim()" class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">
                   Save Note
                 </button>
                 <button @click="showNoteForm = false; newNote = ''" class="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
@@ -781,7 +781,7 @@
               </div>
             </div>
 
-            <button v-else @click="showNoteForm = true" class="w-full py-2 text-sm text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-lg border border-dashed border-brand-300 dark:border-brand-700 transition-colors">
+            <button v-else @click="showNoteForm = true" class="w-full py-2 text-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg border border-dashed border-indigo-300 dark:border-indigo-700 transition-colors">
               + Add Note
             </button>
 

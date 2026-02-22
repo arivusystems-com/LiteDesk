@@ -1,11 +1,11 @@
 <template>
-    <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div class="mx-auto sm:px-6 lg:px-4 py-6 h-screen box-border flex flex-col overflow-hidden">
+    <div class="min-h-screen  dark:bg-gray-900">
+      <div class="mx-auto sm:px-6 lg:px-4 h-screen box-border flex flex-col overflow-hidden">
       <!-- Header -->
       <div class="mb-6 flex items-center justify-between">
         <div class="flex items-center gap-4">
           <!-- Back Button -->
-          <button
+          <!-- <button
             @click="goBack"
             class="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
             title="Go back"
@@ -13,14 +13,14 @@
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
             </svg>
-          </button>
+          </button> -->
           <div>
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Settings</h1>
             <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">Manage your account and organization settings</p>
           </div>
         </div>
         <!-- User Menu (mode + sign out) -->
-        <Menu as="div" class="relative">
+        <!-- <Menu as="div" class="relative">
           <MenuButton class="flex items-center gap-x-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">
             <img 
               class="w-8 h-8 rounded-full ring-2 ring-white/10 dark:ring-white/10"
@@ -57,7 +57,7 @@
               </template>
             </MenuItems>
           </transition>
-        </Menu>
+        </Menu> -->
       </div>
 
       <!-- Vertical Tabs Layout with collapsible left rail -->

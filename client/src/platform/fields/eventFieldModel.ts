@@ -56,6 +56,7 @@ import type {
 import {
   validateBaseFieldMetadata,
   classifyFieldBase,
+  normalizeFieldKeyForMetadataLookup,
 } from './BaseFieldModel';
 
 // =============================================================================
@@ -115,6 +116,8 @@ export interface EventFieldMetadata extends Omit<BaseFieldMetadata, 'intent'> {
 export const EVENT_FIELD_METADATA: Record<string, EventFieldMetadata> = {
   // ==========================================================================
   // SYSTEM FIELDS (platform-managed, read-only, infrastructure-scoped)
+  // Type A: Infrastructure (never visible): _id, __v, organizationId, eventId
+  // Type B: Audit (visible, read-only): createdBy, createdTime, modifiedBy, modifiedTime
   // ==========================================================================
   organizationId: {
     owner: 'system',
@@ -122,6 +125,8 @@ export const EVENT_FIELD_METADATA: Record<string, EventFieldMetadata> = {
     fieldScope: 'CORE',
     editable: false,
     isProtected: true,
+    isSystem: true,
+    isVisibleInConfig: false,
   },
   eventId: {
     owner: 'system',
@@ -129,6 +134,8 @@ export const EVENT_FIELD_METADATA: Record<string, EventFieldMetadata> = {
     fieldScope: 'CORE',
     editable: false,
     isProtected: true,
+    isSystem: true,
+    isVisibleInConfig: false,
   },
   createdBy: {
     owner: 'system',
@@ -136,36 +143,48 @@ export const EVENT_FIELD_METADATA: Record<string, EventFieldMetadata> = {
     fieldScope: 'CORE',
     editable: false,
     isProtected: true,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   createdTime: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   modifiedBy: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   modifiedTime: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   _id: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: false,
   },
   __v: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: false,
   },
   
   // Status fields (system-controlled)
@@ -633,17 +652,14 @@ validateAllEventMetadata();
  * Returns undefined if field is not found (allows graceful handling of unknown fields)
  */
 export function getEventFieldMetadata(fieldName: string): EventFieldMetadata | undefined {
-  // Normalize field name for case-insensitive lookup
-  const normalizedName = fieldName.toLowerCase();
+  const normalizedName = normalizeFieldKeyForMetadataLookup(fieldName);
   
-  // Try exact match first
   if (EVENT_FIELD_METADATA[fieldName]) {
     return EVENT_FIELD_METADATA[fieldName];
   }
   
-  // Try case-insensitive match
   for (const [key, metadata] of Object.entries(EVENT_FIELD_METADATA)) {
-    if (key.toLowerCase() === normalizedName) {
+    if (normalizeFieldKeyForMetadataLookup(key) === normalizedName) {
       return metadata;
     }
   }

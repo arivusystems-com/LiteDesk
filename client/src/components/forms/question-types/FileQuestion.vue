@@ -12,8 +12,8 @@
         readOnly 
           ? 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/30 cursor-not-allowed opacity-60'
           : isDragging
-            ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 cursor-pointer'
-            : 'border-gray-300 dark:border-gray-600 hover:border-brand-400 dark:hover:border-brand-500 bg-white dark:bg-gray-800 cursor-pointer'
+            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 cursor-pointer'
+            : 'border-gray-300 dark:border-gray-600 hover:border-indigo-400 dark:hover:border-indigo-500 bg-white dark:bg-gray-800 cursor-pointer'
       ]"
     >
       <input
@@ -36,7 +36,7 @@
           Drag and Drop file here or 
           <label
             :for="question.questionId"
-            class="font-semibold text-brand-600 dark:text-brand-400 underline cursor-pointer hover:text-brand-700 dark:hover:text-brand-300"
+            class="font-semibold text-indigo-600 dark:text-indigo-400 underline cursor-pointer hover:text-indigo-700 dark:hover:text-indigo-300"
           >
             Choose file
           </label>

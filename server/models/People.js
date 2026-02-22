@@ -122,6 +122,11 @@ const PeopleSchema = new Schema({
     appContext: { type: String } // App context (appKey) - optional for backward compatibility
   }],
   
+  // Trash (soft delete) - See docs/TRASH_IMPLEMENTATION_SPEC.md
+  deletedAt: { type: Date, default: null, index: true },
+  deletedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+  deletionReason: { type: String, trim: true, maxlength: 500 },
+
   // Activity Logs (Generic audit trail - app-agnostic structure)
   // ⚠️ NOTE: The action field is a generic string, but action values may be app-specific
   //    SALES app may use values like "lead_status_changed", "contact_created", etc.
@@ -133,7 +138,13 @@ const PeopleSchema = new Schema({
     details: { type: Schema.Types.Mixed },
     appContext: { type: String }, // App context (appKey) - optional for backward compatibility
     timestamp: { type: Date, default: Date.now, required: true }
-  }]
+  }],
+
+  // Custom fields (user-defined via Settings → Modules & Fields)
+  customFields: {
+    type: Schema.Types.Mixed,
+    default: {}
+  }
 }, {
   timestamps: true
 });
@@ -144,6 +155,7 @@ PeopleSchema.index({ organizationId: 1, email: 1 }, { unique: false, sparse: tru
 PeopleSchema.index({ organizationId: 1, lead_status: 1 });
 PeopleSchema.index({ organizationId: 1, contact_status: 1 });
 PeopleSchema.index({ organizationId: 1, legacyContactId: 1 }, { unique: false, sparse: true });
+PeopleSchema.index({ organizationId: 1, deletedAt: 1 });
 
 // Prevent createdBy from being modified after creation
 PeopleSchema.pre('findOneAndUpdate', function() {

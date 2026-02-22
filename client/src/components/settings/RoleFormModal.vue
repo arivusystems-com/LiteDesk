@@ -43,7 +43,7 @@
                     type="text"
                     required
                     :disabled="isEditing && role?.isSystemRole"
-                    class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     placeholder="e.g., Sales Manager"
                   />
                 </div>
@@ -76,7 +76,7 @@
                   <textarea
                     v-model="form.description"
                     rows="3"
-                    class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent transition-all"
+                    class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
                     placeholder="Brief description of this role's responsibilities"
                   ></textarea>
                 </div>
@@ -88,7 +88,7 @@
                   </label>
                   <select
                     v-model="form.parentRole"
-                    class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent transition-all"
+                    class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
                   >
                     <option value="">None (Top Level)</option>
                     <option v-for="r in availableParentRoles" :key="r._id" :value="r._id">
@@ -104,7 +104,7 @@
                   </label>
                   <select
                     v-model="form.icon"
-                    class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent transition-all"
+                    class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
                   >
                     <option value="user">User</option>
                     <option value="users">Users Group</option>
@@ -123,7 +123,7 @@
                     <input
                       type="checkbox"
                       v-model="form.canViewAllData"
-                      class="w-5 h-5 text-brand-600 focus:ring-brand-500 rounded"
+                      class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
                     />
                     <div>
                       <span class="text-sm font-medium text-gray-900 dark:text-white">Can View All Data</span>
@@ -135,7 +135,7 @@
                     <input
                       type="checkbox"
                       v-model="form.canManageTeam"
-                      class="w-5 h-5 text-brand-600 focus:ring-brand-500 rounded"
+                      class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
                     />
                     <div>
                       <span class="text-sm font-medium text-gray-900 dark:text-white">Can Manage Team</span>
@@ -147,7 +147,7 @@
                     <input
                       type="checkbox"
                       v-model="form.canExportData"
-                      class="w-5 h-5 text-brand-600 focus:ring-brand-500 rounded"
+                      class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
                     />
                     <div>
                       <span class="text-sm font-medium text-gray-900 dark:text-white">Can Export Data</span>
@@ -166,7 +166,7 @@
                 
                 <!-- Loading State -->
                 <div v-if="loadingModules" class="flex items-center justify-center py-8">
-                  <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600"></div>
+                  <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
                 </div>
 
                 <!-- Permission Table -->
@@ -212,7 +212,7 @@
                             type="checkbox"
                             v-model="form.permissions[module.key].read"
                             @change="handleReadChange(module.key)"
-                            class="w-4 h-4 text-brand-600 focus:ring-brand-500 rounded"
+                            class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded"
                           />
                         </td>
                         <td class="px-4 py-3 text-center">
@@ -220,7 +220,7 @@
                             type="checkbox"
                             v-model="form.permissions[module.key].create"
                             @change="handlePermissionChange(module.key, 'create')"
-                            class="w-4 h-4 text-brand-600 focus:ring-brand-500 rounded"
+                            class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded"
                           />
                         </td>
                         <td class="px-4 py-3 text-center">
@@ -230,7 +230,7 @@
                             @change="handlePermissionChange(module.key, 'update')"
                             :disabled="!form.permissions[module.key].create"
                             :class="!form.permissions[module.key].create ? 'opacity-50 cursor-not-allowed' : ''"
-                            class="w-4 h-4 text-brand-600 focus:ring-brand-500 rounded"
+                            class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded"
                           />
                         </td>
                         <td class="px-4 py-3 text-center">
@@ -240,7 +240,7 @@
                             @change="handlePermissionChange(module.key, 'delete')"
                             :disabled="!form.permissions[module.key].update"
                             :class="!form.permissions[module.key].update ? 'opacity-50 cursor-not-allowed' : ''"
-                            class="w-4 h-4 text-brand-600 focus:ring-brand-500 rounded"
+                            class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded"
                           />
                         </td>
                         <td class="px-4 py-3">
@@ -250,7 +250,7 @@
                                 type="checkbox"
                                 v-model="form.permissions[module.key].export"
                                 @change="handlePermissionChange(module.key, 'export')"
-                                class="w-3.5 h-3.5 text-brand-600 focus:ring-brand-500 rounded"
+                                class="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500 rounded"
                               />
                               Export
                             </label>
@@ -261,7 +261,7 @@
                                 @change="handlePermissionChange(module.key, 'import')"
                                 :disabled="!form.permissions[module.key].create"
                                 :class="!form.permissions[module.key].create ? 'opacity-50 cursor-not-allowed' : ''"
-                                class="w-3.5 h-3.5 text-brand-600 focus:ring-brand-500 rounded"
+                                class="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500 rounded"
                               />
                               Import
                             </label>
@@ -270,7 +270,7 @@
                                 type="checkbox"
                                 v-model="form.permissions[module.key].viewAll"
                                 @change="handlePermissionChange(module.key, 'viewAll')"
-                                class="w-3.5 h-3.5 text-brand-600 focus:ring-brand-500 rounded"
+                                class="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500 rounded"
                               />
                               View All
                             </label>
@@ -279,7 +279,7 @@
                                 type="checkbox"
                                 v-model="form.permissions[module.key].manageUsers"
                                 @change="handlePermissionChange(module.key, 'manageUsers')"
-                                class="w-3.5 h-3.5 text-brand-600 focus:ring-brand-500 rounded"
+                                class="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500 rounded"
                               />
                               Manage Users
                             </label>
@@ -288,7 +288,7 @@
                                 type="checkbox"
                                 v-model="form.permissions[module.key].manageRoles"
                                 @change="handlePermissionChange(module.key, 'manageRoles')"
-                                class="w-3.5 h-3.5 text-brand-600 focus:ring-brand-500 rounded"
+                                class="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500 rounded"
                               />
                               Manage Roles
                             </label>
@@ -297,7 +297,7 @@
                                 type="checkbox"
                                 v-model="form.permissions[module.key].manageBilling"
                                 @change="handlePermissionChange(module.key, 'manageBilling')"
-                                class="w-3.5 h-3.5 text-brand-600 focus:ring-brand-500 rounded"
+                                class="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500 rounded"
                               />
                               Billing
                             </label>
@@ -335,7 +335,7 @@
                 <button
                   type="submit"
                   :disabled="saving"
-                  class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                   <svg v-if="saving" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>

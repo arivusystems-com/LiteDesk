@@ -25,7 +25,7 @@
 
     <!-- Loading State -->
     <div v-if="loading" class="flex items-center justify-center py-12">
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
     </div>
 
     <!-- Error State -->
@@ -45,7 +45,7 @@
       <!-- Password Policy -->
       <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
         <div class="flex items-center gap-3 mb-4">
-          <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400">
+          <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
@@ -66,7 +66,7 @@
                 type="number"
                 min="6"
                 max="128"
-                class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent transition-all"
+                class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
               />
             </div>
             <div>
@@ -78,7 +78,7 @@
                 type="number"
                 min="0"
                 max="365"
-                class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent transition-all"
+                class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
               />
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">0 = no expiration</p>
             </div>
@@ -88,7 +88,7 @@
               <input
                 v-model="form.passwordPolicy.requireUppercase"
                 type="checkbox"
-                class="w-5 h-5 text-brand-600 focus:ring-brand-500 rounded"
+                class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
               />
               <div>
                 <span class="text-sm font-medium text-gray-900 dark:text-white">Require Uppercase Letters</span>
@@ -99,7 +99,7 @@
               <input
                 v-model="form.passwordPolicy.requireLowercase"
                 type="checkbox"
-                class="w-5 h-5 text-brand-600 focus:ring-brand-500 rounded"
+                class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
               />
               <div>
                 <span class="text-sm font-medium text-gray-900 dark:text-white">Require Lowercase Letters</span>
@@ -110,7 +110,7 @@
               <input
                 v-model="form.passwordPolicy.requireNumbers"
                 type="checkbox"
-                class="w-5 h-5 text-brand-600 focus:ring-brand-500 rounded"
+                class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
               />
               <div>
                 <span class="text-sm font-medium text-gray-900 dark:text-white">Require Numbers</span>
@@ -121,7 +121,7 @@
               <input
                 v-model="form.passwordPolicy.requireSpecialChars"
                 type="checkbox"
-                class="w-5 h-5 text-brand-600 focus:ring-brand-500 rounded"
+                class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
               />
               <div>
                 <span class="text-sm font-medium text-gray-900 dark:text-white">Require Special Characters</span>
@@ -138,7 +138,7 @@
               type="number"
               min="0"
               max="24"
-              class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent transition-all"
+              class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
             />
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">0 = no restriction</p>
           </div>
@@ -148,7 +148,7 @@
       <!-- Session Rules -->
       <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
         <div class="flex items-center gap-3 mb-4">
-          <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400">
+          <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -168,7 +168,7 @@
               type="number"
               min="1"
               max="168"
-              class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent transition-all"
+              class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
             />
           </div>
           <div>
@@ -180,7 +180,7 @@
               type="number"
               min="5"
               max="480"
-              class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent transition-all"
+              class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
             />
           </div>
           <div>
@@ -192,7 +192,7 @@
               type="number"
               min="1"
               max="20"
-              class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent transition-all"
+              class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
             />
           </div>
         </div>
@@ -201,7 +201,7 @@
       <!-- Login Restrictions -->
       <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
         <div class="flex items-center gap-3 mb-4">
-          <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400">
+          <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
@@ -217,7 +217,7 @@
               <input
                 v-model="form.loginRestrictions.blockFailedAttempts"
                 type="checkbox"
-                class="w-5 h-5 text-brand-600 focus:ring-brand-500 rounded"
+                class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
               />
               <div>
                 <span class="text-sm font-medium text-gray-900 dark:text-white">Block Failed Login Attempts</span>
@@ -234,7 +234,7 @@
                   type="number"
                   min="1"
                   max="10"
-                  class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent transition-all"
+                  class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
                 />
               </div>
               <div>
@@ -246,7 +246,7 @@
                   type="number"
                   min="1"
                   max="1440"
-                  class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent transition-all"
+                  class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
                 />
               </div>
             </div>
@@ -259,7 +259,7 @@
               v-model="ipWhitelistText"
               @blur="updateIpWhitelist"
               rows="3"
-              class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent transition-all"
+              class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
               placeholder="Enter one IP address per line (e.g., 192.168.1.1)"
             ></textarea>
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Leave empty to allow all IP addresses. Enter one IP per line.</p>
@@ -272,7 +272,7 @@
               v-model="ipBlacklistText"
               @blur="updateIpBlacklist"
               rows="3"
-              class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent transition-all"
+              class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
               placeholder="Enter one IP address per line"
             ></textarea>
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Enter one IP per line to block.</p>
@@ -283,7 +283,7 @@
       <!-- Two-Factor Authentication -->
       <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
         <div class="flex items-center gap-3 mb-4">
-          <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400">
+          <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
@@ -298,7 +298,7 @@
             <input
               v-model="form.twoFactorAuth.enabled"
               type="checkbox"
-              class="w-5 h-5 text-brand-600 focus:ring-brand-500 rounded"
+              class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
             />
             <div>
               <span class="text-sm font-medium text-gray-900 dark:text-white">Enable Two-Factor Authentication</span>
@@ -309,7 +309,7 @@
             <input
               v-model="form.twoFactorAuth.required"
               type="checkbox"
-              class="w-5 h-5 text-brand-600 focus:ring-brand-500 rounded"
+              class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
             />
             <div>
               <span class="text-sm font-medium text-gray-900 dark:text-white">Require Two-Factor Authentication</span>
@@ -326,7 +326,7 @@
                   :checked="form.twoFactorAuth.methods.includes('totp')"
                   @change="toggle2FAMethod('totp')"
                   type="checkbox"
-                  class="w-5 h-5 text-brand-600 focus:ring-brand-500 rounded"
+                  class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
                 />
                 <span class="text-sm text-gray-900 dark:text-white">TOTP (Authenticator App)</span>
               </label>
@@ -335,7 +335,7 @@
                   :checked="form.twoFactorAuth.methods.includes('sms')"
                   @change="toggle2FAMethod('sms')"
                   type="checkbox"
-                  class="w-5 h-5 text-brand-600 focus:ring-brand-500 rounded"
+                  class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
                 />
                 <span class="text-sm text-gray-900 dark:text-white">SMS</span>
               </label>
@@ -344,7 +344,7 @@
                   :checked="form.twoFactorAuth.methods.includes('email')"
                   @change="toggle2FAMethod('email')"
                   type="checkbox"
-                  class="w-5 h-5 text-brand-600 focus:ring-brand-500 rounded"
+                  class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
                 />
                 <span class="text-sm text-gray-900 dark:text-white">Email</span>
               </label>
@@ -366,7 +366,7 @@
         <button
           type="submit"
           :disabled="saving || !hasChanges"
-          class="px-4 py-2 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+          class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
         >
           <span v-if="saving">Saving...</span>
           <span v-else>Save Security Settings</span>
@@ -382,7 +382,7 @@
     <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">
-          <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400">
+          <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
@@ -400,7 +400,7 @@
         </button>
       </div>
       <div v-if="activityLoading" class="flex items-center justify-center py-8">
-        <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600"></div>
+        <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
       </div>
       <div v-else-if="securityActivity.length === 0" class="text-center py-8">
         <p class="text-sm text-gray-500 dark:text-gray-400">No security activity to display</p>

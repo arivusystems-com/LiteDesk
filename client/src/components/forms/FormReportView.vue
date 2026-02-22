@@ -8,7 +8,7 @@
             <button
               @click="generateReport"
               :disabled="generating || !canGenerateReport"
-              class="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {{ generating ? 'Generating...' : 'Generate Report' }}
             </button>
@@ -120,7 +120,7 @@
               <div class="flex items-center gap-4">
                 <div class="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                   <div
-                    class="bg-brand-600 h-2 rounded-full transition-all"
+                    class="bg-indigo-600 h-2 rounded-full transition-all"
                     :style="{ width: `${score}%` }"
                   ></div>
                 </div>

@@ -294,7 +294,7 @@
                       v-for="intent in availableAttachIntents"
                       :key="intent.id"
                       @click="selectAttachIntent(intent)"
-                      class="text-left p-4 border-2 rounded-lg transition-all border-gray-200 dark:border-gray-700 hover:border-brand-500 dark:hover:border-brand-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
+                      class="text-left p-4 border-2 rounded-lg transition-all border-gray-200 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
                     >
                       <div class="flex items-start justify-between">
                         <div class="flex-1">
@@ -331,7 +331,7 @@
                 </p>
                 <button
                   @click="openAttachFormModal"
-                  class="px-4 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-colors"
+                  class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors"
                 >
                   Continue
                 </button>

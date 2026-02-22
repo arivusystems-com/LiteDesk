@@ -3,7 +3,7 @@
     <!-- Loading -->
     <div v-if="loading" class="flex items-center justify-center min-h-screen">
       <div class="text-center">
-        <div class="w-16 h-16 border-4 border-gray-200 dark:border-gray-700 border-t-brand-600 dark:border-t-brand-500 rounded-full animate-spin mx-auto mb-4"></div>
+        <div class="w-16 h-16 border-4 border-gray-200 dark:border-gray-700 border-t-indigo-600 dark:border-t-indigo-500 rounded-full animate-spin mx-auto mb-4"></div>
         <p class="text-gray-600 dark:text-gray-400 font-medium">Loading deal...</p>
       </div>
     </div>
@@ -13,7 +13,7 @@
       <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
         <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Error Loading Deal</h2>
         <p class="text-gray-600 dark:text-gray-400 mb-6">{{ error }}</p>
-        <button @click="$router.push('/deals')" class="px-6 py-3 bg-brand-600 text-white rounded-xl hover:bg-brand-700 font-medium">
+        <button @click="$router.push('/deals')" class="px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium">
           Back to Deals
         </button>
       </div>
@@ -173,7 +173,7 @@
                         </p>
                         <div class="flex items-center gap-2 mt-0.5 flex-wrap">
                           <span class="text-xs text-gray-500 dark:text-gray-400">{{ participantRoleLabel(entry.role, 'person') }}</span>
-                          <span v-if="entry.isPrimary" class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300">Primary</span>
+                          <span v-if="entry.isPrimary" class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">Primary</span>
                           <span v-if="!entry.isActive" class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300">Inactive</span>
                         </div>
                       </div>
@@ -198,7 +198,7 @@
                         </p>
                         <div class="flex items-center gap-2 mt-0.5 flex-wrap">
                           <span class="text-xs text-gray-500 dark:text-gray-400">{{ participantRoleLabel(entry.role, 'org') }}</span>
-                          <span v-if="entry.isPrimary" class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300">Primary</span>
+                          <span v-if="entry.isPrimary" class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">Primary</span>
                           <span v-if="!entry.isActive" class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300">Inactive</span>
                         </div>
                       </div>
@@ -325,7 +325,7 @@
             <h3 class="text-base font-bold text-gray-900 dark:text-white mb-3">Stage History</h3>
             <div class="space-y-2">
               <div v-for="(history, index) in deal.stageHistory.slice(0, 5)" :key="index" class="flex items-center gap-2 text-xs">
-                <div class="w-2 h-2 rounded-full bg-brand-600 dark:bg-brand-500"></div>
+                <div class="w-2 h-2 rounded-full bg-indigo-600 dark:bg-indigo-500"></div>
                 <span class="font-medium text-gray-900 dark:text-white">{{ history.stage }}</span>
                 <span class="text-gray-500 dark:text-gray-400">•</span>
                 <span class="text-gray-600 dark:text-gray-400">{{ formatDate(history.changedAt) }}</span>
@@ -338,7 +338,7 @@
           <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
             <div class="flex items-center justify-between mb-3">
               <h3 class="text-base font-bold text-gray-900 dark:text-white">Events</h3>
-              <button @click="openCreateEvent" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-colors">
+              <button @click="openCreateEvent" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                 </svg>
@@ -379,7 +379,7 @@
           <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
             <div class="flex items-center justify-between mb-3">
               <h3 class="text-base font-bold text-gray-900 dark:text-white">Activity & Notes</h3>
-              <button @click="showNoteForm = true" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-colors">
+              <button @click="showNoteForm = true" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                 </svg>
@@ -393,13 +393,13 @@
                 v-model="newNote" 
                 placeholder="Add a note..."
                 rows="2"
-                class="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-brand-500 dark:focus:ring-brand-600 focus:border-transparent resize-none transition-all"
+                class="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent resize-none transition-all"
               ></textarea>
               <div class="flex items-center justify-end gap-2 mt-2">
                 <button @click="showNoteForm = false; newNote = ''" class="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-medium rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                   Cancel
                 </button>
-                <button @click="addNote" :disabled="!newNote.trim()" class="px-3 py-1.5 bg-brand-600 text-white text-xs rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors">
+                <button @click="addNote" :disabled="!newNote.trim()" class="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors">
                   Save
                 </button>
               </div>

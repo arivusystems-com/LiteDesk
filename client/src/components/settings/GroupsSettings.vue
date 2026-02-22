@@ -18,7 +18,7 @@
           <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Groups & Teams</h2>
           <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">Organize users into teams, departments, and project groups</p>
         </div>
-        <button @click="openCreateModal" class="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 text-sm font-medium transition-colors">
+        <button @click="openCreateModal" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium transition-colors">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
@@ -130,7 +130,7 @@
 
       <!-- Groups Grid -->
       <div v-if="loading" class="flex items-center justify-center py-12">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
       </div>
 
       <div v-else-if="groups.length === 0" class="text-center py-12 bg-gray-50 dark:bg-gray-800 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700">
@@ -140,7 +140,7 @@
         <h3 class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">No groups</h3>
         <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Get started by creating your first group.</p>
         <div class="mt-6">
-          <button @click="openCreateModal" class="inline-flex items-center px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium text-sm">
+          <button @click="openCreateModal" class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium text-sm">
             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
@@ -300,7 +300,7 @@
               <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Group Members</h3>
               <button 
                 @click="editGroup(selectedGroup)" 
-                class="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium text-sm transition-colors"
+                class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium text-sm transition-colors"
               >
                 Edit Group
               </button>

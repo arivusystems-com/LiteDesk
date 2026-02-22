@@ -4,10 +4,10 @@
       <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Related Users</h3>
       <button
         @click="$emit('create-user')"
-        class="p-1 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded transition-colors"
+        class="p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
         title="Add User"
       >
-        <svg class="w-4 h-4 text-brand-600 dark:text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
         </svg>
       </button>
@@ -15,7 +15,7 @@
 
     <!-- Loading State -->
     <div v-if="loading" class="flex items-center justify-center py-8">
-      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600"></div>
+      <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
     </div>
 
     <!-- Users List -->
@@ -58,7 +58,7 @@
       <p class="text-sm text-gray-500 dark:text-gray-400">No users linked yet. Link users to this organization to see them here.</p>
       <button
         @click="$emit('create-user')"
-        class="mt-2 text-xs text-brand-600 dark:text-brand-400 hover:underline"
+        class="mt-2 text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
       >
         Add user
       </button>

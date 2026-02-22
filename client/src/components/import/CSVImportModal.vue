@@ -2,7 +2,7 @@
   <div class="fixed inset-0 bg-gradient-to-br from-black/60 via-black/50 to-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click="$emit('close')">
     <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[92vh] overflow-hidden flex flex-col animate-slide-up border border-gray-200 dark:border-gray-700" @click.stop>
       <!-- Header with Gradient -->
-      <div class="relative bg-gradient-to-r from-brand-600 to-brand-700 dark:from-brand-700 dark:to-brand-800 px-8 py-6">
+      <div class="relative bg-gradient-to-r from-indigo-600 to-indigo-700 dark:from-indigo-700 dark:to-indigo-800 px-8 py-6">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-4">
             <div class="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
@@ -14,7 +14,7 @@
               <h2 class="text-2xl font-bold text-white">
                 Import {{ entityType }}
               </h2>
-              <p class="text-brand-100 text-sm mt-0.5">Upload and map your CSV data</p>
+              <p class="text-indigo-100 text-sm mt-0.5">Upload and map your CSV data</p>
             </div>
           </div>
           <button @click="$emit('close')" class="p-2.5 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200">
@@ -31,8 +31,8 @@
               <div class="relative flex flex-col items-center flex-1">
                 <div :class="[
                   'relative z-10 flex items-center justify-center w-11 h-11 rounded-full font-semibold transition-all duration-300 shadow-lg',
-                  step > index ? 'bg-white text-brand-600 scale-100' :
-                  step === index ? 'bg-white text-brand-600 scale-110 ring-4 ring-white/30' :
+                  step > index ? 'bg-white text-indigo-600 scale-100' :
+                  step === index ? 'bg-white text-indigo-600 scale-110 ring-4 ring-white/30' :
                   'bg-white/20 text-white/60 scale-90'
                 ]">
                   <svg v-if="step > index" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-6 h-6">
@@ -63,7 +63,7 @@
           <!-- Step 1: Upload File -->
           <div v-if="step === 0">
             <div class="relative group">
-              <div class="border-3 border-dashed border-gray-300 dark:border-gray-600 rounded-2xl p-16 text-center bg-white dark:bg-gray-900 hover:border-brand-500 dark:hover:border-brand-400 hover:bg-brand-50/50 dark:hover:bg-brand-900/10 transition-all duration-300 cursor-pointer shadow-sm" 
+              <div class="border-3 border-dashed border-gray-300 dark:border-gray-600 rounded-2xl p-16 text-center bg-white dark:bg-gray-900 hover:border-indigo-500 dark:hover:border-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10 transition-all duration-300 cursor-pointer shadow-sm" 
                    @click="$refs.fileInput.click()"
                    @dragover.prevent
                    @drop.prevent="handleFileDrop">
@@ -76,8 +76,8 @@
                 />
                 
                 <div v-if="!fileName" class="space-y-4">
-                  <div class="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-br from-brand-100 to-brand-200 dark:from-brand-900/30 dark:to-brand-800/30 rounded-2xl mb-2 group-hover:scale-110 transition-transform duration-300">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-12 h-12 text-brand-600 dark:text-brand-400">
+                  <div class="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-br from-indigo-100 to-indigo-200 dark:from-indigo-900/30 dark:to-indigo-800/30 rounded-2xl mb-2 group-hover:scale-110 transition-transform duration-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-12 h-12 text-indigo-600 dark:text-indigo-400">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                   </div>
@@ -86,7 +86,7 @@
                     <p class="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
                       Drag and drop your file here, or click to browse from your computer
                     </p>
-                    <button type="button" class="inline-flex items-center gap-2 px-6 py-3 bg-brand-600 hover:bg-brand-700 dark:bg-brand-600 dark:hover:bg-brand-500 text-white font-semibold rounded-xl transition-colors shadow-lg shadow-brand-500/20">
+                    <button type="button" class="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-semibold rounded-xl transition-colors shadow-lg shadow-indigo-500/20">
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
                       </svg>
@@ -106,8 +106,8 @@
                   </div>
                   <div>
                     <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-1">File Selected</h4>
-                    <p class="text-brand-600 dark:text-brand-400 font-medium text-lg">{{ fileName }}</p>
-                    <button type="button" @click.stop="clearFile" class="mt-4 text-sm text-gray-600 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 underline transition-colors">
+                    <p class="text-indigo-600 dark:text-indigo-400 font-medium text-lg">{{ fileName }}</p>
+                    <button type="button" @click.stop="clearFile" class="mt-4 text-sm text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 underline transition-colors">
                       Choose a different file
                     </button>
                   </div>
@@ -140,12 +140,12 @@
 
             <!-- Field Mapping Cards -->
             <div class="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-              <div v-for="header in csvHeaders" :key="header" class="group bg-white dark:bg-gray-900 rounded-xl p-5 border-2 border-gray-200 dark:border-gray-700 hover:border-brand-400 dark:hover:border-brand-600 transition-all duration-200 shadow-sm hover:shadow-md">
+              <div v-for="header in csvHeaders" :key="header" class="group bg-white dark:bg-gray-900 rounded-xl p-5 border-2 border-gray-200 dark:border-gray-700 hover:border-indigo-400 dark:hover:border-indigo-600 transition-all duration-200 shadow-sm hover:shadow-md">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
                   <!-- CSV Column -->
                   <div class="space-y-1">
                     <div class="flex items-center gap-2">
-                      <div class="w-2 h-2 bg-brand-500 rounded-full"></div>
+                      <div class="w-2 h-2 bg-indigo-500 rounded-full"></div>
                       <label class="text-sm font-bold text-gray-900 dark:text-white">{{ header }}</label>
                     </div>
                     <p v-if="preview[0] && preview[0][header]" class="text-xs text-gray-500 dark:text-gray-400 pl-4 truncate">
@@ -155,7 +155,7 @@
 
                   <!-- Arrow -->
                   <div class="flex justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-6 h-6 text-brand-500 dark:text-brand-400 transition-transform group-hover:translate-x-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-6 h-6 text-indigo-500 dark:text-indigo-400 transition-transform group-hover:translate-x-1">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                     </svg>
                   </div>
@@ -164,7 +164,7 @@
                   <div>
                     <select 
                       v-model="fieldMapping[header]" 
-                      class="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-900 dark:text-white focus:border-brand-500 dark:focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 transition-all outline-none"
+                      class="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-900 dark:text-white focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 transition-all outline-none"
                     >
                       <option value="" class="text-gray-500">⊘ Skip this field</option>
                       <option v-for="field in availableFields" :key="field.value" :value="field.value" class="text-gray-900 dark:text-white">
@@ -191,12 +191,12 @@
                   
                   <!-- Radio Buttons for Check/Don't Check -->
                   <div class="space-y-3 mb-6">
-                    <label class="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all" :class="shouldCheckDuplicates ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'">
+                    <label class="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all" :class="shouldCheckDuplicates ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'">
                       <input 
                         type="radio" 
                         :value="true" 
                         v-model="shouldCheckDuplicates"
-                        class="w-5 h-5 text-brand-600 border-gray-300 focus:ring-brand-500 mt-0.5 flex-shrink-0"
+                        class="w-5 h-5 text-indigo-600 border-gray-300 focus:ring-indigo-500 mt-0.5 flex-shrink-0"
                       />
                       <div class="flex-1">
                         <div class="flex items-center gap-2">
@@ -209,12 +209,12 @@
                       </div>
                     </label>
                     
-                    <label class="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all" :class="!shouldCheckDuplicates ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'">
+                    <label class="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all" :class="!shouldCheckDuplicates ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'">
                       <input 
                         type="radio" 
                         :value="false" 
                         v-model="shouldCheckDuplicates"
-                        class="w-5 h-5 text-brand-600 border-gray-300 focus:ring-brand-500 mt-0.5 flex-shrink-0"
+                        class="w-5 h-5 text-indigo-600 border-gray-300 focus:ring-indigo-500 mt-0.5 flex-shrink-0"
                       />
                       <div class="flex-1">
                         <span class="text-sm font-semibold text-gray-900 dark:text-white">Do Not Check for Duplicates</span>
@@ -240,7 +240,7 @@
                     <button
                       type="button"
                       @click="showFieldDropdown = !showFieldDropdown"
-                      class="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
+                      class="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
                     >
                       <div class="flex items-center justify-between">
                         <div class="flex-1 min-w-0">
@@ -251,12 +251,12 @@
                             <span
                               v-for="fieldValue in duplicateCheckFields"
                               :key="fieldValue"
-                              class="inline-flex items-center gap-1 px-2 py-1 bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 text-sm rounded-md"
+                              class="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-sm rounded-md"
                             >
                               {{ duplicateCheckableFields.find(f => f.value === fieldValue)?.label }}
                               <button
                                 @click.stop="removeField(fieldValue)"
-                                class="hover:text-brand-900 dark:hover:text-brand-100"
+                                class="hover:text-indigo-900 dark:hover:text-indigo-100"
                               >
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -286,7 +286,7 @@
                             type="checkbox"
                             :value="field.value"
                             v-model="duplicateCheckFields"
-                            class="w-5 h-5 text-brand-600 border-gray-300 dark:border-gray-600 rounded focus:ring-brand-500 mt-0.5 flex-shrink-0"
+                            class="w-5 h-5 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 mt-0.5 flex-shrink-0"
                           />
                           <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2">
@@ -321,7 +321,7 @@
           </div>
 
           <div v-if="checkingDuplicates" class="text-center py-12">
-            <div class="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-brand-600 mb-4"></div>
+            <div class="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600 mb-4"></div>
             <p class="text-lg font-medium text-gray-900 dark:text-white">Checking for duplicates...</p>
             <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">Comparing {{ totalRows }} records</p>
           </div>
@@ -373,8 +373,8 @@
               </h4>
               <div class="space-y-3">
                 <label class="flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-all"
-                  :class="duplicateAction === 'skip' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'">
-                  <input type="radio" value="skip" v-model="duplicateAction" class="mt-1 w-4 h-4 text-brand-600" />
+                  :class="duplicateAction === 'skip' ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'">
+                  <input type="radio" value="skip" v-model="duplicateAction" class="mt-1 w-4 h-4 text-indigo-600" />
                   <div>
                     <p class="font-medium text-gray-900 dark:text-white">Skip Duplicates</p>
                     <p class="text-sm text-gray-600 dark:text-gray-400">Only import new records ({{ duplicateData.unique }} records)</p>
@@ -382,8 +382,8 @@
                 </label>
                 
                 <label class="flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-all"
-                  :class="duplicateAction === 'update' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'">
-                  <input type="radio" value="update" v-model="duplicateAction" class="mt-1 w-4 h-4 text-brand-600" />
+                  :class="duplicateAction === 'update' ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'">
+                  <input type="radio" value="update" v-model="duplicateAction" class="mt-1 w-4 h-4 text-indigo-600" />
                   <div>
                     <p class="font-medium text-gray-900 dark:text-white">Update Existing Records</p>
                     <p class="text-sm text-gray-600 dark:text-gray-400">Update {{ duplicateData.duplicates }} duplicates with new data</p>
@@ -391,8 +391,8 @@
                 </label>
                 
                 <label class="flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-all"
-                  :class="duplicateAction === 'import-all' ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'">
-                  <input type="radio" value="import-all" v-model="duplicateAction" class="mt-1 w-4 h-4 text-brand-600" />
+                  :class="duplicateAction === 'import-all' ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'">
+                  <input type="radio" value="import-all" v-model="duplicateAction" class="mt-1 w-4 h-4 text-indigo-600" />
                   <div>
                     <p class="font-medium text-gray-900 dark:text-white">Import All (Create Duplicates)</p>
                     <p class="text-sm text-gray-600 dark:text-gray-400">Import all {{ duplicateData.total }} records, even duplicates</p>
@@ -437,7 +437,7 @@
         <!-- Step 4: Import Results -->
         <div v-if="step === 3">
           <div v-if="importing" class="text-center py-12">
-            <div class="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-brand-600 mb-4"></div>
+            <div class="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-indigo-600 mb-4"></div>
             <p class="text-lg font-medium text-gray-900 dark:text-white">Importing records...</p>
             <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">This may take a moment</p>
           </div>
@@ -530,7 +530,7 @@
                 v-if="step === 2 && shouldCheckDuplicates && !duplicateData && !importing && !importResults"
                 @click="checkDuplicates" 
                 :disabled="duplicateCheckFields.length === 0 || checkingDuplicates"
-                class="inline-flex items-center gap-2 px-6 py-2.5 bg-brand-600 hover:bg-brand-700 dark:bg-brand-600 dark:hover:bg-brand-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-brand-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg v-if="!checkingDuplicates" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
@@ -543,7 +543,7 @@
               <button 
                 v-if="step === 2 && !shouldCheckDuplicates && !duplicateData && !importing && !importResults"
                 @click="performImport" 
-                class="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-brand-600 to-brand-700 hover:from-brand-700 hover:to-brand-800 text-white font-semibold rounded-xl transition-all shadow-lg shadow-brand-500/30"
+                class="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-semibold rounded-xl transition-all shadow-lg shadow-indigo-500/30"
               >
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -556,7 +556,7 @@
                 v-if="(step < 2 || (step === 2 && duplicateData)) && !importing && !importResults"
                 @click="nextStep" 
                 :disabled="!canProceed"
-                class="inline-flex items-center gap-2 px-6 py-2.5 bg-brand-600 hover:bg-brand-700 dark:bg-brand-600 dark:hover:bg-brand-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-brand-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white font-semibold rounded-xl transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {{ step === 0 ? 'Next' : step === 1 ? 'Next' : 'Import Now' }}
                 <svg v-if="step < 2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">

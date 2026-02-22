@@ -110,7 +110,7 @@
                               <input
                                 v-model="form.enabled"
                                 type="checkbox"
-                                class="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                               />
                               <span class="text-sm text-gray-700 dark:text-gray-300">Enabled</span>
                             </label>
@@ -180,7 +180,7 @@
                               <button
                                 type="button"
                                 @click="addCondition"
-                                class="text-sm text-brand-600 hover:text-brand-700 dark:text-brand-400"
+                                class="text-sm text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
                               >
                                 + Add Condition
                               </button>
@@ -210,7 +210,7 @@
                           </div>
 
                           <!-- create_task params -->
-                          <div v-if="form.action.type === 'create_task'" class="space-y-4 pl-4 border-l-2 border-brand-200 dark:border-brand-800">
+                          <div v-if="form.action.type === 'create_task'" class="space-y-4 pl-4 border-l-2 border-indigo-200 dark:border-indigo-800">
                             <div>
                               <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                 Task Title <span class="text-red-500">*</span>
@@ -286,7 +286,7 @@
                           </div>
 
                           <!-- notify_user params -->
-                          <div v-if="form.action.type === 'notify_user'" class="space-y-4 pl-4 border-l-2 border-brand-200 dark:border-brand-800">
+                          <div v-if="form.action.type === 'notify_user'" class="space-y-4 pl-4 border-l-2 border-indigo-200 dark:border-indigo-800">
                             <div>
                               <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                 Message <span class="text-red-500">*</span>

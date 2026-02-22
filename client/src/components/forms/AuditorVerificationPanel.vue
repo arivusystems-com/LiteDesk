@@ -29,7 +29,7 @@
                   :key="pIndex"
                   :href="proof"
                   target="_blank"
-                  class="text-xs text-brand-600 dark:text-brand-400 hover:underline"
+                  class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
                 >
                   {{ proof.split('/').pop() }}
                 </a>
@@ -55,7 +55,7 @@
                 v-model="verifications[action.questionId].comment"
                 rows="3"
                 placeholder="Add your verification comments..."
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               ></textarea>
             </div>
             <div class="flex items-center gap-2">
@@ -107,7 +107,7 @@
               </div>
               <button
                 @click="startEdit(action.questionId)"
-                class="px-3 py-1.5 text-sm text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded transition-colors"
+                class="px-3 py-1.5 text-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
               >
                 Edit
               </button>

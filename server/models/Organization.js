@@ -391,7 +391,18 @@ const OrganizationSchema = new mongoose.Schema({
         trim: true,
         default: null,
         index: true
-    }
+    },
+
+    // Custom fields (user-defined via Settings → Modules & Fields)
+    customFields: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {}
+    },
+
+    // Trash (soft delete) - See docs/TRASH_IMPLEMENTATION_SPEC.md
+    deletedAt: { type: Date, default: null, index: true },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    deletionReason: { type: String, trim: true, maxlength: 500 }
 }, { 
     timestamps: true 
 });
@@ -405,6 +416,7 @@ OrganizationSchema.index({ partnerStatus: 1 });
 OrganizationSchema.index({ vendorStatus: 1 });
 OrganizationSchema.index({ isTenant: 1 });
 OrganizationSchema.index({ legacyOrganizationId: 1 }, { unique: true, sparse: true });
+OrganizationSchema.index({ deletedAt: 1 });
 
 // Prevent createdBy from being modified after creation (for CRM organizations)
 OrganizationSchema.pre('findOneAndUpdate', function() {

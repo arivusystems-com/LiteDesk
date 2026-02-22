@@ -56,6 +56,7 @@ import type {
 import {
   validateBaseFieldMetadata,
   classifyFieldBase,
+  normalizeFieldKeyForMetadataLookup,
 } from './BaseFieldModel';
 
 // =============================================================================
@@ -118,6 +119,9 @@ export interface OrganizationFieldMetadata extends Omit<BaseFieldMetadata, 'inte
 export const ORGANIZATION_FIELD_METADATA: Record<string, OrganizationFieldMetadata> = {
   // ==========================================================================
   // SYSTEM FIELDS (platform-managed, read-only, infrastructure-scoped)
+  // Type A: Infrastructure (never visible): _id, __v, organizationId
+  // Type B: Audit (visible, read-only): createdAt, updatedAt, createdBy
+  // Type C: Computed: derivedStatus; legacyOrganizationId: infrastructure
   // ==========================================================================
   organizationId: {
     owner: 'system',
@@ -125,6 +129,8 @@ export const ORGANIZATION_FIELD_METADATA: Record<string, OrganizationFieldMetada
     fieldScope: 'CORE',
     editable: false,
     isProtected: true,
+    isSystem: true,
+    isVisibleInConfig: false,
   },
   createdBy: {
     owner: 'system',
@@ -132,36 +138,48 @@ export const ORGANIZATION_FIELD_METADATA: Record<string, OrganizationFieldMetada
     fieldScope: 'CORE',
     editable: false,
     isProtected: true,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   createdAt: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   updatedAt: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   _id: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: false,
   },
   __v: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: false,
   },
   legacyOrganizationId: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: false,
   },
   isActive: {
     owner: 'core',
@@ -177,6 +195,9 @@ export const ORGANIZATION_FIELD_METADATA: Record<string, OrganizationFieldMetada
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isComputed: true,
+    isVisibleInConfig: true,
   },
 
   // ==========================================================================
@@ -552,17 +573,14 @@ validateAllOrganizationMetadata();
  * Returns undefined if field is not found (allows graceful handling of unknown fields)
  */
 export function getOrganizationFieldMetadata(fieldName: string): OrganizationFieldMetadata | undefined {
-  // Normalize field name for case-insensitive lookup
-  const normalizedName = fieldName.toLowerCase();
+  const normalizedName = normalizeFieldKeyForMetadataLookup(fieldName);
   
-  // Try exact match first
   if (ORGANIZATION_FIELD_METADATA[fieldName]) {
     return ORGANIZATION_FIELD_METADATA[fieldName];
   }
   
-  // Try case-insensitive match
   for (const [key, metadata] of Object.entries(ORGANIZATION_FIELD_METADATA)) {
-    if (key.toLowerCase() === normalizedName) {
+    if (normalizeFieldKeyForMetadataLookup(key) === normalizedName) {
       return metadata;
     }
   }

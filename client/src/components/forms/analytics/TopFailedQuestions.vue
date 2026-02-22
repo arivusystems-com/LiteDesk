@@ -1,7 +1,7 @@
 <template>
   <div>
     <div v-if="loading" class="text-center py-8">
-      <div class="w-8 h-8 border-2 border-gray-200 dark:border-gray-700 border-t-brand-600 dark:border-t-brand-500 rounded-full animate-spin mx-auto mb-2"></div>
+      <div class="w-8 h-8 border-2 border-gray-200 dark:border-gray-700 border-t-indigo-600 dark:border-t-indigo-500 rounded-full animate-spin mx-auto mb-2"></div>
       <p class="text-sm text-gray-500 dark:text-gray-400">Loading failed questions...</p>
     </div>
 

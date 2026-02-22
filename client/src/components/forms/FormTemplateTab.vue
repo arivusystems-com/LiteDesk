@@ -4,7 +4,7 @@
       <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Response Template</h2>
       <button
         @click="showTemplateModal = true"
-        class="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-all"
+        class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-all"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -20,7 +20,7 @@
       </label>
       <select
         v-model="localForm.responseTemplate.templateId"
-        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
       >
         <option :value="null">Use Default Template</option>
         <option v-for="template in templates" :key="template._id" :value="template._id">
@@ -41,7 +41,7 @@
           <input
             v-model="localForm.responseTemplate.customTemplate.includeComparison"
             type="checkbox"
-            class="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+            class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
           />
           <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Include Comparison with Previous Responses</span>
         </label>
@@ -50,7 +50,7 @@
           <input
             v-model="localForm.responseTemplate.customTemplate.includeTrends"
             type="checkbox"
-            class="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+            class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
           />
           <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Include Trends Charts</span>
         </label>
@@ -59,7 +59,7 @@
           <input
             v-model="localForm.responseTemplate.customTemplate.includeCharts"
             type="checkbox"
-            class="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+            class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
           />
           <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Include KPI Charts</span>
         </label>
@@ -68,7 +68,7 @@
           <input
             v-model="localForm.responseTemplate.customTemplate.includeCorrectiveActions"
             type="checkbox"
-            class="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+            class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
           />
           <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Include Corrective Actions Section</span>
         </label>

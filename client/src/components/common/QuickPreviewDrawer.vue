@@ -1,6 +1,5 @@
 <template>
   <Teleport to="body">
-    <!-- Drawer -->
     <Transition
       enter-active-class="transition-transform ease-out duration-300"
       enter-from-class="translate-x-full"
@@ -12,79 +11,66 @@
       <div
         v-if="show"
         @click.stop
-        class="fixed right-0 w-full max-w-3xl bg-white dark:bg-gray-900 shadow-2xl flex flex-col z-[9999]"
+        class="fixed right-0 w-full max-w-3xl bg-white dark:bg-gray-900 shadow-2xl flex flex-col overflow-hidden z-[9999] record-right-pane-drawer"
         :style="{
           top: 'var(--quickpreview-offset, 4rem)',
           height: 'calc(100vh - var(--quickpreview-offset, 4rem))'
         }"
       >
-        <!-- Drawer Header -->
-        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <div class="flex items-center gap-2">
-            <span class="text-sm font-medium text-gray-900 dark:text-white">{{ moduleTitle }}</span>
-            <ChevronDownIcon class="w-4 h-4 text-gray-400 dark:text-gray-500" />
-            <span v-if="row?._id" class="text-xs text-gray-500 dark:text-gray-400 font-mono">
-              {{ row._id.slice(-8) }}
-            </span>
-          </div>
-          <button
-            @click="$emit('close')"
-            class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors cursor-pointer"
-          >
-            <XMarkIcon class="w-5 h-5 text-gray-500 dark:text-gray-400" />
-          </button>
+        <!-- Replicate RecordPageLayout mobile view: RecordRightPane (provider via provide()) -->
+        <div v-if="!row" class="flex-1 flex items-center justify-center p-8">
+          <div class="w-8 h-8 border-4 border-gray-200 dark:border-gray-700 border-t-indigo-600 rounded-full animate-spin"></div>
         </div>
-
-        <!-- Drawer Content - Split Layout -->
-        <div class="flex-1 overflow-hidden flex">
-          <!-- Main Content Area -->
-          <div 
-            ref="scrollContainer"
-            class="flex-1 overflow-y-auto px-6 py-6"
-            @wheel="handleWheel"
-            @touchstart="handleTouchStart"
-            @touchmove="handleTouchMove"
+        <div v-else class="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <TaskRecordPage
+            v-if="moduleKey === 'tasks' && row"
+            embed
+            :task-id="row._id"
+            class="flex-1 min-h-0 overflow-hidden"
+            @close="$emit('close')"
+          />
+          <RecordRightPane
+            v-else
+            ref="recordRightPaneRef"
+            class="flex-1 min-h-0"
+            :title="moduleTitle"
+            :record-id="row?._id"
+            :show-header="true"
+            :show-close-button="true"
+            :tabs="fixedTabs"
+            :default-tab="'summary'"
+            :persistence-key="row?._id ? `quickpreview-${moduleKey}-${row._id}` : null"
+            @close="$emit('close')"
+            @active-tab-change="onActiveTabChange"
           >
-            <div v-if="row">
-              <!-- Summary Tab Content -->
-              <div v-if="activeTab === 'summary'" class="space-y-6">
-                <!-- Record Name/Title -->
-                <div>
-                  <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-                    {{ getRecordDisplayName(row) || 'Untitled' }}
-                  </h2>
-                </div>
-
-                <!-- GridStack Container -->
-                <div v-if="moduleDefinition && activeTab === 'summary'" ref="gridStackContainer" class="grid-stack sm:p-3"></div>
-
-                <!-- Fallback: Show basic fields if module definition not loaded -->
-                <div v-else class="space-y-4">
-                  <div
-                    v-for="column in visibleColumns.filter(col => col.visible !== false && !isCustomField(col))"
-                    :key="columnKey(column)"
-                    class="flex items-start gap-3"
-                  >
-                    <div class="flex-1">
-                      <div class="flex items-center gap-2 mb-1">
-                        <component
-                          :is="getFieldIcon(column.dataType || 'Text')"
-                          class="w-4 h-4 text-gray-400 dark:text-gray-500"
-                        />
-                        <span class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                          {{ columnLabel(column) }}
-                        </span>
+            <template v-if="row" #tab-summary>
+              <div class="record-right-pane__summary-content max-w-4xl mx-auto w-full px-6 pt-0 pb-6">
+                <!-- Forms: empty state if not Active -->
+                <template v-if="moduleKey === 'forms' && row?.status !== 'Active'">
+                  <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center">
+                    <div class="max-w-md mx-auto">
+                      <div class="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <DocumentTextIcon class="w-8 h-8 text-gray-400 dark:text-gray-500" />
                       </div>
-                      <div class="text-sm text-gray-900 dark:text-white">
-                        {{ formatFieldValue(row, column) || 'Empty' }}
-                      </div>
+                      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Form Not Yet Active</h3>
+                      <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                        This form has not been used yet. Assign it via events to start collecting responses.
+                      </p>
                     </div>
                   </div>
-                </div>
+                </template>
+                <!-- Other modules: GridStack dashboard -->
+                <template v-else>
+                  <div v-if="moduleDefinition" ref="gridStackContainer" class="grid-stack bg-gray-100/70 dark:bg-gray-900 sm:p-3 min-h-[200px]"></div>
+                  <div v-else class="flex items-center justify-center py-12">
+                    <div class="w-8 h-8 border-4 border-gray-200 dark:border-gray-700 border-t-indigo-600 dark:border-t-indigo-500 rounded-full animate-spin"></div>
+                  </div>
+                </template>
               </div>
+            </template>
 
-              <!-- Details Tab Content -->
-              <div v-else-if="activeTab === 'details'" class="space-y-6">
+            <template v-if="row" #tab-details>
+              <div class="px-6 py-6 space-y-6">
                 <div>
                   <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">
                     {{ getRecordDisplayName(row) || 'Untitled' }}
@@ -156,9 +142,10 @@
                   </div>
                 </div>
               </div>
+            </template>
 
-              <!-- Updates Tab Content -->
-              <div v-else-if="activeTab === 'updates'" class="space-y-4">
+            <template v-if="row" #tab-updates>
+              <div class="px-6 py-6 space-y-4">
                 <div>
                   <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">
                     {{ getRecordDisplayName(row) || 'Untitled' }}
@@ -272,9 +259,10 @@
                   </ul>
                 </div>
               </div>
+            </template>
 
-              <!-- Tenant Details Tab Content (only for tenant organizations) -->
-              <div v-else-if="activeTab === 'tenant-details' && row?.isTenant === true" class="space-y-6">
+            <template v-if="row?.isTenant === true" #tab-tenant-details>
+              <div class="px-6 py-6 space-y-6">
                 <div>
                   <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">
                     {{ getRecordDisplayName(row) || 'Untitled' }}
@@ -284,48 +272,8 @@
                   <p>Tenant-specific fields will be displayed here</p>
                 </div>
               </div>
-            </div>
-          </div>
-
-          <!-- Right Sidebar - Tabs -->
-          <div class="w-20 border-l border-gray-200 dark:border-gray-700 flex flex-col items-center py-4 gap-2">
-            <button
-              v-for="tab in fixedTabs"
-              :key="tab.id"
-              @click="activeTab = tab.id"
-              class="w-full p-2.5 transition-colors cursor-pointer flex flex-col items-center gap-1"
-              :title="tab.name"
-            >
-              <div
-                :class="[
-                  'p-2 rounded-lg flex items-center justify-center',
-                  activeTab === tab.id
-                    ? 'bg-gray-100 dark:bg-gray-700'
-                    : ''
-                ]"
-              >
-                <component
-                  :is="getTabIcon(tab.id)"
-                  :class="[
-                    'w-5 h-5 flex-shrink-0',
-                    activeTab === tab.id
-                      ? 'text-indigo-600 dark:text-indigo-400'
-                      : 'text-gray-600 dark:text-gray-400'
-                  ]"
-                />
-              </div>
-              <span 
-                :class="[
-                  'text-xs font-medium leading-tight text-center',
-                  activeTab === tab.id
-                    ? 'text-indigo-600 dark:text-indigo-400'
-                    : 'text-gray-600 dark:text-gray-400'
-                ]"
-              >
-                {{ tab.name }}
-              </span>
-            </button>
-          </div>
+            </template>
+          </RecordRightPane>
         </div>
       </div>
     </Transition>
@@ -344,7 +292,12 @@ import {
   ClockIcon,
   LinkIcon,
   UserCircleIcon,
-  MagnifyingGlassIcon
+  MagnifyingGlassIcon,
+  PuzzlePieceIcon,
+  Squares2X2Icon,
+  BellIcon,
+  FunnelIcon,
+  PlusIcon
 } from '@heroicons/vue/24/outline';
 import {
   UserIcon,
@@ -368,9 +321,13 @@ import RelatedDealsWidget from '@/components/deals/RelatedDealsWidget.vue';
 import RelatedTasksWidget from '@/components/tasks/RelatedTasksWidget.vue';
 import RelatedEventsWidget from '@/components/events/RelatedEventsWidget.vue';
 import RelatedOrganizationWidget from '@/components/organizations/RelatedOrganizationWidget.vue';
+import FormAnalyticsWidget from '@/components/forms/widgets/FormAnalyticsWidget.vue';
 import { GridStack } from 'gridstack';
 import 'gridstack/dist/gridstack.min.css';
-import { createApp, h } from 'vue';
+import { createApp, h, provide } from 'vue';
+import RecordRightPane from '@/components/record-page/RecordRightPane.vue';
+import TaskRecordPage from '@/pages/tasks/TaskRecordPage.vue';
+import DOMPurify from 'dompurify';
 
 const props = defineProps({
   show: {
@@ -397,27 +354,37 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'update']);
 
-// Ref for scroll container
-const scrollContainer = ref(null);
-// Track initial touch position for mobile scroll detection
-const touchStartY = ref(0);
+// Provide RecordPageLayout mobile context so RecordRightPane behaves as mobile view
+provide('recordLayoutIsMobile', ref(true));
+provide('recordLayoutSummaryTeleportReady', ref(false));
 
-// Active tab state
+// Ref for RecordRightPane (to sync GridStack with active tab)
+const recordRightPaneRef = ref(null);
+// Track active tab for GridStack init/destroy (synced from RecordRightPane)
 const activeTab = ref('summary');
 
-// Fixed tabs - similar to SummaryView
+const onActiveTabChange = (tab) => {
+  activeTab.value = tab;
+};
+
+// Fixed tabs - TaskRecordPage style for tasks, generic for others
 const fixedTabs = computed(() => {
+  if (props.moduleKey === 'tasks') {
+    return [
+      { id: 'summary', name: 'Summary', icon: Squares2X2Icon },
+      { id: 'activity', name: 'Activity', icon: ClockIcon },
+      { id: 'related', name: 'Related Records', icon: LinkIcon },
+      { id: 'integrations', name: 'Integrations', icon: PuzzlePieceIcon }
+    ];
+  }
   const baseTabs = [
     { id: 'summary', name: 'Summary' },
     { id: 'details', name: 'Details' },
     { id: 'updates', name: 'Updates' }
   ];
-  
-  // Add Tenant Details tab if viewing a tenant organization
   if (props.row?.isTenant === true) {
     baseTabs.splice(2, 0, { id: 'tenant-details', name: 'Tenant' });
   }
-  
   return baseTabs;
 });
 
@@ -455,7 +422,6 @@ const timelineUpdates = ref([]);
 const activityFilterUser = ref('');
 const activityFilterType = ref('');
 const activitySearchQuery = ref('');
-
 // Fetch module definition
 const fetchModuleDefinition = async () => {
   try {
@@ -480,12 +446,14 @@ const fetchModuleDefinition = async () => {
 
 // Get activity logs API endpoint
 const getActivityLogsEndpoint = (recordId) => {
-  // Always use tenant-scoped endpoint for data isolation
   if (props.moduleKey === 'people') {
     return `/people/${recordId}/activity-logs`;
-  } else if (props.moduleKey === 'organizations') {
-    // Always use tenant-scoped endpoint for data isolation
+  }
+  if (props.moduleKey === 'organizations') {
     return `/v2/organization/${recordId}/activity-logs`;
+  }
+  if (props.moduleKey === 'tasks') {
+    return `/tasks/${recordId}/activity-logs`;
   }
   return null;
 };
@@ -698,7 +666,31 @@ const formatFieldName = (key) => {
   return key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim();
 };
 
-// Format date
+// Format date for display (e.g. due date)
+const formatDateDisplay = (date) => {
+  if (!date) return '-';
+  const d = new Date(date);
+  return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+// Get assigned user display name
+const getAssignedToName = (assignedTo) => {
+  if (!assignedTo) return '-';
+  if (typeof assignedTo === 'string') return assignedTo;
+  if (assignedTo.name) return assignedTo.name;
+  if (assignedTo.firstName || assignedTo.lastName) return `${assignedTo.firstName || ''} ${assignedTo.lastName || ''}`.trim();
+  if (assignedTo.username) return assignedTo.username;
+  return '-';
+};
+
+// Sanitize description HTML for safe rendering
+const ALLOWED_DESCRIPTION_TAGS = ['p', 'br', 'strong', 'em', 'u', 's', 'ul', 'ol', 'li', 'a', 'blockquote', 'h1', 'h2', 'h3', 'code', 'pre'];
+const sanitizeDescription = (html) => {
+  if (!html || typeof html !== 'string') return '';
+  return DOMPurify.sanitize(html, { ALLOWED_TAGS: ALLOWED_DESCRIPTION_TAGS, ALLOWED_ATTR: ['href', 'target'] });
+};
+
+// Format date (relative for activity)
 const formatDate = (date) => {
   if (!date) return '-';
   const dateObj = new Date(date);
@@ -989,11 +981,11 @@ watch(() => props.show, async (newVal) => {
   if (newVal) {
     activeTab.value = 'summary';
     await fetchModuleDefinition();
-    if (props.row?._id) {
+    if (props.row?._id && props.moduleKey !== 'tasks') {
       loadActivityLogs();
     }
-    // Initialize GridStack when drawer opens and summary tab is active
-    if (activeTab.value === 'summary' && moduleDefinition.value) {
+    // Initialize GridStack when drawer opens and summary tab is active (skip for tasks - no GridStack)
+    if (activeTab.value === 'summary' && moduleDefinition.value && props.moduleKey !== 'tasks') {
       await nextTick();
       initializeGridStack();
     }
@@ -1007,17 +999,17 @@ watch(() => props.show, async (newVal) => {
 
 // Watch for row changes
 watch(() => props.row?._id, (newId) => {
-  if (newId && props.show) {
+  if (newId && props.show && props.moduleKey !== 'tasks') {
     loadActivityLogs();
   }
 });
 
 // Watch for tab changes to load activity logs and initialize GridStack
 watch(() => activeTab.value, async (newTab) => {
-  if (newTab === 'updates' && props.row?._id && timelineUpdates.value.length === 0) {
+  if ((newTab === 'updates' || (props.moduleKey === 'tasks' && newTab === 'activity')) && props.row?._id && timelineUpdates.value.length === 0) {
     loadActivityLogs();
   }
-  if (newTab === 'summary' && props.show && moduleDefinition.value) {
+  if (newTab === 'summary' && props.show && moduleDefinition.value && props.moduleKey !== 'tasks') {
     await nextTick();
     initializeGridStack();
   } else if (newTab !== 'summary') {
@@ -1034,65 +1026,6 @@ const preventBodyScroll = () => {
     document.body.style.overflow = 'hidden';
   } else {
     document.body.style.overflow = '';
-  }
-};
-
-// Handle wheel events to prevent scroll propagation
-const handleWheel = (e) => {
-  if (!scrollContainer.value) return;
-  
-  const container = scrollContainer.value;
-  const { scrollTop, scrollHeight, clientHeight } = container;
-  const isAtTop = scrollTop === 0;
-  const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1; // Allow 1px tolerance
-  
-  // If scrolling up at the top, prevent propagation
-  if (isAtTop && e.deltaY < 0) {
-    e.preventDefault();
-    e.stopPropagation();
-    return false;
-  }
-  
-  // If scrolling down at the bottom, prevent propagation
-  if (isAtBottom && e.deltaY > 0) {
-    e.preventDefault();
-    e.stopPropagation();
-    return false;
-  }
-  
-  // Allow normal scrolling within bounds
-  e.stopPropagation();
-};
-
-// Handle touch start for mobile
-const handleTouchStart = (e) => {
-  if (e.touches.length > 0) {
-    touchStartY.value = e.touches[0].clientY;
-  }
-};
-
-// Handle touch events for mobile
-const handleTouchMove = (e) => {
-  if (!scrollContainer.value || e.touches.length === 0) return;
-  
-  const container = scrollContainer.value;
-  const { scrollTop, scrollHeight, clientHeight } = container;
-  const isAtTop = scrollTop === 0;
-  const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
-  
-  const currentY = e.touches[0].clientY;
-  const deltaY = currentY - touchStartY.value;
-  
-  // If at top and trying to scroll up (swiping down), prevent
-  if (isAtTop && deltaY > 0) {
-    e.preventDefault();
-    return false;
-  }
-  
-  // If at bottom and trying to scroll down (swiping up), prevent
-  if (isAtBottom && deltaY < 0) {
-    e.preventDefault();
-    return false;
   }
 };
 
@@ -1307,7 +1240,8 @@ const loadSavedWidgets = (savedLayout) => {
   
   const validWidgetTypes = [
     'related-contacts', 'related-deals', 'related-tasks', 'related-events', 
-    'related-organization', 'lifecycle-stage', 'key-fields', 'metrics'
+    'related-organization', 'lifecycle-stage', 'key-fields', 'metrics',
+    'form-total-responses', 'form-avg-compliance', 'form-avg-rating', 'form-response-rate'
   ];
   
   savedLayout.forEach(widgetData => {
@@ -1326,19 +1260,22 @@ const loadSavedWidgets = (savedLayout) => {
   }
 };
 
-// Load default widgets
+// Load default widgets - matches SummaryView layout
 const loadDefaultWidgets = () => {
   if (!gridStack) return;
   
   const defaultWidgets = [];
   let yPosition = 0;
   
-  defaultWidgets.push(
-    { type: 'key-fields', x: 0, y: yPosition, w: 3, h: 4 },
-    { type: 'lifecycle-stage', x: 3, y: yPosition, w: 6, h: 4 },
-    { type: 'metrics', x: 9, y: yPosition, w: 3, h: 4 }
-  );
-  yPosition += 4;
+  // First row: Key Fields, Lifecycle Stage, Metrics (skip for forms)
+  if (props.moduleKey !== 'forms') {
+    defaultWidgets.push(
+      { type: 'key-fields', x: 0, y: yPosition, w: 3, h: 4 },
+      { type: 'lifecycle-stage', x: 3, y: yPosition, w: 6, h: 4 },
+      { type: 'metrics', x: 9, y: yPosition, w: 3, h: 4 }
+    );
+    yPosition += 4;
+  }
   
   if (props.moduleKey === 'organizations') {
     defaultWidgets.push(
@@ -1385,6 +1322,13 @@ const loadDefaultWidgets = () => {
       { type: 'related-deals', x: 0, y: yPosition, w: 6, h: 4 },
       { type: 'related-tasks', x: 6, y: yPosition, w: 6, h: 4 }
     );
+  } else if (props.moduleKey === 'forms' && props.row?.status === 'Active') {
+    defaultWidgets.push(
+      { type: 'form-total-responses', x: 0, y: yPosition, w: 3, h: 3 },
+      { type: 'form-avg-compliance', x: 3, y: yPosition, w: 3, h: 3 },
+      { type: 'form-avg-rating', x: 6, y: yPosition, w: 3, h: 3 },
+      { type: 'form-response-rate', x: 9, y: yPosition, w: 3, h: 3 }
+    );
   }
 
   defaultWidgets.forEach(widget => {
@@ -1406,6 +1350,9 @@ const addWidgetToGrid = (widgetType, x = 0, y = 0, w = 4, h = 3) => {
   if (!gridStack || !gridStackContainer.value) return;
   
   if ((widgetType === 'related-contacts' || widgetType === 'related-deals' || widgetType === 'related-tasks' || widgetType === 'related-events') && !props.row?._id) {
+    return;
+  }
+  if (widgetType.startsWith('form-') && !props.row?._id) {
     return;
   }
 
@@ -1521,9 +1468,31 @@ const createWidgetElement = (widgetType) => {
         componentProps.recordType = props.moduleKey;
         componentProps.moduleDefinition = moduleDefinition.value;
         break;
+      case 'related-contacts':
+        Component = RelatedContactsWidget;
+        // For people: contacts from same org; for deals/tasks/events: from linked org
+        if (props.moduleKey === 'people') {
+          componentProps.organizationId = props.row.organization?._id || props.row.organization || null;
+        } else if (props.moduleKey === 'deals') {
+          componentProps.organizationId = props.row.accountId || props.row.account?._id || null;
+        } else if (props.moduleKey === 'tasks') {
+          componentProps.organizationId = props.row.organizationId || props.row.organization?._id || null;
+        } else if (props.moduleKey === 'events') {
+          componentProps.organizationId = (props.row.relatedType === 'Organization' ? props.row.relatedId : null) || null;
+        }
+        componentProps.limit = 5;
+        componentProps.moduleDefinition = allModuleDefinitions.value['people'];
+        break;
       case 'related-organization':
         Component = RelatedOrganizationWidget;
-        const orgField = props.row.organization;
+        let orgField = props.row.organization;
+        if (props.moduleKey === 'deals') {
+          orgField = props.row.account || (props.row.accountId ? { _id: props.row.accountId } : null);
+        } else if (props.moduleKey === 'tasks') {
+          orgField = props.row.organization || (props.row.organizationId ? { _id: props.row.organizationId } : null);
+        } else if (props.moduleKey === 'events') {
+          orgField = (props.row.relatedType === 'Organization' && props.row.relatedId) ? { _id: props.row.relatedId } : null;
+        }
         if (orgField && typeof orgField === 'object' && orgField._id) {
           componentProps.organization = orgField;
         } else {
@@ -1533,22 +1502,64 @@ const createWidgetElement = (widgetType) => {
         break;
       case 'related-deals':
         Component = RelatedDealsWidget;
-        componentProps.contactId = props.row._id;
+        if (props.moduleKey === 'people') {
+          componentProps.contactId = props.row._id;
+        } else if (props.moduleKey === 'organizations') {
+          componentProps.accountId = props.row._id;
+        }
         componentProps.limit = 5;
         componentProps.moduleDefinition = allModuleDefinitions.value['deals'];
         break;
       case 'related-tasks':
         Component = RelatedTasksWidget;
-        componentProps.contactId = props.row._id;
+        if (props.moduleKey === 'people') {
+          componentProps.contactId = props.row._id;
+        } else if (props.moduleKey === 'organizations') {
+          componentProps.organizationId = props.row._id;
+        } else if (props.moduleKey === 'deals') {
+          componentProps.contactId = props.row.contactId || undefined;
+          componentProps.organizationId = props.row.accountId || undefined;
+        } else if (props.moduleKey === 'tasks') {
+          const rt = props.row.relatedTo;
+          if (rt?.type === 'contact') componentProps.contactId = rt.id;
+          else if (rt?.type === 'organization') componentProps.organizationId = rt.id;
+        } else if (props.moduleKey === 'events') {
+          if (props.row.relatedType === 'Contact') componentProps.contactId = props.row.relatedId;
+          else if (props.row.relatedType === 'Organization') componentProps.organizationId = props.row.relatedId;
+        }
         componentProps.limit = 5;
         componentProps.moduleDefinition = allModuleDefinitions.value['tasks'];
         break;
       case 'related-events':
         Component = RelatedEventsWidget;
-        componentProps.relatedType = 'Contact';
+        const eventRelatedType = props.moduleKey === 'people' ? 'Contact' : (props.moduleKey === 'organizations' ? 'Organization' : (props.moduleKey === 'deals' ? 'Deal' : (props.moduleKey === 'tasks' ? 'Task' : (props.row.relatedType || 'Contact'))));
+        componentProps.relatedType = eventRelatedType;
         componentProps.relatedId = props.row._id;
         componentProps.limit = 5;
         componentProps.moduleDefinition = allModuleDefinitions.value['events'];
+        break;
+    }
+  } else if (props.moduleKey === 'forms' && props.row?.status === 'Active' && props.row?._id) {
+    switch (widgetType) {
+      case 'form-total-responses':
+      case 'form-avg-compliance':
+      case 'form-avg-rating':
+      case 'form-response-rate':
+        Component = FormAnalyticsWidget;
+        componentProps.formId = props.row._id;
+        componentProps.metricType = widgetType.replace('form-', '');
+        break;
+      case 'lifecycle-stage':
+        Component = LifecycleStageWidget;
+        componentProps.record = props.row;
+        componentProps.recordType = props.moduleKey;
+        componentProps.moduleDefinition = moduleDefinition.value;
+        break;
+      case 'key-fields':
+        Component = KeyFieldsWidget;
+        componentProps.record = props.row;
+        componentProps.recordType = props.moduleKey;
+        componentProps.moduleDefinition = moduleDefinition.value;
         break;
     }
   }

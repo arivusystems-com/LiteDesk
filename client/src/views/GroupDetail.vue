@@ -68,7 +68,7 @@
         </div>
         <div 
           v-else
-          class="w-12 h-12 rounded-full bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center text-white font-semibold flex-shrink-0"
+          class="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-semibold flex-shrink-0"
         >
           {{ getUserInitials(group.lead) }}
         </div>

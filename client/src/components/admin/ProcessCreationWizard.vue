@@ -29,9 +29,9 @@
                   :class="[
                     'flex h-10 w-10 items-center justify-center rounded-full border-2',
                     step.status === 'complete'
-                      ? 'border-brand-600 bg-brand-600'
+                      ? 'border-indigo-600 bg-indigo-600'
                       : step.status === 'current'
-                      ? 'border-brand-600 bg-white dark:bg-gray-800'
+                      ? 'border-indigo-600 bg-white dark:bg-gray-800'
                       : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'
                   ]"
                 >
@@ -49,7 +49,7 @@
                     :class="[
                       'text-sm font-medium',
                       step.status === 'current'
-                        ? 'text-brand-600'
+                        ? 'text-indigo-600'
                         : 'text-gray-500 dark:text-gray-400'
                     ]"
                   >
@@ -61,7 +61,7 @@
                     :class="[
                       'text-sm font-medium',
                       step.status === 'current'
-                        ? 'text-brand-600'
+                        ? 'text-indigo-600'
                         : step.status === 'complete'
                         ? 'text-gray-900 dark:text-white'
                         : 'text-gray-500 dark:text-gray-400'
@@ -95,7 +95,7 @@
               :class="[
                 'relative flex cursor-pointer rounded-lg border p-4 focus:outline-none transition-all',
                 wizardData.triggerType === option.value
-                  ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/20'
+                  ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/20'
                   : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-gray-400 dark:hover:border-gray-500'
               ]"
             >
@@ -117,7 +117,7 @@
               </div>
               <svg
                 v-if="wizardData.triggerType === option.value"
-                class="h-5 w-5 text-brand-600"
+                class="h-5 w-5 text-indigo-600"
                 fill="currentColor"
                 viewBox="0 0 20 20"
               >
@@ -133,7 +133,7 @@
             </label>
             <select
               v-model="wizardData.eventType"
-              class="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-brand-500"
+              class="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-indigo-500"
             >
               <option value="">Select an event type...</option>
               <optgroup v-if="wizardData.entityType === 'people' || !wizardData.entityType" label="People Events">
@@ -171,7 +171,7 @@
               </label>
               <select
                 v-model="wizardData.appKey"
-                class="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-brand-500"
+                class="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-indigo-500"
               >
                 <option value="">Select an app...</option>
                 <option value="SALES">Sales</option>
@@ -187,7 +187,7 @@
               </label>
               <select
                 v-model="wizardData.entityType"
-                class="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-brand-500"
+                class="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-indigo-500"
               >
                 <option value="">Select a module...</option>
                 <option value="people">People</option>
@@ -202,7 +202,7 @@
                 <input
                   type="checkbox"
                   v-model="wizardData.hasCondition"
-                  class="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
                 <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">
                   Apply only in some cases
@@ -270,7 +270,7 @@
                 <input
                   type="checkbox"
                   v-model="wizardData.controls.fieldBehavior"
-                  class="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
                 <div class="ml-3 flex-1">
                   <span class="text-sm font-medium text-gray-900 dark:text-white">Control field behavior</span>
@@ -321,7 +321,7 @@
                     <input
                       type="checkbox"
                       v-model="wizardData.fieldRule.value"
-                      class="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                      class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                     />
                     <span class="ml-2 text-xs text-gray-700 dark:text-gray-300">Show field</span>
                   </label>
@@ -338,7 +338,7 @@
                 <input
                   type="checkbox"
                   v-model="wizardData.controls.ownership"
-                  class="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
                 <div class="ml-3 flex-1">
                   <span class="text-sm font-medium text-gray-900 dark:text-white">Control ownership & assignment</span>
@@ -385,7 +385,7 @@
                 <input
                   type="checkbox"
                   v-model="wizardData.controls.statusGuard"
-                  class="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
                 <div class="ml-3 flex-1">
                   <span class="text-sm font-medium text-gray-900 dark:text-white">Control status / stage transitions</span>
@@ -453,7 +453,7 @@
                 <input
                   type="checkbox"
                   v-model="wizardData.controls.actions"
-                  class="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
                 <div class="ml-3 flex-1">
                   <span class="text-sm font-medium text-gray-900 dark:text-white">Run actions</span>
@@ -604,7 +604,7 @@
               v-model="wizardData.name"
               type="text"
               placeholder="e.g. Deal Approval Process"
-              class="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-brand-500"
+              class="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-indigo-500"
             />
           </div>
 
@@ -616,7 +616,7 @@
               v-model="wizardData.description"
               rows="3"
               placeholder="Describe what this process does..."
-              class="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-brand-500"
+              class="w-full px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-indigo-500"
             ></textarea>
           </div>
 
@@ -647,7 +647,7 @@
             v-if="currentStep < steps.length - 1"
             @click="nextStep"
             :disabled="!canProceed"
-            class="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Next
           </button>
@@ -655,7 +655,7 @@
             v-else
             @click="createProcess"
             :disabled="saving || !canCreate"
-            class="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <span v-if="saving">Creating...</span>
             <span v-else>Create Process</span>

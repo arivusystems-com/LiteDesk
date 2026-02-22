@@ -127,7 +127,7 @@
             v-model="rejectReason"
             rows="3"
             placeholder="Enter rejection reason..."
-            class="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-brand-500"
+            class="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-indigo-500"
           ></textarea>
         </div>
         <div class="flex items-center justify-end gap-3">

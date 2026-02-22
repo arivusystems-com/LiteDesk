@@ -1373,11 +1373,7 @@ import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
 import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
 import { getFieldMetadata, PEOPLE_FIELD_METADATA } from '@/platform/fields/peopleFieldModel';
-import { isTaskSystemField } from '@/platform/fields/taskFieldModel';
-import { isOrganizationSystemField } from '@/platform/fields/organizationFieldModel';
-import { isDealSystemField } from '@/platform/fields/dealFieldModel';
-import { isEventSystemField } from '@/platform/fields/eventFieldModel';
-import { isItemSystemField } from '@/platform/fields/itemFieldModel';
+import { isSystemField as isSystemFieldFromEngine } from '@/platform/fields/fieldCapabilityEngine';
 import { useDefaultListFilters } from '@/composables/useDefaultListFilters';
 import DateFilterDropdown from '@/components/common/DateFilterDropdown.vue';
 import { parseDateFilterValue, getDateFilterLabel } from '@/utils/dateFilterOptions';
@@ -2968,20 +2964,8 @@ const clearFilters = () => {
 function isSystemFieldForList(moduleKey, fieldKey, field) {
   if (!fieldKey) return false;
   if (field?.isSystem === true) return true;
-  try {
-    if (moduleKey === 'people') {
-      const metadata = getFieldMetadata(fieldKey);
-      return metadata?.owner === 'system';
-    }
-    if (moduleKey === 'organizations') return isOrganizationSystemField(fieldKey);
-    if (moduleKey === 'tasks') return isTaskSystemField(fieldKey);
-    if (moduleKey === 'deals') return isDealSystemField(fieldKey);
-    if (moduleKey === 'events') return isEventSystemField(fieldKey);
-    if (moduleKey === 'items') return isItemSystemField(fieldKey);
-  } catch (_) {
-    // Field not in metadata - not a system field
-  }
-  return false;
+  const fieldObj = field && field.key ? field : { key: fieldKey };
+  return isSystemFieldFromEngine(moduleKey, fieldObj);
 }
 
 // Field management - sync with visibleColumns and backend configuration
@@ -3357,21 +3341,58 @@ const autosizeAllColumns = () => {
 
 const router = useRouter();
 
+// Core modules are configured in Settings > Core Modules; app modules (e.g. Deals) in Settings > Applications
+const CORE_MODULE_KEYS = ['people', 'organizations', 'tasks', 'events', 'forms', 'items'];
+const APP_MODULE_CONFIG = {
+  deals: { appKey: 'SALES', app: 'sales', config: 'schema' }
+};
+
 const openNewCustomField = () => {
   // Close the drawer
   showColumnSettings.value = false;
-  // Open Settings > Modules & Fields tab with the current module selected in a new tab
-  // Add action=add to trigger the add custom field dialog
-  const url = router.resolve({
-    path: '/settings',
-    query: {
-      tab: 'modules',
-      module: props.moduleKey,
-      mode: 'fields',
-      action: 'add'
-    }
-  }).href;
-  window.open(url, '_blank');
+  const moduleKey = (props.moduleKey || '').toLowerCase();
+  const isCoreModule = CORE_MODULE_KEYS.includes(moduleKey);
+  const appConfig = APP_MODULE_CONFIG[moduleKey];
+
+  if (isCoreModule) {
+    // Settings > Core Modules > [module] > Field Configurations tab
+    router.push({
+      path: '/settings',
+      query: {
+        tab: 'core-modules',
+        moduleKey: props.moduleKey,
+        module: props.moduleKey,
+        mode: 'fields',
+        action: 'add'
+      }
+    });
+  } else if (appConfig) {
+    // Settings > Applications > [app] > [module] > Field Configurations tab
+    router.push({
+      path: '/settings',
+      query: {
+        tab: 'applications',
+        appKey: appConfig.appKey,
+        app: appConfig.app,
+        config: appConfig.config,
+        module: props.moduleKey,
+        mode: 'fields',
+        action: 'add'
+      }
+    });
+  } else {
+    // Fallback: try core-modules (e.g. for future core modules not yet in list)
+    router.push({
+      path: '/settings',
+      query: {
+        tab: 'core-modules',
+        moduleKey: props.moduleKey,
+        module: props.moduleKey,
+        mode: 'fields',
+        action: 'add'
+      }
+    });
+  }
 };
 
 // Drag and drop for columns

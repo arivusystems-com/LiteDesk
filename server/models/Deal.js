@@ -238,7 +238,12 @@ const DealSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'User',
         default: null
-    }
+    },
+
+    // Trash (soft delete) - See docs/TRASH_IMPLEMENTATION_SPEC.md
+    deletedAt: { type: Date, default: null, index: true },
+    deletedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    deletionReason: { type: String, trim: true, maxlength: 500 }
 
 }, {
     timestamps: true // Automatically handles 'createdAt' and 'updatedAt'
@@ -249,6 +254,7 @@ DealSchema.index({ organizationId: 1, stage: 1 });
 DealSchema.index({ organizationId: 1, ownerId: 1 });
 DealSchema.index({ organizationId: 1, status: 1 });
 DealSchema.index({ organizationId: 1, expectedCloseDate: 1 });
+DealSchema.index({ organizationId: 1, deletedAt: 1 });
 
 // Virtual for weighted value (amount * probability)
 DealSchema.virtual('weightedValue').get(function() {

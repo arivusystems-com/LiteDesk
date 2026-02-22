@@ -3,7 +3,7 @@
     <!-- Loading State -->
     <div v-if="loading" class="flex items-center justify-center py-8">
       <div class="text-center">
-        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600 dark:border-brand-400"></div>
+        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
         <p class="mt-4 text-sm text-gray-600 dark:text-gray-400">Loading activities...</p>
       </div>
     </div>
@@ -49,7 +49,7 @@
       >
         <!-- Timeline Line -->
         <div class="flex-shrink-0 flex flex-col items-center">
-          <div class="w-2 h-2 rounded-full bg-brand-500 mt-1.5"></div>
+          <div class="w-2 h-2 rounded-full bg-indigo-500 mt-1.5"></div>
           <div v-if="index < activities.length - 1" class="w-0.5 h-full bg-gray-200 dark:bg-gray-700 mt-1 min-h-[3rem]"></div>
         </div>
 

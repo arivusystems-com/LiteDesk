@@ -107,7 +107,7 @@ const renderChart = () => {
         {
           label: 'Average Score %',
           data: chartData.value.scores,
-          backgroundColor: 'rgba(79, 70, 229, 0.8)', // brand-600
+          backgroundColor: 'rgba(79, 70, 229, 0.8)', // indigo-600
           borderColor: 'rgb(79, 70, 229)',
           borderWidth: 1
         }

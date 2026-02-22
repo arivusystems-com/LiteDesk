@@ -69,7 +69,8 @@ async function findActiveReferences(moduleKey, recordId, organizationId) {
     const activeDeals = await Deal.find({
       organizationId,
       contactId: recordId,
-      status: { $in: ['Open', 'Active'] }
+      status: { $in: ['Open', 'Active'] },
+      deletedAt: null
     }).select('_id name status').lean();
     
     if (activeDeals.length > 0) {
@@ -85,7 +86,8 @@ async function findActiveReferences(moduleKey, recordId, organizationId) {
     // However, we check if any Sales organization has this person as primaryContact
     const orgsWithContact = await Organization.find({
       primaryContact: recordId,
-      isTenant: false
+      isTenant: false,
+      deletedAt: null
     }).select('_id name').lean();
     
     if (orgsWithContact.length > 0) {
@@ -101,7 +103,8 @@ async function findActiveReferences(moduleKey, recordId, organizationId) {
     const activeDeals = await Deal.find({
       organizationId,
       accountId: recordId,
-      status: { $in: ['Open', 'Active'] }
+      status: { $in: ['Open', 'Active'] },
+      deletedAt: null
     }).select('_id name status').lean();
     
     if (activeDeals.length > 0) {
@@ -116,7 +119,8 @@ async function findActiveReferences(moduleKey, recordId, organizationId) {
     // Note: People.organizationId is the tenant organization, People.organization is the Sales organization
     const peopleWithOrg = await People.find({
       organizationId,
-      organization: recordId
+      organization: recordId,
+      deletedAt: null
     }).select('_id first_name last_name email').lean();
     
     if (peopleWithOrg.length > 0) {
@@ -132,7 +136,8 @@ async function findActiveReferences(moduleKey, recordId, organizationId) {
     const orgsWithContact = await Organization.find({
       primaryContact: recordId,
       isTenant: false,
-      _id: { $ne: recordId } // Exclude self
+      _id: { $ne: recordId },
+      deletedAt: null
     }).select('_id name').lean();
     
     if (orgsWithContact.length > 0) {

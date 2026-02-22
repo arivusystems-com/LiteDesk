@@ -330,12 +330,19 @@ const buildSidebar = async () => {
   }
 };
 
+const onCoreModulesUpdated = () => {
+  if (authStore.user && authStore.isAuthenticated) {
+    buildSidebar();
+  }
+};
+
 onMounted(async () => {
   // Phase 2D: Load UI metadata if not already loaded (App.vue also does this, but safe to check)
   if (!appShellStore.isLoaded && authStore.isAuthenticated) {
     await appShellStore.loadUIMetadata();
   }
   await buildSidebar();
+  window.addEventListener('litedesk:core-modules-updated', onCoreModulesUpdated);
 });
 
 // Close menu when clicking outside
@@ -350,6 +357,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  window.removeEventListener('litedesk:core-modules-updated', onCoreModulesUpdated);
   document.removeEventListener('click', handleClickOutside);
 });
 

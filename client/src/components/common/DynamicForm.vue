@@ -2,7 +2,7 @@
   <div class="space-y-6">
     <!-- Loading state -->
     <div v-if="loading" class="flex items-center justify-center py-12">
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
     </div>
     
     <!-- Error state -->
@@ -42,6 +42,7 @@
             :errors="errors"
             :dependency-state="getFieldState(getFieldByKey(col.fieldKey))"
             :locked="props.lockedFields.includes(col.fieldKey)"
+            :module-key="props.moduleKey"
           />
         </div>
       </div>
@@ -95,6 +96,7 @@
               :errors="errors"
               :dependency-state="getFieldState(field)"
               :locked="props.lockedFields.includes(field.key)"
+              :module-key="props.moduleKey"
             />
           </div>
         </div>
@@ -149,6 +151,7 @@
               :errors="errors"
               :dependency-state="getFieldState(field)"
               :locked="props.lockedFields.includes(field.key)"
+              :module-key="props.moduleKey"
             />
           </div>
         </div>
@@ -202,6 +205,7 @@
             :errors="errors"
             :dependency-state="getFieldState(field)"
             :locked="props.lockedFields.includes(field.key)"
+            :module-key="props.moduleKey"
           />
         </div>
       </div>
@@ -222,6 +226,7 @@ import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
 import { useAuthStore } from '@/stores/auth';
 import { useRoute } from 'vue-router';
 import { getCurrentContext, filterFieldsByContext } from '@/utils/fieldContextFilter';
+import { getGlobalSystemFieldKeys, normalizeFieldKeyForSystemMatch } from '@/platform/fields/fieldCapabilityEngine';
 
 const props = defineProps({
   moduleKey: {
@@ -407,23 +412,25 @@ const orderedFields = computed(() => {
     // assignedTo should be visible in Quick Create forms (admin can assign)
     // Note: createdby is excluded from Quick Create (set by backend automatically)
     // Note: status is system-controlled only for Events; for Tasks it is user-editable and can be in Quick Create
+    // RULE: Global system fields (trash: deletedAt, deletedBy, deletionReason) never show in create/edit
     const systemFieldKeys = [
       'organizationid', 'createdat', 'updatedat', '_id', '__v', 'createdby',
       'eventid', 'createdtime', 'modifiedby', 'modifiedtime', 'audithistory',
+      ...getGlobalSystemFieldKeys(),
       ...(props.moduleKey?.toLowerCase() === 'events' ? ['status'] : [])
     ];
   
   // Access localFormData.value to ensure Vue tracks this dependency for reactivity
   const currentFormData = localFormData.value || {};
   
-  // Create a case-insensitive field map for lookup
+  // Create a case-insensitive field map for lookup (supports "Deleted By", "deletedBy", "deleted-by")
   const fieldMapByKey = new Map();
   for (const field of allFields) {
     if (field.key) {
       const keyLower = field.key.toLowerCase();
-      if (!fieldMapByKey.has(keyLower)) {
-        fieldMapByKey.set(keyLower, field);
-      }
+      const keyNorm = normalizeFieldKeyForSystemMatch(field.key);
+      if (!fieldMapByKey.has(keyLower)) fieldMapByKey.set(keyLower, field);
+      if (!fieldMapByKey.has(keyNorm)) fieldMapByKey.set(keyNorm, field);
     }
   }
   
@@ -443,24 +450,24 @@ const orderedFields = computed(() => {
     
     // If useQuickCreateOrder is true, order fields by quickCreate array
     if (props.useQuickCreateOrder && quickCreate.length > 0) {
-      // Create a map of all fields by key (case-insensitive)
+      // Create a map of all fields by key (case-insensitive, supports "Deleted By" -> "deletedby")
       const fieldMapByKey = new Map();
       for (const field of allFields) {
         if (field.key) {
           const keyLower = field.key.toLowerCase();
-          if (!fieldMapByKey.has(keyLower)) {
-            fieldMapByKey.set(keyLower, field);
-          }
+          const keyNorm = normalizeFieldKeyForSystemMatch(field.key);
+          if (!fieldMapByKey.has(keyLower)) fieldMapByKey.set(keyLower, field);
+          if (!fieldMapByKey.has(keyNorm)) fieldMapByKey.set(keyNorm, field);
         }
       }
       
       // First, add fields in quickCreate order
       for (const key of quickCreate) {
         if (!key) continue;
-        const keyLower = key.toLowerCase().trim();
-        if (seen.has(keyLower)) continue;
+        const keyNorm = normalizeFieldKeyForSystemMatch(key);
+        if (seen.has(keyNorm)) continue;
         
-        let field = fieldMapByKey.get(keyLower);
+        let field = fieldMapByKey.get(keyNorm) || fieldMapByKey.get(key.toLowerCase().trim());
         if (!field) {
           // Try normalization (snake_case, camelCase, etc.)
           const camelCaseKey = key.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
@@ -476,9 +483,9 @@ const orderedFields = computed(() => {
         }
         
         if (field) {
-          const fieldKeyLower = field.key?.toLowerCase();
-          const isSystem = systemFieldKeys.includes(fieldKeyLower);
-          const isExcluded = props.excludeFields.some(excluded => excluded.toLowerCase() === fieldKeyLower);
+          const fieldKeyNorm = normalizeFieldKeyForSystemMatch(field.key);
+          const isSystem = systemFieldKeys.includes(fieldKeyNorm);
+          const isExcluded = props.excludeFields.some(excluded => normalizeFieldKeyForSystemMatch(excluded) === fieldKeyNorm);
           
           // Check dependency-based visibility
           let isVisible = true;
@@ -489,18 +496,18 @@ const orderedFields = computed(() => {
           
           if (!isSystem && !isExcluded && isVisible) {
             ordered.push(field);
-            seen.add(keyLower);
+            seen.add(normalizeFieldKeyForSystemMatch(field.key));
           }
         }
       }
       
       // Then add any remaining fields that weren't in quickCreate (but are eligible)
       for (const field of allFields) {
-        const fieldKeyLower = field.key?.toLowerCase();
-        if (seen.has(fieldKeyLower)) continue;
+        const fieldKeyNorm = normalizeFieldKeyForSystemMatch(field.key);
+        if (seen.has(fieldKeyNorm)) continue;
         
-        const isSystem = systemFieldKeys.includes(fieldKeyLower);
-        const isExcluded = props.excludeFields.some(excluded => excluded.toLowerCase() === fieldKeyLower);
+        const isSystem = systemFieldKeys.includes(fieldKeyNorm);
+        const isExcluded = props.excludeFields.some(excluded => normalizeFieldKeyForSystemMatch(excluded) === fieldKeyNorm);
         
         // Check dependency-based visibility
         let isVisible = true;
@@ -511,7 +518,7 @@ const orderedFields = computed(() => {
         
         if (!isSystem && !isExcluded && isVisible) {
           ordered.push(field);
-          seen.add(fieldKeyLower);
+          seen.add(fieldKeyNorm);
         }
       }
       
@@ -534,9 +541,9 @@ const orderedFields = computed(() => {
       if (f?.key) configOrderMap.set(f.key.toLowerCase(), idx);
     });
     for (const field of allFields) {
-      const fieldKeyLower = field.key?.toLowerCase();
-      const isSystem = systemFieldKeys.includes(fieldKeyLower);
-      const isExcluded = props.excludeFields.some(excluded => excluded.toLowerCase() === fieldKeyLower);
+      const fieldKeyNorm = normalizeFieldKeyForSystemMatch(field.key);
+      const isSystem = systemFieldKeys.includes(fieldKeyNorm);
+      const isExcluded = props.excludeFields.some(excluded => normalizeFieldKeyForSystemMatch(excluded) === fieldKeyNorm);
       
       // Check dependency-based visibility
       let isVisible = true;
@@ -545,9 +552,9 @@ const orderedFields = computed(() => {
         isVisible = depState.visible !== false;
       }
       
-      if (!isSystem && !isExcluded && isVisible && !seen.has(fieldKeyLower)) {
+      if (!isSystem && !isExcluded && isVisible && !seen.has(fieldKeyNorm)) {
         ordered.push(field);
-        seen.add(fieldKeyLower);
+        seen.add(fieldKeyNorm);
       }
     }
     
@@ -639,10 +646,10 @@ const orderedFields = computed(() => {
       }
     }
     
-    const fieldKeyLower = field.key?.toLowerCase();
+    const fieldKeyNorm = normalizeFieldKeyForSystemMatch(field.key);
     
-    // Exclude system fields
-    const isSystem = systemFieldKeys.includes(fieldKeyLower);
+    // Exclude system fields (handles "Deleted By" -> "deletedby")
+    const isSystem = systemFieldKeys.includes(fieldKeyNorm);
     
     // Check dependency-based visibility using current form data
     let isVisible = true;
@@ -663,7 +670,7 @@ const orderedFields = computed(() => {
     
     if (!isSystem && isVisible) {
       ordered.push(field);
-      seen.add(keyLower);
+      seen.add(fieldKeyNorm);
       console.log(`✅ Added field "${key}" to ordered list`);
     } else {
       if (isSystem) {
@@ -689,8 +696,8 @@ const orderedFields = computed(() => {
   if (quickCreate.length === 0 && !props.quickCreateMode) {
     console.log('⚠️ quickCreate is empty and quickCreateMode is false - falling back to required fields');
     for (const field of allFields) {
-      const fieldKeyLower = field.key?.toLowerCase();
-      const isSystem = systemFieldKeys.includes(fieldKeyLower);
+      const fieldKeyNorm = normalizeFieldKeyForSystemMatch(field.key);
+      const isSystem = systemFieldKeys.includes(fieldKeyNorm);
       
       // Check dependency visibility for required fields too
       let isVisible = true;
@@ -700,11 +707,11 @@ const orderedFields = computed(() => {
       }
       
       if (field.required && 
-          !seen.has(fieldKeyLower) && 
+          !seen.has(fieldKeyNorm) && 
           !isSystem &&
           isVisible) {
         ordered.push(field);
-        seen.add(fieldKeyLower);
+        seen.add(fieldKeyNorm);
       }
     }
   } else if (props.quickCreateMode && quickCreate.length === 0) {
@@ -824,21 +831,23 @@ const getFieldComponent = (field) => {
 const shouldShowField = (field) => {
   if (!field || !field.key) return false;
   
-  // Exclude fields specified in excludeFields prop
+  // Exclude fields specified in excludeFields prop (handles "Deleted By" vs "deletedBy")
   if (props.excludeFields && props.excludeFields.length > 0) {
-    const keyLower = field.key.toLowerCase();
-    if (props.excludeFields.some(excluded => excluded.toLowerCase() === keyLower)) {
+    const fieldKeyNorm = normalizeFieldKeyForSystemMatch(field.key);
+    if (props.excludeFields.some(excluded => normalizeFieldKeyForSystemMatch(excluded) === fieldKeyNorm)) {
       return false;
     }
   }
   
   // Exclude system fields (module-aware: status only for Events; Tasks status is user-editable and can be in Quick Create)
+  // RULE: Global system fields (trash: deletedAt, deletedBy, deletionReason) never show in create/edit
   const systemFieldKeys = [
     'organizationid', 'createdat', 'updatedat', '_id', '__v', 'createdby',
     'eventid', 'createdtime', 'modifiedby', 'modifiedtime', 'audithistory',
+    ...getGlobalSystemFieldKeys(),
     ...(props.moduleKey?.toLowerCase() === 'events' ? ['status'] : [])
   ];
-  if (systemFieldKeys.includes(field.key.toLowerCase())) return false;
+  if (systemFieldKeys.includes(normalizeFieldKeyForSystemMatch(field.key))) return false;
   
   // Evaluate dependency-based visibility using getFieldState for consistency
   // Access localFormData.value to ensure Vue tracks this dependency

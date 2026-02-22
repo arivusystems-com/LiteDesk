@@ -50,6 +50,7 @@ import type {
 import {
   validateBaseFieldMetadata,
   classifyFieldBase,
+  normalizeFieldKeyForMetadataLookup,
 } from './BaseFieldModel';
 
 // =============================================================================
@@ -109,6 +110,9 @@ export interface DealFieldMetadata extends Omit<BaseFieldMetadata, 'intent'> {
 export const DEAL_FIELD_METADATA: Record<string, DealFieldMetadata> = {
   // ==========================================================================
   // SYSTEM FIELDS (platform-managed, read-only, infrastructure-scoped)
+  // Type A: Infrastructure (never visible): _id, __v, organizationId
+  // Type B: Audit (visible, read-only): createdAt, updatedAt, createdBy, modifiedBy
+  // Type C: Computed: derivedStatus
   // ==========================================================================
   organizationId: {
     owner: 'system',
@@ -116,6 +120,8 @@ export const DEAL_FIELD_METADATA: Record<string, DealFieldMetadata> = {
     fieldScope: 'CORE',
     editable: false,
     isProtected: true,
+    isSystem: true,
+    isVisibleInConfig: false,
   },
   createdBy: {
     owner: 'system',
@@ -123,42 +129,57 @@ export const DEAL_FIELD_METADATA: Record<string, DealFieldMetadata> = {
     fieldScope: 'CORE',
     editable: false,
     isProtected: true,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   createdAt: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   updatedAt: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   modifiedBy: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   _id: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: false,
   },
   __v: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: false,
   },
   derivedStatus: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isComputed: true,
+    isVisibleInConfig: true,
   },
   
   // ==========================================================================
@@ -505,17 +526,14 @@ validateAllDealMetadata();
  * Returns undefined if field is not found (allows graceful handling of unknown fields)
  */
 export function getDealFieldMetadata(fieldName: string): DealFieldMetadata | undefined {
-  // Normalize field name for case-insensitive lookup
-  const normalizedName = fieldName.toLowerCase();
+  const normalizedName = normalizeFieldKeyForMetadataLookup(fieldName);
   
-  // Try exact match first
   if (DEAL_FIELD_METADATA[fieldName]) {
     return DEAL_FIELD_METADATA[fieldName];
   }
   
-  // Try case-insensitive match
   for (const [key, metadata] of Object.entries(DEAL_FIELD_METADATA)) {
-    if (key.toLowerCase() === normalizedName) {
+    if (normalizeFieldKeyForMetadataLookup(key) === normalizedName) {
       return metadata;
     }
   }

@@ -61,7 +61,7 @@
           <span>{{ statusOption.label }}</span>
           <svg
             v-if="statusOption.value === currentValue"
-            class="w-4 h-4 text-brand-600 dark:text-brand-400"
+            class="w-4 h-4 text-indigo-600 dark:text-indigo-400"
             fill="currentColor"
             viewBox="0 0 20 20"
           >

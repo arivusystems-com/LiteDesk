@@ -218,7 +218,7 @@ exports.getEvents = async (req, res) => {
             sortOrder = 'asc'
         } = req.query;
         
-        let query = { organizationId: req.user.organizationId };
+        let query = { organizationId: req.user.organizationId, deletedAt: null };
         
         // Date range filter
         if (startDateTime || endDateTime) {
@@ -358,7 +358,7 @@ exports.getEvents = async (req, res) => {
 // Get a single event by ID (supports both _id and eventId)
 exports.getEventById = async (req, res) => {
     try {
-        const query = { organizationId: req.user.organizationId };
+        const query = { organizationId: req.user.organizationId, deletedAt: null };
         
         // Support both MongoDB _id and eventId UUID
         if (req.params.id.match(/^[0-9a-f]{24}$/i)) {
@@ -386,9 +386,10 @@ exports.getEventById = async (req, res) => {
             });
         }
         
+        const { flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
         res.status(200).json({
             success: true,
-            data: event
+            data: flattenCustomFieldsForResponse(event)
         });
     } catch (error) {
         console.error('Error fetching event:', error);
@@ -680,10 +681,18 @@ exports.createEvent = async (req, res) => {
         
         console.log('[createEvent] Final eventData.linkedFormId:', eventData.linkedFormId);
         
+        // Extract custom fields into customFields bucket for persistence
+        const { extractCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+        const { standardPayload, customFieldsSet } = extractCustomFields(eventData, Event);
+        const eventDataFinal = { ...standardPayload };
+        if (Object.keys(customFieldsSet).length > 0) {
+            eventDataFinal.customFields = customFieldsSet;
+        }
+        
         // Validate field dependencies (configurable, not hardcoded)
         // NOTE: legacy plural corrective owners removed; corrective accountability is enforced via `correctiveOwnerId`.
         
-        const event = new Event(eventData);
+        const event = new Event(eventDataFinal);
         await event.save();
         
         console.log('Event saved successfully with ID:', event._id, 'eventId:', event.eventId);
@@ -705,7 +714,7 @@ exports.createEvent = async (req, res) => {
         res.status(201).json({
             success: true,
             message: 'Event created successfully.',
-            data: populatedEvent
+            data: flattenCustomFieldsForResponse(populatedEvent)
         });
     } catch (error) {
         console.error('Error creating event - Full error:', error);
@@ -739,7 +748,7 @@ exports.updateEvent = async (req, res) => {
         delete req.body.eventId;
         
         // Build query (support both _id and eventId)
-        const query = { organizationId: req.user.organizationId };
+        const query = { organizationId: req.user.organizationId, deletedAt: null };
         if (req.params.id.match(/^[0-9a-f]{24}$/i)) {
             query._id = req.params.id;
         } else {
@@ -988,9 +997,12 @@ exports.updateEvent = async (req, res) => {
             });
         }
         
+        const { buildUpdateWithCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+        const $set = buildUpdateWithCustomFields(updateData, Event);
+
         const updatedEvent = await Event.findOneAndUpdate(
             query,
-            updateData,
+            { $set },
             { new: true, runValidators: true }
         )
             .populate('eventOwnerId', 'firstName lastName email')
@@ -1004,7 +1016,7 @@ exports.updateEvent = async (req, res) => {
         res.status(200).json({
             success: true,
             message: 'Event updated successfully.',
-            data: updatedEvent
+            data: flattenCustomFieldsForResponse(updatedEvent)
         });
     } catch (error) {
         console.error('Error updating event:', error);
@@ -1016,42 +1028,63 @@ exports.updateEvent = async (req, res) => {
     }
 };
 
-// Delete an event (supports both _id and eventId)
+// Delete an event (move to trash; supports both _id and eventId)
 exports.deleteEvent = async (req, res) => {
     try {
-        const query = { organizationId: req.user.organizationId };
-        
-        // Support both MongoDB _id and eventId UUID
+        const query = { organizationId: req.user.organizationId, deletedAt: null };
         if (req.params.id.match(/^[0-9a-f]{24}$/i)) {
             query._id = req.params.id;
         } else {
             query.eventId = req.params.id;
         }
-        
-        const deletedEvent = await Event.findOneAndDelete(query);
-        
-        if (!deletedEvent) {
-            return res.status(404).json({ 
+
+        const event = await Event.findOne(query).select('_id').lean();
+        if (!event) {
+            return res.status(404).json({ success: false, message: 'Event not found.' });
+        }
+
+        const deletionService = require('../services/deletionService');
+        const result = await deletionService.moveToTrash({
+            moduleKey: 'events',
+            recordId: event._id,
+            organizationId: req.user.organizationId,
+            userId: req.user._id,
+            appKey: 'platform',
+            reason: req.body?.reason,
+            cascadeConfirmed: !!req.body?.cascadeConfirmed
+        });
+
+        if (!result.ok) {
+            if (result.blocked) {
+                return res.status(400).json({
+                    success: false,
+                    blocked: true,
+                    dependencies: result.dependencies,
+                    message: result.message
+                });
+            }
+            return res.status(400).json({
                 success: false,
-                message: 'Event not found.' 
+                message: result.message || 'Failed to delete event'
             });
         }
-        
+
         res.status(200).json({
             success: true,
-            message: 'Event deleted successfully.'
+            message: 'Event moved to trash',
+            retentionExpiresAt: result.retentionExpiresAt
         });
     } catch (error) {
         console.error('Error deleting event:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
-            message: 'Error deleting event.', 
-            error: error.message 
+            message: 'Error deleting event.',
+            error: error.message
         });
     }
 };
 
-// Bulk delete events
+// Bulk delete events (move to trash)
 exports.bulkDeleteEvents = async (req, res) => {
     try {
         const { ids } = req.body;
@@ -1063,35 +1096,38 @@ exports.bulkDeleteEvents = async (req, res) => {
             });
         }
         
-        // Support both _id and eventId
-        const mongoIds = ids.filter(id => id.match(/^[0-9a-f]{24}$/i));
-        const eventIds = ids.filter(id => !id.match(/^[0-9a-f]{24}$/i));
-        
         const query = {
             organizationId: req.user.organizationId,
+            deletedAt: null,
             $or: []
         };
-        
-        if (mongoIds.length > 0) {
-            query.$or.push({ _id: { $in: mongoIds } });
-        }
-        if (eventIds.length > 0) {
-            query.$or.push({ eventId: { $in: eventIds } });
-        }
+        const mongoIds = ids.filter(id => id.match(/^[0-9a-f]{24}$/i));
+        const eventIds = ids.filter(id => !id.match(/^[0-9a-f]{24}$/i));
+        if (mongoIds.length > 0) query.$or.push({ _id: { $in: mongoIds } });
+        if (eventIds.length > 0) query.$or.push({ eventId: { $in: eventIds } });
         
         if (query.$or.length === 0) {
-            return res.status(400).json({ 
-                success: false,
-                message: 'No valid event IDs provided.' 
-            });
+            return res.status(400).json({ success: false, message: 'No valid event IDs provided.' });
         }
         
-        const result = await Event.deleteMany(query);
+        const events = await Event.find(query).select('_id').lean();
+        const deletionService = require('../services/deletionService');
+        let movedCount = 0;
+        for (const ev of events) {
+            const result = await deletionService.moveToTrash({
+                moduleKey: 'events',
+                recordId: ev._id,
+                organizationId: req.user.organizationId,
+                userId: req.user._id,
+                appKey: 'platform'
+            });
+            if (result.ok) movedCount++;
+        }
         
         res.status(200).json({
             success: true,
-            message: `Successfully deleted ${result.deletedCount} event(s).`,
-            deletedCount: result.deletedCount
+            message: `Moved ${movedCount} event(s) to trash.`,
+            deletedCount: movedCount
         });
     } catch (error) {
         console.error('Error bulk deleting events:', error);
@@ -1121,7 +1157,7 @@ exports.updateEventStatus = async (req, res) => {
         }
         
         // Build query (support both _id and eventId)
-        const query = { organizationId: req.user.organizationId };
+        const query = { organizationId: req.user.organizationId, deletedAt: null };
         if (req.params.id.match(/^[0-9a-f]{24}$/i)) {
             query._id = req.params.id;
         } else {
@@ -1255,7 +1291,7 @@ exports.addNote = async (req, res) => {
         }
         
         // Build query (support both _id and eventId)
-        const query = { organizationId: req.user.organizationId };
+        const query = { organizationId: req.user.organizationId, deletedAt: null };
         if (req.params.id.match(/^[0-9a-f]{24}$/i)) {
             query._id = req.params.id;
         } else {
@@ -1361,7 +1397,7 @@ exports.startEvent = async (req, res) => {
         const { id } = req.params;
         const { location } = req.body; // Optional: {latitude, longitude, accuracy}
         
-        const query = { organizationId: req.user.organizationId };
+        const query = { organizationId: req.user.organizationId, deletedAt: null };
         if (id.match(/^[0-9a-f]{24}$/i)) {
             query._id = id;
         } else {
@@ -1503,7 +1539,7 @@ exports.checkIn = async (req, res) => {
             });
         }
         
-        const query = { organizationId: req.user.organizationId };
+        const query = { organizationId: req.user.organizationId, deletedAt: null };
         if (id.match(/^[0-9a-f]{24}$/i)) {
             query._id = id;
         } else {
@@ -1762,7 +1798,7 @@ exports.checkOut = async (req, res) => {
         const { id } = req.params;
         const { location, orgIndex } = req.body;
         
-        const query = { organizationId: req.user.organizationId };
+        const query = { organizationId: req.user.organizationId, deletedAt: null };
         if (id.match(/^[0-9a-f]{24}$/i)) {
             query._id = id;
         } else {
@@ -1901,7 +1937,7 @@ exports.submitAudit = async (req, res) => {
             });
         }
         
-        const query = { organizationId: req.user.organizationId };
+        const query = { organizationId: req.user.organizationId, deletedAt: null };
         if (id.match(/^[0-9a-f]{24}$/i)) {
             query._id = id;
         } else {
@@ -2182,7 +2218,7 @@ exports.approveAudit = async (req, res) => {
     try {
         const { id } = req.params;
         
-        const query = { organizationId: req.user.organizationId };
+        const query = { organizationId: req.user.organizationId, deletedAt: null };
         if (id.match(/^[0-9a-f]{24}$/i)) {
             query._id = id;
         } else {
@@ -2311,7 +2347,7 @@ exports.rejectAudit = async (req, res) => {
         const { id } = req.params;
         const { reason } = req.body; // Optional rejection reason
         
-        const query = { organizationId: req.user.organizationId };
+        const query = { organizationId: req.user.organizationId, deletedAt: null };
         if (id.match(/^[0-9a-f]{24}$/i)) {
             query._id = id;
         } else {
@@ -2451,7 +2487,7 @@ exports.moveToNextOrg = async (req, res) => {
     try {
         const { id } = req.params;
         
-        const query = { organizationId: req.user.organizationId };
+        const query = { organizationId: req.user.organizationId, deletedAt: null };
         if (id.match(/^[0-9a-f]{24}$/i)) {
             query._id = id;
         } else {
@@ -2515,7 +2551,7 @@ exports.createOrder = async (req, res) => {
         const { id } = req.params;
         const { orderData, orgIndex } = req.body;
         
-        const query = { organizationId: req.user.organizationId };
+        const query = { organizationId: req.user.organizationId, deletedAt: null };
         if (id.match(/^[0-9a-f]{24}$/i)) {
             query._id = id;
         } else {
@@ -2612,7 +2648,7 @@ exports.completeEvent = async (req, res) => {
     try {
         const { id } = req.params;
         
-        const query = { organizationId: req.user.organizationId };
+        const query = { organizationId: req.user.organizationId, deletedAt: null };
         if (id.match(/^[0-9a-f]{24}$/i)) {
             query._id = id;
         } else {
@@ -2705,7 +2741,7 @@ exports.cancelEvent = async (req, res) => {
         const { id } = req.params;
         const { reason } = req.body; // Optional cancellation reason
         
-        const query = { organizationId: req.user.organizationId };
+        const query = { organizationId: req.user.organizationId, deletedAt: null };
         if (id.match(/^[0-9a-f]{24}$/i)) {
             query._id = id;
         } else {

@@ -25,7 +25,7 @@
 
     <!-- Loading State -->
     <div v-if="loading" class="flex items-center justify-center py-12">
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
     </div>
 
     <!-- Error State -->
@@ -56,8 +56,8 @@
             :class="[
               'w-full text-left p-4 rounded-lg border transition-all flex items-start gap-3',
               selectedIntegration && selectedIntegration.key === integration.key
-                ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20'
-                : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-brand-400 dark:hover:border-brand-400 hover:shadow-sm'
+                ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+                : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-indigo-400 dark:hover:border-indigo-400 hover:shadow-sm'
             ]"
           >
             <div class="flex-1 min-w-0">
@@ -159,7 +159,7 @@
                 type="button"
                 @click="confirmEnable"
                 :disabled="actionLoading"
-                class="px-4 py-2 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Enable Integration
               </button>

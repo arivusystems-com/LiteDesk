@@ -377,6 +377,12 @@ const eventSchema = new Schema({
     type: Schema.Types.Mixed,
     default: {}
   },
+
+  // Custom fields (user-defined via Settings → Modules & Fields)
+  customFields: {
+    type: Schema.Types.Mixed,
+    default: {}
+  },
   
   // Multi-tenancy
   organizationId: { 
@@ -405,8 +411,13 @@ const eventSchema = new Schema({
     type: Date,
     default: Date.now,
     required: true
-  }
-}, { 
+  },
+
+  // Trash (soft delete) - See docs/TRASH_IMPLEMENTATION_SPEC.md
+  deletedAt: { type: Date, default: null, index: true },
+  deletedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+  deletionReason: { type: String, trim: true, maxlength: 500 }
+}, {
   timestamps: false // We use createdTime/modifiedTime instead
 });
 
@@ -423,6 +434,7 @@ eventSchema.index({ isMultiOrg: 1, 'orgList.organizationId': 1 });
 eventSchema.index({ 'orgList.organizationId': 1, 'orgList.sequence': 1 });
 eventSchema.index({ geoRequired: 1, 'checkIn.timestamp': 1 });
 eventSchema.index({ executionStartTime: 1 });
+eventSchema.index({ organizationId: 1, deletedAt: 1 });
 // eventId is already indexed via unique: true, no need for explicit index
 
 // Virtual for duration

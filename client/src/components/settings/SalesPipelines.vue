@@ -6,7 +6,7 @@
     </div>
 
     <div v-if="loading" class="flex items-center justify-center py-12">
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
     </div>
 
     <div v-else-if="error" class="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -17,7 +17,7 @@
       <aside class="w-full lg:w-80 flex-none bg-white dark:bg-gray-900/60 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
         <div class="p-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
           <div class="text-sm font-semibold text-gray-800 dark:text-gray-200">Pipelines</div>
-          <button @click="addPipeline" class="px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors shadow-sm hover:shadow">
+          <button @click="addPipeline" class="px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-sm hover:shadow">
             Add
           </button>
         </div>
@@ -28,7 +28,7 @@
             :class="[
               'p-4 cursor-pointer transition-colors',
               selectedPipelineKey === pipeline.key
-                ? 'bg-brand-50 dark:bg-brand-900/20'
+                ? 'bg-indigo-50 dark:bg-indigo-900/20'
                 : 'hover:bg-gray-50 dark:hover:bg-white/5'
             ]"
             @click="selectedPipelineKey = pipeline.key"
@@ -41,14 +41,14 @@
                   <p class="text-xs text-gray-500 dark:text-gray-400">{{ pipeline.stages?.length || 0 }} stage{{ (pipeline.stages?.length || 0) === 1 ? '' : 's' }}</p>
                 </div>
               </div>
-              <span v-if="pipeline.isDefault" class="text-xs font-medium text-brand-600 dark:text-brand-300">Default</span>
+              <span v-if="pipeline.isDefault" class="text-xs font-medium text-indigo-600 dark:text-indigo-300">Default</span>
             </div>
             <div class="flex items-center gap-2 mt-3">
               <label class="inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                 <input
                   type="radio"
                   name="default-pipeline"
-                  class="text-brand-600 border-gray-300 dark:border-gray-600 focus:ring-brand-500"
+                  class="text-indigo-600 border-gray-300 dark:border-gray-600 focus:ring-indigo-500"
                   :checked="pipeline.isDefault"
                   @change.stop="setDefaultPipeline(pipeline.key)"
                 />
@@ -115,7 +115,7 @@
             :class="[
               isSaving
                 ? 'bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed'
-                : 'bg-brand-600 hover:bg-brand-700 text-white shadow-sm hover:shadow'
+                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm hover:shadow'
             ]"
           >
             <svg v-if="isSaving" class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -139,7 +139,7 @@
               </div>
             </div>
             <div class="md:col-span-2 flex items-center gap-3">
-              <span v-if="currentPipeline.isDefault" class="px-2 py-0.5 text-xs font-medium bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded">Default pipeline</span>
+              <span v-if="currentPipeline.isDefault" class="px-2 py-0.5 text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded">Default pipeline</span>
               <button
                 v-else
                 @click="setDefaultPipeline(currentPipeline.key)"
@@ -156,7 +156,7 @@
               <p class="text-xs text-gray-500 dark:text-gray-400">Configure the stages available in this pipeline.</p>
             </div>
             <div class="flex items-center gap-2">
-              <button @click="addStageToPipeline(currentPipeline)" class="px-3 py-1.5 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors shadow-sm hover:shadow">
+              <button @click="addStageToPipeline(currentPipeline)" class="px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-sm hover:shadow">
                 Add Stage
               </button>
             </div>
@@ -206,7 +206,7 @@
         <div v-else class="flex-1 flex items-center justify-center text-sm text-gray-500 dark:text-gray-400">
           <div class="text-center space-y-3">
             <p>No pipeline selected.</p>
-            <button @click="addPipeline" class="px-4 py-2 text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors">Create Pipeline</button>
+            <button @click="addPipeline" class="px-4 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors">Create Pipeline</button>
           </div>
         </div>
       </section>

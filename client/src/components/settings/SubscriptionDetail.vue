@@ -15,7 +15,7 @@
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
         <!-- App Icon -->
-        <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400">
+        <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
@@ -37,7 +37,7 @@
 
     <!-- Loading State -->
     <div v-if="loading" class="flex items-center justify-center py-12">
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
     </div>
 
     <!-- Error State -->
@@ -113,7 +113,7 @@
             </div>
             <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
               <div
-                class="bg-brand-600 h-3 rounded-full transition-all"
+                class="bg-indigo-600 h-3 rounded-full transition-all"
                 :style="{ width: `${Math.min(100, (subscription.usage.users.current / subscription.usage.users.limit) * 100)}%` }"
               ></div>
             </div>
@@ -132,7 +132,7 @@
             </div>
             <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
               <div
-                class="bg-brand-600 h-3 rounded-full transition-all"
+                class="bg-indigo-600 h-3 rounded-full transition-all"
                 :style="{ width: `${Math.min(100, (subscription.usage.contacts.current / subscription.usage.contacts.limit) * 100)}%` }"
               ></div>
             </div>
@@ -151,7 +151,7 @@
             </div>
             <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
               <div
-                class="bg-brand-600 h-3 rounded-full transition-all"
+                class="bg-indigo-600 h-3 rounded-full transition-all"
                 :style="{ width: `${Math.min(100, (subscription.usage.deals.current / subscription.usage.deals.limit) * 100)}%` }"
               ></div>
             </div>
@@ -170,7 +170,7 @@
             </div>
             <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
               <div
-                class="bg-brand-600 h-3 rounded-full transition-all"
+                class="bg-indigo-600 h-3 rounded-full transition-all"
                 :style="{ width: `${Math.min(100, (subscription.usage.storage.current / subscription.usage.storage.limit) * 100)}%` }"
               ></div>
             </div>
@@ -207,19 +207,19 @@
       </div>
 
       <!-- Upgrade CTA (only for eligible apps) -->
-      <div v-if="subscription.canUpgrade" class="bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 rounded-lg p-4">
+      <div v-if="subscription.canUpgrade" class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4">
         <div class="flex items-start gap-3">
-          <svg class="w-5 h-5 text-brand-600 dark:text-brand-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-5 h-5 text-indigo-600 dark:text-indigo-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
           <div class="flex-1">
-            <h3 class="text-base font-semibold text-brand-800 dark:text-brand-300">Upgrade Available</h3>
-            <p class="mt-1 text-sm text-brand-700 dark:text-brand-400">
+            <h3 class="text-base font-semibold text-indigo-800 dark:text-indigo-300">Upgrade Available</h3>
+            <p class="mt-1 text-sm text-indigo-700 dark:text-indigo-400">
               Upgrade your {{ subscription.appName }} subscription to access more features and higher limits.
             </p>
             <button
               @click="handleUpgrade"
-              class="mt-3 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors"
+              class="mt-3 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors"
             >
               <span>Upgrade {{ subscription.appName }}</span>
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

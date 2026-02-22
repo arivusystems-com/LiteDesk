@@ -28,7 +28,7 @@
           v-model="formData.name"
           type="text"
           placeholder="e.g., Lead to Deal Conversion Flow"
-          class="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-brand-500"
+          class="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-indigo-500"
         />
       </div>
 
@@ -41,7 +41,7 @@
           v-model="formData.description"
           rows="3"
           placeholder="Describe how these processes work together..."
-          class="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-brand-500"
+          class="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-indigo-500"
         ></textarea>
       </div>
 
@@ -52,7 +52,7 @@
         </label>
         <select
           v-model="formData.appKey"
-          class="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-brand-500"
+          class="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-indigo-500"
         >
           <option value="">Select App</option>
           <option value="SALES">SALES</option>
@@ -87,7 +87,7 @@
               type="checkbox"
               :value="process._id"
               v-model="formData.processIds"
-              class="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+              class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
             />
             <label :for="`process-${process._id}`" class="flex-1 cursor-pointer">
               <div class="font-medium text-gray-900 dark:text-white">{{ process.name }}</div>
@@ -129,7 +129,7 @@
         <button
           @click="handleSave"
           :disabled="!isValid || processing"
-          class="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {{ processing ? 'Saving...' : isEdit ? 'Update' : 'Create' }}
         </button>

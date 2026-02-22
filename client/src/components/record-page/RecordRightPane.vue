@@ -6,7 +6,7 @@
     ]"
   >
     <!-- Header -->
-    <div v-if="showHeader" class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+    <div v-if="showHeader" class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white dark:bg-gray-900 z-20 relative">
       <div class="flex items-center gap-2">
         <span v-if="title" class="text-sm font-medium text-gray-900 dark:text-white">{{ title }}</span>
         <ChevronDownIcon v-if="title" class="w-4 h-4 text-gray-400 dark:text-gray-500" />

@@ -153,6 +153,7 @@ import { useAuthStore } from '@/stores/auth';
 import { isAuditEventType } from '@/utils/eventUtils';
 import { useTabs } from '@/composables/useTabs';
 import { getTaskSystemFields } from '@/platform/fields/taskFieldModel';
+import { getGlobalSystemFieldKeys, normalizeFieldKeyForSystemMatch } from '@/platform/fields/fieldCapabilityEngine';
 
 const props = defineProps({
   isOpen: {
@@ -253,15 +254,17 @@ const computedDescription = computed(() => {
 
 const effectiveExcludeFields = computed(() => {
   const base = props.excludeFields || [];
+  // RULE: Global system fields (trash: deletedAt, deletedBy, deletionReason) never show in create/edit
+  const globalSystem = getGlobalSystemFieldKeys();
   if (props.moduleKey === 'deals' && props.useDealRelationshipEditor) {
-    return [...base, 'contactId', 'accountId'];
+    return [...base, ...globalSystem, 'contactId', 'accountId'];
   }
   if (props.moduleKey === 'tasks') {
     const taskSystemFields = (getTaskSystemFields() || []).map((k) => String(k).toLowerCase());
     // Exclude only system fields; relatedTo and subtasks stay in DynamicForm so they appear in config order (like edit drawer)
-    return [...base, 'relatedToType', 'relatedToId', ...taskSystemFields];
+    return [...base, ...globalSystem, 'relatedToType', 'relatedToId', ...taskSystemFields];
   }
-  return base;
+  return [...base, ...globalSystem];
 });
 
 
@@ -541,6 +544,7 @@ const handleSubmit = async () => {
     // Client-side validation (like ContactFormModal)
     if (moduleDefinition.value?.fields) {
       // System fields that are auto-set by backend (status only for Events; Tasks status can be required)
+      // RULE: Global system fields (trash: deletedAt, deletedBy, deletionReason) never show in create/edit
       const systemFieldKeys = [
         'organizationid',
         'createdby',
@@ -549,6 +553,7 @@ const handleSubmit = async () => {
         '_id',
         '__v',
         'activitylogs',
+        ...getGlobalSystemFieldKeys(),
         ...(props.moduleKey === 'events' ? ['status'] : [])
       ];
       
@@ -556,8 +561,8 @@ const handleSubmit = async () => {
 
       // Get effective required fields (dependency-driven), excluding system fields
       const requiredFields = allFields.filter(f => {
-        const keyLower = f.key?.toLowerCase();
-        if (!f.key || systemFieldKeys.includes(keyLower)) return false;
+        const keyNorm = normalizeFieldKeyForSystemMatch(f.key);
+        if (!f.key || systemFieldKeys.includes(keyNorm)) return false;
         const depState = getFieldDependencyState(f, formData.value, allFields);
         // Only validate when visible and required
         return depState.required === true && depState.visible !== false;

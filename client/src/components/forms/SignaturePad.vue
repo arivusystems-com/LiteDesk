@@ -19,7 +19,7 @@
       <div
         ref="canvasContainer"
         class="signature-canvas-container border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 relative"
-        :class="{ 'border-brand-500': isDrawing }"
+        :class="{ 'border-indigo-500': isDrawing }"
       >
         <canvas
           ref="canvas"

@@ -16,8 +16,27 @@ const { resolveRules } = require('./automationRegistry');
 const { execute: executeAction } = require('./automationActionHandlers');
 const AutomationExecution = require('../models/AutomationExecution');
 const { createLogger } = require('./automationLogger');
+const { isTrashed } = require('../utils/trashGuard');
 
 const log = createLogger('automationEngine');
+
+/** Map domain event entityType to trash moduleKey */
+const ENTITY_TO_MODULE = {
+  people: 'people',
+  person: 'people',
+  organization: 'organizations',
+  organizations: 'organizations',
+  deal: 'deals',
+  deals: 'deals',
+  task: 'tasks',
+  tasks: 'tasks',
+  event: 'events',
+  events: 'events',
+  item: 'items',
+  items: 'items',
+  response: 'responses',
+  responses: 'responses'
+};
 
 let initialized = false;
 
@@ -107,6 +126,29 @@ async function processEvent(event) {
     triggeredBy,
     ownerId
   } = event;
+
+  // Workflow isolation: skip automation for trashed records
+  const moduleKey = entityType ? ENTITY_TO_MODULE[entityType.toLowerCase()] : null;
+  if (moduleKey && entityId && organizationId) {
+    try {
+      const trashed = await isTrashed(moduleKey, entityId, organizationId);
+      if (trashed) {
+        log.info('automation_skipped_trashed', { eventId, entityType, entityId, moduleKey });
+        return {
+          eventId,
+          eventType,
+          rulesMatched: 0,
+          plan: [],
+          executed: 0,
+          skipped: 0,
+          failed: 0
+        };
+      }
+    } catch (err) {
+      log.warn('automation_trash_check_failed', { eventId, entityType, entityId, error: err.message });
+      // Continue on error (don't block automation if trash check fails)
+    }
+  }
 
   const matched = await resolveRules(event);
   const plan = matched.map((m, idx) => ({

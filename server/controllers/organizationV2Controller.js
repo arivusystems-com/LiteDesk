@@ -18,14 +18,18 @@ exports.create = async (req, res) => {
       }
     }
     
+    const { extractCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+    const { standardPayload, customFieldsSet } = extractCustomFields(req.body, Organization);
+
     const body = {
-      ...req.body,
+      ...standardPayload,
       // Set createdBy from authenticated user
       createdBy: req.user?._id || null,
       // Default assignedTo to creator if not provided (similar to tasks)
-      assignedTo: req.body.assignedTo || req.user?._id || null,
+      assignedTo: standardPayload.assignedTo || req.user?._id || null,
       // Mark as Sales organization (not tenant)
       isTenant: false,
+      ...(Object.keys(customFieldsSet).length > 0 && { customFields: customFieldsSet }),
       // Add initial activity log for record creation
       activityLogs: [{
         user: userName,
@@ -48,7 +52,7 @@ exports.create = async (req, res) => {
       await org.save();
     }
     
-    res.status(201).json({ success: true, data: org });
+    res.status(201).json({ success: true, data: flattenCustomFieldsForResponse(org) });
   } catch (error) {
     res.status(400).json({ success: false, message: 'Error creating organization', error: error.message });
   }
@@ -78,7 +82,8 @@ exports.list = async (req, res) => {
     // Build query: Sales organizations created by users from this tenant organization
     let query = { 
       isTenant: false, // Only Sales organizations
-      createdBy: { $in: userIds } // Only Sales orgs created by users from this tenant
+      createdBy: { $in: userIds }, // Only Sales orgs created by users from this tenant
+      deletedAt: null
     };
     
     // Note: Organizations use 'types' array field, not 'type'
@@ -298,12 +303,14 @@ exports.getById = async (req, res) => {
     const org = await Organization.findOne({ 
       _id: req.params.id, 
       isTenant: false,
-      createdBy: { $in: userIds } // CRITICAL: Filter by tenant context
+      createdBy: { $in: userIds },
+      deletedAt: null
     })
       .populate('createdBy', 'firstName lastName email avatar username')
       .populate('assignedTo', 'firstName lastName email avatar username');
     if (!org) return res.status(404).json({ success: false, message: 'Not found' });
-    res.json({ success: true, data: org });
+    const { flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+    res.json({ success: true, data: flattenCustomFieldsForResponse(org) });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error fetching organization', error: error.message });
   }
@@ -328,69 +335,63 @@ exports.update = async (req, res) => {
       .lean();
     const userIds = tenantUserIds.map(u => u._id);
 
+    const { buildUpdateWithCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+    const $set = buildUpdateWithCustomFields(req.body, Organization);
+
     // Only allow update of Sales organizations created by users from this tenant
     const updated = await Organization.findOneAndUpdate(
       { 
         _id: req.params.id, 
         isTenant: false,
+        deletedAt: null,
         createdBy: { $in: userIds } // CRITICAL: Filter by tenant context
       }, 
-      req.body, 
+      { $set }, 
       { new: true }
     )
       .populate('createdBy', 'firstName lastName email avatar username')
       .populate('assignedTo', 'firstName lastName email avatar username');
     if (!updated) return res.status(404).json({ success: false, message: 'Not found' });
-    res.json({ success: true, data: updated });
+    res.json({ success: true, data: flattenCustomFieldsForResponse(updated) });
   } catch (error) {
     res.status(400).json({ success: false, message: 'Error updating organization', error: error.message });
   }
 };
 
-// Delete (Sales organization only - tenants cannot be deleted this way, filtered by tenant context)
+// Delete (Sales organization only - move to trash)
 exports.remove = async (req, res) => {
   try {
-    const User = require('../models/User');
     const tenantOrganizationId = req.user?.organizationId;
-    
     if (!tenantOrganizationId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Organization context required' 
-      });
+      return res.status(400).json({ success: false, message: 'Organization context required' });
     }
 
-    // Get all users from this tenant organization
-    const tenantUserIds = await User.find({ organizationId: tenantOrganizationId })
-      .select('_id')
-      .lean();
-    const userIds = tenantUserIds.map(u => u._id);
-
-    // Validate deletion invariants
-    const { validateDelete } = require('../services/systemInvariants');
-    const invariantResult = await validateDelete({
+    const deletionService = require('../services/deletionService');
+    const result = await deletionService.moveToTrash({
       moduleKey: 'organizations',
       recordId: req.params.id,
-      organizationId: tenantOrganizationId
+      organizationId: tenantOrganizationId,
+      userId: req.user._id,
+      appKey: req.body?.appKey || 'SALES',
+      reason: req.body?.reason,
+      cascadeConfirmed: !!req.body?.cascadeConfirmed
     });
-    
-    if (!invariantResult.valid) {
+
+    if (!result.ok) {
+      if (result.blocked) {
+        return res.status(400).json({
+          success: false,
+          blocked: true,
+          dependencies: result.dependencies,
+          message: result.message
+        });
+      }
       return res.status(400).json({
         success: false,
-        code: invariantResult.code,
-        message: invariantResult.message,
-        errors: invariantResult.errors
+        message: result.message || 'Failed to delete organization'
       });
     }
-
-    // Only allow deletion of Sales organizations created by users from this tenant
-    const deleted = await Organization.findOneAndDelete({ 
-      _id: req.params.id, 
-      isTenant: false,
-      createdBy: { $in: userIds } // CRITICAL: Filter by tenant context
-    });
-    if (!deleted) return res.status(404).json({ success: false, message: 'Not found' });
-    res.json({ success: true, data: deleted._id });
+    res.json({ success: true, data: req.params.id, message: 'Moved to trash', retentionExpiresAt: result.retentionExpiresAt });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error deleting organization', error: error.message });
   }
@@ -419,7 +420,8 @@ exports.getActivityLogs = async (req, res) => {
     const org = await Organization.findOne({ 
       _id: req.params.id, 
       isTenant: false,
-      createdBy: { $in: userIds } // CRITICAL: Filter by tenant context
+      createdBy: { $in: userIds },
+      deletedAt: null
     }).select('activityLogs');
     
     if (!org) {

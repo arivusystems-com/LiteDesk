@@ -88,7 +88,7 @@
                           <input
                             type="checkbox"
                             v-model="ruleData.value"
-                            class="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                           />
                           <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Show field</span>
                         </label>
@@ -275,7 +275,7 @@
                     </button>
                     <button
                       @click="saveRule"
-                      class="px-4 py-2 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-700 transition-colors"
+                      class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
                     >
                       Save
                     </button>

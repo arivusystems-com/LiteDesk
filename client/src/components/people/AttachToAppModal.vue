@@ -118,7 +118,7 @@
                       v-model="formData[fieldName]"
                       :required="isFieldRequired(fieldName)"
                       :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent',
+                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
                         validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
                       ]"
                     >
@@ -136,7 +136,7 @@
                       v-model="formData[fieldName]"
                       :required="isFieldRequired(fieldName)"
                       :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent cursor-pointer',
+                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer',
                         validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
                       ]"
                       @click="openDatePicker"
@@ -151,7 +151,7 @@
                       :required="isFieldRequired(fieldName)"
                       :min="fieldName === 'lead_score' ? 0 : undefined"
                       :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent',
+                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
                         validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
                       ]"
                     />
@@ -164,7 +164,7 @@
                       :required="isFieldRequired(fieldName)"
                       rows="3"
                       :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent',
+                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
                         validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
                       ]"
                     />
@@ -177,7 +177,7 @@
                       v-model="formData[fieldName]"
                       :required="isFieldRequired(fieldName)"
                       :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent',
+                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
                         validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
                       ]"
                     />
@@ -209,7 +209,7 @@
                       @change="clearDefaultTracking(fieldName)"
                       :required="isFieldRequired(fieldName)"
                       :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent',
+                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
                         validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
                       ]"
                     >
@@ -229,7 +229,7 @@
                       @click="openDatePicker"
                       :required="isFieldRequired(fieldName)"
                       :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent cursor-pointer',
+                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer',
                         validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
                       ]"
                     />
@@ -244,7 +244,7 @@
                       :required="isFieldRequired(fieldName)"
                       :min="fieldName === 'lead_score' || fieldName === 'estimated_value' ? 0 : undefined"
                       :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent',
+                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
                         validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
                       ]"
                     />
@@ -258,7 +258,7 @@
                       :required="isFieldRequired(fieldName)"
                       rows="3"
                       :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent',
+                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
                         validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
                       ]"
                     />
@@ -272,7 +272,7 @@
                       @input="clearDefaultTracking(fieldName)"
                       :required="isFieldRequired(fieldName)"
                       :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent',
+                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
                         validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
                       ]"
                     />
@@ -306,7 +306,7 @@
                 <button
                   type="submit"
                   :disabled="loading"
-                  class="px-6 py-2 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  class="px-6 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   <svg v-if="loading" class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>

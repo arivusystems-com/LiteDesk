@@ -47,7 +47,7 @@
           <div class="p-6">
             <!-- Loading State -->
             <div v-if="loading" class="flex items-center justify-center py-12">
-              <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+              <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
             </div>
 
             <!-- Empty State -->
@@ -68,7 +68,7 @@
               >
                 <!-- User Info -->
                 <div class="flex items-center gap-3">
-                  <div class="w-10 h-10 rounded-full bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center text-white font-bold">
+                  <div class="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold">
                     {{ user.firstName?.[0] || 'U' }}{{ user.lastName?.[0] || '' }}
                   </div>
                   <div>

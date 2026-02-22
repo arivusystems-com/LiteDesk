@@ -40,7 +40,7 @@ const config: Config = {
       colors: {
         /**
          * Primary — Intelligence, Trust (Law 7)
-         * Maps to brand colors for Arivu identity
+         * Maps to indigo for Arivu identity
          */
         primary: {
           50: '#f5f3ff',

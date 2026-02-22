@@ -13,7 +13,7 @@
             v-model="kpiMetrics"
             type="checkbox"
             value="Compliance %"
-            class="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+            class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
           />
           <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Compliance Percentage</span>
         </label>
@@ -22,7 +22,7 @@
             v-model="kpiMetrics"
             type="checkbox"
             value="Satisfaction %"
-            class="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+            class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
           />
           <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Satisfaction Percentage</span>
         </label>
@@ -31,7 +31,7 @@
             v-model="kpiMetrics"
             type="checkbox"
             value="Avg Rating"
-            class="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+            class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
           />
           <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Average Rating</span>
         </label>
@@ -47,7 +47,7 @@
         v-model="localForm.scoringFormula"
         type="text"
         placeholder="e.g., (Passed / Total) * 100"
-        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
       />
       <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
         Formula for calculating overall form score
@@ -65,7 +65,7 @@
           type="number"
           min="0"
           max="100"
-          class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+          class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
         />
       </div>
       <div>
@@ -77,7 +77,7 @@
           type="number"
           min="0"
           max="100"
-          class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+          class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
         />
       </div>
     </div>
@@ -89,14 +89,14 @@
           v-model="localForm.autoAssignment.enabled"
           type="checkbox"
           id="autoAssignment"
-          class="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+          class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
         />
         <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">Auto Assignment</span>
       </label>
       <div v-if="localForm.autoAssignment.enabled" class="ml-6 mt-2">
         <select
           v-model="localForm.autoAssignment.linkTo"
-          class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+          class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
         >
           <option value="org">Organization</option>
           <option value="deal">Deal</option>
@@ -116,7 +116,7 @@
           <input
             v-model="localForm.workflowOnSubmit.createTask"
             type="checkbox"
-            class="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+            class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
           />
           <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Create Task</span>
         </label>
@@ -142,7 +142,7 @@
           v-model="localForm.approvalWorkflow.enabled"
           type="checkbox"
           id="approvalWorkflow"
-          class="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+          class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
         />
         <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">Require Approval</span>
       </label>
@@ -167,7 +167,7 @@
       </label>
       <select
         v-model="localForm.assignedTo"
-        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
       >
         <option :value="null">Unassigned</option>
         <option v-for="user in users" :key="user._id" :value="user._id">
@@ -203,7 +203,7 @@
         />
         <button
           @click="copyPublicLink"
-          class="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium"
+          class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium"
         >
           Copy
         </button>

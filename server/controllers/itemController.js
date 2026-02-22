@@ -6,11 +6,15 @@ const mongoose = require('mongoose');
 // @access  Private
 exports.createItem = async (req, res) => {
     try {
+        const { extractCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+        const { standardPayload, customFieldsSet } = extractCustomFields(req.body, Item);
+
         const payload = {
-            ...req.body,
+            ...standardPayload,
             organizationId: req.user.organizationId,
             createdBy: req.user._id,
-            modifiedBy: req.user._id
+            modifiedBy: req.user._id,
+            ...(Object.keys(customFieldsSet).length > 0 && { customFields: customFieldsSet })
         };
 
         // Validate required fields
@@ -38,7 +42,7 @@ exports.createItem = async (req, res) => {
         
         res.status(201).json({
             success: true,
-            data: item
+            data: flattenCustomFieldsForResponse(item)
         });
     } catch (error) {
         console.error('Create item error:', error);
@@ -55,7 +59,7 @@ exports.createItem = async (req, res) => {
 // @access  Private
 exports.getItems = async (req, res) => {
     try {
-        const query = { organizationId: req.user.organizationId };
+        const query = { organizationId: req.user.organizationId, deletedAt: null };
         
         // Filters
         if (req.query.status) {
@@ -162,7 +166,8 @@ exports.getItemById = async (req, res) => {
     try {
         const item = await Item.findOne({ 
             _id: req.params.id, 
-            organizationId: req.user.organizationId 
+            organizationId: req.user.organizationId,
+            deletedAt: null
         })
         .populate('vendor', 'name industry phone email')
         .populate('linked_deals', 'name amount stage status')
@@ -178,9 +183,10 @@ exports.getItemById = async (req, res) => {
             });
         }
         
+        const { flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
         res.status(200).json({
             success: true,
-            data: item
+            data: flattenCustomFieldsForResponse(item)
         });
     } catch (error) {
         console.error('Get item error:', error);
@@ -201,12 +207,16 @@ exports.updateItem = async (req, res) => {
         delete req.body.organizationId;
         req.body.modifiedBy = req.user._id;
         
+        const { buildUpdateWithCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+        const $set = buildUpdateWithCustomFields(req.body, Item);
+        
         const updatedItem = await Item.findOneAndUpdate(
             { 
                 _id: req.params.id, 
-                organizationId: req.user.organizationId 
+                organizationId: req.user.organizationId,
+                deletedAt: null
             },
-            req.body,
+            { $set },
             { new: true, runValidators: true }
         )
         .populate('vendor', 'name')
@@ -222,7 +232,7 @@ exports.updateItem = async (req, res) => {
         
         res.status(200).json({
             success: true,
-            data: updatedItem
+            data: flattenCustomFieldsForResponse(updatedItem)
         });
     } catch (error) {
         console.error('Update item error:', error);
@@ -234,33 +244,48 @@ exports.updateItem = async (req, res) => {
     }
 };
 
-// @desc    Delete item
+// @desc    Delete item (move to trash)
 // @route   DELETE /api/items/:id
 // @access  Private
 exports.deleteItem = async (req, res) => {
     try {
-        const result = await Item.findOneAndDelete({ 
-            _id: req.params.id, 
-            organizationId: req.user.organizationId 
+        const deletionService = require('../services/deletionService');
+        const result = await deletionService.moveToTrash({
+            moduleKey: 'items',
+            recordId: req.params.id,
+            organizationId: req.user.organizationId,
+            userId: req.user._id,
+            appKey: 'platform',
+            reason: req.body?.reason,
+            cascadeConfirmed: !!req.body?.cascadeConfirmed
         });
 
-        if (!result) {
-            return res.status(404).json({ 
+        if (!result.ok) {
+            if (result.blocked) {
+                return res.status(400).json({
+                    success: false,
+                    blocked: true,
+                    dependencies: result.dependencies,
+                    message: result.message
+                });
+            }
+            return res.status(400).json({
                 success: false,
-                message: 'Item not found or access denied.' 
+                message: result.message || 'Failed to delete item'
             });
         }
-        
+
         res.status(200).json({
             success: true,
-            message: 'Item deleted successfully'
+            message: 'Item moved to trash',
+            retentionExpiresAt: result.retentionExpiresAt
         });
     } catch (error) {
         console.error('Delete item error:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
-            message: 'Error deleting item.', 
-            error: error.message 
+            message: 'Error deleting item.',
+            error: error.message
         });
     }
 };
@@ -281,7 +306,8 @@ exports.updateStock = async (req, res) => {
         
         const item = await Item.findOne({
             _id: req.params.id,
-            organizationId: req.user.organizationId
+            organizationId: req.user.organizationId,
+            deletedAt: null
         });
         
         if (!item) {

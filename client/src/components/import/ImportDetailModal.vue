@@ -13,10 +13,10 @@
 
       <div class="p-6 overflow-y-auto flex-1 space-y-6">
         <!-- Import Overview -->
-        <div class="bg-gradient-to-r from-brand-50 to-blue-50 dark:from-brand-900/20 dark:to-blue-900/20 border border-brand-200 dark:border-brand-800 rounded-lg p-6">
+        <div class="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-6">
           <div class="flex items-start justify-between">
             <div class="flex items-start gap-4">
-              <div class="w-14 h-14 rounded-lg bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center">
+              <div class="w-14 h-14 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-8 h-8 text-white">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
@@ -33,7 +33,7 @@
               </div>
             </div>
             <div class="text-right">
-              <div class="text-2xl font-bold text-brand-600 dark:text-brand-400">
+              <div class="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
                 {{ successRate }}%
               </div>
               <div class="text-xs text-gray-600 dark:text-gray-400">Success Rate</div>
@@ -71,7 +71,7 @@
               :class="[
                 'py-4 px-1 border-b-2 font-medium text-sm transition-colors',
                 activeTab === tab.id
-                  ? 'border-brand-500 text-brand-600 dark:text-brand-400'
+                  ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
                   : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
               ]"
             >
@@ -90,7 +90,7 @@
             <div class="flex items-center justify-between py-3 border-b border-gray-200 dark:border-gray-700 last:border-0">
               <span class="text-sm font-medium text-gray-600 dark:text-gray-400">Imported By</span>
               <div class="flex items-center gap-2">
-                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white text-sm font-medium">
+                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white text-sm font-medium">
                   {{ (importRecord.importedBy?.firstName?.[0] || '') + (importRecord.importedBy?.lastName?.[0] || '') }}
                 </div>
                 <span class="text-sm font-medium text-gray-900 dark:text-white">
@@ -149,7 +149,7 @@
                   <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
-                  <span class="text-brand-600 dark:text-brand-400 font-medium">{{ crmField }}</span>
+                  <span class="text-indigo-600 dark:text-indigo-400 font-medium">{{ crmField }}</span>
                 </div>
               </div>
             </div>

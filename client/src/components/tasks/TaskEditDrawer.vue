@@ -53,7 +53,7 @@
                   <!-- Body: scrollable -->
                   <div class="h-0 flex-1 overflow-y-auto">
                     <div v-if="loading" class="flex items-center justify-center py-12">
-                      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
+                      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
                     </div>
                     <div v-else-if="loadError" class="p-4">
                       <p class="text-sm text-red-600 dark:text-red-400">{{ loadError }}</p>
@@ -103,6 +103,7 @@
                               @update:value="(v) => updateField(field.key, v)"
                               :errors="errors"
                               :dependency-state="getFieldState(field)"
+                              :module-key="'tasks'"
                               :locked="false"
                             />
                           </div>
@@ -170,6 +171,7 @@
                               @update:value="(v) => updateField(field.key, v)"
                               :errors="errors"
                               :dependency-state="getFieldState(field)"
+                              :module-key="'tasks'"
                               :locked="false"
                             />
                           </div>
@@ -228,7 +230,8 @@ import apiClient from '@/utils/apiClient';
 import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
 import { useAuthStore } from '@/stores/auth';
-import { isTaskSystemField, getTaskFieldMetadata } from '@/platform/fields/taskFieldModel';
+import { getTaskFieldMetadata } from '@/platform/fields/taskFieldModel';
+import { isSystemField as isSystemFieldFromEngine, canEditField } from '@/platform/fields/fieldCapabilityEngine';
 
 const props = defineProps({
   isOpen: { type: Boolean, default: false },
@@ -254,11 +257,14 @@ const quickCreateKeysSet = computed(() => {
   return set;
 });
 
+function isTaskSystemField(keyOrField) {
+  const field = typeof keyOrField === 'string' ? { key: keyOrField } : keyOrField;
+  return field?.key ? isSystemFieldFromEngine('tasks', field) : false;
+}
+
 function isEditableField(field) {
   if (!field?.key) return false;
-  if (isTaskSystemField(field.key)) return false;
-  const meta = getTaskFieldMetadata(field.key);
-  return meta ? meta.editable !== false : true;
+  return canEditField('tasks', field);
 }
 
 const allEditableFields = computed(() => {

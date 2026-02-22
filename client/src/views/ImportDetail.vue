@@ -3,7 +3,7 @@
     <!-- Loading State -->
     <div v-if="loading" class="flex items-center justify-center min-h-screen">
       <div class="text-center">
-        <div class="w-16 h-16 border-4 border-gray-200 dark:border-gray-700 border-t-brand-600 dark:border-t-brand-500 rounded-full animate-spin mx-auto mb-4"></div>
+        <div class="w-16 h-16 border-4 border-gray-200 dark:border-gray-700 border-t-indigo-600 dark:border-t-indigo-500 rounded-full animate-spin mx-auto mb-4"></div>
         <p class="text-gray-600 dark:text-gray-400 font-medium">Loading import...</p>
       </div>
     </div>
@@ -16,7 +16,7 @@
         </svg>
         <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Error Loading Import</h2>
         <p class="text-gray-600 dark:text-gray-400 mb-6">{{ error }}</p>
-        <button @click="$router.push('/imports')" class="px-6 py-3 bg-brand-600 text-white rounded-xl hover:bg-brand-700 font-medium">
+        <button @click="$router.push('/imports')" class="px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium">
           Back to Imports
         </button>
       </div>
@@ -34,7 +34,7 @@
         </button>
 
         <div class="flex items-center gap-2">
-          <button @click="navigateToModule" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium transition-all">
+          <button @click="navigateToModule" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-all">
             <span>Go to {{ formatModule(importRecord.module) }}</span>
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -44,10 +44,10 @@
       </div>
 
       <!-- Header Card -->
-      <div class="bg-gradient-to-r from-brand-50 to-purple-50 dark:from-brand-900/20 dark:to-purple-900/20 border border-brand-200 dark:border-brand-800/50 rounded-xl p-4 mb-4">
+      <div class="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-200 dark:border-indigo-800/50 rounded-xl p-4 mb-4">
         <div class="flex items-start justify-between">
           <div class="flex items-start gap-3">
-            <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center flex-shrink-0">
+            <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
               <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
@@ -68,7 +68,7 @@
             </div>
           </div>
           <div class="text-right">
-            <div class="text-2xl font-bold text-brand-600 dark:text-brand-400">{{ successRate }}%</div>
+            <div class="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{{ successRate }}%</div>
             <div class="text-xs text-gray-600 dark:text-gray-400">Success</div>
           </div>
         </div>
@@ -115,7 +115,7 @@
       </div>
 
       <!-- Records View Modal -->
-      <div v-if="showRecordsView" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 mb-4 border-2 border-brand-500">
+      <div v-if="showRecordsView" class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 mb-4 border-2 border-indigo-500">
         <div class="flex items-center justify-between mb-3">
           <h3 class="text-base font-bold text-gray-900 dark:text-white">{{ recordsViewTitle }}</h3>
           <button @click="closeRecordsView" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
@@ -133,7 +133,7 @@
           
           <!-- Loading -->
           <div v-if="loadingRecords" class="flex items-center justify-center py-8">
-            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
           </div>
           
           <!-- Records Table -->
@@ -223,7 +223,7 @@
               :class="[
                 'py-3 px-1 border-b-2 font-medium text-sm transition-colors',
                 activeTab === tab.id
-                  ? 'border-brand-500 text-brand-600 dark:text-brand-400'
+                  ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
                   : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
               ]"
             >
@@ -242,7 +242,7 @@
             <div class="flex items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700">
               <span class="text-sm font-medium text-gray-600 dark:text-gray-400">Imported By</span>
               <div class="flex items-center gap-2">
-                <div class="w-6 h-6 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white text-xs font-medium">
+                <div class="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white text-xs font-medium">
                   {{ (importRecord.importedBy?.firstName?.[0] || '') + (importRecord.importedBy?.lastName?.[0] || '') }}
                 </div>
                 <span class="text-sm font-medium text-gray-900 dark:text-white">
@@ -301,7 +301,7 @@
                   <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
-                  <span class="text-sm text-brand-600 dark:text-brand-400 font-medium">{{ crmField }}</span>
+                  <span class="text-sm text-indigo-600 dark:text-indigo-400 font-medium">{{ crmField }}</span>
                 </div>
               </div>
             </div>
@@ -509,7 +509,7 @@ const viewRecords = (type) => {
   }
   
   setTimeout(() => {
-    const recordsElement = document.querySelector('.border-brand-500');
+    const recordsElement = document.querySelector('.border-indigo-500');
     if (recordsElement) {
       recordsElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }

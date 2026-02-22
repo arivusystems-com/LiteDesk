@@ -3,7 +3,7 @@
     <!-- Loading State -->
     <div v-if="loading" class="flex items-center justify-center py-8">
       <div class="text-center">
-        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600 dark:border-brand-400"></div>
+        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
         <p class="mt-4 text-sm text-gray-600 dark:text-gray-400">Loading files...</p>
       </div>
     </div>
@@ -58,9 +58,9 @@
                   file:mr-4 file:py-2 file:px-4
                   file:rounded-lg file:border-0
                   file:text-sm file:font-semibold
-                  file:bg-brand-50 file:text-brand-700
-                  hover:file:bg-brand-100
-                  dark:file:bg-brand-900/40 dark:file:text-brand-300
+                  file:bg-indigo-50 file:text-indigo-700
+                  hover:file:bg-indigo-100
+                  dark:file:bg-indigo-900/40 dark:file:text-indigo-300
                   cursor-pointer"
                 :disabled="uploading"
               />
@@ -101,7 +101,7 @@
             <button
               type="submit"
               :disabled="uploading || !selectedFile"
-              class="px-3 py-1.5 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2"
+              class="px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2"
             >
               <svg v-if="uploading" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -134,7 +134,7 @@
               <a
                 :href="file.storagePath"
                 target="_blank"
-                class="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline truncate block"
+                class="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline truncate block"
               >
                 {{ file.fileName }}
               </a>
@@ -157,7 +157,7 @@
             <a
               :href="file.storagePath"
               :download="file.fileName"
-              class="p-2 text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
+              class="p-2 text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
               title="Download"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -172,7 +172,7 @@
       <div v-else-if="!loading && !error && !blocked" class="text-center py-8">
         <p class="text-sm text-gray-500 dark:text-gray-400 italic">
           No files uploaded yet.
-          <span v-if="canUpload" class="text-brand-600 dark:text-brand-400">
+          <span v-if="canUpload" class="text-indigo-600 dark:text-indigo-400">
             Upload a file above to get started.
           </span>
         </p>

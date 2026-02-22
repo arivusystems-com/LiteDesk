@@ -32,7 +32,7 @@
         <button
           v-if="!showAllSignals"
           @click="showAllSignals = true"
-          class="text-sm text-brand-600 dark:text-brand-400 hover:underline font-medium flex items-center gap-1"
+          class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline font-medium flex items-center gap-1"
         >
           <span>View {{ signals.length - 3 }} more signal{{ signals.length - 3 > 1 ? 's' : '' }}</span>
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

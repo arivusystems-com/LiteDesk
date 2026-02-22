@@ -1,17 +1,18 @@
 <template>
-  <div v-if="loading" class="flex items-center justify-center min-h-screen">
+  <div class="task-record-page-root flex-1 min-h-0 overflow-hidden flex flex-col">
+    <div v-if="embed && loading" class="flex items-center justify-center min-h-[200px] flex-1">
     <div class="text-center">
-      <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+      <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
       <p class="text-gray-600 dark:text-gray-400 mt-4">Loading task...</p>
     </div>
   </div>
-  <div v-else-if="error" class="flex items-center justify-center min-h-screen p-4">
+  <div v-else-if="error" class="flex items-center justify-center min-h-[200px] flex-1 p-4">
     <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
       <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Error Loading Task</h2>
       <p class="text-gray-600 dark:text-gray-400 mb-6">{{ error }}</p>
       <button
         @click="fetchTask"
-        class="px-4 py-2 bg-brand-600 text-white rounded hover:bg-brand-700"
+        class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
       >
         Retry
       </button>
@@ -20,7 +21,9 @@
   <RecordPageLayout
     v-else
     :left-expanded="!!expandedLeftSection"
+    :force-mobile="embed"
     :class="[
+      embed ? 'flex-1 min-h-0 overflow-hidden flex flex-col' : '',
       { 'record-page-layout--left-expanded': !!expandedLeftSection },
       '[&.record-page-layout--left-expanded_.record-page-layout__right]:hidden',
       '[&.record-page-layout--left-expanded_.record-page-layout__left]:flex-[1_1_100%] [&.record-page-layout--left-expanded_.record-page-layout__left]:max-w-full [&.record-page-layout--left-expanded_.record-page-layout__left]:pr-0 [&.record-page-layout--left-expanded_.record-page-layout__left]:min-h-0 [&.record-page-layout--left-expanded_.record-page-layout__left]:overflow-hidden',
@@ -28,7 +31,7 @@
       '[&.record-page-layout--left-expanded_.record-page-layout__body]:px-4'
     ]"
   >
-    <template #header>
+    <template v-if="!embed" #header>
       <RecordHeader>
         <!-- Breadcrumbs -->
         <template #breadcrumbs>
@@ -169,7 +172,10 @@
     <template #left>
       <div
         v-if="expandedLeftSection"
-        class="flex-shrink-0 mb-4 sticky top-0 lg:-top-6 z-20 bg-white/95 dark:bg-gray-900/95 supports-[backdrop-filter]:bg-white/90 supports-[backdrop-filter]:dark:bg-gray-900/90 backdrop-blur"
+        :class="[
+          'flex-shrink-0 mb-4 sticky z-20 bg-white/95 dark:bg-gray-900/95 supports-[backdrop-filter]:bg-white/90 supports-[backdrop-filter]:dark:bg-gray-900/90 backdrop-blur',
+          embed ? 'top-0' : 'top-0 lg:-top-6'
+        ]"
       >
         <div class="flex items-center justify-between gap-2 py-2">
           <button
@@ -286,7 +292,8 @@
       <div
         v-if="task && !expandedLeftSection"
         :class="[
-          'mb-6 sticky top-0 lg:-top-6 z-10 border-b transition-[padding,background-color,border-color,backdrop-filter] duration-200 ease-out',
+          'mb-6 sticky z-10 border-b transition-[padding,background-color,border-color,backdrop-filter] duration-200 ease-out',
+          embed ? 'top-0 py-2 lg:py-4 lg:mb-0 mb-0' : 'top-0 lg:-top-6',
           isLeftTitleSticky
             ? 'border-b border-gray-200/80 dark:border-gray-700/80 bg-white/95 dark:bg-gray-900/95 supports-[backdrop-filter]:bg-white/90 supports-[backdrop-filter]:dark:bg-gray-900/90 backdrop-blur py-4'
             : 'border-b border-gray-200/80 dark:border-gray-700/80 bg-white/95 dark:bg-gray-900/95 supports-[backdrop-filter]:bg-white/90 supports-[backdrop-filter]:dark:bg-gray-900/90 backdrop-blur py-4 lg:border-transparent lg:bg-transparent lg:shadow-none lg:py-0'
@@ -1074,7 +1081,7 @@
               type="checkbox"
               :checked="subtask.completed"
               @change="handleSubtaskToggle(subtask)"
-              class="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-indigo-500"
+              class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
             />
             <span
               :class="[
@@ -1281,9 +1288,12 @@
       <RecordRightPane
         v-if="task && !expandedLeftSection"
         :tabs="rightPaneTabs"
-        :show-header="false"
+        :show-header="embed"
+        :show-close-button="embed"
+        :title="embed ? 'Task' : ''"
         :persistence-key="`task-${task._id}`"
         :record-id="task._id"
+        @close="handleEmbedClose"
       >
         <!-- Activity Tab (Combined Comments + Timeline) -->
         <template #tab-activity>
@@ -2445,6 +2455,7 @@
     @close="showDeleteModal = false"
     @confirm="confirmDeleteTask"
   />
+  </div>
 </template>
 
 <script setup>
@@ -2515,13 +2526,27 @@ import { useAuthStore } from '@/stores/auth';
 import { 
   TASK_FIELD_METADATA, 
   getCoreTaskFields,
-  getTaskFieldMetadata,
-  isTaskSystemField 
+  getTaskFieldMetadata
 } from '@/platform/fields/taskFieldModel';
 
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+
+const props = defineProps({
+  /** When true, renders in embed mode for QuickPreviewDrawer (mobile layout, no header, close button) */
+  embed: { type: Boolean, default: false },
+  /** Task ID when embed - used instead of route.params.id */
+  taskId: { type: String, default: null }
+});
+
+const emit = defineEmits(['close']);
+
+const effectiveTaskId = computed(() => props.embed && props.taskId ? props.taskId : route.params.id);
+
+const handleEmbedClose = () => {
+  if (props.embed) emit('close');
+};
 
 const task = ref(null);
 const loading = ref(false);
@@ -4236,10 +4261,12 @@ const resolveRelatedToDisplayName = async () => {
 };
 
 const fetchTask = async () => {
+  const id = effectiveTaskId.value;
+  if (!id) return;
   loading.value = true;
   error.value = null;
   try {
-    const response = await apiClient(`/tasks/${route.params.id}`);
+    const response = await apiClient(`/tasks/${id}`);
     if (response.success) {
       task.value = response.data;
       // TODO: Load follow state from API if available
@@ -6436,6 +6463,10 @@ const handleTaskEditSaved = async () => {
   showEditDrawer.value = false;
   await fetchTask();
 };
+
+watch(() => props.taskId, (id) => {
+  if (props.embed && id) fetchTask();
+}, { immediate: false });
 
 watch(() => task.value?._id, (taskId) => {
   if (!taskId) return;

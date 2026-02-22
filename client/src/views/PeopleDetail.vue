@@ -221,7 +221,7 @@
               <button
                 @click="saveCoreFields"
                 :disabled="saving"
-                class="px-2 py-2 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 min-h-[40px]"
+                class="px-2 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 min-h-[40px]"
               >
                 <svg v-if="saving" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -249,7 +249,7 @@
             <div v-if="profileData.core.fields.email">
               <dt class="text-sm text-gray-500 dark:text-gray-400">Email</dt>
               <dd class="mt-2 text-sm text-gray-900 dark:text-white">
-                <a :href="`mailto:${profileData.core.fields.email}`" class="text-brand-600 dark:text-brand-400 hover:underline">
+                <a :href="`mailto:${profileData.core.fields.email}`" class="text-indigo-600 dark:text-indigo-400 hover:underline">
                   {{ profileData.core.fields.email }}
                 </a>
               </dd>
@@ -325,7 +325,7 @@
                 <input
                   v-model="editForm.first_name"
                   type="text"
-                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>
               <!-- Last Name -->
@@ -336,7 +336,7 @@
                 <input
                   v-model="editForm.last_name"
                   type="text"
-                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>
               <!-- Email -->
@@ -347,7 +347,7 @@
                 <input
                   v-model="editForm.email"
                   type="email"
-                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>
               <!-- Phone -->
@@ -358,7 +358,7 @@
                 <input
                   v-model="editForm.phone"
                   type="tel"
-                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>
               <!-- Mobile -->
@@ -369,7 +369,7 @@
                 <input
                   v-model="editForm.mobile"
                   type="tel"
-                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>
               <!-- Source -->
@@ -380,7 +380,7 @@
                 <input
                   v-model="editForm.source"
                   type="text"
-                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>
               <!-- Do Not Contact -->
@@ -389,7 +389,7 @@
                   <input
                     v-model="editForm.do_not_contact"
                     type="checkbox"
-                    class="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                    class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                   />
                   <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
                     Do Not Contact
@@ -460,7 +460,7 @@
                 <button
                   @click="saveAppFields(appKey)"
                   :disabled="savingApp[appKey]"
-                  class="px-2 py-2 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 min-h-[40px]"
+                  class="px-2 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2 min-h-[40px]"
                 >
                   <svg v-if="savingApp[appKey]" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -515,7 +515,7 @@
             <div v-if="Object.keys(appSection.fields).length === 0" class="col-span-2">
               <p class="text-sm text-gray-500 dark:text-gray-400 italic">
                 No {{ appKey }}-specific fields set for this person yet.
-                <span v-if="appSection.canEdit" class="text-brand-600 dark:text-brand-400">
+                <span v-if="appSection.canEdit" class="text-indigo-600 dark:text-indigo-400">
                   Click "Edit" to add {{ appKey }}-specific fields.
                 </span>
               </p>
@@ -540,7 +540,7 @@
                 <select
                   v-if="fieldKey === 'type'"
                   v-model="appEditForms[appKey][fieldKey]"
-                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
                   <option value="">Select type...</option>
                   <option value="Lead">Lead</option>
@@ -551,7 +551,7 @@
                   v-else-if="fieldKey === 'birthday' || fieldKey === 'qualification_date'"
                   v-model="appEditForms[appKey][fieldKey]"
                   type="date"
-                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 cursor-pointer"
+                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
                   @click="openDatePicker"
                 />
                 <!-- Textarea for notes -->
@@ -559,7 +559,7 @@
                   v-else-if="fieldKey.includes('notes')"
                   v-model="appEditForms[appKey][fieldKey]"
                   rows="3"
-                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 ></textarea>
                 <!-- Number Input for scores/values -->
                 <input
@@ -567,14 +567,14 @@
                   v-model.number="appEditForms[appKey][fieldKey]"
                   type="number"
                   step="0.01"
-                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
                 <!-- Text Input (default) -->
                 <input
                   v-else
                   v-model="appEditForms[appKey][fieldKey]"
                   type="text"
-                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>
             </div>
@@ -731,7 +731,7 @@
                       v-for="intent in availableAttachIntents"
                       :key="intent.id"
                       @click="selectAttachIntent(intent)"
-                      class="text-left p-4 border-2 rounded-lg transition-all border-gray-200 dark:border-gray-700 hover:border-brand-500 dark:hover:border-brand-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
+                      class="text-left p-4 border-2 rounded-lg transition-all border-gray-200 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
                     >
                       <div class="flex items-start justify-between">
                         <div class="flex-1">
@@ -802,7 +802,7 @@
                     </label>
                     <select
                       v-model="attachFormData.contact_status"
-                      class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                      class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     >
                       <option value="">Select status...</option>
                       <option value="Active">Active</option>
@@ -821,7 +821,7 @@
                     </label>
                     <select
                       v-model="attachFormData.role"
-                      class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                      class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     >
                       <option value="">Select role...</option>
                       <option value="Decision Maker">Decision Maker</option>
@@ -841,7 +841,7 @@
                     </label>
                     <select
                       v-model="attachFormData.lead_status"
-                      class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                      class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     >
                       <option value="">Select status...</option>
                       <option value="New">New</option>

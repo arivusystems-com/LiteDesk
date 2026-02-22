@@ -7,7 +7,7 @@
         <select
           v-model="selectedComparisonType"
           @change="fetchComparison"
-          class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+          class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
         >
           <option value="last_audit">Compare with Last Audit</option>
           <option value="average">Compare with Average</option>
@@ -18,7 +18,7 @@
     
     <div class="p-6">
       <div v-if="loading" class="text-center py-12">
-        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600"></div>
+        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
         <p class="mt-4 text-gray-600 dark:text-gray-400">Loading comparison...</p>
       </div>
 
@@ -76,7 +76,7 @@
                   <div class="flex items-center gap-2">
                     <div class="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                       <div
-                        class="bg-brand-600 h-2 rounded-full"
+                        class="bg-indigo-600 h-2 rounded-full"
                         :style="{ width: `${comparison.current}%` }"
                       ></div>
                     </div>

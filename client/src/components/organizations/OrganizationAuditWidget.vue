@@ -5,7 +5,7 @@
       <button
         v-if="audits.length > 0"
         @click="viewAllAudits"
-        class="text-sm text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-500 font-medium"
+        class="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-500 font-medium"
       >
         View All
       </button>
@@ -13,7 +13,7 @@
 
     <!-- Loading State -->
     <div v-if="loading" class="text-center py-8">
-      <div class="w-8 h-8 border-2 border-gray-200 dark:border-gray-700 border-t-brand-600 dark:border-t-brand-500 rounded-full animate-spin mx-auto mb-2"></div>
+      <div class="w-8 h-8 border-2 border-gray-200 dark:border-gray-700 border-t-indigo-600 dark:border-t-indigo-500 rounded-full animate-spin mx-auto mb-2"></div>
       <p class="text-sm text-gray-500 dark:text-gray-400">Loading audit history...</p>
     </div>
 

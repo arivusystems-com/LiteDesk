@@ -55,6 +55,7 @@ import type {
 import {
   validateBaseFieldMetadata,
   classifyFieldBase,
+  normalizeFieldKeyForMetadataLookup,
 } from './BaseFieldModel';
 
 // =============================================================================
@@ -114,6 +115,9 @@ export interface TaskFieldMetadata extends Omit<BaseFieldMetadata, 'intent'> {
 export const TASK_FIELD_METADATA: Record<string, TaskFieldMetadata> = {
   // ==========================================================================
   // SYSTEM FIELDS (platform-managed, read-only, infrastructure-scoped)
+  // Type A: Infrastructure (never visible in config): _id, __v, organizationId
+  // Type B: Audit/Ownership (visible, read-only): createdAt, updatedAt, createdBy, assignedBy
+  // Type C: Computed: activityLogs, reminderSent, descriptionVersions
   // ==========================================================================
   organizationId: {
     owner: 'system',
@@ -121,6 +125,8 @@ export const TASK_FIELD_METADATA: Record<string, TaskFieldMetadata> = {
     fieldScope: 'CORE',
     editable: false,
     isProtected: true,
+    isSystem: true,
+    isVisibleInConfig: false,
   },
   createdBy: {
     owner: 'system',
@@ -128,84 +134,115 @@ export const TASK_FIELD_METADATA: Record<string, TaskFieldMetadata> = {
     fieldScope: 'CORE',
     editable: false,
     isProtected: true,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   createdAt: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   updatedAt: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   assignedBy: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   completedDate: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   completedAt: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   reminderDate: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
   reminderSent: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isComputed: true,
+    isVisibleInConfig: true,
   },
   _id: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: false,
   },
   __v: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: false,
   },
   activityLogs: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isComputed: true,
+    isVisibleInConfig: false, // Managed internally, too verbose for config
   },
   descriptionVersions: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isComputed: true,
+    isVisibleInConfig: true,
   },
   relatedToType: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: false,
   },
   relatedToId: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: false,
   },
 
   // ==========================================================================
@@ -443,17 +480,16 @@ validateAllTaskMetadata();
  * Returns undefined if field is not found (allows graceful handling of unknown fields)
  */
 export function getTaskFieldMetadata(fieldName: string): TaskFieldMetadata | undefined {
-  // Normalize field name for case-insensitive lookup
-  const normalizedName = fieldName.toLowerCase();
+  const normalizedName = normalizeFieldKeyForMetadataLookup(fieldName);
   
   // Try exact match first
   if (TASK_FIELD_METADATA[fieldName]) {
     return TASK_FIELD_METADATA[fieldName];
   }
   
-  // Try case-insensitive match
+  // Try normalized match (handles Status vs status, related-to vs relatedTo)
   for (const [key, metadata] of Object.entries(TASK_FIELD_METADATA)) {
-    if (key.toLowerCase() === normalizedName) {
+    if (normalizeFieldKeyForMetadataLookup(key) === normalizedName) {
       return metadata;
     }
   }
