@@ -28,17 +28,42 @@
                     :key="view.id"
                     v-slot="{ active, close }"
                   >
-                    <div class="group flex items-center justify-between">
+                    <div
+                      class="group flex items-center justify-between pr-2"
+                      :class="[
+                        active ? 'bg-gray-100 dark:bg-gray-700' : '',
+                        activeSavedViewId === view.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
+                      ]"
+                    >
                       <button
                         @click="() => { handleSavedViewClick(view); close(); }"
                         :class="[
-                          active ? 'bg-gray-100 dark:bg-gray-700' : '',
-                          activeSavedViewId === view.id ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100',
+                          activeSavedViewId === view.id ? 'text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100',
                           'flex-1 block w-full text-left px-4 py-2 text-sm'
                         ]"
                       >
                         {{ view.label }}
                       </button>
+                      <!-- Set as default (all views) -->
+                      <HoverTooltip
+                        :content="defaultViewId === view.id ? 'Default list (loads when opening)' : 'Set as default list'"
+                        anchor-selector="button"
+                        :show-delay="50"
+                        :hide-delay="80"
+                        :gap="4"
+                        class="flex items-center p-1 -m-1 rounded"
+                      >
+                        <button
+                          @click.stop="() => { handleSetDefaultView(view); close(); }"
+                          :class="[
+                            defaultViewId === view.id ? 'text-amber-500 dark:text-amber-400' : 'text-gray-400 hover:text-amber-500 dark:hover:text-amber-400',
+                            'p-0.5 transition-colors'
+                          ]"
+                        >
+                          <StarIcon v-if="defaultViewId !== view.id" class="w-4 h-4" />
+                          <StarIconSolid v-else class="w-4 h-4" />
+                        </button>
+                      </HoverTooltip>
                       <!-- Edit/Delete actions for custom views only -->
                       <div v-if="!isSystemView(view.id)" class="flex items-center gap-1 pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
@@ -1342,6 +1367,7 @@
       @close="() => { showPreviewDrawer = false; saveDrawerState(); }"
       @update="handlePreviewUpdate"
     />
+
   </div>
 </template>
 
@@ -1349,6 +1375,7 @@
 import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { ArrowUpIcon, ArrowDownIcon } from '@heroicons/vue/20/solid';
+import { StarIcon as StarIconSolid } from '@heroicons/vue/24/solid';
 import { Listbox, ListboxButton, ListboxOptions, ListboxOption, Popover, PopoverButton, PopoverPanel, Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue';
 import { ChevronUpDownIcon, CheckIcon, Cog6ToothIcon, FunnelIcon, ChartBarIcon, XMarkIcon, WrenchScrewdriverIcon, ChevronDownIcon, ChevronRightIcon, PencilSquareIcon, MagnifyingGlassIcon, PlusIcon, TrashIcon, ArrowDownTrayIcon, DocumentDuplicateIcon, ArrowUpTrayIcon, ArchiveBoxIcon, ArrowPathIcon, ArrowRightIcon, StarIcon, PuzzlePieceIcon, RectangleStackIcon, ViewColumnsIcon } from '@heroicons/vue/24/outline';
 import { 
@@ -1366,6 +1393,7 @@ import TableView from '@/components/common/TableView.vue';
 import ModuleActions from '@/components/common/ModuleActions.vue';
 import RowActions from '@/components/common/RowActions.vue';
 import DeleteConfirmationModal from '@/components/common/DeleteConfirmationModal.vue';
+import HoverTooltip from '@/components/common/HoverTooltip.vue';
 import QuickPreviewDrawer from '@/components/common/QuickPreviewDrawer.vue';
 import { useBulkActions } from '@/composables/useBulkActions';
 import { useAuthStore } from '@/stores/auth';
@@ -1502,6 +1530,11 @@ const props = defineProps({
     type: String,
     default: null
   },
+  /** View ID marked as default (loads when opening module) */
+  defaultViewId: {
+    type: String,
+    default: null
+  },
   // External filters (synced from ModuleList when stat is clicked)
   externalFilters: {
     type: Object,
@@ -1530,6 +1563,7 @@ const emit = defineEmits([
   'bulk-action',
   'row-updated',
   'saved-view-selected',
+  'set-default-view',
   'stat-click',
   'saved-views-updated',
   'kanban-settings-changed',
@@ -4076,6 +4110,12 @@ const handleCloseDeleteViewModal = () => {
 const handleSavedViewClick = (view) => {
   // Emit event to parent first - ModuleList will handle filter application and data fetching
   // This ensures consistent behavior between ListView and ModuleList
+  emit('saved-view-selected', view);
+};
+
+// Handle set as default - mark view as default and switch to it
+const handleSetDefaultView = (view) => {
+  emit('set-default-view', view.id);
   emit('saved-view-selected', view);
 };
 </script>

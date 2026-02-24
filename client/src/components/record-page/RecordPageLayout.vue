@@ -5,7 +5,7 @@
       <slot name="header" />
     </header>
     <!-- Body container - no scroll, only columns scroll -->
-    <div :class="['record-page-layout__body', 'flex', 'flex-1', 'min-h-0', 'gap-0', isMobile ? 'px-0' : 'px-6', 'pr-0', forceMobile ? 'pt-0' : 'pt-6', 'overflow-hidden', 'record-page-layout__body--responsive', !forceMobile && 'record-page-layout__body--with-header', 'record-page-layout__body--positioned', { 'transition-all duration-300 ease-in-out': allowTransition }]">
+    <div :class="['record-page-layout__body', 'flex', 'flex-1', 'min-h-0', 'gap-0', isMobile ? 'px-0' : 'px-6', 'pr-0', forceMobile ? 'pt-0' : 'pt-6', 'overflow-hidden', 'record-page-layout__body--responsive', !forceMobile && 'record-page-layout__body--with-header', !forceMobile && 'record-page-layout__body--positioned', { 'transition-all duration-300 ease-in-out': allowTransition }]">
       <!-- Left column: Main content (2/3 width) - scrollable; on mobile/tablet hidden unless leftExpanded (e.g. version history) -->
       <div
         v-show="!isMobile || leftExpanded"
@@ -18,8 +18,8 @@
           <slot name="left" :is-mobile="isMobile" />
         </div>
       </div>
-      <!-- Right column: Activity sidebar (1/3 width) - uses QuickPreview UI structure -->
-      <aside :class="['record-page-layout__right', 'min-w-0', 'flex', 'flex-col', 'border-l', 'border-gray-200', 'dark:border-gray-700', 'overflow-hidden', isMobile ? 'w-full border-l-0' : 'w-full lg:w-auto lg:flex-shrink-0']">
+      <!-- Right column: Activity sidebar (1/3 width) - hidden when section expanded (e.g. description history) -->
+      <aside v-show="!leftExpanded" :class="['record-page-layout__right', 'min-w-0', 'flex', 'flex-col', 'border-l', 'border-gray-200', 'dark:border-gray-700', 'overflow-hidden', isMobile ? 'w-full border-l-0' : 'w-full lg:w-auto lg:flex-shrink-0']">
         <slot name="right" :is-mobile="isMobile">
           <!-- Default slot content -->
         </slot>

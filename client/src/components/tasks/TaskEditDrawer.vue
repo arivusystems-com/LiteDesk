@@ -519,11 +519,15 @@ async function handleSubmit() {
       return;
     }
 
-    const allowedUpdates = [
+    const standardKeys = [
       'title', 'description', 'relatedTo', 'projectId', 'assignedTo',
       'status', 'priority', 'dueDate', 'startDate', 'completedDate',
       'estimatedHours', 'actualHours', 'subtasks', 'tags', 'reminderDate'
-    ].filter((key) => !isTaskSystemField(key));
+    ];
+    const moduleFieldKeys = (allFields || []).map((f) => f?.key).filter(Boolean);
+    const allowedUpdates = [...new Set([...standardKeys, ...moduleFieldKeys])].filter(
+      (key) => !isTaskSystemField(key)
+    );
     const raw = { ...formData.value };
     const normId = (v) => (v && typeof v === 'object' && v._id != null) ? v._id : v;
     const payload = {};

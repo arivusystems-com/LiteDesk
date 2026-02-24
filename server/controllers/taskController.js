@@ -1678,10 +1678,11 @@ const deleteTaskComment = async (req, res) => {
 // @desc    Get custom fields for a task
 // @route   GET /api/tasks/:id/custom-fields
 // @access  Private
-// Note: Placeholder endpoint - custom fields for tasks not yet implemented
 const getTaskCustomFields = async (req, res) => {
   try {
-    const task = await Task.findById(req.params.id);
+    const task = await Task.findById(req.params.id)
+      .select('customFields organizationId')
+      .lean();
     if (!task) {
       return res.status(404).json({ success: false, message: 'Task not found' });
     }
@@ -1689,11 +1690,75 @@ const getTaskCustomFields = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
-    // Custom fields not yet implemented for tasks - return empty array
-    res.json({
-      success: true,
-      data: []
+    const customFieldsData = task.customFields || {};
+    const schemaPaths = new Set(Object.keys(Task.schema.paths || {}));
+    const normalizeKey = (k) => String(k || '').toLowerCase().replace(/\s/g, '').replace(/-/g, '');
+    const schemaPathsNormalized = new Set([...schemaPaths].map(normalizeKey));
+
+    // System/schema fields to never return as "custom" (avoids duplicates and system field exposure)
+    const RESERVED_CUSTOM_KEYS = new Set([
+      'relatedto', 'relatedtotype', 'relatedtoid', 'completedat', 'deletedat', 'deletedby',
+      'deletionreason', 'createdat', 'updatedat', 'createdby', 'organizationid'
+    ]);
+
+    // Get module definition for custom field definitions (org override first, then platform)
+    const ModuleDefinition = require('../models/ModuleDefinition');
+    const orgModule = await ModuleDefinition.findOne({
+      organizationId: req.user.organizationId,
+      key: 'tasks'
+    })
+      .select('fields')
+      .lean();
+    const platformModule = await ModuleDefinition.findOne({
+      appKey: 'platform',
+      moduleKey: 'tasks',
+      organizationId: null
+    })
+      .select('fields')
+      .lean();
+
+    const moduleDef = orgModule || platformModule;
+    const customFieldDefs = [];
+    const seenNormalized = new Set();
+    if (moduleDef && Array.isArray(moduleDef.fields)) {
+      for (const f of moduleDef.fields) {
+        if (!f || !f.key) continue;
+        const keyNorm = normalizeKey(f.key);
+        if (schemaPaths.has(f.key) || schemaPathsNormalized.has(keyNorm)) continue;
+        if (RESERVED_CUSTOM_KEYS.has(keyNorm)) continue;
+        if (seenNormalized.has(keyNorm)) continue;
+        seenNormalized.add(keyNorm);
+        customFieldDefs.push({ key: f.key, label: f.label || f.key });
+      }
+    }
+
+    if (customFieldDefs.length === 0) {
+      return res.json({ success: true, data: [] });
+    }
+
+    // Build response: all custom fields from module, with values from task (or empty)
+    const customByKeyLower = new Map();
+    Object.entries(customFieldsData).forEach(([k, v]) => {
+      customByKeyLower.set(String(k).toLowerCase().trim(), v);
     });
+    const data = customFieldDefs.map(({ key, label }) => {
+      const value = customFieldsData[key] ?? customByKeyLower.get(String(key).toLowerCase().trim());
+      let displayValue = value;
+      if (value === undefined || value === null || value === '') {
+        displayValue = '';
+      } else if (value instanceof Date) {
+        displayValue = value.toISOString();
+      } else if (Array.isArray(value)) {
+        displayValue = value.map((v) => (v && typeof v === 'object' && v.label != null ? v.label : v)).join(', ');
+      } else if (value && typeof value === 'object' && !(value instanceof Date)) {
+        displayValue = value.name || value.label || value.title || value._id || JSON.stringify(value);
+      } else {
+        displayValue = String(value);
+      }
+      return { key, label, value: displayValue != null ? String(displayValue) : '' };
+    });
+
+    res.json({ success: true, data });
   } catch (error) {
     console.error('Get task custom fields error:', error);
     res.status(500).json({

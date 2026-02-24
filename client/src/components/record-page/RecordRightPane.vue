@@ -28,7 +28,7 @@
       <!-- Main Content Area - Always render for smooth transitions -->
       <div 
         ref="scrollContainer"
-        class="flex-1 overflow-y-auto transition-all duration-300 min-h-0 flex flex-col"
+        class="flex-1 overflow-y-auto overflow-x-hidden transition-all duration-300 min-h-0 flex flex-col"
         :class="[
           { 'opacity-0': !activeTab, 'opacity-100': activeTab },
           layoutIsMobile && activeTab === 'summary'
@@ -42,7 +42,7 @@
             <div v-if="activeTab === tab.id" class="flex-1 flex flex-col min-h-0 h-full overflow-hidden">
               <!-- Summary tab: use teleport target for layout's left content on mobile -->
               <template v-if="tab.id === 'summary' && layoutIsMobile">
-                <div class="flex-1 overflow-y-auto">
+                <div class="flex-1 overflow-y-auto overflow-x-hidden">
                   <div id="record-summary-teleport-target" class="record-right-pane__summary-content max-w-4xl mx-auto w-full px-6 pt-0 pb-6">
                     <!-- Content will be teleported here from RecordPageLayout -->
                     <slot :name="`tab-${tab.id}`">

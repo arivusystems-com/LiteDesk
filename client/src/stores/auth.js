@@ -155,6 +155,21 @@ export const useAuthStore = defineStore('auth', {
                     console.error('[Auth] Error clearing offline data:', err);
                 });
             });
+
+            // Clear list active-view (session state) so next login shows default list
+            // Keeps default-view and saved-views; only clears active-view
+            try {
+                const keysToRemove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith('litedesk-listview-') && key.endsWith('-active-view')) {
+                        keysToRemove.push(key);
+                    }
+                }
+                keysToRemove.forEach(k => localStorage.removeItem(k));
+            } catch (e) {
+                console.warn('[Auth] Failed to clear list active-view keys:', e);
+            }
         },
 
     async authenticate(endpoint, credentials) {
