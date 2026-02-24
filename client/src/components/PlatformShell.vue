@@ -122,10 +122,6 @@ const queueContentOffsetUpdate = () => {
 watch(
   () => route.fullPath,
   () => {
-    // Collapse sidebar when entering Settings (maximize content area)
-    if (route.path.startsWith('/settings')) {
-      sidebarCollapsed.value = true;
-    }
     collapseSidebarForRecordOnTablet();
     queueContentOffsetUpdate();
   }
@@ -140,10 +136,6 @@ const handleResize = () => {
 };
 
 onMounted(() => {
-  // Collapse sidebar when on Settings (maximize content area)
-  if (route.path.startsWith('/settings')) {
-    sidebarCollapsed.value = true;
-  }
   collapseSidebarForRecordOnTablet();
   queueContentOffsetUpdate();
   window.addEventListener('resize', handleResize, { passive: true });

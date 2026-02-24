@@ -42,6 +42,7 @@
       :stats-config="statsConfig"
       :saved-views="savedViews"
       :active-saved-view-id="activeSavedViewId"
+      :default-view-id="defaultViewId"
       :sort-field="sortField"
       :sort-order="sortOrder"
       :pagination="pagination"
@@ -59,6 +60,7 @@
       @update:sort="handleSortUpdate"
       @update:pagination="handlePaginationUpdate"
       @saved-view-selected="handleSavedViewSelected"
+      @set-default-view="handleSetDefaultView"
       @saved-views-updated="handleSavedViewsUpdated"
       @stat-click="handleStatClick"
       @fetch="fetchData"
@@ -162,6 +164,7 @@ const searchQuery = ref('');
 
 // Saved Views for People module
 const savedViews = ref([]);
+const defaultViewId = ref(null);
 const activeSavedViewId = ref(null);
 
 // Schema-driven filter data
@@ -287,33 +290,33 @@ const buildList = async () => {
       // Find default view or first view
       const defaultView = systemViews.find(v => v.isDefault) || systemViews[0];
       if (defaultView) {
-        // Load saved active view from localStorage, or default to default view
+        // Priority: last active view (if user switched before reload) > user's default (first visit) > "All"
+        const defaultViewStorageKey = `litedesk-listview-${props.moduleKey}-default-view`;
         const savedViewStorageKey = `litedesk-listview-${props.moduleKey}-active-view`;
         try {
+          const userDefaultViewId = localStorage.getItem(defaultViewStorageKey);
+          defaultViewId.value = userDefaultViewId || null;
           const savedActiveViewId = localStorage.getItem(savedViewStorageKey);
-          if (savedActiveViewId && savedViews.value.find(v => v.id === savedActiveViewId)) {
-            activeSavedViewId.value = savedActiveViewId;
-            // Apply the saved view's filters
-            const savedView = savedViews.value.find(v => v.id === savedActiveViewId);
-            if (savedView && savedView.filters) {
-              const viewFilters = { ...savedView.filters };
-              // Normalize filters using registry function if available
-              if (moduleConfig?.normalizeViewFilters) {
-                const normalized = moduleConfig.normalizeViewFilters(viewFilters, currentUserId);
-                filters.value = normalized;
-              } else {
-                filters.value = viewFilters;
-              }
+          const viewToLoad = (savedActiveViewId && savedViews.value.find(v => v.id === savedActiveViewId))
+            ? savedActiveViewId
+            : (userDefaultViewId && savedViews.value.find(v => v.id === userDefaultViewId))
+              ? userDefaultViewId
+              : defaultView.id;
+          activeSavedViewId.value = viewToLoad;
+          const savedView = savedViews.value.find(v => v.id === viewToLoad);
+          if (savedView && savedView.filters) {
+            const viewFilters = { ...savedView.filters };
+            if (moduleConfig?.normalizeViewFilters) {
+              const normalized = moduleConfig.normalizeViewFilters(viewFilters, currentUserId);
+              filters.value = normalized;
             } else {
-              filters.value = {};
+              filters.value = viewFilters;
             }
           } else {
-            // Default to default view
-            activeSavedViewId.value = defaultView.id;
             filters.value = {};
           }
         } catch (error) {
-          console.warn('[ModuleList] Failed to load saved active view:', error);
+          console.warn('[ModuleList] Failed to load saved view:', error);
           activeSavedViewId.value = defaultView.id;
           filters.value = {};
         }
@@ -1715,6 +1718,17 @@ const handleSavedViewSelected = (view) => {
   
   // Use handleFiltersUpdate to properly sync filters with ListView and trigger fetch
   handleFiltersUpdate(normalizedFilters);
+};
+
+const handleSetDefaultView = (viewId) => {
+  if (!viewId || !hasModuleListConfig(props.moduleKey)) return;
+  const defaultViewStorageKey = `litedesk-listview-${props.moduleKey}-default-view`;
+  try {
+    localStorage.setItem(defaultViewStorageKey, viewId);
+    defaultViewId.value = viewId;
+  } catch (error) {
+    console.warn('[ModuleList] Failed to save default view:', error);
+  }
 };
 
 const handleSortUpdate = ({ sortField: key, sortOrder: order }) => {

@@ -1075,11 +1075,28 @@ const updateQuickPreviewOffset = () => {
   document.documentElement.style.setProperty('--quickpreview-offset', `${fallbackOffset}px`);
 };
 
+// Reset horizontal scroll in drawer content (fixes shift after tab switch / visibility change)
+const resetDrawerScrollPosition = () => {
+  nextTick(() => {
+    const drawer = document.querySelector('.record-right-pane-drawer');
+    if (!drawer) return;
+    const scrollables = drawer.querySelectorAll('.overflow-y-auto, .overflow-auto, [style*="overflow"]');
+    scrollables.forEach((el) => {
+      if (el.scrollLeft !== 0) {
+        el.scrollLeft = 0;
+      }
+    });
+  });
+};
+
 // Watch for changes when drawer opens
 watch(() => props.show, (newVal) => {
   if (newVal) {
     // Prevent body scroll
     preventBodyScroll();
+    // Reset any horizontal scroll that may have been incorrectly restored after tab switch
+    resetDrawerScrollPosition();
+    setTimeout(resetDrawerScrollPosition, 50);
     
     // Multiple attempts to ensure we get the correct offset
     nextTick(() => {
@@ -1582,10 +1599,17 @@ const createWidgetElement = (widgetType) => {
 // Watch for CSS variable changes
 let observer = null;
 
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible' && props.show) {
+    resetDrawerScrollPosition();
+  }
+};
+
 onMounted(() => {
   updateQuickPreviewOffset();
   window.addEventListener('resize', handleResize);
   window.addEventListener('sidebar-toggle', handleSidebarToggle);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
   
   // Watch for CSS variable changes on document root (especially --tabbar-offset)
   observer = new MutationObserver(() => {
@@ -1603,6 +1627,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize);
   window.removeEventListener('sidebar-toggle', handleSidebarToggle);
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
   if (observer) {
     observer.disconnect();
   }

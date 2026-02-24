@@ -997,6 +997,25 @@
                   <span>{{ getRelatedToDisplay(task) || '—' }}</span>
                 </div>
               </div>
+
+              <EditableLabeledValue
+                v-else-if="getCustomFieldByKey(fieldKey)"
+                class="pl-0"
+                layout="row"
+                :label="getCustomFieldByKey(fieldKey).label"
+                :value="task[fieldKey] ?? getCustomFieldByKey(fieldKey).value"
+                :type="getCustomFieldEditableType(fieldKey)"
+                :can-edit="canEditTask"
+                :options="getCustomFieldOptions(fieldKey)"
+                :min="getCustomFieldNumberMin(fieldKey)"
+                :step="getCustomFieldNumberStep(fieldKey)"
+                @save="handleFieldSave(fieldKey, $event)"
+              >
+                <span v-if="(task[fieldKey] ?? getCustomFieldByKey(fieldKey).value) !== null && (task[fieldKey] ?? getCustomFieldByKey(fieldKey).value) !== undefined && (task[fieldKey] ?? getCustomFieldByKey(fieldKey).value) !== ''">
+                  {{ task[fieldKey] ?? getCustomFieldByKey(fieldKey).value }}
+                </span>
+                <span v-else class="text-gray-400 dark:text-gray-500">—</span>
+              </EditableLabeledValue>
             </template>
           </template>
         </RecordFieldsSection>
@@ -1010,27 +1029,6 @@
             View all ({{ detailFieldCount }})
           </button>
         </div>
-      </div>
-
-      <div v-if="task && customFields.length > 0 && (!expandedLeftSection || expandedLeftSection === 'custom-fields')" class="group/left-section">
-        <CustomFieldsSection
-          :fields="customFields"
-          storage-key="task-record-custom-fields-state"
-          :default-open="true"
-        >
-          <template #actions>
-            <button
-              v-if="!expandedLeftSection"
-              type="button"
-              class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 opacity-100 transition-opacity hover:text-gray-800 hover:bg-gray-50 lg:opacity-0 lg:group-hover/left-section:opacity-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:text-gray-100 dark:hover:bg-gray-800"
-              aria-label="Expand custom fields"
-              title="Expand"
-              @click.stop="openLeftSection('custom-fields')"
-            >
-              <ArrowsPointingOutIcon class="h-4 w-4" />
-            </button>
-          </template>
-        </CustomFieldsSection>
       </div>
 
       <section v-if="task && (!expandedLeftSection || expandedLeftSection === 'subtasks')" class="group/left-section py-3">
@@ -2467,7 +2465,6 @@ import {
   RecordHeader,
   RecordStateSection,
   RecordFieldsSection,
-  CustomFieldsSection,
   RecordActivityTimeline,
   RecordRightPane,
   EditableLabeledValue
@@ -2942,6 +2939,57 @@ const getFieldLabel = (fieldKey) => {
   return toReadableFieldLabel(moduleField?.label, fieldKey);
 };
 
+// Get custom field object by key (for Details section display)
+const getCustomFieldByKey = (fieldKey) => {
+  return (customFields.value || []).find(
+    (f) => (f?.key || '').toLowerCase() === (fieldKey || '').toLowerCase()
+  ) || null;
+};
+
+// Get module field definition for a custom field (from taskModuleDefinition)
+const getModuleFieldForKey = (fieldKey) => {
+  return (taskModuleDefinition.value?.fields || []).find(
+    (f) => (f?.key || '').toLowerCase() === (fieldKey || '').toLowerCase()
+  ) || null;
+};
+
+// Map custom field dataType to EditableLabeledValue type
+const getCustomFieldEditableType = (fieldKey) => {
+  const modField = getModuleFieldForKey(fieldKey);
+  const dt = (modField?.dataType || 'Text').toLowerCase();
+  if (['integer', 'decimal', 'currency'].includes(dt)) return 'number';
+  if (['date', 'date-time', 'datetime'].includes(dt)) return 'date';
+  if (dt === 'picklist') return 'select';
+  return 'text';
+};
+
+// Get options for Picklist/Multi-Picklist custom fields
+const getCustomFieldOptions = (fieldKey) => {
+  const modField = getModuleFieldForKey(fieldKey);
+  const opts = modField?.options;
+  if (!Array.isArray(opts)) return undefined;
+  return opts.map((o) => ({
+    value: typeof o === 'object' && o !== null ? (o.value ?? o.label ?? o) : o,
+    label: typeof o === 'object' && o !== null ? (o.label ?? o.value ?? String(o)) : String(o)
+  }));
+};
+
+// Get min/step for number-type custom fields
+const getCustomFieldNumberMin = (fieldKey) => {
+  const modField = getModuleFieldForKey(fieldKey);
+  const dt = (modField?.dataType || '').toLowerCase();
+  if (['integer', 'decimal', 'currency'].includes(dt)) return 0;
+  return undefined;
+};
+
+const getCustomFieldNumberStep = (fieldKey) => {
+  const modField = getModuleFieldForKey(fieldKey);
+  const dt = (modField?.dataType || '').toLowerCase();
+  if (dt === 'integer') return 1;
+  if (['decimal', 'currency'].includes(dt)) return 0.01;
+  return undefined;
+};
+
 // Get field type for EditableLabeledValue component based on field metadata
 const getFieldType = (fieldKey) => {
   const metadata = getTaskFieldMetadata(fieldKey);
@@ -3228,53 +3276,90 @@ const keyFieldDisplayValues = computed(() => {
   return values;
 });
 
+// Platform default key fields (used when module not loaded) - these are shown in Key section, not Details
+const TASK_DEFAULT_KEY_FIELDS = Object.freeze(['status', 'priority', 'startDate', 'dueDate', 'assignedTo', 'estimatedHours']);
+
 const detailsSectionExcludedFields = computed(() => {
   const baseExcluded = ['title', 'description', 'subtasks', 'projectId'];
-  return Array.from(new Set([...baseExcluded, ...keyFieldKeys.value]));
+  const systemExcluded = [
+    'completedAt', 'deletedAt', 'deletedBy', 'deletionReason',
+    'createdAt', 'updatedAt', 'createdBy', 'relatedToType', 'relatedToId'
+  ];
+  const keys = keyFieldKeys.value.length > 0 ? keyFieldKeys.value : TASK_DEFAULT_KEY_FIELDS;
+  return Array.from(new Set([...baseExcluded, ...systemExcluded, ...keys]));
 });
 
 const showAllDetails = ref(false);
 
-const detailGroupFieldsMap = computed(() => {
-  const coreFields = getCoreTaskFields();
-  const excludedFields = detailsSectionExcludedFields.value;
-  const displayableFields = coreFields.filter(field => !excludedFields.includes(field));
+const normalizeFieldKey = (k) => String(k || '').toLowerCase().trim().replace(/\s+/g, '').replace(/-/g, '');
 
-  const core = displayableFields.filter((field) => {
-    const metadata = getTaskFieldMetadata(field);
-    return metadata && (metadata.intent === 'primary' || metadata.intent === 'state' || metadata.intent === 'scheduling');
-  });
+// Details section fields in module configuration order (Settings → Modules & Fields)
+const detailsSectionFieldsOrdered = computed(() => {
+  const excluded = detailsSectionExcludedFields.value;
+  const excludedNorm = new Set(excluded.map(normalizeFieldKey));
+  const mod = taskModuleDefinition.value;
+  const moduleFields = mod?.fields || [];
 
-  const planning = displayableFields.filter((field) => {
-    const metadata = getTaskFieldMetadata(field);
-    return metadata && metadata.intent === 'tracking';
-  });
-
-  const relationships = displayableFields.filter((field) => {
-    const metadata = getTaskFieldMetadata(field);
-    return metadata && metadata.intent === 'detail';
-  });
-
-  // Add tags to planning only if not already in another group (tags has intent 'detail' so it appears in relationships)
-  if (displayableFields.includes('tags') && !relationships.includes('tags') && !planning.includes('tags')) {
-    planning.push('tags');
+  if (moduleFields.length === 0) {
+    // Fallback: intent-based order when module not loaded
+    const coreFields = getCoreTaskFields();
+    const displayableFields = coreFields.filter(f => !excluded.includes(f));
+    const core = displayableFields.filter((f) => {
+      const m = getTaskFieldMetadata(f);
+      return m && (m.intent === 'primary' || m.intent === 'state' || m.intent === 'scheduling');
+    });
+    const planning = displayableFields.filter((f) => {
+      const m = getTaskFieldMetadata(f);
+      return m && m.intent === 'tracking';
+    });
+    const relationships = displayableFields.filter((f) => {
+      const m = getTaskFieldMetadata(f);
+      return m && m.intent === 'detail';
+    });
+    if (displayableFields.includes('tags') && !relationships.includes('tags') && !planning.includes('tags')) {
+      planning.push('tags');
+    }
+    const customKeys = (customFields.value || []).map(f => f?.key).filter(Boolean);
+    return [...new Set([...core, ...planning, ...relationships, ...customKeys])];
   }
 
-  return {
-    core: Array.from(new Set(core)),
-    planning: Array.from(new Set(planning)),
-    relationships: Array.from(new Set(relationships))
-  };
+  const ordered = [];
+  const seen = new Set();
+  const sorted = [...moduleFields].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+  for (const f of sorted) {
+    const key = f?.key;
+    if (!key) continue;
+    const keyNorm = normalizeFieldKey(key);
+    if (excludedNorm.has(keyNorm)) continue;
+    if (seen.has(keyNorm)) continue;
+    const showInDetail = f.visibility?.detail;
+    if (showInDetail !== true) {
+      if (keyNorm !== 'relatedto') continue;
+    }
+    seen.add(keyNorm);
+    ordered.push(key);
+  }
+  return ordered;
 });
 
+// Fields that have render templates in the Details section (count must match what's actually displayed)
+const DETAIL_RENDERABLE_KEYS = Object.freeze(new Set([
+  'assignedto', 'duedate', 'startdate', 'priority', 'status',
+  'estimatedhours', 'actualhours', 'tags', 'relatedto'
+]));
+
 const detailFieldsOrdered = computed(() => {
-  const ordered = [
-    ...detailGroupFieldsMap.value.core,
-    ...detailGroupFieldsMap.value.planning,
-    ...(detailGroupFieldsMap.value.relationships || [])
-  ];
-  return Array.from(new Set(ordered));
+  const ordered = detailsSectionFieldsOrdered.value;
+  const customKeys = (customFields.value || []).map(f => (f?.key || '').toLowerCase()).filter(Boolean);
+  return ordered.filter((key) => {
+    const norm = normalizeFieldKey(key);
+    return DETAIL_RENDERABLE_KEYS.has(norm) || customKeys.includes(norm);
+  });
 });
+
+const detailGroupFieldsMap = computed(() => ({
+  details: detailFieldsOrdered.value
+}));
 
 const detailFieldCount = computed(() => detailFieldsOrdered.value.length);
 
@@ -3289,67 +3374,10 @@ const visibleDetailFieldSet = computed(() => {
   return new Set(detailFieldsOrdered.value.slice(0, 5));
 });
 
-// Computed: Get core fields grouped by intent for display
+// Single group: all details fields in module configuration order
 const fieldGroups = computed(() => {
-  const coreFields = getCoreTaskFields();
-  
-  // Filter out system fields and fields we don't want to show in RecordFieldsSection
-  // (title and description are shown separately, subtasks are shown separately,
-  // and RecordStateSection fields are shown in the state section above)
-  const excludedFields = detailsSectionExcludedFields.value;
-  const displayableFields = coreFields.filter(field => !excludedFields.includes(field));
-  
-  // Group fields by intent
-  const groups = [];
-  
-  // Core fields group (primary, state, scheduling)
-  const coreGroupFields = displayableFields.filter(field => {
-    const metadata = getTaskFieldMetadata(field);
-    return metadata && (metadata.intent === 'primary' || metadata.intent === 'state' || metadata.intent === 'scheduling');
-  });
-  
-  if (coreGroupFields.length > 0) {
-    groups.push({
-      key: 'core',
-      label: 'Core',
-      fields: coreGroupFields
-    });
-  }
-  
-  // Planning group (tracking fields)
-  const planningGroupFields = displayableFields.filter(field => {
-    const metadata = getTaskFieldMetadata(field);
-    return metadata && metadata.intent === 'tracking';
-  });
-
-  // Relationships group (detail intent: relatedTo, tags, etc.)
-  const relationshipsGroupFields = displayableFields.filter(field => {
-    const metadata = getTaskFieldMetadata(field);
-    return metadata && metadata.intent === 'detail';
-  });
-  
-  // Only add tags to planning if not already in relationships (tags has intent 'detail')
-  if (displayableFields.includes('tags') && !relationshipsGroupFields.includes('tags') && !planningGroupFields.includes('tags')) {
-    planningGroupFields.push('tags');
-  }
-  
-  if (planningGroupFields.length > 0) {
-    groups.push({
-      key: 'planning',
-      label: 'Planning',
-      fields: planningGroupFields
-    });
-  }
-  
-  if (relationshipsGroupFields.length > 0) {
-    groups.push({
-      key: 'relationships',
-      label: 'Relationships',
-      fields: relationshipsGroupFields
-    });
-  }
-  
-  return groups.map(group => ({ key: group.key, label: group.label }));
+  const ordered = detailsSectionFieldsOrdered.value;
+  return ordered.length > 0 ? [{ key: 'details', label: '' }] : [];
 });
 
 // Computed: Get fields for each group
@@ -5874,6 +5902,17 @@ const handleFieldSave = async (fieldName, newValue) => {
         }
       } else {
         task.value[fieldName] = newValue;
+      }
+      // Keep customFields in sync when saving a custom field
+      const cf = getCustomFieldByKey(fieldName);
+      if (cf) {
+        const idx = (customFields.value || []).findIndex(
+          (f) => (f?.key || '').toLowerCase() === (fieldName || '').toLowerCase()
+        );
+        if (idx >= 0 && customFields.value) {
+          customFields.value = [...customFields.value];
+          customFields.value[idx] = { ...cf, value: newValue != null ? String(newValue) : '' };
+        }
       }
     }
   } catch (err) {
