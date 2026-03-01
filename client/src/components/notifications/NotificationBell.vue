@@ -1,12 +1,14 @@
 <template>
   <button
     type="button"
-    class="relative inline-flex items-center justify-center rounded-full p-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors min-h-[44px] min-w-[44px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
+    class="relative inline-flex items-center justify-center rounded-full p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors duration-150 min-h-[44px] min-w-[44px] bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:ring-offset-2 dark:focus:ring-offset-neutral-900"
     :aria-label="ariaLabel"
+    :title="tooltipText"
     @click.stop.prevent="handleClick"
   >
     <svg
-      class="w-6 h-6 text-gray-600 dark:text-gray-300"
+      class="w-6 h-6 text-neutral-600 dark:text-neutral-300 transition-transform duration-200"
+      :class="{ 'notification-bell--ring': justReceived }"
       fill="none"
       stroke="currentColor"
       viewBox="0 0 24 24"
@@ -19,17 +21,17 @@
       />
     </svg>
 
-    <!-- Red dot (all viewports) -->
+    <!-- Dot badge (mobile / fallback) -->
     <span
       v-if="hasUnread"
-      class="absolute top-1 right-1 block w-2 h-2 rounded-full bg-red-500"
+      class="absolute top-1 right-1 block w-2 h-2 rounded-full bg-danger-500 notification-bell-badge md:hidden"
       aria-hidden="true"
     ></span>
 
-    <!-- Numeric badge (desktop only) -->
+    <!-- Numeric badge (desktop) -->
     <span
       v-if="hasUnread && showCountOnDesktop"
-      class="hidden md:flex items-center justify-center absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-red-500 text-[10px] font-semibold text-white px-1"
+      class="hidden md:flex items-center justify-center absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-danger-500 text-[10px] font-semibold text-white px-1 notification-bell-badge"
       aria-hidden="true"
     >
       {{ displayCount }}
@@ -38,7 +40,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onBeforeUnmount } from 'vue';
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import { useNotificationStore } from '@/stores/notifications';
 import { useNotificationStream } from '@/composables/useNotificationStream';
 import { useOffline } from '@/composables/useOffline';
@@ -54,6 +56,10 @@ const emit = defineEmits(['toggle']);
 
 const store = useNotificationStore();
 const { isOnline } = useOffline();
+
+// Ring animation when new notification arrives via SSE
+const justReceived = ref(false);
+let justReceivedTimer = null;
 
 // Get current app key for SSE connection
 const currentAppKey = () => {
@@ -73,36 +79,77 @@ const ariaLabel = computed(() =>
   hasUnread.value ? 'Notifications, unread items present' : 'Notifications'
 );
 
+const tooltipText = computed(() =>
+  hasUnread.value ? `${displayCount.value} unread notification${store.unreadCount !== 1 ? 's' : ''}` : 'Notifications'
+);
+
 let streamDisconnect = null;
 
 onMounted(() => {
-  console.log('[NotificationBell] Component mounted');
-  // Lightweight preview so we only know if there is at least one unread
   store.fetchUnreadPreview();
-  
-  // Connect SSE stream for real-time bell updates (only when online)
+
   if (isOnline.value) {
     const appKey = currentAppKey();
     const stream = useNotificationStream(appKey, (notification) => {
-      // Update unread count when new notification arrives
       store.handleIncomingNotification(notification);
+      // Trigger ring animation
+      justReceived.value = true;
+      if (justReceivedTimer) clearTimeout(justReceivedTimer);
+      justReceivedTimer = setTimeout(() => {
+        justReceived.value = false;
+        justReceivedTimer = null;
+      }, 800);
     });
     streamDisconnect = stream.disconnect;
   }
 });
 
 onBeforeUnmount(() => {
-  if (streamDisconnect) {
-    streamDisconnect();
-  }
+  if (streamDisconnect) streamDisconnect();
+  if (justReceivedTimer) clearTimeout(justReceivedTimer);
 });
 
 function handleClick(e) {
-  console.log('[NotificationBell] toggle clicked', e);
   e.preventDefault();
   e.stopPropagation();
   emit('toggle');
 }
 </script>
+
+<style scoped>
+.notification-bell-badge {
+  animation: notification-bell-pulse 2s ease-in-out infinite;
+}
+
+.notification-bell--ring {
+  animation: notification-bell-ring 0.5s ease-in-out;
+}
+
+@keyframes notification-bell-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes notification-bell-ring {
+  0%, 100% {
+    transform: rotate(0);
+  }
+  10%, 30% {
+    transform: rotate(-15deg);
+  }
+  20%, 40% {
+    transform: rotate(15deg);
+  }
+  50% {
+    transform: rotate(0);
+  }
+}
+</style>
 
 

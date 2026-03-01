@@ -31,6 +31,16 @@
         </button>
 
         <div class="flex items-center gap-2">
+          <button
+            v-if="primaryContact?.email"
+            @click="showEmailModal = true"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 font-medium text-gray-700 dark:text-gray-300 transition-all"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            Email
+          </button>
           <button @click="editDeal" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 font-medium text-gray-700 dark:text-gray-300 transition-all">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -463,6 +473,15 @@
       @close="showEventModal = false"
       @saved="handleEventSaved"
     />
+
+    <!-- Email Compose Drawer -->
+    <EmailComposeDrawer
+      :is-open="showEmailModal"
+      :related-to="(deal?.id ?? deal?._id) ? { moduleKey: 'deals', recordId: String(deal?.id ?? deal?._id ?? '') } : null"
+      :initial-to="primaryContact?.email || ''"
+      @close="showEmailModal = false"
+      @submit="handleEmailSubmit"
+    />
   </div>
 </template>
 
@@ -472,6 +491,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
+import EmailComposeDrawer from '@/components/communications/EmailComposeDrawer.vue';
 import RelatedEventsWidget from '@/components/events/RelatedEventsWidget.vue';
 import RelatedRecordsPanel from '@/components/relationships/RelatedRecordsPanel.vue';
 import AutomationContext from '@/components/automation/AutomationContext.vue';
@@ -490,6 +510,7 @@ const showEditModal = ref(false);
 const showNoteForm = ref(false);
 const newNote = ref('');
 const showEventModal = ref(false);
+const showEmailModal = ref(false);
 const eventToEdit = ref(null);
 const eventsWidgetRef = ref(null);
 const showAllParticipants = ref(false);
@@ -648,6 +669,21 @@ const getPriorityClass = (priority) => {
 
 const editDeal = () => {
   showEditModal.value = true;
+};
+
+const handleEmailSubmit = async (payload) => {
+  showEmailModal.value = false;
+  try {
+    const res = await apiClient.post('/communications/email', payload);
+    if (res.success) {
+      fetchDeal();
+    } else {
+      alert(res.message || 'Failed to send email');
+    }
+  } catch (err) {
+    const msg = err.response?.data?.error || err.response?.data?.message || err.message;
+    alert(msg || 'Failed to send email');
+  }
 };
 
 const handleDealUpdated = () => {

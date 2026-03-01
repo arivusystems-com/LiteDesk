@@ -21,6 +21,7 @@ const Organization = require('../models/Organization');
 const User = require('../models/User');
 const TenantModuleConfiguration = require('../models/TenantModuleConfiguration');
 const integrationRegistry = require('../constants/integrationRegistry');
+const emailService = require('../services/emailService');
 
 /**
  * Get all core modules with their application usage
@@ -1600,23 +1601,29 @@ exports.getIntegration = async (req, res) => {
         const enabled = state.enabled === true;
         const status = enabled ? (state.status || 'connected') : 'disconnected';
 
+        const payload = {
+            key: integration.key,
+            name: integration.name,
+            description: integration.description,
+            scope: integration.scope,
+            apps: integration.apps || [],
+            category: integration.category,
+            dataSharedSummary: integration.dataSharedSummary,
+            dataSharedDetails: integration.dataSharedDetails,
+            recommended: integration.recommended === true,
+            enabled,
+            status,
+            connectedAt: state.connectedAt || null,
+            disconnectedAt: state.disconnectedAt || null
+        };
+
+        if (integration.key === emailService.EMAIL_PROVIDER_KEY) {
+            payload.configStatus = emailService.isConfigured() ? 'configured' : 'not_configured';
+        }
+
         res.json({
             success: true,
-            integration: {
-                key: integration.key,
-                name: integration.name,
-                description: integration.description,
-                scope: integration.scope,
-                apps: integration.apps || [],
-                category: integration.category,
-                dataSharedSummary: integration.dataSharedSummary,
-                dataSharedDetails: integration.dataSharedDetails,
-                recommended: integration.recommended === true,
-                enabled,
-                status,
-                connectedAt: state.connectedAt || null,
-                disconnectedAt: state.disconnectedAt || null
-            }
+            integration: payload
         });
     } catch (error) {
         console.error('Get integration error:', error);
@@ -1685,6 +1692,64 @@ exports.enableIntegration = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to enable integration',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Test integration (e.g. send test email for email-provider)
+ * POST /api/settings/integrations/:key/test
+ */
+exports.testIntegration = async (req, res) => {
+    try {
+        const { key } = req.params;
+        if (key !== emailService.EMAIL_PROVIDER_KEY) {
+            return res.status(400).json({
+                success: false,
+                message: 'Test not supported for this integration'
+            });
+        }
+
+        const userEmail = req.user?.email;
+        if (!userEmail) {
+            return res.status(400).json({
+                success: false,
+                message: 'Your account has no email address. Add an email to your profile to receive test emails.'
+            });
+        }
+
+        if (!emailService.isConfigured()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email service is not configured. Add SMTP or AWS SES credentials to your environment.'
+            });
+        }
+
+        const result = await emailService.sendEmail({
+            to: userEmail,
+            subject: 'LiteDesk – Test Email',
+            text: 'This is a test email from LiteDesk. If you received this, your email integration is working.',
+            html: '<p>This is a test email from LiteDesk.</p><p>If you received this, your email integration is working.</p>'
+        });
+
+        if (!result.success) {
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to send test email',
+                error: result.error
+            });
+        }
+
+        res.json({
+            success: true,
+            message: `Test email sent to ${userEmail}. Check your inbox (or Mailtrap if in dev).`
+        });
+    } catch (error) {
+        console.error('Test integration error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to send test email',
             error: error.message
         });
     }

@@ -1,52 +1,78 @@
 <template>
   <!-- Wrapper keeps layout unchanged; icon is absolutely positioned -->
   <div
-    class="w-full relative group"
+    class="w-full relative group notification-item"
+    :class="[
+      { 'notification-item--new': isNew },
+      infoPopoverOpen && 'z-50'
+    ]"
     @mouseenter="isRowHovered = true"
     @mouseleave="isRowHovered = false"
     @focusin="isRowFocused = true"
     @focusout="isRowFocused = false"
   >
-    <!-- Main click target (layout/spacing unchanged) -->
+    <!-- Card container -->
     <button
       type="button"
-      class="w-full flex items-start gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 text-left min-h-[44px]"
+      :class="[
+        'w-full flex items-start gap-3 px-3 py-3 rounded-2xl text-left min-h-[56px] transition-all duration-200 ease-out',
+        'border border-transparent hover:border-neutral-200/80 dark:hover:border-neutral-600/50',
+        'bg-neutral-50/50 dark:bg-neutral-800/30 hover:bg-neutral-100/80 dark:hover:bg-neutral-800/60',
+        'hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:ring-inset focus:border-primary-500/30',
+        inGroup ? 'border-l-[3px] border-l-transparent' : (isUnread ? 'border-l-[3px] border-l-primary-500 pl-[11px]' : 'border-l-[3px] border-l-transparent')
+      ]"
       @click="handleClick"
       :aria-label="item.title"
     >
-      <!-- Icon -->
-      <div class="mt-1 flex-shrink-0">
+      <!-- Icon avatar -->
+      <div class="flex-shrink-0 mt-0.5">
         <span
-          class="inline-flex items-center justify-center w-8 h-8 rounded-full"
-          :class="iconBgClass"
+          class="inline-flex items-center justify-center w-10 h-10 rounded-xl shadow-sm"
+          :class="[iconBgClass, isUnread && 'ring-2 ring-primary-500/20']"
         >
-          <component :is="iconComponent" class="w-4 h-4" :class="iconColorClass" />
+          <component :is="iconComponent" class="w-5 h-5" :class="iconColorClass" />
         </span>
       </div>
 
       <!-- Content -->
-      <div class="flex-1 min-w-0">
-        <p
-          class="text-sm"
-          :class="item.readAt ? 'text-gray-700 dark:text-gray-300' : 'font-semibold text-gray-900 dark:text-white'"
-        >
-          {{ item.title }}
-        </p>
-        <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate">
-          {{ entityLabel }}
-        </p>
+      <div class="flex-1 min-w-0 pr-6">
+        <!-- Title + New badge -->
+        <div class="flex items-start justify-between gap-2">
+          <p
+            class="text-sm leading-snug"
+            :class="item.readAt ? 'text-neutral-600 dark:text-neutral-400 font-medium' : 'font-semibold text-neutral-900 dark:text-white'"
+          >
+            {{ item.title }}
+          </p>
+          <span
+            v-if="isNew"
+            class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-primary-500/15 text-primary-600 dark:text-primary-400"
+          >
+            New
+          </span>
+        </div>
+
+        <!-- Body preview -->
         <p
           v-if="item.body"
-          class="mt-0.5 text-xs text-gray-500 dark:text-gray-400 line-clamp-2"
+          class="mt-1 text-xs text-neutral-500 dark:text-neutral-400 line-clamp-2 leading-relaxed"
         >
           {{ item.body }}
         </p>
-        <p class="mt-0.5 text-[11px] text-gray-400 dark:text-gray-500">
-          {{ relativeTime }}
-        </p>
+
+        <!-- Metadata row: entity chip + time -->
+        <div class="mt-2 flex items-center gap-2 flex-wrap">
+          <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-neutral-200/80 dark:bg-neutral-700/80 text-neutral-600 dark:text-neutral-400">
+            {{ entityLabel }}
+          </span>
+          <span class="text-[11px] tabular-nums text-neutral-400 dark:text-neutral-500">
+            {{ relativeTime }}
+          </span>
+        </div>
+
         <p
           v-if="unavailable"
-          class="mt-1 text-xs text-amber-600 dark:text-amber-400"
+          class="mt-2 text-xs text-warning-600 dark:text-warning-400"
         >
           This item is no longer available.
         </p>
@@ -56,42 +82,42 @@
     <!-- Inline actions (NotificationDrawer only) -->
     <div
       v-if="showActions"
-      class="absolute right-2 bottom-2 flex items-center gap-1 transition-opacity"
+      class="absolute right-3 bottom-3 flex items-center gap-0.5 transition-opacity duration-200"
       :class="actionsVisible ? 'opacity-100' : 'opacity-0'"
       :style="actionsVisible ? '' : 'pointer-events:none;'"
     >
       <!-- Inline feedback (no toast) -->
       <span
         v-if="feedbackText"
-        class="absolute -top-6 right-0 text-[11px] text-gray-500 dark:text-gray-400 bg-white/80 dark:bg-gray-900/80 backdrop-blur px-2 py-0.5 rounded-md border border-gray-200 dark:border-gray-800"
+        class="absolute -top-7 right-0 text-[11px] text-neutral-500 dark:text-neutral-400 bg-white dark:bg-neutral-800 shadow-lg px-2.5 py-1 rounded-lg border border-neutral-200 dark:border-neutral-600"
         aria-live="polite"
       >
         {{ feedbackText }}
       </span>
 
-      <!-- Open -->
-      <button
-        type="button"
-        class="inline-flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 min-h-[28px] min-w-[28px]"
-        :tabindex="actionsVisible ? 0 : -1"
-        aria-label="Open notification"
-        title="Open"
-        @click.stop.prevent="handleOpenAction"
-      >
-        <ArrowTopRightOnSquareIcon class="w-4 h-4" aria-hidden="true" />
-      </button>
-
       <!-- Mark as read (unread only) -->
       <button
         v-if="isUnread"
         type="button"
-        class="inline-flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 min-h-[28px] min-w-[28px]"
+        class="inline-flex items-center justify-center rounded-lg text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300 hover:bg-white dark:hover:bg-neutral-700 min-h-[32px] min-w-[32px] transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary-500/20 shadow-sm"
         :tabindex="actionsVisible ? 0 : -1"
         aria-label="Mark notification as read"
         title="Mark as read"
         @click.stop.prevent="handleMarkReadAction"
       >
         <CheckIcon class="w-4 h-4" aria-hidden="true" />
+      </button>
+
+      <!-- Dismiss -->
+      <button
+        type="button"
+        class="inline-flex items-center justify-center rounded-lg text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300 hover:bg-white dark:hover:bg-neutral-700 min-h-[32px] min-w-[32px] transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary-500/20 shadow-sm"
+        :tabindex="actionsVisible ? 0 : -1"
+        aria-label="Dismiss notification"
+        title="Dismiss"
+        @click.stop.prevent="handleDismissAction"
+      >
+        <XMarkIcon class="w-4 h-4" aria-hidden="true" />
       </button>
 
       <!-- Snooze (time-based only) -->
@@ -103,7 +129,7 @@
         <PopoverButton
           type="button"
           ref="snoozeButtonEl"
-          class="inline-flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 min-h-[28px] min-w-[28px]"
+          class="inline-flex items-center justify-center rounded-lg text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300 hover:bg-white dark:hover:bg-neutral-700 min-h-[32px] min-w-[32px] transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary-500/20 shadow-sm"
           :tabindex="actionsVisible ? 0 : -1"
           aria-label="Snooze options"
           title="Snooze"
@@ -112,21 +138,21 @@
         </PopoverButton>
 
         <PopoverPanel
-          class="absolute right-0 bottom-full mb-2 w-56 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-lg p-2 z-20 focus:outline-none"
+          class="absolute right-0 bottom-full mb-2 w-56 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-xl shadow-neutral-900/10 dark:shadow-black/20 p-2 z-20 focus:outline-none"
         >
           <div class="space-y-1">
             <button
               v-for="opt in snoozeOptions"
               :key="opt.key"
               type="button"
-              class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+              class="w-full text-left px-3 py-2 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors duration-150"
               :aria-label="opt.ariaLabel"
               @click="onSelectSnooze(opt, close)"
             >
-              <p class="text-sm font-medium text-gray-900 dark:text-white">
+              <p class="text-sm font-medium text-neutral-900 dark:text-white">
                 {{ opt.label }}
               </p>
-              <p class="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
+              <p class="mt-0.5 text-xs text-neutral-600 dark:text-neutral-400">
                 {{ opt.helpText }}
               </p>
             </button>
@@ -138,7 +164,7 @@
       <button
         v-if="isResolvable"
         type="button"
-        class="inline-flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 min-h-[28px] min-w-[28px]"
+        class="inline-flex items-center justify-center rounded-lg text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300 hover:bg-white dark:hover:bg-neutral-700 min-h-[32px] min-w-[32px] transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary-500/20 shadow-sm"
         :tabindex="actionsVisible ? 0 : -1"
         aria-label="Acknowledge notification (does not change record)"
         title="Acknowledge — Marks this notification as handled. Does not change the underlying record."
@@ -150,15 +176,16 @@
 
     <!-- Anchored explainability popover (hidden by default on desktop) -->
     <Popover
-      v-slot="{ close }"
+      v-slot="{ open: infoOpen, close }"
       class="absolute right-2 top-2"
       :class="iconVisible ? 'opacity-100' : 'opacity-0'"
       :style="iconVisible ? '' : 'pointer-events:none;'"
     >
+      <span v-show="false">{{ syncInfoPopoverOpen(infoOpen) }}</span>
       <PopoverButton
         type="button"
         ref="infoButtonEl"
-        class="inline-flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 min-h-[28px] min-w-[28px]"
+        class="inline-flex items-center justify-center rounded-lg text-neutral-400 hover:text-neutral-600 dark:text-neutral-500 dark:hover:text-neutral-300 hover:bg-white dark:hover:bg-neutral-700 min-h-[28px] min-w-[28px] transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
         :tabindex="iconVisible ? 0 : -1"
         :aria-label="`Why am I seeing this?`"
         @click="onInfoClick"
@@ -168,15 +195,15 @@
 
       <PopoverPanel
         ref="whyPanelEl"
-        class="absolute mt-2 w-[320px] max-w-[calc(100vw-32px)] rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-lg p-4 z-10 focus:outline-none"
+        class="absolute mt-2 w-[320px] max-w-[calc(100vw-32px)] rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-xl shadow-neutral-900/10 dark:shadow-black/20 p-4 z-[100] focus:outline-none"
         :class="panelSide === 'right' ? 'right-0' : 'left-0'"
       >
         <div class="space-y-4">
           <div>
-            <p class="text-sm font-semibold text-gray-900 dark:text-white">
+            <p class="text-sm font-semibold text-neutral-900 dark:text-white">
               Why you received this notification
             </p>
-            <p class="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
+            <p class="mt-0.5 text-xs text-neutral-600 dark:text-neutral-400">
               A quick explanation based on the notification details.
             </p>
           </div>
@@ -186,7 +213,7 @@
             <p class="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
               This happened because
             </p>
-            <p class="mt-1 text-sm text-gray-900 dark:text-white">
+            <p class="mt-1 text-sm text-neutral-900 dark:text-white">
               {{ triggerLine }}
             </p>
           </div>
@@ -196,9 +223,9 @@
             <p class="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
               You received this because you are
             </p>
-            <ul class="mt-1 text-sm text-gray-900 dark:text-white space-y-1">
+            <ul class="mt-1 text-sm text-neutral-900 dark:text-white space-y-1">
               <li v-for="(line, idx) in roleLines" :key="idx" class="flex gap-2">
-                <span class="text-gray-400 dark:text-gray-500">•</span>
+                <span class="text-neutral-400 dark:text-neutral-500">•</span>
                 <span>{{ line }}</span>
               </li>
             </ul>
@@ -209,7 +236,7 @@
             <p class="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
               Delivered via
             </p>
-            <p class="mt-1 text-sm text-gray-900 dark:text-white">
+            <p class="mt-1 text-sm text-neutral-900 dark:text-white">
               {{ deliveryLine }}
             </p>
           </div>
@@ -219,13 +246,13 @@
             <p class="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
               Control
             </p>
-            <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">
+            <p class="mt-1 text-sm text-neutral-700 dark:text-neutral-300">
               You can manage notifications like this in Notification settings.
             </p>
             <div class="mt-2 flex flex-col gap-2">
               <router-link
                 to="/settings?tab=notifications&notificationPage=overview"
-                class="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+                class="text-sm font-medium text-primary-600 dark:text-primary-400 hover:underline"
                 @click="close"
               >
                 Open Notification settings
@@ -233,7 +260,7 @@
               <router-link
                 v-if="hasRuleId"
                 to="/settings?tab=notifications&notificationPage=rules"
-                class="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+                class="text-sm font-medium text-primary-600 dark:text-primary-400 hover:underline"
                 @click="close"
               >
                 Review notification rules
@@ -249,6 +276,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { useTabs } from '@/composables/useTabs';
 import { useNotificationStore } from '@/stores/notifications';
 import { getNotificationRoute, validateRoute } from '@/utils/notificationRouteMap';
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/vue';
@@ -260,9 +288,9 @@ import {
 } from '@heroicons/vue/24/solid';
 import { InformationCircleIcon as InfoOutlineIcon } from '@heroicons/vue/24/outline';
 import {
-  ArrowTopRightOnSquareIcon,
   CheckIcon,
-  ClockIcon
+  ClockIcon,
+  XMarkIcon
 } from '@heroicons/vue/24/outline';
 
 const props = defineProps({
@@ -277,14 +305,27 @@ const props = defineProps({
   showActions: {
     type: Boolean,
     default: false
+  },
+  isNew: {
+    type: Boolean,
+    default: false
+  },
+  inGroup: {
+    type: Boolean,
+    default: false
   }
 });
 
 const emit = defineEmits(['navigated', 'snooze']);
 
 const router = useRouter();
+const { openTab } = useTabs();
 const store = useNotificationStore();
 const unavailable = ref(false);
+const infoPopoverOpen = ref(false);
+function syncInfoPopoverOpen(open) {
+  infoPopoverOpen.value = open;
+}
 
 const relativeTime = computed(() => store.formatRelative(props.item.createdAt));
 
@@ -295,15 +336,15 @@ const iconComponent = computed(() => {
 });
 
 const iconBgClass = computed(() => {
-  if (props.item.priority === 'HIGH') return 'bg-red-100 dark:bg-red-900/40';
-  if (props.item.priority === 'LOW') return 'bg-blue-100 dark:bg-blue-900/40';
-  return 'bg-green-100 dark:bg-green-900/40';
+  if (props.item.priority === 'HIGH') return 'bg-danger-100 dark:bg-danger-900/40';
+  if (props.item.priority === 'LOW') return 'bg-secondary-100 dark:bg-secondary-900/40';
+  return 'bg-success-100 dark:bg-success-900/40';
 });
 
 const iconColorClass = computed(() => {
-  if (props.item.priority === 'HIGH') return 'text-red-600 dark:text-red-400';
-  if (props.item.priority === 'LOW') return 'text-blue-600 dark:text-blue-400';
-  return 'text-green-600 dark:text-green-400';
+  if (props.item.priority === 'HIGH') return 'text-danger-600 dark:text-danger-400';
+  if (props.item.priority === 'LOW') return 'text-secondary-600 dark:text-secondary-400';
+  return 'text-success-600 dark:text-success-400';
 });
 
 const entityLabel = computed(() => {
@@ -480,13 +521,14 @@ const isResolvable = computed(() => {
   return entType === 'CORRECTIVE_ACTION';
 });
 
-async function handleOpenAction() {
-  await handleClick();
-}
-
 async function handleMarkReadAction() {
   await store.markRead(props.item.id);
   flashFeedback('Marked read');
+}
+
+async function handleDismissAction() {
+  flashFeedback('Dismissed');
+  await store.dismissNotification(props.item.id);
 }
 
 function handleSnoozeAction() {
@@ -633,7 +675,10 @@ async function handleClick() {
   }
 
   try {
-    await router.push(route);
+    const resolved = router.resolve(route);
+    const path = resolved.path;
+    const recordName = props.item.entity?.title || props.item.entity?.name;
+    openTab(path, recordName ? { title: recordName, params: { name: recordName } } : {});
     emit('navigated');
   } catch (err) {
     console.error('[NotificationItem] Navigation error:', err);
@@ -642,4 +687,33 @@ async function handleClick() {
 }
 </script>
 
+<style scoped>
+.notification-item {
+  animation: notification-item-in 0.3s ease-out both;
+}
+
+.notification-item--new {
+  animation: notification-item-in 0.4s ease-out both, notification-item-new 0.6s ease-out 0.2s both;
+}
+
+@keyframes notification-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes notification-item-new {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+</style>
 

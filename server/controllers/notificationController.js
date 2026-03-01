@@ -1,7 +1,69 @@
 const mongoose = require('mongoose');
 const Notification = require('../models/Notification');
+const Task = require('../models/Task');
+const Event = require('../models/Event');
 
 const APP_KEYS = ['SALES', 'AUDIT', 'PORTAL'];
+
+/**
+ * Enrich notification items with entity titles (Task title, Event eventName, etc.)
+ * so the client can show "Latest: Design logo" instead of "Latest: Task".
+ */
+async function enrichWithEntityTitles(items, organizationId) {
+  const taskIds = [];
+  const eventIds = [];
+  const itemIndexByKey = new Map(); // 'Task_<id>' -> [indices]
+
+  items.forEach((item, idx) => {
+    if (!item.entity?.id || !mongoose.isValidObjectId(item.entity.id)) return;
+    const type = item.entity.type;
+    const id = item.entity.id;
+    const key = `${type}_${id}`;
+    if (!itemIndexByKey.has(key)) itemIndexByKey.set(key, []);
+    itemIndexByKey.get(key).push(idx);
+
+    if (type === 'Task') taskIds.push(id);
+    else if (type === 'Audit' || type === 'Event') eventIds.push(id);
+  });
+
+  const titleByKey = new Map();
+
+  if (taskIds.length > 0) {
+    const tasks = await Task.find({
+      _id: { $in: taskIds.map((id) => new mongoose.Types.ObjectId(id)) },
+      organizationId
+    })
+      .select('_id title')
+      .lean();
+    for (const t of tasks) {
+      titleByKey.set(`Task_${t._id.toString()}`, t.title || null);
+    }
+  }
+
+  if (eventIds.length > 0) {
+    const events = await Event.find({
+      _id: { $in: eventIds.map((id) => new mongoose.Types.ObjectId(id)) },
+      organizationId
+    })
+      .select('_id eventName')
+      .lean();
+    for (const e of events) {
+      titleByKey.set(`Event_${e._id.toString()}`, e.eventName || null);
+      titleByKey.set(`Audit_${e._id.toString()}`, e.eventName || null);
+    }
+  }
+
+  const result = items.map((item) => ({ ...item }));
+  for (const [key, indices] of itemIndexByKey) {
+    const title = titleByKey.get(key);
+    if (title != null) {
+      for (const idx of indices) {
+        if (result[idx].entity) result[idx].entity.title = title;
+      }
+    }
+  }
+  return result;
+}
 
 function normalizeAppKey(req) {
   const fromQuery = req.query.appKey;
@@ -28,7 +90,8 @@ exports.listNotifications = async (req, res) => {
   const query = {
     userId: req.user._id,
     organizationId: req.user.organizationId,
-    appKey
+    appKey,
+    channel: 'IN_APP'  // Only show in-app notifications in the panel; EMAIL/PUSH/etc. are delivery channels
   };
 
   if (unreadOnly) {
@@ -50,7 +113,7 @@ exports.listNotifications = async (req, res) => {
       nextCursor = String(next._id);
     }
 
-    const responseItems = items.map(n => ({
+    let responseItems = items.map(n => ({
       id: String(n._id),
       eventType: n.eventType,
       title: n.title,
@@ -64,6 +127,8 @@ exports.listNotifications = async (req, res) => {
       createdAt: n.createdAt
     }));
 
+    responseItems = await enrichWithEntityTitles(responseItems, req.user.organizationId);
+
     // If unreadOnly is true, also include the total unread count
     let unreadCount = null;
     if (unreadOnly) {
@@ -71,6 +136,7 @@ exports.listNotifications = async (req, res) => {
         userId: req.user._id,
         organizationId: req.user.organizationId,
         appKey,
+        channel: 'IN_APP',
         readAt: null
       });
     }

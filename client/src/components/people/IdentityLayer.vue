@@ -39,8 +39,18 @@
           </p>
         </div>
         
-        <!-- Edit Profile Action -->
-        <div class="flex-shrink-0 ml-4">
+        <!-- Actions -->
+        <div class="flex-shrink-0 ml-4 flex items-center gap-2">
+          <button
+            v-if="personId"
+            @click="handleEmail"
+            class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            Email
+          </button>
           <button
             @click="handleEditProfile"
             class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
@@ -198,7 +208,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['edit-profile']);
+const emit = defineEmits(['edit-profile', 'email']);
 
 // Computed: Full name
 const fullName = computed(() => {
@@ -242,6 +252,11 @@ const viewOrganization = () => {
 // Edit profile action
 const handleEditProfile = () => {
   emit('edit-profile', props.personId);
+};
+
+// Email action (opens in-product compose modal)
+const handleEmail = () => {
+  emit('email', props.personId);
 };
 </script>
 

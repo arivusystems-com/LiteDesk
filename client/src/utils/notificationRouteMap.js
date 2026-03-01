@@ -1,14 +1,29 @@
 /**
  * Centralized notification deep-link route mapping.
  * Maps appKey + entity.type to Vue Router route definitions.
- * 
- * This ensures consistency across all notification components
- * and aligns with actual router configurations.
+ *
+ * Entity types are normalized to uppercase for lookup. Backend may send
+ * "Task", "Audit", "CorrectiveAction", etc. - all are handled.
  */
 
 /**
+ * Normalize entity type for route lookup.
+ * Backend may send: "Task", "Audit", "CorrectiveAction", "Deal", etc.
+ * Maps variations to canonical keys (e.g. CORRECTIVEACTION -> CORRECTIVE_ACTION).
+ */
+function normalizeEntityType(entityType) {
+  const upper = String(entityType || '').toUpperCase().replace(/\s/g, '');
+  const aliases = {
+    CORRECTIVEACTION: 'CORRECTIVE_ACTION',
+    CONTACT: 'PEOPLE',
+    PERSON: 'PEOPLE'
+  };
+  return aliases[upper] || upper;
+}
+
+/**
  * Route map: appKey -> entityType -> route definition
- * 
+ *
  * Route definitions can be:
  * - { name: 'route-name', params: { ... } } - named route with params
  * - { path: '/path/to/route' } - path-based route
@@ -16,30 +31,54 @@
  */
 const NOTIFICATION_ROUTE_MAP = {
   SALES: {
-    EVENT: (entityId) => ({
-      name: 'event-detail',
-      params: { id: entityId }
-    }),
     TASK: (entityId) => ({
       name: 'task-detail',
       params: { id: entityId }
     }),
+    EVENT: (entityId) => ({
+      name: 'event-detail',
+      params: { id: entityId }
+    }),
+    DEAL: (entityId) => ({
+      name: 'deal-detail',
+      params: { id: entityId }
+    }),
+    ORGANIZATION: (entityId) => ({
+      name: 'organization-detail',
+      params: { id: entityId }
+    }),
+    PEOPLE: (entityId) => ({
+      name: 'person-detail',
+      params: { id: entityId }
+    }),
+    ITEM: (entityId) => ({
+      name: 'item-detail',
+      params: { id: entityId }
+    }),
   },
-  
+
   AUDIT: {
+    AUDIT: (entityId) => ({
+      name: 'audit-detail',
+      params: { eventId: entityId }
+    }),
     EVENT: (entityId) => ({
       name: 'audit-detail',
-      params: { eventId: entityId } // Note: Audit routes use 'eventId' param
+      params: { eventId: entityId }
     }),
   },
-  
+
   PORTAL: {
+    AUDIT: (entityId) => ({
+      name: 'portal-audit-detail',
+      params: { eventId: entityId }
+    }),
     EVENT: (entityId) => ({
       name: 'portal-audit-detail',
-      params: { eventId: entityId } // Note: Portal routes use 'eventId' param
+      params: { eventId: entityId }
     }),
     CORRECTIVE_ACTION: () => ({
-      path: '/portal/actions' // List view, no specific ID needed
+      name: 'portal-actions'
     }),
   }
 };
@@ -62,9 +101,11 @@ export function getNotificationRoute(appKey, entity) {
     return null;
   }
 
-  const routeBuilder = appRoutes[entity.type];
+  // Normalize entity type (handles "Task", "Audit", "CorrectiveAction", etc.)
+  const entityTypeKey = normalizeEntityType(entity.type);
+  const routeBuilder = appRoutes[entityTypeKey];
   if (!routeBuilder || typeof routeBuilder !== 'function') {
-    console.warn(`[notificationRouteMap] No route for appKey=${appKey}, entityType=${entity.type}`);
+    console.warn(`[notificationRouteMap] No route for appKey=${appKey}, entityType=${entityTypeKey}`);
     return null;
   }
 

@@ -1,4 +1,5 @@
 const Event = require('../models/Event');
+const Task = require('../models/Task');
 const User = require('../models/User');
 const domainEvents = require('../constants/domainEvents');
 const { aggregateDigest } = require('./notificationDigestService');
@@ -32,10 +33,38 @@ async function resolveKey(key, context) {
       return resolveOrgAdmins(context);
     case 'USER_SELF':
       return resolveUserSelf(context);
+    case 'TASK_ASSIGNEE':
+      return resolveTaskAssignee(context);
     default:
       console.warn('[notificationRecipientResolver] Unhandled recipient key:', key);
       return [];
   }
+}
+
+async function resolveTaskAssignee({ entity, organizationId, eventType }) {
+  if (!entity || entity.type !== 'Task' || !entity.id) return [];
+  const task = await Task.findOne({ _id: entity.id, organizationId })
+    .select('assignedTo title');
+  if (!task || !task.assignedTo) return [];
+
+  const titles = {
+    [domainEvents.TASK_ASSIGNED]: 'Task Assigned',
+    [domainEvents.TASK_CREATED]: 'New Task',
+    [domainEvents.TASK_STATUS_CHANGED]: 'Task Status Updated',
+    [domainEvents.TASK_DUE_SOON]: 'Task Due Soon'
+  };
+  const bodies = {
+    [domainEvents.TASK_ASSIGNED]: `You have been assigned to task "${task.title || 'Task'}".`,
+    [domainEvents.TASK_CREATED]: `A new task "${task.title || 'Task'}" has been created and assigned to you.`,
+    [domainEvents.TASK_STATUS_CHANGED]: `Task "${task.title || 'Task'}" status has been updated.`,
+    [domainEvents.TASK_DUE_SOON]: `Task "${task.title || 'Task'}" is due soon.`
+  };
+
+  return [{
+    userId: task.assignedTo,
+    title: titles[eventType] || 'Task Notification',
+    body: bodies[eventType] || `Update on task "${task.title || 'Task'}".`
+  }];
 }
 
 async function resolveEventAuditor({ entity, organizationId }) {

@@ -119,11 +119,15 @@ export function useNotificationRules() {
         appKey: currentAppKey.value
       });
       
-      if (response.data?.success) {
+      // apiClient returns parsed JSON directly: { success: true, data: {...} }
+      if (response?.success) {
+        await fetchRules(); // Refresh list
+        return { success: true, data: response.data };
+      } else if (response?.data?.success) {
         await fetchRules(); // Refresh list
         return { success: true, data: response.data.data };
       } else {
-        throw new Error(response.data?.message || 'Failed to update rule');
+        throw new Error(response?.message || response?.data?.message || 'Failed to update rule');
       }
     } catch (err) {
       error.value = err.response?.data?.message || err.message || 'Failed to update notification rule';
@@ -146,11 +150,12 @@ export function useNotificationRules() {
         params: { appKey: currentAppKey.value }
       });
       
-      if (response.data?.success) {
+      // apiClient returns parsed JSON directly: { success: true } or { success: true, data: {...} }
+      if (response?.success || response?.data?.success) {
         await fetchRules(); // Refresh list
         return { success: true };
       } else {
-        throw new Error(response.data?.message || 'Failed to delete rule');
+        throw new Error(response?.message || response?.data?.message || 'Failed to delete rule');
       }
     } catch (err) {
       error.value = err.response?.data?.message || err.message || 'Failed to delete notification rule';

@@ -97,8 +97,8 @@ const props = defineProps({
     default: null
   },
   personId: {
-    type: String,
-    required: true
+    validator: (v) => v === null || typeof v === 'string',
+    default: null
   }
 });
 

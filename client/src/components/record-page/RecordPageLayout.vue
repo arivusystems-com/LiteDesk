@@ -1,5 +1,5 @@
 <template>
-  <div class="record-page-layout flex flex-col h-full w-full bg-white dark:bg-gray-900 overflow-hidden absolute inset-0">
+  <div ref="layoutRootRef" class="record-page-layout flex flex-col h-full w-full bg-white dark:bg-gray-900 overflow-hidden absolute inset-0">
     <!-- Fixed header - positioned below TabBar -->
     <header v-if="$slots.header" :class="['record-page-layout__header', 'fixed', 'z-20', 'flex-shrink-0', 'bg-white', 'dark:bg-gray-900', 'border-b', 'border-gray-200', 'dark:border-gray-700', 'record-page-layout__header--positioned', { 'transition-all duration-300 ease-in-out': allowTransition }]">
       <slot name="header" />
@@ -59,6 +59,7 @@ const props = defineProps({
 
 const allowTransition = ref(false);
 const leftEl = ref(null);
+const layoutRootRef = ref(null);
 const leftScrolling = ref(false);
 let leftScrollHideTimer = null;
 const SCROLL_HIDE_DELAY = 800;
@@ -92,100 +93,106 @@ function onLeftWheel() {
 }
 let updateHeaderHeight = null;
 let updateHeaderPosition = null;
+let resizeHandler = null;
+let sidebarToggleHandler = null;
 
 onMounted(async () => {
   await nextTick();
   const el = leftEl.value;
   if (el) el.addEventListener('touchstart', showLeftScrollbar, { passive: true });
 
-  // Disable overflow on parent content wrapper to prevent body scroll
-  // Find the parent content wrapper that contains RouterView
-  const recordPageElement = document.querySelector('.record-page-layout');
-  if (recordPageElement) {
-    let parent = recordPageElement.parentElement;
-    // Traverse up to find the content wrapper with overflow-y-auto
-    while (parent && parent !== document.body) {
-      if (parent.classList.contains('overflow-y-auto') || 
-          getComputedStyle(parent).overflowY === 'auto' ||
-          getComputedStyle(parent).overflowY === 'scroll') {
-        parent.classList.add('record-page-parent-no-scroll');
-        parent.style.overflowY = 'hidden';
-        break;
+  if (!props.forceMobile) {
+    // Disable overflow on parent content wrapper to prevent body scroll
+    // Find the parent content wrapper that contains RouterView
+    const recordPageElement = layoutRootRef.value;
+    if (recordPageElement) {
+      let parent = recordPageElement.parentElement;
+      // Traverse up to find the content wrapper with overflow-y-auto
+      while (parent && parent !== document.body) {
+        if (parent.classList.contains('overflow-y-auto') || 
+            getComputedStyle(parent).overflowY === 'auto' ||
+            getComputedStyle(parent).overflowY === 'scroll') {
+          parent.classList.add('record-page-parent-no-scroll');
+          parent.style.overflowY = 'hidden';
+          break;
+        }
+        parent = parent.parentElement;
       }
-      parent = parent.parentElement;
     }
-  }
-  
-  // Calculate header height dynamically
-  updateHeaderHeight = () => {
-    const header = document.querySelector('.record-page-layout__header');
-    if (header) {
-      const height = header.offsetHeight;
-      document.documentElement.style.setProperty('--header-height', `${height}px`);
-    } else {
-      // Default height if header not found
-      document.documentElement.style.setProperty('--header-height', '120px');
-    }
-  };
-  
-  // Calculate header position (below TabBar and accounting for sidebar)
-  updateHeaderPosition = () => {
-    const header = document.querySelector('.record-page-layout__header');
-    if (!header) return;
-    
-    // Get TabBar height - TabBar uses h-12 which is 48px (3rem)
-    // On mobile it's at top-16 (64px), on desktop at top-0
-    const viewportWidth = window.innerWidth;
-    const isMobileView = viewportWidth < MOBILE_BREAKPOINT;
-    const mobileTopNavHeight = 64; // h-16 = 4rem = 64px
-    const tabBarHeight = 48; // h-12 = 3rem = 48px
-    // Phone: no tab bar in this layout, use navbar offset only.
-    // Tablet: tab bar is present below navbar, reserve both heights.
-    const isTabletView = isMobileView && viewportWidth >= TABLET_MIN_WIDTH;
-    const tabBarTopOffset = isMobileView
-      ? (isTabletView ? (mobileTopNavHeight + tabBarHeight) : mobileTopNavHeight)
-      : tabBarHeight;
-    
-    // Get sidebar width from localStorage
-    let sidebarWidth = 0;
-    let leftOffset = 0;
-    
-    if (!isMobileView) {
-      const sidebarCollapsed = localStorage.getItem('litedesk-sidebar-collapsed') === 'true';
-      sidebarWidth = sidebarCollapsed ? 80 : 256;
-      leftOffset = sidebarWidth;
-    }
-    
-    // Set CSS variables for header and body positioning
-    document.documentElement.style.setProperty('--tabbar-height', `${tabBarTopOffset}px`);
-    document.documentElement.style.setProperty('--sidebar-width', `${sidebarWidth}px`);
-    document.documentElement.style.setProperty('--header-top', `${tabBarTopOffset}px`);
-    document.documentElement.style.setProperty('--header-left', `${leftOffset}px`);
-    document.documentElement.style.setProperty('--body-left', `${leftOffset}px`);
-  };
-  
-  // Initial setup without transition
-  updateHeaderHeight();
-  updateHeaderPosition();
-  
-  // Enable transitions after initial positioning is complete
-  // Use a small delay to ensure initial position is set before enabling transitions
-  setTimeout(() => {
-    allowTransition.value = true;
-  }, 50);
-  
-  window.addEventListener('resize', () => {
+
+    // Calculate header height dynamically
+    updateHeaderHeight = () => {
+      const header = layoutRootRef.value?.querySelector('.record-page-layout__header');
+      if (header) {
+        const height = header.offsetHeight;
+        document.documentElement.style.setProperty('--header-height', `${height}px`);
+      } else {
+        // Default height if header not found
+        document.documentElement.style.setProperty('--header-height', '120px');
+      }
+    };
+
+    // Calculate header position (below TabBar and accounting for sidebar)
+    updateHeaderPosition = () => {
+      const header = layoutRootRef.value?.querySelector('.record-page-layout__header');
+      if (!header) return;
+
+      // Get TabBar height - TabBar uses h-12 which is 48px (3rem)
+      // On mobile it's at top-16 (64px), on desktop at top-0
+      const viewportWidth = window.innerWidth;
+      const isMobileView = viewportWidth < MOBILE_BREAKPOINT;
+      const mobileTopNavHeight = 64; // h-16 = 4rem = 64px
+      const tabBarHeight = 48; // h-12 = 3rem = 48px
+      // Phone: no tab bar in this layout, use navbar offset only.
+      // Tablet: tab bar is present below navbar, reserve both heights.
+      const isTabletView = isMobileView && viewportWidth >= TABLET_MIN_WIDTH;
+      const tabBarTopOffset = isMobileView
+        ? (isTabletView ? (mobileTopNavHeight + tabBarHeight) : mobileTopNavHeight)
+        : tabBarHeight;
+
+      // Get sidebar width from localStorage
+      let sidebarWidth = 0;
+      let leftOffset = 0;
+
+      if (!isMobileView) {
+        const sidebarCollapsed = localStorage.getItem('litedesk-sidebar-collapsed') === 'true';
+        sidebarWidth = sidebarCollapsed ? 80 : 256;
+        leftOffset = sidebarWidth;
+      }
+
+      // Set CSS variables for header and body positioning
+      document.documentElement.style.setProperty('--tabbar-height', `${tabBarTopOffset}px`);
+      document.documentElement.style.setProperty('--sidebar-width', `${sidebarWidth}px`);
+      document.documentElement.style.setProperty('--header-top', `${tabBarTopOffset}px`);
+      document.documentElement.style.setProperty('--header-left', `${leftOffset}px`);
+      document.documentElement.style.setProperty('--body-left', `${leftOffset}px`);
+    };
+
+    // Initial setup without transition
     updateHeaderHeight();
     updateHeaderPosition();
-    windowIsMobile.value = window.innerWidth < MOBILE_BREAKPOINT;
-  });
-  
-  // Listen for sidebar toggle events - transitions will be enabled by this point
-  window.addEventListener('sidebar-toggle', () => {
+
+    // Enable transitions after initial positioning is complete
+    // Use a small delay to ensure initial position is set before enabling transitions
     setTimeout(() => {
+      allowTransition.value = true;
+    }, 50);
+
+    resizeHandler = () => {
+      updateHeaderHeight();
       updateHeaderPosition();
-    }, 0); // Update immediately to sync with TabBar transition
-  });
+      windowIsMobile.value = window.innerWidth < MOBILE_BREAKPOINT;
+    };
+    window.addEventListener('resize', resizeHandler);
+
+    // Listen for sidebar toggle events - transitions will be enabled by this point
+    sidebarToggleHandler = () => {
+      setTimeout(() => {
+        updateHeaderPosition();
+      }, 0); // Update immediately to sync with TabBar transition
+    };
+    window.addEventListener('sidebar-toggle', sidebarToggleHandler);
+  }
 });
 
 onUnmounted(() => {
@@ -200,13 +207,8 @@ onUnmounted(() => {
     parentWithNoScroll.style.overflowY = '';
   }
   
-  if (updateHeaderHeight) {
-    window.removeEventListener('resize', updateHeaderHeight);
-  }
-  if (updateHeaderPosition) {
-    window.removeEventListener('resize', updateHeaderPosition);
-    window.removeEventListener('sidebar-toggle', updateHeaderPosition);
-  }
+  if (resizeHandler) window.removeEventListener('resize', resizeHandler);
+  if (sidebarToggleHandler) window.removeEventListener('sidebar-toggle', sidebarToggleHandler);
 });
 </script>
 

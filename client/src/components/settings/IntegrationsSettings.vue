@@ -199,6 +199,32 @@
             </div>
           </div>
 
+          <!-- Email Provider: Configuration Status -->
+          <div
+            v-if="selectedIntegration.key === 'email-provider' && selectedIntegration.configStatus !== undefined"
+            class="rounded-lg p-4 border"
+            :class="selectedIntegration.configStatus === 'configured'
+              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+              : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'"
+          >
+            <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">Configuration</h4>
+            <p v-if="selectedIntegration.configStatus === 'configured'" class="text-sm text-green-800 dark:text-green-300">
+              Email service is configured via environment (AWS SES or SMTP). Notifications will be sent when this integration is enabled.
+            </p>
+            <p v-else class="text-sm text-amber-800 dark:text-amber-300">
+              Email service is not configured. Add AWS SES or SMTP credentials to the server environment variables to send emails. See <code class="text-xs bg-gray-200 dark:bg-gray-700 px-1 rounded">.env.example</code> for required variables.
+            </p>
+            <button
+              v-if="selectedIntegration.configStatus === 'configured'"
+              type="button"
+              @click="sendTestEmail"
+              :disabled="testEmailLoading"
+              class="mt-3 px-4 py-2 text-sm font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {{ testEmailLoading ? 'Sending…' : 'Send Test Email' }}
+            </button>
+          </div>
+
           <!-- Data Sharing -->
           <div class="bg-white dark:bg-gray-900/40 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
             <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">What data is shared</h4>
@@ -224,6 +250,7 @@ const selectedIntegration = ref(null);
 const loading = ref(true);
 const error = ref(null);
 const actionLoading = ref(false);
+const testEmailLoading = ref(false);
 
 const fetchIntegrations = async () => {
   loading.value = true;
@@ -323,6 +350,24 @@ const disableIntegration = async (key) => {
     alert('Failed to disable integration');
   } finally {
     actionLoading.value = false;
+  }
+};
+
+const sendTestEmail = async () => {
+  if (!selectedIntegration.value || selectedIntegration.value.key !== 'email-provider') return;
+  testEmailLoading.value = true;
+  try {
+    const data = await apiClient(`/settings/integrations/email-provider/test`, { method: 'POST' });
+    if (data && data.success) {
+      alert(data.message || 'Test email sent. Check your inbox (or Mailtrap in dev).');
+    } else {
+      alert(data.message || data.error || 'Failed to send test email');
+    }
+  } catch (err) {
+    console.error('Failed to send test email:', err);
+    alert(err?.response?.data?.message || err?.message || 'Failed to send test email');
+  } finally {
+    testEmailLoading.value = false;
   }
 };
 

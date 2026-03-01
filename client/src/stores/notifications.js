@@ -22,6 +22,13 @@ export const useNotificationStore = defineStore('notifications', () => {
   const snoozesByApp = ref({}); // { [appKey]: { [id]: { until: number, wasUnread: boolean, label: string } } }
   const snoozeTimers = new Map(); // key: `${appKey}:${id}` -> timeout
 
+  /**
+   * Dismiss v1 (UI-only)
+   * - localStorage-based (device-only)
+   * - dismissed notifications are hidden from UI lists; marked as read on backend
+   */
+  const dismissedByApp = ref({}); // { [appKey]: string[] }
+
   const currentAppKey = () => {
     // Derive from route or allowed apps; keep simple for now:
     const path = window.location.pathname || '';
@@ -33,6 +40,11 @@ export const useNotificationStore = defineStore('notifications', () => {
   function snoozeStorageKey() {
     const userId = authStore.user?._id || authStore.user?.id || 'anon';
     return `notification_snooze_v1:${userId}`;
+  }
+
+  function dismissedStorageKey() {
+    const userId = authStore.user?._id || authStore.user?.id || 'anon';
+    return `notification_dismissed_v1:${userId}`;
   }
 
   function loadSnoozesFromStorage() {
@@ -78,6 +90,29 @@ export const useNotificationStore = defineStore('notifications', () => {
     }
   }
 
+  function loadDismissedFromStorage() {
+    try {
+      const raw = localStorage.getItem(dismissedStorageKey());
+      const parsed = raw ? JSON.parse(raw) : {};
+      if (!parsed || typeof parsed !== 'object') {
+        dismissedByApp.value = {};
+        return;
+      }
+      dismissedByApp.value = parsed;
+    } catch (e) {
+      console.warn('[notifications] Failed to load dismissed from storage:', e);
+      dismissedByApp.value = {};
+    }
+  }
+
+  function persistDismissedToStorage() {
+    try {
+      localStorage.setItem(dismissedStorageKey(), JSON.stringify(dismissedByApp.value || {}));
+    } catch (e) {
+      console.warn('[notifications] Failed to persist dismissed to storage:', e);
+    }
+  }
+
   function persistSnoozesToStorage() {
     try {
       localStorage.setItem(snoozeStorageKey(), JSON.stringify(snoozesByApp.value || {}));
@@ -102,6 +137,17 @@ export const useNotificationStore = defineStore('notifications', () => {
   function getSnoozedUntil(id, appKey = currentAppKey()) {
     const entry = getSnoozeMap(appKey)[id];
     return typeof entry?.until === 'number' ? entry.until : null;
+  }
+
+  function getDismissedSet(appKey = currentAppKey()) {
+    const root = dismissedByApp.value || {};
+    const arr = root[appKey];
+    return Array.isArray(arr) ? new Set(arr) : new Set();
+  }
+
+  function isDismissed(id, appKey = currentAppKey()) {
+    if (!id) return false;
+    return getDismissedSet(appKey).has(String(id));
   }
 
   function scheduleUnsnooze(appKey, id, until) {
@@ -135,6 +181,9 @@ export const useNotificationStore = defineStore('notifications', () => {
     if (!Object.keys(snoozesByApp.value || {}).length) {
       loadSnoozesFromStorage();
     }
+    if (!Object.keys(dismissedByApp.value || {}).length) {
+      loadDismissedFromStorage();
+    }
 
     const existingUntil = getSnoozedUntil(id, appKey);
     if (existingUntil && existingUntil > Date.now()) {
@@ -155,6 +204,25 @@ export const useNotificationStore = defineStore('notifications', () => {
     snoozesByApp.value = { ...root, [appKey]: map };
     persistSnoozesToStorage();
     scheduleUnsnooze(appKey, id, until);
+  }
+
+  async function dismissNotification(id) {
+    if (!id) return;
+    const appKey = currentAppKey();
+    if (!Object.keys(dismissedByApp.value || {}).length) {
+      loadDismissedFromStorage();
+    }
+
+    await markRead(id);
+
+    const root = dismissedByApp.value || {};
+    const arr = root[appKey] || [];
+    if (!arr.includes(String(id))) {
+      dismissedByApp.value = { ...root, [appKey]: [...arr, String(id)] };
+      persistDismissedToStorage();
+    }
+
+    items.value = items.value.filter(n => n.id !== id);
   }
 
   function syncSnoozeUnreadFlags(appKey = currentAppKey()) {
@@ -206,6 +274,9 @@ export const useNotificationStore = defineStore('notifications', () => {
     if (!Object.keys(snoozesByApp.value || {}).length) {
       loadSnoozesFromStorage();
     }
+    if (!Object.keys(dismissedByApp.value || {}).length) {
+      loadDismissedFromStorage();
+    }
     try {
       const res = await fetch(buildQuery({ unreadOnly: true, limit: 1 }), {
         headers: buildHeaders()
@@ -248,6 +319,9 @@ export const useNotificationStore = defineStore('notifications', () => {
     error.value = null;
     if (!Object.keys(snoozesByApp.value || {}).length) {
       loadSnoozesFromStorage();
+    }
+    if (!Object.keys(dismissedByApp.value || {}).length) {
+      loadDismissedFromStorage();
     }
 
     const params = {
@@ -408,7 +482,10 @@ export const useNotificationStore = defineStore('notifications', () => {
     // Snooze v1
     isSnoozed,
     getSnoozedUntil,
-    snoozeNotification
+    snoozeNotification,
+    // Dismiss v1
+    isDismissed,
+    dismissNotification
   };
 });
 

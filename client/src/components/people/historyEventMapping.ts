@@ -229,6 +229,48 @@ export const PEOPLE_HISTORY_EVENTS: Record<string, HistoryEventMapping> = {
       const appName = formatAppName(appContext);
       return appContext ? `Scheduled meeting (${appName})` : 'Scheduled meeting';
     }
+  },
+
+  'email_sending': {
+    action: 'email_sending',
+    displayText: (metadata) => {
+      const to = metadata?.to;
+      const subj = metadata?.subject;
+      if (to && subj) return `Email to ${to} (sending…)`;
+      if (to) return `Email to ${to} (sending…)`;
+      return 'Email (sending…)';
+    }
+  },
+
+  'email_failed': {
+    action: 'email_failed',
+    displayText: (metadata) => {
+      const to = metadata?.to;
+      if (to) return `Email to ${to} (failed — retry?)`;
+      return 'Email (failed — retry?)';
+    }
+  },
+
+  'email_sent': {
+    action: 'email_sent',
+    displayText: (metadata) => {
+      const subj = metadata?.subject;
+      const to = metadata?.to;
+      if (subj && to) return `Sent email to ${to}: "${subj}"`;
+      if (to) return `Sent email to ${to}`;
+      return 'Sent email';
+    }
+  },
+
+  'email_received': {
+    action: 'email_received',
+    displayText: (metadata) => {
+      const from = metadata?.from;
+      const subj = metadata?.subject;
+      if (from && subj) return `Received email from ${from}: "${subj}"`;
+      if (from) return `Received email from ${from}`;
+      return 'Received email';
+    }
   }
 };
 

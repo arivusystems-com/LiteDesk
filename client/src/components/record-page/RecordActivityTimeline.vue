@@ -1,15 +1,17 @@
 <template>
+  <!-- Conversation style: [Older] ... [Newest] ───── [Composer] -->
   <section :class="['record-activity-timeline', 'flex', 'flex-col', { 'flex-1': expandToFill, 'min-h-0': expandToFill }]" aria-labelledby="record-activity-heading">
-    <h2 id="record-activity-heading" class="sr-only">Activity</h2>
+    <h2 id="record-activity-heading" class="sr-only">Activity (newest at bottom)</h2>
     
-    <!-- Activity feed – only this area scrolls (between header and comment input) -->
+    <!-- Activity feed – scrollable; inner wrapper anchors content at bottom when short -->
     <div
       ref="feedEl"
       :class="['record-activity-timeline__feed', 'overflow-y-auto', { 'flex-1': expandToFill, 'min-h-0': expandToFill, 'is-scrolling': isScrolling }]"
       @scroll="onScroll"
       @wheel="onWheel"
     >
-      <ul class="space-y-0 list-none p-0 m-0">
+      <div class="record-activity-timeline__feed-inner min-h-full flex flex-col justify-end">
+      <ul class="space-y-0 list-none p-0 m-0 flex-shrink-0">
         <li
           v-for="(event, index) in events"
           :key="event.id ?? index"
@@ -91,13 +93,14 @@
         </li>
       </ul>
       
-      <div v-if="events.length === 0" class="px-4 py-6 text-sm text-gray-500 dark:text-gray-400 text-center">
+      <div v-if="events.length === 0" class="flex-shrink-0 px-4 py-6 text-sm text-gray-500 dark:text-gray-400 text-center">
         <slot name="empty">No activity yet.</slot>
+      </div>
       </div>
     </div>
     
-    <!-- Comment input at bottom -->
-    <div v-if="allowComments" class="record-activity-timeline__input sticky bottom-0 flex-shrink-0 border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-900">
+    <!-- Composer – fixed at bottom (conversation style) -->
+    <div v-if="allowComments" class="record-activity-timeline__input flex-shrink-0 border-t border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-900">
       <slot name="commentInput" :submit="handleSubmitComment">
         <textarea
           v-model="commentText"
@@ -148,7 +151,17 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { PaperClipIcon, HandThumbUpIcon, HandThumbDownIcon } from '@heroicons/vue/24/outline';
 
 const feedEl = ref(null);
-defineExpose({ feedEl });
+
+function scrollToBottom() {
+  const el = feedEl.value;
+  if (!el) return;
+  el.scrollTop = el.scrollHeight;
+  // Fallback: scroll last item into view (more resilient with nested scroll containers)
+  const lastItem = el.querySelector('.record-activity-timeline__item:last-of-type');
+  if (lastItem) lastItem.scrollIntoView({ block: 'end', behavior: 'auto' });
+}
+
+defineExpose({ feedEl, scrollToBottom });
 
 const isScrolling = ref(false);
 let scrollHideTimer = null;
@@ -171,14 +184,31 @@ function onWheel() {
   showScrollbar();
 }
 
+let resizeObserver = null;
+let lastHeight = 0;
+
 onMounted(() => {
   const el = feedEl.value;
   if (!el) return;
   el.addEventListener('touchstart', showScrollbar, { passive: true });
+  if (props.scrollToBottomOnLayout) {
+    resizeObserver = new ResizeObserver(() => {
+      if (!props.events?.length) return;
+      const h = el.offsetHeight;
+      const shouldScroll = h > 0 && (lastHeight === 0 || el.scrollTop < 50);
+      if (h > 0) lastHeight = h;
+      else lastHeight = 0;
+      if (shouldScroll) scrollToBottom();
+    });
+    resizeObserver.observe(el);
+  }
 });
 
 onUnmounted(() => {
   if (scrollHideTimer) clearTimeout(scrollHideTimer);
+  resizeObserver?.disconnect();
+  resizeObserver = null;
+  lastHeight = 0;
   const el = feedEl.value;
   if (el) el.removeEventListener('touchstart', showScrollbar);
 });
@@ -198,7 +228,9 @@ const props = defineProps({
   allowInteractions: { type: Boolean, default: true },
   expandToFill: { type: Boolean, default: true },
   showItemBorders: { type: Boolean, default: true },
-  itemPaddingClass: { type: String, default: 'py-4' }
+  itemPaddingClass: { type: String, default: 'py-4' },
+  /** When true, scrolls to bottom when feed is laid out (e.g. after keep-alive reactivation) */
+  scrollToBottomOnLayout: { type: Boolean, default: false }
 });
 
 const emit = defineEmits(['comment', 'like', 'dislike', 'reply']);
@@ -265,10 +297,11 @@ const getAuthorName = (author) => {
 </script>
 
 <style scoped>
-/* Hide scrollbar by default; show only when user initiates scroll */
+/* Conversation style: feed scrolls, newest at bottom; composer fixed below */
 .record-activity-timeline__feed {
   scrollbar-color: transparent transparent;
   scrollbar-width: thin;
+  overflow-anchor: auto;
 }
 .record-activity-timeline__feed.is-scrolling {
   scrollbar-color: rgba(0, 0, 0, 0.25) transparent;

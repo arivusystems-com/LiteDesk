@@ -182,6 +182,8 @@ app.use('/health', healthRoutes); // Public health check endpoint
 // New versioned endpoints (non-breaking)
 app.use('/api/people', peopleRoutes);
 app.use('/api/activity', activityRoutes);
+app.use('/api/communications', require('./routes/communicationsRoutes'));
+app.use('/api/webhooks/email', require('./routes/inboundEmailWebhookRoutes'));
 app.use('/api/notes', notesRoutes);
 app.use('/api/files', filesRoutes);
 app.use('/api/v2/organization', organizationV2Routes);
@@ -355,6 +357,14 @@ mongoose.connect(masterUri)
     const processExecutor = require('./services/processExecutor');
     processExecutor.init();
     console.log('✅ Process executor initialized');
+
+    // 3d. Start email queue worker (async send when Redis configured)
+    try {
+      const emailQueueService = require('./services/emailQueueService');
+      emailQueueService.startWorker();
+    } catch (eqErr) {
+      console.warn('⚠️  Email queue worker not started:', eqErr.message);
+    }
     
     // 4. Start Server after successful DB connection
     server = app.listen(PORT, () => {
