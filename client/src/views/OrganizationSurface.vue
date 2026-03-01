@@ -242,6 +242,17 @@
               </button>
             </div>
           </div>
+          <!-- Email action -->
+          <button
+            v-if="organization && !organization.isTenant"
+            @click="handleEmail"
+            class="flex-shrink-0 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            Email
+          </button>
         </div>
       </div>
 
@@ -463,45 +474,17 @@
         :entity-id="organization._id"
       />
 
-      <!-- E. Activity Timeline -->
+      <!-- E. Activity Timeline (consistent with Person: threads, unread, email) -->
       <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
           Recent Activity
         </h2>
-        
-        <div v-if="organization.recentActivity && organization.recentActivity.length > 0" class="space-y-4">
-          <div
-            v-for="(activity, index) in organization.recentActivity"
-            :key="index"
-            class="flex items-start gap-4 pb-4 border-b border-gray-100 dark:border-gray-700 last:border-0 last:pb-0"
-          >
-            <div class="flex-shrink-0 w-2 h-2 rounded-full bg-blue-500 mt-2"></div>
-            <div class="flex-1 min-w-0">
-              <p class="text-sm text-gray-900 dark:text-gray-100">
-                <template v-if="activity.personId && activity.personName">
-                  <span>{{ getActivitySummaryBeforePerson(activity) }}</span>
-                  <button
-                    @click="openTab(`/people/${activity.personId}`)"
-                    class="text-blue-600 dark:text-blue-400 hover:underline font-medium"
-                  >
-                    {{ activity.personName }}
-                  </button>
-                  <span>{{ getActivitySummaryAfterPerson(activity) }}</span>
-                </template>
-                <template v-else>
-                  {{ formatActivitySummary(activity) }}
-                </template>
-              </p>
-              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {{ formatDate(activity.timestamp) }}
-              </p>
-            </div>
-          </div>
-        </div>
-        <!-- Empty state: Explain why data is missing -->
-        <p v-else class="text-sm text-gray-500 dark:text-gray-400 italic">
-          No recent activity — changes to this organization will appear here.
-        </p>
+        <ActivityTimeline
+          v-if="organization?.id"
+          :key="`activity-${organization.id}-${activityRefreshKey}`"
+          entity-type="Organization"
+          :entity-id="organization.id"
+        />
       </div>
     </div>
 
@@ -514,6 +497,15 @@
       @close="showEditDrawer = false"
       @saved="handleOrganizationUpdated"
     />
+
+    <!-- Email Compose Modal -->
+    <EmailComposeDrawer
+      :is-open="showEmailModal"
+      :related-to="organization?.id ? { moduleKey: 'organizations', recordId: organization.id } : null"
+      :initial-to="organization?.primaryContact?.email || ''"
+      @close="showEmailModal = false"
+      @submit="handleEmailSubmit"
+    />
   </div>
 </template>
 
@@ -523,6 +515,8 @@ import { useRoute } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
 import { useAuthStore } from '@/stores/auth';
 import OrganizationQuickCreateDrawer from '@/components/organizations/OrganizationQuickCreateDrawer.vue';
+import EmailComposeDrawer from '@/components/communications/EmailComposeDrawer.vue';
+import ActivityTimeline from '@/components/ActivityTimeline.vue';
 import AutomationContext from '@/components/automation/AutomationContext.vue';
 import apiClient from '@/utils/apiClient';
 // CONTRACT-LOCKED:
@@ -542,6 +536,8 @@ const error = ref(null);
 const organization = ref(null);
 const showBusinessDetails = ref(false);
 const showEditDrawer = ref(false);
+const showEmailModal = ref(false);
+const activityRefreshKey = ref(0);
 
 // Computed
 const hasBusinessDetails = computed(() => {
@@ -607,6 +603,26 @@ function getActionLabel(action) {
  * Handle organization updated after edit
  * ARCHITECTURAL NOTE: Refresh organization data after successful edit
  */
+const handleEmail = () => {
+  showEmailModal.value = true;
+};
+
+const handleEmailSubmit = async (payload) => {
+  showEmailModal.value = false;
+  try {
+    const res = await apiClient.post('/communications/email', payload);
+    if (res.success) {
+      activityRefreshKey.value += 1;
+      fetchOrganization();
+    } else {
+      alert(res.message || 'Failed to send email');
+    }
+  } catch (err) {
+    const msg = err.response?.data?.error || err.response?.data?.message || err.message;
+    alert(msg || 'Failed to send email');
+  }
+};
+
 const handleOrganizationUpdated = () => {
   // DEV-ONLY INVARIANT GUARD: OrganizationSurface does not mutate, only refreshes
   if (process.env.NODE_ENV === 'development') {
@@ -615,9 +631,9 @@ const handleOrganizationUpdated = () => {
       '[OrganizationSurface] INVARIANT: Edit operations must happen in CreateOrganizationSurface, not inline'
     );
   }
-  
+
   showEditDrawer.value = false;
-  // Refresh organization data to show updated information
+  activityRefreshKey.value += 1;
   fetchOrganization();
 };
 
@@ -684,29 +700,6 @@ const formatCurrency = (amount) => {
   }).format(amount);
 };
 
-const formatDate = (timestamp) => {
-  if (!timestamp) return '-';
-  const date = new Date(timestamp);
-  if (isNaN(date.getTime())) return '-';
-  
-  const now = new Date();
-  const diffMs = now - date;
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-  
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
-  if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
-  if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
-  
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
-  });
-};
-
 const getAppLabel = (appKey) => {
   const labels = {
     'SALES': 'Sales',
@@ -717,166 +710,6 @@ const getAppLabel = (appKey) => {
     'LMS': 'Learning Management'
   };
   return labels[appKey] || appKey;
-};
-
-/**
- * Format activity summary for human-readable display
- * Improves readability by:
- * - Using user display name instead of raw IDs
- * - Making action descriptions more natural
- * - Handling generic/system actions gracefully
- * - Converting technical action names to human-friendly text
- * - Removing raw ObjectIds from summaries
- */
-const formatActivitySummary = (activity) => {
-  if (!activity) return 'Activity recorded';
-  
-  const user = activity.user || 'System';
-  const action = activity.action || '';
-  
-  // Map common action patterns to human-friendly descriptions
-  const actionMap = {
-    'created this record': 'created this organization',
-    'created': 'created this organization',
-    'updated': 'updated this organization',
-    'status_changed': 'changed status',
-    'customer_status_changed': 'changed customer status',
-    'partner_status_changed': 'changed partner status',
-    'vendor_status_changed': 'changed vendor status',
-    'name_changed': 'changed name',
-    'industry_changed': 'changed industry',
-    'website_changed': 'changed website',
-    'phone_changed': 'changed phone',
-    'address_changed': 'changed address',
-    'annual_revenue_changed': 'changed annual revenue',
-    'number_of_employees_changed': 'changed number of employees',
-    'primary_contact_changed': 'changed primary contact',
-    'performed an action': 'made a change',
-    'unknown': 'made a change'
-  };
-  
-  // Remove ObjectIds from action before processing
-  // ObjectIds are 24-character hexadecimal strings
-  const objectIdPattern = /['"]?[0-9a-fA-F]{24}['"]?/g;
-  const cleanAction = action.replace(objectIdPattern, '').trim();
-  
-  // Get human-friendly action description
-  let formattedAction = actionMap[cleanAction.toLowerCase()] || cleanAction;
-  
-  // If action contains underscores, convert to readable text
-  if (formattedAction.includes('_') && !actionMap[cleanAction.toLowerCase()]) {
-    formattedAction = formattedAction
-      .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(' ');
-  }
-  
-  // Handle common patterns with ObjectIds removed
-  if (formattedAction.includes('created people')) {
-    formattedAction = 'created a person';
-  } else if (formattedAction.includes('created organization')) {
-    formattedAction = 'created this organization';
-  } else if (formattedAction.includes('linked')) {
-    formattedAction = formattedAction.replace(/linked\s+to\s*/gi, 'linked');
-  }
-  
-  // Build final summary
-  let summary = `${user} ${formattedAction}`;
-  
-  // Use provided summary if it exists and is different from our generated one
-  if (activity.summary && activity.summary.trim() && activity.summary !== `${user} ${action}`) {
-    summary = activity.summary.trim();
-    
-    // Remove raw ObjectIds (24-character hexadecimal strings)
-    // Pattern: matches ObjectIds in quotes, parentheses, or standalone
-    summary = summary.replace(objectIdPattern, '');
-    
-    // Clean up common patterns in provided summary
-    summary = summary.replace(/performed an action/gi, 'made a change');
-    summary = summary.replace(/unknown/gi, 'made a change');
-    
-    // Clean up common patterns that result from ObjectId removal
-    summary = summary.replace(/\s+created\s+people\s*/gi, ' created a person');
-    summary = summary.replace(/\s+created\s+people\s+['"]/gi, ' created a person');
-    summary = summary.replace(/\s+created\s+organization\s*/gi, ' created this organization');
-    summary = summary.replace(/\s+linked\s+to\s*/gi, ' linked');
-    summary = summary.replace(/\s+unlinked\s+from\s*/gi, ' unlinked');
-    
-    // Remove extra spaces and clean up punctuation
-    summary = summary.replace(/\s+/g, ' ').trim();
-    summary = summary.replace(/\s+([.,;:])/g, '$1'); // Remove space before punctuation
-    summary = summary.replace(/([.,;:])\s*([.,;:])/g, '$1'); // Remove duplicate punctuation
-    summary = summary.replace(/^\s*,\s*/, ''); // Remove leading comma
-    summary = summary.replace(/\s*,\s*$/, ''); // Remove trailing comma
-  }
-  
-  // Ensure proper capitalization
-  if (summary.length > 0) {
-    summary = summary.charAt(0).toUpperCase() + summary.slice(1);
-  }
-  
-  return summary;
-};
-
-/**
- * Get the part of activity summary before the person name
- * Used to split summary for rendering person name as link
- */
-const getActivitySummaryBeforePerson = (activity) => {
-  if (!activity || !activity.personName) return formatActivitySummary(activity);
-  
-  let summary = formatActivitySummary(activity);
-  
-  // Check if this is a person creation action
-  const isPersonCreation = activity.action && 
-    (activity.action.includes('people') || 
-     activity.action.includes('person') ||
-     summary.toLowerCase().includes('created a person') ||
-     summary.toLowerCase().includes('created person'));
-  
-  if (isPersonCreation) {
-    // Replace "created a person" or "created person" with "created "
-    summary = summary.replace(/\bcreated (a )?person\b/gi, 'created ');
-    return summary;
-  }
-  
-  // If person name appears in summary, get text before it
-  const nameIndex = summary.indexOf(activity.personName);
-  if (nameIndex !== -1) {
-    return summary.substring(0, nameIndex);
-  }
-  
-  return summary;
-};
-
-/**
- * Get the part of activity summary after the person name
- * Used to split summary for rendering person name as link
- */
-const getActivitySummaryAfterPerson = (activity) => {
-  if (!activity || !activity.personName) return '';
-  
-  const summary = formatActivitySummary(activity);
-  
-  // Check if this is a person creation action
-  const isPersonCreation = activity.action && 
-    (activity.action.includes('people') || 
-     activity.action.includes('person') ||
-     summary.toLowerCase().includes('created a person') ||
-     summary.toLowerCase().includes('created person'));
-  
-  if (isPersonCreation) {
-    // For creation actions, there's no text after the person name
-    return '';
-  }
-  
-  // If person name appears in summary, get text after it
-  const nameIndex = summary.indexOf(activity.personName);
-  if (nameIndex !== -1) {
-    return summary.substring(nameIndex + activity.personName.length);
-  }
-  
-  return '';
 };
 
 // Listen for refresh events from command palette or other sources

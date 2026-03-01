@@ -32,25 +32,44 @@ exports.getEntityActivities = async (req, res) => {
       });
     }
 
-    // Only support 'Person' entity type for now
-    if (entityType.toLowerCase() !== 'person') {
+    const et = entityType.toLowerCase();
+    if (et !== 'person' && et !== 'organization') {
       return res.status(400).json({
         success: false,
-        message: `Entity type '${entityType}' is not supported. Only 'Person' is supported.`
+        message: `Entity type '${entityType}' is not supported. Supported: Person, Organization.`
       });
     }
 
-    // Fetch the person record
-    const person = await People.findOne({
-      _id: entityId,
-      organizationId: req.user.organizationId
-    }).lean();
+    let rawActivities = [];
+    let entityOrgId = req.user.organizationId;
 
-    if (!person) {
-      return res.status(404).json({
-        success: false,
-        message: 'Person not found.'
-      });
+    if (et === 'person') {
+      const person = await People.findOne({
+        _id: entityId,
+        organizationId: req.user.organizationId
+      }).lean();
+
+      if (!person) {
+        return res.status(404).json({
+          success: false,
+          message: 'Person not found.'
+        });
+      }
+      rawActivities = person.activityLogs || [];
+    } else if (et === 'organization') {
+      const org = await Organization.findOne({
+        _id: entityId,
+        organizationId: req.user.organizationId,
+        isTenant: false
+      }).lean();
+
+      if (!org) {
+        return res.status(404).json({
+          success: false,
+          message: 'Organization not found.'
+        });
+      }
+      rawActivities = org.activityLogs || [];
     }
 
     // Get enabled apps for the organization
@@ -90,14 +109,11 @@ exports.getEntityActivities = async (req, res) => {
       userAppAccess: userAppAccess
     });
 
-    // Get raw activities from person record
-    const rawActivities = person.activityLogs || [];
-
     // Resolve and filter activities
     const activityResult = resolveActivities({
       activities: rawActivities,
       resolvedAppContext: appContextResult,
-      entityType: 'Person',
+      entityType: entityType,
       entityId: entityId
     });
 

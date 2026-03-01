@@ -140,6 +140,58 @@ module.exports = {
       sms: false
     }
   },
+  [domainEvents.TASK_ASSIGNED]: {
+    appKey: 'SALES',
+    recipients: ['TASK_ASSIGNEE'],
+    priority: 'NORMAL',
+    defaultChannels: ['IN_APP', 'EMAIL'],
+    channels: {
+      inApp: true,
+      email: true,
+      push: false,
+      whatsapp: false,
+      sms: false
+    }
+  },
+  [domainEvents.TASK_CREATED]: {
+    appKey: 'SALES',
+    recipients: ['TASK_ASSIGNEE'],
+    priority: 'NORMAL',
+    defaultChannels: ['IN_APP', 'EMAIL'],
+    channels: {
+      inApp: true,
+      email: true,
+      push: false,
+      whatsapp: false,
+      sms: false
+    }
+  },
+  [domainEvents.TASK_STATUS_CHANGED]: {
+    appKey: 'SALES',
+    recipients: ['TASK_ASSIGNEE'],
+    priority: 'NORMAL',
+    defaultChannels: ['IN_APP', 'EMAIL'],
+    channels: {
+      inApp: true,
+      email: true,
+      push: false,
+      whatsapp: false,
+      sms: false
+    }
+  },
+  [domainEvents.TASK_DUE_SOON]: {
+    appKey: 'SALES',
+    recipients: ['TASK_ASSIGNEE'],
+    priority: 'NORMAL',
+    defaultChannels: ['IN_APP', 'EMAIL'],
+    channels: {
+      inApp: true,
+      email: true,
+      push: false,
+      whatsapp: false,
+      sms: false
+    }
+  },
   [domainEvents.USER_ADDED_TO_APP]: {
     appKey: 'SALES',
     recipients: ['USER_SELF'],

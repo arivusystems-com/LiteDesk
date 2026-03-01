@@ -104,8 +104,8 @@ const props = defineProps({
     default: null
   },
   personId: {
-    type: String,
-    required: true
+    validator: (v) => v === null || typeof v === 'string',
+    default: null
   },
   statusBadgeId: {
     type: String,
@@ -127,6 +127,8 @@ const dropdownRef = ref(null);
 // Status is read-only when derivedStatus exists (system-owned)
 // Legacy mode: editable when derivedStatus is null
 const isEditable = computed(() => {
+  // Cannot edit without personId (e.g. when route has changed but view is still mounted)
+  if (!props.personId) return false;
   // If derivedStatus exists, status is system-owned (read-only)
   if (props.derivedStatus != null && props.derivedStatus !== '') {
     return false;
@@ -198,7 +200,7 @@ const flagClasses = computed(() => {
 
 // Handle status selection
 const handleStatusSelect = async (newStatus) => {
-  if (updating.value || newStatus === currentValue.value) {
+  if (updating.value || newStatus === currentValue.value || !props.personId) {
     showDropdown.value = false;
     return;
   }

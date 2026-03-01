@@ -51,9 +51,12 @@
     <!-- Content -->
     <div class="px-6 py-4">
       <ActivityTimeline
+        :key="refreshKey"
         entityType="Person"
         :entityId="personId"
         :appKey="appKey"
+        :optimistic-activities="optimisticActivities"
+        @retry-optimistic="(activity) => activity?.metadata?.retryPayload && emit('retry-email', activity.metadata.retryPayload)"
       />
     </div>
   </div>
@@ -72,18 +75,58 @@ const props = defineProps({
   appContext: {
     type: Object,
     default: null
+  },
+  refreshKey: {
+    type: [Number, String],
+    default: 0
+  },
+  optimisticEmail: {
+    type: Object,
+    default: null
   }
 });
 
-const emit = defineEmits(['create-task', 'schedule-meeting', 'add-note']);
+const emit = defineEmits(['create-task', 'schedule-meeting', 'add-note', 'email', 'retry-email']);
 
 const appKey = computed(() => {
   return props.appContext?.appKey || 'SALES';
 });
 
+const optimisticActivities = computed(() => {
+  const email = props.optimisticEmail;
+  if (!email) return [];
+  const isFailed = email.status === 'failed';
+  const toDisplay = email.toDisplay ?? email.to?.[0] ?? email.to;
+  return [{
+    _optimisticId: isFailed ? 'email-failed' : 'email-sending',
+    actor: 'You',
+    action: isFailed ? 'email_failed' : 'email_sending',
+    metadata: {
+      to: toDisplay,
+      subject: email.subject,
+      status: email.status,
+      retryPayload: isFailed
+        ? {
+            relatedTo: email.relatedTo,
+            to: email.to,
+            subject: email.subject,
+            body: email.body
+          }
+        : undefined
+    },
+    createdAt: new Date()
+  }];
+});
+
 // Quick Actions for HistoryLayer
 const quickActions = computed(() => {
   return [
+    {
+      label: 'Email',
+      icon: null,
+      handler: () => emit('email', props.personId),
+      disabled: false
+    },
     {
       label: 'Create task',
       icon: null,

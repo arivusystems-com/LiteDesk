@@ -1,5 +1,7 @@
 const User = require('../../models/User');
+const Organization = require('../../models/Organization');
 const domainEvents = require('../../constants/domainEvents');
+const emailService = require('../emailService');
 
 const NOTIFICATION_DEBUG = process.env.NOTIFICATION_DEBUG === 'true';
 
@@ -10,11 +12,41 @@ function debugLog(event, data) {
 }
 
 /**
+ * Check if email-provider integration is enabled for the organization.
+ */
+async function isEmailIntegrationEnabled(organizationId) {
+  if (!organizationId) return false;
+  const org = await Organization.findById(organizationId).select('integrations').lean();
+  const state = (org?.integrations || {})[emailService.EMAIL_PROVIDER_KEY];
+  return state?.enabled === true;
+}
+
+/**
  * Email channel implementation.
  * Handles regular notifications and digest notifications.
+ * Only sends when: ENABLE_EMAIL_NOTIFICATIONS=true, email-provider integration enabled, and email service configured.
  */
 async function send({ notification }) {
   try {
+    // Global kill switch
+    if (process.env.ENABLE_EMAIL_NOTIFICATIONS === 'false') {
+      return { success: false, skipped: true, reason: 'email_notifications_disabled' };
+    }
+
+    // Integration gate: email-provider must be enabled for this org
+    const orgId = notification.organizationId;
+    const integrationEnabled = await isEmailIntegrationEnabled(orgId);
+    if (!integrationEnabled) {
+      debugLog('Skipped', { reason: 'integration_disabled', organizationId: String(orgId) });
+      return { success: false, skipped: true, reason: 'integration_disabled' };
+    }
+
+    // Email service must be configured (SES or SMTP)
+    if (!emailService.isConfigured()) {
+      debugLog('Skipped', { reason: 'not_configured' });
+      return { success: false, skipped: true, reason: 'not_configured' };
+    }
+
     // Get user email
     const user = await User.findById(notification.userId).select('email firstName lastName');
     if (!user || !user.email) {
@@ -40,42 +72,25 @@ async function send({ notification }) {
       html = regularContent.html;
     }
 
-    // Try to use email service if available
-    try {
-      const emailService = require('../emailService');
-      if (emailService && typeof emailService.sendEmail === 'function') {
-        const result = await emailService.sendEmail({
-          to: user.email,
-          subject,
-          text,
-          html
-        });
-        
-        debugLog('EmailSent', {
-          notificationId: String(notification._id),
-          userId: String(notification.userId),
-          eventType: notification.eventType,
-          success: result.success
-        });
-        
-        return { success: result.success, messageId: result.messageId };
-      }
-    } catch (emailServiceErr) {
-      // Email service not available or failed - log and continue
-      debugLog('EmailServiceUnavailable', {
-        notificationId: String(notification._id),
-        error: emailServiceErr.message
-      });
-    }
-
-    // Fallback: log if email service not available
-    console.log('[emailChannel] Email service not available, would send:', {
+    const result = await emailService.sendEmail({
       to: user.email,
       subject,
-      notificationId: String(notification._id)
+      text,
+      html,
+      replyTo: process.env.EMAIL_REPLY_TO
     });
-    
-    return { success: true, skipped: true, reason: 'no_email_service' };
+
+    debugLog('EmailSent', {
+      notificationId: String(notification._id),
+      userId: String(notification.userId),
+      eventType: notification.eventType,
+      success: result.success
+    });
+
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+    return { success: true, messageId: result.messageId };
   } catch (err) {
     // Never throw - email failures should not affect users
     console.error('[emailChannel] Failed to send email:', err);

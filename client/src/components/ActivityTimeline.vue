@@ -41,27 +41,40 @@
     </div>
 
     <!-- Activities List -->
-    <div v-else-if="activities && activities.length > 0" class="space-y-4">
+    <div v-else-if="mergedActivities && mergedActivities.length > 0" class="space-y-4">
       <div
-        v-for="(activity, index) in activities"
-        :key="activity.id || index"
+        v-for="(activity, index) in mergedActivities"
+        :key="activity._threadEntry ? `thread-${activity.thread?.threadId}` : (activity.id || activity._optimisticId || index)"
         class="flex items-start gap-3"
       >
         <!-- Timeline Line -->
         <div class="flex-shrink-0 flex flex-col items-center">
           <div class="w-2 h-2 rounded-full bg-indigo-500 mt-1.5"></div>
-          <div v-if="index < activities.length - 1" class="w-0.5 h-full bg-gray-200 dark:bg-gray-700 mt-1 min-h-[3rem]"></div>
+          <div v-if="index < mergedActivities.length - 1" class="w-0.5 h-full bg-gray-200 dark:bg-gray-700 mt-1 min-h-[3rem]"></div>
         </div>
 
-        <!-- Activity Content -->
-        <div class="flex-1 min-w-0 pb-4">
+        <!-- Thread Entry (comment-style cards) -->
+        <div v-if="activity._threadEntry" class="flex-1 min-w-0 pb-4">
+          <EmailThreadCard
+            :thread="activity.thread"
+            :expanded="expandedThreads.has(activity.thread.threadId)"
+            :current-user="authStore.user"
+            :format-date="formatDate"
+            :compact="true"
+            @toggle="toggleThread(activity.thread.threadId)"
+            @create-task="createTaskFromMessage"
+          />
+        </div>
+
+        <!-- Regular Activity Content -->
+        <div v-else class="flex-1 min-w-0 pb-4">
           <div class="flex items-start justify-between gap-2">
             <div class="flex-1 min-w-0">
               <p class="text-sm text-gray-900 dark:text-white">
                 <span class="font-medium">{{ activity.actor || 'System' }}</span>
                 <span class="text-gray-600 dark:text-gray-400"> {{ formatAction(activity) }}</span>
               </p>
-              <div class="mt-1 flex items-center gap-2">
+              <div class="mt-1 flex items-center gap-2 flex-wrap">
                 <p class="text-xs text-gray-500 dark:text-gray-400">
                   {{ formatDate(activity.createdAt) }}
                 </p>
@@ -72,6 +85,15 @@
                 >
                   {{ formatAppName(getAppContext(activity)) }}
                 </span>
+                <!-- Retry button for failed optimistic email -->
+                <button
+                  v-if="activity.metadata?.retryPayload"
+                  type="button"
+                  class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50 transition-colors"
+                  @click="emit('retry-optimistic', activity)"
+                >
+                  Retry
+                </button>
               </div>
             </div>
           </div>
@@ -89,10 +111,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import apiClient from '@/utils/apiClient';
+import { useAuthStore } from '@/stores/auth';
 import { getHistoryDisplayText, getHistoryAppContext } from './people/historyEventMapping';
+import EmailThreadCard from '@/components/communications/EmailThreadCard.vue';
+
+const emit = defineEmits(['retry-optimistic']);
 
 const props = defineProps({
   entityType: {
@@ -107,18 +133,108 @@ const props = defineProps({
   appKey: {
     type: String,
     default: null
+  },
+  optimisticActivities: {
+    type: Array,
+    default: () => []
   }
 });
 
 const route = useRoute();
+const authStore = useAuthStore();
 
 // State
 const loading = ref(true);
+const expandedThreads = ref(new Set());
+
+const createTaskFromMessage = async (msg) => {
+  if (!msg?._id) return;
+  try {
+    const res = await apiClient.post(`/communications/${msg._id}/create-task`, {});
+    if (res?.success && res?.data?.taskId) {
+      window.open(`/tasks/${res.data.taskId}`, '_blank');
+    }
+  } catch (err) {
+    error.value = err.response?.data?.message || err.message || 'Failed to create task';
+  }
+};
+
+const toggleThread = async (threadId) => {
+  const next = new Set(expandedThreads.value);
+  if (next.has(threadId)) {
+    next.delete(threadId);
+  } else {
+    next.add(threadId);
+    const thread = threads.value?.find((t) => t.threadId === threadId);
+    if (thread?.unread) {
+      try {
+        await apiClient.patch(`/communications/threads/${encodeURIComponent(threadId)}/view`, {});
+        threads.value = threads.value.map((t) =>
+          t.threadId === threadId ? { ...t, unread: false, lastViewedAt: new Date().toISOString() } : t
+        );
+      } catch {
+        // Non-critical; unread badge may persist until refresh
+      }
+    }
+  }
+  expandedThreads.value = next;
+};
+
 const error = ref(null);
 const activities = ref([]);
+const threads = ref([]);
 const blocked = ref(false);
 const blockedReason = ref(null);
 const appContext = ref(null);
+
+// Map communicationId -> thread for collapse logic
+const commIdToThread = computed(() => {
+  const map = new Map();
+  for (const t of threads.value || []) {
+    for (const m of t.messages || []) {
+      if (m._id) map.set(String(m._id), t);
+    }
+  }
+  return map;
+});
+
+// Merge fetched activities with optimistic; collapse email activities by thread
+const mergedActivities = computed(() => {
+  const fromApi = activities.value || [];
+  const optimistic = props.optimisticActivities || [];
+  const combined = optimistic.length > 0
+    ? [...optimistic, ...fromApi]
+    : fromApi;
+  const sorted = [...combined].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  const emailActions = new Set(['email_sent', 'email_received']);
+  const renderedThreadIds = new Set();
+  const out = [];
+
+  for (const a of sorted) {
+    const isEmail = emailActions.has(a.action);
+    const commId = a.metadata?.communicationId ? String(a.metadata.communicationId) : null;
+
+    if (isEmail && commId) {
+      const thread = commIdToThread.value.get(commId);
+      if (thread && !renderedThreadIds.has(thread.threadId)) {
+        renderedThreadIds.add(thread.threadId);
+        const lastAt = thread.lastActivityAt || thread.firstActivityAt || a.createdAt;
+        out.push({ _threadEntry: true, thread, createdAt: lastAt });
+        continue;
+      }
+      if (thread) continue; // already rendered this thread
+    }
+
+    out.push(a);
+  }
+
+  return out.sort((a, b) => {
+    const da = a.createdAt || a._threadEntry?.createdAt;
+    const db = b.createdAt || b._threadEntry?.createdAt;
+    return new Date(db) - new Date(da);
+  });
+});
 
 // Methods
 const loadActivities = async () => {
@@ -132,6 +248,8 @@ const loadActivities = async () => {
       throw new Error('Entity ID is required');
     }
 
+    expandedThreads.value = new Set();
+
     // Build route info for app context resolution
     const routeInfo = {
       path: route.path,
@@ -141,26 +259,42 @@ const loadActivities = async () => {
       meta: route.meta
     };
 
-    // Load activities from API
-    const response = await apiClient.get(`/activity/${props.entityType}/${props.entityId}`, {
-      params: {
-        routePath: route.path,
-        routeName: route.name,
-        appKey: props.appKey || route.query.appKey || null
-      }
-    });
+    const [activityRes, threadsRes] = await Promise.all([
+      apiClient.get(`/activity/${props.entityType}/${props.entityId}`, {
+        params: {
+          routePath: route.path,
+          routeName: route.name,
+          appKey: props.appKey || route.query.appKey || null
+        }
+      }),
+      (() => {
+        const et = (props.entityType || '').toLowerCase();
+        if (et === 'person') {
+          return apiClient.get('/communications/threads', { params: { moduleKey: 'people', recordId: props.entityId } }).catch(() => ({ success: false, data: { threads: [] } }));
+        }
+        if (et === 'organization') {
+          return apiClient.get('/communications/threads', { params: { moduleKey: 'organizations', recordId: props.entityId } }).catch(() => ({ success: false, data: { threads: [] } }));
+        }
+        return Promise.resolve({ success: true, data: { threads: [] } });
+      })()
+    ]);
 
-    if (response.success && response.data) {
-      activities.value = response.data.activities || [];
-      appContext.value = response.data.appContext;
-      
-      // Check if activities were blocked
-      if (response.data.blocked) {
+    if (activityRes.success && activityRes.data) {
+      activities.value = activityRes.data.activities || [];
+      appContext.value = activityRes.data.appContext;
+
+      if (activityRes.data.blocked) {
         blocked.value = true;
-        blockedReason.value = response.data.reason || 'App context is ambiguous. Cannot determine which activities to show.';
+        blockedReason.value = activityRes.data.reason || 'App context is ambiguous. Cannot determine which activities to show.';
       }
     } else {
       throw new Error('Failed to load activities');
+    }
+
+    if (threadsRes.success && threadsRes.data?.threads) {
+      threads.value = threadsRes.data.threads;
+    } else {
+      threads.value = [];
     }
   } catch (err) {
     console.error('Error loading activities:', err);

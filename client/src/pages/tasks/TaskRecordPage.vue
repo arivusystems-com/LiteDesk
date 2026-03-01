@@ -1,5 +1,5 @@
 <template>
-  <div class="task-record-page-root flex-1 min-h-0 overflow-hidden flex flex-col">
+  <div ref="taskRecordPageRootRef" class="task-record-page-root flex-1 min-h-0 overflow-hidden flex flex-col">
     <div v-if="embed && loading" class="flex items-center justify-center min-h-[200px] flex-1">
     <div class="text-center">
       <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
@@ -145,6 +145,18 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     <span>Export</span>
+                  </button>
+                </MenuItem>
+                <MenuItem v-slot="{ active }">
+                  <button
+                    @click="showEmailModal = true"
+                    :class="[
+                      'w-full text-left px-4 py-2 text-sm transition-colors duration-150 flex items-center gap-2',
+                      active ? 'bg-gray-100 dark:bg-gray-700' : 'text-gray-700 dark:text-gray-200'
+                    ]"
+                  >
+                    <EnvelopeIcon class="w-4 h-4" />
+                    <span>Email assignee</span>
                   </button>
                 </MenuItem>
                 <hr class="my-1 border-gray-200 dark:border-gray-700" />
@@ -1285,7 +1297,9 @@
     <template #right>
       <RecordRightPane
         v-if="task && !expandedLeftSection"
+        ref="rightPaneRef"
         :tabs="rightPaneTabs"
+        :default-tab="recordLayoutIsMobile ? undefined : 'activity'"
         :show-header="embed"
         :show-close-button="embed"
         :title="embed ? 'Task' : ''"
@@ -1491,6 +1505,7 @@
                 :key="isThreadViewActive ? `thread-${activeThreadRootCommentId}` : 'activity-main'"
                 ref="activityTimelineRef"
                 :events="activityTimelineEvents"
+                :scroll-to-bottom-on-layout="true"
                 :allow-comments="true"
                 :allow-attachments="true"
                 :allow-interactions="true"
@@ -1517,11 +1532,43 @@
                     <span class="text-sm text-gray-500 dark:text-gray-400">{{ threadReplyCount }} {{ threadReplyCount === 1 ? 'reply' : 'replies' }}</span>
                     <span class="h-px flex-1 bg-gray-200 dark:bg-gray-700"></span>
                   </div>
+                  <!-- Email thread (comment-style cards) -->
+                  <EmailThreadCard
+                    v-else-if="event.type === 'email_thread' && event.thread"
+                    :thread="event.thread"
+                    :expanded="expandedTaskEmailThreads.has(event.thread.threadId)"
+                    :current-user="authStore.user"
+                    :format-date="formatRelativeActivityTime"
+                    :format-full-date="formatFullTimestamp"
+                    :on-timestamp-pointer-up="handleTimestampPointerUp"
+                    @toggle="toggleTaskEmailThread(event.thread.threadId)"
+                    @create-task="createTaskFromEmailMessage"
+                  />
                   <!-- System events / Update logs -->
-                  <div v-if="event.type === 'system'" class="flex items-start gap-2.5 py-0.5 text-[13px] text-gray-500 dark:text-slate-400 max-[480px]:flex-wrap max-[480px]:gap-x-2.5 max-[480px]:gap-y-1.5">
-                    <span class="h-1.5 w-1.5 mt-[0.45rem] rounded-full bg-slate-400 dark:bg-slate-500 shrink-0" aria-hidden="true"></span>
+                  <div v-else-if="event.type === 'system'" class="flex items-start gap-2.5 px-2 py-0.5 text-[13px] text-gray-500 dark:text-slate-400 max-[480px]:flex-wrap max-[480px]:gap-x-2.5 max-[480px]:gap-y-1.5">
+                    <span class="h-1 w-1 mt-[0.45rem] rounded-full bg-slate-400 dark:bg-slate-500 shrink-0" aria-hidden="true"></span>
                     <div class="flex-1 min-w-0 space-y-1.5">
-                      <p class="text-[12px] leading-[1.4] text-gray-500 dark:text-slate-400">
+                      <template v-if="isFieldChangeSystemEvent(event)">
+                        <div class="flex items-start justify-between gap-2 max-[480px]:flex-wrap max-[480px]:gap-y-1">
+                          <p class="text-[12px] leading-[1.4] text-gray-500 dark:text-slate-400">
+                            <span>{{ getSystemEventActorLabel(event) }}</span>
+                            <span> changed </span>
+                            <span class="font-semibold text-gray-900 dark:text-white">{{ getSystemEventFieldLabel(event) }}</span>
+                          </p>
+                          <span
+                            v-if="event.createdAt"
+                            class="ml-auto whitespace-nowrap text-[12px] text-gray-400 dark:text-slate-500 cursor-help"
+                            :title="formatFullTimestamp(event.createdAt)"
+                            @pointerup="handleTimestampPointerUp($event, event.createdAt)"
+                          >
+                            {{ formatRelativeActivityTime(event.createdAt) }}
+                          </span>
+                        </div>
+                        <p class="text-[12px] leading-[1.4] text-gray-700 dark:text-gray-300">
+                          Changed {{ getSystemEventFieldLabel(event) }} from "{{ getSystemEventFromValue(event) }}" to "{{ getSystemEventToValue(event) }}"
+                        </p>
+                      </template>
+                      <p v-else class="text-[12px] leading-[1.4] text-gray-500 dark:text-slate-400">
                         {{ getSystemEventMessage(event) }}
                         <a v-if="event.showMore" href="#" @click.prevent="handleShowMore(event)" class="ml-1 text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
                           Show more
@@ -1533,8 +1580,13 @@
                         v-html="event.descriptionDiffHtml"
                       />
                     </div>
-                    <span v-if="event.createdAt" class="ml-auto pl-2 whitespace-nowrap text-[12px] text-gray-400 dark:text-slate-500 max-[480px]:ml-4 max-[480px]:pl-0 self-start">
-                      {{ formatDate(event.createdAt) }}
+                    <span
+                      v-if="event.createdAt && !isFieldChangeSystemEvent(event)"
+                      class="ml-auto pl-2 whitespace-nowrap text-[12px] text-gray-400 dark:text-slate-500 max-[480px]:ml-4 max-[480px]:pl-0 self-start cursor-help"
+                      :title="formatFullTimestamp(event.createdAt)"
+                      @pointerup="handleTimestampPointerUp($event, event.createdAt)"
+                    >
+                      {{ formatRelativeActivityTime(event.createdAt) }}
                     </span>
                   </div>
                   
@@ -1560,8 +1612,13 @@
                             <span class="text-sm font-semibold text-gray-900 dark:text-white truncate">
                               {{ getAuthorName(event.author) }}
                             </span>
-                            <span v-if="event.createdAt" class="text-xs text-gray-500 dark:text-gray-400">
-                              {{ formatDate(event.createdAt) }}
+                            <span
+                              v-if="event.createdAt"
+                              class="text-xs text-gray-500 dark:text-gray-400 cursor-help"
+                              :title="formatFullTimestamp(event.createdAt)"
+                              @pointerup="handleTimestampPointerUp($event, event.createdAt)"
+                            >
+                              {{ formatRelativeActivityTime(event.createdAt) }}
                             </span>
                             <span v-if="event.editedAt" class="text-xs text-gray-400 dark:text-gray-500">(edited)</span>
                           </div>
@@ -2444,6 +2501,16 @@
     @saved="handleTaskEditSaved"
   />
 
+  <!-- Email Compose Drawer -->
+  <EmailComposeDrawer
+    v-if="task"
+    :is-open="showEmailModal"
+    :related-to="{ moduleKey: 'tasks', recordId: String(task._id) }"
+    :initial-to="assigneeEmail || ''"
+    @close="showEmailModal = false"
+    @submit="handleEmailSubmit"
+  />
+
   <!-- Delete Confirmation Modal -->
   <DeleteConfirmationModal
     :show="showDeleteModal"
@@ -2453,11 +2520,34 @@
     @close="showDeleteModal = false"
     @confirm="confirmDeleteTask"
   />
+
+  <Teleport to="body">
+    <div v-if="showTimestampSheet" class="fixed inset-0 z-[140]">
+      <button
+        type="button"
+        class="absolute inset-0 bg-black/40"
+        aria-label="Close timestamp details"
+        @click="closeTimestampSheet"
+      ></button>
+      <section class="absolute inset-x-0 bottom-0 rounded-t-2xl bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 px-4 pt-3 pb-5 shadow-2xl">
+        <div class="mx-auto mb-3 h-1.5 w-12 rounded-full bg-gray-300 dark:bg-gray-600" aria-hidden="true"></div>
+        <p class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Timestamp</p>
+        <p class="mt-2 text-sm font-semibold text-gray-900 dark:text-white">{{ timestampSheetValue }}</p>
+        <button
+          type="button"
+          class="mt-4 w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
+          @click="closeTimestampSheet"
+        >
+          Close
+        </button>
+      </section>
+    </div>
+  </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, onActivated, watch, nextTick, inject } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Menu, MenuButton, MenuItem, MenuItems, Listbox, ListboxButton, ListboxOptions, ListboxOption } from '@headlessui/vue';
 import {
@@ -2477,6 +2567,8 @@ import LinkRecordsDrawer from '@/components/common/LinkRecordsDrawer.vue';
 import TaskEditDrawer from '@/components/tasks/TaskEditDrawer.vue';
 import TaskRelatedToField from '@/components/tasks/TaskRelatedToField.vue';
 import DeleteConfirmationModal from '@/components/common/DeleteConfirmationModal.vue';
+import EmailComposeDrawer from '@/components/communications/EmailComposeDrawer.vue';
+import EmailThreadCard from '@/components/communications/EmailThreadCard.vue';
 import DOMPurify from 'dompurify';
 import {
   ChatBubbleLeftRightIcon,
@@ -2508,7 +2600,8 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   HandThumbUpIcon,
-  FaceSmileIcon
+  FaceSmileIcon,
+  EnvelopeIcon
 } from '@heroicons/vue/24/outline';
 import {
   StarIcon as StarIconSolid,
@@ -2529,6 +2622,7 @@ import {
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+const recordLayoutIsMobile = inject('recordLayoutIsMobile', ref(false));
 
 const props = defineProps({
   /** When true, renders in embed mode for QuickPreviewDrawer (mobile layout, no header, close button) */
@@ -2541,17 +2635,25 @@ const emit = defineEmits(['close']);
 
 const effectiveTaskId = computed(() => props.embed && props.taskId ? props.taskId : route.params.id);
 
+const assigneeEmail = computed(() => {
+  const a = task.value?.assignedTo;
+  if (!a) return '';
+  return typeof a === 'object' ? (a.email || '') : '';
+});
+
 const handleEmbedClose = () => {
   if (props.embed) emit('close');
 };
 
 const task = ref(null);
+const taskRecordPageRootRef = ref(null);
 const loading = ref(false);
 const error = ref(null);
 const isFollowing = ref(false);
 const showDeleteModal = ref(false);
 const deleting = ref(false);
 const showEditDrawer = ref(false);
+const showEmailModal = ref(false);
 const taskEvents = ref([]);
 const taskDeals = ref([]);
 const taskForms = ref([]);
@@ -2594,9 +2696,13 @@ const rightRelatedModuleOpen = ref({
   ...RIGHT_RELATED_DEFAULT_OPEN_STATE
 });
 const activityEvents = ref([]);
+const emailThreads = ref([]);
+const expandedTaskEmailThreads = ref(new Set());
 const customFields = ref([]);
 const users = ref([]);
 const activityTimelineRef = ref(null);
+const rightPaneRef = ref(null);
+const activityScrollTrigger = ref(0); // Incremented on activation to re-run scroll logic
 const activityPaneReady = ref(false); // hide activity content until scrolled to bottom (avoids top flash)
 const leftPaneScrollTop = ref(0);
 const leftPaneScrollElement = ref(null);
@@ -2614,6 +2720,8 @@ const newSubtaskInputRef = ref(null);
 const activitySearchQuery = ref('');
 const activitySearchInputRef = ref(null);
 const activitySearchOpen = ref(false);
+const showTimestampSheet = ref(false);
+const timestampSheetValue = ref('');
 
 const ACTIVITY_FILTER_STORAGE_KEY = 'litedesk-activity-filter';
 function loadActivityFilter() {
@@ -4053,10 +4161,30 @@ const enrichRelatedRecords = async (moduleKey, rows) => {
   return enriched;
 };
 
-// Combined activity events (comments + timeline) sorted chronologically (oldest first, newest at bottom)
+// Combined activity events (comments + timeline + email threads) sorted chronologically (oldest first, newest at bottom)
 const combinedActivityEvents = computed(() => {
-  // Combine all events and sort by createdAt (oldest first)
-  const allEvents = [...activityEvents.value];
+  const allEvents = [];
+  const emailSentIds = new Set(); // communicationIds we'll replace with thread entries
+
+  for (const ev of activityEvents.value) {
+    if (ev.type === 'system' && ev.action === 'email_sent' && ev.details?.communicationId) {
+      emailSentIds.add(String(ev.details.communicationId));
+      continue; // Skip standalone email_sent; we show threads instead
+    }
+    allEvents.push(ev);
+  }
+
+  // Add email thread entries
+  for (const thread of emailThreads.value || []) {
+    const createdAt = thread.lastActivityAt || thread.firstActivityAt || new Date().toISOString();
+    allEvents.push({
+      type: 'email_thread',
+      _threadEntry: true,
+      thread,
+      createdAt
+    });
+  }
+
   return allEvents.sort((a, b) => {
     const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
     const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -4189,7 +4317,8 @@ const filteredActivityEvents = computed(() => {
 
   // No search query: filter by the activity type toggles
   return events.filter(e =>
-    ((e.type === 'comment' && !getParentCommentId(e)) && showComments) || (e.type === 'system' && showUpdates)
+    ((e.type === 'comment' && !getParentCommentId(e)) && showComments) ||
+    ((e.type === 'system' || e.type === 'email_thread') && showUpdates)
   );
 });
 
@@ -4515,6 +4644,20 @@ const fetchActivityEvents = async () => {
   });
   
   activityEvents.value = events;
+
+  // Fetch email threads for this task
+  try {
+    const threadsRes = await apiClient.get('/communications/threads', {
+      params: { moduleKey: 'tasks', recordId: task.value._id }
+    });
+    if (threadsRes?.success && threadsRes.data?.threads?.length) {
+      emailThreads.value = threadsRes.data.threads;
+    } else {
+      emailThreads.value = [];
+    }
+  } catch {
+    emailThreads.value = [];
+  }
 };
 
 const generateUpdateLogsFromTask = () => {
@@ -4598,6 +4741,38 @@ const resolveActorLabel = (name, userId) => {
   if (isCurrentUserById(userId) || isCurrentUserByName(name)) return 'You';
   return name || 'System';
 };
+
+const isFieldChangeSystemEvent = (event) => {
+  if (!event || event.type !== 'system') return false;
+  return event.action === 'field_changed' || event.action === 'status_changed';
+};
+
+const getSystemEventActorLabel = (event) => {
+  if (!event) return 'System';
+  const author = event.author;
+  if (author && typeof author === 'object') {
+    return resolveActorLabel(getUserDisplayName(author), author._id || author.id);
+  }
+  if (typeof author === 'string') {
+    return resolveActorLabel(author, event.userId || event.user);
+  }
+  return 'System';
+};
+
+const getSystemEventFieldLabel = (event) => {
+  const details = event?.details || {};
+  const raw = details.fieldLabel ?? details.field;
+  const label = String(raw ?? '').trim();
+  return label || 'field';
+};
+
+const formatSystemEventValue = (value) => {
+  if (value === undefined || value === null || value === '') return 'Empty';
+  return String(value);
+};
+
+const getSystemEventFromValue = (event) => formatSystemEventValue(event?.details?.from ?? event?.details?.oldValue);
+const getSystemEventToValue = (event) => formatSystemEventValue(event?.details?.to ?? event?.details?.newValue);
 
 const formatActivityLog = (log) => {
   if (!log) return 'Activity logged';
@@ -4790,7 +4965,12 @@ const fetchUsers = async () => {
 const scrollActivityToBottom = (options = {}) => {
   const behavior = options.behavior ?? 'auto';
   nextTick(() => {
-    const feedEl = activityTimelineRef.value?.feedEl;
+    const comp = activityTimelineRef.value;
+    if (comp?.scrollToBottom) {
+      comp.scrollToBottom();
+      return;
+    }
+    const feedEl = comp?.feedEl;
     const el = feedEl?.value ?? feedEl;
     if (!el) return;
     const top = el.scrollHeight;
@@ -5233,6 +5413,97 @@ const formatDate = (date) => {
     minute: '2-digit',
     hour12: true
   });
+};
+
+const formatRelativeActivityTime = (date) => {
+  if (!date) return '';
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return '';
+
+  const now = new Date();
+  let diffSeconds = Math.floor((now.getTime() - d.getTime()) / 1000);
+  if (diffSeconds < 0) diffSeconds = 0;
+
+  const formatTimePart = (value) => value.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+  const startOfDay = (value) => new Date(value.getFullYear(), value.getMonth(), value.getDate());
+
+  if (diffSeconds < 60) return 'Just now';
+
+  const mins = Math.floor(diffSeconds / 60);
+  if (mins < 60) return `${mins} ${mins === 1 ? 'min' : 'mins'} ago`;
+
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} ${hours === 1 ? 'hr' : 'hrs'} ago`;
+
+  const dayDiff = Math.floor((startOfDay(now).getTime() - startOfDay(d).getTime()) / 86400000);
+
+  if (dayDiff <= 0) {
+    return `Today at ${formatTimePart(d)}`;
+  }
+
+  if (dayDiff === 1) {
+    return `Yesterday at ${formatTimePart(d)}`;
+  }
+
+  if (dayDiff < 7) {
+    const weekday = d.toLocaleDateString('en-US', { weekday: 'long' });
+    return `${weekday} at ${formatTimePart(d)}`;
+  }
+
+  if (d.getFullYear() === now.getFullYear()) {
+    const dayMonth = d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+    return `${dayMonth} at ${formatTimePart(d)}`;
+  }
+
+  const dayMonthYear = d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+  return `${dayMonthYear} at ${formatTimePart(d)}`;
+};
+
+const formatFullTimestamp = (date) => {
+  if (!date) return '';
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+};
+
+const isTouchOrPenPointer = (event) => {
+  if (event?.pointerType) {
+    return event.pointerType === 'touch' || event.pointerType === 'pen';
+  }
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    if (window.matchMedia('(hover: none), (pointer: coarse)').matches) return true;
+  }
+  return (typeof navigator !== 'undefined' && Number(navigator.maxTouchPoints || 0) > 0);
+};
+
+const openTimestampSheet = (date) => {
+  const fullValue = formatFullTimestamp(date);
+  if (!fullValue) return;
+  timestampSheetValue.value = fullValue;
+  showTimestampSheet.value = true;
+};
+
+const closeTimestampSheet = () => {
+  showTimestampSheet.value = false;
+  timestampSheetValue.value = '';
+};
+
+const handleTimestampPointerUp = (event, date) => {
+  if (!isTouchOrPenPointer(event)) return;
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+  openTimestampSheet(date);
 };
 
 const formatCreatedDate = (date) => {
@@ -5935,8 +6206,51 @@ watch(() => task.value?.tags, (newTags) => {
   mergeTagDefinitions(Array.isArray(newTags) ? newTags : []);
 }, { deep: true });
 
-// Note: We no longer scroll on every activityEvents change to avoid jitter when opening the tab.
-// Scrolling happens when: (1) Activity tab is shown (ref watcher), (2) User adds a comment (handleAddComment).
+// Scroll to bottom when activity events or email threads first load (ref watcher may run before data arrives).
+// Email threads load after activityEvents in fetchActivityEvents; we scroll when either populates.
+watch(activityEvents, (newEvents, oldEvents) => {
+  const hadItems = Array.isArray(oldEvents) && oldEvents.length > 0;
+  const hasItems = Array.isArray(newEvents) && newEvents.length > 0;
+  if (!hadItems && hasItems && !isThreadViewActive.value && activityTimelineRef.value) {
+    scrollActivityToBottom();
+  }
+}, { deep: true });
+
+watch(emailThreads, (newThreads, oldThreads) => {
+  const hadItems = Array.isArray(oldThreads) && oldThreads.length > 0;
+  const hasItems = Array.isArray(newThreads) && newThreads.length > 0;
+  if (!hadItems && hasItems && !isThreadViewActive.value && activityTimelineRef.value) {
+    scrollActivityToBottom();
+  }
+}, { deep: true });
+
+// When reactivated (navigate back) or route returns to this task, scroll to bottom
+watch(activityScrollTrigger, (trigger) => {
+  if (trigger === 0 || props.embed) return;
+  runActivityScrollToBottom();
+});
+
+// Route watcher: when navigating back to this task (tab switch, browser back), scroll
+watch(() => route.fullPath, (path) => {
+  if (props.embed) return;
+  const taskId = effectiveTaskId.value;
+  if (!taskId || !path?.includes(`/tasks/${taskId}`)) return;
+  runActivityScrollToBottom();
+});
+
+function runActivityScrollToBottom() {
+  const activeTab = rightPaneRef.value?.activeTab?.value;
+  const hasContent = (activityEvents.value?.length ?? 0) > 0 || (emailThreads.value?.length ?? 0) > 0;
+  if (activeTab !== 'activity' || !hasContent || !activityTimelineRef.value || isThreadViewActive.value) return;
+  const run = () => {
+    scrollActivityToBottom();
+    setTimeout(() => scrollActivityToBottom(), 150);
+    setTimeout(() => scrollActivityToBottom(), 400);
+  };
+  nextTick(() => {
+    requestAnimationFrame(() => requestAnimationFrame(run));
+  });
+}
 
 // Initialize local description
 watch(() => task.value, (newTask) => {
@@ -6503,6 +6817,59 @@ const handleTaskEditSaved = async () => {
   await fetchTask();
 };
 
+const handleEmailSubmit = async (payload) => {
+  showEmailModal.value = false;
+  try {
+    const res = await apiClient.post('/communications/email', payload);
+    if (res.success) {
+      await fetchTask();
+    } else {
+      alert(res.message || 'Failed to send email');
+    }
+  } catch (err) {
+    const msg = err.response?.data?.error || err.response?.data?.message || err.message;
+    alert(msg || 'Failed to send email');
+  }
+};
+
+const stripHtml = (html) => {
+  if (!html || typeof html !== 'string') return '';
+  return html.replace(/<[^>]+>/g, '').trim().slice(0, 200) || '(no content)';
+};
+
+const toggleTaskEmailThread = async (threadId) => {
+  const next = new Set(expandedTaskEmailThreads.value);
+  if (next.has(threadId)) {
+    next.delete(threadId);
+  } else {
+    next.add(threadId);
+    const thread = emailThreads.value?.find((t) => t.threadId === threadId);
+    if (thread?.unread) {
+      try {
+        await apiClient.patch(`/communications/threads/${encodeURIComponent(threadId)}/view`, {});
+        emailThreads.value = emailThreads.value.map((t) =>
+          t.threadId === threadId ? { ...t, unread: false } : t
+        );
+      } catch {
+        // Non-critical
+      }
+    }
+  }
+  expandedTaskEmailThreads.value = next;
+};
+
+const createTaskFromEmailMessage = async (msg) => {
+  if (!msg?._id) return;
+  try {
+    const res = await apiClient.post(`/communications/${msg._id}/create-task`, {});
+    if (res?.success && res?.data?.taskId) {
+      window.open(`/tasks/${res.data.taskId}`, '_blank');
+    }
+  } catch (err) {
+    alert(err.response?.data?.message || err.message || 'Failed to create task');
+  }
+};
+
 watch(() => props.taskId, (id) => {
   if (props.embed && id) fetchTask();
 }, { immediate: false });
@@ -6544,7 +6911,10 @@ const detachLeftPaneScrollListener = () => {
 };
 
 const attachLeftPaneScrollListener = () => {
-  const leftPaneEl = document.querySelector('.record-page-layout__left');
+  const rootEl = taskRecordPageRootRef.value;
+  const leftPaneEl = rootEl instanceof HTMLElement
+    ? rootEl.querySelector('.record-page-layout__left')
+    : null;
   if (!leftPaneEl) return false;
   if (leftPaneScrollElement.value === leftPaneEl) {
     const nextScrollTop = leftPaneEl.scrollTop || 0;
@@ -6574,6 +6944,16 @@ watch(loading, (isLoading) => {
 watch(tagStorageKey, () => {
   loadTagDefinitionsFromStorage();
 }, { immediate: true });
+
+// When navigating back (keep-alive reactivation), trigger scroll – watcher will run when DOM is ready
+onActivated(() => {
+  if (!props.embed) activityScrollTrigger.value += 1;
+  nextTick(() => {
+    if (attachLeftPaneScrollListener()) return;
+    isLeftTitleSticky.value = false;
+    leftPaneScrollTop.value = 0;
+  });
+});
 
 onMounted(() => {
   fetchTask();

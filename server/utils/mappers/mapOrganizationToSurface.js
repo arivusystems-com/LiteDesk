@@ -42,7 +42,8 @@ function mapOrganizationToSurface(orgDoc, relatedData = {}) {
       const contact = org.primaryContact;
       primaryContact = {
         id: contact._id.toString(),
-        displayName: `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || contact.email || 'Unknown'
+        displayName: `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || contact.email || 'Unknown',
+        email: contact.email || undefined
       };
     } else if (typeof org.primaryContact === 'string' || org.primaryContact._id) {
       // Just an ID - would need to be populated separately

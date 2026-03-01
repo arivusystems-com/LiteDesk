@@ -116,6 +116,7 @@
         :avatar="identityData.avatar"
         :person-id="personId"
         @edit-profile="handleEditProfile"
+        @email="handleEmail"
       />
 
       <!-- Action Availability Explanation (Read-Only) -->
@@ -197,9 +198,13 @@
         v-if="personId"
         :personId="personId"
         :appContext="appContext"
+        :refresh-key="activityRefreshKey"
+        :optimistic-email="pendingEmail"
         @create-task="handleCreateTaskFromHistory"
         @schedule-meeting="handleScheduleMeetingFromHistory"
         @add-note="handleAddNote"
+        @email="handleEmail"
+        @retry-email="handleEmailSubmit"
       />
 
       <!-- Relationship-based drill-downs -->
@@ -404,6 +409,15 @@
       @close="showEditDetailsModal = false"
       @updated="handleParticipationUpdated"
     />
+
+    <!-- Email Compose Drawer (in-product email) -->
+    <EmailComposeDrawer
+      :is-open="showEmailModal"
+      :related-to="personId ? { moduleKey: 'people', recordId: personId } : null"
+      :initial-to="identityData.email || ''"
+      @close="showEmailModal = false"
+      @submit="handleEmailSubmit"
+    />
   </div>
 </template>
 
@@ -422,6 +436,7 @@ import AttachToAppModal from '@/components/people/AttachToAppModal.vue';
 import SalesConvertLeadModal from '@/components/people/SalesConvertLeadModal.vue';
 import DetachFromAppModal from '@/components/people/DetachFromAppModal.vue';
 import ParticipationEditModal from '@/components/people/ParticipationEditModal.vue';
+import EmailComposeDrawer from '@/components/communications/EmailComposeDrawer.vue';
 import { useRouter } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
 import { assertAttachPermission, assertEditParticipationPermission, assertLifecyclePermission } from '@/platform/permissions/peopleGuards';
@@ -482,6 +497,11 @@ const editDetailsParticipationData = ref(null);
 // Edit profile state
 const showEditProfileDrawer = ref(false);
 const editProfileRecord = ref(null);
+
+// Email compose state
+const showEmailModal = ref(false);
+const activityRefreshKey = ref(0);
+const pendingEmail = ref(null); // Optimistic: { to, subject } while send in progress
 
 /**
  * Check if a field is eligible for Quick Create (same logic as PeopleQuickCreate)
@@ -1043,6 +1063,45 @@ const handleEditProfile = async (personId) => {
     // Fallback: open drawer with just personId
     editProfileRecord.value = { _id: personId };
     showEditProfileDrawer.value = true;
+  }
+};
+
+// Email compose handler
+const handleEmail = (id) => {
+  if (!id) return;
+  showEmailModal.value = true;
+};
+
+// Email submit: optimistic UI - close modal, show "sending...", call API, refresh when done
+// On failure: keep "Email to X (failed — retry?)" with retry button instead of clearing
+const handleEmailSubmit = async (payload) => {
+  showEmailModal.value = false;
+  const toDisplay = payload.to?.[0] || payload.to;
+  pendingEmail.value = {
+    ...payload,
+    to: Array.isArray(payload.to) ? payload.to : [payload.to],
+    toDisplay,
+    status: 'sending'
+  };
+  try {
+    const res = await apiClient.post('/communications/email', payload);
+    if (res.success) {
+      pendingEmail.value = null;
+      activityRefreshKey.value += 1;
+    } else {
+      pendingEmail.value = {
+        ...pendingEmail.value,
+        status: 'failed',
+        error: res.message || 'Failed to send email'
+      };
+    }
+  } catch (err) {
+    const msg = err.response?.data?.error || err.response?.data?.message || err.message;
+    pendingEmail.value = {
+      ...pendingEmail.value,
+      status: 'failed',
+      error: msg || 'Failed to send email'
+    };
   }
 };
 

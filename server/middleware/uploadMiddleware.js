@@ -56,7 +56,9 @@ const fileFilter = (req, file, cb) => {
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'text/csv'
+    'text/plain',
+    'text/csv',
+    'application/octet-stream' // fallback for unknown binary
   ];
   
   if (allowedMimes.includes(file.mimetype)) {
@@ -137,4 +139,7 @@ exports.getFilePath = (filename, orgId = null) => {
   const org = orgId || 'public';
   return path.join(uploadsDir, org, filename);
 };
+
+// Base uploads directory (for consistent path resolution)
+exports.uploadsDir = uploadsDir;
 
