@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
-require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env'), override: false });
 
 const ModuleDefinition = require('../models/ModuleDefinition');
 const Organization = require('../models/Organization');
@@ -54,7 +56,7 @@ const baseFields = [
     label: 'Deal Name',
     dataType: 'Text',
     required: true,
-    keyField: true,
+    keyField: false,
     order: 0,
     visibility: { list: true, detail: true },
     textSettings: { maxLength: 255, rows: 1 }
@@ -79,6 +81,7 @@ const baseFields = [
     dataType: 'Picklist',
     order: 3,
     required: true,
+    keyField: true,
     options: makeOptions(['Qualification', 'Proposal', 'Negotiation', 'Contract Sent', 'Closed Won', 'Closed Lost'])
   }),
   buildField({
@@ -86,6 +89,7 @@ const baseFields = [
     label: 'Deal Owner',
     dataType: 'Lookup (Relationship)',
     required: true,
+    keyField: true,
     order: 4,
     lookupSettings: {
       targetModule: 'users',
@@ -97,6 +101,7 @@ const baseFields = [
     label: 'Organization',
     dataType: 'Lookup (Relationship)',
     required: false,
+    keyField: true,
     order: 5,
     lookupSettings: {
       targetModule: 'organizations',
@@ -128,6 +133,7 @@ const baseFields = [
     dataType: 'Currency',
     order: 8,
     required: true,
+    keyField: true,
     numberSettings: {
       min: 0,
       max: null,
@@ -140,6 +146,7 @@ const baseFields = [
     label: 'Probability (%)',
     dataType: 'Decimal',
     order: 9,
+    keyField: true,
     numberSettings: {
       min: 0,
       max: 100,
@@ -151,7 +158,8 @@ const baseFields = [
     label: 'Close Date',
     dataType: 'Date',
     order: 10,
-    required: true
+    required: true,
+    keyField: true
   }),
   buildField({
     key: 'source',
@@ -184,7 +192,7 @@ const baseFields = [
   }),
   buildField({
     key: 'description',
-    label: 'Notes',
+    label: 'Description',
     dataType: 'Rich Text',
     order: 15,
     visibility: { list: false, detail: true },

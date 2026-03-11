@@ -163,17 +163,20 @@ const handleOpenRelatedRecord = (relationType, recordId) => {
   if (relationType === 'deals') {
     openTab(`/deals/${recordId}`, {
       title: 'Deal Detail',
-      icon: 'briefcase'
+      icon: 'briefcase',
+      insertAdjacent: true
     });
   } else if (relationType === 'forms') {
     openTab(`/forms/${recordId}/detail`, {
       title: 'Form Detail',
-      icon: 'document-text'
+      icon: 'document-text',
+      insertAdjacent: true
     });
   } else if (relationType === 'contacts' || relationType === 'people') {
     openTab(`/people/${recordId}`, {
       title: 'Contact Detail',
-      icon: 'user'
+      icon: 'user',
+      insertAdjacent: true
     });
   }
 };

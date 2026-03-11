@@ -290,11 +290,10 @@
         <thead class="bg-gray-50 dark:bg-gray-900/50">
           <tr>
             <th class="w-10 px-4 py-3">
-              <input
-                type="checkbox"
+              <HeadlessCheckbox
                 :checked="isAllSelected"
                 :indeterminate="isPartiallySelected"
-                class="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                checkbox-class="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                 @change="toggleSelectAll"
               />
             </th>
@@ -312,11 +311,10 @@
             class="transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/30"
           >
             <td class="w-10 px-4 py-3">
-              <input
+              <HeadlessCheckbox
                 v-if="!item.isLegalHold"
-                type="checkbox"
                 :checked="selectedIds.has(itemKey(item))"
-                class="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                checkbox-class="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                 @change="toggleSelect(item)"
               />
             </td>
@@ -430,6 +428,7 @@ import { Listbox, ListboxButton, ListboxOptions, ListboxOption } from '@headless
 import apiClient from '@/utils/apiClient';
 import { useAuthStore } from '@/stores/auth';
 import DeleteConfirmationModal from '@/components/common/DeleteConfirmationModal.vue';
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 
 const authStore = useAuthStore();
 const loading = ref(true);

@@ -135,11 +135,21 @@ async function getTenantModuleConfig(organizationId, appKey, moduleKey) {
       moduleKey: moduleKey.toLowerCase()
     });
 
-    // Get platform definition
-    const platformModule = await ModuleDefinition.findOne({
-      appKey: appKey.toLowerCase(),
-      moduleKey: moduleKey.toLowerCase()
+    // Get platform definition (platform = no tenant: organizationId null or missing)
+    const normApp = appKey.toLowerCase();
+    const normMod = moduleKey.toLowerCase();
+    let platformModule = await ModuleDefinition.findOne({
+      appKey: normApp,
+      moduleKey: normMod,
+      $or: [
+        { organizationId: null },
+        { organizationId: { $exists: false } }
+      ]
     });
+    if (!platformModule) {
+      const all = await ModuleDefinition.find({ appKey: normApp, moduleKey: normMod }).lean();
+      platformModule = all.find((m) => m.organizationId == null || m.organizationId === undefined) || null;
+    }
 
     if (!platformModule) {
       return null; // Module doesn't exist in platform
@@ -212,27 +222,12 @@ async function getEffectiveRelationships(organizationId, appKey, moduleKey) {
     for (const platformRel of platformRelationships) {
       const tenantConfig = relationshipConfigMap.get(platformRel.relationshipKey);
 
-      // Skip if disabled by tenant
-      if (tenantConfig && !tenantConfig.enabled) {
+      // Skip only if tenant explicitly disabled this relationship
+      if (tenantConfig && tenantConfig.enabled === false) {
         continue;
       }
 
-      // Check if both source and target modules are enabled for tenant
-      const sourceModule = await getTenantModuleConfig(
-        organizationId,
-        platformRel.source.appKey.toUpperCase(),
-        platformRel.source.moduleKey
-      );
-      const targetModule = await getTenantModuleConfig(
-        organizationId,
-        platformRel.target.appKey.toUpperCase(),
-        platformRel.target.moduleKey
-      );
-
-      // Skip if either module is disabled
-      if (!sourceModule || !targetModule) {
-        continue;
-      }
+      // Include relationship whenever not explicitly disabled (do not skip when module config missing)
 
       // Merge platform defaults with tenant overrides
       effectiveRelationships.push({

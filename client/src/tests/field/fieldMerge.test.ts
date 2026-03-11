@@ -9,14 +9,14 @@ import { mergeFields, filterToVisibleInConfig, getFallbackMetadataForVisibleInCo
 import { TASK_FIELD_METADATA } from '../../platform/fields/taskFieldModel';
 import { getFieldMetadataFromRegistry } from '../../platform/fields/FieldRegistry';
 
-function meta(overrides: Partial<BaseFieldMetadata> & Pick<BaseFieldMetadata, 'owner' | 'intent' | 'fieldScope' | 'editable'>): BaseFieldMetadata {
-  return {
+function meta(overrides: Partial<BaseFieldMetadata> = {}): BaseFieldMetadata {
+  const base: BaseFieldMetadata = {
     owner: 'core',
     intent: 'primary',
     fieldScope: 'CORE',
     editable: true,
-    ...overrides,
   };
+  return { ...base, ...overrides };
 }
 
 const getTaskMetadata = (fieldKey: string) => getFieldMetadataFromRegistry('tasks', fieldKey);
@@ -25,7 +25,7 @@ describe('fieldMerge', () => {
   describe('A. Infrastructure Fields (_id)', () => {
     it('_id must NOT appear if isVisibleInConfig: false', () => {
       const backendFields = [{ key: '_id', label: 'ID', dataType: 'Text' }];
-      const metadata = { _id: meta({ owner: 'system', intent: 'system', fieldScope: 'CORE', editable: false, isVisibleInConfig: false }) };
+      const metadata: Record<string, BaseFieldMetadata> = { _id: meta({ owner: 'system', intent: 'system', fieldScope: 'CORE', editable: false, isVisibleInConfig: false }) };
       const result = mergeFields(metadata, backendFields, {
         moduleKey: 'tasks',
         getMetadata: (k) => metadata[k] ?? getTaskMetadata(k),
@@ -39,7 +39,7 @@ describe('fieldMerge', () => {
         { key: '_id', label: 'ID' },
         { key: '_id', label: 'ID' },
       ];
-      const metadata = { _id: meta({ owner: 'system', isVisibleInConfig: false }) };
+      const metadata: Record<string, BaseFieldMetadata> = { _id: meta({ owner: 'system', isVisibleInConfig: false }) };
       const result = mergeFields(metadata, backendFields, {
         moduleKey: 'tasks',
         getMetadata: (k) => metadata[k],
@@ -50,7 +50,7 @@ describe('fieldMerge', () => {
 
     it('infrastructure fields must never become editable', () => {
       const backendFields = [{ key: '_id', label: 'ID', editable: true }];
-      const metadata = { _id: meta({ owner: 'system', editable: false, isVisibleInConfig: false }) };
+      const metadata: Record<string, BaseFieldMetadata> = { _id: meta({ owner: 'system', editable: false, isVisibleInConfig: false }) };
       const result = mergeFields(metadata, backendFields, {
         moduleKey: 'tasks',
         getMetadata: (k) => metadata[k],

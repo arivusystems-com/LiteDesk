@@ -282,11 +282,10 @@
                           :key="field.value"
                           class="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors"
                         >
-                          <input
-                            type="checkbox"
-                            :value="field.value"
-                            v-model="duplicateCheckFields"
-                            class="w-5 h-5 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 mt-0.5 flex-shrink-0"
+                          <HeadlessCheckbox
+                            :checked="duplicateCheckFields.includes(field.value)"
+                            @change="toggleDuplicateCheckField(field.value, $event)"
+                            checkbox-class="w-5 h-5 mt-0.5 flex-shrink-0"
                           />
                           <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2">
@@ -586,6 +585,7 @@
 </template>
 
 <script setup>
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, reactive, computed, watch } from 'vue';
 import apiClient from '@/utils/apiClient';
 
@@ -930,6 +930,17 @@ const performImport = async () => {
 
 // Remove a field from the duplicate check selection
 const removeField = (fieldValue) => {
+  duplicateCheckFields.value = duplicateCheckFields.value.filter(f => f !== fieldValue);
+};
+
+const toggleDuplicateCheckField = (fieldValue, event) => {
+  const isChecked = !!event?.target?.checked;
+  if (isChecked) {
+    if (!duplicateCheckFields.value.includes(fieldValue)) {
+      duplicateCheckFields.value = [...duplicateCheckFields.value, fieldValue];
+    }
+    return;
+  }
   duplicateCheckFields.value = duplicateCheckFields.value.filter(f => f !== fieldValue);
 };
 

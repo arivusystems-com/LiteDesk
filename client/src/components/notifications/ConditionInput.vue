@@ -19,11 +19,10 @@
           :key="priority"
           class="flex items-center"
         >
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             :checked="isPrioritySelected(priority)"
+            checkbox-class="w-4 h-4"
             @change="handlePriorityChange(priority, $event.target.checked)"
-            class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
           />
           <span class="ml-2 text-sm text-gray-700 dark:text-gray-300 capitalize">
             {{ priority }}
@@ -40,11 +39,10 @@
           :key="status"
           class="flex items-center"
         >
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             :checked="isStatusSelected(status)"
+            checkbox-class="w-4 h-4"
             @change="handleStatusChange(status, $event.target.checked)"
-            class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
           />
           <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">
             {{ formatStatus(status) }}

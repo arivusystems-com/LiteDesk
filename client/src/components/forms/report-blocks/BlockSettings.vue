@@ -74,60 +74,55 @@
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showAuditId"
             @change="emitUpdate"
             :disabled="block.locked && !canEditPresentation"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Audit ID</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showDates"
             @change="emitUpdate"
             :disabled="block.locked && !canEditPresentation"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Check-in/Check-out Dates</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showRound"
             @change="emitUpdate"
             :disabled="block.locked && !canEditPresentation"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Round Number</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showAddress"
             @change="emitUpdate"
             :disabled="block.locked && !canEditPresentation"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Address</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showGeneralManager"
             @change="emitUpdate"
             :disabled="block.locked && !canEditPresentation"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show General Manager</span>
         </label>
@@ -143,60 +138,55 @@
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showScore"
             @change="emitUpdate"
             :disabled="block.locked && !canEditPresentation"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Overall Score</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showRating"
             @change="emitUpdate"
             :disabled="block.locked && !canEditPresentation"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Star Rating</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showBenchmark"
             @change="emitUpdate"
             :disabled="block.locked && !canEditPresentation"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Benchmark Comparison</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showScoreBreakdown"
             @change="emitUpdate"
             :disabled="block.locked && !canEditPresentation"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Score Breakdown</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showClassification"
             @change="emitUpdate"
             :disabled="block.locked && !canEditPresentation"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Rating Classification Table</span>
         </label>
@@ -219,12 +209,11 @@
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showPerformanceHistory"
             @change="emitUpdate"
             :disabled="block.locked && !canEditPresentation"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Performance History Chart</span>
         </label>
@@ -240,48 +229,44 @@
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showCurrentScores"
             @change="emitUpdate"
             :disabled="block.locked && !canEditPresentation"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Current Audit Scores</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showPreviousScores"
             @change="emitUpdate"
             :disabled="block.locked && !canEditPresentation"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Previous Audit Scores</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showChange"
             @change="emitUpdate"
             :disabled="block.locked && !canEditPresentation"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Change Indicators</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showPassFailCounts"
             @change="emitUpdate"
             :disabled="block.locked && !canEditPresentation"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Pass/Fail Question Counts</span>
         </label>
@@ -324,22 +309,20 @@
     <div v-else-if="block.type === 'audit_summary'" class="space-y-4">
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.showOverallScore"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Overall Score</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.showResult"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Result (Pass/Fail)</span>
         </label>
@@ -350,22 +333,20 @@
     <div v-else-if="block.type === 'overall_score'" class="space-y-4">
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.showPercentage"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Percentage</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.showLabel"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Label</span>
         </label>
@@ -376,22 +357,20 @@
     <div v-else-if="block.type === 'section_results'" class="space-y-4">
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.showCompliancePercentage"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Compliance Percentage</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.showFailedSections"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Highlight Failed Sections</span>
         </label>
@@ -402,22 +381,20 @@
     <div v-else-if="block.type === 'failed_questions'" class="space-y-4">
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.showSectionName"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Section Name</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.showEvidence"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Evidence Status</span>
         </label>
@@ -441,11 +418,10 @@
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.showThumbnails"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Thumbnails</span>
         </label>
@@ -456,22 +432,20 @@
     <div v-else-if="block.type === 'corrective_actions'" class="space-y-4">
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.showStatus"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Status (Fixed/Pending/Regressed)</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.showDates"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Dates</span>
         </label>
@@ -499,20 +473,18 @@
         </label>
         <div class="space-y-2">
           <label class="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
+            <HeadlessCheckbox
               :checked="localBlock.metrics?.includes('compliance')"
               @change="toggleMetric('compliance')"
-              class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+              checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
             />
             <span class="text-sm text-gray-700 dark:text-gray-300">Compliance %</span>
           </label>
           <label class="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
+            <HeadlessCheckbox
               :checked="localBlock.metrics?.includes('failedPoints')"
               @change="toggleMetric('failedPoints')"
-              class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+              checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
             />
             <span class="text-sm text-gray-700 dark:text-gray-300">Failed Points</span>
           </label>
@@ -541,11 +513,10 @@
         </label>
         <div class="space-y-2">
           <label class="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
+            <HeadlessCheckbox
               :checked="localBlock.metrics?.includes('compliance')"
               @change="toggleMetric('compliance')"
-              class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+              checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
             />
             <span class="text-sm text-gray-700 dark:text-gray-300">Compliance %</span>
           </label>
@@ -597,44 +568,40 @@
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.includeScoreContext"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Include Score Context</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.includeTopAreas"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Mention Top Performing Areas</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.includeBottomAreas"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Mention Areas Needing Improvement</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.includeTrends"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Include Trend Information</span>
         </label>
@@ -676,22 +643,20 @@
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showScores"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Score Percentages</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showChange"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Change from Previous Audit</span>
         </label>
@@ -721,44 +686,40 @@
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showByDepartment"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Group by Department</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showByCategory"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Group by Category</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showPreviousComparison"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Compare with Previous Audit</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showChange"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Change Indicators</span>
         </label>
@@ -815,22 +776,20 @@
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showCurrentHighlight"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Highlight Current Audit</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showAverage"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Average Trend Line</span>
         </label>
@@ -846,44 +805,40 @@
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showOnlyFailed"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Only Failed Questions</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showEvidence"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Evidence Attachments</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showComments"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Question Comments</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showScores"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Individual Question Scores</span>
         </label>
@@ -913,44 +868,40 @@
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showStatus"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Action Item Status</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showDates"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Creation/Due Dates</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showAssignee"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Show Assigned User</span>
         </label>
       </div>
       <div>
         <label class="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localBlock.config.showFromPreviousAudits"
             @change="emitUpdate"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
           />
           <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Include Items from Previous Audits</span>
         </label>
@@ -1010,6 +961,7 @@
 </template>
 
 <script setup>
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, watch, computed } from 'vue';
 import { LockClosedIcon } from '@heroicons/vue/24/outline';
 import { hasSystemVisibilityRule as checkSystemRule, getSystemVisibilityRule } from '../../../utils/blockVisibility';

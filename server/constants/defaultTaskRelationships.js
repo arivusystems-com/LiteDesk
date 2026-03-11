@@ -4,17 +4,17 @@
  * ============================================================================
  *
  * These relationships define the system-recommended, out-of-the-box data model
- * for Tasks across all applications.
+ * for Tasks across all applications. Use stable relationshipKeys (e.g. task_events,
+ * task_deals) to reference relationships across the system.
  *
  * ⚠️ PLATFORM defaults only - not tenant-specific
- * ⚠️ Only PRIMARY and OPERATIONAL relationships are defined here
  * ============================================================================
  */
 
 const DEFAULT_TASK_RELATIONSHIPS = [
   // 1) Task → Project (PRIMARY)
   {
-    relationshipKey: 'project',
+    relationshipKey: 'task_projects',
     sourceModule: 'tasks',
     targetModule: 'projects',
     relationshipType: 'ONE_TO_MANY', // Project (1) → Tasks (N)
@@ -34,7 +34,7 @@ const DEFAULT_TASK_RELATIONSHIPS = [
 
   // 2) Task ↔ Event (OPERATIONAL)
   {
-    relationshipKey: 'events',
+    relationshipKey: 'task_events',
     sourceModule: 'tasks',
     targetModule: 'events',
     relationshipType: 'MANY_TO_MANY',
@@ -50,7 +50,7 @@ const DEFAULT_TASK_RELATIONSHIPS = [
 
   // 3) Task ↔ Deal (OPERATIONAL)
   {
-    relationshipKey: 'deals',
+    relationshipKey: 'task_deals',
     sourceModule: 'tasks',
     targetModule: 'deals',
     relationshipType: 'MANY_TO_MANY',
@@ -66,7 +66,7 @@ const DEFAULT_TASK_RELATIONSHIPS = [
 
   // 4) Task ↔ Case (OPERATIONAL)
   {
-    relationshipKey: 'cases',
+    relationshipKey: 'task_cases',
     sourceModule: 'tasks',
     targetModule: 'cases',
     relationshipType: 'MANY_TO_MANY',
@@ -82,7 +82,7 @@ const DEFAULT_TASK_RELATIONSHIPS = [
 
   // 5) Task ↔ Audit Form (OPERATIONAL)
   {
-    relationshipKey: 'forms',
+    relationshipKey: 'task_forms',
     sourceModule: 'tasks',
     targetModule: 'forms',
     relationshipType: 'MANY_TO_MANY',
@@ -98,7 +98,7 @@ const DEFAULT_TASK_RELATIONSHIPS = [
 
   // 6) Task ↔ Task (Dependency) (OPERATIONAL – ADVANCED)
   {
-    relationshipKey: 'dependencies',
+    relationshipKey: 'task_dependencies',
     sourceModule: 'tasks',
     targetModule: 'tasks',
     relationshipType: 'MANY_TO_MANY',

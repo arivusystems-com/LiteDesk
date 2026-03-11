@@ -244,7 +244,8 @@ const viewOrganization = () => {
   if (organizationId.value) {
     openTab(`/organizations/${organizationId.value}`, {
       title: organization.value || 'Organization',
-      icon: 'building'
+      icon: 'building',
+      insertAdjacent: true
     });
   }
 };

@@ -35,8 +35,17 @@ async function syncContactIdToDealPeople(deal, userId) {
     deal.dealPeople = [];
   }
 
+  const contactIdStr = deal.contactId.toString();
+
+  // Ensure only one primary contact: clear isPrimary on other primary_contact entries
+  for (const p of deal.dealPeople) {
+    if (p.role === 'primary_contact' && p.personId && p.personId.toString() !== contactIdStr) {
+      p.isPrimary = false;
+    }
+  }
+
   const existingPrimary = deal.dealPeople.find(
-    (p) => p.personId && p.personId.toString() === deal.contactId.toString() && p.role === 'primary_contact'
+    (p) => p.personId && p.personId.toString() === contactIdStr && p.role === 'primary_contact'
   );
 
   if (!existingPrimary) {
@@ -75,8 +84,17 @@ async function syncAccountIdToDealOrganizations(deal, userId) {
     deal.dealOrganizations = [];
   }
 
+  const accountIdStr = deal.accountId.toString();
+
+  // Ensure only one primary customer: clear isPrimary on other customer entries
+  for (const o of deal.dealOrganizations) {
+    if (o.role === 'customer' && o.organizationId && o.organizationId.toString() !== accountIdStr) {
+      o.isPrimary = false;
+    }
+  }
+
   const existingPrimary = deal.dealOrganizations.find(
-    (o) => o.organizationId && o.organizationId.toString() === deal.accountId.toString() && o.role === 'customer'
+    (o) => o.organizationId && o.organizationId.toString() === accountIdStr && o.role === 'customer'
   );
 
   if (!existingPrimary) {

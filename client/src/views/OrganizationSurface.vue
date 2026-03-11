@@ -235,7 +235,7 @@
             <div v-if="organization.primaryContact" class="mt-2">
               <span class="text-sm text-gray-500 dark:text-gray-400">Primary Contact: </span>
               <button
-                @click="openTab(`/people/${organization.primaryContact.id}`)"
+                @click="openTab(`/people/${organization.primaryContact.id}`, { insertAdjacent: true })"
                 class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
               >
                 {{ organization.primaryContact.displayName }}
@@ -269,7 +269,7 @@
           </div>
           <button
             v-if="organization.peopleCount > organization.peoplePreview.length"
-            @click="openTab(`/people?organization=${organization.id}`)"
+            @click="openTab(`/people?organization=${organization.id}`, { insertAdjacent: true })"
             class="text-sm text-blue-600 dark:text-blue-400 hover:underline"
           >
             View all
@@ -283,7 +283,7 @@
             class="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0"
           >
             <button
-              @click="openTab(`/people/${person.id}`)"
+              @click="openTab(`/people/${person.id}`, { insertAdjacent: true })"
               class="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400"
             >
               {{ person.name }}

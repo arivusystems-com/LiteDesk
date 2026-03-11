@@ -275,7 +275,8 @@ const viewImport = (importRecord, event = null) => {
     title,
     icon: 'download',
     params: { fileName: importRecord.fileName },
-    background: openInBackground
+    background: openInBackground,
+    insertAdjacent: true
   });
 };
 

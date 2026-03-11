@@ -386,10 +386,9 @@
               <!-- Do Not Contact -->
               <div class="sm:col-span-2">
                 <label class="flex items-center gap-2">
-                  <input
+                  <HeadlessCheckbox
                     v-model="editForm.do_not_contact"
-                    type="checkbox"
-                    class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                    checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                   />
                   <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
                     Do Not Contact
@@ -973,12 +972,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue';
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/utils/apiClient';
 import { openDatePicker } from '@/utils/dateUtils';
 import { formatRawValueForDisplay } from '@/utils/fieldDisplay';
+import { useRecordPageLifecycle } from '@/components/record-page/composables/useRecordPageLifecycle';
 import ActivityTimeline from '@/components/ActivityTimeline.vue';
 import Notes from '@/components/Notes.vue';
 import Files from '@/components/Files.vue';
@@ -1025,6 +1026,7 @@ const showConvertModal = ref(false);
 const converting = ref(false);
 const convertError = ref(null);
 const activityTimelineKey = ref(0); // Key to force ActivityTimeline refresh
+const lastRoutedPersonId = ref(String(personId.value || ''));
 
 // Methods
 const loadProfile = async () => {
@@ -1328,12 +1330,22 @@ const saveAppFields = async (appKey) => {
   }
 };
 
-// Watch for route changes
-watch(() => [route.name, route.params.id], ([routeName, newId]) => {
-  if (routeName !== 'person-detail') return;
-  // Only load profile if person ID exists (prevents error when tab is closed)
-  if (newId) loadProfile();
-}, { immediate: false });
+useRecordPageLifecycle({
+  route,
+  recordId: personId,
+  routePrefix: '/people',
+  fetchRecord: async () => {
+    await loadProfile();
+    lastRoutedPersonId.value = String(personId.value || '');
+  },
+  onRouteChange: async ({ recordId }) => {
+    if (route.name !== 'person-detail') return;
+    const nextId = String(recordId || '');
+    if (!nextId || nextId === lastRoutedPersonId.value) return;
+    lastRoutedPersonId.value = nextId;
+    await loadProfile();
+  }
+});
 
 // Handle note creation (refresh Activity timeline)
 const handleNoteCreated = () => {
@@ -1612,9 +1624,5 @@ const handleAttachSubmit = async () => {
   }
 };
 
-// Lifecycle
-onMounted(async () => {
-  await loadProfile();
-});
 </script>
 

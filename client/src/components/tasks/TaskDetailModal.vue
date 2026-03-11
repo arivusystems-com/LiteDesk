@@ -154,11 +154,10 @@
               :key="subtask._id"
               class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer"
             >
-              <input 
-                type="checkbox" 
+              <HeadlessCheckbox
                 :checked="subtask.completed"
+                checkbox-class="w-4 h-4"
                 @change="toggleSubtask(subtask)"
-                class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
               />
               <span :class="['flex-1', subtask.completed ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white']">
                 {{ subtask.title }}

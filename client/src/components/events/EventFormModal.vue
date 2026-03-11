@@ -210,15 +210,12 @@
                   {{ geoRequiredDescription }}
                 </p>
               </div>
-              <label class="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  v-model="form.geoRequired"
-                  :disabled="!canToggleGeo"
-                  class="sr-only peer"
-                />
-                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-              </label>
+              <HeadlessCheckbox
+                v-model="form.geoRequired"
+                :disabled="!canToggleGeo"
+                variant="switch"
+                checkbox-class="w-11 h-6"
+              />
             </div>
             
             <div v-else-if="geoRequiredForced" class="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
@@ -286,14 +283,11 @@
                   Enable only if the auditor is responsible for both execution and approval.
                 </p>
               </div>
-              <label class="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  v-model="form.allowSelfReview"
-                  class="sr-only peer"
-                />
-                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-              </label>
+              <HeadlessCheckbox
+                v-model="form.allowSelfReview"
+                variant="switch"
+                checkbox-class="w-11 h-6"
+              />
             </div>
 
             <!-- Multi-Org Route (External Audit Beat, Field Sales Beat) -->
@@ -342,10 +336,9 @@
               
               <!-- Background Tracking (External Audit Beat) -->
               <div v-if="form.eventType === 'External Audit Beat'" class="flex items-center gap-2">
-                <input
-                  type="checkbox"
+                <HeadlessCheckbox
                   v-model="form.backgroundTracking"
-                  class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                  checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                 />
                 <label class="text-sm text-gray-700 dark:text-gray-300">Enable Background Tracking</label>
               </div>
@@ -373,26 +366,23 @@
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Allowed Actions</label>
                 <div class="space-y-2">
                   <label class="flex items-center gap-2">
-                    <input
-                      type="checkbox"
+                    <HeadlessCheckbox
                       v-model="form.allowedActions.orders"
-                      class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                      checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                     />
                     <span class="text-sm text-gray-700 dark:text-gray-300">Orders</span>
                   </label>
                   <label class="flex items-center gap-2">
-                    <input
-                      type="checkbox"
+                    <HeadlessCheckbox
                       v-model="form.allowedActions.payments"
-                      class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                      checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                     />
                     <span class="text-sm text-gray-700 dark:text-gray-300">Payments</span>
                   </label>
                   <label class="flex items-center gap-2">
-                    <input
-                      type="checkbox"
+                    <HeadlessCheckbox
                       v-model="form.allowedActions.feedback"
-                      class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                      checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                     />
                     <span class="text-sm text-gray-700 dark:text-gray-300">Feedback</span>
                   </label>
@@ -402,10 +392,9 @@
             
             <!-- Partner Visibility (External Audit) -->
             <div v-if="form.eventType === 'External Audit — Single Org'" class="flex items-center gap-2">
-              <input
-                type="checkbox"
+              <HeadlessCheckbox
                 v-model="form.partnerVisibility"
-                class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
               />
               <label class="text-sm text-gray-700 dark:text-gray-300">Partner Visibility (for guest auditor)</label>
             </div>
@@ -452,6 +441,7 @@
 <script setup>
 import { ref, watch, computed, onMounted, nextTick } from 'vue';
 import apiClient from '@/utils/apiClient';
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import dateUtils, { openDatePicker } from '@/utils/dateUtils';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
 import { useAuthStore } from '@/stores/auth';
@@ -1161,7 +1151,8 @@ const handleSubmit = async (e) => {
           if (!isEditing.value || !isAlreadyViewing) {
             openTab(recordPath, {
               title: eventTitle,
-              icon: '📅'
+              icon: '📅',
+              insertAdjacent: true
             });
           }
         }

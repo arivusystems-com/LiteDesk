@@ -2,14 +2,16 @@
  * ============================================================================
  * Platform Relationship Registry Utilities
  * ============================================================================
- * 
+ *
  * Helper functions for reading platform-level relationship metadata.
- * All functions read from RelationshipDefinition model.
- * 
+ * Includes an in-memory cache of enabled relationshipKeys for fast validation
+ * (registry.has(key)) without DB queries. Call refreshRelationshipKeyCache()
+ * at server startup to populate the cache.
+ *
  * ⚠️ This is READ-ONLY metadata access - no business logic
  * ⚠️ No tenant data, no permissions enforcement
  * ⚠️ Never throws - returns empty arrays/objects instead
- * 
+ *
  * See PLATFORM_ARCHITECTURE.md for details.
  * ============================================================================
  */
@@ -17,6 +19,90 @@
 const RelationshipDefinition = require('../models/RelationshipDefinition');
 const AppDefinition = require('../models/AppDefinition');
 const ModuleDefinition = require('../models/ModuleDefinition');
+
+// In-memory cache of enabled relationshipKeys (lowercase). Populated by refreshRelationshipKeyCache().
+let _enabledKeysSet = new Set();
+// Map: relationshipKey (lowercase) -> { source: { appKey, moduleKey }, target: { appKey, moduleKey } } for validation
+let _definitionsByKey = new Map();
+// Reverse index: targetKey (appKey.moduleKey) -> array of { relationshipKey, source, target } where module is the target
+let _reverseByTarget = new Map();
+
+/**
+ * Refresh the relationshipKey cache from the database. Call at server startup.
+ * Safe to call repeatedly; each call replaces the cache with current enabled keys, source/target, and reverse index.
+ * @returns {Promise<void>}
+ */
+async function refreshRelationshipKeyCache() {
+  try {
+    const docs = await RelationshipDefinition.find({ enabled: true })
+      .select('relationshipKey source target')
+      .lean();
+    _enabledKeysSet = new Set();
+    _definitionsByKey = new Map();
+    _reverseByTarget = new Map();
+    for (const doc of docs || []) {
+      const k = String(doc.relationshipKey || '').trim().toLowerCase();
+      if (!k) continue;
+      const def = {
+        source: {
+          appKey: (doc.source?.appKey || '').toString().toLowerCase(),
+          moduleKey: (doc.source?.moduleKey || '').toString().toLowerCase()
+        },
+        target: {
+          appKey: (doc.target?.appKey || '').toString().toLowerCase(),
+          moduleKey: (doc.target?.moduleKey || '').toString().toLowerCase()
+        }
+      };
+      _enabledKeysSet.add(k);
+      _definitionsByKey.set(k, def);
+      const targetKey = `${def.target.appKey}.${def.target.moduleKey}`;
+      if (!_reverseByTarget.has(targetKey)) _reverseByTarget.set(targetKey, []);
+      _reverseByTarget.get(targetKey).push({ relationshipKey: k, source: def.source, target: def.target });
+    }
+  } catch (error) {
+    console.error('[relationshipRegistry] Error refreshing relationshipKey cache:', error);
+    _enabledKeysSet = new Set();
+    _definitionsByKey = new Map();
+    _reverseByTarget = new Map();
+  }
+}
+
+/** Normalize key before registry access so case/whitespace mismatches cannot slip through. */
+function normalizeKey(key) {
+  if (key == null) return '';
+  return String(key).trim().toLowerCase();
+}
+
+/**
+ * Check whether a relationshipKey exists in the platform (enabled). Uses cache only.
+ * Key is normalized (trim + toLowerCase) before lookup.
+ * @param {string} key - relationshipKey (case-insensitive)
+ * @returns {boolean}
+ */
+function has(key) {
+  if (!key) return false;
+  return _enabledKeysSet.has(normalizeKey(key));
+}
+
+/**
+ * Get cached definition (source/target) for a relationshipKey. Uses cache only; no DB query.
+ * Key is normalized (trim + toLowerCase) before lookup.
+ * @param {string} key - relationshipKey (case-insensitive)
+ * @returns {{ source: { appKey: string, moduleKey: string }, target: { appKey: string, moduleKey: string } } | undefined}
+ */
+function get(key) {
+  if (!key) return undefined;
+  return _definitionsByKey.get(normalizeKey(key));
+}
+
+/**
+ * Get the Set of enabled relationshipKeys (lowercase). Read-only; do not mutate.
+ * Empty if cache has not been populated.
+ * @returns {Set<string>}
+ */
+function getEnabledKeysSet() {
+  return _enabledKeysSet;
+}
 
 /**
  * Get all enabled relationships
@@ -90,27 +176,18 @@ async function getOutgoingRelationships(appKey, moduleKey) {
 }
 
 /**
- * Get incoming relationships to a specific module (where module is the target)
- * @param {string} appKey - The app key
- * @param {string} moduleKey - The module key
- * @returns {Promise<Array>} - Array of relationship definitions where the module is the target
+ * Get relationships where the given module is the target (incoming links).
+ * Uses the reverse index built during refreshRelationshipKeyCache(); no DB query.
+ * Allows record pages to discover which modules can link to the current module.
+ * @param {string} appKey - Target app key (case-insensitive)
+ * @param {string} moduleKey - Target module key (case-insensitive)
+ * @returns {Array<{ relationshipKey: string, source: { appKey: string, moduleKey: string }, target: { appKey: string, moduleKey: string } }>}
  */
-async function getIncomingRelationships(appKey, moduleKey) {
-  try {
-    const normalizedAppKey = appKey.toLowerCase();
-    const normalizedModuleKey = moduleKey.toLowerCase();
-    
-    const relationships = await RelationshipDefinition.find({
-      enabled: true,
-      'target.appKey': normalizedAppKey,
-      'target.moduleKey': normalizedModuleKey
-    }).sort({ relationshipKey: 1 });
-    
-    return relationships;
-  } catch (error) {
-    console.error(`[relationshipRegistry] Error getting incoming relationships for ${appKey}.${moduleKey}:`, error);
-    return [];
-  }
+function getIncomingRelationships(appKey, moduleKey) {
+  if (!appKey || !moduleKey) return [];
+  const targetKey = `${String(appKey).trim().toLowerCase()}.${String(moduleKey).trim().toLowerCase()}`;
+  const list = _reverseByTarget.get(targetKey) || [];
+  return list.slice();
 }
 
 /**
@@ -386,6 +463,10 @@ async function validateRelationship(relationshipData, excludeRelationshipKey = n
 }
 
 module.exports = {
+  refreshRelationshipKeyCache,
+  has,
+  get,
+  getEnabledKeysSet,
   getAllRelationships,
   getRelationshipsForModule,
   getOutgoingRelationships,

@@ -74,7 +74,6 @@ const DemoRequestSchema = new mongoose.Schema({
 });
 
 // Index for faster queries
-DemoRequestSchema.index({ email: 1 });
 DemoRequestSchema.index({ status: 1 });
 DemoRequestSchema.index({ createdAt: -1 });
 

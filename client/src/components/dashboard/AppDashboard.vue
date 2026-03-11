@@ -264,7 +264,8 @@ const handleAction = (route) => {
   // Open in tab
   openTab(route, {
     title: route.split('/').pop(),
-    background: false
+    background: false,
+    insertAdjacent: true
   });
 };
 

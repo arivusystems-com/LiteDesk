@@ -173,7 +173,18 @@ class UICompositionService {
         moduleMap.set(module.moduleKey, module);
       });
       
-      const moduleDefinitions = Array.from(moduleMap.values());
+      let moduleDefinitions = Array.from(moduleMap.values());
+
+      // Exclude deprecated/removed modules from app nav (e.g. contacts was removed from Sales)
+      const excludedModuleKeysByApp = {
+        sales: ['contacts']
+      };
+      const excludedForApp = excludedModuleKeysByApp[appKeyLower];
+      if (excludedForApp && excludedForApp.length > 0) {
+        moduleDefinitions = moduleDefinitions.filter(
+          (m) => !excludedForApp.includes((m.moduleKey || '').toLowerCase())
+        );
+      }
 
       // Get tenant module configurations
       const tenantConfigs = await TenantModuleConfiguration.find({

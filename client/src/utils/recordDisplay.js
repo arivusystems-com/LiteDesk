@@ -19,23 +19,32 @@ const recordCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Get endpoint for a record type
+ * Get endpoint for a record type.
+ * Server routes are module-based (/api/tasks, /api/deals, etc.), not /api/{appKey}/{moduleKey}.
  */
 function getRecordEndpoint(appKey, moduleKey) {
-  const normalizedApp = appKey?.toLowerCase() || 'crm';
-  const normalizedModule = moduleKey?.toLowerCase() || 'unknown';
-  
-  // Use generic API pattern: /api/{appKey}/{moduleKey}
-  // For CRM, use existing endpoints
-  if (normalizedApp === 'crm') {
-    if (normalizedModule === 'organizations' || normalizedModule === 'organization') {
-      return '/v2/organization';
-    }
-    return `/${normalizedModule}`;
-  }
-  
-  // For other apps, use generic pattern
-  return `/${normalizedApp}/${normalizedModule}`;
+  const normalizedModule = (moduleKey ?? '').toString().toLowerCase().trim();
+  // Map moduleKey to actual server path (no appKey in path)
+  const moduleToPath = {
+    tasks: '/tasks',
+    task: '/tasks',
+    events: '/events',
+    event: '/events',
+    forms: '/forms',
+    form: '/forms',
+    deals: '/deals',
+    deal: '/deals',
+    people: '/people',
+    organizations: '/v2/organization',
+    organization: '/v2/organization',
+    items: '/items',
+    item: '/items'
+  };
+  const path = moduleToPath[normalizedModule];
+  if (path) return path;
+  if (normalizedModule === 'organizations' || normalizedModule === 'organization') return '/v2/organization';
+  // Fallback: try moduleKey as path (e.g. /people, /groups)
+  return `/${normalizedModule || 'unknown'}`;
 }
 
 /**
@@ -84,7 +93,7 @@ export async function fetchRecord(appKey, moduleKey, recordId, forceRefresh = fa
 
 /**
  * Get display label for a record
- * Tries multiple fields in order: name, title, primaryField, email, id
+ * Tries multiple fields in order: name, title, eventName, primaryField, email, id
  */
 export function getRecordLabel(record) {
   if (!record) return 'Unnamed Record';
@@ -92,6 +101,7 @@ export function getRecordLabel(record) {
   // Try common fields
   if (record.name) return record.name;
   if (record.title) return record.title;
+  if (record.eventName) return record.eventName;
   if (record.primaryField) return record.primaryField;
   if (record.email) return record.email;
   if (record.firstName || record.lastName) {
@@ -124,9 +134,10 @@ export async function fetchRecordsForDisplay(records, forceRefresh = false) {
   if (!records || records.length === 0) return [];
   
   // Fetch records in parallel (cache will be checked inside fetchRecord)
-  const fetchPromises = records.map(record => 
-    fetchRecord(record.appKey, record.moduleKey, record.id, forceRefresh)
-  );
+  const fetchPromises = records.map(record => {
+    const recordId = record.recordId ?? record.id ?? record._id;
+    return fetchRecord(record.appKey, record.moduleKey, recordId, forceRefresh);
+  });
   
   const fetchedRecords = await Promise.all(fetchPromises);
   

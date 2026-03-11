@@ -2,13 +2,18 @@
 
 /**
  * Seed Platform Relationship Definitions
- * 
- * This script seeds the platform-level metadata for relationships between modules.
- * This is PLATFORM metadata, not tenant data.
- * 
- * Run this once when setting up the platform or after schema changes.
- * 
+ *
+ * RelationshipDefinition is the platform canonical schema. It must only be created or
+ * updated by: system seeds, migrations, or platform-level modules (organizationId: null).
+ * Tenant settings must NOT create or modify RelationshipDefinition.
+ *
+ * Use stable relationshipKeys (e.g. deal_events, deal_contacts, task_events) to reference
+ * relationships across the system.
+ *
  * Usage: node scripts/seedPlatformRelationships.js
+ *
+ * Run seedPlatformDefinitions.js first so AppDefinition and ModuleDefinition contain
+ * the required apps (e.g. platform, sales) and modules (e.g. platform.tasks, sales.organizations).
  */
 
 // Load environment variables
@@ -23,9 +28,9 @@ const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || process.en
 // Platform Relationship Definitions
 // Minimal foundational relationships - easy to extend
 const RELATIONSHIP_DEFINITIONS = [
-  // Sales → Deals ↔ Projects → Projects
+  // Deals → Projects (stable key: deal_projects)
   {
-    relationshipKey: 'sales.deals-to-projects.projects',
+    relationshipKey: 'deal_projects',
     source: {
       appKey: 'sales',
       moduleKey: 'deals'
@@ -57,6 +62,92 @@ const RELATIONSHIP_DEFINITIONS = [
     automation: {
       allowed: true
     },
+    enabled: true
+  },
+
+  // Deals → Organizations (stable key: deal_organizations)
+  {
+    relationshipKey: 'deal_organizations',
+    source: { appKey: 'sales', moduleKey: 'deals' },
+    target: { appKey: 'sales', moduleKey: 'organizations' },
+    cardinality: 'MANY_TO_ONE',
+    ownership: 'TARGET',
+    required: false,
+    cascade: { onDelete: 'DETACH' },
+    ui: {
+      source: { showAs: 'TAB', label: 'Related Organizations' },
+      target: { showAs: 'TAB', label: 'Related Deals' },
+      picker: { enabled: true, searchable: true }
+    },
+    automation: { allowed: true },
+    enabled: true
+  },
+  // Deals → People / Contacts (stable key: deal_contacts)
+  {
+    relationshipKey: 'deal_contacts',
+    source: { appKey: 'sales', moduleKey: 'deals' },
+    target: { appKey: 'sales', moduleKey: 'people' },
+    cardinality: 'MANY_TO_MANY',
+    ownership: 'SOURCE',
+    required: false,
+    cascade: { onDelete: 'DETACH' },
+    ui: {
+      source: { showAs: 'TAB', label: 'Related Contacts' },
+      target: { showAs: 'TAB', label: 'Related Deals' },
+      picker: { enabled: true, searchable: true }
+    },
+    automation: { allowed: true },
+    enabled: true
+  },
+  // Deals → Tasks (stable key: deal_tasks)
+  {
+    relationshipKey: 'deal_tasks',
+    source: { appKey: 'sales', moduleKey: 'deals' },
+    target: { appKey: 'platform', moduleKey: 'tasks' },
+    cardinality: 'ONE_TO_MANY',
+    ownership: 'SOURCE',
+    required: false,
+    cascade: { onDelete: 'DETACH' },
+    ui: {
+      source: { showAs: 'TAB', label: 'Related Tasks' },
+      target: { showAs: 'TAB', label: 'Related Deals' },
+      picker: { enabled: true, searchable: true }
+    },
+    automation: { allowed: true },
+    enabled: true
+  },
+  // Deals → Events (stable key: deal_events)
+  {
+    relationshipKey: 'deal_events',
+    source: { appKey: 'sales', moduleKey: 'deals' },
+    target: { appKey: 'platform', moduleKey: 'events' },
+    cardinality: 'ONE_TO_MANY',
+    ownership: 'SOURCE',
+    required: false,
+    cascade: { onDelete: 'DETACH' },
+    ui: {
+      source: { showAs: 'TAB', label: 'Related Events' },
+      target: { showAs: 'TAB', label: 'Related Deals' },
+      picker: { enabled: true, searchable: true }
+    },
+    automation: { allowed: true },
+    enabled: true
+  },
+  // Deals → Forms (stable key: deal_forms)
+  {
+    relationshipKey: 'deal_forms',
+    source: { appKey: 'sales', moduleKey: 'deals' },
+    target: { appKey: 'platform', moduleKey: 'forms' },
+    cardinality: 'ONE_TO_MANY',
+    ownership: 'SOURCE',
+    required: false,
+    cascade: { onDelete: 'DETACH' },
+    ui: {
+      source: { showAs: 'TAB', label: 'Related Forms' },
+      target: { showAs: 'TAB', label: 'Related Deals' },
+      picker: { enabled: true, searchable: true }
+    },
+    automation: { allowed: true },
     enabled: true
   },
   
@@ -93,116 +184,6 @@ const RELATIONSHIP_DEFINITIONS = [
     },
     automation: {
       allowed: true
-    },
-    enabled: true
-  },
-  
-  // Phase 0I.1: CRM Form to Response Relationship
-  {
-    relationshipKey: 'crm.form_to_response',
-    source: {
-      appKey: 'crm',
-      moduleKey: 'forms'
-    },
-    target: {
-      appKey: 'crm',
-      moduleKey: 'responses'
-    },
-    cardinality: 'ONE_TO_MANY',
-    ownership: 'SOURCE',
-    required: false,
-    cascade: {
-      onDelete: 'DETACH'
-    },
-    ui: {
-      source: {
-        showAs: 'TAB',
-        label: 'Responses'
-      },
-      target: {
-        showAs: 'NONE',
-        label: 'Form'
-      },
-      picker: {
-        enabled: false
-      }
-    },
-    automation: {
-      allowed: false
-    },
-    enabled: true
-  },
-  
-  // Phase 0I.1: CRM Event to Response Relationship
-  {
-    relationshipKey: 'crm.event_to_response',
-    source: {
-      appKey: 'crm',
-      moduleKey: 'events'
-    },
-    target: {
-      appKey: 'crm',
-      moduleKey: 'responses'
-    },
-    cardinality: 'ONE_TO_MANY',
-    ownership: 'SOURCE',
-    required: false,
-    cascade: {
-      onDelete: 'DETACH'
-    },
-    ui: {
-      source: {
-        showAs: 'TAB',
-        label: 'Responses'
-      },
-      target: {
-        showAs: 'NONE',
-        label: 'Event'
-      },
-      picker: {
-        enabled: false
-      }
-    },
-    automation: {
-      allowed: false
-    },
-    enabled: true
-  },
-  
-  // Phase 0I.1: Response to Corrective Actions (embedded relationship)
-  // Note: Corrective actions are embedded in FormResponse.correctiveActions array
-  // This relationship definition is for metadata/registry purposes only
-  {
-    relationshipKey: 'crm.response_to_corrective_actions',
-    source: {
-      appKey: 'crm',
-      moduleKey: 'responses'
-    },
-    target: {
-      appKey: 'crm',
-      moduleKey: 'corrective_actions'
-    },
-    cardinality: 'ONE_TO_MANY',
-    ownership: 'SOURCE',
-    required: false,
-    cascade: {
-      onDelete: 'CASCADE'
-    },
-    ui: {
-      source: {
-        showAs: 'TAB',
-        label: 'Corrective Actions'
-      },
-      target: {
-        showAs: 'NONE',
-        label: 'Response'
-      },
-      picker: {
-        enabled: false
-      }
-    },
-    automation: {
-      allowed: false
     },
     enabled: true
   }

@@ -152,6 +152,20 @@ const DealSchema = new Schema({
         type: String, 
         trim: true 
     },
+    descriptionVersions: [{
+        content: {
+            type: String,
+            default: ''
+        },
+        createdAt: {
+            type: Date,
+            default: Date.now
+        },
+        createdBy: {
+            type: Schema.Types.ObjectId,
+            ref: 'User'
+        }
+    }],
     type: {
         type: String,
         enum: ['New Business', 'Existing Customer', 'Existing Business', 'Upsell', 'Renewal', 'Cross-Sell', null],
@@ -215,7 +229,23 @@ const DealSchema = new Schema({
     notes: [{
         text: { type: String, required: true },
         createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
-        createdAt: { type: Date, default: Date.now }
+        createdAt: { type: Date, default: Date.now },
+        editedAt: { type: Date, default: null },
+        editedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null }
+    }],
+    activityLogs: [{
+        user: { type: String, required: true },
+        userId: {
+            type: Schema.Types.ObjectId,
+            ref: 'User'
+        },
+        action: { type: String, required: true },
+        details: { type: Schema.Types.Mixed },
+        timestamp: {
+            type: Date,
+            default: Date.now,
+            required: true
+        }
     }],
     lineItems: {
         type: Schema.Types.Mixed,

@@ -38,15 +38,6 @@ const apiClient = async (url, options = {}) => {
         if (!response.ok) {
             const is404 = response.status === 404;
             let errorMessage = `HTTP error! Status: ${response.status}`;
-            
-            // For 404 errors, don't try to parse the response body
-            if (is404) {
-                const error = new Error(errorMessage);
-                error.status = 404;
-                error.is404 = true;
-                throw error;
-            }
-            
             let errorData = null;
             try {
                 // Clone response before reading to avoid "body stream already read" error
@@ -68,7 +59,7 @@ const apiClient = async (url, options = {}) => {
             
             const error = new Error(errorMessage);
             error.status = response.status;
-            error.is404 = false;
+            error.is404 = is404;
             // Attach response data for 400 errors (validation errors)
             if (errorData) {
                 error.response = { data: errorData };

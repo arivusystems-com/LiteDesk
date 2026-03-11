@@ -172,17 +172,20 @@ const handleOpenRelatedRecord = (record) => {
   if (record.type === 'deals') {
     openTab(`/deals/${record.id}`, {
       title: record.name || 'Deal',
-      background: false
+      background: false,
+      insertAdjacent: true
     });
   } else if (record.type === 'people') {
     openTab(`/people/${record.id}`, {
       title: record.name || 'Person',
-      background: false
+      background: false,
+      insertAdjacent: true
     });
   } else if (record.type === 'organizations') {
     openTab(`/organizations/${record.id}`, {
       title: record.name || 'Organization',
-      background: false
+      background: false,
+      insertAdjacent: true
     });
   }
 };

@@ -486,7 +486,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
@@ -514,6 +514,11 @@ const showEmailModal = ref(false);
 const eventToEdit = ref(null);
 const eventsWidgetRef = ref(null);
 const showAllParticipants = ref(false);
+
+const isDealDetailRoute = () => {
+  if (route.name === 'deal-detail') return true;
+  return typeof route.path === 'string' && route.path.startsWith('/deals/');
+};
 
 // Primary Contact: from dealPeople (role=primary_contact, isPrimary=true) or legacy contactId
 const primaryContact = computed(() => {
@@ -605,7 +610,11 @@ const fetchDeal = async () => {
     }
   } catch (err) {
     console.error('Error fetching deal:', err);
-    error.value = err.message || 'Failed to load deal';
+    if (err?.status === 404 || err?.is404) {
+      error.value = err?.response?.data?.message || err?.message || 'Deal not found or access denied.';
+    } else {
+      error.value = err?.message || 'Failed to load deal';
+    }
   } finally {
     loading.value = false;
   }
@@ -735,7 +744,8 @@ const openCreateEvent = () => {
 const viewEvent = (eventId) => {
   openTab(`/events/${eventId}`, {
     title: 'Event Detail',
-    icon: '📅'
+    icon: '📅',
+    insertAdjacent: true
   });
 };
 
@@ -747,14 +757,16 @@ const handleEventSaved = () => {
   }
 };
 
-onMounted(() => {
-  fetchDeal();
-});
-
-// Watch for route param changes to reload data when switching tabs
-watch(() => route.params.id, (newId, oldId) => {
-  if (newId && newId !== oldId) {
-    fetchDeal();
-  }
-}, { immediate: false });
+// Only fetch when this component is bound to an actual deal-detail route.
+watch(
+  () => [route.name, route.path, route.params.id],
+  ([, , newId], oldValue) => {
+    const oldId = Array.isArray(oldValue) ? oldValue[2] : undefined;
+    if (!isDealDetailRoute()) return;
+    if (newId && newId !== oldId) {
+      fetchDeal();
+    }
+  },
+  { immediate: true }
+);
 </script>

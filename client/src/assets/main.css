@@ -509,7 +509,6 @@ a,
 input[type="submit"]:not(:disabled),
 input[type="button"]:not(:disabled),
 input[type="reset"]:not(:disabled),
-input[type="checkbox"],
 input[type="radio"],
 select,
 label[for] {

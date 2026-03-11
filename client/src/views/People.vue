@@ -440,7 +440,8 @@ const viewContact = (contactId, event = null) => {
     title,
     icon: 'users',
     params: { name: title },
-    background: openInBackground
+    background: openInBackground,
+    insertAdjacent: true
   });
 };
 

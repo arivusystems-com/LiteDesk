@@ -4,6 +4,7 @@
  */
 
 export { default as RecordPageLayout } from './RecordPageLayout.vue';
+export { default as RecordPageShell } from './RecordPageShell.vue';
 export { default as RecordHeader } from './RecordHeader.vue';
 export { default as RecordStateSection } from './RecordStateSection.vue';
 export { default as RecordFieldsSection } from './RecordFieldsSection.vue';
@@ -18,3 +19,4 @@ export { default as EditableTitle } from './EditableTitle.vue';
 export { default as EditableLabeledValue } from './EditableLabeledValue.vue';
 export { default as CommentInput } from './CommentInput.vue';
 export { default as CommentContent } from './CommentContent.vue';
+export { default as RecordTagPopover } from './RecordTagPopover.vue';

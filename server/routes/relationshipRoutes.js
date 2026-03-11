@@ -21,7 +21,8 @@ const {
   linkRecords,
   unlinkRecords,
   getRecordLinks,
-  getRecordContext
+  getRecordContext,
+  getLinkableTargets
 } = require('../controllers/relationshipController');
 const { protect } = require('../middleware/authMiddleware');
 const { organizationIsolation } = require('../middleware/organizationMiddleware');
@@ -44,6 +45,9 @@ router.post('/unlink', unlinkRecords);
 
 // Get raw links for a record
 router.get('/links', getRecordLinks);
+
+// Get linkable target modules for a source (settings/relationships)
+router.get('/linkable-targets', getLinkableTargets);
 
 // Get record context
 router.get('/record-context', getRecordContext);

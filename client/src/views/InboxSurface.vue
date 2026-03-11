@@ -117,11 +117,10 @@
             class="flex-shrink-0 pt-0.5"
             @click.stop
           >
-            <input
-              type="checkbox"
+            <HeadlessCheckbox
               :checked="false"
               :aria-label="`Complete task: ${item.title}`"
-              class="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 cursor-pointer"
+              checkbox-class="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 cursor-pointer"
               @change.stop="handleTaskComplete(item)"
               @click.stop
             />
@@ -189,6 +188,7 @@
 </template>
 
 <script setup>
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 /**
  * ============================================================================
  * INBOX SURFACE COMPONENT

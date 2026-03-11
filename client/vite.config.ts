@@ -39,5 +39,94 @@ export default defineConfig({
       }
     }
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('/node_modules/')) {
+            if (
+              id.includes('/node_modules/vue/') ||
+              id.includes('/node_modules/vue-router/') ||
+              id.includes('/node_modules/pinia/')
+            ) {
+              return 'vendor-vue'
+            }
+
+            if (
+              id.includes('/node_modules/@headlessui/') ||
+              id.includes('/node_modules/@heroicons/')
+            ) {
+              return 'vendor-ui'
+            }
+
+            if (
+              id.includes('/node_modules/@tiptap/') ||
+              id.includes('/node_modules/prosemirror/')
+            ) {
+              return 'vendor-editor'
+            }
+
+            if (id.includes('/node_modules/@fullcalendar/')) {
+              return 'vendor-calendar'
+            }
+
+            if (
+              id.includes('/node_modules/chart.js/') ||
+              id.includes('/node_modules/vue-chartjs/') ||
+              id.includes('/node_modules/gridstack/')
+            ) {
+              return 'vendor-visual'
+            }
+
+            if (id.includes('/node_modules/@vue/')) {
+              return 'vendor-vue-ecosystem'
+            }
+
+            if (id.includes('/node_modules/@tanstack/')) {
+              return 'vendor-tanstack'
+            }
+
+            if (id.includes('/node_modules/linkifyjs/')) {
+              return 'vendor-linkify'
+            }
+
+            if (id.includes('/node_modules/preact/')) {
+              return 'vendor-preact'
+            }
+
+            if (id.includes('/node_modules/@popperjs/core/')) {
+              return 'vendor-popper'
+            }
+
+            if (id.includes('/node_modules/tippy.js/')) {
+              return 'vendor-tippy'
+            }
+
+            if (id.includes('/node_modules/dompurify/')) {
+              return 'vendor-dompurify'
+            }
+
+            if (
+              id.includes('/node_modules/sortablejs/') ||
+              id.includes('/node_modules/vuedraggable/')
+            ) {
+              return 'vendor-dnd'
+            }
+
+            return 'vendor-misc'
+          }
+
+          if (
+            id.includes('/src/components/record-page/') ||
+            id.includes('/src/components/activity/')
+          ) {
+            return 'record-activity'
+          }
+
+          return undefined
+        }
+      }
+    }
+  },
   // resolve: { alias: { '@': path.resolve(__dirname, './src') } }
 })

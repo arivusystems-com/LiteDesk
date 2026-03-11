@@ -85,10 +85,9 @@
                       </div>
                       <div v-if="ruleData.rule === 'visibility'">
                         <label class="flex items-center">
-                          <input
-                            type="checkbox"
+                          <HeadlessCheckbox
                             v-model="ruleData.value"
-                            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                            checkbox-class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                           />
                           <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Show field</span>
                         </label>
@@ -291,6 +290,7 @@
 </template>
 
 <script setup>
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, watch, computed } from 'vue';
 import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
 

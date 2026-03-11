@@ -44,11 +44,11 @@ function buildShellCommands(shell: SidebarItem[]): CommandItem[] {
     }));
 }
 
-function buildIdentityCommands(identity: SidebarItem[]): CommandItem[] {
-  return identity
-    .filter((i) => i.kind === 'identity')
+function buildCoreModuleCommands(coreModules: SidebarItem[]): CommandItem[] {
+  return coreModules
+    .filter((i) => i.kind === 'coreModule')
     .map((i) => ({
-      id: `identity-${i.id}`,
+      id: `core-module-${i.id}`,
       label: i.label,
       description: `Navigate to ${i.label}`,
       icon: i.icon,
@@ -214,7 +214,7 @@ export function buildCommandsFromRegistry(
   const commands: CommandItem[] = [];
 
   commands.push(...buildShellCommands(sidebarStructure.shell));
-  commands.push(...buildIdentityCommands(sidebarStructure.identity));
+  commands.push(...buildCoreModuleCommands(sidebarStructure.coreModules));
   commands.push(...buildAppSwitcherCommands(sidebarStructure.appSwitcher.apps));
   commands.push(...buildAppNavCommands(sidebarStructure.appNav));
   commands.push(...buildPlatformCommands(sidebarStructure.platform));

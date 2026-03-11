@@ -365,7 +365,6 @@ const FormSchema = new Schema({
         },
         slug: {
             type: String,
-            sparse: true,
             trim: true,
             lowercase: true
             // unique: true removed - using explicit unique index below instead

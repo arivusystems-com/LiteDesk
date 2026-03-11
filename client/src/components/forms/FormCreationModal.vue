@@ -610,7 +610,8 @@ const handleSubmit = async () => {
         name: `form-builder-${formId}`,
         title: response.data.name || 'Form Builder',
         component: 'FormBuilder',
-        params: { formId }
+        params: { formId },
+        insertAdjacent: true
       });
       router.push(`/forms/builder/${formId}`);
       

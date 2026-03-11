@@ -9,29 +9,26 @@
       </label>
       <div class="space-y-2">
         <label class="flex items-center">
-          <input
-            v-model="kpiMetrics"
-            type="checkbox"
-            value="Compliance %"
-            class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+          <HeadlessCheckbox
+            :checked="isKpiMetricSelected('Compliance %')"
+            checkbox-class="w-4 h-4"
+            @change="toggleKpiMetric('Compliance %', $event.target.checked)"
           />
           <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Compliance Percentage</span>
         </label>
         <label class="flex items-center">
-          <input
-            v-model="kpiMetrics"
-            type="checkbox"
-            value="Satisfaction %"
-            class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+          <HeadlessCheckbox
+            :checked="isKpiMetricSelected('Satisfaction %')"
+            checkbox-class="w-4 h-4"
+            @change="toggleKpiMetric('Satisfaction %', $event.target.checked)"
           />
           <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Satisfaction Percentage</span>
         </label>
         <label class="flex items-center">
-          <input
-            v-model="kpiMetrics"
-            type="checkbox"
-            value="Avg Rating"
-            class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+          <HeadlessCheckbox
+            :checked="isKpiMetricSelected('Avg Rating')"
+            checkbox-class="w-4 h-4"
+            @change="toggleKpiMetric('Avg Rating', $event.target.checked)"
           />
           <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Average Rating</span>
         </label>
@@ -85,11 +82,10 @@
     <!-- Auto Assignment -->
     <div>
       <label class="flex items-center mb-2">
-        <input
+        <HeadlessCheckbox
           v-model="localForm.autoAssignment.enabled"
-          type="checkbox"
           id="autoAssignment"
-          class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+          checkbox-class="w-4 h-4"
         />
         <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">Auto Assignment</span>
       </label>
@@ -113,10 +109,9 @@
       </label>
       <div class="space-y-2">
         <label class="flex items-center">
-          <input
+          <HeadlessCheckbox
             v-model="localForm.workflowOnSubmit.createTask"
-            type="checkbox"
-            class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4"
           />
           <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Create Task</span>
         </label>
@@ -138,11 +133,10 @@
     <!-- Approval Workflow -->
     <div>
       <label class="flex items-center mb-2">
-        <input
+        <HeadlessCheckbox
           v-model="localForm.approvalWorkflow.enabled"
-          type="checkbox"
           id="approvalWorkflow"
-          class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+          checkbox-class="w-4 h-4"
         />
         <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">Require Approval</span>
       </label>
@@ -249,6 +243,20 @@ const kpiMetrics = computed({
     localForm.value.kpiMetrics = value;
   }
 });
+
+const isKpiMetricSelected = (metric) => kpiMetrics.value.includes(metric);
+
+const toggleKpiMetric = (metric, checked) => {
+  const current = Array.isArray(kpiMetrics.value) ? [...kpiMetrics.value] : [];
+  if (checked) {
+    if (!current.includes(metric)) current.push(metric);
+  } else {
+    const next = current.filter((entry) => entry !== metric);
+    kpiMetrics.value = next;
+    return;
+  }
+  kpiMetrics.value = current;
+};
 
 // Only sync when form ID changes (new form loaded)
 watch(() => props.form?._id, (newId) => {

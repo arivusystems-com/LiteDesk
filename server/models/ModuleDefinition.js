@@ -299,7 +299,6 @@ ModuleDefinitionSchema.index({ appKey: 1 });
 
 // Indexes for tenant-specific overrides
 ModuleDefinitionSchema.index({ organizationId: 1, key: 1 }, { unique: true, sparse: true });
-ModuleDefinitionSchema.index({ organizationId: 1 });
 
 // Auto-activate pending default relationships when modules become available
 ModuleDefinitionSchema.post('save', async function(doc) {

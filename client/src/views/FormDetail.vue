@@ -222,7 +222,8 @@ const editForm = () => {
       // FormCreate will handle fetching and prefilling the form data
       openTab(editPath, {
         title: `Edit: ${form.value.name}`,
-        icon: 'clipboard-document'
+        icon: 'clipboard-document',
+        insertAdjacent: true
       });
     }
   }
@@ -235,7 +236,8 @@ const duplicateForm = () => {
   // FormCreate will handle fetching and prefilling the form data
   openTab(`/forms/create?duplicateFrom=${form.value._id}`, {
     title: `Duplicate: ${form.value.name}`,
-    icon: 'clipboard-document'
+    icon: 'clipboard-document',
+    insertAdjacent: true
   });
 };
 

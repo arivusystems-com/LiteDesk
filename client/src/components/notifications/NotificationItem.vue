@@ -678,7 +678,7 @@ async function handleClick() {
     const resolved = router.resolve(route);
     const path = resolved.path;
     const recordName = props.item.entity?.title || props.item.entity?.name;
-    openTab(path, recordName ? { title: recordName, params: { name: recordName } } : {});
+    openTab(path, recordName ? { title: recordName, params: { name: recordName }, insertAdjacent: true } : { insertAdjacent: true });
     emit('navigated');
   } catch (err) {
     console.error('[NotificationItem] Navigation error:', err);

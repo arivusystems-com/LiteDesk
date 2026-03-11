@@ -74,20 +74,17 @@
                         </div>
                         <div class="space-y-1">
                           <label for="add-field-type" class="block text-sm/6 font-medium text-gray-900 dark:text-white">Type</label>
-                          <select
+                          <HeadlessSelect
                             id="add-field-type"
                             v-model="draft.dataType"
-                            class="block w-full mt-2 rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:focus:outline-indigo-500"
-                          >
-                            <option v-for="t in fieldTypes" :key="t" :value="t">{{ t }}</option>
-                          </select>
+                            :options="fieldTypeOptions"
+                          />
                         </div>
                         <div class="flex items-center gap-6 pt-2">
                           <label class="inline-flex items-center gap-2 cursor-pointer">
-                            <input
+                            <HeadlessCheckbox
                               v-model="draft.required"
-                              type="checkbox"
-                              class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                              checkbox-class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                             />
                             <span class="text-sm text-gray-900 dark:text-white">Required in Form</span>
                           </label>
@@ -96,18 +93,16 @@
                           <label class="block text-sm/6 font-medium text-gray-900 dark:text-white mb-3">Visibility</label>
                           <div class="flex flex-col gap-2">
                             <label class="inline-flex items-center gap-2 cursor-pointer">
-                              <input
+                              <HeadlessCheckbox
                                 v-model="draft.visibility.list"
-                                type="checkbox"
-                                class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                                checkbox-class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                               />
                               <span class="text-sm text-gray-900 dark:text-white">Show in List</span>
                             </label>
                             <label class="inline-flex items-center gap-2 cursor-pointer">
-                              <input
+                              <HeadlessCheckbox
                                 v-model="draft.visibility.detail"
-                                type="checkbox"
-                                class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                                checkbox-class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                               />
                               <span class="text-sm text-gray-900 dark:text-white">Show in Detail</span>
                             </label>
@@ -147,9 +142,11 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import { XMarkIcon } from '@heroicons/vue/24/outline';
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
+import HeadlessSelect from '@/components/ui/HeadlessSelect.vue';
 
 const FIELD_TYPES = [
   'Text',
@@ -183,6 +180,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'save']);
 
 const fieldTypes = FIELD_TYPES;
+const fieldTypeOptions = computed(() => fieldTypes.map((t) => ({ value: t, label: t })));
 
 const createEmptyDraft = () => ({
   key: '',

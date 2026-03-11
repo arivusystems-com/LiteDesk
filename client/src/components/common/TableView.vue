@@ -43,20 +43,13 @@
                   ]"
                   :style="{ top: headerTop, left: '0px', zIndex: '25' }"
                 >
-                  <div class="group absolute top-1/2 left-4 -mt-2 grid size-4 grid-cols-1">
-                    <input
-                      ref="selectAllCheckbox"
-                      type="checkbox"
+                  <div class="absolute top-1/2 left-4 -mt-2">
+                    <HeadlessCheckbox
                       :checked="allSelected"
                       :indeterminate="someSelected"
                       @change="toggleSelectAll"
                       @click.stop
-                      class="col-start-1 row-start-1 appearance-none rounded-sm border border-gray-300 bg-white checked:border-indigo-600 checked:bg-indigo-600 indeterminate:border-indigo-600 indeterminate:bg-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:border-gray-300 disabled:bg-gray-100 disabled:checked:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:checked:border-indigo-600 dark:checked:bg-indigo-600 dark:indeterminate:border-indigo-600 dark:indeterminate:bg-indigo-600"
                     />
-                    <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
-                      <path class="opacity-0 group-has-checked:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                      <path class="opacity-0 group-has-indeterminate:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                    </svg>
                   </div>
                 </th>
                 <th
@@ -274,18 +267,12 @@
                       :style="{ left: '0px' }"
                     >
                       <div v-if="isRowSelected(row)" class="hidden group-has-checked:block absolute inset-y-0 left-0 w-0.5 bg-indigo-600"></div>
-                      <div class="absolute top-1/2 left-4 -mt-2 grid size-4 grid-cols-1">
-                        <input
-                          type="checkbox"
+                      <div class="absolute top-1/2 left-4 -mt-2">
+                        <HeadlessCheckbox
                           :checked="isRowSelected(row)"
                           @change.stop="toggleRowSelection(row)"
                           @click.stop
-                          class="col-start-1 row-start-1 appearance-none rounded-sm border border-gray-300 bg-white checked:border-indigo-600 checked:bg-indigo-600 indeterminate:border-indigo-600 indeterminate:bg-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:border-gray-300 disabled:bg-gray-100 disabled:checked:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:checked:border-indigo-600 dark:checked:bg-indigo-600 dark:indeterminate:border-indigo-600 dark:indeterminate:bg-indigo-600"
                         />
-                        <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
-                          <path class="opacity-0 group-has-checked:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                          <path class="opacity-0 group-has-indeterminate:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                        </svg>
                       </div>
                     </td>
                     <td
@@ -377,6 +364,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import { ArrowsUpDownIcon, ChevronDownIcon, ChevronUpIcon, CheckIcon, XMarkIcon } from '@heroicons/vue/20/solid'
 import { formatRawValueForDisplay } from '@/utils/fieldDisplay'
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue'
 
 type ColumnObjectDef = {
   key?: string
@@ -480,8 +468,6 @@ const scrollContainerRef = ref<HTMLDivElement | null>(null)
 const leftEdgeColumnIndex = ref<number | null>(null)
 const rightEdgeColumnIndex = ref<number | null>(null)
 const isScrolledHorizontally = ref(false)
-const selectAllCheckbox = ref<HTMLInputElement | null>(null)
-
 const sampleColumns: ColumnDef[] = [
   { key: 'id', label: 'ID', sortable: true },
   { key: 'name', label: 'Name', sortable: true },
@@ -1054,7 +1040,7 @@ const resolveValue = (row: RowData, column: ColumnDef) => {
 
 const handleRowClick = (row: RowData, event: MouseEvent) => {
   // Don't trigger row click if clicking on checkbox
-  if ((event.target as HTMLElement)?.closest('input[type="checkbox"]')) {
+  if ((event.target as HTMLElement)?.closest('[data-headless-checkbox="true"]')) {
     return
   }
   emit('row-click', row, event)

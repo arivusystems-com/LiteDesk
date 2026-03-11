@@ -133,24 +133,66 @@ import PeopleQuickCreateDrawer from '@/components/people/PeopleQuickCreateDrawer
 import { buildIntentContext, type IntentMapping } from '@/utils/personCreationUtils';
 import type { CreatePersonIntentContext } from '@/types/personCreation.types';
 
+type AppContextResult = {
+  isAmbiguous?: boolean;
+  reason?: string;
+  candidates?: string[];
+  [key: string]: any;
+};
+
+type AggregatedType = {
+  typeKey: string;
+  owningApps: string[];
+  [key: string]: any;
+};
+
+type TypesResult = {
+  aggregated: AggregatedType[];
+  [key: string]: any;
+};
+
+type QuickCreateResult = {
+  appKey?: string;
+  requiresUserChoice?: boolean;
+  reason?: string;
+  confidence?: string;
+  candidates?: string[];
+  [key: string]: any;
+};
+
+type PeopleCreateFormData = {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  mobile: string;
+  source: string;
+  type: string;
+  lead_status: string;
+  lead_score: number | null;
+  contact_status: string;
+  role: string;
+  [key: string]: string | number | null;
+};
+
 const route = useRoute();
 const router = useRouter();
 
 // State
 const loading = ref(false);
-const error = ref(null);
-const appContextResult = ref(null);
-const resolvedAppKey = ref(null);
-const typesResult = ref(null);
-const selectedType = ref(null);
-const quickCreateResult = ref(null);
-const finalAppKey = ref(null);
+const error = ref<string | null>(null);
+const appContextResult = ref<AppContextResult | null>(null);
+const resolvedAppKey = ref<string | null>(null);
+const typesResult = ref<TypesResult | null>(null);
+const selectedType = ref<string | null>(null);
+const quickCreateResult = ref<QuickCreateResult | null>(null);
+const finalAppKey = ref<string | null>(null);
 const submitting = ref(false);
-const validationErrors = ref({});
+const validationErrors = ref<Record<string, string>>({});
 const selectedIntent = ref<IntentMapping | null>(null);
 
 // Form data
-const formData = ref({
+const formData = ref<PeopleCreateFormData>({
   first_name: '',
   last_name: '',
   email: '',
@@ -185,11 +227,12 @@ const availableIntents = computed(() => {
 });
 
 const availableTypes = computed(() => {
-  if (!typesResult.value?.aggregated || !finalAppKey.value) return [];
+  const appKey = finalAppKey.value;
+  if (!typesResult.value?.aggregated || !appKey) return [];
   
   // Filter types that are available for the resolved app
-  return typesResult.value.aggregated.filter(type => {
-    return type.owningApps.includes(finalAppKey.value);
+  return typesResult.value.aggregated.filter((type: AggregatedType) => {
+    return type.owningApps.includes(appKey);
   });
 });
 
@@ -227,7 +270,7 @@ const handleDrawerClose = () => {
 
 // Resolver is called AFTER intent selection (not on mount)
 // This function is called after user selects intent
-const resolveAppContextAfterIntent = async (appKey) => {
+const resolveAppContextAfterIntent = async (appKey: string) => {
   try {
     loading.value = true;
     error.value = null;
@@ -259,9 +302,9 @@ const resolveAppContextAfterIntent = async (appKey) => {
     } else {
       error.value = response.message || 'Failed to resolve app context';
     }
-  } catch (err) {
+  } catch (err: unknown) {
     console.error('Error resolving app context:', err);
-    error.value = err.message || 'Error resolving app context';
+    error.value = err instanceof Error ? err.message : 'Error resolving app context';
   } finally {
     loading.value = false;
   }
@@ -274,7 +317,7 @@ const resolveTypes = async () => {
     if (response.success) {
       typesResult.value = response.data;
     }
-  } catch (err) {
+  } catch (err: unknown) {
     console.error('Error resolving types:', err);
   }
 };
@@ -285,7 +328,7 @@ const resolveQuickCreate = async () => {
   try {
     const selectedTypeKey = selectedType.value || null;
     const owningApps = selectedTypeKey
-      ? (typesResult.value?.aggregated.find(t => t.typeKey === selectedTypeKey)?.owningApps || [])
+      ? (typesResult.value?.aggregated.find((t: AggregatedType) => t.typeKey === selectedTypeKey)?.owningApps || [])
       : [];
 
     const response = await apiClient.post('/people/resolve-quick-create', {
@@ -299,25 +342,25 @@ const resolveQuickCreate = async () => {
 
       // DO NOT overwrite finalAppKey - it's set from intent and should remain locked
       // quickCreateResult is only used for validation/display purposes
-      if (quickCreateResult.value.requiresUserChoice) {
+      if (quickCreateResult.value?.requiresUserChoice) {
         // This should not happen in intent-first flow, but if it does, keep finalAppKey from intent
         // finalAppKey.value remains unchanged (set from intent)
       }
       // finalAppKey.value remains unchanged - it's set from intent
     }
-  } catch (err) {
+  } catch (err: unknown) {
     console.error('Error resolving quick create context:', err);
     // finalAppKey.value remains unchanged - it's set from intent
   }
 };
 
-const selectAppContext = async (appKey) => {
+const selectAppContext = async (appKey: string) => {
   resolvedAppKey.value = appKey;
   await resolveTypes();
   await resolveQuickCreate();
 };
 
-const selectAppForType = (appKey) => {
+const selectAppForType = (appKey: string) => {
   finalAppKey.value = appKey;
   quickCreateResult.value = {
     appKey,
@@ -332,7 +375,7 @@ const handleTypeChange = async () => {
 };
 
 // Format app name for display
-const formatAppName = (appKey) => {
+const formatAppName = (appKey: string | null) => {
   if (!appKey) return '';
   const appNames = {
     'SALES': 'Sales',
@@ -342,11 +385,11 @@ const formatAppName = (appKey) => {
     'PORTAL': 'Portal',
     'LMS': 'LMS'
   };
-  return appNames[appKey] || appKey;
+  return appNames[appKey as keyof typeof appNames] || appKey;
 };
 
 // Get display name for intent
-const getIntentDisplayName = (intent) => {
+const getIntentDisplayName = (intent: IntentMapping | null) => {
   if (!intent) return '';
   // Convert "Add Sales Lead" to "Sales Lead", etc.
   return intent.label.replace('Add ', '');
@@ -377,7 +420,7 @@ const handleSubmit = async () => {
     error.value = null;
 
     // Clean form data: convert empty strings to null for enum fields
-    const cleanedFormData = { ...formData.value };
+    const cleanedFormData: Record<string, string | number | null> = { ...formData.value };
     const enumFields = ['lead_status', 'contact_status', 'role', 'source'];
     enumFields.forEach(field => {
       if (cleanedFormData[field] === '') {
@@ -401,20 +444,21 @@ const handleSubmit = async () => {
         error.value = response.message || 'Failed to create person';
       }
     }
-  } catch (err) {
+  } catch (err: unknown) {
+    const apiErr = err as any;
     console.error('Error creating person:', err);
-    console.error('Error response:', err.response?.data);
-    console.error('Validation errors:', err.response?.data?.errors);
+    console.error('Error response:', apiErr?.response?.data);
+    console.error('Validation errors:', apiErr?.response?.data?.errors);
     
     // Handle validation errors from backend
-    if (err.response?.data?.errors) {
-      validationErrors.value = err.response.data.errors;
-      error.value = err.response.data.message || 'Validation failed. Please check the fields below.';
+    if (apiErr?.response?.data?.errors) {
+      validationErrors.value = apiErr.response.data.errors;
+      error.value = apiErr.response.data.message || 'Validation failed. Please check the fields below.';
       console.log('Set validationErrors:', validationErrors.value);
-    } else if (err.response?.data?.message) {
-      error.value = err.response.data.message;
+    } else if (apiErr?.response?.data?.message) {
+      error.value = apiErr.response.data.message;
     } else {
-      error.value = err.message || 'Error creating person';
+      error.value = err instanceof Error ? err.message : 'Error creating person';
     }
   } finally {
     submitting.value = false;

@@ -579,7 +579,8 @@ const handleEventClick = (info) => {
   if (eventId) {
     openTab(`/events/${eventId}`, {
       title: info.event.title || 'Event Detail',
-      icon: '📅'
+      icon: '📅',
+      insertAdjacent: true
     });
   }
 };
@@ -643,7 +644,8 @@ const handleEventResize = async (info) => {
 const handleRowClick = (row) => {
   openTab(`/events/${row._id || row.eventId}`, {
     title: row.eventName || 'Event Detail',
-    background: false
+    background: false,
+    insertAdjacent: true
   });
 };
 

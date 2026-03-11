@@ -120,15 +120,11 @@
           </div>
         </div>
         <div>
-          <select
+          <HeadlessSelect
             v-model="form.timeZone"
-            @change="handleTimezoneChange"
-            class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
-          >
-            <option v-for="tz in timezones" :key="tz.value" :value="tz.value">
-              {{ tz.label }}
-            </option>
-          </select>
+            :options="timezones"
+            @update:model-value="handleTimezoneChange"
+          />
           <p v-if="showTimezoneWarning" class="mt-2 text-sm text-amber-600 dark:text-amber-400">
             ⚠️ Changing timezone will affect how dates and times are displayed across the platform.
           </p>
@@ -149,14 +145,10 @@
           </div>
         </div>
         <div>
-          <select
+          <HeadlessSelect
             v-model="form.currency"
-            class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
-          >
-            <option v-for="curr in currencies" :key="curr.code" :value="curr.code">
-              {{ curr.code }} - {{ curr.name }}
-            </option>
-          </select>
+            :options="currencyOptions"
+          />
         </div>
       </div>
 
@@ -252,6 +244,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import apiClient from '@/utils/apiClient';
+import HeadlessSelect from '@/components/ui/HeadlessSelect.vue';
 
 const loading = ref(true);
 const saving = ref(false);
@@ -296,6 +289,10 @@ const currencies = [
   { code: 'INR', name: 'Indian Rupee' },
   { code: 'SGD', name: 'Singapore Dollar' }
 ];
+
+const currencyOptions = computed(() =>
+  currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))
+);
 
 // Common languages
 const languages = [

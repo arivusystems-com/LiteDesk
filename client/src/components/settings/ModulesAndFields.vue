@@ -200,10 +200,9 @@
           <input v-model="fieldSearch" placeholder="Search fields" class="w-full px-2 py-1 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-xs" />
           <!-- Show Tenant Fields Toggle (only for organizations module) -->
           <label v-if="selectedModule?.key === 'organizations'" class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer">
-            <input 
-              type="checkbox" 
-              v-model="showTenantFields" 
-              class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+            <HeadlessCheckbox
+              v-model="showTenantFields"
+              checkbox-class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
             />
             <span>Show Tenant Fields</span>
           </label>
@@ -420,6 +419,95 @@
             </div>
 
             <!-- App Participation Groups -->
+            <div v-for="(fields, appKey) in groupedFields.participation" :key="appKey" class="mb-4">
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">
+                {{ appKey === 'SALES' ? 'Sales Participation' : `${appKey} Participation` }}
+              </div>
+              <ul class="space-y-1">
+                <li
+                  v-for="fieldKey in fields"
+                  :key="fieldKey"
+                  class="group"
+                  :draggable="true"
+                  @dragstart="onDragStart(getFieldIndex(fieldKey))"
+                  @dragover.prevent="onDragOver(getFieldIndex(fieldKey))"
+                  @drop.prevent="onDrop(getFieldIndex(fieldKey))"
+                >
+                  <div :class="[
+                        'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
+                        getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
+                      ]">
+                    <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                      <span>{{ getFieldLabel(fieldKey) }}</span>
+                      <span class="px-1.5 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">{{ appKey }}</span>
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <!-- System Fields -->
+            <div class="mb-4">
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">System Fields</div>
+              <ul class="space-y-1">
+                <li
+                  v-for="fieldKey in groupedFields.system"
+                  :key="fieldKey"
+                  class="group"
+                >
+                  <div :class="[
+                        'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2 opacity-75',
+                        getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5'
+                      ]">
+                    <div class="mr-2 text-xs text-purple-600 dark:text-purple-400" title="System field">🔒</div>
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                      <span>{{ getFieldLabel(fieldKey) }}</span>
+                      <span class="px-1.5 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">System</span>
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </template>
+
+          <!-- Deals module: Grouped by core vs system (same pattern as Tasks, People) -->
+          <template v-else-if="isDealsModule">
+            <!-- Core Deal Fields -->
+            <div class="mb-4">
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Core Deal Fields</div>
+              <ul class="space-y-1">
+                <li
+                  v-for="(fieldKey, idx) in groupedFields.coreIdentity"
+                  :key="fieldKey"
+                  class="group"
+                  :draggable="true"
+                  @dragstart="onDragStart(getFieldIndex(fieldKey))"
+                  @dragover.prevent="onDragOver(getFieldIndex(fieldKey))"
+                  @drop.prevent="onDrop(getFieldIndex(fieldKey))"
+                >
+                  <div
+                    :class="[
+                        'w-full px-3 py-2 rounded-lg text-sm flex items-center justify-between gap-2',
+                        getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
+                        dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
+                      ]">
+                    <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                      <span>{{ getFieldLabel(fieldKey) }}</span>
+                      <span v-if="isCustomField(fieldKey)" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Custom</span>
+                      <span v-else class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
+                    </button>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ getFieldDataType(fieldKey) }}</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <!-- App Participation Groups (if any in future) -->
             <div v-for="(fields, appKey) in groupedFields.participation" :key="appKey" class="mb-4">
               <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">
                 {{ appKey === 'SALES' ? 'Sales Participation' : `${appKey} Participation` }}
@@ -785,6 +873,12 @@
                 <span v-else-if="getPeopleFieldMetadata(currentField.key)?.owner === 'core'" class="px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
                 <span v-else-if="getPeopleFieldMetadata(currentField.key)?.fieldScope" class="px-2 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">{{ getPeopleFieldMetadata(currentField.key)?.fieldScope }}</span>
               </template>
+              <!-- Deals module: Core vs System badges from deal field model -->
+              <template v-else-if="isDealsModule && currentField?.key">
+                <span v-if="getDealFieldMetadata(currentField.key)?.owner === 'system'" class="px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">System</span>
+                <span v-else-if="currentField?.owner === 'org'" class="px-2 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Custom</span>
+                <span v-else-if="getDealFieldMetadata(currentField.key)?.owner === 'core'" class="px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
+              </template>
               <!-- Other modules: Legacy badges -->
               <template v-else>
                 <span v-if="isSystemField(currentField)" class="px-2 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">System</span>
@@ -799,6 +893,11 @@
               <p v-if="getPeopleFieldMetadata(currentField.key)?.owner === 'system'" class="mt-1 text-xs text-amber-600 dark:text-amber-400">This is a system field and cannot be modified</p>
               <p v-else-if="getPeopleFieldMetadata(currentField.key)?.owner === 'core'" class="mt-1 text-xs text-blue-600 dark:text-blue-400">Core identity field. Ownership and scope are defined by the platform.</p>
               <p v-else-if="getPeopleFieldMetadata(currentField.key)?.owner === 'participation'" class="mt-1 text-xs text-purple-600 dark:text-purple-400">Participation field for {{ getPeopleFieldMetadata(currentField.key)?.fieldScope }}. Ownership and scope are defined by the app.</p>
+            </template>
+            <!-- Deals module: Core vs System messages -->
+            <template v-else-if="isDealsModule && currentField?.key">
+              <p v-if="getDealFieldMetadata(currentField.key)?.owner === 'system'" class="mt-1 text-xs text-amber-600 dark:text-amber-400">This is a system field and cannot be modified</p>
+              <p v-else-if="getDealFieldMetadata(currentField.key)?.owner === 'core'" class="mt-1 text-xs text-blue-600 dark:text-blue-400">Core deal field. Ownership and scope are defined by the platform.</p>
             </template>
             <!-- Other modules: Legacy messages -->
             <template v-else>
@@ -1009,10 +1108,9 @@
                   <template v-else>
                     <div class="inline-flex items-center gap-2">
                       <label class="inline-flex items-center gap-2 text-sm">
-                        <input 
-                          type="checkbox" 
-                          v-model="currentField.required" 
-                          :disabled="isSystemField(currentField) || currentField.dataType === 'Auto-Number' || currentField.dataType === 'Formula' || currentField.dataType === 'Rollup Summary'" 
+                        <HeadlessCheckbox
+                          v-model="currentField.required"
+                          :disabled="isSystemField(currentField) || currentField.dataType === 'Auto-Number' || currentField.dataType === 'Formula' || currentField.dataType === 'Rollup Summary'"
                         />
                         Required in Form
                       </label>
@@ -1029,10 +1127,9 @@
 
                   <!-- Key Field checkbox -->
                   <label class="inline-flex items-center gap-2 text-sm">
-                    <input 
-                      type="checkbox" 
-                      v-model="currentField.keyField" 
-                      :disabled="isSystemField(currentField) || !canMarkAsKeyField || isParticipationStateField(currentField)" 
+                    <HeadlessCheckbox
+                      v-model="currentField.keyField"
+                      :disabled="isSystemField(currentField) || !canMarkAsKeyField || isParticipationStateField(currentField)"
                     />
                     Key Field
                     <span v-if="keyFieldCount > 0" class="text-xs text-gray-500 dark:text-gray-400">({{ keyFieldCount }}/10)</span>
@@ -1058,18 +1155,16 @@
                     <!-- Other fields: Normal checkboxes -->
                     <template v-else>
                       <label class="inline-flex items-center gap-2 text-sm" title="Controls whether this field is visible in the table/list view. Users can still customize visibility in column settings.">
-                        <input 
-                          type="checkbox" 
-                          v-model="currentField.visibility.list" 
-                          :disabled="!canHideField(currentField) || getPeopleFieldMetadata(currentField.key)?.owner === 'system'" 
+                        <HeadlessCheckbox
+                          v-model="currentField.visibility.list"
+                          :disabled="!canHideField(currentField) || getPeopleFieldMetadata(currentField.key)?.owner === 'system'"
                         />
                         Show in Table
                       </label>
                       <label class="inline-flex items-center gap-2 text-sm">
-                        <input 
-                          type="checkbox" 
-                          v-model="currentField.visibility.detail" 
-                          :disabled="!canHideField(currentField) || getPeopleFieldMetadata(currentField.key)?.owner === 'system'" 
+                        <HeadlessCheckbox
+                          v-model="currentField.visibility.detail"
+                          :disabled="!canHideField(currentField) || getPeopleFieldMetadata(currentField.key)?.owner === 'system'"
                         />
                         Show in Detail
                       </label>
@@ -1086,10 +1181,10 @@
                   <!-- Other modules: Legacy visibility controls -->
                   <template v-else>
                     <label class="inline-flex items-center gap-2 text-sm" title="Controls whether this field is visible in the table/list view. Users can still customize visibility in column settings.">
-                      <input type="checkbox" v-model="currentField.visibility.list" :disabled="isSystemField(currentField) || isFixedPositionField(currentField, selectedModule?.key)" />
+                      <HeadlessCheckbox v-model="currentField.visibility.list" :disabled="isSystemField(currentField) || isFixedPositionField(currentField, selectedModule?.key)" />
                       Show in Table
                     </label>
-                    <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" v-model="currentField.visibility.detail" :disabled="isSystemField(currentField) || isFixedPositionField(currentField, selectedModule?.key)" /> Show in Detail</label>
+                    <label class="inline-flex items-center gap-2 text-sm"><HeadlessCheckbox v-model="currentField.visibility.detail" :disabled="isSystemField(currentField) || isFixedPositionField(currentField, selectedModule?.key)" /> Show in Detail</label>
                     <p v-if="isFixedPositionField(currentField, selectedModule?.key)" class="w-full mt-2 text-xs text-gray-500 dark:text-gray-400">This field must always be visible in table and detail views</p>
                   </template>
                 </div>
@@ -1119,7 +1214,11 @@
                     </template>
                     <!-- Checkbox: checkbox -->
                     <label v-else-if="currentField.dataType === 'Checkbox'" class="inline-flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" :checked="defaultValueCheckbox" @change="currentField.defaultValue = $event.target.checked" class="rounded border-gray-300 dark:border-gray-600" />
+                      <HeadlessCheckbox
+                        :checked="defaultValueCheckbox"
+                        @change="currentField.defaultValue = $event.target.checked"
+                        checkbox-class="rounded border-gray-300 dark:border-gray-600"
+                      />
                       <span class="text-sm">Default to checked</span>
                     </label>
                     <!-- Number fields: number input -->
@@ -1232,10 +1331,13 @@
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                     </button>
                     <!-- Enabled Toggle (status/priority) - before delete -->
-                    <div v-if="isTaskLifecycleField(currentField) && !isOptionSystemLocked(option)" class="group relative inline-flex w-9 shrink-0 rounded-full p-0.5 transition-colors duration-200 outline-offset-2 outline-indigo-600" :class="(option.enabled !== false ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700')">
-                      <span class="size-4 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200" :class="(option.enabled !== false ? 'translate-x-4' : 'translate-x-0')"></span>
-                      <input type="checkbox" class="absolute inset-0 size-full appearance-none focus:outline-hidden cursor-pointer" :aria-label="`${option.enabled !== false ? 'Disable' : 'Enable'} ${getOptionDisplayLabel(option)}`" :checked="option.enabled !== false" @change="updateOptionEnabled(optIdx, $event.target.checked)" />
-                    </div>
+                    <HeadlessCheckbox
+                      v-if="isTaskLifecycleField(currentField) && !isOptionSystemLocked(option)"
+                      :checked="option.enabled !== false"
+                      @change="updateOptionEnabled(optIdx, $event.target.checked)"
+                      variant="switch"
+                      checkbox-class="w-9 h-5"
+                    />
                     <button v-if="!isOptionSystemLocked(option) && !(isTaskPriorityField(currentField) && currentField.options.length <= 1)" @click="removeOption(optIdx)" class="p-1.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200 rounded" title="Remove">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>
@@ -1638,16 +1740,13 @@
                         Allow this field to be used as a filter in list views
                       </p>
                     </div>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        v-model="currentField.filterable"
-                        :disabled="isSystemField(currentField)"
-                        @change="handleFilterableChange"
-                        class="sr-only peer"
-                      />
-                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
-                    </label>
+                    <HeadlessCheckbox
+                      v-model="currentField.filterable"
+                      :disabled="isSystemField(currentField)"
+                      @change="handleFilterableChange"
+                      variant="switch"
+                      checkbox-class="w-11 h-6"
+                    />
                   </div>
 
                   <!-- Filter Type (visible only when filterable is ON) -->
@@ -1863,11 +1962,11 @@
                                       @click="toggleDependencyValue(di, ci, opt)"
                                       class="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer"
                                     >
-                                      <input
-                                        type="checkbox"
+                                      <HeadlessCheckbox
                                         :checked="isDependencyValueSelected(di, ci, opt)"
-                                        @change.stop="toggleDependencyValue(di, ci, opt)"
-                                        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 pointer-events-none"
+                                        @change="toggleDependencyValue(di, ci, opt)"
+                                        @click.stop
+                                        checkbox-class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 pointer-events-none"
                                       />
                                       <span class="text-sm text-gray-700 dark:text-gray-300 flex-1">{{ opt }}</span>
                                     </div>
@@ -1949,14 +2048,12 @@
                         </div>
                         <div v-else class="space-y-2">
                           <div v-for="(option, optIdx) in getPicklistOptions(currentField)" :key="optIdx" class="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              :id="`picklist-option-${di}-${optIdx}`"
-                              :checked="isPicklistOptionSelected(di, option)"
-                              @change="togglePicklistOption(di, option)"
-                              class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
-                            />
-                            <label :for="`picklist-option-${di}-${optIdx}`" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer flex items-center gap-2">
+                            <label class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer flex items-center gap-2">
+                              <HeadlessCheckbox
+                                :checked="isPicklistOptionSelected(di, option)"
+                                @change="togglePicklistOption(di, option)"
+                                checkbox-class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                              />
                               <span v-if="typeof option === 'object' && option.color" class="w-3 h-3 rounded-full flex-shrink-0" :style="{ backgroundColor: option.color }"></span>
                               <span>{{ normalizePicklistOption(option) }}</span>
                             </label>
@@ -1980,14 +2077,12 @@
                         </div>
                         <div v-else class="space-y-2 max-h-60 overflow-y-auto">
                           <div v-for="f in editFields" :key="f.key" class="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              :id="`popup-field-${di}-${f.key}`"
-                              :checked="isPopupFieldSelected(di, f.key)"
-                              @change="togglePopupField(di, f.key)"
-                              class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
-                            />
-                            <label :for="`popup-field-${di}-${f.key}`" class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer flex items-center gap-2">
+                            <label class="text-sm text-gray-700 dark:text-gray-300 cursor-pointer flex items-center gap-2">
+                              <HeadlessCheckbox
+                                :checked="isPopupFieldSelected(di, f.key)"
+                                @change="togglePopupField(di, f.key)"
+                                checkbox-class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                              />
                               <span>{{ f.label || f.key }}</span>
                               <span class="text-xs text-gray-500 dark:text-gray-400">({{ f.dataType }})</span>
                             </label>
@@ -2133,11 +2228,10 @@
                                   :key="optIdx"
                                   class="flex items-center gap-2 p-1.5 hover:bg-gray-50 dark:hover:bg-white/5 rounded cursor-pointer"
                                 >
-                                  <input
-                                    type="checkbox"
+                                  <HeadlessCheckbox
                                     :checked="isMappingOptionSelected(mapping, option)"
                                     @change="toggleMappingOption(mapping, option)"
-                                    class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                                    checkbox-class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                                   />
                                   <span class="text-xs text-gray-700 dark:text-gray-300">{{ normalizePicklistOption(option) }}</span>
                                 </label>
@@ -2266,8 +2360,8 @@
               <input :value="selectedModule.type" disabled class="w-full px-3 py-2 rounded bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400" />
             </div>
             <div class="flex items-center gap-2 mt-6">
-              <input id="mod-enabled" type="checkbox" v-model="moduleEnabled" />
-              <label for="mod-enabled" class="text-sm text-gray-700 dark:text-gray-300">Enabled</label>
+              <HeadlessCheckbox id="mod-enabled" v-model="moduleEnabled" />
+              <label for="mod-enabled" class="text-sm text-gray-700 dark:text-gray-300" @click="moduleEnabled = !moduleEnabled">Enabled</label>
             </div>
           </div>
           
@@ -2419,19 +2513,12 @@
                       </div>
                     </div>
                     <div class="flex items-center gap-3">
-                      <div 
-                        class="group relative inline-flex w-11 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-in-out outline-offset-2 outline-indigo-600"
-                        :class="type.enabled ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'"
-                      >
-                        <span class="size-5 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out" :class="type.enabled ? 'translate-x-5' : 'translate-x-0'"></span>
-                        <input 
-                          type="checkbox" 
-                          class="absolute inset-0 size-full appearance-none focus:outline-hidden cursor-pointer" 
-                          :aria-label="`${type.enabled ? 'Disable' : 'Enable'} ${type.label}`"
-                          :checked="type.enabled"
-                          @change="type.enabled = !type.enabled"
-                        />
-                      </div>
+                      <HeadlessCheckbox
+                        :checked="type.enabled"
+                        @change="type.enabled = !type.enabled"
+                        variant="switch"
+                        checkbox-class="w-11 h-6"
+                      />
                     </div>
                   </div>
                   
@@ -2489,19 +2576,12 @@
                         <span v-else class="text-sm font-medium text-gray-900 dark:text-white">{{ status.label }}</span>
                       </div>
                       <div class="flex items-center gap-2">
-                        <div 
-                          class="group relative inline-flex w-9 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-in-out outline-offset-2 outline-indigo-600"
-                          :class="status.enabled ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'"
-                        >
-                          <span class="size-4 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out" :class="status.enabled ? 'translate-x-4' : 'translate-x-0'"></span>
-                          <input 
-                            type="checkbox" 
-                            class="absolute inset-0 size-full appearance-none focus:outline-hidden cursor-pointer" 
-                            :aria-label="`${status.enabled ? 'Disable' : 'Enable'} ${status.label}`"
-                            :checked="status.enabled"
-                            @change="status.enabled = !status.enabled"
-                          />
-                        </div>
+                        <HeadlessCheckbox
+                          :checked="status.enabled"
+                          @change="status.enabled = !status.enabled"
+                          variant="switch"
+                          checkbox-class="w-9 h-5"
+                        />
                         <button
                           @click="startStatusEdit('customerStatus', index)"
                           class="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors rounded"
@@ -2565,19 +2645,12 @@
                         <span v-else class="text-sm font-medium text-gray-900 dark:text-white">{{ status.label }}</span>
                       </div>
                       <div class="flex items-center gap-2">
-                        <div 
-                          class="group relative inline-flex w-9 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-in-out outline-offset-2 outline-indigo-600"
-                          :class="status.enabled ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'"
-                        >
-                          <span class="size-4 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out" :class="status.enabled ? 'translate-x-4' : 'translate-x-0'"></span>
-                          <input 
-                            type="checkbox" 
-                            class="absolute inset-0 size-full appearance-none focus:outline-hidden cursor-pointer" 
-                            :aria-label="`${status.enabled ? 'Disable' : 'Enable'} ${status.label}`"
-                            :checked="status.enabled"
-                            @change="status.enabled = !status.enabled"
-                          />
-                        </div>
+                        <HeadlessCheckbox
+                          :checked="status.enabled"
+                          @change="status.enabled = !status.enabled"
+                          variant="switch"
+                          checkbox-class="w-9 h-5"
+                        />
                         <button
                           @click="startStatusEdit('partnerStatus', index)"
                           class="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors rounded"
@@ -2641,19 +2714,12 @@
                         <span v-else class="text-sm font-medium text-gray-900 dark:text-white">{{ status.label }}</span>
                       </div>
                       <div class="flex items-center gap-2">
-                        <div 
-                          class="group relative inline-flex w-9 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-in-out outline-offset-2 outline-indigo-600"
-                          :class="status.enabled ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'"
-                        >
-                          <span class="size-4 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out" :class="status.enabled ? 'translate-x-4' : 'translate-x-0'"></span>
-                          <input 
-                            type="checkbox" 
-                            class="absolute inset-0 size-full appearance-none focus:outline-hidden cursor-pointer" 
-                            :aria-label="`${status.enabled ? 'Disable' : 'Enable'} ${status.label}`"
-                            :checked="status.enabled"
-                            @change="status.enabled = !status.enabled"
-                          />
-                        </div>
+                        <HeadlessCheckbox
+                          :checked="status.enabled"
+                          @change="status.enabled = !status.enabled"
+                          variant="switch"
+                          checkbox-class="w-9 h-5"
+                        />
                         <button
                           @click="startStatusEdit('vendorStatus', index)"
                           class="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors rounded"
@@ -2774,19 +2840,12 @@
                       </div>
                     </div>
                     <div class="flex items-center gap-3">
-                      <div 
-                        class="group relative inline-flex w-11 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-in-out outline-offset-2 outline-indigo-600"
-                        :class="type.enabled ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'"
-                      >
-                        <span class="size-5 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out" :class="type.enabled ? 'translate-x-5' : 'translate-x-0'"></span>
-                        <input 
-                          type="checkbox" 
-                          class="absolute inset-0 size-full appearance-none focus:outline-hidden cursor-pointer" 
-                          :aria-label="`${type.enabled ? 'Disable' : 'Enable'} ${type.label}`"
-                          :checked="type.enabled"
-                          @change="type.enabled = !type.enabled"
-                        />
-                      </div>
+                      <HeadlessCheckbox
+                        :checked="type.enabled"
+                        @change="type.enabled = !type.enabled"
+                        variant="switch"
+                        checkbox-class="w-11 h-6"
+                      />
                     </div>
                   </div>
                   
@@ -2841,19 +2900,12 @@
                       <span v-else class="text-sm font-medium text-gray-900 dark:text-white">{{ status.label }}</span>
                     </div>
                     <div class="flex items-center gap-2">
-                      <div 
-                        class="group relative inline-flex w-9 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-in-out outline-offset-2 outline-indigo-600"
-                        :class="status.enabled ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'"
-                      >
-                        <span class="size-4 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out" :class="status.enabled ? 'translate-x-4' : 'translate-x-0'"></span>
-                        <input 
-                          type="checkbox" 
-                          class="absolute inset-0 size-full appearance-none focus:outline-hidden cursor-pointer" 
-                          :aria-label="`${status.enabled ? 'Disable' : 'Enable'} ${status.label}`"
-                          :checked="status.enabled"
-                          @change="status.enabled = !status.enabled"
-                        />
-                      </div>
+                      <HeadlessCheckbox
+                        :checked="status.enabled"
+                        @change="status.enabled = !status.enabled"
+                        variant="switch"
+                        checkbox-class="w-9 h-5"
+                      />
                       <button
                         @click="startItemStatusEdit(index)"
                         class="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors rounded"
@@ -2953,18 +3005,12 @@
                       </span>
                     </div>
                     <div class="flex items-center gap-2">
-                      <div 
-                        class="group relative inline-flex w-9 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-in-out outline-offset-2 outline-indigo-600 bg-indigo-600 dark:bg-indigo-500"
-                      >
-                        <span class="size-4 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out translate-x-4"></span>
-                        <input 
-                          type="checkbox" 
-                          class="absolute inset-0 size-full appearance-none focus:outline-hidden cursor-not-allowed opacity-50" 
-                          :aria-label="`${status.label} (System-locked)`"
-                          checked
-                          disabled
-                        />
-                      </div>
+                      <HeadlessCheckbox
+                        :checked="true"
+                        :disabled="true"
+                        variant="switch"
+                        checkbox-class="w-9 h-5"
+                      />
                       <button
                         disabled
                         class="p-1.5 text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-50"
@@ -3044,11 +3090,10 @@
                     <h5 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Meeting / Appointment</h5>
                     <div class="space-y-3">
                       <label class="flex items-start gap-3">
-                        <input
-                          type="checkbox"
+                        <HeadlessCheckbox
                           :checked="eventRoleRules['Meeting / Appointment']?.auditorRequired || false"
                           @change="updateEventRoleRule('Meeting / Appointment', 'auditorRequired', $event.target.checked)"
-                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                          checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Auditor Required</span>
@@ -3058,11 +3103,10 @@
                         </div>
                       </label>
                       <label class="flex items-start gap-3">
-                        <input
-                          type="checkbox"
+                        <HeadlessCheckbox
                           :checked="eventRoleRules['Meeting / Appointment']?.reviewerRequired || false"
                           @change="updateEventRoleRule('Meeting / Appointment', 'reviewerRequired', $event.target.checked)"
-                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                          checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Reviewer Required</span>
@@ -3072,11 +3116,10 @@
                         </div>
                       </label>
                       <label class="flex items-start gap-3">
-                        <input
-                          type="checkbox"
+                        <HeadlessCheckbox
                           :checked="eventRoleRules['Meeting / Appointment']?.correctiveOwnerRequired || false"
                           @change="updateEventRoleRule('Meeting / Appointment', 'correctiveOwnerRequired', $event.target.checked)"
-                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                          checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Corrective Owner Required</span>
@@ -3093,11 +3136,10 @@
                     <h5 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Internal Audit</h5>
                     <div class="space-y-3">
                       <label class="flex items-start gap-3 opacity-75">
-                        <input
-                          type="checkbox"
-                          checked
-                          disabled
-                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                        <HeadlessCheckbox
+                          :checked="true"
+                          :disabled="true"
+                          checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Auditor Required</span>
@@ -3108,11 +3150,10 @@
                         </div>
                       </label>
                       <label class="flex items-start gap-3">
-                        <input
-                          type="checkbox"
+                        <HeadlessCheckbox
                           :checked="eventRoleRules['Internal Audit']?.reviewerRequired || false"
                           @change="updateEventRoleRule('Internal Audit', 'reviewerRequired', $event.target.checked)"
-                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                          checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Reviewer Required</span>
@@ -3122,11 +3163,10 @@
                         </div>
                       </label>
                       <label class="flex items-start gap-3 opacity-75">
-                        <input
-                          type="checkbox"
-                          checked
-                          disabled
-                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                        <HeadlessCheckbox
+                          :checked="true"
+                          :disabled="true"
+                          checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Corrective Owner Required</span>
@@ -3144,11 +3184,10 @@
                     <h5 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">External Audit — Single Org</h5>
                     <div class="space-y-3">
                       <label class="flex items-start gap-3 opacity-75">
-                        <input
-                          type="checkbox"
-                          checked
-                          disabled
-                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                        <HeadlessCheckbox
+                          :checked="true"
+                          :disabled="true"
+                          checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Auditor Required</span>
@@ -3159,11 +3198,10 @@
                         </div>
                       </label>
                       <label class="flex items-start gap-3 opacity-75">
-                        <input
-                          type="checkbox"
-                          checked
-                          disabled
-                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                        <HeadlessCheckbox
+                          :checked="true"
+                          :disabled="true"
+                          checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Reviewer Required</span>
@@ -3174,11 +3212,10 @@
                         </div>
                       </label>
                       <label class="flex items-start gap-3 opacity-75">
-                        <input
-                          type="checkbox"
-                          checked
-                          disabled
-                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                        <HeadlessCheckbox
+                          :checked="true"
+                          :disabled="true"
+                          checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Corrective Owner Required</span>
@@ -3196,11 +3233,10 @@
                     <h5 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">External Audit Beat</h5>
                     <div class="space-y-3">
                       <label class="flex items-start gap-3 opacity-75">
-                        <input
-                          type="checkbox"
-                          checked
-                          disabled
-                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                        <HeadlessCheckbox
+                          :checked="true"
+                          :disabled="true"
+                          checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Auditor Required</span>
@@ -3211,11 +3247,10 @@
                         </div>
                       </label>
                       <label class="flex items-start gap-3">
-                        <input
-                          type="checkbox"
+                        <HeadlessCheckbox
                           :checked="eventRoleRules['External Audit Beat']?.reviewerRequired || false"
                           @change="updateEventRoleRule('External Audit Beat', 'reviewerRequired', $event.target.checked)"
-                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                          checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Reviewer Required</span>
@@ -3225,11 +3260,10 @@
                         </div>
                       </label>
                       <label class="flex items-start gap-3 opacity-75">
-                        <input
-                          type="checkbox"
-                          checked
-                          disabled
-                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                        <HeadlessCheckbox
+                          :checked="true"
+                          :disabled="true"
+                          checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Corrective Owner Required</span>
@@ -3247,11 +3281,10 @@
                     <h5 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Field Sales Beat</h5>
                     <div class="space-y-3">
                       <label class="flex items-start gap-3">
-                        <input
-                          type="checkbox"
+                        <HeadlessCheckbox
                           :checked="eventRoleRules['Field Sales Beat']?.auditorRequired || false"
                           @change="updateEventRoleRule('Field Sales Beat', 'auditorRequired', $event.target.checked)"
-                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                          checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Auditor Required</span>
@@ -3261,11 +3294,10 @@
                         </div>
                       </label>
                       <label class="flex items-start gap-3">
-                        <input
-                          type="checkbox"
+                        <HeadlessCheckbox
                           :checked="eventRoleRules['Field Sales Beat']?.reviewerRequired || false"
                           @change="updateEventRoleRule('Field Sales Beat', 'reviewerRequired', $event.target.checked)"
-                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                          checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Reviewer Required</span>
@@ -3275,11 +3307,10 @@
                         </div>
                       </label>
                       <label class="flex items-start gap-3">
-                        <input
-                          type="checkbox"
+                        <HeadlessCheckbox
                           :checked="eventRoleRules['Field Sales Beat']?.correctiveOwnerRequired || false"
                           @change="updateEventRoleRule('Field Sales Beat', 'correctiveOwnerRequired', $event.target.checked)"
-                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                          checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Corrective Owner Required</span>
@@ -3334,22 +3365,13 @@
                       >
                         Locked
                       </span>
-                      <label
+                      <HeadlessCheckbox
                         v-else
-                        class="relative inline-flex w-11 h-6 items-center rounded-full transition-colors"
-                        :class="eventGeoRules[eventType] ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700'"
-                      >
-                        <input
-                          type="checkbox"
-                          :checked="eventGeoRules[eventType] || false"
-                          @change="updateEventGeoRule(eventType, $event.target.checked)"
-                          class="sr-only"
-                        />
-                        <span
-                          class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
-                          :class="eventGeoRules[eventType] ? 'translate-x-6' : 'translate-x-1'"
-                        />
-                      </label>
+                        :checked="eventGeoRules[eventType] || false"
+                        @change="updateEventGeoRule(eventType, $event.target.checked)"
+                        variant="switch"
+                        checkbox-class="w-11 h-6"
+                      />
                     </div>
                   </div>
                 </div>
@@ -3365,7 +3387,7 @@
                 </p>
                 <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
                   <p class="text-xs text-amber-800 dark:text-amber-400">
-                    <strong>Important:</strong> These settings configure form linking eligibility (whether forms can be linked to events), not form assignment or execution. 
+                    <strong>Important:</strong> These settings configure form linking eligibility (whether forms can be linked to events), not form assignment or execution.
                     Form assignment and execution belong in Work interfaces.
                   </p>
                 </div>
@@ -3381,12 +3403,11 @@
                     <h5 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">{{ eventType }}</h5>
                     <div class="space-y-3">
                       <label class="flex items-start gap-3">
-                        <input
-                          type="checkbox"
+                        <HeadlessCheckbox
                           :checked="eventFormRules[eventType]?.allowLinking !== false"
                           @change="updateEventFormRule(eventType, 'allowLinking', $event.target.checked)"
                           :disabled="isAuditEventType(eventType)"
-                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                          checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                           :class="isAuditEventType(eventType) ? 'opacity-50 cursor-not-allowed' : ''"
                         />
                         <div class="flex-1">
@@ -3411,11 +3432,10 @@
                         v-if="isAuditEventType(eventType)"
                         class="flex items-start gap-3"
                       >
-                        <input
-                          type="checkbox"
+                        <HeadlessCheckbox
                           :checked="eventFormRules[eventType]?.requireOnCreation || false"
                           @change="updateEventFormRule(eventType, 'requireOnCreation', $event.target.checked)"
-                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                          checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Require Form on Creation</span>
@@ -3428,11 +3448,10 @@
                         v-if="isAuditEventType(eventType)"
                         class="flex items-start gap-3"
                       >
-                        <input
-                          type="checkbox"
+                        <HeadlessCheckbox
                           :checked="eventFormRules[eventType]?.preventUnlinkingAfterStart || false"
                           @change="updateEventFormRule(eventType, 'preventUnlinkingAfterStart', $event.target.checked)"
-                          class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                          checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Prevent Unlinking After Start</span>
@@ -3739,12 +3758,21 @@
         <!-- Relationships Tab (with Forms-specific display) -->
         <div class="flex-1 overflow-y-auto" v-else-if="activeTopTab === 'relationships'">
           <div class="p-6">
-          <!-- Header -->
-          <div class="mb-6">
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Relationships</h3>
-            <p class="text-sm text-gray-500 dark:text-gray-400">
+          <!-- Intro + Add button (section title "Relationships" is already in the tab header above) -->
+          <div v-if="!isFormsModule" class="mb-6 flex items-start justify-between gap-4">
+            <p class="text-sm text-gray-500 dark:text-gray-400 max-w-2xl">
               Define relationships between this module and other modules. Relationships enable data linking and cross-module references.
             </p>
+            <button
+              type="button"
+              @click="openRelationshipDrawer()"
+              class="flex-shrink-0 inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-4 h-4">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+              Add relationship
+            </button>
           </div>
 
           <!-- Forms Module Relationships (read-only display) -->
@@ -3798,211 +3826,73 @@
           </div>
 
           <!-- Empty State -->
-          <div v-if="relationships.length === 0" class="bg-gray-50 dark:bg-white/5 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-12 text-center">
+          <div v-if="!isFormsModule && relationships.length === 0" class="bg-gray-50 dark:bg-white/5 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-12 text-center">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-12 h-12 mx-auto text-gray-400 dark:text-gray-500 mb-4">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
             </svg>
             <p class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">No relationships defined</p>
-            <p class="text-xs text-gray-500 dark:text-gray-500 mb-4">Get started by adding your first relationship</p>
-            <button @click="addRelationship" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 mx-auto shadow-sm hover:shadow-md">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-4 h-4">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-              </svg>
-              Add Relationship
-            </button>
+            <p class="text-xs text-gray-500 dark:text-gray-500">Link this module to others (e.g. Deals → Organizations). Use the button above to add one.</p>
           </div>
 
-          <!-- Relationships List -->
-          <div v-else class="space-y-4">
-            <div v-for="(r, ri) in relationships" :key="ri" class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm overflow-hidden">
-              <!-- Relationship Header -->
-              <div class="bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-white/5 dark:to-white/10 px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                  <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-4 h-4">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h4 class="text-sm font-semibold text-gray-900 dark:text-white">
-                      {{ r.name || `Relationship ${ri + 1}` }}
-                    </h4>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">
-                      {{ getRelationshipTypeLabel(r.type) }}
-                      <span v-if="r.targetModuleKey"> • {{ getModuleName(r.targetModuleKey) }}</span>
-                    </p>
-                  </div>
-                </div>
-                <button 
-                  @click="removeRelationship(ri)" 
-                  class="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
-                  title="Remove relationship"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          <!-- Relationships list (two-column grid for easier scanning with 10+ items) -->
+          <div v-else-if="!isFormsModule && relationships.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div
+                v-for="(r, ri) in relationships"
+                :key="ri"
+                class="flex items-center gap-3 px-4 py-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
+              >
+                <div class="flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-4 h-4">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                   </svg>
-                </button>
-              </div>
-
-              <!-- Relationship Content -->
-              <div class="p-4 space-y-4">
-                <!-- Basic Information -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                      Relationship Name <span class="text-red-500">*</span>
-                    </label>
-                    <input 
-                      v-model="r.name" 
-                      placeholder="e.g., Primary Organization" 
-                      class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-transparent transition-all" 
-                    />
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">A descriptive name for this relationship</p>
-                  </div>
-                  
-                  <div>
-                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                      Relationship Type <span class="text-red-500">*</span>
-                    </label>
-                    <select 
-                      v-model="r.type" 
-                      class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-transparent transition-all"
-                    >
-                      <option value="one_to_one">One-to-One (1:1)</option>
-                      <option value="one_to_many">One-to-Many (1:N)</option>
-                      <option value="many_to_one">Many-to-One (N:1)</option>
-                      <option value="many_to_many">Many-to-Many (N:N)</option>
-                      <option value="lookup">Lookup</option>
-                    </select>
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">How records relate to each other</p>
-                  </div>
                 </div>
-
-                <!-- Module Configuration -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                      Target Module <span class="text-red-500">*</span>
-                    </label>
-                    <select 
-                      v-model="r.targetModuleKey" 
-                      class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-transparent transition-all"
-                    >
-                      <option value="">Select module</option>
-                      <option v-for="m in modules" :key="m.key" :value="m.key">{{ m.name }}</option>
-                    </select>
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">The module this relationship links to</p>
-                  </div>
-                  
-                  <div>
-                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                      Display Label
-                    </label>
-                    <input 
-                      v-model="r.label" 
-                      placeholder="e.g., Related Organizations" 
-                      class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-transparent transition-all" 
-                    />
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Label shown in the UI</p>
-                  </div>
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
+                    {{ r.name || `Relationship ${ri + 1}` }}
+                  </p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 mr-1.5">{{ getRelationshipTypeBadge(r) }}</span>
+                    {{ selectedModule?.name || 'This module' }} → {{ getModuleName(r.targetModuleKey) || '…' }}
+                  </p>
                 </div>
-
-                <!-- Field Configuration -->
-                <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
-                  <h5 class="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                <div class="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    type="button"
+                    @click="openRelationshipDrawer(ri)"
+                    class="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+                    title="Edit relationship"
+                  >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-4 h-4">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
-                    Field Mapping
-                  </h5>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                        Local Field <span class="text-red-500">*</span>
-                      </label>
-                      <select 
-                        v-model="r.localField" 
-                        class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-transparent transition-all"
-                      >
-                        <option value="">Select field</option>
-                        <option v-for="field in editFields" :key="field.key" :value="field.key">
-                          {{ field.label || field.key }} ({{ field.key }})
-                        </option>
-                      </select>
-                      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Field in this module</p>
-                    </div>
-                    
-                    <div>
-                      <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                        Foreign Field <span class="text-red-500">*</span>
-                      </label>
-                      <input 
-                        v-model="r.foreignField" 
-                        placeholder="e.g., _id" 
-                        class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-transparent transition-all" 
-                      />
-                      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Field in target module</p>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Options -->
-                <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
-                  <h5 class="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                  </button>
+                  <button
+                    type="button"
+                    @click="removeRelationship(ri)"
+                    class="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    title="Remove relationship"
+                  >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-4 h-4">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
-                    Relationship Options
-                  </h5>
-                  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <label class="flex items-center gap-2 p-3 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 cursor-pointer hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
-                      <input 
-                        type="checkbox" 
-                        v-model="r.required" 
-                        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-400"
-                      />
-                      <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Required</span>
-                    </label>
-                    <label class="flex items-center gap-2 p-3 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 cursor-pointer hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
-                      <input 
-                        type="checkbox" 
-                        v-model="r.unique" 
-                        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-400"
-                      />
-                      <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Unique</span>
-                    </label>
-                    <label class="flex items-center gap-2 p-3 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 cursor-pointer hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
-                      <input 
-                        type="checkbox" 
-                        v-model="r.index" 
-                        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-400"
-                      />
-                      <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Index</span>
-                    </label>
-                    <label class="flex items-center gap-2 p-3 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 cursor-pointer hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
-                      <input 
-                        type="checkbox" 
-                        v-model="r.cascadeDelete" 
-                        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-400"
-                      />
-                      <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Cascade Delete</span>
-                    </label>
-                  </div>
+                  </button>
                 </div>
               </div>
-            </div>
-
-            <!-- Add Button -->
-            <button 
-              @click="addRelationship" 
-              class="w-full px-4 py-3 bg-white dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 hover:border-indigo-500 dark:hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors flex items-center justify-center gap-2"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-5 h-5">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-              </svg>
-              Add Another Relationship
-            </button>
           </div>
+
+          <!-- Relationship add/edit drawer -->
+          <RelationshipFormDrawer
+            :open="relationshipDrawerOpen"
+            :module-name="selectedModule?.name || ''"
+            :current-module-key="selectedModule?.key || ''"
+            :relationship="relationshipEditIndex !== null ? relationships[relationshipEditIndex] : null"
+            :edit-index="relationshipEditIndex"
+            :modules="modules"
+            :existing-relationships="relationships"
+            :edit-fields="editFields"
+            @close="closeRelationshipDrawer"
+            @save="onRelationshipSave"
+          />
           </div>
         </div>
 
@@ -4351,11 +4241,10 @@
                               </p>
                             </div>
                             <label class="inline-flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer flex-shrink-0">
-                              <input
-                                type="checkbox"
+                              <HeadlessCheckbox
                                 v-model="stage.playbook.enabled"
                                 @change="handlePlaybookToggle(stage)"
-                                class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                                checkbox-class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                               />
                               <span>Enable</span>
                             </label>
@@ -4399,7 +4288,7 @@
                                 </div>
                                 <div>
                                   <label class="inline-flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
-                                    <input type="checkbox" v-model="stage.playbook.autoAdvance" @change="onPlaybookAutoAdvanceChange(stage)" class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500" />
+                                    <HeadlessCheckbox v-model="stage.playbook.autoAdvance" @change="onPlaybookAutoAdvanceChange(stage)" checkbox-class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500" />
                                     Auto-move to next stage when criteria met
                                   </label>
                                   <p class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Automatically progress when conditions are satisfied.</p>
@@ -4579,7 +4468,7 @@
                         @click="toggleQuickRow(f)"
                         :title="f.required ? 'Required field is always included' : ''"
                       >
-                        <input type="checkbox" :checked="quickCreateSelected.has(f.key)" :disabled="f.required" @change.stop="toggleQuickCreate(f.key, $event.target.checked)" />
+                        <HeadlessCheckbox :checked="quickCreateSelected.has(f.key)" :disabled="f.required" @change="toggleQuickCreate(f.key, $event.target.checked)" @click.stop />
                         <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
                       </li>
                     </ul>
@@ -4597,7 +4486,7 @@
                         @click="toggleQuickRow(f)"
                         :title="f.required ? 'Required field is always included' : ''"
                       >
-                        <input type="checkbox" :checked="quickCreateSelected.has(f.key)" :disabled="f.required" @change.stop="toggleQuickCreate(f.key, $event.target.checked)" />
+                        <HeadlessCheckbox :checked="quickCreateSelected.has(f.key)" :disabled="f.required" @change="toggleQuickCreate(f.key, $event.target.checked)" @click.stop />
                         <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
                       </li>
                     </ul>
@@ -4615,7 +4504,7 @@
                         @click="toggleQuickRow(f)"
                         :title="f.required ? 'Required field is always included' : ''"
                       >
-                        <input type="checkbox" :checked="quickCreateSelected.has(f.key)" :disabled="f.required" @change.stop="toggleQuickCreate(f.key, $event.target.checked)" />
+                        <HeadlessCheckbox :checked="quickCreateSelected.has(f.key)" :disabled="f.required" @change="toggleQuickCreate(f.key, $event.target.checked)" @click.stop />
                         <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
                       </li>
                     </ul>
@@ -4650,11 +4539,11 @@
                         @click="f.key?.toLowerCase() !== 'name' ? toggleQuickRow(f) : null"
                         :title="f.key?.toLowerCase() === 'name' ? 'Name is required and cannot be removed' : (f.required ? 'Required field is always included' : '')"
                       >
-                        <input 
-                          type="checkbox" 
-                          :checked="quickCreateSelected.has(f.key)" 
-                          :disabled="f.key?.toLowerCase() === 'name' || f.required" 
-                          @change.stop="f.key?.toLowerCase() !== 'name' ? toggleQuickCreate(f.key, $event.target.checked) : null" 
+                        <HeadlessCheckbox
+                          :checked="quickCreateSelected.has(f.key)"
+                          :disabled="f.key?.toLowerCase() === 'name' || f.required"
+                          @change="f.key?.toLowerCase() !== 'name' ? toggleQuickCreate(f.key, $event.target.checked) : null"
+                          @click.stop
                         />
                         <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
                         <span v-if="f.key?.toLowerCase() === 'name'" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded ml-auto">Required</span>
@@ -4700,11 +4589,11 @@
                         @click="f.key?.toLowerCase() !== 'title' ? toggleQuickRow(f) : null"
                         :title="f.key?.toLowerCase() === 'title' ? 'Title is required and cannot be removed' : (f.required ? 'Required field is always included' : '')"
                       >
-                        <input 
-                          type="checkbox" 
-                          :checked="quickCreateSelected.has(f.key)" 
-                          :disabled="f.key?.toLowerCase() === 'title' || f.required" 
-                          @change.stop="f.key?.toLowerCase() !== 'title' ? toggleQuickCreate(f.key, $event.target.checked) : null" 
+                        <HeadlessCheckbox
+                          :checked="quickCreateSelected.has(f.key)"
+                          :disabled="f.key?.toLowerCase() === 'title' || f.required"
+                          @change="f.key?.toLowerCase() !== 'title' ? toggleQuickCreate(f.key, $event.target.checked) : null"
+                          @click.stop
                         />
                         <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
                         <span v-if="f.key?.toLowerCase() === 'title'" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded ml-auto">Required</span>
@@ -4752,11 +4641,11 @@
                         @click="f.key?.toLowerCase() !== 'eventname' ? toggleQuickRow(f) : null"
                         :title="f.key?.toLowerCase() === 'eventname' ? 'Event Name is required and cannot be removed' : (f.required ? 'Required field is always included' : '')"
                       >
-                        <input 
-                          type="checkbox" 
-                          :checked="quickCreateSelected.has(f.key)" 
-                          :disabled="f.key?.toLowerCase() === 'eventname' || f.required" 
-                          @change.stop="f.key?.toLowerCase() !== 'eventname' ? toggleQuickCreate(f.key, $event.target.checked) : null" 
+                        <HeadlessCheckbox
+                          :checked="quickCreateSelected.has(f.key)"
+                          :disabled="f.key?.toLowerCase() === 'eventname' || f.required"
+                          @change="f.key?.toLowerCase() !== 'eventname' ? toggleQuickCreate(f.key, $event.target.checked) : null"
+                          @click.stop
                         />
                         <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
                         <span v-if="f.key?.toLowerCase() === 'eventname'" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded ml-auto">Required</span>
@@ -4793,7 +4682,7 @@
                         @click="toggleQuickRow(f)"
                         :title="f.required ? 'Required field is always included' : ''"
                       >
-                        <input type="checkbox" :checked="quickCreateSelected.has(f.key)" :disabled="f.required" @change.stop="toggleQuickCreate(f.key, $event.target.checked)" />
+                        <HeadlessCheckbox :checked="quickCreateSelected.has(f.key)" :disabled="f.required" @change="toggleQuickCreate(f.key, $event.target.checked)" @click.stop />
                         <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
                       </li>
                     </ul>
@@ -4811,7 +4700,7 @@
                         @click="toggleQuickRow(f)"
                         :title="f.required ? 'Required field is always included' : ''"
                       >
-                        <input type="checkbox" :checked="quickCreateSelected.has(f.key)" :disabled="f.required" @change.stop="toggleQuickCreate(f.key, $event.target.checked)" />
+                        <HeadlessCheckbox :checked="quickCreateSelected.has(f.key)" :disabled="f.required" @change="toggleQuickCreate(f.key, $event.target.checked)" @click.stop />
                         <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
                       </li>
                     </ul>
@@ -5073,11 +4962,11 @@
               </div>
               <div class="flex flex-wrap items-center gap-6">
                 <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-                  <input type="checkbox" v-model="actionModalAction.required" class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500" />
+                  <HeadlessCheckbox v-model="actionModalAction.required" checkbox-class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500" />
                   Required to complete stage
                 </label>
                 <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-                  <input type="checkbox" v-model="actionModalAction.autoCreate" class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500" />
+                  <HeadlessCheckbox v-model="actionModalAction.autoCreate" checkbox-class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500" />
                   Auto-create when stage starts
                 </label>
               </div>
@@ -5174,11 +5063,10 @@
                   :key="option.value"
                   class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
                 >
-                  <input
-                    type="checkbox"
+                  <HeadlessCheckbox
                     :checked="actionModalAction.dependencies?.includes(option.value)"
                     @change="toggleActionDependency(actionModalStage, actionModalAction, option.value, $event.target.checked)"
-                    class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                    checkbox-class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                   />
                   {{ option.label }}
                 </label>
@@ -5419,6 +5307,8 @@ import apiClient from '@/utils/apiClient';
 import { openDatePicker } from '@/utils/dateUtils';
 import ModuleFormModal from './ModuleFormModal.vue';
 import AddCustomFieldDrawer from './AddCustomFieldDrawer.vue';
+import RelationshipFormDrawer from './RelationshipFormDrawer.vue';
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ArrowsUpDownIcon, ExclamationTriangleIcon } from '@heroicons/vue/24/outline';
 
 // DEV-only guards: Forms Settings must never support execution
@@ -5783,6 +5673,8 @@ const activeTopTab = ref(getInitialTab());
 const moduleNameEdit = ref('');
 const moduleEnabled = ref(true);
 const relationships = ref([]);
+const relationshipDrawerOpen = ref(false);
+const relationshipEditIndex = ref(null);
 const quickCreateSelected = ref(new Set());
 const quickLayout = ref({ version: 1, rows: [] });
 const quickMode = ref('simple'); // Advanced mode hidden for now
@@ -6908,6 +6800,9 @@ const isItemsModule = computed(() => {
 const isFormsModule = computed(() => {
   return selectedModule.value?.key?.toLowerCase() === 'forms';
 });
+const isDealsModule = computed(() => {
+  return selectedModule.value?.key?.toLowerCase() === 'deals';
+});
 
 // DEV-only guard: Ensure Forms module never supports execution
 if (process.env.NODE_ENV === 'development') {
@@ -7033,7 +6928,7 @@ const quickCreateAvailableFields = computed(() => {
 // See: docs/architecture/event-settings.md Section 6
 // See: client/src/platform/modules/forms/formsModule.definition.ts
 const groupedFields = computed(() => {
-  if (!isPeopleModule.value && !isOrganizationsModule.value && !isTasksModule.value && !isEventsModule.value && !isFormsModule.value && !isItemsModule.value) {
+  if (!isPeopleModule.value && !isOrganizationsModule.value && !isTasksModule.value && !isEventsModule.value && !isFormsModule.value && !isItemsModule.value && !isDealsModule.value) {
     return { coreIdentity: [], participation: {}, system: [] };
   }
 
@@ -7188,6 +7083,24 @@ const groupedFields = computed(() => {
         }
         
         // Participation fields - classification returns the app scope (e.g., 'SALES', 'AUDIT')
+        if (!participation[classification]) {
+          participation[classification] = [];
+        }
+        participation[classification].push(fieldKey);
+        continue;
+      } else if (isDealsModule.value) {
+        // Deals module: use deal field model for classification (core vs system, same as Tasks/People)
+        // ARCHITECTURE NOTE: Field classification is driven by dealFieldModel.ts
+        const classification = classifyDealField(fieldKey);
+        if (classification === 'core') {
+          coreIdentity.push(fieldKey);
+          continue;
+        }
+        if (classification === 'system') {
+          system.push(fieldKey);
+          continue;
+        }
+        // Participation fields - group by app scope (e.g. SALES if any in future)
         if (!participation[classification]) {
           participation[classification] = [];
         }
@@ -9825,12 +9738,34 @@ const clearSelection = () => {
 };
 
 function addRelationship() {
-  relationships.value.push({ name: '', type: 'lookup', targetModuleKey: '', localField: '', foreignField: '_id', inverseName: '', inverseField: '', required: false, unique: false, index: true, cascadeDelete: false, label: '' });
+  relationships.value.push({ name: '', type: 'many_to_one', isLookup: true, targetModuleKey: '', localField: '', foreignField: '_id', inverseName: '', inverseField: '', required: false, unique: false, index: true, cascadeDelete: false, label: '' });
+}
+function openRelationshipDrawer(editIndex = null) {
+  relationshipEditIndex.value = editIndex;
+  relationshipDrawerOpen.value = true;
+}
+function closeRelationshipDrawer() {
+  relationshipDrawerOpen.value = false;
+  relationshipEditIndex.value = null;
+}
+function onRelationshipSave({ relationship, editIndex }) {
+  if (editIndex === null) {
+    relationships.value.push(relationship);
+  } else {
+    relationships.value[editIndex] = relationship;
+  }
+  closeRelationshipDrawer();
 }
 function removeRelationship(idx) {
   if (confirm('Are you sure you want to remove this relationship?')) {
     relationships.value.splice(idx, 1);
   }
+}
+function getRelationshipTypeBadge(rel) {
+  const r = rel && typeof rel === 'object' ? rel : { type: rel, isLookup: false };
+  if (r.type === 'lookup' || (r.type === 'many_to_one' && r.isLookup === true)) return 'Lookup';
+  const badges = { one_to_one: '1:1', one_to_many: '1:N', many_to_one: 'N:1', many_to_many: 'N:N' };
+  return badges[r.type] || r.type || '';
 }
 
 // Helper function to get field rules (excluding picklistValue rules)
@@ -9925,16 +9860,17 @@ function toggleMappingOption(mapping, option) {
   }
 }
 
-// Helper functions for Relationships tab
-function getRelationshipTypeLabel(type) {
+// Helper functions for Relationships tab (Lookup is UI mode of many_to_one; support legacy type "lookup")
+function getRelationshipTypeLabel(relOrType) {
+  const r = relOrType && typeof relOrType === 'object' ? relOrType : { type: relOrType, isLookup: false };
+  if (r.type === 'lookup' || (r.type === 'many_to_one' && r.isLookup === true)) return 'Lookup';
   const labels = {
     'one_to_one': 'One-to-One (1:1)',
     'one_to_many': 'One-to-Many (1:N)',
     'many_to_one': 'Many-to-One (N:1)',
-    'many_to_many': 'Many-to-Many (N:N)',
-    'lookup': 'Lookup'
+    'many_to_many': 'Many-to-Many (N:N)'
   };
-  return labels[type] || type;
+  return labels[r.type] || r.type || '';
 }
 
 function getModuleName(key) {

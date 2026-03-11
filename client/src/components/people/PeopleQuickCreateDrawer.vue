@@ -1678,7 +1678,8 @@ const handleSubmit = async () => {
           openTab(`/people/${personId}`, {
             title,
             icon: 'users',
-            params: { name: title }
+            params: { name: title },
+            insertAdjacent: true
           });
         }
         
@@ -1781,7 +1782,8 @@ const handleSubmit = async () => {
           openTab(`/people/${personId}`, {
             title,
             icon: 'users',
-            params: { name: title }
+            params: { name: title },
+            insertAdjacent: true
           });
         }
         

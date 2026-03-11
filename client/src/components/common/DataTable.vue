@@ -172,12 +172,11 @@
                     <ArrowsUpDownIcon class="w-5 h-5 text-gray-400 dark:text-gray-500 cursor-move flex-shrink-0" />
                     
                     <!-- Visibility Checkbox -->
-                    <input
-                      type="checkbox"
+                    <HeadlessCheckbox
                       :checked="isColumnVisible(column.key)"
+                      checkbox-class="w-4 h-4 flex-shrink-0"
                       @change="toggleColumnVisibility(column.key)"
                       @click.stop
-                      class="w-4 h-4 text-indigo-600 dark:text-indigo-500 border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 cursor-pointer flex-shrink-0"
                     />
                     
                     <!-- Column Label -->
@@ -277,11 +276,10 @@
               v-if="selectable" 
               class="sticky-selection-header w-14 px-4 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800"
             >
-              <input
-                type="checkbox"
+              <HeadlessCheckbox
                 :checked="allSelected"
+                checkbox-class="w-4 h-4 transition-all"
                 @change="toggleSelectAll"
-                class="w-4 h-4 text-indigo-600 dark:text-indigo-500 border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 cursor-pointer transition-all"
               />
             </th>
 
@@ -358,12 +356,11 @@
                 'bg-indigo-50 dark:bg-indigo-900/30': isSelected(row)
               }"
             >
-              <input
-                type="checkbox"
+              <HeadlessCheckbox
                 :checked="isSelected(row)"
+                checkbox-class="w-4 h-4 transition-all"
                 @change="toggleSelect(row)"
                 @click.stop
-                class="w-4 h-4 text-indigo-600 dark:text-indigo-500 border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 cursor-pointer transition-all"
               />
             </td>
 
@@ -506,6 +503,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { InformationCircleIcon, XMarkIcon, TrashIcon, PencilSquareIcon, ArrowDownTrayIcon, ArchiveBoxIcon, ChevronLeftIcon, ChevronRightIcon, ArrowsUpDownIcon, EyeIcon, MagnifyingGlassIcon, Cog6ToothIcon, BookmarkIcon, ArchiveBoxXMarkIcon, ChevronUpIcon, ChevronDownIcon } from '@heroicons/vue/24/outline';
 import BadgeCell from '@/components/common/table/BadgeCell.vue';
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { formatRawValueForDisplay } from '@/utils/fieldDisplay';
 
 const props = defineProps({

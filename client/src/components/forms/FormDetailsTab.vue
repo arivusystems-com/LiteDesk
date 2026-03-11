@@ -135,17 +135,15 @@
     </div>
 
     <!-- Approval Required -->
-    <div class="flex items-center">
-      <input
+    <label class="flex items-center">
+      <HeadlessCheckbox
         v-model="localForm.approvalRequired"
-        type="checkbox"
-        id="approvalRequired"
-        class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+        checkbox-class="w-4 h-4"
       />
-      <label for="approvalRequired" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+      <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
         Approval Required
-      </label>
-    </div>
+      </span>
+    </label>
 
     <!-- Notes -->
     <div>

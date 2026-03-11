@@ -142,6 +142,7 @@ export function removeCustomFormType(key: string): boolean {
   if (index === -1) return false;
   
   const type = FORM_TYPE_DEFINITIONS[index];
+  if (!type) return false;
   
   // Prevent removal of built-in types
   if (type.builtIn) {

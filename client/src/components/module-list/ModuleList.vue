@@ -1322,7 +1322,8 @@ const handleAction = (route) => {
   if (!route) return;
   openTab(route, {
     title: route.split('/').pop(),
-    background: false
+    background: false,
+    insertAdjacent: true
   });
 };
 
@@ -1751,7 +1752,8 @@ const handleRowClick = (row) => {
     const route = viewAction.route.replace(':id', row._id);
     openTab(route, {
       title: row.name || row.title || row.first_name || 'Detail',
-      background: false
+      background: false,
+      insertAdjacent: true
     });
   } else {
     emit('row-click', row);
@@ -1769,7 +1771,8 @@ const handleEdit = (row) => {
     const route = editAction.route.replace(':id', row._id);
     openTab(route, {
       title: `Edit ${row.name || row.title || 'Item'}`,
-      background: false
+      background: false,
+      insertAdjacent: true
     });
   } else {
     emit('edit', row);
@@ -1822,7 +1825,8 @@ defineExpose({
   filters: filters,
   searchQuery: searchQuery,
   getFilters: () => filters.value,
-  getSearchQuery: () => searchQuery.value
+  getSearchQuery: () => searchQuery.value,
+  getCurrentRows: () => (Array.isArray(data.value) ? data.value : [])
 });
 </script>
 

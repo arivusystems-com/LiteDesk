@@ -103,9 +103,9 @@ export async function getAppRegistry(): Promise<AppRegistry> {
       // Warn if dashboardRoute is still not /dashboard or /dashboard/:appKey (shouldn't happen after normalization)
       // Exclude special app routes (Audit, Portal, Helpdesk, Projects) which have their own routing structure
       const entry = registry[app.appKey];
+      if (!entry) continue;
       const isSpecialRoute = specialAppRoutes.some(prefix => entry.dashboardRoute.startsWith(prefix));
       if (
-        entry &&
         !isSpecialRoute &&
         entry.dashboardRoute !== '/dashboard' &&
         !entry.dashboardRoute.startsWith('/dashboard/')

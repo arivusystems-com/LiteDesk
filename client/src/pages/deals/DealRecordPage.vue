@@ -1,0 +1,3265 @@
+<template>
+  <div ref="dealRecordPageRootRef" class="deal-record-page-root flex-1 min-h-0 overflow-hidden flex flex-col">
+    <RecordPageShell
+      :loading="loading"
+      :error="error"
+      loading-message="Loading deal..."
+      error-title="Error Loading Deal"
+      :layout-props="{
+        leftExpanded: !!expandedLeftSection,
+        forceMobile: props.embed,
+        class: [
+          props.embed ? 'flex-1 min-h-0 overflow-hidden flex flex-col' : '',
+          { 'record-page-layout--left-expanded': !!expandedLeftSection },
+          '[&.record-page-layout--left-expanded_.record-page-layout__right]:hidden',
+          '[&.record-page-layout--left-expanded_.record-page-layout__left]:flex-[1_1_100%] [&.record-page-layout--left-expanded_.record-page-layout__left]:max-w-full [&.record-page-layout--left-expanded_.record-page-layout__left]:pr-0 [&.record-page-layout--left-expanded_.record-page-layout__left]:min-h-0 [&.record-page-layout--left-expanded_.record-page-layout__left]:overflow-hidden',
+          '[&.record-page-layout--left-expanded_.record-page-layout__left-content]:max-w-full [&.record-page-layout--left-expanded_.record-page-layout__left-content]:pl-0 [&.record-page-layout--left-expanded_.record-page-layout__left-content]:pr-0 [&.record-page-layout--left-expanded_.record-page-layout__left-content]:flex [&.record-page-layout--left-expanded_.record-page-layout__left-content]:flex-col [&.record-page-layout--left-expanded_.record-page-layout__left-content]:flex-1 [&.record-page-layout--left-expanded_.record-page-layout__left-content]:min-h-0',
+          '[&.record-page-layout--left-expanded_.record-page-layout__body]:px-4'
+        ]
+      }"
+      @retry="fetchDeal"
+    >
+      <template v-if="deal" #header>
+        <RecordHeader
+          :show-navigation="!props.embed"
+          :can-previous="canNavigatePreviousDeal"
+          :can-next="canNavigateNextDeal"
+          previous-label="Previous deal"
+          next-label="Next deal"
+          :shortcut-prev="navShortcutPrev"
+          :shortcut-next="navShortcutNext"
+          @previous="goToPreviousDeal"
+          @next="goToNextDeal"
+        >
+          <template #breadcrumbs>
+            <span class="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
+              Deal <span class="w-1 h-1 rounded-full bg-gray-400 dark:bg-gray-500"></span> {{ deal?._id?.slice(-8) || 'N/A' }}
+            </span>
+          </template>
+
+          <template #pageActions>
+            <button
+              v-if="primaryContact?.email"
+              type="button"
+              class="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-label="Email contact"
+              title="Email contact"
+              @click="showEmailModal = true"
+            >
+              <EnvelopeIcon class="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              class="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-label="Edit deal"
+              title="Edit deal"
+              @click="showEditModal = true"
+            >
+              <PencilSquareIcon class="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              ref="tagHeaderButtonRef"
+              @click="handleTagIconClick($event)"
+              :class="[
+                'relative inline-flex items-center justify-center p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
+                hasDealTags
+                  ? 'text-indigo-600 dark:text-indigo-400'
+                  : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+              ]"
+              aria-label="Tag"
+              title="Tag"
+            >
+              <TagIcon class="block w-5 h-5" />
+              <span
+                v-if="hasDealTags"
+                class="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400"
+              ></span>
+            </button>
+            <button
+              type="button"
+              class="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-label="Copy URL"
+              title="Copy URL"
+              @click="handleCopyUrl"
+            >
+              <ClipboardDocumentIcon class="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              :class="[
+                'p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
+                isFollowing ? 'text-yellow-500 dark:text-yellow-400' : ''
+              ]"
+              :aria-label="isFollowing ? 'Unstar' : 'Star'"
+              :title="isFollowing ? 'Unstar' : 'Star'"
+              @click="isFollowing = !isFollowing"
+            >
+              <StarIcon v-if="!isFollowing" class="w-5 h-5" />
+              <StarIconSolid v-else class="w-5 h-5" />
+            </button>
+            <Menu as="div" class="relative">
+              <MenuButton
+                class="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                aria-label="More actions"
+              >
+                <EllipsisVerticalIcon class="w-5 h-5" />
+              </MenuButton>
+              <transition
+                enter-active-class="transition ease-out duration-100"
+                enter-from-class="transform opacity-0 scale-95"
+                enter-to-class="transform opacity-100 scale-100"
+                leave-active-class="transition ease-in duration-75"
+                leave-from-class="transform opacity-100 scale-100"
+                leave-to-class="transform opacity-0 scale-95"
+              >
+                <MenuItems class="absolute right-0 top-full mt-2 w-48 rounded-lg shadow-xl py-1 bg-white dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/10 z-50">
+                  <MenuItem v-slot="{ active }">
+                    <button
+                      @click="handleDuplicate"
+                      :class="[
+                        'w-full text-left px-4 py-2 text-sm transition-colors duration-150',
+                        active ? 'bg-gray-100 dark:bg-gray-700' : 'text-gray-700 dark:text-gray-200'
+                      ]"
+                    >
+                      Duplicate
+                    </button>
+                  </MenuItem>
+                  <MenuItem v-slot="{ active }">
+                    <button
+                      @click="handleExport"
+                      :class="[
+                        'w-full text-left px-4 py-2 text-sm transition-colors duration-150',
+                        active ? 'bg-gray-100 dark:bg-gray-700' : 'text-gray-700 dark:text-gray-200'
+                      ]"
+                    >
+                      Export
+                    </button>
+                  </MenuItem>
+                  <MenuItem v-slot="{ active }">
+                    <button
+                      @click="showEmailModal = true"
+                      :class="[
+                        'w-full text-left px-4 py-2 text-sm transition-colors duration-150',
+                        active ? 'bg-gray-100 dark:bg-gray-700' : 'text-gray-700 dark:text-gray-200'
+                      ]"
+                    >
+                      Email contact
+                    </button>
+                  </MenuItem>
+                  <hr class="my-1 border-gray-200 dark:border-gray-700" />
+                  <MenuItem v-slot="{ active }">
+                    <button
+                      @click="showDeleteModal = true"
+                      :class="[
+                        'w-full text-left px-4 py-2 text-sm transition-colors duration-150',
+                        active ? 'bg-gray-100 dark:bg-gray-700' : 'text-red-600 dark:text-red-400'
+                      ]"
+                    >
+                      Delete
+                    </button>
+                  </MenuItem>
+                </MenuItems>
+              </transition>
+            </Menu>
+          </template>
+        </RecordHeader>
+      </template>
+
+      <template v-if="deal" #left>
+        <div
+          v-if="expandedLeftSection"
+          :class="[
+            'flex-shrink-0 mb-4 sticky z-20 bg-white/95 dark:bg-gray-900/95 supports-[backdrop-filter]:bg-white/90 supports-[backdrop-filter]:dark:bg-gray-900/90 backdrop-blur',
+            props.embed ? 'top-0' : 'top-0 lg:-top-6'
+          ]"
+        >
+            <div class="flex items-center justify-between gap-2 py-2">
+              <button
+                type="button"
+                class="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+                @click="closeExpandedLeftSection"
+              >
+                <ArrowLeftIcon class="h-4 w-4" />
+                <span>Back to deal</span>
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 dark:border-gray-700 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                aria-label="Collapse section"
+                title="Collapse"
+                @click="closeExpandedLeftSection"
+              >
+                <ArrowsPointingInIcon class="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div
+            v-if="deal && expandedLeftSection === 'description-history'"
+            class="description-history-page flex-1 min-h-0 mt-4 flex flex-col gap-6"
+          >
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white flex-shrink-0">{{ deal.name || 'Deal' }}</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] grid-rows-[1fr] gap-6 min-h-0 flex-1">
+              <div class="flex flex-col min-h-0 min-w-0 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden h-full">
+                <div class="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+                  <div
+                    v-if="descriptionHistoryShowDiff && descriptionHistoryDiffHtml"
+                    class="text-md text-gray-900 dark:text-white px-6 py-4 leading-[1.75] [&_del]:px-0.5 [&_ins]:px-0.5"
+                    v-html="descriptionHistoryDiffHtml"
+                  />
+                  <div
+                    v-else-if="descriptionHistorySelectedHasContent"
+                    class="text-md text-gray-900 dark:text-white px-6 py-4 leading-[1.75] [&_p]:mb-2 [&_p:last-child]:mb-0 [&_p]:leading-[1.75] [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:my-4 [&_h1]:mb-2 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:my-4 [&_h2]:mb-2 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:my-4 [&_h3]:mb-2 [&_ul]:my-2 [&_ol]:my-2 [&_ul]:pl-6 [&_ol]:pl-6 [&_ul]:list-disc [&_ol]:list-decimal [&_blockquote]:border-l-4 [&_blockquote]:border-gray-200 [&_blockquote]:pl-4 [&_blockquote]:my-2 [&_blockquote]:text-gray-500 dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400 [&_a]:text-indigo-600 [&_a]:underline dark:[&_a]:text-indigo-400"
+                    v-html="descriptionHistorySelectedContent"
+                  />
+                  <p v-else class="px-6 py-4 text-sm text-gray-400 dark:text-gray-500 italic m-0">
+                    No description in this version.
+                  </p>
+                </div>
+              </div>
+              <div class="flex flex-col min-h-0 min-w-0 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden h-full">
+                <h3 class="font-semibold text-gray-900 dark:text-white px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                  Version history
+                </h3>
+                <div v-if="descriptionVersionsLoading" class="flex items-center justify-center py-8 flex-1 min-h-0 overflow-hidden">
+                  <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+                </div>
+                <div v-else class="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-0">
+                  <label
+                    v-for="(ver, idx) in descriptionHistoryList"
+                    :key="ver.isCurrent ? 'current' : `version-${idx}-${ver.createdAt}`"
+                    :class="[
+                      'flex items-start gap-3 py-3 px-3 rounded-lg cursor-pointer transition-colors',
+                      selectedDescriptionVersionIndex === idx
+                        ? 'bg-indigo-50 dark:bg-indigo-900/30'
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                    ]"
+                  >
+                    <input
+                      v-model="selectedDescriptionVersionIndex"
+                      type="radio"
+                      :name="'deal-desc-version-' + (deal._id || '')"
+                      :value="idx"
+                      class="mt-1 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 focus:ring-indigo-500"
+                    />
+                    <div class="min-w-0 flex-1">
+                      <span class="text-sm text-gray-900 dark:text-white block">
+                        {{ formatDescriptionVersionDate(ver.createdAt) }}
+                      </span>
+                      <span class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mt-0.5">
+                        <span v-if="ver.isCurrent" class="font-medium text-gray-600 dark:text-gray-300">Current Version</span>
+                        <template v-else>
+                          <Avatar
+                            v-if="ver.createdBy"
+                            :record="{ name: ver.createdBy }"
+                            size="sm"
+                            class="shrink-0"
+                          />
+                          {{ ver.createdBy || 'Someone' }}
+                        </template>
+                      </span>
+                    </div>
+                  </label>
+                </div>
+                <p class="text-xs text-gray-400 dark:text-gray-500 px-4 py-2 border-t border-gray-100 dark:border-gray-700 flex-shrink-0">
+                  Version history will be stored for up to 365 days in deal descriptions.
+                </p>
+                <div class="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+                  <button
+                    type="button"
+                    :disabled="selectedDescriptionVersionIndex === 0 || descriptionRestoreLoading"
+                    class="w-full inline-flex items-center justify-center px-4 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:pointer-events-none"
+                    @click="restoreDescriptionVersion"
+                  >
+                    <span v-if="descriptionRestoreLoading">Restoring…</span>
+                    <span v-else>Restore this version</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div
+            v-if="deal && !expandedLeftSection"
+            :class="[
+              'mb-6 sticky z-10 border-b transition-[padding,background-color,border-color,backdrop-filter] duration-200 ease-out',
+              props.embed ? 'top-0 py-2 lg:py-4 lg:mb-0 mb-0' : 'top-0 lg:-top-6',
+              isLeftTitleSticky
+                ? 'border-b border-gray-200/80 dark:border-gray-700/80 bg-white/95 dark:bg-gray-900/95 supports-[backdrop-filter]:bg-white/90 supports-[backdrop-filter]:dark:bg-gray-900/90 backdrop-blur py-4'
+                : 'border-b border-gray-200/80 dark:border-gray-700/80 bg-white/95 dark:bg-gray-900/95 supports-[backdrop-filter]:bg-white/90 supports-[backdrop-filter]:dark:bg-gray-900/90 backdrop-blur py-4 lg:border-transparent lg:bg-transparent lg:shadow-none lg:py-0'
+            ]"
+          >
+            <div class="flex items-center gap-3">
+              <Avatar :record="{ name: DEAL_MODULE_NAME }" :icon="BanknotesIcon" size="lg" class="shrink-0" />
+              <div class="min-w-0 flex-1">
+                <EditableTitle
+                  :title="deal.name || ''"
+                  :can-edit="authStore.can('deals', 'edit')"
+                  @save="handleDealTitleSave"
+                />
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <p class="text-3xl font-bold text-green-600 dark:text-green-400">${{ (deal.amount || 0).toLocaleString() }}</p>
+              <span class="text-sm text-gray-500 dark:text-gray-400">Weighted ${{ weightedAmount.toLocaleString() }}</span>
+            </div>
+          </div>
+
+          <!-- RecordStateSection - Key fields (same logic as task details section) -->
+          <div
+            v-if="deal && (!expandedLeftSection || expandedLeftSection === 'key-fields')"
+            :class="['group/left-section', expandedLeftSection ? 'mt-8' : 'mt-4']"
+          >
+            <RecordStateSection
+              heading="Key fields"
+              :fields="dealStateFields"
+              :field-values="dealStateValues"
+              :enable-legacy-fallback="false"
+            >
+              <template #stage>
+                <Listbox
+                  v-if="canEditDealStage"
+                  :model-value="deal?.stage || ''"
+                  @update:model-value="handleDealStageSave"
+                >
+                  <div class="relative w-full">
+                    <ListboxButton
+                      :class="[
+                        'inline-flex items-center rounded-md text-xs font-semibold transition-colors focus:outline-none focus:ring-0',
+                        getStagePillClass(deal?.stage)
+                      ]"
+                      :style="getStagePillStyle(deal?.stage)"
+                    >
+                      <span class="truncate px-2.5 py-1">{{ formatDealStage(deal?.stage) || '—' }}</span>
+                      <span
+                        :class="['inline-flex items-center justify-center px-2 py-1 border-l', getStagePillDividerClass(deal?.stage)]"
+                        :style="getStagePillDividerStyle(deal?.stage)"
+                      >
+                        <ChevronDownIcon class="h-4 w-4" />
+                      </span>
+                    </ListboxButton>
+                    <transition
+                      leave-active-class="transition duration-100 ease-in"
+                      leave-from-class="opacity-100"
+                      leave-to-class="opacity-0"
+                    >
+                      <ListboxOptions
+                        class="absolute z-10 mt-1 max-h-60 w-full min-w-[140px] overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm"
+                      >
+                        <ListboxOption
+                          v-for="opt in dealStageOptions"
+                          :key="opt.value"
+                          :value="opt.value"
+                          v-slot="{ active, selected }"
+                        >
+                          <li :class="['relative cursor-default select-none py-2 pl-4 pr-10', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
+                            <span :class="['flex items-center gap-2 truncate', selected ? 'font-medium' : 'font-normal']">
+                              <span
+                                class="inline-block h-2.5 w-2.5 rounded-full border border-black/10 dark:border-white/20"
+                                :style="opt.color ? { backgroundColor: opt.color } : null"
+                              />
+                              <span class="truncate">{{ opt.label }}</span>
+                            </span>
+                            <span v-if="selected" class="absolute inset-y-0 right-0 flex items-center pr-3 text-indigo-600 dark:text-indigo-400">
+                              <CheckIcon class="h-5 w-5" aria-hidden="true" />
+                            </span>
+                          </li>
+                        </ListboxOption>
+                      </ListboxOptions>
+                    </transition>
+                  </div>
+                </Listbox>
+                <span
+                  v-else
+                  :class="[
+                    'inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold cursor-default select-none bg-gray-50 dark:bg-gray-800/60',
+                    getStagePillClass(deal?.stage)
+                  ]"
+                  :style="getStagePillStyle(deal?.stage)"
+                >
+                  {{ formatDealStage(deal?.stage) || '—' }}
+                </span>
+              </template>
+
+              <template #amount>
+                <div v-if="canEditDealKeyFields" class="w-full min-h-8 px-2 py-1 -mx-2 -my-1 flex items-center">
+                  <input
+                    v-show="isEditingAmount"
+                    ref="amountInputRef"
+                    v-model="localAmount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    @blur="handleAmountBlur"
+                    @keydown.enter="handleAmountBlur"
+                    @keydown.esc="handleAmountCancel"
+                    class="text-xs h-8 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full"
+                    placeholder="Expected value"
+                  />
+                  <span
+                    v-show="!isEditingAmount"
+                    @click="startAmountEdit"
+                    :class="[
+                      'block w-full h-8 text-sm cursor-text hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 transition-colors flex items-center',
+                      deal?.amount != null ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+                    ]"
+                  >
+                    {{ formatDealAmount(deal?.amount) || 'Empty' }}
+                  </span>
+                </div>
+                <span
+                  v-else
+                  :class="['block w-full text-sm', formatDealAmount(deal?.amount) ? 'text-gray-900 dark:text-white' : 'text-gray-300 dark:text-gray-600']"
+                >
+                  {{ formatDealAmount(deal?.amount) || '—' }}
+                </span>
+              </template>
+
+              <template #probability>
+                <div v-if="canEditDealKeyFields" class="w-full min-h-8 px-2 py-1 -mx-2 -my-1 flex items-center">
+                  <input
+                    v-show="isEditingProbability"
+                    ref="probabilityInputRef"
+                    v-model="localProbability"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    @blur="handleProbabilityBlur"
+                    @keydown.enter="handleProbabilityBlur"
+                    @keydown.esc="handleProbabilityCancel"
+                    class="text-xs h-8 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full"
+                    placeholder="Probability"
+                  />
+                  <span
+                    v-show="!isEditingProbability"
+                    @click="startProbabilityEdit"
+                    :class="[
+                      'block w-full h-8 text-sm cursor-text hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 transition-colors flex items-center',
+                      deal?.probability != null ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+                    ]"
+                  >
+                    {{ formatDealProbability(deal?.probability) || 'Empty' }}
+                  </span>
+                </div>
+                <span
+                  v-else
+                  :class="['block w-full text-sm', formatDealProbability(deal?.probability) ? 'text-gray-900 dark:text-white' : 'text-gray-300 dark:text-gray-600']"
+                >
+                  {{ formatDealProbability(deal?.probability) || '—' }}
+                </span>
+              </template>
+
+              <template #expectedCloseDate>
+                <div v-if="canEditDealKeyFields" class="w-full min-h-8 px-2 py-1 -mx-2 -my-1 flex items-center">
+                  <input
+                    v-show="isEditingExpectedCloseDate"
+                    ref="expectedCloseDateInputRef"
+                    v-model="localExpectedCloseDate"
+                    type="date"
+                    @blur="handleExpectedCloseDateBlur"
+                    @keydown.enter="handleExpectedCloseDateBlur"
+                    @keydown.esc="handleExpectedCloseDateCancel"
+                    class="text-xs h-8 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full cursor-pointer"
+                    placeholder="Close date"
+                  />
+                  <span
+                    v-show="!isEditingExpectedCloseDate"
+                    @click="startExpectedCloseDateEdit"
+                    :class="[
+                      'block w-full h-8 text-sm cursor-text hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 transition-colors flex items-center',
+                      deal?.expectedCloseDate ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+                    ]"
+                  >
+                    {{ formatDealCloseDate(deal?.expectedCloseDate) || 'Empty' }}
+                  </span>
+                </div>
+                <span
+                  v-else
+                  :class="['block w-full text-sm', formatDealCloseDate(deal?.expectedCloseDate) ? 'text-gray-900 dark:text-white' : 'text-gray-300 dark:text-gray-600']"
+                >
+                  {{ formatDealCloseDate(deal?.expectedCloseDate) || '—' }}
+                </span>
+              </template>
+
+              <template #ownerId>
+                <Listbox
+                  v-if="canInlineEditDealOwner"
+                  :model-value="selectedDealOwnerId"
+                  @update:model-value="(v) => handleDealDetailFieldSave('ownerId', v || null)"
+                >
+                  <div class="relative w-full">
+                    <ListboxButton
+                      class="flex items-center gap-2 w-full min-h-8 text-left cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 py-1 -mx-2 -my-1 transition-colors focus:outline-none focus:ring-0"
+                    >
+                      <Avatar
+                        v-if="dealOwnerAvatarUser"
+                        :user="dealOwnerAvatarUser"
+                        size="sm"
+                      />
+                      <span
+                        :class="[
+                          'text-sm flex-1 truncate',
+                          formatDealOwnerName(deal) ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+                        ]"
+                      >
+                        {{ formatDealOwnerName(deal) || 'Empty' }}
+                      </span>
+                    </ListboxButton>
+                    <Transition
+                      leave-active-class="transition duration-100 ease-in"
+                      leave-from-class="opacity-100"
+                      leave-to-class="opacity-0"
+                    >
+                      <ListboxOptions
+                        class="absolute z-10 mt-1 max-h-60 w-full min-w-[160px] overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm"
+                      >
+                        <ListboxOption :value="null" v-slot="{ active }">
+                          <li :class="['relative cursor-default select-none py-2 pl-4 pr-10 flex items-center gap-2', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
+                            <span class="block truncate">Unassigned</span>
+                          </li>
+                        </ListboxOption>
+                        <ListboxOption
+                          v-for="user in dealUsers"
+                          :key="user._id"
+                          :value="user._id"
+                          v-slot="{ active, selected }"
+                        >
+                          <li :class="['relative cursor-default select-none py-2 pl-4 pr-10 flex items-center gap-2', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
+                            <Avatar :user="user" size="sm" />
+                            <span :class="['block truncate flex-1', selected ? 'font-medium' : 'font-normal']">{{ getDealUserDisplayName(user) }}</span>
+                            <span v-if="selected" class="absolute inset-y-0 right-0 flex items-center pr-3 text-indigo-600 dark:text-indigo-400">
+                              <CheckIcon class="h-5 w-5" aria-hidden="true" />
+                            </span>
+                          </li>
+                        </ListboxOption>
+                      </ListboxOptions>
+                    </Transition>
+                  </div>
+                </Listbox>
+                <div v-else class="flex items-center gap-2 min-h-8 rounded px-2 py-1 cursor-default select-none bg-gray-50 dark:bg-gray-800/60">
+                  <Avatar
+                    v-if="dealOwnerAvatarUser"
+                    :user="dealOwnerAvatarUser"
+                    size="sm"
+                  />
+                  <span
+                    :class="[
+                      'text-sm',
+                      formatDealOwnerName(deal) ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+                    ]"
+                  >
+                    {{ formatDealOwnerName(deal) || 'Empty' }}
+                  </span>
+                </div>
+              </template>
+
+              <template #accountId>
+                <Listbox
+                  v-if="canInlineEditDealOrganization"
+                  :model-value="selectedDealOrganizationId"
+                  @update:model-value="(v) => handleDealDetailFieldSave('accountId', v || null)"
+                >
+                  <div class="relative w-full">
+                    <ListboxButton
+                      class="flex items-center gap-2 w-full min-h-8 text-left cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 py-1 -mx-2 -my-1 transition-colors focus:outline-none focus:ring-0"
+                    >
+                      <span
+                        v-if="selectedDealOrganizationId && formatDealOrganizationName(deal)"
+                        class="text-sm min-w-0 flex-1 truncate text-gray-900 dark:text-white transition-colors hover:text-primary-600 dark:hover:text-primary-400"
+                      >
+                        <span
+                          role="button"
+                          tabindex="0"
+                          class="text-sm inline cursor-pointer"
+                          @click.stop="openTab(`/organizations/${selectedDealOrganizationId}`, { background: false, insertAdjacent: true })"
+                        >
+                          {{ formatDealOrganizationName(deal) }}
+                        </span>
+                      </span>
+                      <span
+                        v-else
+                        :class="[
+                          'text-sm min-w-0 flex-1 truncate',
+                          formatDealOrganizationName(deal) ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+                        ]"
+                      >
+                        {{ formatDealOrganizationName(deal) || 'Empty' }}
+                      </span>
+                    </ListboxButton>
+                    <Transition
+                      leave-active-class="transition duration-100 ease-in"
+                      leave-from-class="opacity-100"
+                      leave-to-class="opacity-0"
+                    >
+                      <ListboxOptions
+                        class="absolute z-10 mt-1 max-h-60 w-full min-w-[160px] overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm"
+                      >
+                        <ListboxOption :value="null" v-slot="{ active }">
+                          <li :class="['relative cursor-default select-none py-2 pl-4 pr-10', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
+                            <span class="block truncate">Empty</span>
+                          </li>
+                        </ListboxOption>
+                        <ListboxOption
+                          v-for="organization in dealOrganizationOptions"
+                          :key="organization._id"
+                          :value="organization._id"
+                          v-slot="{ active, selected }"
+                        >
+                          <li :class="['relative cursor-default select-none py-2 pl-4 pr-10', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
+                            <span :class="['block truncate', selected ? 'font-medium' : 'font-normal']">{{ organization.name || 'Unnamed organization' }}</span>
+                            <span v-if="selected" class="absolute inset-y-0 right-0 flex items-center pr-3 text-indigo-600 dark:text-indigo-400">
+                              <CheckIcon class="h-5 w-5" aria-hidden="true" />
+                            </span>
+                          </li>
+                        </ListboxOption>
+                      </ListboxOptions>
+                    </Transition>
+                  </div>
+                </Listbox>
+                <span
+                  v-else-if="selectedDealOrganizationId && formatDealOrganizationName(deal)"
+                  class="block w-full text-sm text-gray-900 dark:text-white truncate transition-colors hover:text-primary-600 dark:hover:text-primary-400"
+                >
+                  <span
+                    role="button"
+                    tabindex="0"
+                    class="text-sm inline cursor-pointer"
+                    @click="openTab(`/organizations/${selectedDealOrganizationId}`, { background: false, insertAdjacent: true })"
+                  >
+                    {{ formatDealOrganizationName(deal) }}
+                  </span>
+                </span>
+                <span
+                  v-else
+                  :class="['block w-full text-sm', formatDealOrganizationName(deal) ? 'text-gray-900 dark:text-white' : 'text-gray-300 dark:text-gray-600']"
+                >
+                  {{ formatDealOrganizationName(deal) || '—' }}
+                </span>
+              </template>
+
+              <template #contactId>
+                <Listbox
+                  v-if="canInlineEditDealContact"
+                  :model-value="selectedDealContactId"
+                  @update:model-value="(v) => handleDealDetailFieldSave('contactId', v || null)"
+                >
+                  <div class="relative w-full">
+                    <ListboxButton
+                      class="flex items-center gap-2 w-full min-h-8 text-left cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 py-1 -mx-2 -my-1 transition-colors focus:outline-none focus:ring-0"
+                    >
+                      <span
+                        v-if="selectedDealContactId && formatDealContactName(deal)"
+                        class="text-sm min-w-0 flex-1 truncate text-gray-900 dark:text-white transition-colors hover:text-primary-600 dark:hover:text-primary-400"
+                      >
+                        <span
+                          role="button"
+                          tabindex="0"
+                          class="text-sm inline cursor-pointer"
+                          @click.stop="openTab(`/people/${selectedDealContactId}`, { background: false, insertAdjacent: true })"
+                        >
+                          {{ formatDealContactName(deal) }}
+                        </span>
+                      </span>
+                      <span
+                        v-else
+                        :class="[
+                          'text-sm min-w-0 flex-1 truncate',
+                          formatDealContactName(deal) ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+                        ]"
+                      >
+                        {{ formatDealContactName(deal) || 'Empty' }}
+                      </span>
+                    </ListboxButton>
+                    <Transition
+                      leave-active-class="transition duration-100 ease-in"
+                      leave-from-class="opacity-100"
+                      leave-to-class="opacity-0"
+                    >
+                      <ListboxOptions
+                        class="absolute z-10 mt-1 max-h-60 w-full min-w-[160px] overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm"
+                      >
+                        <ListboxOption :value="null" v-slot="{ active }">
+                          <li :class="['relative cursor-default select-none py-2 pl-4 pr-10', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
+                            <span class="block truncate">Empty</span>
+                          </li>
+                        </ListboxOption>
+                        <ListboxOption
+                          v-for="person in dealPeopleOptions"
+                          :key="person._id"
+                          :value="person._id"
+                          v-slot="{ active, selected }"
+                        >
+                          <li :class="['relative cursor-default select-none py-2 pl-4 pr-10', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
+                            <span :class="['block truncate', selected ? 'font-medium' : 'font-normal']">{{ person.name || 'Unnamed' }}</span>
+                            <span v-if="selected" class="absolute inset-y-0 right-0 flex items-center pr-3 text-indigo-600 dark:text-indigo-400">
+                              <CheckIcon class="h-5 w-5" aria-hidden="true" />
+                            </span>
+                          </li>
+                        </ListboxOption>
+                      </ListboxOptions>
+                    </Transition>
+                  </div>
+                </Listbox>
+                <span
+                  v-else-if="selectedDealContactId && formatDealContactName(deal)"
+                  class="block w-full text-sm text-gray-900 dark:text-white truncate transition-colors hover:text-primary-600 dark:hover:text-primary-400"
+                >
+                  <span
+                    role="button"
+                    tabindex="0"
+                    class="text-sm inline cursor-pointer"
+                    @click="openTab(`/people/${selectedDealContactId}`, { background: false, insertAdjacent: true })"
+                  >
+                    {{ formatDealContactName(deal) }}
+                  </span>
+                </span>
+                <span
+                  v-else
+                  :class="['block w-full text-sm', formatDealContactName(deal) ? 'text-gray-900 dark:text-white' : 'text-gray-300 dark:text-gray-600']"
+                >
+                  {{ formatDealContactName(deal) || '—' }}
+                </span>
+              </template>
+            </RecordStateSection>
+          </div>
+
+          <section
+            v-if="deal && shouldRenderDealSectionStack"
+            :class="[expandedLeftSection ? 'mt-8' : 'mt-4']"
+          >
+            <SectionStack
+              :sections="dealSections"
+              :record="deal"
+              :adapter="dealRecordAdapter"
+              :context="dealSectionContext"
+            />
+          </section>
+      </template>
+
+      <template v-if="deal" #right>
+        <RecordRightPane
+          ref="rightPaneRef"
+          :tabs="rightPaneTabs"
+          :default-tab="recordLayoutIsMobile ? undefined : 'activity'"
+          :show-header="props.embed"
+          :show-close-button="props.embed"
+          :title="props.embed ? 'Deal' : ''"
+          :persistence-key="`deal-${deal._id}`"
+          :record-id="deal._id"
+          @close="handleEmbedClose"
+        >
+          <template #tab-activity>
+            <ActivitySection
+              :events="activitySectionEvents"
+              :ui="dealActivityUi"
+              :is-thread-view-active="isThreadViewActive"
+              :active-thread-root-comment="activeThreadRootComment"
+              :thread-reply-count="threadReplyCount"
+              :activity-pane-ready="true"
+              :activity-search-open="activitySearchOpen"
+              :activity-search-query="activitySearchQuery"
+              :activity-filter-comments="activityFilterComments"
+              :activity-filter-updates="activityFilterUpdates"
+              :activity-filter-email="activityFilterEmail"
+              :new-comment-text="newCommentText"
+              :show-notifications="false"
+              :on-timeline-ref="setActivityTimelineRef"
+              @comment="handleAddComment"
+              @close-thread="closeCommentThread"
+              @update:activitySearchOpen="activitySearchOpen = $event"
+              @update:activitySearchQuery="activitySearchQuery = $event"
+              @update:activityFilterComments="activityFilterComments = $event"
+              @update:activityFilterUpdates="activityFilterUpdates = $event"
+              @update:activityFilterEmail="activityFilterEmail = $event"
+              @update:newCommentText="newCommentText = $event"
+            />
+          </template>
+
+          <template #tab-related>
+            <div class="flex flex-col h-full">
+              <div class="record-context-panel__header flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white dark:bg-gray-900">
+                <h2 class="text-base font-semibold text-gray-900 dark:text-white">Related</h2>
+                <button
+                  type="button"
+                  @click="showLinkRecordDrawer = true"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                >
+                  <PlusIcon class="w-4 h-4" />
+                  Link record
+                </button>
+              </div>
+            <div class="p-4 overflow-y-auto flex-1 min-h-0">
+              <section v-if="deal._id">
+                <RelatedSection
+                  :key="relatedRefreshKey"
+                  :record="deal"
+                  :adapter="dealRecordAdapter"
+                  :context="{ hideHeader: true }"
+                />
+              </section>
+            </div>
+            </div>
+          </template>
+
+          <template #tab-integrations>
+            <div class="flex flex-col h-full">
+              <div class="record-context-panel__header flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white dark:bg-gray-900">
+                <h2 class="text-base font-semibold text-gray-900 dark:text-white">Integrations</h2>
+              </div>
+              <div class="p-4 overflow-y-auto flex-1 min-h-0">
+                <AutomationContext
+                  v-if="deal._id"
+                  entity-type="deal"
+                  :entity-id="deal._id"
+                />
+              </div>
+            </div>
+          </template>
+        </RecordRightPane>
+      </template>
+    </RecordPageShell>
+
+    <CreateRecordDrawer
+      :isOpen="showEditModal"
+      moduleKey="deals"
+      :record="deal"
+      @close="showEditModal = false"
+      @saved="handleDealUpdated"
+    />
+
+    <CreateRecordDrawer
+      :isOpen="showEventModal"
+      moduleKey="events"
+      :record="eventToEdit"
+      @close="showEventModal = false"
+      @saved="handleEventSaved"
+    />
+
+    <EmailComposeDrawer
+      :is-open="showEmailModal"
+      :related-to="(deal?.id ?? deal?._id) ? { moduleKey: 'deals', recordId: String(deal?.id ?? deal?._id ?? '') } : null"
+      :initial-to="primaryContact?.email || ''"
+      @close="showEmailModal = false"
+      @submit="handleEmailSubmit"
+    />
+
+    <LinkRecordsDrawer
+      :isOpen="showLinkRecordDrawer"
+      :module-key="''"
+      source-app-key="SALES"
+      source-module-key="deals"
+      :multiple="true"
+      title="Link Record"
+      :context="linkRecordDrawerContext"
+      @close="showLinkRecordDrawer = false"
+      @linked="handleLinkRecordDrawerLinked"
+    />
+
+    <Teleport to="body">
+      <div
+        v-if="showTagPopover"
+        ref="tagPopoverRef"
+        :style="tagPopoverStyle"
+        class="fixed z-[120] w-[360px] rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl"
+      >
+        <RecordTagPopover
+          :record="deal"
+          :tag-storage-key="tagStorageKey"
+          :can-edit="canEditDeal"
+          :persist-tags="persistRecordTagsForDeal"
+          instance-tag-source="deals"
+          :fetch-record="fetchDeal"
+          :open="showTagPopover"
+        />
+      </div>
+    </Teleport>
+
+    <DeleteConfirmationModal
+      :show="showDeleteModal"
+      :record-name="deal?.name || ''"
+      record-type="deals"
+      :deleting="deleting"
+      @close="showDeleteModal = false"
+      @confirm="confirmDeleteDeal"
+    />
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, watch, inject, nextTick, onMounted, onBeforeUnmount } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { Menu, MenuButton, MenuItem, MenuItems, Listbox, ListboxButton, ListboxOption, ListboxOptions } from '@headlessui/vue';
+import DOMPurify from 'dompurify';
+import {
+  RecordPageShell,
+  RecordHeader,
+  RecordStateSection,
+  RecordRightPane,
+  RecordTagPopover
+} from '@/components/record-page';
+import ActivitySection from '@/components/activity/ActivitySection.vue';
+import SectionStack from '@/components/record-page/sections/SectionStack.vue';
+import RelatedSection from '@/components/record-page/sections/RelatedSection.vue';
+import { useRecordTagPopoverPosition } from '@/components/record-page/composables/useRecordTagPopoverPosition';
+import { useRecordTags } from '@/components/record-page/composables/useRecordTags';
+import EditableTitle from '@/components/record-page/EditableTitle.vue';
+import { createActivityTimelineRefSetter } from '@/components/activity/useRecordActivityAdapter';
+import { createDealActivityUi } from '@/components/activity/adapters/dealActivityUiAdapter';
+import { createDealRecordAdapter } from '@/components/record-page/adapters/dealRecordAdapter';
+import { useRecordPageLifecycle } from '@/components/record-page/composables/useRecordPageLifecycle';
+import {
+  normalizeSystemActivityEvent,
+  normalizeCommentActivityEvent,
+  normalizeEmailThreadActivityEvent,
+  sortActivityEventsByDate
+} from '@/components/record-page/activityEventModel';
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ArrowsPointingInIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  EnvelopeIcon,
+  PencilSquareIcon,
+  BanknotesIcon,
+  PlusIcon,
+  ClipboardDocumentIcon,
+  StarIcon,
+  EllipsisVerticalIcon,
+  ClockIcon,
+  LinkIcon,
+  PuzzlePieceIcon,
+  TagIcon
+} from '@heroicons/vue/24/outline';
+import { StarIcon as StarIconSolid } from '@heroicons/vue/24/solid';
+import Avatar from '@/components/common/Avatar.vue';
+import { useTabs } from '@/composables/useTabs';
+import { useAuthStore } from '@/stores/auth';
+import apiClient from '@/utils/apiClient';
+import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
+import LinkRecordsDrawer from '@/components/common/LinkRecordsDrawer.vue';
+import DeleteConfirmationModal from '@/components/common/DeleteConfirmationModal.vue';
+import EmailComposeDrawer from '@/components/communications/EmailComposeDrawer.vue';
+import { useRecordContext, invalidateRecordContext } from '@/composables/useRecordContext';
+import AutomationContext from '@/components/automation/AutomationContext.vue';
+
+const route = useRoute();
+const router = useRouter();
+const { openTab, replaceActiveTab, activeTabId, updateTabTitle, findTabById } = useTabs();
+const authStore = useAuthStore();
+const recordLayoutIsMobile = inject('recordLayoutIsMobile', ref(false));
+
+const props = defineProps({
+  embed: { type: Boolean, default: false },
+  dealId: { type: String, default: null }
+});
+
+const emit = defineEmits(['close']);
+
+const deal = ref(null);
+const expandedLeftSection = ref('');
+const effectiveDealId = computed(() => props.embed && props.dealId ? props.dealId : route.params.id);
+const loading = ref(true);
+const error = ref(null);
+const showEditModal = ref(false);
+const showDeleteModal = ref(false);
+const deleting = ref(false);
+const showEventModal = ref(false);
+const showEmailModal = ref(false);
+const isFollowing = ref(false);
+const eventToEdit = ref(null);
+const rightPaneRef = ref(null);
+const activityTimelineRef = ref(null);
+const activityLogs = ref([]);
+const comments = ref([]);
+const emailThreads = ref([]);
+const expandedTaskEmailThreads = ref(new Set());
+const dealNavigationIds = ref([]);
+const newCommentText = ref('');
+const activityFilterComments = ref(true);
+const activityFilterUpdates = ref(true);
+const activityFilterEmail = ref(true);
+const activitySearchQuery = ref('');
+const activitySearchOpen = ref(false);
+const activeThreadRootCommentId = ref(null);
+const showLinkRecordDrawer = ref(false);
+const relatedRefreshKey = ref(0);
+const dealRecordPageRootRef = ref(null);
+const leftPaneScrollElement = ref(null);
+const isLeftTitleSticky = ref(false);
+const STICKY_TITLE_ENABLE_OFFSET = 10;
+const STICKY_TITLE_DISABLE_OFFSET = 2;
+const editingNoteId = ref('');
+const editingNoteText = ref('');
+const editingNoteAttachments = ref([]);
+const editingNoteOriginalText = ref('');
+const editingNoteOriginalAttachments = ref([]);
+const editingNoteHasPendingFiles = ref(false);
+const savingEditedNote = ref(false);
+const lastRoutedDealId = ref(String(effectiveDealId.value || ''));
+const dealModuleDefinition = ref(null);
+const DEAL_MODULE_NAME = 'Deal';
+const SLOT_RENDERED_KEY_FIELDS = Object.freeze(new Set(['stage', 'amount', 'probability', 'expectedCloseDate', 'ownerId', 'accountId', 'contactId']));
+const dealUsers = ref([]);
+const dealOrganizationsList = ref([]);
+const dealPeopleList = ref([]);
+
+const isEditingAmount = ref(false);
+const isEditingProbability = ref(false);
+const isEditingExpectedCloseDate = ref(false);
+const localAmount = ref('');
+const localProbability = ref('');
+const localExpectedCloseDate = ref('');
+const amountInputRef = ref(null);
+const probabilityInputRef = ref(null);
+const expectedCloseDateInputRef = ref(null);
+
+const {
+  tagHeaderButtonRef,
+  tagFieldButtonRef,
+  tagPopoverRef,
+  showTagPopover,
+  tagPopoverStyle,
+  updateTagPopoverPosition,
+  handleTagIconClick,
+  openTagPopoverFromField,
+  handleTagPopoverMousedown,
+  handleTagPopoverOutsideClick
+} = useRecordTagPopoverPosition();
+
+const tagStorageKey = computed(() => {
+  const organizationId = authStore.user?.organizationId || authStore.organization?._id || 'default-org';
+  return `litedesk-deal-tag-definitions-${organizationId}`;
+});
+const hasDealTags = computed(() => Array.isArray(deal.value?.tags) && deal.value.tags.length > 0);
+const canEditDeal = computed(() => authStore.can('deals', 'edit'));
+
+const persistRecordTagsForDeal = async (cleaned) => {
+  if (!deal.value || !canEditDeal.value) return;
+  const response = await apiClient.put(`/deals/${deal.value._id}`, { tags: cleaned });
+  if (response?.success && response?.data) {
+    deal.value.tags = Array.isArray(response.data.tags) ? response.data.tags : cleaned;
+  } else {
+    deal.value.tags = cleaned;
+  }
+};
+
+const { getTagChipClass: getDealTagChipClass } = useRecordTags(deal, {
+  tagStorageKey,
+  canEdit: canEditDeal,
+  persistTags: persistRecordTagsForDeal,
+  instanceTagSource: 'deals'
+});
+
+const ACTIVITY_FILTER_STORAGE_KEY = 'litedesk-deal-activity-filter';
+
+const linkRecordDrawerContext = computed(() => (deal.value?._id ? { dealId: deal.value._id } : {}));
+const canLinkRecords = computed(() => authStore.can('deals', 'edit'));
+
+const { context: dealRecordContext, load: loadDealRecordContext } = useRecordContext(
+  'SALES',
+  'deals',
+  () => deal.value?._id
+);
+watch(deal, (d) => {
+  if (d?._id) loadDealRecordContext();
+}, { immediate: true });
+
+const dealRelatedGroupsFromContext = computed(() => {
+  const rels = dealRecordContext.value?.relationships;
+  if (!Array.isArray(rels) || rels.length === 0) return [];
+  return rels
+    .filter((rel) => rel.records && rel.records.length > 0)
+    .map((rel) => {
+      const key = rel.relationshipKey || rel.label || 'related';
+      const label = rel.ui?.label || rel.label || key;
+      const direction = (rel.direction || 'SOURCE').toUpperCase();
+      const items = (rel.records || []).map((r) => {
+        const id = r.recordId ?? r.id ?? r._id;
+        const moduleKey = (r.moduleKey || '').toLowerCase();
+        const appKey = (r.appKey || 'SALES').toUpperCase();
+        const path = moduleKey ? `/${moduleKey}/${id}` : null;
+        return {
+          id: id?.toString?.() ?? String(id),
+          title: r.label || r.name || r.title || (id ? String(id).slice(0, 8) : 'Untitled'),
+          meta: r.secondaryText || r.status || '',
+          onOpen: path ? () => router.push(path) : undefined,
+          relationshipKey: key,
+          appKey,
+          moduleKey,
+          direction
+        };
+      });
+      return { key, label, items };
+    });
+});
+
+const rightPaneTabs = computed(() => ([
+  { id: 'activity', name: 'Activity', icon: ClockIcon },
+  { id: 'related', name: 'Related Records', icon: LinkIcon },
+  { id: 'integrations', name: 'Integrations', icon: PuzzlePieceIcon }
+]));
+
+const DEAL_NAV_CONTEXT_STORAGE_PREFIX = 'litedesk-deal-nav-context:';
+const dealNavigationContextToken = computed(() => String(route.query?.navCtx || '').trim());
+
+const currentDealNavigationId = computed(() => String(effectiveDealId.value || deal.value?._id || ''));
+
+const currentDealNavigationIndex = computed(() => {
+  const currentId = currentDealNavigationId.value;
+  if (!currentId) return -1;
+  return dealNavigationIds.value.findIndex((id) => id === currentId);
+});
+
+const previousDealId = computed(() => {
+  const index = currentDealNavigationIndex.value;
+  if (index <= 0) return '';
+  return dealNavigationIds.value[index - 1] || '';
+});
+
+const nextDealId = computed(() => {
+  const index = currentDealNavigationIndex.value;
+  if (index < 0 || index >= dealNavigationIds.value.length - 1) return '';
+  return dealNavigationIds.value[index + 1] || '';
+});
+
+const canNavigatePreviousDeal = computed(() => Boolean(previousDealId.value));
+const canNavigateNextDeal = computed(() => Boolean(nextDealId.value));
+
+const navShortcutPrev = computed(() =>
+  typeof navigator !== 'undefined' && /Mac/i.test(navigator.userAgent) ? '⌘+Left' : 'Ctrl+Left'
+);
+const navShortcutNext = computed(() =>
+  typeof navigator !== 'undefined' && /Mac/i.test(navigator.userAgent) ? '⌘+Right' : 'Ctrl+Right'
+);
+
+const navigateToDealById = (dealId) => {
+  const targetId = String(dealId || '').trim();
+  if (!targetId) return;
+  const navToken = dealNavigationContextToken.value;
+  const path = navToken
+    ? `/deals/${targetId}?navCtx=${encodeURIComponent(navToken)}`
+    : `/deals/${targetId}`;
+  replaceActiveTab(path, { title: 'Deal' });
+};
+
+const goToPreviousDeal = () => {
+  if (!canNavigatePreviousDeal.value) return;
+  navigateToDealById(previousDealId.value);
+};
+
+const goToNextDeal = () => {
+  if (!canNavigateNextDeal.value) return;
+  navigateToDealById(nextDealId.value);
+};
+
+const handleHeaderKeydown = (e) => {
+  if (e.repeat) return;
+  const ctrlOrMeta = e.ctrlKey || e.metaKey;
+  if (!ctrlOrMeta) return;
+  // Only the visible deal record page should handle: with keep-alive, multiple instances can have listeners.
+  const myId = String(effectiveDealId.value || '');
+  if (!myId) return;
+  const tab = findTabById(activeTabId.value);
+  const pathShowsMe = tab?.path && tab.path.includes(myId);
+  const routeShowsMe = route.params.id === myId;
+  if (!pathShowsMe && !routeShowsMe) return;
+  const tag = document.activeElement?.tagName?.toLowerCase();
+  const isEditable =
+    tag === 'input' ||
+    tag === 'textarea' ||
+    document.activeElement?.getAttribute?.('contenteditable') === 'true';
+  if (isEditable) return;
+  if (e.key === 'ArrowLeft') {
+    e.preventDefault();
+    goToPreviousDeal();
+  } else if (e.key === 'ArrowRight') {
+    e.preventDefault();
+    goToNextDeal();
+  }
+};
+
+onMounted(() => {
+  document.addEventListener('keydown', handleHeaderKeydown);
+});
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', handleHeaderKeydown);
+});
+
+// Keep tab title in sync with deal name when deal loads or name changes.
+// Only update when the tab's path actually contains this deal id – never update the list tab (/deals).
+watch(
+  () => [activeTabId.value, deal.value?._id, deal.value?.name],
+  ([tabId, dealId, name]) => {
+    if (!tabId || name === undefined || !dealId) return;
+    const tab = findTabById(tabId);
+    if (!tab || !tab.path) return;
+    const pathBase = tab.path.split('?')[0].replace(/\/$/, '');
+    if (pathBase === '/deals') return; // list tab – never overwrite with record name
+    if (!tab.path.includes(String(dealId))) return; // only update the tab that shows this record
+    updateTabTitle(tabId, String(name || 'Deal').trim() || 'Deal');
+  },
+  { immediate: true }
+);
+
+const openLeftSection = (sectionKey) => {
+  const normalized = String(sectionKey || '').trim();
+  expandedLeftSection.value = normalized;
+};
+
+const closeExpandedLeftSection = () => {
+  expandedLeftSection.value = '';
+};
+
+const selectedDescriptionVersionIndex = ref(0);
+const descriptionVersionsLoading = ref(false);
+const descriptionRestoreLoading = ref(false);
+const ALLOWED_DESCRIPTION_TAGS = ['p', 'br', 'strong', 'em', 's', 'u', 'a', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'blockquote'];
+const descriptionVersionsData = ref({ currentDescription: '', versions: [] });
+
+const descriptionHistoryList = computed(() => {
+  if (!deal.value) return [];
+
+  const current = {
+    isCurrent: true,
+    createdAt: deal.value.updatedAt || deal.value.createdAt || new Date(),
+    createdBy: authStore.user
+      ? [authStore.user.firstName, authStore.user.lastName].filter(Boolean).join(' ').trim() || authStore.user.email
+      : 'You',
+    content: descriptionVersionsData.value?.currentDescription ?? deal.value.description ?? ''
+  };
+
+  const historical = (descriptionVersionsData.value?.versions || [])
+    .map((log) => ({
+      isCurrent: false,
+      createdAt: log?.createdAt || null,
+      createdBy: String(log?.createdBy || 'Unknown'),
+      content: String(log?.content ?? '')
+    }));
+
+  return [current, ...historical];
+});
+
+const canViewDescriptionHistory = computed(() => descriptionHistoryList.value.length > 1);
+
+const formatDescriptionVersionDate = (date) => {
+  if (!date) return '';
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+};
+
+const getPlainTextFromHtml = (html) => {
+  if (!html || typeof html !== 'string') return '';
+  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+};
+
+const diffWordsToHtml = (oldText, newText) => {
+  const oldParts = String(oldText || '').split(/(\s+)/);
+  const newParts = String(newText || '').split(/(\s+)/);
+  const escape = (value) => {
+    const element = document.createElement('div');
+    element.textContent = value;
+    return element.innerHTML;
+  };
+
+  const result = [];
+  let oldIndex = 0;
+  let newIndex = 0;
+
+  while (oldIndex < oldParts.length || newIndex < newParts.length) {
+    if (oldIndex < oldParts.length && newIndex < newParts.length && oldParts[oldIndex] === newParts[newIndex]) {
+      result.push(escape(oldParts[oldIndex]));
+      oldIndex += 1;
+      newIndex += 1;
+      continue;
+    }
+
+    if (newIndex < newParts.length && !oldParts.slice(oldIndex).includes(newParts[newIndex])) {
+      result.push(`<ins class="bg-green-100 dark:bg-green-900/30 text-green-900 dark:text-green-200 no-underline">${escape(newParts[newIndex])}</ins>`);
+      newIndex += 1;
+      continue;
+    }
+
+    if (oldIndex < oldParts.length) {
+      result.push(`<del class="bg-red-100 dark:bg-red-900/30 text-red-900 dark:text-red-200 line-through">${escape(oldParts[oldIndex])}</del>`);
+      oldIndex += 1;
+      continue;
+    }
+
+    if (newIndex < newParts.length) {
+      result.push(`<ins class="bg-green-100 dark:bg-green-900/30 text-green-900 dark:text-green-200 no-underline">${escape(newParts[newIndex])}</ins>`);
+      newIndex += 1;
+    }
+  }
+
+  return result.join('');
+};
+
+const descriptionHistorySelectedContent = computed(() => {
+  const selected = descriptionHistoryList.value[selectedDescriptionVersionIndex.value];
+  const raw = String(selected?.content || '');
+  if (!raw.trim()) return '';
+  return DOMPurify.sanitize(raw, { ALLOWED_TAGS: ALLOWED_DESCRIPTION_TAGS });
+});
+
+const descriptionHistoryShowDiff = computed(() => descriptionHistoryList.value.length > 1 && selectedDescriptionVersionIndex.value > 0);
+
+const descriptionHistoryDiffHtml = computed(() => {
+  if (!descriptionHistoryShowDiff.value) return '';
+  const list = descriptionHistoryList.value;
+  const currentVersion = list[0];
+  const selectedVersion = list[selectedDescriptionVersionIndex.value];
+  if (!currentVersion || !selectedVersion) return '';
+
+  const oldPlain = getPlainTextFromHtml(selectedVersion.content);
+  const newPlain = getPlainTextFromHtml(currentVersion.content);
+  const diffHtml = diffWordsToHtml(oldPlain, newPlain);
+
+  return DOMPurify.sanitize(diffHtml, { ALLOWED_TAGS: ['ins', 'del'], ALLOWED_ATTR: ['class'] });
+});
+
+const descriptionHistorySelectedHasContent = computed(() => {
+  const selected = descriptionHistoryList.value[selectedDescriptionVersionIndex.value];
+  return Boolean(selected && String(selected.content || '').trim());
+});
+
+const openDescriptionHistory = () => {
+  selectedDescriptionVersionIndex.value = 0;
+  openLeftSection('description-history');
+  fetchDescriptionVersions();
+};
+
+const fetchDescriptionVersions = async () => {
+  if (!deal.value?._id) return;
+  descriptionVersionsLoading.value = true;
+  try {
+    const response = await apiClient.get(`/deals/${deal.value._id}/description-versions`);
+    descriptionVersionsData.value = response?.data || { currentDescription: deal.value?.description || '', versions: [] };
+  } catch (error) {
+    console.error('Fetch deal description versions failed:', error);
+    descriptionVersionsData.value = { currentDescription: deal.value?.description || '', versions: [] };
+  } finally {
+    descriptionVersionsLoading.value = false;
+  }
+};
+
+const restoreDescriptionVersion = async () => {
+  if (selectedDescriptionVersionIndex.value === 0) return;
+  if (!deal.value?._id) return;
+
+  const apiIndex = selectedDescriptionVersionIndex.value - 1;
+  if (apiIndex < 0) return;
+
+  descriptionRestoreLoading.value = true;
+  try {
+    const response = await apiClient.post(`/deals/${deal.value._id}/description-versions/restore`, {
+      versionIndex: apiIndex
+    });
+    if (response?.data) {
+      deal.value = response.data;
+      selectedDescriptionVersionIndex.value = 0;
+      closeExpandedLeftSection();
+    }
+  } finally {
+    descriptionRestoreLoading.value = false;
+  }
+};
+
+const dealSectionContext = computed(() => ({
+  module: 'deal',
+  expandedLeftSection: expandedLeftSection.value,
+  openLeftSection,
+  closeExpandedLeftSection,
+  openTab,
+  openTagsEditor: (...args) => openTagPopoverFromField(...args),
+  getTagChipClass: getDealTagChipClass,
+  getStateFieldOptions: (fieldKey) => {
+    if (fieldKey === 'contactId') return dealPeopleOptions.value.map((p) => ({ value: p._id, label: p.name }));
+    if (fieldKey === 'accountId') return dealOrganizationOptions.value.map((o) => ({ value: o._id, label: o.name }));
+    return [];
+  },
+  getDetailFieldOptions: (fieldKey) => {
+    if (fieldKey === 'contactId') return dealPeopleOptions.value.map((p) => ({ value: p._id, label: p.name }));
+    if (fieldKey === 'accountId') return dealOrganizationOptions.value.map((o) => ({ value: o._id, label: o.name }));
+    return [];
+  }
+}));
+
+const handleEmbedClose = () => {
+  if (props.embed) emit('close');
+};
+
+const handleDealDescriptionSave = async (value) => {
+  if (!deal.value?._id) return;
+  const nextDescription = String(value || '').trim();
+  if (nextDescription === String(deal.value?.description || '').trim()) return;
+  try {
+    const response = await apiClient.put(`/deals/${deal.value._id}`, {
+      description: nextDescription
+    });
+    if (response?.success && response?.data) {
+      deal.value = response.data;
+    } else {
+      await fetchDeal();
+    }
+  } catch (err) {
+    console.error('Failed to save deal description:', err);
+  }
+};
+
+const handleDealTitleSave = async (value) => {
+  if (!deal.value?._id) return;
+  const nextName = String(value || '').trim();
+  const currentName = String(deal.value?.name || '').trim();
+  if (!nextName || nextName === currentName) return;
+
+  try {
+    const response = await apiClient.put(`/deals/${deal.value._id}`, {
+      name: nextName
+    });
+    if (response?.success && response?.data) {
+      deal.value = response.data;
+    } else {
+      await fetchDeal();
+    }
+  } catch (err) {
+    console.error('Failed to save deal title:', err);
+  }
+};
+
+const handleDealDetailFieldSave = async (fieldKey, value) => {
+  if (!deal.value?._id) return;
+  if (!fieldKey) return;
+
+  const currentRawValue = deal.value?.[fieldKey];
+
+  const resolveReferenceId = (input) => {
+    if (input == null || input === '') return null;
+    if (typeof input === 'object') {
+      return input._id || input.id || null;
+    }
+    return String(input);
+  };
+
+  let nextValue = value;
+  if (fieldKey === 'expectedCloseDate') {
+    const normalizedDateValue = value ? String(value).trim() : '';
+    nextValue = normalizedDateValue ? normalizedDateValue : null;
+    const currentDateValue = currentRawValue ? String(currentRawValue).slice(0, 10) : null;
+    if ((nextValue || null) === (currentDateValue || null)) {
+      return;
+    }
+  } else if (fieldKey === 'ownerId' || fieldKey === 'accountId' || fieldKey === 'contactId') {
+    const currentComparable = resolveReferenceId(currentRawValue);
+    const nextComparable = resolveReferenceId(value);
+    if ((currentComparable || null) === (nextComparable || null)) {
+      return;
+    }
+    nextValue = nextComparable;
+  } else {
+    const currentComparable = currentRawValue == null ? null : String(currentRawValue);
+    const nextComparable = value == null ? null : String(value);
+    if (currentComparable === nextComparable) {
+      return;
+    }
+  }
+
+  try {
+    const response = await apiClient.put(`/deals/${deal.value._id}`, {
+      [fieldKey]: nextValue
+    });
+    if (response?.success && response?.data) {
+      deal.value = response.data;
+    } else {
+      await fetchDeal();
+    }
+  } catch (err) {
+    console.error('Failed to save deal detail field:', err);
+  }
+};
+
+const openDealDetailFieldEditor = () => {
+  showEditModal.value = true;
+};
+
+const setRightPaneActiveTab = (tabId) => {
+  if (!tabId || !rightPaneRef.value) return;
+  const activeTabRef = rightPaneRef.value.activeTab;
+  if (activeTabRef && typeof activeTabRef === 'object' && 'value' in activeTabRef) {
+    activeTabRef.value = tabId;
+    return;
+  }
+  rightPaneRef.value.activeTab = tabId;
+};
+
+const getDealRelatedGroups = () => dealRelatedGroupsFromContext.value;
+
+const openDealRelatedItem = (item) => {
+  if (!item) return;
+  if (item.action === 'add-event') {
+    openCreateEvent();
+    return;
+  }
+  setRightPaneActiveTab('related');
+};
+
+const handleUnlinkDealRelated = async (item, group, record) => {
+  if (!record?._id || !item?.id || !group?.key) return;
+  const dealRef = { appKey: 'SALES', moduleKey: 'deals', recordId: record._id };
+  const relatedRef = { appKey: item.appKey || 'SALES', moduleKey: item.moduleKey || '', recordId: item.id };
+  const isDealSource = (item.direction || 'SOURCE').toUpperCase() === 'SOURCE';
+  const source = isDealSource ? dealRef : relatedRef;
+  const target = isDealSource ? relatedRef : dealRef;
+  try {
+    await apiClient.post('/relationships/unlink', {
+      relationshipKey: group.key,
+      source,
+      target
+    });
+    invalidateRecordContext('SALES', 'deals', record._id);
+    await loadDealRecordContext(true);
+  } catch (err) {
+    console.error('Error unlinking related record:', err);
+    alert('Error unlinking record. Please try again.');
+  }
+};
+
+const dealRecordAdapter = computed(() => createDealRecordAdapter({
+  formatDate,
+  moduleDefinition: dealModuleDefinition,
+  participantPersonName,
+  participantOrgName,
+  participantRoleLabel,
+  allPeople,
+  allOrgs,
+  canEditDetails: () => authStore.can('deals', 'edit'),
+  saveDetailField: handleDealDetailFieldSave,
+  openDetailFieldEditor: openDealDetailFieldEditor,
+  openCreateEvent,
+  getRelatedGroups: getDealRelatedGroups,
+  openRelatedItem: openDealRelatedItem,
+  canUnlinkRelated: () => canLinkRecords.value,
+  onUnlinkRelated: handleUnlinkDealRelated,
+  canLinkRecords: canLinkRecords.value,
+  openLinkRecordDrawer: () => {
+    showLinkRecordDrawer.value = true;
+  },
+  handleDescriptionSave: handleDealDescriptionSave,
+  canEditDescription: true,
+  canViewDescriptionHistory: () => true,
+  openDescriptionHistory,
+  expandedLeftSection,
+  openLeftSection
+}));
+
+const dealStateFields = computed(() => {
+  const fields = dealRecordAdapter.value.getStateFields?.(deal.value, dealSectionContext.value);
+  if (!Array.isArray(fields)) return [];
+  return fields.map((field) => {
+    if (!SLOT_RENDERED_KEY_FIELDS.has(field?.key)) return field;
+    return {
+      ...field,
+      canEdit: false
+    };
+  });
+});
+
+const selectedDealOwnerId = computed(() => {
+  const owner = deal.value?.ownerId;
+  if (!owner) return null;
+  if (typeof owner === 'object') return owner._id || owner.id || null;
+  return owner;
+});
+
+const selectedDealOrganizationId = computed(() => {
+  const organization = deal.value?.accountId;
+  if (!organization) return null;
+  if (typeof organization === 'object') return organization._id || organization.id || null;
+  return organization;
+});
+
+const selectedDealContactId = computed(() => {
+  const contact = deal.value?.contactId;
+  if (!contact) return null;
+  if (typeof contact === 'object') return contact._id || contact.id || null;
+  return contact;
+});
+
+const dealStageField = computed(() => dealStateFields.value.find((field) => field?.key === 'stage') || null);
+
+const dealStageOptions = computed(() => {
+  const options = Array.isArray(dealStageField.value?.options) ? dealStageField.value.options : [];
+  return options.map((option) => ({
+    value: option?.value,
+    label: String(option?.label ?? option?.value ?? ''),
+    color: option?.color || null
+  })).filter((option) => option.value != null && option.label);
+});
+
+const canEditDealStage = computed(() => authStore.can('deals', 'edit') && dealStageOptions.value.length > 0);
+const canEditDealKeyFields = computed(() => authStore.can('deals', 'edit'));
+const canInlineEditDealOwner = computed(() => canEditDealKeyFields.value && dealUsers.value.length > 0);
+const dealOrganizationOptions = computed(() => {
+  const merged = [];
+  const seen = new Set();
+
+  const addOrganization = (organization) => {
+    if (!organization || typeof organization !== 'object') return;
+    const id = organization._id || organization.id;
+    if (!id) return;
+    const normalizedId = String(id);
+    if (seen.has(normalizedId)) return;
+    seen.add(normalizedId);
+    merged.push({
+      _id: normalizedId,
+      name: organization.name || organization.title || 'Unnamed organization'
+    });
+  };
+
+  for (const organization of dealOrganizationsList.value) {
+    addOrganization(organization);
+  }
+
+  if (deal.value?.accountId && typeof deal.value.accountId === 'object') {
+    addOrganization(deal.value.accountId);
+  }
+
+  const relations = Array.isArray(deal.value?.dealOrganizations) ? deal.value.dealOrganizations : [];
+  for (const relation of relations) {
+    if (relation?.organizationId && typeof relation.organizationId === 'object') {
+      addOrganization(relation.organizationId);
+    }
+  }
+
+  return merged;
+});
+const canInlineEditDealOrganization = computed(() => canEditDealKeyFields.value && dealOrganizationOptions.value.length > 0);
+
+const dealPeopleOptions = computed(() => {
+  const merged = [];
+  const seen = new Set();
+
+  const addPerson = (person) => {
+    if (!person || typeof person !== 'object') return;
+    const id = person._id || person.id;
+    if (!id) return;
+    const normalizedId = String(id);
+    if (seen.has(normalizedId)) return;
+    seen.add(normalizedId);
+    const first = person.firstName || person.first_name || '';
+    const last = person.lastName || person.last_name || '';
+    const name = [first, last].filter(Boolean).join(' ').trim() || person.email || person.name || 'Unnamed';
+    merged.push({ _id: normalizedId, name });
+  };
+
+  for (const person of dealPeopleList.value) {
+    addPerson(person);
+  }
+  if (deal.value?.contactId && typeof deal.value.contactId === 'object') {
+    addPerson(deal.value.contactId);
+  }
+  const relations = Array.isArray(deal.value?.dealPeople) ? deal.value.dealPeople : [];
+  for (const relation of relations) {
+    if (relation?.personId && typeof relation.personId === 'object') {
+      addPerson(relation.personId);
+    }
+  }
+  return merged;
+});
+const canInlineEditDealContact = computed(() => canEditDealKeyFields.value && dealPeopleOptions.value.length > 0);
+
+const dealStateValues = computed(() => {
+  const values = dealRecordAdapter.value.getStateValues?.(deal.value, dealSectionContext.value);
+  return values && typeof values === 'object' ? values : {};
+});
+
+const findDealStageOption = (stageValue) => {
+  const lookup = String(stageValue || '').trim();
+  if (!lookup) return null;
+  return dealStageOptions.value.find((option) => String(option.value) === lookup) || null;
+};
+
+const formatDealStage = (stageValue) => {
+  const configured = findDealStageOption(stageValue);
+  if (configured?.label) return configured.label;
+  return stageValue || null;
+};
+
+const hexToRgb = (hex) => {
+  const normalized = String(hex || '').trim().replace('#', '');
+  if (!/^[0-9a-fA-F]{3,8}$/.test(normalized)) return null;
+
+  if (normalized.length === 3) {
+    const [r, g, b] = normalized.split('').map((char) => parseInt(char + char, 16));
+    return { r, g, b };
+  }
+
+  if (normalized.length >= 6) {
+    return {
+      r: parseInt(normalized.slice(0, 2), 16),
+      g: parseInt(normalized.slice(2, 4), 16),
+      b: parseInt(normalized.slice(4, 6), 16)
+    };
+  }
+
+  return null;
+};
+
+const getStageTextColor = (bgColor) => {
+  const rgb = hexToRgb(bgColor);
+  if (!rgb) return '#ffffff';
+  const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+  return luminance > 0.62 ? '#111827' : '#ffffff';
+};
+
+const getStagePillClass = (stageValue) => {
+  const configured = findDealStageOption(stageValue);
+  if (configured?.color) return '';
+  return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-100';
+};
+
+const getStagePillDividerClass = (stageValue) => {
+  const configured = findDealStageOption(stageValue);
+  if (configured?.color) return '';
+  return 'border-gray-300 dark:border-gray-500';
+};
+
+const getStagePillStyle = (stageValue) => {
+  const configured = findDealStageOption(stageValue);
+  if (!configured?.color) return null;
+  return {
+    backgroundColor: configured.color,
+    color: getStageTextColor(configured.color)
+  };
+};
+
+const getStagePillDividerStyle = (stageValue) => {
+  const configured = findDealStageOption(stageValue);
+  if (!configured?.color) return null;
+  const textColor = getStageTextColor(configured.color);
+  return {
+    borderColor: textColor === '#111827' ? 'rgba(17, 24, 39, 0.28)' : 'rgba(255, 255, 255, 0.35)'
+  };
+};
+
+const handleDealStageSave = async (stageValue) => {
+  await handleDealDetailFieldSave('stage', stageValue);
+};
+
+const formatDealAmount = (amountValue) => {
+  if (amountValue == null || amountValue === '') return null;
+  const numericValue = Number(amountValue);
+  if (!Number.isFinite(numericValue)) return String(amountValue);
+  return `$${numericValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+};
+
+const formatDealProbability = (probabilityValue) => {
+  if (probabilityValue == null || probabilityValue === '') return null;
+  const numericValue = Number(probabilityValue);
+  if (!Number.isFinite(numericValue)) return String(probabilityValue);
+  return `${Math.round(numericValue)}%`;
+};
+
+const formatDealCloseDate = (dateValue) => {
+  if (!dateValue) return null;
+  return formatDate(dateValue);
+};
+
+const formatDealOwnerName = (dealValue) => {
+  const owner = dealValue?.ownerId;
+  if (!owner) return null;
+  if (typeof owner === 'string') return owner;
+  return [owner.firstName, owner.lastName].filter(Boolean).join(' ') || owner.email || null;
+};
+
+const getDealUserDisplayName = (user) => {
+  if (!user) return 'Unknown user';
+  return [user.firstName || user.first_name, user.lastName || user.last_name].filter(Boolean).join(' ')
+    || user.email
+    || user.username
+    || 'Unknown user';
+};
+
+const dealOwnerAvatarUser = computed(() => {
+  const owner = deal.value?.ownerId;
+  if (!owner || typeof owner !== 'object') return null;
+  return {
+    firstName: owner.firstName || owner.first_name || '',
+    lastName: owner.lastName || owner.last_name || '',
+    email: owner.email || '',
+    avatar: owner.avatar || ''
+  };
+});
+
+const formatDealOrganizationName = (dealValue) => {
+  const organization = dealValue?.accountId;
+  if (!organization) return null;
+  if (typeof organization === 'string') return organization;
+  return organization.name || null;
+};
+
+const formatDealContactName = (dealValue) => {
+  const contact = dealValue?.contactId;
+  if (!contact) return null;
+  if (typeof contact === 'string') {
+    const option = dealPeopleOptions.value.find((p) => String(p._id) === contact);
+    return option?.name ?? null;
+  }
+  const first = contact.firstName || contact.first_name || '';
+  const last = contact.lastName || contact.last_name || '';
+  const name = [first, last].filter(Boolean).join(' ').trim();
+  return name || contact.name || contact.email || null;
+};
+
+const syncInlineKeyFieldEditors = () => {
+  localAmount.value = deal.value?.amount != null ? String(deal.value.amount) : '';
+  localProbability.value = deal.value?.probability != null ? String(deal.value.probability) : '';
+  localExpectedCloseDate.value = deal.value?.expectedCloseDate
+    ? String(deal.value.expectedCloseDate).slice(0, 10)
+    : '';
+};
+
+watch(deal, () => {
+  if (!isEditingAmount.value && !isEditingProbability.value && !isEditingExpectedCloseDate.value) {
+    syncInlineKeyFieldEditors();
+  }
+}, { immediate: true });
+
+const startAmountEdit = async () => {
+  if (!canEditDealKeyFields.value) return;
+  isEditingAmount.value = true;
+  localAmount.value = deal.value?.amount != null ? String(deal.value.amount) : '';
+  await nextTick();
+  amountInputRef.value?.focus?.();
+};
+
+const handleAmountCancel = () => {
+  localAmount.value = deal.value?.amount != null ? String(deal.value.amount) : '';
+  isEditingAmount.value = false;
+};
+
+const handleAmountBlur = async () => {
+  if (!isEditingAmount.value) return;
+  const trimmed = String(localAmount.value || '').trim();
+  const nextValue = trimmed === '' ? null : Number(trimmed);
+  if (trimmed !== '' && !Number.isFinite(nextValue)) {
+    handleAmountCancel();
+    return;
+  }
+  await handleDealDetailFieldSave('amount', nextValue);
+  isEditingAmount.value = false;
+};
+
+const startProbabilityEdit = async () => {
+  if (!canEditDealKeyFields.value) return;
+  isEditingProbability.value = true;
+  localProbability.value = deal.value?.probability != null ? String(deal.value.probability) : '';
+  await nextTick();
+  probabilityInputRef.value?.focus?.();
+};
+
+const handleProbabilityCancel = () => {
+  localProbability.value = deal.value?.probability != null ? String(deal.value.probability) : '';
+  isEditingProbability.value = false;
+};
+
+const handleProbabilityBlur = async () => {
+  if (!isEditingProbability.value) return;
+  const trimmed = String(localProbability.value || '').trim();
+  if (trimmed === '') {
+    await handleDealDetailFieldSave('probability', null);
+    isEditingProbability.value = false;
+    return;
+  }
+  const numericValue = Number(trimmed);
+  if (!Number.isFinite(numericValue)) {
+    handleProbabilityCancel();
+    return;
+  }
+  const clampedValue = Math.min(100, Math.max(0, Math.round(numericValue)));
+  await handleDealDetailFieldSave('probability', clampedValue);
+  isEditingProbability.value = false;
+};
+
+const startExpectedCloseDateEdit = async () => {
+  if (!canEditDealKeyFields.value) return;
+  isEditingExpectedCloseDate.value = true;
+  localExpectedCloseDate.value = deal.value?.expectedCloseDate
+    ? String(deal.value.expectedCloseDate).slice(0, 10)
+    : '';
+  await nextTick();
+  expectedCloseDateInputRef.value?.focus?.();
+};
+
+const handleExpectedCloseDateCancel = () => {
+  localExpectedCloseDate.value = deal.value?.expectedCloseDate
+    ? String(deal.value.expectedCloseDate).slice(0, 10)
+    : '';
+  isEditingExpectedCloseDate.value = false;
+};
+
+const handleExpectedCloseDateBlur = async () => {
+  if (!isEditingExpectedCloseDate.value) return;
+  const trimmed = String(localExpectedCloseDate.value || '').trim();
+  await handleDealDetailFieldSave('expectedCloseDate', trimmed || null);
+  isEditingExpectedCloseDate.value = false;
+};
+
+/** Section keys that are part of the left-column SectionStack (not full-page views like description-history). */
+const DEAL_STACK_SECTION_KEYS = ['description', 'details', 'stage-history', 'related'];
+
+const shouldRenderDealSectionStack = computed(() => {
+  const sectionKey = expandedLeftSection.value;
+  if (!sectionKey) return true;
+  return DEAL_STACK_SECTION_KEYS.includes(sectionKey);
+});
+
+const dealSections = computed(() => dealRecordAdapter.value.getSections());
+
+const isDealDetailRoute = () => {
+  if (route.name === 'deal-detail') return true;
+  return typeof route.path === 'string' && route.path.startsWith('/deals/');
+};
+
+const primaryContact = computed(() => {
+  if (!deal.value) return null;
+  if (deal.value.dealPeople && Array.isArray(deal.value.dealPeople)) {
+    const primary = deal.value.dealPeople.find(
+      (p) => p.isPrimary && p.isActive && p.role === 'primary_contact' && p.personId
+    );
+    if (primary && primary.personId) {
+      return typeof primary.personId === 'object' ? primary.personId : null;
+    }
+  }
+  if (deal.value.contactId) {
+    return typeof deal.value.contactId === 'object' ? deal.value.contactId : null;
+  }
+  return null;
+});
+
+const primaryCustomer = computed(() => {
+  if (!deal.value) return null;
+  if (deal.value.dealOrganizations && Array.isArray(deal.value.dealOrganizations)) {
+    const primary = deal.value.dealOrganizations.find(
+      (o) => o.isPrimary && o.isActive && o.role === 'customer' && o.organizationId
+    );
+    if (primary && primary.organizationId) {
+      return typeof primary.organizationId === 'object' ? primary.organizationId : null;
+    }
+  }
+  if (deal.value.accountId) {
+    return typeof deal.value.accountId === 'object' ? deal.value.accountId : null;
+  }
+  return null;
+});
+
+const allPeople = computed(() => {
+  if (!deal.value?.dealPeople || !Array.isArray(deal.value.dealPeople)) return [];
+  return deal.value.dealPeople.filter((p) => p.personId);
+});
+
+const allOrgs = computed(() => {
+  if (!deal.value?.dealOrganizations || !Array.isArray(deal.value.dealOrganizations)) return [];
+  return deal.value.dealOrganizations.filter((o) => o.organizationId);
+});
+
+const hasMultipleParticipants = computed(() => allPeople.value.length > 1 || allOrgs.value.length > 1);
+
+const weightedAmount = computed(() => {
+  const amount = Number(deal.value?.amount || 0);
+  const probability = Number(deal.value?.probability || 0);
+  return Math.round((amount * probability) / 100);
+});
+
+const commentEvents = computed(() => {
+  return (comments.value || []).map((comment) => normalizeCommentActivityEvent({
+    ...comment,
+    recordRef: {
+      module: 'deals',
+      id: String(deal.value?._id || '')
+    }
+  }));
+});
+
+const systemEvents = computed(() => {
+  return (activityLogs.value || []).flatMap((log) => {
+    const fields = Array.isArray(log?.details?.fields)
+      ? log.details.fields.map((field) => String(field || '').trim()).filter(Boolean)
+      : [];
+
+    if (!log?.details?.field && fields.length > 0) {
+      const hasFieldDiffMap = Boolean(log?.details?.fromByField && log?.details?.toByField);
+      if (!hasFieldDiffMap) {
+        return [];
+      }
+
+      return fields
+        .filter((field) => log?.details?.fromByField?.[field] != null || log?.details?.toByField?.[field] != null)
+        .map((field, index) => {
+        const normalized = {
+          ...log,
+          _id: `${String(log?._id || log?.id || log?.timestamp || Date.now())}-${index}`,
+          action: 'field_changed',
+          details: {
+            ...(log?.details || {}),
+            field,
+            fieldLabel: toReadableFieldLabel(field),
+            from: log?.details?.fromByField?.[field] ?? 'Empty',
+            to: log?.details?.toByField?.[field] ?? 'Empty'
+          }
+        };
+
+        return normalizeSystemActivityEvent(normalized, {
+          message: formatActivityLog(normalized),
+          recordRef: {
+            module: 'deals',
+            id: String(deal.value?._id || '')
+          },
+          source: normalized?.user || normalized?.userId ? 'user' : 'system'
+        });
+      });
+    }
+
+    let descriptionDiffHtml = null;
+    let message = formatActivityLog(log);
+    if (log?.action === 'field_changed' && String(log?.details?.field || '').toLowerCase() === 'description') {
+      const fromPlain = getPlainTextFromHtml(log?.details?.from ?? log?.details?.oldValue ?? '');
+      const toPlain = getPlainTextFromHtml(log?.details?.to ?? log?.details?.newValue ?? '');
+      const descActor = (String(authStore?.user?._id || '') && log?.userId != null && String(log.userId) === String(authStore?.user?._id || '')) ? 'You' : (log?.user || 'Someone');
+      message = `${descActor} changed description`;
+      descriptionDiffHtml = DOMPurify.sanitize(diffWordsToHtml(fromPlain, toPlain), {
+        ALLOWED_TAGS: ['ins', 'del'],
+        ALLOWED_ATTR: ['class']
+      });
+    }
+
+    return [normalizeSystemActivityEvent(log, {
+      message,
+      descriptionDiffHtml,
+      recordRef: {
+        module: 'deals',
+        id: String(deal.value?._id || '')
+      },
+      source: log?.user || log?.userId ? 'user' : 'system'
+    })];
+  });
+});
+
+const emailThreadEvents = computed(() => {
+  return (emailThreads.value || []).map((thread) => normalizeEmailThreadActivityEvent({
+    ...thread,
+    recordRef: {
+      module: 'deals',
+      id: String(deal.value?._id || '')
+    },
+    source: 'integration'
+  }));
+});
+
+const activityTimelineEvents = computed(() => {
+  return sortActivityEventsByDate([
+    ...commentEvents.value,
+    ...systemEvents.value,
+    ...emailThreadEvents.value
+  ]);
+});
+
+const getCommentEventId = (event) => String(event?.id || event?._id || event?.commentId || '');
+
+const getParentCommentId = (event) => {
+  const rawParentId = event?.parentCommentId;
+  if (!rawParentId) return '';
+  if (typeof rawParentId === 'object') {
+    return String(rawParentId._id || rawParentId.id || '');
+  }
+  return String(rawParentId);
+};
+
+const commentActivityEvents = computed(() => (
+  activityTimelineEvents.value.filter((event) => event.type === 'comment')
+));
+
+const commentEventsById = computed(() => {
+  const map = new Map();
+  commentActivityEvents.value.forEach((event) => {
+    const id = getCommentEventId(event);
+    if (id) map.set(id, event);
+  });
+  return map;
+});
+
+const activeThreadRootComment = computed(() => {
+  if (!activeThreadRootCommentId.value) return null;
+  return commentEventsById.value.get(String(activeThreadRootCommentId.value)) || null;
+});
+
+const threadReplyEvents = computed(() => {
+  if (!activeThreadRootCommentId.value) return [];
+  const rootId = String(activeThreadRootCommentId.value);
+  return commentActivityEvents.value
+    .filter((event) => getParentCommentId(event) === rootId)
+    .sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateA - dateB;
+    });
+});
+
+const threadReplyCount = computed(() => threadReplyEvents.value.length);
+const isThreadViewActive = computed(() => Boolean(activeThreadRootCommentId.value && activeThreadRootComment.value));
+
+const commentThreadRepliesByRootId = computed(() => {
+  const map = new Map();
+  commentActivityEvents.value.forEach((event) => {
+    const eventId = getCommentEventId(event);
+    if (!eventId) return;
+    const parentId = getParentCommentId(event);
+    if (!parentId || parentId === eventId) return;
+    const bucket = map.get(parentId) || [];
+    bucket.push(event);
+    map.set(parentId, bucket);
+  });
+
+  map.forEach((events, rootId) => {
+    events.sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateA - dateB;
+    });
+    map.set(rootId, events);
+  });
+
+  return map;
+});
+
+const filteredActivityTimelineEvents = computed(() => {
+  const q = (activitySearchQuery.value || '').trim().toLowerCase();
+  return activityTimelineEvents.value.filter((event) => {
+    if (event.type === 'comment') {
+      if (!activityFilterComments.value) return false;
+      if (!q && getParentCommentId(event)) return false;
+    }
+    if (event.type === 'system' && !activityFilterUpdates.value) return false;
+    if (event.type === 'email_thread' && !activityFilterEmail.value) return false;
+
+    if (!q) return true;
+    if (event.type === 'comment') {
+      if (getParentCommentId(event)) return false;
+      const content = String(event.content || event.text || '').toLowerCase();
+      const author = String(eventAuthorName(event) || '').toLowerCase();
+      return content.includes(q) || author.includes(q);
+    }
+    if (event.type === 'system') {
+      return String(event.message || '').toLowerCase().includes(q);
+    }
+    return true;
+  });
+});
+
+const activitySectionEvents = computed(() => {
+  if (!isThreadViewActive.value || !activeThreadRootComment.value) {
+    return filteredActivityTimelineEvents.value;
+  }
+  return [activeThreadRootComment.value, ...threadReplyEvents.value];
+});
+
+const currentUserId = computed(() => String(authStore?.user?._id || ''));
+
+const loadActivityFilter = () => {
+  try {
+    const raw = localStorage.getItem(ACTIVITY_FILTER_STORAGE_KEY);
+    if (!raw) return { comments: true, updates: true, email: true };
+    const parsed = JSON.parse(raw);
+    return {
+      comments: parsed?.comments !== false,
+      updates: parsed?.updates !== false,
+      email: parsed?.email !== false
+    };
+  } catch {
+    return { comments: true, updates: true, email: true };
+  }
+};
+
+const personRoleLabels = {
+  primary_contact: 'Primary contact',
+  decision_maker: 'Decision maker',
+  influencer: 'Influencer',
+  partner_contact: 'Partner contact'
+};
+const orgRoleLabels = { customer: 'Customer', partner: 'Partner', reseller: 'Reseller' };
+
+function participantPersonName(entry) {
+  const p = entry.personId;
+  if (!p) return '—';
+  const o = typeof p === 'object' ? p : null;
+  if (o) return [o.first_name, o.last_name].filter(Boolean).join(' ') || o.email || '—';
+  return '—';
+}
+
+function participantOrgName(entry) {
+  const o = entry.organizationId;
+  if (!o) return '—';
+  const obj = typeof o === 'object' ? o : null;
+  return obj?.name || '—';
+}
+
+function participantRoleLabel(role, kind) {
+  if (kind === 'person') return personRoleLabels[role] || role;
+  return orgRoleLabels[role] || role;
+}
+
+const formatActivityLog = (log) => {
+  const currentId = String(authStore?.user?._id || authStore?.user?.id || '');
+  const logUserId = log?.userId != null ? String(log.userId) : '';
+  const actor = (currentId && logUserId && currentId === logUserId) ? 'You' : (log?.user || 'Someone');
+  const action = log?.action || 'updated this deal';
+  const details = log?.details || {};
+
+  if (log?.details?.field) {
+    const fromValue = log.details?.from ?? log.details?.oldValue ?? '—';
+    const toValue = log.details?.to ?? log.details?.newValue ?? '—';
+    return `${actor} changed ${log.details.field} from "${fromValue}" to "${toValue}"`;
+  }
+  if (Array.isArray(log?.details?.fields) && log.details.fields.length > 0) {
+    const fields = log.details.fields
+      .map((field) => String(field || '').trim())
+      .filter(Boolean)
+      .join(', ');
+    return `${actor} updated ${fields}`;
+  }
+
+  const relatedModuleLabel = (rawModuleKey) => {
+    const key = String(rawModuleKey || '').toLowerCase();
+    const map = { project: 'project', projects: 'project', event: 'event', events: 'event', deal: 'deal', deals: 'deal', form: 'form', forms: 'form', task: 'task', tasks: 'task' };
+    return map[key] || 'record';
+  };
+  const relatedPart = (d) => {
+    const label = d?.relatedRecordLabel && String(d.relatedRecordLabel).trim();
+    const id = String(d?.relatedRecordId || d?.recordId || '').trim();
+    if (label) return ` "${label}"`;
+    if (id) return ` (${id.slice(-8)})`;
+    return '';
+  };
+
+  if (action === 'record_linked') {
+    const moduleLabel = relatedModuleLabel(details.relatedModuleKey || details.moduleKey);
+    return `${actor} linked a ${moduleLabel}${relatedPart(details)}`;
+  }
+  if (action === 'record_unlinked') {
+    const moduleLabel = relatedModuleLabel(details.relatedModuleKey || details.moduleKey);
+    return `${actor} unlinked a ${moduleLabel}${relatedPart(details)}`;
+  }
+
+  return `${actor} ${action}`;
+};
+
+const fetchActivityLogs = async () => {
+  if (!effectiveDealId.value) {
+    activityLogs.value = [];
+    return;
+  }
+  try {
+    const res = await apiClient.get(`/deals/${effectiveDealId.value}/activity-logs`);
+    activityLogs.value = Array.isArray(res?.data) ? res.data : [];
+  } catch {
+    activityLogs.value = [];
+  }
+};
+
+const fetchComments = async () => {
+  if (!effectiveDealId.value) {
+    comments.value = [];
+    return;
+  }
+  try {
+    const res = await apiClient.get(`/deals/${effectiveDealId.value}/comments`);
+    comments.value = Array.isArray(res?.data) ? res.data : [];
+  } catch (err) {
+    if (err.status !== 404 && !err.is404) {
+      console.error('Error fetching deal comments:', err);
+    }
+    comments.value = [];
+  }
+};
+
+const fetchEmailThreads = async () => {
+  if (!effectiveDealId.value) {
+    emailThreads.value = [];
+    return;
+  }
+
+  try {
+    const response = await apiClient.get('/communications/threads', {
+      params: {
+        moduleKey: 'deals',
+        recordId: effectiveDealId.value
+      }
+    });
+
+    if (response?.success && response?.data?.threads?.length) {
+      emailThreads.value = response.data.threads;
+    } else {
+      emailThreads.value = [];
+    }
+  } catch {
+    emailThreads.value = [];
+  }
+};
+
+const fetchDealNavigationIds = async () => {
+  if (!effectiveDealId.value || props.embed) {
+    dealNavigationIds.value = [];
+    return;
+  }
+
+  const currentId = String(effectiveDealId.value);
+  const navToken = dealNavigationContextToken.value;
+  if (navToken) {
+    try {
+      const raw = sessionStorage.getItem(`${DEAL_NAV_CONTEXT_STORAGE_PREFIX}${navToken}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const contextIds = Array.isArray(parsed?.ids)
+          ? parsed.ids.map((id) => String(id || '').trim()).filter(Boolean)
+          : [];
+        if (contextIds.includes(currentId)) {
+          // Keep existing list when navigating within same list (prevents overwriting with a smaller list)
+          const existing = dealNavigationIds.value;
+          if (Array.isArray(existing) && existing.length > 0 && existing.includes(currentId)) {
+            return;
+          }
+          dealNavigationIds.value = contextIds;
+          return;
+        }
+      }
+    } catch {
+    }
+  }
+
+  try {
+    const response = await apiClient.get('/deals', {
+      params: {
+        page: 1,
+        limit: 500,
+        sortBy: 'updatedAt',
+        sortOrder: 'desc'
+      }
+    });
+
+    const rows = Array.isArray(response?.data)
+      ? response.data
+      : Array.isArray(response)
+        ? response
+        : [];
+
+    const ids = rows
+      .map((entry) => String(entry?._id || entry?.id || '').trim())
+      .filter(Boolean);
+
+    if (ids.includes(currentId)) {
+      dealNavigationIds.value = ids;
+      return;
+    }
+
+    dealNavigationIds.value = [currentId];
+  } catch {
+    dealNavigationIds.value = [currentId];
+  }
+};
+
+const fetchDealUsers = async () => {
+  try {
+    const response = await apiClient.get('/users/list');
+    if (response?.success && Array.isArray(response.data)) {
+      dealUsers.value = response.data;
+      return;
+    }
+    if (Array.isArray(response)) {
+      dealUsers.value = response;
+      return;
+    }
+    dealUsers.value = [];
+  } catch (err) {
+    console.error('Error fetching users for deal key fields:', err);
+    dealUsers.value = [];
+  }
+};
+
+const fetchDealOrganizations = async () => {
+  try {
+    const normalizeCandidates = (response) => {
+      if (Array.isArray(response)) return response;
+      const candidates = [
+        response?.data,
+        response?.data?.data,
+        response?.data?.items,
+        response?.data?.rows,
+        response?.organizations,
+        response?.data?.organizations
+      ];
+      for (const candidate of candidates) {
+        if (Array.isArray(candidate)) return candidate;
+      }
+      return [];
+    };
+
+    const primary = await apiClient.get('/v2/organization', {
+      params: {
+        page: 1,
+        limit: 200,
+        sortBy: 'name',
+        sortOrder: 'asc'
+      }
+    });
+
+    const primaryList = normalizeCandidates(primary);
+    if (primaryList.length > 0) {
+      dealOrganizationsList.value = primaryList;
+      return;
+    }
+
+    const fallback = await apiClient.get('/organization');
+    dealOrganizationsList.value = normalizeCandidates(fallback);
+  } catch (err) {
+    console.error('Error fetching organizations for deal key fields:', err);
+    dealOrganizationsList.value = [];
+  }
+};
+
+const fetchDealPeople = async () => {
+  try {
+    const normalizeCandidates = (response) => {
+      if (Array.isArray(response)) return response;
+      const candidates = [
+        response?.data,
+        response?.data?.data,
+        response?.data?.items,
+        response?.data?.rows,
+        response?.people,
+        response?.data?.people
+      ];
+      for (const candidate of candidates) {
+        if (Array.isArray(candidate)) return candidate;
+      }
+      return [];
+    };
+    const response = await apiClient.get('/people', { params: { limit: 200, sortBy: 'firstName', sortOrder: 'asc' } });
+    dealPeopleList.value = normalizeCandidates(response);
+  } catch (err) {
+    console.error('Error fetching people for deal key fields:', err);
+    dealPeopleList.value = [];
+  }
+};
+
+const fetchDealModuleDefinition = async () => {
+  try {
+    const response = await apiClient.get('/modules');
+    const modules = Array.isArray(response)
+      ? response
+      : Array.isArray(response?.data)
+        ? response.data
+        : Array.isArray(response?.data?.data)
+          ? response.data.data
+          : Array.isArray(response?.modules)
+            ? response.modules
+            : Array.isArray(response?.data?.modules)
+              ? response.data.modules
+              : [];
+    const dealsModule = modules.find(module => String(module?.key || '').toLowerCase() === 'deals');
+    dealModuleDefinition.value = dealsModule || null;
+  } catch (err) {
+    console.error('Error fetching deal module definition:', err);
+    dealModuleDefinition.value = null;
+  }
+};
+
+const fetchDeal = async () => {
+  // Only show full-page loading when we have no deal yet (initial load). When navigating
+  // prev/next, keep the current layout mounted so content doesn’t jump below the header.
+  if (!deal.value) loading.value = true;
+  error.value = null;
+  activeThreadRootCommentId.value = null;
+  cancelEditNote();
+  try {
+    if (!effectiveDealId.value) {
+      error.value = 'Deal not found or access denied.';
+      return;
+    }
+    const data = await apiClient.get(`/deals/${effectiveDealId.value}`);
+    if (data.success) {
+      deal.value = data.data;
+    }
+    await Promise.all([
+      fetchActivityLogs(),
+      fetchComments(),
+      fetchEmailThreads(),
+      fetchDealNavigationIds(),
+      fetchDealModuleDefinition(),
+      fetchDealUsers(),
+      fetchDealOrganizations(),
+      fetchDealPeople()
+    ]);
+  } catch (err) {
+    if (err?.status === 404 || err?.is404) {
+      error.value = err?.response?.data?.message || err?.message || 'Deal not found or access denied.';
+    } else {
+      error.value = err?.message || 'Failed to load deal';
+    }
+  } finally {
+    loading.value = false;
+  }
+};
+
+const formatDate = (date) => {
+  if (!date) return '-';
+  return new Date(date).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+};
+
+const formatTimeAgo = (date) => {
+  if (!date) return '';
+  const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+  if (seconds < 60) return `${seconds} secs ago`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} mins ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`;
+  return `${Math.floor(seconds / 86400)} days ago`;
+};
+
+const handleEmailSubmit = async (payload) => {
+  showEmailModal.value = false;
+  try {
+    const res = await apiClient.post('/communications/email', payload);
+    if (res.success) {
+      fetchDeal();
+    } else {
+      alert(res.message || 'Failed to send email');
+    }
+  } catch (err) {
+    const msg = err.response?.data?.error || err.response?.data?.message || err.message;
+    alert(msg || 'Failed to send email');
+  }
+};
+
+const toggleTaskEmailThread = async (threadId) => {
+  const next = new Set(expandedTaskEmailThreads.value);
+  if (next.has(threadId)) {
+    next.delete(threadId);
+  } else {
+    next.add(threadId);
+    const thread = emailThreads.value?.find((t) => t.threadId === threadId);
+    if (thread?.unread) {
+      try {
+        await apiClient.patch(`/communications/threads/${encodeURIComponent(threadId)}/view`, {});
+        emailThreads.value = emailThreads.value.map((t) => (
+          t.threadId === threadId ? { ...t, unread: false } : t
+        ));
+      } catch {
+      }
+    }
+  }
+  expandedTaskEmailThreads.value = next;
+};
+
+const createTaskFromEmailMessage = async (msg) => {
+  if (!msg?._id) return;
+  try {
+    const res = await apiClient.post(`/communications/${msg._id}/create-task`, {});
+    if (res?.success && res?.data?.taskId) {
+      window.open(`/tasks/${res.data.taskId}`, '_blank');
+    }
+  } catch (err) {
+    alert(err.response?.data?.message || err.message || 'Failed to create task');
+  }
+};
+
+const handleDealUpdated = () => {
+  showEditModal.value = false;
+  fetchDeal();
+};
+
+const handleCopyUrl = async () => {
+  try {
+    await navigator.clipboard.writeText(window.location.href);
+  } catch {
+    alert('Failed to copy URL');
+  }
+};
+
+const handleDuplicate = () => {
+  alert('Duplicate action is not implemented yet for deals.');
+};
+
+const handleExport = () => {
+  alert('Export action is not implemented yet for deals.');
+};
+
+const confirmDeleteDeal = async () => {
+  if (!deal.value?._id || deleting.value) return;
+  deleting.value = true;
+  try {
+    await apiClient.delete(`/deals/${effectiveDealId.value}`);
+    showDeleteModal.value = false;
+    router.push('/deals');
+  } catch {
+    alert('Failed to delete deal');
+  } finally {
+    deleting.value = false;
+  }
+};
+
+const addComment = async (content = '', attachments = [], parentCommentId = null) => {
+  if (!content.trim() && (!attachments || attachments.length === 0)) return;
+  try {
+    const response = await apiClient.post(`/deals/${effectiveDealId.value}/comments`, {
+      content: content.trim(),
+      attachments: attachments || [],
+      parentCommentId: parentCommentId || null
+    });
+    if (response.success) {
+      await fetchComments();
+    }
+  } catch (err) {
+    console.error('Failed to add comment:', err);
+    alert('Failed to add comment');
+  }
+};
+
+const handleAddComment = async (payload) => {
+  const content = typeof payload === 'string'
+    ? payload.trim()
+    : String(payload?.content || '').trim();
+  if (!content) return;
+  await addComment(content, [], isThreadViewActive.value ? activeThreadRootCommentId.value : null);
+  newCommentText.value = '';
+  if (activityTimelineRef.value?.scrollToBottom) {
+    activityTimelineRef.value.scrollToBottom();
+  }
+};
+
+const eventAuthorName = (event) => {
+  const author = event?.author;
+  if (!author) return 'Unknown user';
+  if (typeof author === 'string') return author;
+  return [author.firstName, author.lastName].filter(Boolean).join(' ')
+    || [author.first_name, author.last_name].filter(Boolean).join(' ')
+    || author.email
+    || author.username
+    || 'Unknown user';
+};
+
+const canEditNote = (event) => {
+  if (!event || event.type !== 'comment') return false;
+  const author = event.author || event.actor;
+  const authorId = String(author?._id || author?.id || '');
+  return Boolean(getCommentEventId(event) && authorId && currentUserId.value && authorId === currentUserId.value);
+};
+
+const startEditNote = (event) => {
+  if (!canEditNote(event)) return;
+  editingNoteId.value = getCommentEventId(event);
+  editingNoteText.value = String(event.content || event.text || '');
+  const initialAttachments = Array.isArray(event.attachments)
+    ? event.attachments.map((attachment) => ({ ...attachment }))
+    : [];
+  editingNoteAttachments.value = initialAttachments;
+  editingNoteOriginalText.value = editingNoteText.value;
+  editingNoteOriginalAttachments.value = initialAttachments.map((attachment) => ({ ...attachment }));
+  editingNoteHasPendingFiles.value = false;
+};
+
+const cancelEditNote = () => {
+  editingNoteId.value = '';
+  editingNoteText.value = '';
+  editingNoteAttachments.value = [];
+  editingNoteOriginalText.value = '';
+  editingNoteOriginalAttachments.value = [];
+  editingNoteHasPendingFiles.value = false;
+};
+
+const normalizeCommentAttachmentForCompare = (attachment) => ({
+  url: attachment?.url || '',
+  filename: attachment?.filename || attachment?.name || '',
+  size: Number(attachment?.size) || 0,
+  mimetype: attachment?.mimetype || attachment?.type || ''
+});
+
+const areCommentAttachmentListsEqual = (left, right) => {
+  if (!Array.isArray(left) || !Array.isArray(right)) return false;
+  if (left.length !== right.length) return false;
+  return left.every((attachment, idx) => {
+    const normalizedLeft = normalizeCommentAttachmentForCompare(attachment);
+    const normalizedRight = normalizeCommentAttachmentForCompare(right[idx]);
+    return normalizedLeft.url === normalizedRight.url
+      && normalizedLeft.filename === normalizedRight.filename
+      && normalizedLeft.size === normalizedRight.size
+      && normalizedLeft.mimetype === normalizedRight.mimetype;
+  });
+};
+
+const isEditingCommentDirty = computed(() => {
+  if (!editingNoteId.value) return false;
+  const textChanged = String(editingNoteText.value || '').trim() !== String(editingNoteOriginalText.value || '').trim();
+  const attachmentsChanged = !areCommentAttachmentListsEqual(editingNoteAttachments.value, editingNoteOriginalAttachments.value);
+  return textChanged || attachmentsChanged || editingNoteHasPendingFiles.value;
+});
+
+const uploadDealCommentAttachmentFile = async (file) => {
+  if (!deal.value?._id || !file) return null;
+  const token = authStore.user?.token;
+  const formData = new FormData();
+  formData.append('file', file);
+  const uploadRes = await fetch(`/api/deals/${deal.value._id}/comment-attachments`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData
+  });
+
+  if (!uploadRes.ok) {
+    const errData = await uploadRes.json().catch(() => ({}));
+    console.error('Deal comment attachment upload failed:', uploadRes.status, errData.error || errData.message || uploadRes.statusText);
+    return null;
+  }
+
+  const result = await uploadRes.json();
+  if (!result?.success || !result?.url) return null;
+  return {
+    url: result.url,
+    filename: result.originalname || file.name,
+    size: result.size ?? file.size,
+    mimetype: result.mimetype || file.type
+  };
+};
+
+const saveEditedNote = async (submitPayload) => {
+  const commentId = String(editingNoteId.value || '');
+  if (!commentId || savingEditedNote.value || !isEditingCommentDirty.value) return;
+
+  savingEditedNote.value = true;
+  try {
+    const payload = submitPayload && typeof submitPayload === 'object' ? submitPayload : {};
+    const rawContent = typeof payload?.content === 'string' ? payload.content : editingNoteText.value;
+    const content = String(rawContent || '').trim();
+    const files = Array.isArray(payload?.files) ? payload.files : [];
+    const existingAttachments = Array.isArray(payload?.existingAttachments)
+      ? payload.existingAttachments
+      : editingNoteAttachments.value;
+
+    const uploadedAttachments = [];
+    for (const file of files) {
+      const uploaded = await uploadDealCommentAttachmentFile(file);
+      if (uploaded) uploadedAttachments.push(uploaded);
+    }
+
+    const finalAttachments = [
+      ...(Array.isArray(existingAttachments) ? existingAttachments : []),
+      ...uploadedAttachments
+    ].filter((attachment) => attachment && typeof attachment.url === 'string' && typeof attachment.filename === 'string');
+
+    const finalContent = content || (finalAttachments.length > 0 ? 'Attached file(s)' : '');
+    if (!finalContent) return;
+
+    const response = await apiClient.put(`/deals/${effectiveDealId.value}/comments/${commentId}`, {
+      content: finalContent,
+      attachments: finalAttachments
+    });
+    if (response?.success) {
+      await fetchComments();
+      cancelEditNote();
+    }
+  } catch (err) {
+    console.error('Failed to update comment:', err);
+    alert('Failed to update comment');
+  } finally {
+    savingEditedNote.value = false;
+  }
+};
+
+const setEditingCommentText = (value) => {
+  editingNoteText.value = typeof value === 'string' ? value : '';
+};
+
+const setEditingCommentAttachments = (value) => {
+  editingNoteAttachments.value = Array.isArray(value) ? value : [];
+};
+
+const handleEditCommentFilesChange = (files) => {
+  editingNoteHasPendingFiles.value = Array.isArray(files) && files.length > 0;
+};
+
+const handleSaveEditCommentClick = () => {
+  saveEditedNote();
+};
+
+const closeCommentThread = () => {
+  activeThreadRootCommentId.value = null;
+};
+
+const openCommentThread = (event) => {
+  if (!event || event.type !== 'comment') return;
+  const commentId = getCommentEventId(event);
+  if (!commentId) return;
+  activeThreadRootCommentId.value = commentId;
+};
+
+const getCommentThreadReplyCount = (event) => {
+  const rootId = getCommentEventId(event);
+  if (!rootId) return 0;
+  return (commentThreadRepliesByRootId.value.get(rootId) || []).length;
+};
+
+const getCommentThreadLatestReplyAuthor = (event) => {
+  const rootId = getCommentEventId(event);
+  if (!rootId) return null;
+  const replies = commentThreadRepliesByRootId.value.get(rootId) || [];
+  const latestReply = replies[replies.length - 1];
+  return latestReply?.author || latestReply?.actor || null;
+};
+
+const formatRelativeActivityTime = (date) => formatTimeAgo(date);
+
+const formatFullTimestamp = (date) => {
+  if (!date) return '';
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toLocaleString();
+};
+
+const handleTimestampPointerUp = () => {};
+
+const getInitials = (author) => {
+  if (!author) return 'U';
+  const name = typeof author === 'string'
+    ? author
+    : ([author.firstName, author.lastName].filter(Boolean).join(' ') || [author.first_name, author.last_name].filter(Boolean).join(' ') || author.email || author.username || 'U');
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('') || 'U';
+};
+
+const getAuthorName = (author) => eventAuthorName({ author });
+
+const escapeRegExp = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const highlightSearchText = (text) => {
+  if (!text) return '';
+  const q = (activitySearchQuery.value || '').trim();
+  if (!q) return text;
+  const regex = new RegExp(`(${escapeRegExp(q)})`, 'gi');
+  return String(text).replace(regex, '<mark class="bg-yellow-200 dark:bg-yellow-800 font-semibold">$1</mark>');
+};
+
+const commentMentionsCurrentUser = (event) => {
+  const content = String(event?.content || event?.text || '').trim();
+  if (!content) return false;
+  const userId = String(authStore.user?._id || authStore.user?.id || '');
+  if (userId) {
+    const mentionByIdRegex = new RegExp(`@\\[[^\\]]+\\]\\(user:${escapeRegExp(userId)}\\)`, 'i');
+    if (mentionByIdRegex.test(content)) return true;
+  }
+  const names = [
+    [authStore.user?.firstName, authStore.user?.lastName].filter(Boolean).join(' ').trim(),
+    authStore.user?.username,
+    authStore.user?.email
+  ].filter(Boolean).map((value) => String(value).toLowerCase());
+  const normalizedContent = content.toLowerCase();
+  return names.some((name) => normalizedContent.includes(`@${name}`));
+};
+
+const getAttachmentName = (attachment) => String(attachment?.filename || attachment?.name || 'attachment');
+const getAttachmentUrl = (attachment) => String(attachment?.url || attachment?.path || '');
+const hasAttachmentUrl = (attachment) => Boolean(getAttachmentUrl(attachment));
+const isImageAttachment = (attachment) => /^image\//i.test(String(attachment?.mimetype || attachment?.type || '')) || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(getAttachmentName(attachment));
+const isSvgAttachment = (attachment) => /svg/i.test(String(attachment?.mimetype || attachment?.type || '')) || /\.svg$/i.test(getAttachmentName(attachment));
+const formatFileSize = (bytes) => {
+  const value = Number(bytes || 0);
+  if (value <= 0) return '0 B';
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+};
+const getAttachmentLabel = (attachment) => {
+  const details = [];
+  if (attachment?.mimetype) details.push(String(attachment.mimetype));
+  if (attachment?.size) details.push(formatFileSize(attachment.size));
+  return details.join(' • ') || 'Attachment';
+};
+const downloadAttachment = (attachment) => {
+  const url = getAttachmentUrl(attachment);
+  if (!url) return;
+  const link = document.createElement('a');
+  link.href = url;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.download = getAttachmentName(attachment);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+const getCommentReactions = (event) => {
+  const reactions = Array.isArray(event?.reactions) ? event.reactions : [];
+  return reactions
+    .map((reaction) => {
+      const emoji = String(reaction?.emoji || '').trim();
+      if (!emoji) return null;
+      const count = Number(reaction?.count ?? reaction?.users?.length ?? 0);
+      const reactors = Array.isArray(reaction?.reactors) ? reaction.reactors : [];
+      return { emoji, count, reactors };
+    })
+    .filter((reaction) => reaction && reaction.count > 0);
+};
+
+const hasCommentReactions = (event) => getCommentReactions(event).length > 0;
+
+const isCommentReactionSelected = (event, emoji) => {
+  const myReactions = Array.isArray(event?.myReactions) ? event.myReactions : [];
+  if (myReactions.includes(emoji)) return true;
+  const currentId = String(authStore.user?._id || authStore.user?.id || '');
+  if (!currentId) return false;
+  const reaction = getCommentReactions(event).find((entry) => entry.emoji === emoji);
+  return Array.isArray(reaction?.reactors)
+    && reaction.reactors.some((reactor) => String(reactor?.id || reactor?._id || '') === currentId);
+};
+
+const toggleCommentReaction = async (event, emoji) => {
+  const commentId = getCommentEventId(event);
+  if (!commentId || !emoji) return;
+  try {
+    const response = await apiClient.post(`/deals/${effectiveDealId.value}/comments/${commentId}/reactions`, { emoji });
+    if (response?.success) {
+      await fetchComments();
+    }
+  } catch (error) {
+    console.error('Failed to toggle deal comment reaction:', error);
+  }
+};
+
+const setCommentReactionButtonRef = () => {};
+const toggleCommentReactionPicker = (event) => toggleCommentReaction(event, '👍');
+const handleShowCommentReactionTooltip = () => {};
+const handleHideCommentReactionTooltip = () => {};
+
+const isCurrentUserById = (userId) => {
+  const currentId = String(authStore.user?._id || authStore.user?.id || '').trim();
+  const candidate = String(userId || '').trim();
+  return Boolean(currentId && candidate && currentId === candidate);
+};
+
+const isCurrentUserByName = (name) => {
+  const candidate = String(name || '').trim().toLowerCase();
+  if (!candidate) return false;
+  const fullName = [authStore.user?.firstName, authStore.user?.lastName].filter(Boolean).join(' ').trim().toLowerCase();
+  const username = String(authStore.user?.username || '').trim().toLowerCase();
+  const email = String(authStore.user?.email || '').trim().toLowerCase();
+  return Boolean(candidate && (candidate === fullName || candidate === username || candidate === email));
+};
+
+const resolveActorLabel = (name, userId) => {
+  if (isCurrentUserById(userId) || isCurrentUserByName(name)) return 'You';
+  return name || 'System';
+};
+
+const isFieldChangeSystemEvent = (event) => {
+  if (!event || event.type !== 'system') return false;
+  return event.action === 'field_changed' || event.action === 'status_changed' || Boolean(event?.details?.field || event?.payload?.details?.field);
+};
+
+const getSystemEventActorLabel = (event) => {
+  if (!event) return 'System';
+  const author = event.author;
+  if (author && typeof author === 'object') {
+    const authorName = [author.firstName, author.lastName].filter(Boolean).join(' ').trim() || author.username || author.email || 'System';
+    return resolveActorLabel(authorName, author._id || author.id);
+  }
+  if (typeof author === 'string') {
+    return resolveActorLabel(author, event.userId || event.user || event.actor);
+  }
+  if (typeof event.actor === 'string') {
+    return resolveActorLabel(event.actor, event.userId || event.user);
+  }
+  return 'System';
+};
+
+const getSystemEventFieldLabel = (event) => {
+  const details = event?.details || event?.payload?.details || {};
+  const raw = details.fieldLabel ?? details.field;
+  const label = String(raw ?? '').trim();
+  return label || 'field';
+};
+
+const formatSystemEventValue = (value) => {
+  if (value === undefined || value === null || value === '') return 'Empty';
+  return String(value);
+};
+
+const getSystemEventFromValue = (event) => formatSystemEventValue(event?.details?.from ?? event?.details?.oldValue ?? event?.payload?.details?.from ?? event?.payload?.details?.oldValue);
+const getSystemEventToValue = (event) => formatSystemEventValue(event?.details?.to ?? event?.details?.newValue ?? event?.payload?.details?.to ?? event?.payload?.details?.newValue);
+const getSystemEventMessage = (event) => {
+  if (!event) return 'Updated this record';
+  const message = String(event?.message || event?.payload?.message || '').trim();
+  if (message) return message;
+  return `${event?.action || 'updated'} this record`;
+};
+const handleShowMore = () => {};
+
+const setActivityTimelineRef = createActivityTimelineRefSetter(activityTimelineRef);
+
+const dealActivityUi = createDealActivityUi({
+  authStore,
+  expandedTaskEmailThreads,
+  editingNoteId,
+  editingNoteText,
+  editingNoteAttachments,
+  isEditingCommentDirty,
+  setEditingCommentText,
+  setEditingCommentAttachments,
+  handleEditCommentFilesChange,
+  saveEditedNote,
+  handleSaveEditCommentClick,
+  cancelEditNote,
+  canEditNote,
+  startEditNote,
+  getInitials,
+  getAuthorName,
+  formatFullTimestamp,
+  formatRelativeActivityTime,
+  handleTimestampPointerUp,
+  highlightSearchText,
+  commentMentionsCurrentUser,
+  hasAttachmentUrl,
+  getAttachmentUrl,
+  isImageAttachment,
+  isSvgAttachment,
+  getAttachmentName,
+  downloadAttachment,
+  formatFileSize,
+  getAttachmentLabel,
+  hasCommentReactions,
+  getCommentReactions,
+  isCommentReactionSelected,
+  toggleCommentReaction,
+  handleShowCommentReactionTooltip,
+  handleHideCommentReactionTooltip,
+  setCommentReactionButtonRef,
+  toggleCommentReactionPicker,
+  openCommentThread,
+  getCommentThreadReplyCount,
+  getCommentThreadLatestReplyAuthor,
+  isFieldChangeSystemEvent,
+  getSystemEventActorLabel,
+  getSystemEventFieldLabel,
+  getSystemEventFromValue,
+  getSystemEventToValue,
+  getSystemEventMessage,
+  handleShowMore,
+  toggleTaskEmailThread,
+  createTaskFromEmailMessage
+});
+
+const openCreateEvent = () => {
+  eventToEdit.value = {
+    relatedTo: {
+      type: 'Deal',
+      id: deal.value._id
+    }
+  };
+  showEventModal.value = true;
+};
+
+const viewEvent = (eventId) => {
+  openTab(`/events/${eventId}`, {
+    title: 'Event Detail',
+    icon: '📅',
+    insertAdjacent: true
+  });
+};
+
+const handleEventSaved = () => {
+  showEventModal.value = false;
+  eventToEdit.value = null;
+  loadDealRecordContext(true);
+};
+
+const normalizeModuleKey = (moduleKey) => {
+  const map = {
+    organization: 'organizations',
+    organizations: 'organizations',
+    contact: 'people',
+    contacts: 'people',
+    people: 'people',
+    task: 'tasks',
+    tasks: 'tasks',
+    event: 'events',
+    events: 'events',
+    form: 'forms',
+    forms: 'forms'
+  };
+  return map[String(moduleKey || '').toLowerCase().trim()] || String(moduleKey || '').toLowerCase().trim();
+};
+
+const handleLinkRecordDrawerLinked = async ({ moduleKey, ids, context, relationshipKey: payloadRelationshipKey, targetAppKey: payloadTargetAppKey }) => {
+  if (!deal.value || !context?.dealId || deal.value._id !== context.dealId) return;
+  if (!ids?.length) return;
+
+  const normalizedModuleKey = normalizeModuleKey(moduleKey);
+  const targetAppKeyByModule = {
+    events: 'platform',
+    tasks: 'platform',
+    forms: 'platform',
+    projects: 'projects',
+    organizations: 'sales',
+    people: 'sales'
+  };
+  const targetAppKey = payloadTargetAppKey || targetAppKeyByModule[normalizedModuleKey];
+  const relationshipKey = payloadRelationshipKey || normalizedModuleKey;
+  if (!targetAppKey) return;
+
+  for (const recordId of ids) {
+    try {
+      await apiClient.post('/relationships/link', {
+        relationshipKey,
+        source: {
+          appKey: 'sales',
+          moduleKey: 'deals',
+          recordId: deal.value._id
+        },
+        target: {
+          appKey: targetAppKey,
+          moduleKey: normalizedModuleKey,
+          recordId
+        }
+      });
+    } catch (linkErr) {
+      if (linkErr?.status === 409) continue;
+      throw linkErr;
+    }
+  }
+
+  showLinkRecordDrawer.value = false;
+  invalidateRecordContext('SALES', 'deals', deal.value._id);
+  // Invalidate linked records’ context so their Related Records refresh when user navigates there
+  if (normalizedModuleKey === 'events') {
+    ids.forEach((id) => invalidateRecordContext('PLATFORM', 'events', id));
+  }
+  relatedRefreshKey.value += 1;
+  await fetchDeal();
+};
+
+const updateStickyTitleState = (scrollTop) => {
+  if (isLeftTitleSticky.value) {
+    if (scrollTop <= STICKY_TITLE_DISABLE_OFFSET) {
+      isLeftTitleSticky.value = false;
+    }
+    return;
+  }
+
+  if (scrollTop >= STICKY_TITLE_ENABLE_OFFSET) {
+    isLeftTitleSticky.value = true;
+  }
+};
+
+const handleLeftPaneScrollForStickyTitle = (event) => {
+  const nextScrollTop = event?.target?.scrollTop || 0;
+  updateStickyTitleState(nextScrollTop);
+};
+
+const detachLeftPaneScrollListener = () => {
+  if (!leftPaneScrollElement.value) return;
+  leftPaneScrollElement.value.removeEventListener('scroll', handleLeftPaneScrollForStickyTitle);
+  leftPaneScrollElement.value = null;
+};
+
+const attachLeftPaneScrollListener = () => {
+  const rootEl = dealRecordPageRootRef.value;
+  const leftPaneEl = rootEl instanceof HTMLElement
+    ? rootEl.querySelector('.record-page-layout__left')
+    : null;
+  if (!leftPaneEl) return false;
+  if (leftPaneScrollElement.value === leftPaneEl) {
+    const nextScrollTop = leftPaneEl.scrollTop || 0;
+    updateStickyTitleState(nextScrollTop);
+    return true;
+  }
+  detachLeftPaneScrollListener();
+  leftPaneScrollElement.value = leftPaneEl;
+  const nextScrollTop = leftPaneEl.scrollTop || 0;
+  updateStickyTitleState(nextScrollTop);
+  leftPaneEl.addEventListener('scroll', handleLeftPaneScrollForStickyTitle, { passive: true });
+  return true;
+};
+
+watch([activityFilterComments, activityFilterUpdates, activityFilterEmail], ([comments, updates, email]) => {
+  try {
+    localStorage.setItem(ACTIVITY_FILTER_STORAGE_KEY, JSON.stringify({ comments, updates, email }));
+  } catch {}
+});
+
+watch(loading, (isLoading) => {
+  if (isLoading) return;
+  nextTick(() => {
+    if (attachLeftPaneScrollListener()) return;
+    requestAnimationFrame(() => {
+      attachLeftPaneScrollListener();
+    });
+  });
+});
+
+useRecordPageLifecycle({
+  route,
+  recordId: effectiveDealId,
+  embed: () => props.embed,
+  routePrefix: '/deals',
+  embedRecordIdSource: () => props.dealId,
+  fetchRecord: async () => {
+    if (!props.embed && !isDealDetailRoute()) return;
+    await fetchDeal();
+    lastRoutedDealId.value = String(effectiveDealId.value || '');
+  },
+  onRouteChange: async ({ recordId }) => {
+    if (!props.embed && !isDealDetailRoute()) return;
+    const nextId = String(recordId || '');
+    if (!nextId || nextId === lastRoutedDealId.value) return;
+    lastRoutedDealId.value = nextId;
+    await fetchDeal();
+  },
+  onMount: [
+    () => {
+      window.addEventListener('scroll', updateTagPopoverPosition, true);
+      window.addEventListener('resize', updateTagPopoverPosition);
+      document.addEventListener('mousedown', handleTagPopoverMousedown);
+      document.addEventListener('click', handleTagPopoverOutsideClick);
+    }
+  ],
+  onUnmounted: [
+    () => {
+      detachLeftPaneScrollListener();
+    },
+    () => {
+      window.removeEventListener('scroll', updateTagPopoverPosition, true);
+      window.removeEventListener('resize', updateTagPopoverPosition);
+      document.removeEventListener('mousedown', handleTagPopoverMousedown);
+      document.removeEventListener('click', handleTagPopoverOutsideClick);
+    }
+  ]
+});
+
+const initialFilter = loadActivityFilter();
+activityFilterComments.value = initialFilter.comments;
+activityFilterUpdates.value = initialFilter.updates;
+activityFilterEmail.value = initialFilter.email;
+</script>

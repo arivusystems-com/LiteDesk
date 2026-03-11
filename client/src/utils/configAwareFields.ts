@@ -15,7 +15,7 @@
  * ============================================================================
  */
 
-import apiClient from './apiClient';
+import apiClient from '@/utils/apiClient';
 
 /**
  * Get visible fields for an entity based on config registry

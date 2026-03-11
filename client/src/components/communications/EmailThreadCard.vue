@@ -1,19 +1,19 @@
 <template>
-  <div :class="['flex-1 min-w-0', compact ? 'py-0' : 'py-2']">
-    <div class="group/thread w-full overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm transition-all duration-200 hover:shadow-md hover:border-indigo-200 dark:hover:border-indigo-800/60">
+  <div :class="['flex-1 min-w-0', compact ? 'py-0' : 'py-1.5']">
+    <div class="group/thread w-full overflow-hidden rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 transition-colors">
       <!-- Collapsed card header (always shown) -->
       <button
         type="button"
-        class="w-full text-left"
+        class="w-full text-left transition-colors hover:bg-gray-50/70 dark:hover:bg-gray-800/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
         @click="$emit('toggle')"
       >
-        <div class="flex items-center gap-3 px-4 pt-3 pb-3">
-          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 ring-1 ring-indigo-500/10 dark:ring-indigo-400/10">
-            <EnvelopeIcon class="w-5 h-5" />
+        <div class="flex items-center gap-3 px-4 pt-3 pb-2">
+          <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 ring-1 ring-indigo-500/10 dark:ring-indigo-400/10">
+            <EnvelopeIcon class="w-4 h-4" />
           </div>
           <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="text-sm font-semibold text-gray-900 dark:text-white">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-sm font-semibold text-gray-900 dark:text-white truncate">
                 {{ thread.participantDisplay || `${thread.messageCount || 0} message${(thread.messageCount || 0) !== 1 ? 's' : ''}` }}
               </span>
               <span
@@ -21,23 +21,34 @@
                 class="w-2 h-2 rounded-full bg-indigo-500 shrink-0"
                 title="Unread"
               />
-              <span class="text-xs text-gray-500 dark:text-gray-400 ml-auto whitespace-nowrap shrink-0">
-                <span
-                  class="cursor-help"
-                  :title="formatFullDate ? formatFullDate(thread.lastActivityAt || thread.firstActivityAt) : ''"
-                  @pointerup.stop="handleTimestampPointerUp($event, thread.lastActivityAt || thread.firstActivityAt)"
-                >
-                {{ formatDate(thread.lastActivityAt || thread.firstActivityAt) }}
-                </span>
-              </span>
             </div>
-            <p class="text-sm text-gray-600 dark:text-gray-400 truncate mt-0.5">
+            <p
+              :class="[
+                'text-sm mt-0.5 line-clamp-2 leading-5 max-w-[62ch]',
+                thread.unread
+                  ? 'font-semibold text-gray-900 dark:text-white'
+                  : 'text-gray-600 dark:text-gray-400'
+              ]"
+            >
               {{ thread.subject }}
             </p>
           </div>
-          <ChevronRightIcon
-            :class="['w-5 h-5 text-gray-400 flex-shrink-0 transition-transform duration-200', expanded && 'rotate-90']"
-          />
+          <div class="flex shrink-0 items-center gap-2 pl-2">
+            <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+              <span
+                class="cursor-help"
+                :title="formatFullDate ? formatFullDate(thread.lastActivityAt || thread.firstActivityAt) : ''"
+                @pointerup.stop="handleTimestampPointerUp($event, thread.lastActivityAt || thread.firstActivityAt)"
+              >
+                {{ formatDate(thread.lastActivityAt || thread.firstActivityAt) }}
+              </span>
+            </span>
+            <span class="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 group-hover/thread:text-gray-600 dark:group-hover/thread:text-gray-300 transition-colors">
+              <ChevronRightIcon
+                :class="['w-5 h-5 transition-transform duration-200', expanded && 'rotate-90']"
+              />
+            </span>
+          </div>
         </div>
       </button>
 
@@ -51,17 +62,17 @@
         leave-to-class="opacity-0"
       >
         <div v-if="expanded" class="border-t border-gray-200 dark:border-gray-700">
-          <div class="px-4 py-3">
+          <div class="px-4 pb-3.5 pt-2.5">
             <div
               v-for="(msg, mi) in thread.messages"
               :key="msg._id || mi"
               :class="[
-                mi > 0 ? 'mt-4 pt-4 border-t border-gray-100 dark:border-gray-800' : '',
+                mi > 0 ? 'mt-3.5 pt-3.5 border-t border-gray-100 dark:border-gray-800' : '',
                 'transition-colors'
               ]"
             >
               <!-- Message header (avatar + meta) -->
-              <div class="flex items-start justify-between gap-2 pb-2">
+              <div class="flex items-start justify-between gap-2 pb-1.5">
                 <div class="flex items-center gap-3 min-w-0">
                   <Avatar
                     v-if="msg.direction === 'outbound' && currentUser"
@@ -79,7 +90,7 @@
                   >
                     {{ getMessageInitials(msg) }}
                   </div>
-                  <div class="min-w-0 flex items-baseline gap-2 flex-wrap">
+                  <div class="min-w-0 flex items-center gap-2 flex-wrap">
                     <span class="text-sm font-semibold text-gray-900 dark:text-white truncate">
                       {{ getMessageSenderLabel(msg) }}
                     </span>
@@ -104,7 +115,7 @@
                   <button
                     type="button"
                     @click="$emit('create-task', msg)"
-                    class="px-2.5 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
+                    class="inline-flex items-center justify-center rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/30 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
                   >
                     Create task
                   </button>
@@ -112,7 +123,7 @@
               </div>
 
               <!-- Message body -->
-              <div class="text-sm leading-[1.6] text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
+              <div class="max-w-[72ch] text-sm leading-[1.55] text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
                 {{ getMessageBody(msg.body) }}
               </div>
 

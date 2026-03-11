@@ -400,7 +400,8 @@ const handleRowClick = (group, event) => {
     title,
     icon: 'users',
     params: { name: title },
-    background: openInBackground
+    background: openInBackground,
+    insertAdjacent: true
   });
 };
 

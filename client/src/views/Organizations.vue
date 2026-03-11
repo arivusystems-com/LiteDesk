@@ -306,7 +306,8 @@ const viewOrganization = (orgId, event = null) => {
     title,
     icon: 'building',
     params: { name: title },
-    background: openInBackground
+    background: openInBackground,
+    insertAdjacent: true
   });
 };
 

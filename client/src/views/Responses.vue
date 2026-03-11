@@ -648,7 +648,8 @@ const viewResponseDetail = (response) => {
     name: `form-response-${response._id}`,
     title: `Response - ${response.responseId || new Date(response.submittedAt).toLocaleDateString()}`,
     component: 'FormResponseDetail',
-    params: { formId, responseId: response._id }
+    params: { formId, responseId: response._id },
+    insertAdjacent: true
   });
   router.push(`/forms/${formId}/responses/${response._id}`);
 };

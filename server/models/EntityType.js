@@ -74,7 +74,4 @@ const EntityTypeSchema = new mongoose.Schema({
 // Compound index for entity + appKey queries
 EntityTypeSchema.index({ entity: 1, appKey: 1, isActive: 1 });
 
-// Ensure unique key
-EntityTypeSchema.index({ key: 1 }, { unique: true });
-
 module.exports = mongoose.model('EntityType', EntityTypeSchema);

@@ -84,33 +84,29 @@ import type {
  * This allows commands to work with router without direct coupling.
  */
 function createNavigationUtilities(router: Router): NavigationUtilities {
+  const performNavigation = async (target: string | { path: string; query: Record<string, string> }) => {
+    try {
+      await router.push(target as any);
+    } catch (err: any) {
+      if (err?.name !== 'NavigationDuplicated') {
+        console.warn('[CommandRegistry] Navigation error:', err);
+      }
+    }
+  };
+
   return {
-    navigate: (path: string) => {
-      return router.push(path).catch((err) => {
-        // Ignore duplicate navigation errors (same route)
-        if (err.name !== 'NavigationDuplicated') {
-          console.warn('[CommandRegistry] Navigation error:', err);
-        }
-      });
+    navigate: async (path: string) => {
+      await performNavigation(path);
     },
-    navigateWithQuery: (path: string, query: Record<string, string>) => {
-      return router.push({ path, query }).catch((err) => {
-        // Ignore duplicate navigation errors (same route)
-        if (err.name !== 'NavigationDuplicated') {
-          console.warn('[CommandRegistry] Navigation error:', err);
-        }
-      });
+    navigateWithQuery: async (path: string, query: Record<string, string>) => {
+      await performNavigation({ path, query });
     },
-    openTab: (path: string, options?: { title?: string; background?: boolean }) => {
+    openTab: async (path: string, options?: { title?: string; background?: boolean }) => {
       // Note: This is a placeholder - actual tab opening is handled in GlobalSearch
       // where useTabs() is available. This ensures commands can request tab opening.
-      return router.push(path).catch((err) => {
-        if (err.name !== 'NavigationDuplicated') {
-          console.warn('[CommandRegistry] Navigation error:', err);
-        }
-      });
+      await performNavigation(path);
     },
-    getCurrentRoute: () => router.currentRoute.value
+    getCurrentRoute: () => router.currentRoute
   };
 }
 

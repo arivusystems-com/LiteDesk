@@ -394,16 +394,15 @@
     
     <!-- Checkbox -->
     <div v-else-if="field.dataType === 'Checkbox'" class="mt-2 flex items-center space-x-2">
-      <input 
+      <HeadlessCheckbox 
         :id="field.key"
         :name="field.key"
-        type="checkbox"
         :checked="value"
         @change="updateValue($event.target.checked)"
         @blur="$emit('blur')"
         :required="isRequired"
         :disabled="isReadOnly"
-        class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+        checkbox-class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
       />
       <label 
         :for="field.key"
@@ -692,6 +691,7 @@
 </template>
 
 <script setup>
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { Listbox, ListboxButton, ListboxOptions, ListboxOption, Combobox, ComboboxButton, ComboboxInput, ComboboxOptions, ComboboxOption } from '@headlessui/vue';
 import { CheckIcon, ChevronUpDownIcon, XMarkIcon, MagnifyingGlassIcon, ArrowUpTrayIcon } from '@heroicons/vue/24/outline';

@@ -77,11 +77,12 @@
                             @click="toggleSelect(item)"
                           >
                             <div class="shrink-0">
-                              <input
-                                type="checkbox"
+                              <HeadlessCheckbox
                                 class="w-4 h-4"
                                 :checked="isSelected(item._id)"
-                                @change.stop="toggleSelect(item)"
+                                checkbox-class="w-4 h-4"
+                                @change="toggleSelect(item)"
+                                @click.stop
                               />
                             </div>
                             <div class="min-w-0 flex-1">
@@ -136,6 +137,7 @@ import { ref, computed, watch } from 'vue';
 import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import { XMarkIcon } from '@heroicons/vue/24/outline';
 import apiClient from '@/utils/apiClient';
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 
 const props = defineProps({
   isOpen: { type: Boolean, default: false },
