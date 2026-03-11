@@ -28,10 +28,9 @@
         :key="subtask._id || `subtask-${index}`"
         class="group/subtask flex items-center gap-3 border-b border-gray-100 dark:border-gray-800 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 last:border-b-0"
       >
-        <input
-          type="checkbox"
+        <HeadlessCheckbox
           :checked="!!subtask.completed"
-          class="w-4 h-4 shrink-0 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+          checkbox-class="w-4 h-4 shrink-0"
           @change="toggleCompleted(index)"
         />
         <input
@@ -72,6 +71,7 @@
 <script setup>
 import { computed } from 'vue';
 import { PlusIcon, TrashIcon } from '@heroicons/vue/24/outline';
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 
 const props = defineProps({
   modelValue: {

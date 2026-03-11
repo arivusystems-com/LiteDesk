@@ -269,7 +269,7 @@ const routes = [
   {
     path: '/deals/:id',
     name: 'deal-detail',
-    component: () => import('@/views/DealDetail.vue'),
+    component: () => import('@/pages/deals/DealRecordPage.vue'),
     meta: { requiresAuth: true, requiresPermission: { module: 'deals', action: 'view' } }
   },
   {

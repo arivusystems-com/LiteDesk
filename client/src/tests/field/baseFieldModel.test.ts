@@ -17,14 +17,14 @@ import {
   classifyFieldBase,
 } from '../../platform/fields/BaseFieldModel';
 
-function meta(overrides: Partial<BaseFieldMetadata> & Pick<BaseFieldMetadata, 'owner' | 'intent' | 'fieldScope' | 'editable'>): BaseFieldMetadata {
-  return {
+function meta(overrides: Partial<BaseFieldMetadata> = {}): BaseFieldMetadata {
+  const base: BaseFieldMetadata = {
     owner: 'core',
     intent: 'primary',
     fieldScope: 'CORE',
     editable: true,
-    ...overrides,
   };
+  return { ...base, ...overrides };
 }
 
 describe('BaseFieldModel helpers', () => {

@@ -120,22 +120,6 @@ const loadTabsFromStorage = () => {
       let loadedTabs = parsed.tabs || [];
       let loadedActiveTabId = parsed.activeTabId || null;
       
-      // Filter out settings tabs (settings should not be stored as tabs)
-      const settingsTabsCount = loadedTabs.filter(tab => tab.path?.startsWith('/settings')).length;
-      if (settingsTabsCount > 0) {
-        console.log('🔄 [loadTabsFromStorage] Filtering out', settingsTabsCount, 'settings tab(s)');
-        loadedTabs = loadedTabs.filter(tab => !tab.path?.startsWith('/settings'));
-        
-        // If the active tab was a settings tab, clear it
-        if (loadedActiveTabId) {
-          const activeTab = parsed.tabs?.find(tab => tab.id === loadedActiveTabId);
-          if (activeTab && activeTab.path?.startsWith('/settings')) {
-            console.log('🔄 [loadTabsFromStorage] Active tab was settings, clearing it');
-            loadedActiveTabId = null;
-          }
-        }
-      }
-      
       // Deduplicate home tabs before setting tabs.value
       // Keep only the first home tab found (by ID or path)
       const homeTabs = loadedTabs.filter(tab => tab.id === 'home' || tab.path === '/platform/home');
@@ -375,6 +359,7 @@ const getTitleForPath = (path, params = {}) => {
     '/sales/dashboard': 'Sales Dashboard',
     '/dashboard': 'Dashboard', // backward compat
     '/contacts': 'Contacts',
+    '/people': 'People',
     '/organizations': 'Organizations',
     '/deals': 'Deals',
     '/tasks': 'Tasks',
@@ -547,6 +532,24 @@ export function useTabs() {
   // Find tab by ID
   const findTabById = (id) => {
     return tabs.value.find(tab => tab.id === id);
+  };
+
+  // Heuristic: path looks like a record detail (e.g. /deals/123, /people/456) so new tab should open adjacent.
+  // Used when insertAdjacent is not explicitly set — so new modules get correct behavior by default.
+  const looksLikeRecordPath = (path) => {
+    const pathOnly = (path || '').split('?')[0];
+    const segments = pathOnly.split('/').filter(Boolean);
+    if (segments.length < 2) return false;
+    const first = segments[0];
+    const second = segments[1];
+    if (['settings', 'platform', 'audit', 'login', 'portal'].includes(first)) return false;
+    if (first === 'forms' && second === 'create') return false;
+    if (first === 'forms' && segments.length === 1) return false;
+    // Second segment looks like an ID: Mongo 24-char hex, UUID, or numeric
+    if (/^[a-fA-F0-9]{24}$/.test(second)) return true;
+    if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/i.test(second)) return true;
+    if (/^\d+$/.test(second)) return true;
+    return false;
   };
 
   // Find tab by path (exact match or path without query params)
@@ -990,6 +993,17 @@ export function useTabs() {
         const currentPathWithoutQuery = currentActiveTab.path.split('?')[0];
         const newPathWithoutQuery = newPath.split('?')[0];
         if (currentPathWithoutQuery === newPathWithoutQuery) {
+          // Module list tab should always show the module name
+          const isListRoute = newPathWithoutQuery === '/tasks' || newPathWithoutQuery === '/deals' || newPathWithoutQuery === '/events' ||
+            newPathWithoutQuery === '/people' || newPathWithoutQuery === '/organizations' || newPathWithoutQuery === '/forms' ||
+            newPathWithoutQuery === '/items' || newPathWithoutQuery === '/imports' || newPathWithoutQuery === '/trash' ||
+            newPathWithoutQuery === '/platform/home' || newPathWithoutQuery === '/sales/dashboard' || newPathWithoutQuery.startsWith('/control/');
+          if (isListRoute) {
+            const moduleTitle = getTitleForPath(newPathWithoutQuery, currentActiveTab.params || {});
+            if (moduleTitle && currentActiveTab.title !== moduleTitle) {
+              currentActiveTab.title = moduleTitle;
+            }
+          }
           console.log('✅ Active tab already matches route, skipping sync');
           return;
         }
@@ -1039,17 +1053,24 @@ export function useTabs() {
         }
         
         // Update tab path if it differs (e.g., query params changed)
-        // This ensures the tab reflects the current route state
         if (existingTabForRoute.path !== newPath && existingTabForRoute.path !== newFullPath) {
           const pathWithoutQuery = existingTabForRoute.path.split('?')[0];
           const newPathWithoutQuery = newPath.split('?')[0];
-          // Only update if base paths match (same route, different query)
           if (pathWithoutQuery === newPathWithoutQuery) {
             existingTabForRoute.path = newFullPath;
             console.log('🔄 Updated tab path to match route:', newFullPath);
           }
         }
-        
+        // Restore title for list/module routes when switching to this tab (e.g. back to /tasks so tab shows "Tasks" not record name)
+        const newPathBase = newPath.split('?')[0];
+        const isListRoute = newPathBase === '/tasks' || newPathBase === '/deals' || newPathBase === '/events' ||
+          newPathBase === '/people' || newPathBase === '/organizations' || newPathBase === '/forms' ||
+          newPathBase === '/items' || newPathBase === '/imports' || newPathBase === '/trash' ||
+          newPathBase === '/platform/home' || newPathBase === '/sales/dashboard' || newPathBase.startsWith('/control/');
+        if (isListRoute) {
+          const titleForPath = getTitleForPath(newPathBase, existingTabForRoute.params || {});
+          if (titleForPath) existingTabForRoute.title = titleForPath;
+        }
         return;
       }
       
@@ -1287,7 +1308,19 @@ export function useTabs() {
     };
     
     console.log('✨ Creating new tab:', newTab.id, newTab.title);
-    tabs.value.push(newTab);
+    // Record opens: next to current tab. Section/sidebar: at end. Explicit option wins; else infer from path for new modules.
+    const insertAdjacent = options.insertAdjacent === true
+      || (options.insertAdjacent === undefined && looksLikeRecordPath(path));
+    if (insertAdjacent) {
+      const currentIndex = tabs.value.findIndex(tab => tab.id === activeTabId.value);
+      if (currentIndex >= 0) {
+        tabs.value.splice(currentIndex + 1, 0, newTab);
+      } else {
+        tabs.value.push(newTab);
+      }
+    } else {
+      tabs.value.push(newTab);
+    }
     
     // Only switch to tab and navigate if NOT background mode
     if (!isBackground) {
@@ -1355,6 +1388,16 @@ export function useTabs() {
         // Switch to previous tab, or next tab, or first tab
         const newActiveTab = tabs.value[Math.max(0, index - 1)];
         activeTabId.value = newActiveTab.id;
+        // Restore module title when switching back to a list tab (e.g. close record → list tab shows "Tasks" not record name)
+        const pathBase = (newActiveTab.path || '').split('?')[0];
+        const isListPath = pathBase === '/tasks' || pathBase === '/deals' || pathBase === '/events' ||
+          pathBase === '/people' || pathBase === '/organizations' || pathBase === '/forms' ||
+          pathBase === '/items' || pathBase === '/imports' || pathBase === '/trash' ||
+          pathBase === '/platform/home' || pathBase === '/sales/dashboard' || pathBase.startsWith('/control/');
+        if (isListPath) {
+          const listTitle = getTitleForPath(pathBase, newActiveTab.params || {});
+          if (listTitle) newActiveTab.title = listTitle;
+        }
         // Mark as programmatic navigation
         isProgrammaticNavigation = true;
         lastProgrammaticPath = newActiveTab.path;
@@ -1473,6 +1516,54 @@ export function useTabs() {
     }
   };
 
+  /**
+   * Replace the current tab's path and title in place, then navigate.
+   * Use for prev/next record navigation so the same tab is reused instead of opening a new one.
+   * @param {string} path - Full path (including query if needed), e.g. '/deals/123' or '/deals/123?navCtx=...'
+   * @param {{ title?: string, params?: object }} options - Optional title and params for getTitleForPath
+   */
+  const replaceActiveTab = (path, options = {}) => {
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    if (isMobile) {
+      isProgrammaticNavigation = true;
+      navigateToPath(path).then(() => {
+        setTimeout(() => { isProgrammaticNavigation = false; }, 50);
+      });
+      return;
+    }
+    const currentActiveTab = tabs.value.find(tab => tab.id === activeTabId.value);
+    if (!currentActiveTab) {
+      isProgrammaticNavigation = true;
+      lastProgrammaticPath = path;
+      navigateToPath(path).then(() => {
+        setTimeout(() => {
+          isProgrammaticNavigation = false;
+          lastProgrammaticPath = null;
+        }, 300);
+      });
+      return;
+    }
+    const newTitle = options.title || getTitleForPath(path.split('?')[0], options.params || {});
+    currentActiveTab.path = path;
+    currentActiveTab.title = newTitle;
+    if (options.params) {
+      currentActiveTab.params = { ...currentActiveTab.params, ...options.params };
+    }
+    isProgrammaticNavigation = true;
+    lastProgrammaticPath = path;
+    navigateToPath(path).then(() => {
+      setTimeout(() => {
+        isProgrammaticNavigation = false;
+        lastProgrammaticPath = null;
+      }, 300);
+    }).catch(() => {
+      setTimeout(() => {
+        isProgrammaticNavigation = false;
+        lastProgrammaticPath = null;
+      }, 300);
+    });
+  };
+
   // Reorder tabs
   const reorderTabs = (fromIndex, toIndex) => {
     const movedTab = tabs.value.splice(fromIndex, 1)[0];
@@ -1497,6 +1588,7 @@ export function useTabs() {
     closeAllTabs,
     switchToTab,
     updateTabTitle,
+    replaceActiveTab,
     reorderTabs,
     findTabById,
     findTabByPath

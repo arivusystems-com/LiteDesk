@@ -204,7 +204,8 @@ const handleRowClick = (row) => {
   openTab(`/items/${row._id}`, {
     title: row.item_name || 'Item Detail',
     icon: 'cube',
-    background: false
+    background: false,
+    insertAdjacent: true
   });
 };
 

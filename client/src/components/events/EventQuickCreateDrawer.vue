@@ -116,7 +116,8 @@ const handleCreated = (event: any) => {
       const eventTitle = event.eventName || event.title || 'Event';
       openTab(`/events/${eventId}`, {
         title: eventTitle,
-        icon: '📅'
+        icon: '📅',
+        insertAdjacent: true
       });
     }
   }

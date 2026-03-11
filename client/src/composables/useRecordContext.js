@@ -21,14 +21,61 @@ import { fetchRecordsForDisplay } from '@/utils/recordDisplay';
 const contextCache = new Map();
 
 /**
+ * Normalize recordId to a string (handles ObjectId-like, { _id }, or string)
+ */
+function normalizeRecordId(recordId) {
+  if (recordId == null) return '';
+  if (typeof recordId === 'string') return recordId.trim();
+  if (typeof recordId === 'object' && recordId !== null) {
+    const id = recordId._id ?? recordId.id ?? recordId.recordId;
+    if (id != null) return String(id);
+    if (typeof recordId.toString === 'function') return recordId.toString();
+  }
+  return String(recordId);
+}
+
+/**
  * Generate cache key for a record
  */
 function getCacheKey(appKey, moduleKey, recordId) {
-  // Ensure values are strings (handle refs/computed values)
   const appKeyStr = String(appKey || 'sales').toLowerCase();
   const moduleKeyStr = String(moduleKey || 'unknown').toLowerCase();
-  const recordIdStr = String(recordId || '');
+  const recordIdStr = normalizeRecordId(recordId);
   return `${appKeyStr}.${moduleKeyStr}.${recordIdStr}`;
+}
+
+/**
+ * Build relationships array from GET /relationships/links response (fallback when record-context returns empty)
+ */
+function buildRelationshipsFromLinks(links, appKey, moduleKey) {
+  if (!Array.isArray(links) || links.length === 0) return [];
+  const appKeyLower = String(appKey || '').toLowerCase();
+  const moduleKeyLower = String(moduleKey || '').toLowerCase();
+  const byKey = new Map();
+  for (const link of links) {
+    const relKey = (link?.relationshipKey || '').toLowerCase();
+    if (!relKey || !link?.relatedRecord?.recordId) continue;
+    const rec = {
+      recordId: link.relatedRecord.recordId,
+      id: link.relatedRecord.recordId,
+      appKey: (link.relatedRecord.appKey || 'SALES').toUpperCase(),
+      moduleKey: (link.relatedRecord.moduleKey || '').toLowerCase()
+    };
+    if (!byKey.has(relKey)) {
+      const mod = (link.relatedRecord.moduleKey || relKey).toLowerCase();
+      const label = mod ? mod.charAt(0).toUpperCase() + mod.slice(1) : relKey;
+      byKey.set(relKey, {
+        relationshipKey: relKey,
+        label,
+        direction: link.direction || 'SOURCE',
+        cardinality: 'ONE_TO_MANY',
+        records: [],
+        ui: { showAs: 'TAB', label }
+      });
+    }
+    byKey.get(relKey).records.push(rec);
+  }
+  return Array.from(byKey.values());
 }
 
 /**
@@ -36,10 +83,9 @@ function getCacheKey(appKey, moduleKey, recordId) {
  */
 async function fetchRecordContext(appKey, moduleKey, recordId) {
   try {
-    // Ensure values are strings (handle refs/computed values)
     const appKeyStr = String(appKey || 'sales');
     const moduleKeyStr = String(moduleKey || 'unknown');
-    const recordIdStr = String(recordId || '');
+    const recordIdStr = normalizeRecordId(recordId);
     
     const response = await apiClient.get('/relationships/record-context', {
       params: {
@@ -216,6 +262,28 @@ export function useRecordContext(appKey, moduleKey, recordId) {
         resolveAccessMode(appKeyValue)
       ]);
 
+      // Fallback: when record-context returns no relationships, use links API so Related Records still shows linked items (e.g. Deals)
+      if ((!contextData.relationships || contextData.relationships.length === 0) && recordIdValue) {
+        try {
+          const linksRes = await apiClient.get('/relationships/links', {
+            params: {
+              appKey: appKeyValue,
+              moduleKey: moduleKeyValue,
+              recordId: normalizeRecordId(recordIdValue)
+            }
+          });
+          if (linksRes?.success && Array.isArray(linksRes.data) && linksRes.data.length > 0) {
+            contextData.relationships = buildRelationshipsFromLinks(
+              linksRes.data,
+              appKeyValue,
+              moduleKeyValue
+            );
+          }
+        } catch (linksErr) {
+          console.warn('[useRecordContext] Links fallback failed:', linksErr);
+        }
+      }
+
       // Phase 2E: Enhance linked records with fetched details for better labels
       // SAFETY: Handle broken relationships gracefully (deleted records, disabled apps, etc.)
       if (contextData.relationships) {
@@ -330,5 +398,20 @@ export function useRecordContext(appKey, moduleKey, recordId) {
  */
 export function clearAllRecordContextCache() {
   contextCache.clear();
+}
+
+/**
+ * Invalidate cached context for a single record so the next load refetches.
+ * Call after linking/unlinking so Related Records section and tab show up-to-date data.
+ * @param {string} appKey - e.g. 'SALES', 'sales'
+ * @param {string} moduleKey - e.g. 'deals', 'tasks'
+ * @param {string} recordId - record id
+ */
+export function invalidateRecordContext(appKey, moduleKey, recordId) {
+  const appKeyStr = String(appKey || 'sales').toLowerCase();
+  const moduleKeyStr = String(moduleKey || 'unknown').toLowerCase();
+  const recordIdStr = normalizeRecordId(recordId);
+  const key = `${appKeyStr}.${moduleKeyStr}.${recordIdStr}`;
+  contextCache.delete(key);
 }
 

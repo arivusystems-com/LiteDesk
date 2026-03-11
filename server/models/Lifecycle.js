@@ -77,7 +77,4 @@ const LifecycleSchema = new mongoose.Schema({
 // Compound index for entityTypeKey + appKey queries
 LifecycleSchema.index({ entityTypeKey: 1, appKey: 1, isActive: 1, order: 1 });
 
-// Ensure unique key
-LifecycleSchema.index({ key: 1 }, { unique: true });
-
 module.exports = mongoose.model('Lifecycle', LifecycleSchema);

@@ -70,6 +70,7 @@
  */
 
 import { computed, readonly, ref } from 'vue';
+import type { ComputedRef, Ref } from 'vue';
 import type { ModuleKey } from '@/platform/fields/FieldRegistry';
 import {
   getDefaultFiltersForModule,
@@ -117,31 +118,31 @@ export interface UseDefaultListFiltersReturn {
    * Whether the default filters feature is enabled.
    * Reactive ref that reflects the feature flag state.
    */
-  isEnabled: Readonly<ReturnType<typeof ref<boolean>>>;
+  isEnabled: Readonly<Ref<boolean>>;
   
   /**
    * Array of suggested default filter field keys.
    * Empty when feature is disabled.
    * Reactive computed property.
    */
-  defaultFilters: ReturnType<typeof computed<string[]>>;
+  defaultFilters: ComputedRef<string[]>;
   
   /**
    * Whether there are any default filters available.
    * Convenience computed for conditional rendering.
    */
-  hasDefaultFilters: ReturnType<typeof computed<boolean>>;
+  hasDefaultFilters: ComputedRef<boolean>;
   
   /**
    * Total count of default filters.
    */
-  defaultFilterCount: ReturnType<typeof computed<number>>;
+  defaultFilterCount: ComputedRef<number>;
   
   /**
    * All eligible filters (before cap is applied).
    * Useful for showing "more filters" options.
    */
-  allEligibleFilters: ReturnType<typeof computed<string[]>>;
+  allEligibleFilters: ComputedRef<string[]>;
   
   /**
    * Check if a specific field is a suggested default filter.

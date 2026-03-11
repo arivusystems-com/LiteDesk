@@ -22,10 +22,24 @@
  * ============================================================================
  */
 
+const mongoose = require('mongoose');
 const RelationshipInstance = require('../models/RelationshipInstance');
 const RelationshipDefinition = require('../models/RelationshipDefinition');
 const TenantRelationshipConfiguration = require('../models/TenantRelationshipConfiguration');
 const { getEffectiveRelationships } = require('../utils/tenantMetadata');
+
+/**
+ * Normalize recordId for query (RelationshipInstance stores recordId as ObjectId)
+ * @param {string|ObjectId} recordId
+ * @returns {ObjectId|string} - ObjectId if valid hex string, otherwise original
+ */
+function normalizeRecordIdForQuery(recordId) {
+  if (recordId == null) return recordId;
+  if (mongoose.Types.ObjectId.isValid(recordId) && String(recordId).length === 24) {
+    return new mongoose.Types.ObjectId(String(recordId));
+  }
+  return recordId;
+}
 
 /**
  * Get all relationship instances for a specific record
@@ -39,6 +53,7 @@ async function getRelationshipsForRecord(organizationId, appKey, moduleKey, reco
   try {
     const normalizedAppKey = appKey.toLowerCase();
     const normalizedModuleKey = moduleKey.toLowerCase();
+    const normalizedRecordId = normalizeRecordIdForQuery(recordId);
 
     // SAFETY: Cross-app relationship resolution must never throw
     // Get all relationship instances where this record is source OR target
@@ -48,12 +63,12 @@ async function getRelationshipsForRecord(organizationId, appKey, moduleKey, reco
         {
           'source.appKey': normalizedAppKey,
           'source.moduleKey': normalizedModuleKey,
-          'source.recordId': recordId
+          'source.recordId': normalizedRecordId
         },
         {
           'target.appKey': normalizedAppKey,
           'target.moduleKey': normalizedModuleKey,
-          'target.recordId': recordId
+          'target.recordId': normalizedRecordId
         }
       ]
     }).lean();

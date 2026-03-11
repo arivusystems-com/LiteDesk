@@ -290,7 +290,8 @@ const handleOpenRecord = () => {
   
   openTab(path, {
     title: recordLabel.value,
-    icon: 'document'
+    icon: 'document',
+    insertAdjacent: true
   });
 };
 </script>

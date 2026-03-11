@@ -589,7 +589,6 @@ form :deep(button:not(:disabled)),
 form :deep([role="button"]:not([aria-disabled="true"])),
 form :deep(a),
 form :deep(select),
-form :deep(input[type="checkbox"]),
 form :deep(input[type="radio"]),
 form :deep(label) {
   cursor: pointer;

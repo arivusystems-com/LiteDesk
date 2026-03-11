@@ -813,13 +813,12 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
-// @ts-expect-error - JavaScript module without type declarations
 import dateUtils from '@/utils/dateUtils';
 import { useAuthStore } from '@/stores/auth';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import RelatedRecordsPanel from '@/components/relationships/RelatedRecordsPanel.vue';
 // @ts-expect-error - JavaScript module without type declarations
-import { useRecordContext } from '@/composables/useRecordContext';
+import { useRecordContext, invalidateRecordContext } from '@/composables/useRecordContext';
 // @ts-expect-error - JavaScript module without type declarations
 import { getProjectionTypeLabel, getProjectionTypeBadgeClass, getAppLabel } from '@/utils/projectionLabels';
 import { getEventTypeDefinitionByKey } from '@/metadata/eventTypes';
@@ -1295,6 +1294,9 @@ const fetchEvent = async () => {
     const response = await apiClient.get(`/events/${route.params.id}`);
     if (response.success) {
       event.value = response.data;
+      // Invalidate related-records cache so panel shows current links (e.g. after linking from Deal page)
+      const id = event.value?._id ?? event.value?.eventId ?? route.params.id;
+      if (id) invalidateRecordContext('PLATFORM', 'events', id);
     } else {
       error.value = 'Event not found';
     }

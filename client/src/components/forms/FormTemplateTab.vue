@@ -38,37 +38,33 @@
       
       <div class="space-y-3">
         <label class="flex items-center">
-          <input
+          <HeadlessCheckbox
             v-model="localForm.responseTemplate.customTemplate.includeComparison"
-            type="checkbox"
-            class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4"
           />
           <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Include Comparison with Previous Responses</span>
         </label>
 
         <label class="flex items-center">
-          <input
+          <HeadlessCheckbox
             v-model="localForm.responseTemplate.customTemplate.includeTrends"
-            type="checkbox"
-            class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4"
           />
           <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Include Trends Charts</span>
         </label>
 
         <label class="flex items-center">
-          <input
+          <HeadlessCheckbox
             v-model="localForm.responseTemplate.customTemplate.includeCharts"
-            type="checkbox"
-            class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4"
           />
           <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Include KPI Charts</span>
         </label>
 
         <label class="flex items-center">
-          <input
+          <HeadlessCheckbox
             v-model="localForm.responseTemplate.customTemplate.includeCorrectiveActions"
-            type="checkbox"
-            class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+            checkbox-class="w-4 h-4"
           />
           <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Include Corrective Actions Section</span>
         </label>

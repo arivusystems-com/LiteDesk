@@ -119,7 +119,7 @@ export function getDefaultStatusForTypes(types: string[]): string | null {
   
   // Return the first matching intent's default status
   // In case of multiple matches, the first one in the array takes precedence
-  return intents[0].defaultStatus;
+  return intents[0]?.defaultStatus ?? null;
 }
 
 // ============================================================================

@@ -312,7 +312,7 @@
       :initialData="createDrawerInitialData"
       :autoLinkContext="createDrawerAutoLinkContext"
       @close="handleCreateDrawerClose"
-      @saved="(record) => handleCreateDrawerSaved(record)"
+      @saved="handleCreateDrawerSaved"
     />
     
     <!-- Create Record Drawer (for other modules) -->
@@ -325,7 +325,7 @@
       :title="createDrawerTitle"
       :description="createDrawerDescription"
       @close="handleCreateDrawerClose"
-      @saved="(record) => handleCreateDrawerSaved(record)"
+      @saved="handleCreateDrawerSaved"
     />
   </template>
 
@@ -345,6 +345,34 @@ import OrganizationQuickCreateDrawer from '@/components/organizations/Organizati
 import PeopleQuickCreateDrawer from '@/components/people/PeopleQuickCreateDrawer.vue';
 import EventQuickCreateDrawer from '@/components/events/EventQuickCreateDrawer.vue';
 
+type GroupKey = 'people' | 'organizations' | 'work' | 'configuration';
+
+type SearchResultItem = {
+  id: string;
+  type: string;
+  route?: string;
+  title?: string;
+  subtitle?: string;
+  icon?: string;
+  [key: string]: any;
+};
+
+type BackendSearchResults = {
+  people?: SearchResultItem[];
+  organizations?: SearchResultItem[];
+  deals?: SearchResultItem[];
+  tasks?: SearchResultItem[];
+  events?: SearchResultItem[];
+  forms?: SearchResultItem[];
+  items?: SearchResultItem[];
+  [key: string]: SearchResultItem[] | undefined;
+};
+
+type SearchResponseData = {
+  total?: number;
+  results?: BackendSearchResults;
+};
+
 const props = defineProps({
   isOpen: {
     type: Boolean,
@@ -360,14 +388,19 @@ const { openTab } = useTabs();
 const { activeSurface } = useActiveSurface();
 const authStore = useAuthStore();
 
-const searchInputRef = ref(null);
+const searchInputRef = ref<HTMLInputElement | null>(null);
 const searchQuery = ref('');
 const loading = ref(false);
-const searchResults = ref(null);
-const selectedGroup = ref(null);
+const searchResults = ref<SearchResponseData | null>(null);
+const selectedGroup = ref<GroupKey | null>(null);
 const selectedIndex = ref(-1);
-const resultRefs = ref({});
-const commandRefs = ref([]);
+const resultRefs = ref<Record<GroupKey, Record<number, HTMLElement>>>({
+  people: {},
+  organizations: {},
+  work: {},
+  configuration: {}
+});
+const commandRefs = ref<HTMLElement[]>([]);
 
 // Track if user has used "/" in this session (for discoverability hint)
 const hasUsedCommandTrigger = ref(false);
@@ -376,7 +409,7 @@ const hasUsedCommandTrigger = ref(false);
 const showLinkDrawer = ref(false);
 const linkDrawerModuleKey = ref('');
 const linkDrawerTitle = ref('');
-const linkDrawerContext = ref({});
+const linkDrawerContext = ref<Record<string, any>>({});
 const linkDrawerAllowCreate = ref(false);
 
 // Create drawer state (for create action commands)
@@ -384,11 +417,11 @@ const showCreateDrawer = ref(false);
 const showPeopleDrawer = ref(false);
 const showEventDrawer = ref(false);
 const createDrawerModuleKey = ref('');
-const createDrawerInitialData = ref({});
+const createDrawerInitialData = ref<Record<string, any>>({});
 const createDrawerTitle = ref('');
 const createDrawerDescription = ref('');
 const createDrawerLockedFields = ref<string[]>([]);
-const createDrawerAutoLinkContext = ref<Record<string, any>>({});
+const createDrawerAutoLinkContext = ref<Record<string, any> | null>({});
 
 // Confirmation state for destructive commands
 // See: docs/architecture/command-palette-invariants.md
@@ -420,13 +453,13 @@ const pendingDestructiveCommand = ref<CommandPaletteItem | null>(null);
 // - Command Palette executes actions (navigation, creation)
 // - These are fundamentally different mental models and must not be mixed
 // - Mixing would create cognitive load and violate the "calm, scannable" principle
-const mode = ref('search'); // 'search' | 'command'
+const mode = ref<'search' | 'command'>('search');
 
 // Priority order for result groups (primary nouns first)
-const GROUP_PRIORITY_ORDER = ['people', 'organizations', 'work', 'configuration'];
+const GROUP_PRIORITY_ORDER: GroupKey[] = ['people', 'organizations', 'work', 'configuration'];
 
 // Debounce search
-let searchTimeout = null;
+let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const totalResults = computed(() => {
   if (!searchResults.value) return 0;
@@ -469,7 +502,7 @@ const prioritizedGroups = computed(() => {
     searchQuery.value.length >= 4 || 
     authStore.isAdminLike;
   
-  return GROUP_PRIORITY_ORDER.filter(groupKey => {
+  return GROUP_PRIORITY_ORDER.filter((groupKey: GroupKey) => {
     // Hide configuration group unless conditions are met
     if (groupKey === 'configuration' && !shouldShowConfiguration) {
       return false;
@@ -692,7 +725,7 @@ onUnmounted(() => {
 });
 
 // Perform search
-const performSearch = async (query) => {
+const performSearch = async (query: string) => {
   if (!query || query.length < 2) {
     console.log('[GlobalSearch] Query too short:', query);
     return;
@@ -722,12 +755,13 @@ const performSearch = async (query) => {
       console.warn('[GlobalSearch] Search failed - response:', response);
       searchResults.value = null;
     }
-  } catch (error) {
+  } catch (error: unknown) {
+    const searchError = error as any;
     console.error('[GlobalSearch] Error searching:', error);
     console.error('[GlobalSearch] Error details:', {
-      message: error.message,
-      status: error.status,
-      stack: error.stack
+      message: searchError?.message,
+      status: searchError?.status,
+      stack: searchError?.stack
     });
     searchResults.value = null;
   } finally {
@@ -736,35 +770,31 @@ const performSearch = async (query) => {
 };
 
 // Get group label for UX categories
-const getGroupLabel = (groupKey) => {
-  const labels = {
+const getGroupLabel = (groupKey: GroupKey) => {
+  const labels: Record<GroupKey, string> = {
     people: 'People',
     organizations: 'Organizations',
     work: 'Work',
     configuration: 'Configuration'
   };
-  return labels[groupKey] || groupKey;
+  return labels[groupKey] || String(groupKey);
 };
 
 // Check if result is selected
-const isSelected = (groupKey, index) => {
+const isSelected = (groupKey: GroupKey, index: number) => {
   return selectedGroup.value === groupKey && selectedIndex.value === index;
 };
 
 // Set result ref
-const setResultRef = (el, groupKey, index) => {
+const setResultRef = (el: any, groupKey: GroupKey, index: number) => {
   if (el) {
-    const key = `${groupKey}-${index}`;
-    if (!resultRefs.value[groupKey]) {
-      resultRefs.value[groupKey] = {};
-    }
-    resultRefs.value[groupKey][index] = el;
+    resultRefs.value[groupKey][index] = el as HTMLElement;
   }
 };
 
 // Navigate results with arrow keys
 // Handles both command mode (flat list) and search mode (grouped results)
-const navigateResults = (direction) => {
+const navigateResults = (direction: number) => {
   // Clear pending confirmation when navigating (user changed selection)
   if (pendingDestructiveCommand.value) {
     pendingDestructiveCommand.value = null;
@@ -805,7 +835,9 @@ const navigateResults = (direction) => {
 
   // Initialize selection
   if (selectedGroup.value === null) {
-    selectedGroup.value = groups[0];
+    const firstGroup = groups[0];
+    if (!firstGroup) return;
+    selectedGroup.value = firstGroup;
     selectedIndex.value = 0;
     scrollToSelected();
     return;
@@ -821,7 +853,9 @@ const navigateResults = (direction) => {
       selectedIndex.value++;
     } else if (currentGroupIndex < groups.length - 1) {
       // Move to next group
-      selectedGroup.value = groups[currentGroupIndex + 1];
+      const nextGroup = groups[currentGroupIndex + 1];
+      if (!nextGroup) return;
+      selectedGroup.value = nextGroup;
       selectedIndex.value = 0;
     }
   } else {
@@ -829,8 +863,10 @@ const navigateResults = (direction) => {
       selectedIndex.value--;
     } else if (currentGroupIndex > 0) {
       // Move to previous group
-      selectedGroup.value = groups[currentGroupIndex - 1];
-      selectedIndex.value = groupedResults.value[selectedGroup.value].length - 1;
+      const previousGroup = groups[currentGroupIndex - 1];
+      if (!previousGroup) return;
+      selectedGroup.value = previousGroup;
+      selectedIndex.value = groupedResults.value[previousGroup].length - 1;
     }
   }
 
@@ -846,6 +882,7 @@ const scrollToSelected = () => {
         ref.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
     } else {
+      if (!selectedGroup.value) return;
       const ref = resultRefs.value[selectedGroup.value]?.[selectedIndex.value];
       if (ref) {
         ref.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -920,12 +957,13 @@ const confirmDestructiveCommand = () => {
 };
 
 // Navigate to result
-const navigateToResult = (result) => {
+const navigateToResult = (result: SearchResultItem) => {
   if (!result || !result.route) return;
 
   openTab(result.route, {
     title: result.title,
-    background: false
+    background: false,
+    insertAdjacent: true
   });
 
   close();
@@ -1064,9 +1102,9 @@ const exampleCommands = computed<CommandPaletteItem[]>(() => {
 });
 
 // Set command ref for scrolling
-const setCommandRef = (el, index) => {
+const setCommandRef = (el: any, index: number) => {
   if (el) {
-    commandRefs.value[index] = el;
+    commandRefs.value[index] = el as HTMLElement;
   }
 };
 
@@ -1076,24 +1114,24 @@ const setCommandRef = (el, index) => {
  * Provides NavigationUtilities interface for navigation commands.
  */
 function createNavigationUtilities(): NavigationUtilities {
+  const performNavigation = async (target: string | { path: string; query: Record<string, string> }) => {
+    try {
+      await router.push(target as any);
+    } catch (err: any) {
+      if (err?.name !== 'NavigationDuplicated') {
+        console.warn('[GlobalSearch] Navigation error:', err);
+      }
+    }
+  };
+
   return {
-    navigate: (path: string) => {
-      return router.push(path).catch((err) => {
-        // Ignore duplicate navigation errors (same route)
-        if (err.name !== 'NavigationDuplicated') {
-          console.warn('[GlobalSearch] Navigation error:', err);
-        }
-      });
+    navigate: async (path: string) => {
+      await performNavigation(path);
     },
-    navigateWithQuery: (path: string, query: Record<string, string>) => {
-      return router.push({ path, query }).catch((err) => {
-        // Ignore duplicate navigation errors (same route)
-        if (err.name !== 'NavigationDuplicated') {
-          console.warn('[GlobalSearch] Navigation error:', err);
-        }
-      });
+    navigateWithQuery: async (path: string, query: Record<string, string>) => {
+      await performNavigation({ path, query });
     },
-    openTab: (path: string, options?: { title?: string; background?: boolean }) => {
+    openTab: async (path: string, options?: { title?: string; background?: boolean }) => {
       // Open route in a new tab with proper title
       // If title is provided, use it; otherwise openTab will generate one from path
       openTab(path, {
@@ -1101,7 +1139,7 @@ function createNavigationUtilities(): NavigationUtilities {
         background: options?.background || false
       });
     },
-    getCurrentRoute: () => router.currentRoute.value
+    getCurrentRoute: () => router.currentRoute
   };
 }
 
@@ -1325,7 +1363,7 @@ const getCurrentUserName = () => {
 /**
  * Helper: Get activity logs endpoint for a record
  */
-const getActivityLogsEndpoint = (recordId, recordType) => {
+const getActivityLogsEndpoint = (recordId: string, recordType: string) => {
   if (!recordId) return null;
   
   switch (recordType) {
@@ -1349,9 +1387,9 @@ const getActivityLogsEndpoint = (recordId, recordType) => {
 /**
  * Helper: Fetch records by IDs for activity log links
  */
-const fetchRecordsByIds = async (moduleKey, ids) => {
-  const out = [];
-  const getDetailEndpoint = (key, id) => {
+const fetchRecordsByIds = async (moduleKey: string, ids: string[]) => {
+  const out: Array<{ id: string; name: string; module: string }> = [];
+  const getDetailEndpoint = (key: string, id: string) => {
     switch (key) {
       case 'people':
       case 'contacts':
@@ -1370,8 +1408,8 @@ const fetchRecordsByIds = async (moduleKey, ids) => {
     }
   };
   
-  const getRecordDisplayName = (rec) => {
-    return rec?.name || rec?.title || `${rec?.first_name || ''} ${rec?.last_name || ''}`.trim() || rec?.email || rec?._id;
+  const getRecordDisplayName = (rec: any) => {
+    return rec?.name || rec?.title || `${rec?.first_name || ''} ${rec?.last_name || ''}`.trim() || rec?.email || rec?._id || '';
   };
   
   for (const id of ids || []) {
@@ -1391,7 +1429,7 @@ const fetchRecordsByIds = async (moduleKey, ids) => {
 /**
  * Helper: Add activity log to a record
  */
-const addActivityLog = async (recordId, recordType, action, details = null) => {
+const addActivityLog = async (recordId: string, recordType: string, action: string, details: any = null) => {
   if (!recordId) {
     console.warn('[GlobalSearch] Cannot add activity log: recordId is missing');
     return;
@@ -1418,7 +1456,7 @@ const addActivityLog = async (recordId, recordType, action, details = null) => {
     } else {
       console.warn('[GlobalSearch] Activity log API returned non-success:', response);
     }
-  } catch (e) {
+  } catch (e: any) {
     console.error('[GlobalSearch] Error adding activity log:', e);
     console.error('[GlobalSearch] Error details:', {
       endpoint,
@@ -1437,7 +1475,7 @@ const addActivityLog = async (recordId, recordType, action, details = null) => {
  * Performs the actual linking via API based on context.
  * This matches the logic from SummaryView.vue.
  */
-const handleLinkDrawerLinked = async ({ moduleKey, ids, context }) => {
+const handleLinkDrawerLinked = async ({ moduleKey, ids, context }: { moduleKey: string; ids: string[]; context: Record<string, any> }) => {
   try {
     if (context.organizationId && moduleKey === 'people') {
       // Link contacts to organization by updating each contact's organization field

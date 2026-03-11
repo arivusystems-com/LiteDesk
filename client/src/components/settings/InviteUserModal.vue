@@ -125,13 +125,12 @@
                   }"
                 >
                   <div class="flex items-start gap-3">
-                    <input
-                      type="checkbox"
+                    <HeadlessCheckbox
                       :id="`app-${app.appKey}`"
                       :checked="isAppSelected(app.appKey)"
                       :disabled="!isAppEnabled(app)"
                       @change="toggleApp(app)"
-                      class="mt-1 w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded"
+                      checkbox-class="mt-1 w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded"
                     />
                     <div class="flex-1">
                       <label
@@ -248,11 +247,10 @@
 
             <!-- Send Invite Email -->
             <div class="flex items-center gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-              <input
-                type="checkbox"
+              <HeadlessCheckbox
                 v-model="form.sendEmail"
                 id="sendEmail"
-                class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded"
+                checkbox-class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded"
               />
               <div class="flex-1">
                 <label for="sendEmail" class="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
@@ -298,6 +296,7 @@
 </template>
 
 <script setup>
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, watch, computed } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/utils/apiClient';

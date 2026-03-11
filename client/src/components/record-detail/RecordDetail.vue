@@ -263,7 +263,7 @@ const handleEdit = () => {
   if (!detailDefinition.value) return;
   const editRoute = detailDefinition.value.editRoute?.replace(':id', route.params.id);
   if (editRoute) {
-    openTab(editRoute, { title: `Edit ${recordName.value}`, background: false });
+    openTab(editRoute, { title: `Edit ${recordName.value}`, background: false, insertAdjacent: true });
   }
 };
 

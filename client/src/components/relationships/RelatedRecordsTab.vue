@@ -137,7 +137,8 @@ const viewRecord = (record) => {
   
   openTab(path, {
     title: getRecordLabelForDisplay(record),
-    icon: 'document'
+    icon: 'document',
+    insertAdjacent: true
   });
 };
 

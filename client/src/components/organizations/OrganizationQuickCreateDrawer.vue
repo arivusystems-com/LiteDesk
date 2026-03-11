@@ -177,11 +177,10 @@
                                     :key="type"
                                     class="flex items-center gap-2 cursor-pointer"
                                   >
-                                    <input
-                                      type="checkbox"
-                                      :value="type"
-                                      v-model="formData.types"
-                                      class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+                                    <HeadlessCheckbox
+                                      :checked="(formData.types || []).includes(type)"
+                                      checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+                                      @change="toggleOrganizationType(type, $event.target.checked)"
                                     />
                                     <span class="text-sm text-gray-700 dark:text-gray-300">{{ type }}</span>
                                   </label>
@@ -326,6 +325,7 @@ import DynamicForm from '@/components/common/DynamicForm.vue';
 import apiClient from '@/utils/apiClient';
 import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 
 const props = defineProps({
   isOpen: {
@@ -382,6 +382,15 @@ const moduleDefinition = ref(null);
 
 // Organization types (locked order for Full Form mode)
 const organizationTypes = ['Customer', 'Partner', 'Vendor', 'Distributor', 'Dealer'];
+
+const toggleOrganizationType = (type, checked) => {
+  const currentTypes = Array.isArray(formData.value.types) ? formData.value.types : [];
+  if (checked) {
+    formData.value.types = currentTypes.includes(type) ? currentTypes : [...currentTypes, type];
+    return;
+  }
+  formData.value.types = currentTypes.filter((existingType) => existingType !== type);
+};
 
 // ============================================================================
 // AUTHORITATIVE FIELD LISTS (DO NOT INFER FROM FILLED VALUES)
@@ -650,7 +659,7 @@ const handleSubmit = async () => {
         // If invoked from Command Palette: Open OrganizationSurface in new tab
         const orgId = createdOrg._id || createdOrg.id;
         if (orgId) {
-          openTab(`/organizations/${orgId}`);
+          openTab(`/organizations/${orgId}`, { insertAdjacent: true });
         }
       }
       

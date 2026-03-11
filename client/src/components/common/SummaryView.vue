@@ -486,10 +486,9 @@
             <!-- Right Side: Toggle -->
             <div class="flex items-center gap-3">
               <label class="hidden lg:flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
+                <HeadlessCheckbox
                   v-model="showEmptyFields"
-                  class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                  checkbox-class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
                 />
                 <span class="text-sm text-gray-700 dark:text-gray-300">Show empty fields</span>
               </label>
@@ -1657,6 +1656,7 @@ import { useTabs } from '@/composables/useTabs';
 import PermissionButton from '@/components/common/PermissionButton.vue';
 import DynamicFormField from '@/components/common/DynamicFormField.vue';
 import DependencyPopupModal from '@/components/common/DependencyPopupModal.vue';
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import BadgeCell from '@/components/common/table/BadgeCell.vue';
 import DateCell from '@/components/common/table/DateCell.vue';
 import Avatar from '@/components/common/Avatar.vue';
@@ -2446,7 +2446,7 @@ const sortedTimelineUpdates = computed(() => {
 function handleActivityLinkClick(li) {
   if (!li?.href) return;
   try {
-    openTab(li.href, { title: li.text });
+    openTab(li.href, { title: li.text, insertAdjacent: true });
   } catch {
     // Fallback to router navigation
     router.push(li.href);
@@ -6124,6 +6124,7 @@ const viewFormResponses = () => {
     name: `form-responses-${formId}`,
     title: `${props.record.name || 'Form'} - Responses`,
     component: 'FormResponses',
+    insertAdjacent: true,
     params: { formId }
   });
   router.push(`/forms/${formId}/responses`);
@@ -6193,6 +6194,7 @@ const viewResponseDetail = (response) => {
     name: `form-response-${responseId}`,
     title: `Response - ${new Date(response.submittedAt).toLocaleDateString()}`,
     component: 'FormResponseDetail',
+    insertAdjacent: true,
     params: { formId, responseId }
   });
   router.push(`/forms/${formId}/responses/${responseId}`);
@@ -6261,7 +6263,8 @@ const handleOpenRelatedRecord = async (relatedRecord) => {
     openTab(path, {
       title: title,
       icon: icon,
-      params: { name: title } // Pass name in params for potential title updates
+      params: { name: title }, // Pass name in params for potential title updates
+      insertAdjacent: true
     });
   }
 };

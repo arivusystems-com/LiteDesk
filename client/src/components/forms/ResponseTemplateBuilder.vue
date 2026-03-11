@@ -225,20 +225,18 @@
           </label>
           <div class="space-y-3">
             <label class="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
+              <HeadlessCheckbox
                 v-model="activeTemplate.branding.header.showLogo"
                 @change="emitUpdate"
-                class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+                checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
               />
               <span class="text-sm text-gray-700 dark:text-gray-300">Show Logo in Header</span>
             </label>
             <label class="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
+              <HeadlessCheckbox
                 v-model="activeTemplate.branding.header.showCompanyName"
                 @change="emitUpdate"
-                class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+                checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
               />
               <span class="text-sm text-gray-700 dark:text-gray-300">Show Company Name in Header</span>
             </label>
@@ -264,11 +262,10 @@
           </label>
           <div class="space-y-3">
             <label class="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
+              <HeadlessCheckbox
                 v-model="activeTemplate.branding.footer.showDisclaimer"
                 @change="emitUpdate"
-                class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+                checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
               />
               <span class="text-sm text-gray-700 dark:text-gray-300">Show Disclaimer Text</span>
             </label>
@@ -445,6 +442,7 @@
 </template>
 
 <script setup>
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, computed, watch, nextTick } from 'vue';
 import {
   DocumentTextIcon,

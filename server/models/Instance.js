@@ -71,7 +71,6 @@ const InstanceSchema = new mongoose.Schema({
 });
 
 // Indexes for fast queries
-InstanceSchema.index({ organizationId: 1 }, { unique: true });
 InstanceSchema.index({ status: 1 });
 InstanceSchema.index({ demoRequestId: 1 });
 InstanceSchema.index({ createdAt: -1 });

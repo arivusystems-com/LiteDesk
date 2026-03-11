@@ -113,21 +113,24 @@ const hasAnyDrillDowns = computed(() => {
 const viewAllDeals = () => {
   openTab(`/deals?personId=${props.personId}`, {
     title: `Deals involving ${props.personName}`,
-    icon: 'briefcase'
+    icon: 'briefcase',
+    insertAdjacent: true
   });
 };
 
 const viewAllTasks = () => {
   openTab(`/tasks?personId=${props.personId}`, {
     title: `Tasks for ${props.personName}`,
-    icon: 'check'
+    icon: 'check',
+    insertAdjacent: true
   });
 };
 
 const viewAllMeetings = () => {
   openTab(`/events?personId=${props.personId}`, {
     title: `Meetings with ${props.personName}`,
-    icon: 'calendar'
+    icon: 'calendar',
+    insertAdjacent: true
   });
 };
 
@@ -135,7 +138,8 @@ const viewAllCases = () => {
   // Cases might be under helpdesk or a different module
   openTab(`/cases?personId=${props.personId}`, {
     title: `Cases for ${props.personName}`,
-    icon: 'clipboard-document'
+    icon: 'clipboard-document',
+    insertAdjacent: true
   });
 };
 </script>

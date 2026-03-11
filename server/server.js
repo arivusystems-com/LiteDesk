@@ -327,7 +327,16 @@ mongoose.connect(masterUri)
     } catch (relError) {
       console.warn('⚠️  Failed to register default Task relationships:', relError.message);
     }
-    
+
+    // 1.7. Refresh relationship key cache (registry.has) for validation without DB hits
+    try {
+      const relationshipRegistry = require('./utils/relationshipRegistry');
+      await relationshipRegistry.refreshRelationshipKeyCache();
+      console.log('✅ Relationship key cache refreshed');
+    } catch (cacheErr) {
+      console.warn('⚠️  Failed to refresh relationship key cache:', cacheErr.message);
+    }
+
     // 2. Start Monitoring Services (if enabled)
     if (process.env.ENABLE_HEALTH_CHECKER !== 'false') {
       const healthChecker = require('./services/monitoring/healthChecker');

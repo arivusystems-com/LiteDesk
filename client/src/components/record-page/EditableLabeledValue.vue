@@ -2,16 +2,21 @@
   <!-- Row layout: icon + label (min-width) + value next to label (Core Fields style) -->
   <div
     v-if="layout === 'row'"
-    class="editable-labeled-value editable-labeled-value--row flex items-center gap-3 py-2 px-4 min-h-[3rem]"
+    :class="['editable-labeled-value editable-labeled-value--row flex items-center gap-3', rowPaddingClass]"
   >
     <span class="editable-labeled-value__icon flex-shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true">
       <component :is="fieldIcon" class="w-4 h-4" />
     </span>
     <span class="editable-labeled-value__label text-sm text-gray-700 dark:text-gray-300 flex-shrink-0 min-w-[12rem]">{{ label }}</span>
-    <div class="editable-labeled-value__value flex-1 min-w-0 flex items-center min-h-8 text-sm text-gray-900 dark:text-white rounded px-2 py-1 -mx-2 -my-1 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800">
-      <!-- Select/User: dropdown or tag display -->
+    <div
+      :class="[
+        'editable-labeled-value__value flex-1 min-w-0 flex items-center min-h-8 text-sm rounded px-2 -mx-2 -my-1 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800',
+        hasDisplayValue ? 'text-gray-900 dark:text-white' : 'text-gray-300 dark:text-gray-600'
+      ]"
+    >
+      <!-- Select/User/Entity: dropdown or tag display -->
       <Listbox
-        v-if="layout === 'row' && canEdit && (type === 'select' || type === 'user')"
+        v-if="layout === 'row' && canEdit && (type === 'select' || type === 'user' || type === 'entity')"
         :model-value="selectModelValue"
         @update:model-value="handleSelectChange"
         class="w-full min-w-0"
@@ -22,25 +27,25 @@
               'editable-labeled-value__display w-full min-w-0 text-left rounded transition-colors cursor-pointer',
               'min-h-8 flex items-center',
               'hover:bg-gray-50 dark:hover:bg-gray-800',
-              'px-2 py-1 -mx-2 -my-1'
+              'px-2 -mx-2 -my-1'
             ]"
           >
             <slot v-if="type === 'user'">
               <span v-if="displayValue" class="block truncate">{{ displayValue }}</span>
-              <span v-else class="text-gray-400 dark:text-gray-500">—</span>
+              <span v-else class="text-gray-300 dark:text-gray-600">—</span>
             </slot>
             <template v-else>
               <span v-if="displayValue" class="block truncate">{{ displayValue }}</span>
-              <span v-else class="text-gray-400 dark:text-gray-500">—</span>
+              <span v-else class="text-gray-300 dark:text-gray-600">—</span>
             </template>
           </ListboxButton>
           <Transition leave-active-class="transition duration-100 ease-in" leave-from-class="opacity-100" leave-to-class="opacity-0">
             <ListboxOptions
               class="absolute z-10 mt-1 left-0 max-h-60 min-w-[140px] overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm"
             >
-              <ListboxOption v-if="allowEmpty || type === 'user'" :value="null" v-slot="{ active }">
+              <ListboxOption v-if="allowEmpty || type === 'user' || type === 'entity'" :value="null" v-slot="{ active }">
                 <li :class="['relative cursor-default select-none py-2 pl-4 pr-10', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
-                  <span class="block truncate">{{ type === 'user' ? 'Unassigned' : (emptyLabel || '—') }}</span>
+                  <span class="block truncate">{{ type === 'user' ? 'Unassigned' : (type === 'entity' ? 'Empty' : (emptyLabel || '—')) }}</span>
                 </li>
               </ListboxOption>
               <ListboxOption v-for="option in selectOptions" :key="option.value" :value="option.value" v-slot="{ active, selected }">
@@ -55,24 +60,24 @@
           </Transition>
         </div>
       </Listbox>
-      <!-- Select/User read-only: tag or dash -->
+      <!-- Select/User/Entity read-only: tag or dash -->
       <span
-        v-else-if="layout === 'row' && !canEdit && (type === 'select' || type === 'user')"
+        v-else-if="layout === 'row' && !canEdit && (type === 'select' || type === 'user' || type === 'entity')"
         class="min-w-0 block w-full min-h-8 flex items-center"
       >
         <slot v-if="type === 'user'">
           <span v-if="displayValue">{{ displayValue }}</span>
-          <span v-else class="text-gray-400 dark:text-gray-500">—</span>
+          <span v-else class="text-gray-300 dark:text-gray-600">—</span>
         </slot>
         <template v-else>
           <span v-if="displayValue">{{ displayValue }}</span>
-          <span v-else class="text-gray-400 dark:text-gray-500">—</span>
+          <span v-else class="text-gray-300 dark:text-gray-600">—</span>
         </template>
       </span>
       <!-- Row: text/number/date display or edit -->
       <div
         v-else-if="layout === 'row' && isEditing && canEdit"
-        class="editable-labeled-value__edit min-w-[120px] w-full min-h-8 flex items-center"
+        :class="['editable-labeled-value__edit min-w-[120px] w-full flex', multiline ? 'items-start min-h-[80px]' : 'items-center min-h-8']"
       >
         <input
           v-if="type === 'text' && !multiline"
@@ -83,6 +88,15 @@
           @keydown.esc="handleCancel"
           class="w-full h-8 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
           type="text"
+        />
+        <textarea
+          v-else-if="type === 'text' && multiline"
+          ref="inputRef"
+          v-model="localValue"
+          @blur="handleBlur"
+          @keydown.esc="handleCancel"
+          class="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-y min-h-[80px]"
+          :rows="rows || 3"
         />
         <input
           v-else-if="type === 'number'"
@@ -113,9 +127,19 @@
         @click="handleClick"
         :class="['editable-labeled-value__display w-full min-w-0 min-h-8 flex items-center', canEdit ? 'cursor-text hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 py-1 -mx-2 -my-1 transition-colors' : '']"
       >
-        <slot>
+        <div v-if="type === 'tags'" class="flex flex-wrap gap-1.5 min-w-0">
+          <span
+            v-for="(tag, index) in tagList"
+            :key="`${tag}-${index}`"
+            :class="['inline-block text-xs px-2 py-0.5 rounded', (getTagChipClass ? getTagChipClass(tag) : null) || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200']"
+          >
+            {{ tag }}
+          </span>
+          <span v-if="tagList.length === 0" class="text-gray-300 dark:text-gray-600">—</span>
+        </div>
+        <slot v-else>
           <span v-if="displayValue !== null && displayValue !== undefined && displayValue !== ''">{{ displayValue }}</span>
-          <span v-else class="text-gray-400 dark:text-gray-500">—</span>
+          <span v-else class="text-gray-300 dark:text-gray-600">—</span>
         </slot>
       </div>
     </div>
@@ -126,7 +150,7 @@
     <dd class="mt-2 text-sm text-gray-900 dark:text-white">
       <!-- Select/User: Dropdown style - value stays visible, click opens dropdown -->
       <Listbox
-        v-if="canEdit && (type === 'select' || type === 'user')"
+        v-if="canEdit && (type === 'select' || type === 'user' || type === 'entity')"
         :model-value="selectModelValue"
         @update:model-value="handleSelectChange"
       >
@@ -140,7 +164,7 @@
           >
             <slot>
               <span v-if="displayValue !== null && displayValue !== undefined && displayValue !== ''" class="block truncate">{{ displayValue }}</span>
-              <span v-else class="block truncate w-full text-gray-400 dark:text-gray-500">—</span>
+              <span v-else class="block truncate w-full text-gray-300 dark:text-gray-600">—</span>
             </slot>
           </ListboxButton>
           <Transition
@@ -151,9 +175,9 @@
             <ListboxOptions
               class="absolute z-10 mt-1 max-h-60 w-full min-w-[140px] overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm"
             >
-              <ListboxOption v-if="allowEmpty || type === 'user'" :value="null" v-slot="{ active }">
+              <ListboxOption v-if="allowEmpty || type === 'user' || type === 'entity'" :value="null" v-slot="{ active }">
                 <li :class="['relative cursor-default select-none py-2 pl-4 pr-10', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
-                  <span class="block truncate">{{ type === 'user' ? 'Unassigned' : (emptyLabel || '—') }}</span>
+                  <span class="block truncate">{{ type === 'user' ? 'Unassigned' : (type === 'entity' ? 'Empty' : (emptyLabel || '—')) }}</span>
                 </li>
               </ListboxOption>
               <ListboxOption
@@ -176,12 +200,12 @@
 
       <!-- Select/User read-only display -->
       <div
-        v-else-if="!canEdit && (type === 'select' || type === 'user')"
+        v-else-if="!canEdit && (type === 'select' || type === 'user' || type === 'entity')"
         class="editable-labeled-value__display"
       >
         <slot>
           <span v-if="displayValue !== null && displayValue !== undefined && displayValue !== ''">{{ displayValue }}</span>
-          <span v-else class="w-full text-gray-400 dark:text-gray-500">—</span>
+          <span v-else class="w-full text-gray-300 dark:text-gray-600">—</span>
         </slot>
       </div>
 
@@ -238,7 +262,7 @@
         />
       </div>
       
-      <!-- Display mode for text/number/date -->
+      <!-- Display mode for text/number/date/tags -->
       <div
         v-else
         @click="handleClick"
@@ -247,9 +271,19 @@
           canEdit ? 'cursor-text hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 py-1 -mx-2 -my-1 transition-colors' : ''
         ]"
       >
-        <slot>
+        <div v-if="type === 'tags'" class="flex flex-wrap gap-1.5">
+          <span
+            v-for="(tag, index) in tagList"
+            :key="`${tag}-${index}`"
+            :class="['inline-block text-xs px-2 py-0.5 rounded', (getTagChipClass ? getTagChipClass(tag) : null) || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200']"
+          >
+            {{ tag }}
+          </span>
+          <span v-if="tagList.length === 0" class="text-gray-300 dark:text-gray-600">—</span>
+        </div>
+        <slot v-else>
           <span v-if="displayValue !== null && displayValue !== undefined && displayValue !== ''">{{ displayValue }}</span>
-          <span v-else class="w-full text-gray-400 dark:text-gray-500">—</span>
+          <span v-else class="w-full text-gray-300 dark:text-gray-600">—</span>
         </slot>
       </div>
     </dd>
@@ -276,13 +310,13 @@ const props = defineProps({
     required: true
   },
   value: {
-    type: [String, Number, Object, null],
+    type: [String, Number, Object, Array, null],
     default: null
   },
   type: {
     type: String,
-    default: 'text', // 'text', 'number', 'date', 'select', 'user'
-    validator: (value) => ['text', 'number', 'date', 'select', 'user'].includes(value)
+    default: 'text', // 'text', 'number', 'date', 'select', 'user', 'entity', 'tags'
+    validator: (value) => ['text', 'number', 'date', 'select', 'user', 'entity', 'tags'].includes(value)
   },
   multiline: {
     type: Boolean,
@@ -332,17 +366,31 @@ const props = defineProps({
     type: Function,
     default: null
   },
+  /** For type 'tags': optional (tagName) => string of chip Tailwind classes */
+  getTagChipClass: {
+    type: Function,
+    default: null
+  },
   /** 'stack' = label above value; 'row' = icon + label left, value right (Core Fields style) */
   layout: {
     type: String,
     default: 'stack',
     validator: (v) => ['stack', 'row'].includes(v)
+  },
+  rowPaddingClass: {
+    type: String,
+    default: 'py-2 px-4 min-h-[2rem]'
+  },
+  prefixIcon: {
+    type: [Object, Function],
+    default: null
   }
 });
 
 const emit = defineEmits(['update:value', 'save']);
 
 const fieldIcon = computed(() => {
+  if (props.prefixIcon) return props.prefixIcon;
   const map = {
     number: CurrencyDollarIcon,
     date: CalendarDaysIcon,
@@ -427,20 +475,35 @@ const displayValue = computed(() => {
   return props.value;
 });
 
-// For select/user Listbox: model value
+const hasDisplayValue = computed(() => {
+  const v = displayValue.value;
+  return v !== null && v !== undefined && v !== '';
+});
+
+const tagList = computed(() => {
+  if (props.type !== 'tags') return [];
+  const v = props.value;
+  if (Array.isArray(v)) {
+    return v.map((item) => (item != null && typeof item === 'object' ? (item.name || item.label || item.title) : String(item))).filter(Boolean);
+  }
+  return [];
+});
+
+// For select/user/entity Listbox: model value
 const selectModelValue = computed(() => {
-  if (props.type === 'user') {
-    if (props.value && typeof props.value === 'object' && props.value._id) {
-      return props.value._id;
+  if (props.type === 'user' || props.type === 'entity') {
+    if (props.value && typeof props.value === 'object' && (props.value._id || props.value.id)) {
+      return props.value._id || props.value.id;
     }
     return props.value || null;
   }
   return props.value;
 });
 
-// For select/user Listbox: options array
+// For select/user/entity Listbox: options array
 const selectOptions = computed(() => {
   if (props.type === 'select') return props.options || [];
+  if (props.type === 'entity') return props.options || [];
   if (props.type === 'user') {
     return (users.value || []).map(u => ({
       value: u._id,

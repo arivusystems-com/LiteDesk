@@ -1,5 +1,6 @@
 const ModuleDefinition = require('../models/ModuleDefinition');
-const { buildTaskDefaultRelationshipsForSettings } = require('../utils/taskRelationshipSettings');
+const relationshipRegistry = require('../utils/relationshipRegistry');
+const { getOutgoingRelationships } = require('../utils/relationshipRegistry');
 const { filterFieldsByReadAccess, filterFieldsByWriteAccess, validateFieldWrite } = require('../utils/fieldAccessControl');
 
 /** Canonical key for field dedup: lowercase, trim, strip spaces and hyphens (so "deleted-by", "deletedBy", "Deleted By" all match) */
@@ -1566,7 +1567,7 @@ exports.listModules = async (req, res) => {
                     label: 'Linked Form',
                     description: 'Link audit forms to events for audit event types'
                 }
-            ] : m.key === 'tasks' ? buildTaskDefaultRelationshipsForSettings() : m.key === 'items' ? [
+            ] : (m.key === 'tasks' || m.key === 'deals') ? [] : m.key === 'items' ? [
                 {
                     name: 'Vendor',
                     type: 'lookup',
@@ -2896,9 +2897,81 @@ exports.updateModule = async (req, res) => {
             mod.fields = sanitizedFields;
         }
         
-        // Always update relationships if provided (even if empty array)
+        // Always update relationships if provided (even if empty array).
+        // Implementation decision: tenant settings only update ModuleDefinition.relationships
+        // (tenant config: enable/disable, labels, display options). We do NOT create or
+        // update RelationshipDefinition here; that is platform canonical schema (seeds/migrations only).
+        // Every entry must include relationshipKey that matches an existing RelationshipDefinition.
+        // If an entry has targetModuleKey but no relationshipKey, resolve from platform (so Settings UI
+        // relationships show in the Link Record drawer without requiring relationshipKey in the UI).
         if (relationships !== undefined) {
-            const newRelationships = Array.isArray(relationships) ? relationships : [];
+            const newRelationships = Array.isArray(relationships) ? [...relationships] : [];
+            const sourceAppKey = (mod.appKey || (mod.key === 'deals' ? 'sales' : mod.key === 'tasks' ? 'platform' : 'platform')).toString().toLowerCase();
+            const sourceModuleKey = (mod.moduleKey || mod.key || '').toString().toLowerCase();
+            const toTargetKey = (r) => {
+                const raw = r.targetModuleKey ?? r.targetModule;
+                if (raw == null) return '';
+                if (typeof raw === 'object') return String(raw.key ?? raw.moduleKey ?? '').toLowerCase().trim();
+                return String(raw).toLowerCase().trim();
+            };
+            const outgoing = await getOutgoingRelationships(sourceAppKey, sourceModuleKey);
+            for (const r of newRelationships) {
+                const targetKey = toTargetKey(r);
+                if (targetKey && (!r.relationshipKey || !String(r.relationshipKey).trim())) {
+                    const matches = outgoing.filter((def) => def.target && (String(def.target.moduleKey || '').toLowerCase() === targetKey));
+                    if (matches.length === 1) {
+                        r.relationshipKey = matches[0].relationshipKey;
+                    }
+                }
+            }
+            const missingKey = newRelationships.findIndex((r) => !r.relationshipKey || !String(r.relationshipKey).trim());
+            if (missingKey !== -1) {
+                const r = newRelationships[missingKey];
+                const targetKey = toTargetKey(r) || '?';
+                return res.status(400).json({
+                    success: false,
+                    message: `No platform relationship defined for ${sourceModuleKey} → ${targetKey}. Add it in seedPlatformRelationships.js (or run the seed script), then try again.`,
+                    code: 'RELATIONSHIP_KEY_REQUIRED',
+                    invalidIndex: missingKey
+                });
+            }
+            const invalid = newRelationships
+                .map((r) => String(r.relationshipKey).trim())
+                .filter((k) => !relationshipRegistry.has(k));
+            const invalidUnique = [...new Set(invalid)];
+            if (invalidUnique.length > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: `The following relationshipKeys do not exist in the platform schema: ${invalidUnique.join(', ')}. Define them via seed/migration first.`,
+                    code: 'RELATIONSHIP_KEY_NOT_FOUND',
+                    invalidKeys: invalidUnique
+                });
+            }
+            // Verify each relationship's source matches this module and target matches the relationship's targetModuleKey
+            const mismatch = newRelationships.findIndex((r) => {
+                const def = relationshipRegistry.get(r.relationshipKey);
+                if (!def) return true;
+                const targetModuleKey = toTargetKey(r);
+                const sourceMatch = def.source.appKey === sourceAppKey && def.source.moduleKey === sourceModuleKey;
+                const targetMatch = def.target.moduleKey === targetModuleKey;
+                return !sourceMatch || !targetMatch;
+            });
+            if (mismatch !== -1) {
+                const r = newRelationships[mismatch];
+                const def = relationshipRegistry.get(r.relationshipKey);
+                const targetModuleKey = toTargetKey(r);
+                return res.status(400).json({
+                    success: false,
+                    message: `Relationship "${r.relationshipKey}" does not match this module: expected source ${sourceAppKey}.${sourceModuleKey} and target module ${targetModuleKey}, but definition has source ${def?.source?.appKey}.${def?.source?.moduleKey} and target ${def?.target?.moduleKey}.`,
+                    code: 'RELATIONSHIP_MODULE_MISMATCH',
+                    invalidIndex: mismatch,
+                    relationshipKey: r.relationshipKey,
+                    expectedSource: { appKey: sourceAppKey, moduleKey: sourceModuleKey },
+                    expectedTargetModuleKey: targetModuleKey,
+                    definitionSource: def?.source,
+                    definitionTarget: def?.target
+                });
+            }
             console.log('📝 Setting relationships:', {
                 from: mod.relationships?.length || 0,
                 to: newRelationships.length,
@@ -3209,7 +3282,72 @@ exports.updateSystemModule = async (req, res) => {
             }
             updateObj.fields = fieldsOut;
         }
-        if (Array.isArray(relationships)) updateObj.relationships = relationships;
+        // Resolve and validate relationships (same as updateModule) so saved config works in Link Record drawer
+        if (relationships !== undefined) {
+            const newRelationships = Array.isArray(relationships) ? [...relationships] : [];
+            const sourceAppKey = (key === 'deals' ? 'sales' : key === 'tasks' ? 'platform' : 'platform').toString().toLowerCase();
+            const sourceModuleKey = key.toLowerCase();
+            const toTargetKey = (r) => {
+                const raw = r.targetModuleKey ?? r.targetModule;
+                if (raw == null) return '';
+                if (typeof raw === 'object') return String(raw.key ?? raw.moduleKey ?? '').toLowerCase().trim();
+                return String(raw).toLowerCase().trim();
+            };
+            const outgoing = await getOutgoingRelationships(sourceAppKey, sourceModuleKey);
+            for (const r of newRelationships) {
+                const targetKey = toTargetKey(r);
+                const relKey = r.relationshipKey && String(r.relationshipKey).trim();
+                if (targetKey && (!relKey || !relationshipRegistry.has(relKey))) {
+                    const matches = outgoing.filter((def) => def.target && (String(def.target.moduleKey || '').toLowerCase() === targetKey));
+                    if (matches.length === 1) {
+                        r.relationshipKey = matches[0].relationshipKey;
+                    }
+                }
+            }
+            const missingKey = newRelationships.findIndex((r) => !r.relationshipKey || !String(r.relationshipKey).trim());
+            if (missingKey !== -1) {
+                const r = newRelationships[missingKey];
+                const targetKey = toTargetKey(r) || '?';
+                return res.status(400).json({
+                    success: false,
+                    message: `No platform relationship defined for ${sourceModuleKey} → ${targetKey}. Add it in seedPlatformRelationships.js (or run the seed script), then try again.`,
+                    code: 'RELATIONSHIP_KEY_REQUIRED',
+                    invalidIndex: missingKey
+                });
+            }
+            const invalid = newRelationships
+                .map((r) => String(r.relationshipKey).trim())
+                .filter((k) => !relationshipRegistry.has(k));
+            const invalidUnique = [...new Set(invalid)];
+            if (invalidUnique.length > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: `The following relationshipKeys do not exist in the platform schema: ${invalidUnique.join(', ')}. Define them via seed/migration first.`,
+                    code: 'RELATIONSHIP_KEY_NOT_FOUND',
+                    invalidKeys: invalidUnique
+                });
+            }
+            const mismatch = newRelationships.findIndex((r) => {
+                const def = relationshipRegistry.get(r.relationshipKey);
+                if (!def) return true;
+                const targetModuleKey = toTargetKey(r);
+                const sourceMatch = def.source.appKey === sourceAppKey && def.source.moduleKey === sourceModuleKey;
+                const targetMatch = def.target.moduleKey === targetModuleKey;
+                return !sourceMatch || !targetMatch;
+            });
+            if (mismatch !== -1) {
+                const r = newRelationships[mismatch];
+                const def = relationshipRegistry.get(r.relationshipKey);
+                const targetModuleKey = toTargetKey(r);
+                return res.status(400).json({
+                    success: false,
+                    message: `Relationship "${r.relationshipKey}" does not match this module: expected source ${sourceAppKey}.${sourceModuleKey} and target ${targetModuleKey}, but definition has source ${def?.source?.appKey}.${def?.source?.moduleKey} and target ${def?.target?.moduleKey}.`,
+                    code: 'RELATIONSHIP_MODULE_MISMATCH',
+                    invalidIndex: mismatch
+                });
+            }
+            updateObj.relationships = newRelationships;
+        }
         if (pipelineSettings !== undefined) {
             const pipelineValue = Array.isArray(pipelineSettings) ? pipelineSettings : [];
             updateObj.pipelineSettings = key === 'deals'

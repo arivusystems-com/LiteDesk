@@ -19,7 +19,7 @@
                         type="button"
                         class="shrink-0 p-1 rounded text-indigo-200 hover:text-white"
                         aria-label="Back to record type"
-                        @click="selectedModuleKey = ''"
+                        @click="clearRecordTypeSelection"
                       >
                         <ChevronLeftIcon class="size-5" />
                       </button>
@@ -36,13 +36,19 @@
                     <!-- Record type selector (when no moduleKey and no type selected yet) -->
                     <div v-if="showTypeSelector && !effectiveModuleKey" class="flex-1 overflow-auto p-4">
                       <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Select a record type to link</p>
-                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div v-if="linkableTargetsLoading" class="flex items-center justify-center py-8">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                      </div>
+                      <div v-else-if="recordTypeOptions.length === 0" class="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
+                        No linkable record types configured for this module. Configure relationships in Settings → Modules.
+                      </div>
+                      <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <button
                           v-for="opt in recordTypeOptions"
                           :key="opt.key"
                           type="button"
                           class="flex items-center gap-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700/50 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                          @click="selectedModuleKey = opt.key"
+                          @click="selectRecordType(opt)"
                         >
                           <span class="text-base font-medium text-gray-900 dark:text-white">{{ opt.label }}</span>
                         </button>
@@ -73,10 +79,9 @@
                           >
                             <!-- Checkbox on the left for easy selection -->
                             <div class="shrink-0">
-                              <input 
-                                v-if="multiple" 
-                                type="checkbox" 
-                                class="w-4 h-4"
+                              <HeadlessCheckbox
+                                v-if="multiple"
+                                checkbox-class="w-4 h-4"
                                 :checked="isSelected(item._id) || isPrelinked(item._id)"
                                 :disabled="isPrelinked(item._id)"
                                 @change="toggleSelect(item)"
@@ -129,6 +134,7 @@ import { ref, watch, computed } from 'vue';
 import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import { XMarkIcon, ChevronLeftIcon } from '@heroicons/vue/24/outline';
 import apiClient from '@/utils/apiClient';
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { useAuthStore } from '@/stores/auth';
 
 const RECORD_TYPE_OPTIONS_DEFAULT = [
@@ -143,6 +149,8 @@ const props = defineProps({
   isOpen: { type: Boolean, default: false },
   moduleKey: { type: String, default: '' }, // When empty, show record type selector first
   recordTypes: { type: Array, default: null }, // Optional override for type selector (e.g. [{ key: 'project', label: 'Project' }, ...])
+  sourceAppKey: { type: String, default: '' }, // When set with sourceModuleKey, record types are fetched from settings/relationships (linkable-targets)
+  sourceModuleKey: { type: String, default: '' }, // Source module for linkable-targets (e.g. 'deals', 'tasks')
   multiple: { type: Boolean, default: true },
   title: { type: String, default: null },
   context: { type: Object, default: () => ({}) }, // e.g., { organizationId, contactId, taskId }
@@ -158,6 +166,9 @@ const searchQuery = ref('');
 const selectedIds = ref(new Set());
 const prelinkedIds = ref(new Set());
 const selectedModuleKey = ref(''); // When moduleKey prop is empty, user selects type first
+const linkableTargets = ref([]); // Fetched from /relationships/linkable-targets when sourceAppKey + sourceModuleKey set
+const linkableTargetsLoading = ref(false);
+const selectedRecordTypeOption = ref(null); // { key, label, relationshipKey?, targetAppKey? } when from API
 let searchDebounce = null;
 
 const MODULE_KEY_ALIASES = Object.freeze({
@@ -186,7 +197,22 @@ const normalizeModuleKey = (moduleKey) => {
 
 const showTypeSelector = computed(() => !props.moduleKey);
 const effectiveModuleKey = computed(() => normalizeModuleKey(props.moduleKey || selectedModuleKey.value));
-const recordTypeOptions = computed(() => props.recordTypes && props.recordTypes.length ? props.recordTypes : RECORD_TYPE_OPTIONS_DEFAULT);
+
+const useLinkableTargetsFromApi = computed(
+  () =>
+    Boolean(
+      props.sourceAppKey &&
+        props.sourceModuleKey &&
+        !(props.recordTypes && props.recordTypes.length)
+    )
+);
+
+const recordTypeOptions = computed(() => {
+  if (props.recordTypes && props.recordTypes.length) return props.recordTypes;
+  if (useLinkableTargetsFromApi.value && linkableTargets.value.length) return linkableTargets.value;
+  if (useLinkableTargetsFromApi.value) return []; // Still loading or no relationships configured
+  return RECORD_TYPE_OPTIONS_DEFAULT;
+});
 
 // Auth role
 const authStore = useAuthStore();
@@ -227,6 +253,35 @@ const closeDrawer = () => {
   searchQuery.value = '';
   prelinkedIds.value = new Set();
   selectedModuleKey.value = '';
+  selectedRecordTypeOption.value = null;
+};
+
+const selectRecordType = (opt) => {
+  selectedModuleKey.value = opt.key;
+  selectedRecordTypeOption.value = opt.relationshipKey != null ? opt : null;
+};
+
+const clearRecordTypeSelection = () => {
+  selectedModuleKey.value = '';
+  selectedRecordTypeOption.value = null;
+};
+
+const fetchLinkableTargets = async () => {
+  if (!props.sourceAppKey || !props.sourceModuleKey) return;
+  linkableTargetsLoading.value = true;
+  linkableTargets.value = [];
+  try {
+    const res = await apiClient.get('/relationships/linkable-targets', {
+      params: { appKey: props.sourceAppKey, moduleKey: props.sourceModuleKey }
+    });
+    if (res?.success && Array.isArray(res.data)) {
+      linkableTargets.value = res.data;
+    }
+  } catch (e) {
+    linkableTargets.value = [];
+  } finally {
+    linkableTargetsLoading.value = false;
+  }
 };
 
 const handleCreate = () => {
@@ -254,6 +309,8 @@ const endpointForModule = (moduleKey) => {
 const buildLinkedFilterParams = (moduleKey, context) => {
   const params = { limit: 1000 };
   if (!context) return params;
+  // When linking from a source record (e.g. deal), don't use generic list - prelinked are fetched via relationships/links
+  if (context.dealId && props.sourceModuleKey) return null;
   // Link targets based on module and context
   if (moduleKey === 'people' && context.organizationId) {
     params.organization = context.organizationId;
@@ -280,6 +337,30 @@ const fetchPrelinked = async () => {
     if (!modKey) return;
     // When context is task (or other "link to this record") we already have preselectedIds from parent; don't overwrite with a full list fetch
     if (props.context?.taskId) {
+      return;
+    }
+    // When linking from a Deal (or other source record), fetch already-linked target IDs via relationships/links
+    const sourceRecordId = props.context?.dealId;
+    if (sourceRecordId && props.sourceAppKey && props.sourceModuleKey && selectedRecordTypeOption.value?.relationshipKey) {
+      try {
+        const res = await apiClient.get('/relationships/links', {
+          params: {
+            appKey: props.sourceAppKey,
+            moduleKey: props.sourceModuleKey,
+            recordId: sourceRecordId
+          }
+        });
+        if (res?.success && Array.isArray(res.data)) {
+          const relKey = (selectedRecordTypeOption.value.relationshipKey || '').toLowerCase();
+          const ids = res.data
+            .filter((link) => (link?.relationshipKey || '').toLowerCase() === relKey && link?.relatedRecord?.recordId)
+            .map((link) => link.relatedRecord.recordId);
+          prelinkedIds.value = new Set(ids);
+          selectedIds.value = new Set([...prelinkedIds.value, ...selectedIds.value]);
+        }
+      } catch (e) {
+        // ignore
+      }
       return;
     }
     // Special case: when linking organizations to a contact, fetch the contact to get its current organization
@@ -352,12 +433,16 @@ watch(() => props.isOpen, async (open) => {
   if (open) {
     prelinkedIds.value = new Set(props.preselectedIds || []);
     selectedIds.value = new Set(props.preselectedIds || []);
+    if (useLinkableTargetsFromApi.value) {
+      await fetchLinkableTargets();
+    }
     if (!showTypeSelector.value || selectedModuleKey.value) {
       await fetchPrelinked();
       await fetchItems();
     }
   } else {
     selectedModuleKey.value = '';
+    selectedRecordTypeOption.value = null;
   }
 });
 
@@ -392,7 +477,16 @@ const selectSingle = (item) => { if (isPrelinked(item._id)) return; selectedIds.
 const confirmLink = () => {
   const idsToLink = Array.from(deltaSelectedIds.value);
   if (props.multiple && idsToLink.length === 0) return;
-  emit('linked', { moduleKey: effectiveModuleKey.value, ids: idsToLink, context: props.context });
+  const payload = {
+    moduleKey: effectiveModuleKey.value,
+    ids: idsToLink,
+    context: props.context
+  };
+  if (selectedRecordTypeOption.value?.relationshipKey) {
+    payload.relationshipKey = selectedRecordTypeOption.value.relationshipKey;
+    payload.targetAppKey = selectedRecordTypeOption.value.targetAppKey;
+  }
+  emit('linked', payload);
   closeDrawer();
 };
 </script>

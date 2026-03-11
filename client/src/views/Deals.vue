@@ -663,6 +663,58 @@ const fetchKanbanDeals = async () => {
 
 const currentSearchQuery = ref('');
 
+const DEAL_NAV_CONTEXT_STORAGE_PREFIX = 'litedesk-deal-nav-context:';
+const DEAL_NAV_CONTEXT_MAX_ENTRIES = 12;
+
+const getCurrentDealNavigationIds = () => {
+  if (currentView.value === 'kanban') {
+    return (kanbanDeals.value || [])
+      .map((deal) => String(deal?._id || deal?.id || '').trim())
+      .filter(Boolean);
+  }
+
+  const rows = moduleListRef.value?.getCurrentRows?.() || [];
+  return rows
+    .map((row) => String(row?._id || row?.id || '').trim())
+    .filter(Boolean);
+};
+
+const persistDealNavigationContext = (ids) => {
+  if (!Array.isArray(ids) || ids.length === 0) return '';
+
+  const uniqueIds = [...new Set(ids.map((id) => String(id || '').trim()).filter(Boolean))];
+  if (uniqueIds.length === 0) return '';
+
+  const token = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const payload = {
+    ids: uniqueIds,
+    createdAt: Date.now()
+  };
+
+  try {
+    sessionStorage.setItem(`${DEAL_NAV_CONTEXT_STORAGE_PREFIX}${token}`, JSON.stringify(payload));
+
+    const allKeys = [];
+    for (let index = 0; index < sessionStorage.length; index += 1) {
+      const key = sessionStorage.key(index);
+      if (key && key.startsWith(DEAL_NAV_CONTEXT_STORAGE_PREFIX)) {
+        allKeys.push(key);
+      }
+    }
+
+    if (allKeys.length > DEAL_NAV_CONTEXT_MAX_ENTRIES) {
+      allKeys
+        .sort()
+        .slice(0, allKeys.length - DEAL_NAV_CONTEXT_MAX_ENTRIES)
+        .forEach((key) => sessionStorage.removeItem(key));
+    }
+  } catch {
+    return '';
+  }
+
+  return token;
+};
+
 const handleFiltersChanged = () => {
   if (currentView.value === 'kanban') {
     fetchKanbanDeals();
@@ -759,7 +811,11 @@ const handleRowClick = (row) => {
 const viewDeal = (dealId, event = null, titleOverride = null) => {
   const title = titleOverride || kanbanDeals.value.find(d => d._id === dealId)?.name || 'Deal Detail';
   const openInBackground = event && (event.button === 1 || event.metaKey || event.ctrlKey);
-  openTab(`/deals/${dealId}`, { title, icon: 'briefcase', params: { name: title }, background: openInBackground });
+  const navContextToken = persistDealNavigationContext(getCurrentDealNavigationIds());
+  const routePath = navContextToken
+    ? `/deals/${dealId}?navCtx=${encodeURIComponent(navContextToken)}`
+    : `/deals/${dealId}`;
+  openTab(routePath, { title, icon: 'briefcase', params: { name: title }, background: openInBackground, insertAdjacent: true });
 };
 
 // Bulk actions

@@ -3,11 +3,52 @@
     <h2 id="record-state-heading" class="sr-only">{{ heading }}</h2>
     <div v-if="hasConfiguredFields" class="grid grid-cols-1 xl:grid-cols-2 gap-x-8 gap-y-2">
       <div class="space-y-1">
-        <div
+        <template
           v-for="field in leftFields"
           :key="field.key"
-          class="record-state-section__row flex items-center gap-x-6"
         >
+          <EditableLabeledValue
+            v-if="shouldRenderEditableField(field)"
+            :label="field.label"
+            :value="getFieldRawValue(field)"
+            :type="field.type || 'text'"
+            :prefix-icon="field.icon || null"
+            row-padding-class="record-state-section__row"
+            :can-edit="field.canEdit === true"
+            :options="Array.isArray(field.options) ? field.options : []"
+            :min="field.min"
+            :step="field.step"
+            :format-value="() => getFieldValue(field)"
+            layout="row"
+            @save="(value) => handleFieldSave(field, value)"
+          />
+          <div
+            v-else-if="shouldRenderActionField(field)"
+            class="record-state-section__row flex items-center gap-x-6"
+          >
+            <div class="flex items-center gap-2 min-w-[140px]">
+              <component
+                v-if="field.icon"
+                :is="field.icon"
+                class="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0"
+              />
+              <span class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ field.label }}</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <button
+                type="button"
+                class="w-full min-w-0 text-left text-sm text-gray-900 dark:text-white rounded px-2 py-1 -mx-2 -my-1 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                @click="handleFieldEdit(field, $event)"
+              >
+                <span v-if="getFieldValue(field)" class="truncate">{{ getFieldValue(field) }}</span>
+                <span v-else class="text-gray-300 dark:text-gray-600">—</span>
+              </button>
+            </div>
+          </div>
+          <div
+            v-else
+            class="record-state-section__row flex items-center gap-x-6"
+          >
           <div class="flex items-center gap-2 min-w-[140px]">
             <component
               v-if="field.icon"
@@ -24,18 +65,60 @@
               >
                 {{ getFieldValue(field) }}
               </span>
-              <span v-else class="block w-full text-sm text-gray-400 dark:text-gray-500">—</span>
+              <span v-else class="block w-full text-sm text-gray-300 dark:text-gray-600">—</span>
             </slot>
           </div>
-        </div>
+          </div>
+        </template>
       </div>
 
       <div class="space-y-1">
-        <div
+        <template
           v-for="field in rightFields"
           :key="field.key"
-          class="record-state-section__row flex items-center gap-x-6"
         >
+          <EditableLabeledValue
+            v-if="shouldRenderEditableField(field)"
+            :label="field.label"
+            :value="getFieldRawValue(field)"
+            :type="field.type || 'text'"
+            :prefix-icon="field.icon || null"
+            row-padding-class="record-state-section__row"
+            :can-edit="field.canEdit === true"
+            :options="Array.isArray(field.options) ? field.options : []"
+            :min="field.min"
+            :step="field.step"
+            :format-value="() => getFieldValue(field)"
+            layout="row"
+            @save="(value) => handleFieldSave(field, value)"
+          />
+          <div
+            v-else-if="shouldRenderActionField(field)"
+            class="record-state-section__row flex items-center gap-x-6"
+          >
+            <div class="flex items-center gap-2 min-w-[140px]">
+              <component
+                v-if="field.icon"
+                :is="field.icon"
+                class="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0"
+              />
+              <span class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ field.label }}</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <button
+                type="button"
+                class="w-full min-w-0 text-left text-sm text-gray-900 dark:text-white rounded px-2 py-1 -mx-2 -my-1 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                @click="handleFieldEdit(field, $event)"
+              >
+                <span v-if="getFieldValue(field)" class="truncate">{{ getFieldValue(field) }}</span>
+                <span v-else class="text-gray-300 dark:text-gray-600">—</span>
+              </button>
+            </div>
+          </div>
+          <div
+            v-else
+            class="record-state-section__row flex items-center gap-x-6"
+          >
           <div class="flex items-center gap-2 min-w-[140px]">
             <component
               v-if="field.icon"
@@ -52,10 +135,11 @@
               >
                 {{ getFieldValue(field) }}
               </span>
-              <span v-else class="block w-full text-sm text-gray-400 dark:text-gray-500">—</span>
+              <span v-else class="block w-full text-sm text-gray-300 dark:text-gray-600">—</span>
             </slot>
           </div>
-        </div>
+          </div>
+        </template>
       </div>
     </div>
 
@@ -73,7 +157,7 @@
           <div class="flex-1 min-w-0">
             <slot name="status">
               <span v-if="status != null && status !== ''" class="block w-full text-sm text-gray-900 dark:text-white">{{ status }}</span>
-              <span v-else class="block w-full text-sm text-gray-400 dark:text-gray-500">—</span>
+              <span v-else class="block w-full text-sm text-gray-300 dark:text-gray-600">—</span>
             </slot>
           </div>
         </div>
@@ -89,7 +173,7 @@
           <div class="flex-1 min-w-0">
             <slot name="startDate">
               <span v-if="startDate != null && startDate !== ''" class="block w-full text-sm text-gray-900 dark:text-white">{{ startDate }}</span>
-              <span v-else class="block w-full text-sm text-gray-400 dark:text-gray-500">—</span>
+              <span v-else class="block w-full text-sm text-gray-300 dark:text-gray-600">—</span>
             </slot>
           </div>
         </div>
@@ -105,7 +189,7 @@
           <div class="flex-1 min-w-0">
             <slot name="dueDate">
               <span v-if="dueDate != null && dueDate !== ''" class="block w-full text-sm text-gray-900 dark:text-white">{{ dueDate }}</span>
-              <span v-else class="block w-full text-sm text-gray-400 dark:text-gray-500">—</span>
+              <span v-else class="block w-full text-sm text-gray-300 dark:text-gray-600">—</span>
             </slot>
           </div>
         </div>
@@ -121,7 +205,7 @@
           <div class="flex-1 min-w-0">
             <slot name="timeEstimate">
               <span v-if="timeEstimate != null && timeEstimate !== ''" class="block w-full text-sm text-gray-900 dark:text-white">{{ timeEstimate }}</span>
-              <span v-else class="block w-full text-sm text-gray-400 dark:text-gray-500">—</span>
+              <span v-else class="block w-full text-sm text-gray-300 dark:text-gray-600">—</span>
             </slot>
           </div>
         </div>
@@ -140,7 +224,7 @@
           <div class="flex-1 min-w-0">
             <slot name="owner">
               <span v-if="owner != null && owner !== ''" class="block w-full text-sm text-gray-900 dark:text-white">{{ owner }}</span>
-              <span v-else class="block w-full text-sm text-gray-400 dark:text-gray-500">—</span>
+              <span v-else class="block w-full text-sm text-gray-300 dark:text-gray-600">—</span>
             </slot>
           </div>
         </div>
@@ -156,7 +240,7 @@
           <div class="flex-1 min-w-0">
             <slot name="priority">
               <span v-if="priority != null && priority !== ''" class="block w-full text-sm text-gray-900 dark:text-white">{{ priority }}</span>
-              <span v-else class="block w-full text-sm text-gray-400 dark:text-gray-500">—</span>
+              <span v-else class="block w-full text-sm text-gray-300 dark:text-gray-600">—</span>
             </slot>
           </div>
         </div>
@@ -180,7 +264,8 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, useSlots } from 'vue';
+import EditableLabeledValue from '@/components/record-page/EditableLabeledValue.vue';
 
 /**
  * RecordStateSection – current state and signals in two-column layout.
@@ -208,6 +293,7 @@ const props = defineProps({
 });
 
 const hasConfiguredFields = computed(() => Array.isArray(props.fields) && props.fields.length > 0);
+const slots = useSlots();
 
 const leftFields = computed(() => {
   if (!hasConfiguredFields.value) return [];
@@ -238,6 +324,40 @@ const getFieldValue = (field) => {
     }
   }
   return raw;
+};
+
+const getFieldRawValue = (field) => {
+  if (!field) return null;
+  if (Object.prototype.hasOwnProperty.call(field, 'value')) return field.value;
+  const valueKey = field.valueKey || field.key;
+  return props.fieldValues?.[valueKey] ?? null;
+};
+
+const hasFieldSlot = (field) => {
+  const slotKey = field?.slotKey || field?.key;
+  return Boolean(slotKey && slots[slotKey]);
+};
+
+const shouldRenderEditableField = (field) => {
+  if (!field || hasFieldSlot(field)) return false;
+  return field.canEdit === true && typeof field.onSave === 'function';
+};
+
+const shouldRenderActionField = (field) => {
+  if (!field || hasFieldSlot(field)) return false;
+  return field.canOpenEditor === true && typeof field.onEdit === 'function';
+};
+
+const handleFieldSave = (field, value) => {
+  if (typeof field?.onSave === 'function') {
+    field.onSave(value);
+  }
+};
+
+const handleFieldEdit = (field, event) => {
+  if (typeof field?.onEdit === 'function') {
+    field.onEdit(event);
+  }
 };
 </script>
 

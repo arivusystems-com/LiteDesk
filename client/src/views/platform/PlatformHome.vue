@@ -293,14 +293,16 @@ const loadAlerts = async () => {
 const navigateToTask = (task) => {
   openTab(`/tasks/${task._id}`, {
     title: task.title || 'Task',
-    icon: '📋'
+    icon: '📋',
+    insertAdjacent: true
   });
 };
 
 const navigateToEvent = (event) => {
   openTab(`/events/${event._id}`, {
     title: event.eventName || 'Event',
-    icon: '📅'
+    icon: '📅',
+    insertAdjacent: true
   });
 };
 

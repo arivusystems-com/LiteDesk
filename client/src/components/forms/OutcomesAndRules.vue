@@ -83,10 +83,9 @@
 
       <div class="space-y-3">
         <label class="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localOutcomes.reportingMetrics.overallCompliance"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 focus:ring-2"
+            checkbox-class="w-4 h-4"
           />
           <div>
             <span class="text-sm font-medium text-gray-900 dark:text-white">
@@ -99,10 +98,9 @@
         </label>
 
         <label class="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localOutcomes.reportingMetrics.sectionWiseCompliance"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 focus:ring-2"
+            checkbox-class="w-4 h-4"
           />
           <div>
             <span class="text-sm font-medium text-gray-900 dark:text-white">
@@ -115,10 +113,9 @@
         </label>
 
         <label class="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localOutcomes.reportingMetrics.evidenceCompletion"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 focus:ring-2"
+            checkbox-class="w-4 h-4"
           />
           <div>
             <span class="text-sm font-medium text-gray-900 dark:text-white">
@@ -134,10 +131,9 @@
           v-if="hasRatingQuestions"
           class="flex items-center gap-3 cursor-pointer"
         >
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localOutcomes.reportingMetrics.averageRating"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 focus:ring-2"
+            checkbox-class="w-4 h-4"
           />
           <div>
             <span class="text-sm font-medium text-gray-900 dark:text-white">
@@ -167,10 +163,9 @@
 
       <div class="space-y-3">
         <label class="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localOutcomes.postSubmissionSignals.emitOnAuditFail"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 focus:ring-2"
+            checkbox-class="w-4 h-4"
           />
           <div>
             <span class="text-sm font-medium text-gray-900 dark:text-white">
@@ -183,10 +178,9 @@
         </label>
 
         <label class="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localOutcomes.postSubmissionSignals.emitOnSectionFail"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 focus:ring-2"
+            checkbox-class="w-4 h-4"
           />
           <div>
             <span class="text-sm font-medium text-gray-900 dark:text-white">
@@ -199,10 +193,9 @@
         </label>
 
         <label class="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localOutcomes.postSubmissionSignals.emitOnCriticalQuestionFail"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 focus:ring-2"
+            checkbox-class="w-4 h-4"
           />
           <div>
             <span class="text-sm font-medium text-gray-900 dark:text-white">
@@ -215,10 +208,9 @@
         </label>
 
         <label class="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
+          <HeadlessCheckbox
             v-model="localOutcomes.postSubmissionSignals.emitOnMissingEvidence"
-            class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 focus:ring-2"
+            checkbox-class="w-4 h-4"
           />
           <div>
             <span class="text-sm font-medium text-gray-900 dark:text-white">

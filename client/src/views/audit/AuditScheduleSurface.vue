@@ -915,7 +915,7 @@
                     <input
                       v-model="startDateTimeLocal"
                       @input="handleStartDateTimeChange"
-                      @click="openDatePicker"
+                      @click="handleDateTimeInputClick"
                       type="datetime-local"
                       :min="minDateTime"
                       required
@@ -940,7 +940,7 @@
                     <input
                       v-model="endDateTimeLocal"
                       @input="handleEndDateTimeChange"
-                      @click="openDatePicker"
+                      @click="handleDateTimeInputClick"
                       type="datetime-local"
                       :min="minEndDateTime"
                       required
@@ -1540,6 +1540,7 @@
  */
 
 import { ref, computed, watch, onMounted } from 'vue';
+import type { DirectiveBinding } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { AuditScheduleStep } from '@/types/auditSchedule.types';
 import type { AuditScheduleDraft, AuditScheduleValidationResult } from '@/types/auditSchedule.types';
@@ -1547,6 +1548,39 @@ import { getAuditEventTypes, getEventTypeByLabel } from '@/metadata/eventTypes';
 import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/utils/apiClient';
 import { openDatePicker } from '@/utils/dateUtils';
+
+type OrganizationLite = {
+  _id: string;
+  name?: string;
+  email?: string;
+  address?: string;
+  [key: string]: any;
+};
+
+type UserLite = {
+  _id: string;
+  firstName?: string;
+  lastName?: string;
+  username?: string;
+  email?: string;
+  [key: string]: any;
+};
+
+type AuditFormLite = {
+  _id: string;
+  name?: string;
+  description?: string;
+  status?: string;
+  formType?: string;
+  sections?: any[];
+  [key: string]: any;
+};
+
+type StepDefinition = {
+  step: AuditScheduleStep;
+  label: string;
+  description: string;
+};
 
 const route = useRoute();
 const router = useRouter();
@@ -1566,7 +1600,7 @@ const authStore = useAuthStore();
 // See: docs/architecture/audit-scheduling-surface.md Section 6.1 (Guided, Step-Based Flow)
 
 // Step definitions with labels and descriptions
-const stepDefinitions = [
+const stepDefinitions: StepDefinition[] = [
   {
     step: AuditScheduleStep.SELECT_TYPE,
     label: 'Audit Type',
@@ -1639,9 +1673,9 @@ const userOrganization = computed(() => {
 
 // Organization search and selection state
 const orgSearchQuery = ref('');
-const organizations = ref([]);
+const organizations = ref<OrganizationLite[]>([]);
 const loadingOrganizations = ref(false);
-let orgSearchDebounce = null;
+let orgSearchDebounce: ReturnType<typeof setTimeout> | null = null;
 
 // Filtered organizations based on search
 const filteredOrganizations = computed(() => {
@@ -1663,6 +1697,10 @@ const filteredOrganizations = computed(() => {
 const selectedOrganizations = computed(() => {
   return organizations.value.filter(org => draft.value.targetOrganizations.includes(org._id));
 });
+
+const handleDateTimeInputClick = (event: PointerEvent) => {
+  openDatePicker(event.target);
+};
 
 // ============================================================================
 // Audit Scheduling Prerequisite: Organization Address (UX-safe)
@@ -1790,7 +1828,10 @@ const saveAddress = async () => {
     if (Array.isArray(organizations.value)) {
       const idx = organizations.value.findIndex(o => o?._id === orgId);
       if (idx >= 0) {
-        organizations.value[idx] = { ...organizations.value[idx], address: trimmed };
+        const existingOrganization = organizations.value[idx];
+        if (existingOrganization) {
+          organizations.value[idx] = { ...existingOrganization, address: trimmed };
+        }
       }
     }
 
@@ -1937,7 +1978,7 @@ const getOrganizationInitials = (orgId: string): string => {
   if (!org?.name) return '?';
   const words = org.name.split(' ').filter(Boolean);
   if (words.length >= 2) {
-    return (words[0][0] + words[1][0]).toUpperCase();
+    return ((words[0]?.[0] || '') + (words[1]?.[0] || '')).toUpperCase();
   }
   return org.name.substring(0, 2).toUpperCase();
 };
@@ -1963,7 +2004,7 @@ watch(() => draft.value.auditType, (newType) => {
 });
 
 // User search and selection state
-const users = ref([]);
+const users = ref<UserLite[]>([]);
 const loadingUsers = ref(false);
 const auditorSearchQuery = ref('');
 const reviewerSearchQuery = ref('');
@@ -1971,7 +2012,7 @@ const correctiveOwnerSearchQuery = ref('');
 const showAuditorDropdown = ref(false);
 const showReviewerDropdown = ref(false);
 const showCorrectiveOwnerDropdown = ref(false);
-let userSearchDebounce = null;
+let userSearchDebounce: ReturnType<typeof setTimeout> | null = null;
 
 // Computed: Reviewer section visibility and requirements
 const showReviewerSection = computed(() => {
@@ -2094,7 +2135,7 @@ const getUserInitials = (user: any): string => {
   const name = getUserDisplayName(user);
   const words = name.split(' ').filter(Boolean);
   if (words.length >= 2) {
-    return (words[0][0] + words[1][0]).toUpperCase();
+    return ((words[0]?.[0] || '') + (words[1]?.[0] || '')).toUpperCase();
   }
   return name.substring(0, 2).toUpperCase();
 };
@@ -2161,15 +2202,16 @@ const clearRole = (role: string) => {
 
 // Click outside directive for dropdowns
 const vClickOutside = {
-  mounted(el, binding) {
-    el.clickOutsideEvent = (event) => {
-      if (!(el === event.target || el.contains(event.target))) {
+  mounted(el: HTMLElement & { clickOutsideEvent?: (event: Event) => void }, binding: DirectiveBinding<() => void>) {
+    el.clickOutsideEvent = (event: Event) => {
+      const target = event.target as Node | null;
+      if (!(target && (el === target || el.contains(target)))) {
         binding.value();
       }
     };
     document.addEventListener('click', el.clickOutsideEvent);
   },
-  unmounted(el) {
+  unmounted(el: HTMLElement & { clickOutsideEvent?: (event: Event) => void }) {
     if (el.clickOutsideEvent) {
       document.removeEventListener('click', el.clickOutsideEvent);
     }
@@ -2439,14 +2481,14 @@ watch(() => draft.value.endDateTime, (newValue) => {
 // ============================================================================
 
 // Form search and selection state
-const forms = ref([]);
+const forms = ref<AuditFormLite[]>([]);
 const loadingForms = ref(false);
 const formSearchQuery = ref('');
 const showFormDropdown = ref(false);
-let formSearchDebounce = null;
+let formSearchDebounce: ReturnType<typeof setTimeout> | null = null;
 
 // Selected form
-const selectedForm = computed(() => {
+const selectedForm = computed<AuditFormLite | null>(() => {
   if (!draft.value.linkedFormId || !Array.isArray(forms.value)) return null;
   return forms.value.find(f => f._id === draft.value.linkedFormId) || null;
 });
@@ -2486,15 +2528,15 @@ const fetchForms = async () => {
     // Ready forms become Active when linked to an event
     const response = await apiClient.get('/forms', { params: { limit: 100 } });
     if (response.success) {
-      const allForms = response.data || [];
+      const allForms: AuditFormLite[] = Array.isArray(response.data) ? response.data : [];
       
       // Filter to show only Ready and Active forms
-      const readyAndActiveForms = allForms.filter(form => 
+      const readyAndActiveForms = allForms.filter((form: AuditFormLite) => 
         form.status === 'Ready' || form.status === 'Active'
       );
       
       // Filter to show audit-related forms
-      forms.value = readyAndActiveForms.filter(form => {
+      forms.value = readyAndActiveForms.filter((form: AuditFormLite) => {
         // Prefer Audit types; include all Ready/Active forms as fallback if no audit forms
         return !form.formType || 
                form.formType === 'Audit' || 
@@ -2590,6 +2632,7 @@ const getAuditTitlePrefix = (auditTypeLabel: string | null): string => {
 const generatedAuditTitle = computed(() => {
   const auditTypeLabel = draft.value.auditType;
   const prefix = getAuditTitlePrefix(auditTypeLabel);
+  const firstTargetOrganizationId = draft.value.targetOrganizations[0];
 
   if (auditTypeLabel === 'External Audit Beat') {
     const count = draft.value.targetOrganizations.length || 0;
@@ -2598,8 +2641,8 @@ const generatedAuditTitle = computed(() => {
   }
 
   const orgName =
-    draft.value.targetOrganizations.length > 0
-      ? getOrganizationName(draft.value.targetOrganizations[0])
+    firstTargetOrganizationId
+      ? getOrganizationName(firstTargetOrganizationId)
       : 'Organization';
 
   return `${prefix} — ${orgName || 'Organization'}`;
@@ -2714,7 +2757,13 @@ const scheduleAudit = async () => {
       }));
     } else {
       // Single-org audits: use relatedToId
-      eventPayload.relatedToId = draft.value.targetOrganizations[0];
+      const firstTargetOrganizationId = draft.value.targetOrganizations[0];
+      if (!firstTargetOrganizationId) {
+        scheduleError.value = 'Target organization is required.';
+        scheduling.value = false;
+        return;
+      }
+      eventPayload.relatedToId = firstTargetOrganizationId;
     }
 
     // ARCHITECTURE NOTE: Call audit-scoped event creation API (exclusive audit creation path)
@@ -2814,7 +2863,7 @@ const currentStepIndex = computed(() => {
 });
 
 const currentStepDefinition = computed(() => {
-  return stepDefinitions[currentStepIndex.value];
+  return stepDefinitions[currentStepIndex.value] ?? stepDefinitions[0]!;
 });
 
 const isLastStep = computed(() => {
@@ -2916,7 +2965,8 @@ const nextStep = () => {
 
   const nextIndex = currentStepIndex.value + 1;
   if (nextIndex < stepDefinitions.length) {
-    currentStep.value = stepDefinitions[nextIndex].step;
+    const next = stepDefinitions[nextIndex];
+    if (next) currentStep.value = next.step;
   } else {
     // Last step - handle scheduling (will be implemented later)
     handleSchedule();
@@ -2926,7 +2976,8 @@ const nextStep = () => {
 const prevStep = () => {
   const prevIndex = currentStepIndex.value - 1;
   if (prevIndex >= 0) {
-    currentStep.value = stepDefinitions[prevIndex].step;
+    const prev = stepDefinitions[prevIndex];
+    if (prev) currentStep.value = prev.step;
   }
 };
 

@@ -293,12 +293,10 @@
                             ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' 
                             : 'border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-600 bg-white dark:bg-gray-800'"
                         >
-                          <input
-                            type="checkbox"
-                            :value="option"
-                            v-model="formData[question.questionId]"
-                            @change="handleInputChange"
-                            class="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                          <HeadlessCheckbox
+                            :checked="(formData[question.questionId] || []).includes(option)"
+                            @change="toggleQuestionCheckboxOption(question.questionId, option, $event)"
+                            checkbox-class="w-5 h-5 cursor-pointer"
                           />
                           <span class="flex-1 text-gray-900 dark:text-white font-medium">{{ option }}</span>
                           <div v-if="(formData[question.questionId] || []).includes(option)" class="w-6 h-6 bg-indigo-600 rounded flex items-center justify-center">
@@ -494,12 +492,10 @@
                             ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' 
                             : 'border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-600 bg-white dark:bg-gray-800'"
                         >
-                          <input
-                            type="checkbox"
-                            :value="option"
-                            v-model="formData[question.questionId]"
-                            @change="handleInputChange"
-                            class="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                          <HeadlessCheckbox
+                            :checked="(formData[question.questionId] || []).includes(option)"
+                            @change="toggleQuestionCheckboxOption(question.questionId, option, $event)"
+                            checkbox-class="w-5 h-5 cursor-pointer"
                           />
                           <span class="flex-1 text-gray-900 dark:text-white font-medium">{{ option }}</span>
                           <div v-if="(formData[question.questionId] || []).includes(option)" class="w-6 h-6 bg-indigo-600 rounded flex items-center justify-center">
@@ -621,6 +617,7 @@
 </template>
 
 <script setup>
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
@@ -774,6 +771,21 @@ const getSectionCompletionPercentage = (section) => {
   const total = getSectionQuestionCount(section);
   if (total === 0) return 100;
   return (getSectionAnsweredCount(section) / total) * 100;
+};
+
+const toggleQuestionCheckboxOption = (questionId, option, event) => {
+  const isChecked = !!event?.target?.checked;
+  const selectedOptions = Array.isArray(formData.value[questionId]) ? formData.value[questionId] : [];
+
+  if (isChecked) {
+    if (!selectedOptions.includes(option)) {
+      formData.value[questionId] = [...selectedOptions, option];
+    }
+  } else {
+    formData.value[questionId] = selectedOptions.filter(item => item !== option);
+  }
+
+  handleInputChange();
 };
 
 // Auto-save functionality

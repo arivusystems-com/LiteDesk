@@ -125,6 +125,9 @@ export function mergeFields(
     const idx = seenCanonical.get(k);
     if (idx !== undefined) {
       const existing = dedupedBackend[idx];
+      if (!existing) {
+        continue;
+      }
       if ((f.key || '').indexOf(' ') === -1 && (existing.key || '').indexOf(' ') !== -1) {
         dedupedBackend[idx] = f;
       }

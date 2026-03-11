@@ -61,11 +61,10 @@
       <!-- Custom Title Cell with checkbox -->
       <template #cell-title="{ row }">
         <div class="flex items-center gap-3">
-          <input 
-            type="checkbox" 
+          <HeadlessCheckbox 
             :checked="row.status === 'completed'"
             @click.stop="toggleTaskStatus(row)"
-            class="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+            checkbox-class="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
           />
           <span :class="['font-semibold', row.status === 'completed' ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white']">
             {{ row.title }}
@@ -300,6 +299,7 @@
 </template>
 
 <script setup>
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, computed, watch, nextTick, onMounted, onActivated } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
@@ -440,6 +440,47 @@ const currentSearchQuery = ref('');
 
 const refreshList = () => {
   moduleListRef.value?.refresh?.();
+};
+
+// Header navigation context (prev/next on task record page)
+const TASK_NAV_CONTEXT_STORAGE_PREFIX = 'litedesk-task-nav-context:';
+const TASK_NAV_CONTEXT_MAX_ENTRIES = 12;
+
+const getCurrentTaskNavigationIds = () => {
+  if (currentView.value === 'kanban') {
+    return (kanbanTasks.value || [])
+      .map((t) => String(t?._id || t?.id || '').trim())
+      .filter(Boolean);
+  }
+  const rows = moduleListRef.value?.getCurrentRows?.() || [];
+  return rows
+    .map((row) => String(row?._id || row?.id || '').trim())
+    .filter(Boolean);
+};
+
+const persistTaskNavigationContext = (ids) => {
+  if (!Array.isArray(ids) || ids.length === 0) return '';
+  const uniqueIds = [...new Set(ids.map((id) => String(id || '').trim()).filter(Boolean))];
+  if (uniqueIds.length === 0) return '';
+  const token = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const payload = { ids: uniqueIds, createdAt: Date.now() };
+  try {
+    sessionStorage.setItem(`${TASK_NAV_CONTEXT_STORAGE_PREFIX}${token}`, JSON.stringify(payload));
+    const allKeys = [];
+    for (let index = 0; index < sessionStorage.length; index += 1) {
+      const key = sessionStorage.key(index);
+      if (key && key.startsWith(TASK_NAV_CONTEXT_STORAGE_PREFIX)) allKeys.push(key);
+    }
+    if (allKeys.length > TASK_NAV_CONTEXT_MAX_ENTRIES) {
+      allKeys
+        .sort()
+        .slice(0, allKeys.length - TASK_NAV_CONTEXT_MAX_ENTRIES)
+        .forEach((k) => sessionStorage.removeItem(k));
+    }
+  } catch {
+    return '';
+  }
+  return token;
 };
 
 // Initialize view from route query or localStorage
@@ -601,10 +642,12 @@ const handleKanbanUpdate = async ({ item, newStage }) => {
 
 const handleTaskCardClick = (task, event) => {
   const openInBackground = event && (event.button === 1 || event.metaKey || event.ctrlKey);
-  openTab(`/tasks/${task._id}`, {
-    title: task.title || 'Task Detail',
-    background: openInBackground
-  });
+  const title = task.title || 'Task Detail';
+  const navContextToken = persistTaskNavigationContext(getCurrentTaskNavigationIds());
+  const routePath = navContextToken
+    ? `/tasks/${task._id}?navCtx=${encodeURIComponent(navContextToken)}`
+    : `/tasks/${task._id}`;
+  openTab(routePath, { title, background: openInBackground, insertAdjacent: true });
 };
 
 const createInitialData = ref({});
@@ -708,11 +751,12 @@ const openCreateModal = () => {
 };
 
 const handleRowClick = (row) => {
-  // Navigate to task detail if route exists, otherwise emit event
-  openTab(`/tasks/${row._id}`, {
-    title: row.title || 'Task Detail',
-    background: false
-  });
+  const title = row.title || 'Task Detail';
+  const navContextToken = persistTaskNavigationContext(getCurrentTaskNavigationIds());
+  const routePath = navContextToken
+    ? `/tasks/${row._id}?navCtx=${encodeURIComponent(navContextToken)}`
+    : `/tasks/${row._id}`;
+  openTab(routePath, { title, background: false, insertAdjacent: true });
 };
 
 const handleDeleteTask = async (row) => {

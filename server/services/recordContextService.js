@@ -64,11 +64,34 @@ const {
  */
 async function getRecordContext(organizationId, appKey, moduleKey, recordId, options = {}) {
   try {
-    // Get module definition
-    const moduleDef = await ModuleDefinition.findOne({
-      appKey: appKey.toLowerCase(),
-      moduleKey: moduleKey.toLowerCase()
+    const normAppKey = appKey.toLowerCase();
+    const normModuleKey = moduleKey.toLowerCase();
+
+    // Get platform module definition (same rule as getTenantModuleConfig: organizationId null or missing)
+    let moduleDef = await ModuleDefinition.findOne({
+      appKey: normAppKey,
+      moduleKey: normModuleKey,
+      $or: [
+        { organizationId: null },
+        { organizationId: { $exists: false } }
+      ]
     });
+    if (!moduleDef) {
+      moduleDef = await ModuleDefinition.findOne({ appKey: normAppKey, moduleKey: normModuleKey });
+    }
+
+    // Current module's relationship config (tenant override wins) for isLookup pass-through
+    let currentModuleRelationships = (moduleDef && Array.isArray(moduleDef.relationships)) ? moduleDef.relationships : [];
+    if (organizationId) {
+      try {
+        const tenantMod = await ModuleDefinition.findOne({ organizationId, key: moduleKey.toLowerCase() })
+          .select('relationships')
+          .lean();
+        if (tenantMod && Array.isArray(tenantMod.relationships) && tenantMod.relationships.length > 0) {
+          currentModuleRelationships = tenantMod.relationships;
+        }
+      } catch (_) { /* ignore */ }
+    }
 
     // SAFETY: Cross-app relationship resolution must never throw
     // Get effective relationships for this module
@@ -98,6 +121,17 @@ async function getRecordContext(organizationId, appKey, moduleKey, recordId, opt
 
       const direction = isSource ? 'SOURCE' : 'TARGET';
       const uiConfig = isSource ? rel.ui.source : rel.ui.target;
+
+      let isLookup = false;
+      if (isSource && currentModuleRelationships.length > 0) {
+        const targetModKey = (rel.target && rel.target.moduleKey) || '';
+        const match = currentModuleRelationships.find(function (r) {
+          const keyMatch = r.relationshipKey && String(r.relationshipKey).toLowerCase() === String(rel.relationshipKey).toLowerCase();
+          const targetMatch = r.targetModuleKey && String(r.targetModuleKey).toLowerCase() === String(targetModKey).toLowerCase();
+          return keyMatch || targetMatch;
+        });
+        if (match) isLookup = !!match.isLookup;
+      }
 
       // Check if required relationship is satisfied
       let requiredSatisfied = true;
@@ -138,6 +172,7 @@ async function getRecordContext(organizationId, appKey, moduleKey, recordId, opt
         cascade: rel.cascade,
         target: target,
         records: related ? related.records : [],
+        isLookup,
         ui: {
           showAs: uiConfig.showAs || 'TAB',
           label: uiConfig.label || rel.relationshipKey,
@@ -145,6 +180,45 @@ async function getRecordContext(organizationId, appKey, moduleKey, recordId, opt
         }
       };
     });
+
+    // Enrich TARGET-direction relationships with isLookup from source module's relationship config (UI-only; no schema change)
+    for (let i = 0; i < relationships.length; i++) {
+      const out = relationships[i];
+      if (out.direction !== 'TARGET') continue;
+      const eff = effectiveRelationships.find((e) => e.relationshipKey === out.relationshipKey);
+      if (!eff || !eff.source) continue;
+      const srcApp = (eff.source.appKey || '').toString().toLowerCase();
+      const srcMod = (eff.source.moduleKey || '').toString().toLowerCase();
+      if (!srcMod) continue;
+      let sourceDef = null;
+      try {
+        if (organizationId) {
+          sourceDef = await ModuleDefinition.findOne({
+            organizationId,
+            key: srcMod
+          })
+            .select('relationships')
+            .lean();
+        }
+        if (!sourceDef) {
+          sourceDef = await ModuleDefinition.findOne({
+            organizationId: null,
+            appKey: srcApp,
+            moduleKey: srcMod
+          })
+            .select('relationships')
+            .lean();
+        }
+      } catch (_) { /* ignore */ }
+      if (sourceDef && Array.isArray(sourceDef.relationships)) {
+        const match = sourceDef.relationships.find(
+          (r) =>
+            (r.relationshipKey && String(r.relationshipKey).toLowerCase() === String(out.relationshipKey).toLowerCase()) ||
+            (r.targetModuleKey && String(r.targetModuleKey).toLowerCase() === moduleKey.toLowerCase())
+        );
+        if (match) out.isLookup = !!match.isLookup;
+      }
+    }
 
     // Check required relationships satisfaction
     for (const rel of relationships) {

@@ -206,11 +206,10 @@
                         class="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer transition-colors"
                         @click.stop
                       >
-                        <input
-                          type="checkbox"
+                        <HeadlessCheckbox
                           :checked="isRoleSelected(role._id)"
                           @change="toggleRole(role._id)"
-                          class="w-5 h-5 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 mt-0.5 flex-shrink-0"
+                          checkbox-class="w-5 h-5 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 mt-0.5 flex-shrink-0"
                         />
                         <div class="flex-1 min-w-0">
                           <div class="flex items-center gap-2">
@@ -460,10 +459,9 @@
           <!-- Status -->
           <div>
             <label class="flex items-center gap-3 cursor-pointer">
-              <input
+              <HeadlessCheckbox
                 v-model="form.isActive"
-                type="checkbox"
-                class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                checkbox-class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
               />
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Active</span>
             </label>
@@ -494,6 +492,7 @@
 </template>
 
 <script setup>
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, computed, watch, onMounted } from 'vue';
 import { Combobox, ComboboxButton, ComboboxInput, ComboboxOptions, ComboboxOption } from '@headlessui/vue';
 import { CheckIcon } from '@heroicons/vue/24/solid';

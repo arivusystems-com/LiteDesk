@@ -86,7 +86,7 @@
               </select>
             </div>
             <label class="flex items-center gap-2">
-              <input type="checkbox" v-model="addPersonForm.isPrimary" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+              <HeadlessCheckbox v-model="addPersonForm.isPrimary" />
               <span class="text-sm text-gray-700 dark:text-gray-300">Primary</span>
             </label>
             <span v-if="addPersonForm.isPrimary" class="text-xs text-gray-500 self-center">(Primary contact)</span>
@@ -187,7 +187,7 @@
               </select>
             </div>
             <label class="flex items-center gap-2" :class="{ 'opacity-50': addOrgForm.role !== 'customer' }">
-              <input type="checkbox" v-model="addOrgForm.isPrimary" :disabled="addOrgForm.role !== 'customer'" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+              <HeadlessCheckbox v-model="addOrgForm.isPrimary" :disabled="addOrgForm.role !== 'customer'" />
               <span class="text-sm text-gray-700 dark:text-gray-300">Primary</span>
             </label>
             <span v-if="addOrgForm.role !== 'customer'" class="text-xs text-gray-500 self-center">(Customer only)</span>
@@ -214,6 +214,7 @@ import { ref, computed, watch } from 'vue';
 import { StarIcon } from '@heroicons/vue/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/vue/24/solid';
 import { TrashIcon } from '@heroicons/vue/24/outline';
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 
 const personRoles = [
   { value: 'primary_contact', label: 'Primary contact' },

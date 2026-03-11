@@ -83,7 +83,7 @@
               :title="isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
               class="flex-shrink-0 p-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
             >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg :class="shouldShowExpanded ? 'w-5 h-5' : 'w-6 h-6'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path v-if="shouldShowExpanded" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                 <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
               </svg>
@@ -190,23 +190,23 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useColorMode } from '@/composables/useColorMode';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
-import PlatformSettings from '@/components/settings/PlatformSettings.vue';
-import OrganizationSettings from '@/components/settings/OrganizationSettings.vue';
-import SecuritySettings from '@/components/settings/SecuritySettings.vue';
-import IntegrationsSettings from '@/components/settings/IntegrationsSettings.vue';
-import UsersAccessSettings from '@/components/settings/UsersAccessSettings.vue';
-import AppsSettings from '@/components/settings/AppsSettings.vue';
-import SettingsLandingPage from '@/components/settings/SettingsLandingPage.vue';
-import CoreModulesList from '@/components/settings/CoreModulesList.vue';
-import CoreModuleDetail from '@/components/settings/CoreModuleDetail.vue';
-import ApplicationsList from '@/components/settings/ApplicationsList.vue';
-import ApplicationDetail from '@/components/settings/ApplicationDetail.vue';
-import AppManagement from '@/components/settings/AppManagement.vue';
-import SubscriptionsList from '@/components/settings/SubscriptionsList.vue';
-import SubscriptionDetail from '@/components/settings/SubscriptionDetail.vue';
-import NotificationSettings from '@/components/settings/NotificationSettings.vue';
-import DemoRequests from '@/views/DemoRequests.vue';
-import InstanceManagement from '@/views/InstanceManagement.vue';
+
+const OrganizationSettings = defineAsyncComponent(() => import('@/components/settings/OrganizationSettings.vue'));
+const SecuritySettings = defineAsyncComponent(() => import('@/components/settings/SecuritySettings.vue'));
+const IntegrationsSettings = defineAsyncComponent(() => import('@/components/settings/IntegrationsSettings.vue'));
+const UsersAccessSettings = defineAsyncComponent(() => import('@/components/settings/UsersAccessSettings.vue'));
+const AppsSettings = defineAsyncComponent(() => import('@/components/settings/AppsSettings.vue'));
+const SettingsLandingPage = defineAsyncComponent(() => import('@/components/settings/SettingsLandingPage.vue'));
+const CoreModulesList = defineAsyncComponent(() => import('@/components/settings/CoreModulesList.vue'));
+const CoreModuleDetail = defineAsyncComponent(() => import('@/components/settings/CoreModuleDetail.vue'));
+const ApplicationsList = defineAsyncComponent(() => import('@/components/settings/ApplicationsList.vue'));
+const ApplicationDetail = defineAsyncComponent(() => import('@/components/settings/ApplicationDetail.vue'));
+const AppManagement = defineAsyncComponent(() => import('@/components/settings/AppManagement.vue'));
+const SubscriptionsList = defineAsyncComponent(() => import('@/components/settings/SubscriptionsList.vue'));
+const SubscriptionDetail = defineAsyncComponent(() => import('@/components/settings/SubscriptionDetail.vue'));
+const NotificationSettings = defineAsyncComponent(() => import('@/components/settings/NotificationSettings.vue'));
+const DemoRequests = defineAsyncComponent(() => import('@/views/DemoRequests.vue'));
+const InstanceManagement = defineAsyncComponent(() => import('@/views/InstanceManagement.vue'));
 
 const authStore = useAuthStore();
 const { colorMode, toggleColorMode } = useColorMode();

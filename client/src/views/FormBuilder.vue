@@ -544,7 +544,8 @@ const saveForm = async (isAutoSave = false) => {
             name: `form-builder-${savedForm._id}`,
             title: savedForm.name || 'Form Builder',
             component: 'FormBuilder',
-            params: { formId: savedForm._id }
+            params: { formId: savedForm._id },
+            insertAdjacent: true
           });
         }
         

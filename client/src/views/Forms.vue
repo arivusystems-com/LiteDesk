@@ -498,7 +498,8 @@ const openFormBuilder = (form) => {
     name: `form-builder-${form._id}`,
     title: form.name || 'Form Builder',
     component: 'FormBuilder',
-    params: { formId: form._id }
+    params: { formId: form._id },
+    insertAdjacent: true
   });
   router.push(`/forms/builder/${form._id}`);
 };
@@ -524,7 +525,8 @@ const viewFormDetail = (form) => {
   openTab(`/forms/${form._id}/detail`, {
     name: `form-detail-${form._id}`,
     title: form.name || 'Form Details',
-    icon: 'clipboard-document'
+    icon: 'clipboard-document',
+    insertAdjacent: true
   });
   router.push(`/forms/${form._id}/detail`);
 };
@@ -534,7 +536,8 @@ const viewResponses = (form) => {
     name: `form-responses-${form._id}`,
     title: `${form.name} - Responses`,
     component: 'FormResponses',
-    params: { formId: form._id }
+    params: { formId: form._id },
+    insertAdjacent: true
   });
   router.push(`/forms/${form._id}/responses`);
 };

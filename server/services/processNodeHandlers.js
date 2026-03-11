@@ -13,11 +13,14 @@
  * ============================================================================
  */
 
-const { execute: executeAction } = require('./automationActionHandlers');
 const { createLogger } = require('./automationLogger');
 const { resolveApprovers } = require('./approvalApproverResolver');
 
 const log = createLogger('processNodeHandlers');
+
+function executeAction(...args) {
+  return require('./automationActionHandlers').execute(...args);
+}
 
 /**
  * Execute trigger node.

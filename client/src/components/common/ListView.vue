@@ -1030,19 +1030,13 @@
                           <span class="flex-1 text-sm text-gray-900 dark:text-white">{{ field.label }}</span>
                           <span v-if="props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name'" class="text-xs text-gray-500 dark:text-gray-400 mr-2">Required</span>
                           <span v-if="field.locked" class="text-xs text-gray-500 dark:text-gray-400 mr-2">Locked</span>
-                          <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                            <input 
-                              type="checkbox" 
-                              :checked="field.visible"
-                              @change="toggleFieldVisibility(field.key)"
-                              :disabled="(props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name') || field.locked"
-                              :class="['sr-only peer', (props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name') || field.locked ? 'cursor-not-allowed opacity-50' : '']"
-                            >
-                            <div :class="[
-                              'w-9 h-5 bg-indigo-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-indigo-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600',
-                              (props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name') || field.locked ? 'opacity-50 cursor-not-allowed' : ''
-                            ]"></div>
-                          </label>
+                          <HeadlessCheckbox
+                            :checked="field.visible"
+                            @change="toggleFieldVisibility(field.key)"
+                            :disabled="(props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name') || field.locked"
+                            variant="switch"
+                            checkbox-class="w-9 h-5"
+                          />
                           </div>
                         </template>
                       </div>
@@ -1064,19 +1058,13 @@
                           />
                           <span class="flex-1 text-sm text-gray-900 dark:text-white">{{ field.label }}</span>
                           <span v-if="field.locked" class="text-xs text-gray-500 dark:text-gray-400 mr-2">Locked</span>
-                          <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                            <input 
-                              type="checkbox" 
-                              :checked="field.visible"
-                              @change="toggleFieldVisibility(field.key)"
-                              :disabled="(props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name') || field.locked"
-                              :class="['sr-only peer', (props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name') || field.locked ? 'cursor-not-allowed opacity-50' : '']"
-                            >
-                            <div :class="[
-                              'w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600',
-                              field.locked ? 'opacity-50 cursor-not-allowed' : ''
-                            ]"></div>
-                          </label>
+                          <HeadlessCheckbox
+                            :checked="field.visible"
+                            @change="toggleFieldVisibility(field.key)"
+                            :disabled="(props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name') || field.locked"
+                            variant="switch"
+                            checkbox-class="w-9 h-5"
+                          />
                             </div>
                         </template>
                         <div v-if="hiddenFields.length === 0" class="text-sm text-gray-500 dark:text-gray-400 py-2 text-center">
@@ -1196,31 +1184,39 @@
                 </Menu>
                 <div class="flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
                   <span>Stack fields</span>
-                  <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" v-model="kanbanStackFields" @change="saveKanbanOptions()" class="sr-only peer">
-                    <div class="w-9 h-5 bg-gray-200 dark:bg-gray-600 rounded-full peer peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
-                  </label>
+                  <HeadlessCheckbox
+                    v-model="kanbanStackFields"
+                    @change="saveKanbanOptions()"
+                    variant="switch"
+                    checkbox-class="w-9 h-5"
+                  />
                 </div>
                 <div class="flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
                   <span>Collapse empty columns</span>
-                  <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" v-model="kanbanCollapseEmptyColumns" @change="saveKanbanOptions()" class="sr-only peer">
-                    <div class="w-9 h-5 bg-gray-200 dark:bg-gray-600 rounded-full peer peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
-                  </label>
+                  <HeadlessCheckbox
+                    v-model="kanbanCollapseEmptyColumns"
+                    @change="saveKanbanOptions()"
+                    variant="switch"
+                    checkbox-class="w-9 h-5"
+                  />
                 </div>
                 <div class="flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
                   <span>Show empty fields</span>
-                  <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" v-model="kanbanShowEmptyFields" @change="saveKanbanOptions()" class="sr-only peer">
-                    <div class="w-9 h-5 bg-gray-200 dark:bg-gray-600 rounded-full peer peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
-                  </label>
+                  <HeadlessCheckbox
+                    v-model="kanbanShowEmptyFields"
+                    @change="saveKanbanOptions()"
+                    variant="switch"
+                    checkbox-class="w-9 h-5"
+                  />
                 </div>
                 <div class="flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
                   <span>Show closed records</span>
-                  <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" v-model="kanbanClosedTasks" @change="saveKanbanOptions()" class="sr-only peer">
-                    <div class="w-9 h-5 bg-gray-200 dark:bg-gray-600 rounded-full peer peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
-                  </label>
+                  <HeadlessCheckbox
+                    v-model="kanbanClosedTasks"
+                    @change="saveKanbanOptions()"
+                    variant="switch"
+                    checkbox-class="w-9 h-5"
+                  />
                 </div>
                 <!-- Reset -->
                 <Menu as="div" class="relative">
@@ -1312,19 +1308,13 @@
                       <component :is="getFieldIcon(field.dataType)" class="w-4 h-4 text-gray-500 dark:text-gray-400 flex-shrink-0" />
                       <span class="flex-1 text-sm text-gray-900 dark:text-white">{{ field.label || field.key }}</span>
                       <span v-if="field.locked" class="text-xs text-gray-500 dark:text-gray-400 mr-2">Locked</span>
-                      <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                        <input
-                          type="checkbox"
-                          :checked="field.visible"
-                          @change="toggleKanbanFieldVisibility(field.key)"
-                          :disabled="field.locked"
-                          :class="['sr-only peer', field.locked ? 'cursor-not-allowed opacity-50' : '']"
-                        >
-                        <div :class="[
-                          'w-9 h-5 bg-indigo-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-indigo-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[\'\'] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600',
-                          field.locked ? 'opacity-50 cursor-not-allowed' : ''
-                        ]"></div>
-                      </label>
+                      <HeadlessCheckbox
+                        :checked="field.visible"
+                        @change="toggleKanbanFieldVisibility(field.key)"
+                        :disabled="field.locked"
+                        variant="switch"
+                        checkbox-class="w-9 h-5"
+                      />
                     </div>
                   </div>
                 </div>
@@ -1340,10 +1330,12 @@
                     >
                       <component :is="getFieldIcon(field.dataType)" class="w-4 h-4 text-gray-500 dark:text-gray-400 flex-shrink-0" />
                       <span class="flex-1 text-sm text-gray-900 dark:text-white">{{ field.label || field.key }}</span>
-                      <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                        <input type="checkbox" :checked="false" @change="toggleKanbanFieldVisibility(field.key)" class="sr-only peer">
-                        <div class="w-9 h-5 bg-gray-200 dark:bg-gray-600 rounded-full peer peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
-                      </label>
+                      <HeadlessCheckbox
+                        :checked="false"
+                        @change="toggleKanbanFieldVisibility(field.key)"
+                        variant="switch"
+                        checkbox-class="w-9 h-5"
+                      />
                     </div>
                     <div v-if="kanbanHiddenFields.length === 0" class="text-sm text-gray-500 dark:text-gray-400 py-2 text-center">No hidden fields</div>
                   </div>

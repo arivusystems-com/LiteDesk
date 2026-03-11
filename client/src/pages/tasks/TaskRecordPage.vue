@@ -1,39 +1,37 @@
 <template>
   <div ref="taskRecordPageRootRef" class="task-record-page-root flex-1 min-h-0 overflow-hidden flex flex-col">
-    <div v-if="embed && loading" class="flex items-center justify-center min-h-[200px] flex-1">
-    <div class="text-center">
-      <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-      <p class="text-gray-600 dark:text-gray-400 mt-4">Loading task...</p>
-    </div>
-  </div>
-  <div v-else-if="error" class="flex items-center justify-center min-h-[200px] flex-1 p-4">
-    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
-      <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Error Loading Task</h2>
-      <p class="text-gray-600 dark:text-gray-400 mb-6">{{ error }}</p>
-      <button
-        @click="fetchTask"
-        class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
-      >
-        Retry
-      </button>
-    </div>
-  </div>
-  <RecordPageLayout
-    v-else
-    :left-expanded="!!expandedLeftSection"
-    :force-mobile="embed"
-    :class="[
-      embed ? 'flex-1 min-h-0 overflow-hidden flex flex-col' : '',
-      { 'record-page-layout--left-expanded': !!expandedLeftSection },
-      '[&.record-page-layout--left-expanded_.record-page-layout__right]:hidden',
-      '[&.record-page-layout--left-expanded_.record-page-layout__left]:flex-[1_1_100%] [&.record-page-layout--left-expanded_.record-page-layout__left]:max-w-full [&.record-page-layout--left-expanded_.record-page-layout__left]:pr-0 [&.record-page-layout--left-expanded_.record-page-layout__left]:min-h-0 [&.record-page-layout--left-expanded_.record-page-layout__left]:overflow-hidden',
-      '[&.record-page-layout--left-expanded_.record-page-layout__left-content]:max-w-full [&.record-page-layout--left-expanded_.record-page-layout__left-content]:pl-0 [&.record-page-layout--left-expanded_.record-page-layout__left-content]:pr-0 [&.record-page-layout--left-expanded_.record-page-layout__left-content]:flex [&.record-page-layout--left-expanded_.record-page-layout__left-content]:flex-col [&.record-page-layout--left-expanded_.record-page-layout__left-content]:flex-1 [&.record-page-layout--left-expanded_.record-page-layout__left-content]:min-h-0',
-      '[&.record-page-layout--left-expanded_.record-page-layout__body]:px-4'
-    ]"
-  >
+    <RecordPageShell
+      :loading="loading"
+      :show-loading="embed"
+      :error="error"
+      loading-message="Loading task..."
+      error-title="Error Loading Task"
+      :layout-props="{
+        leftExpanded: !!expandedLeftSection,
+        forceMobile: embed,
+        class: [
+          embed ? 'flex-1 min-h-0 overflow-hidden flex flex-col' : '',
+          { 'record-page-layout--left-expanded': !!expandedLeftSection },
+          '[&.record-page-layout--left-expanded_.record-page-layout__right]:hidden',
+          '[&.record-page-layout--left-expanded_.record-page-layout__left]:flex-[1_1_100%] [&.record-page-layout--left-expanded_.record-page-layout__left]:max-w-full [&.record-page-layout--left-expanded_.record-page-layout__left]:pr-0 [&.record-page-layout--left-expanded_.record-page-layout__left]:min-h-0 [&.record-page-layout--left-expanded_.record-page-layout__left]:overflow-hidden',
+          '[&.record-page-layout--left-expanded_.record-page-layout__left-content]:max-w-full [&.record-page-layout--left-expanded_.record-page-layout__left-content]:pl-0 [&.record-page-layout--left-expanded_.record-page-layout__left-content]:pr-0 [&.record-page-layout--left-expanded_.record-page-layout__left-content]:flex [&.record-page-layout--left-expanded_.record-page-layout__left-content]:flex-col [&.record-page-layout--left-expanded_.record-page-layout__left-content]:flex-1 [&.record-page-layout--left-expanded_.record-page-layout__left-content]:min-h-0',
+          '[&.record-page-layout--left-expanded_.record-page-layout__body]:px-4'
+        ]
+      }"
+      @retry="fetchTask"
+    >
     <template v-if="!embed" #header>
-      <RecordHeader>
-        <!-- Breadcrumbs -->
+      <RecordHeader
+        :show-navigation="true"
+        :can-previous="canNavigatePreviousTask"
+        :can-next="canNavigateNextTask"
+        previous-label="Previous task"
+        next-label="Next task"
+        :shortcut-prev="navShortcutPrev"
+        :shortcut-next="navShortcutNext"
+        @previous="goToPreviousTask"
+        @next="goToNextTask"
+      >
         <template #breadcrumbs>
           <span class="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
             Task <span class="w-1 h-1 rounded-full bg-gray-400 dark:bg-gray-500"></span> {{ task?._id?.slice(-8) || 'N/A' }}
@@ -669,7 +667,50 @@
           </span>
         </template>
 
-        <!-- Editable Tags slot -->
+        <!-- Editable Tags slot: click value text → open record; click elsewhere → inline edit. Hover over value container → primary color -->
+        <template #relatedTo>
+          <button
+            v-if="canEditTask"
+            type="button"
+            @click="openRelatedToPopover($event, 'relatedTo', task)"
+            class="w-full min-w-0 min-h-8 flex items-center text-sm text-left text-gray-900 dark:text-white rounded px-2 py-1 -mx-2 -my-1 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
+          >
+            <span
+              v-if="getRelatedToDisplay(task) && getRelatedToRecordPath(task)"
+              class="min-w-0 flex-1 truncate transition-colors hover:text-primary-600 dark:hover:text-primary-400"
+            >
+              <span
+                role="button"
+                tabindex="0"
+                class="inline cursor-pointer"
+                @click.stop="openRelatedToRecord"
+              >
+                {{ getRelatedToDisplay(task) }}
+              </span>
+            </span>
+            <span v-else-if="getRelatedToDisplay(task)" class="min-w-0 flex-1 truncate">{{ getRelatedToDisplay(task) }}</span>
+            <span v-else class="min-w-0 flex-1 text-gray-400 dark:text-gray-500">Click to link record</span>
+          </button>
+
+          <div v-else class="w-full min-w-0 min-h-8 text-sm text-gray-900 dark:text-white rounded px-2 py-1 cursor-default select-none bg-gray-50 dark:bg-gray-800/60 flex items-center">
+            <span
+              v-if="getRelatedToDisplay(task) && getRelatedToRecordPath(task)"
+              class="min-w-0 flex-1 truncate transition-colors hover:text-primary-600 dark:hover:text-primary-400"
+            >
+              <span
+                role="button"
+                tabindex="0"
+                class="inline cursor-pointer"
+                @click="openRelatedToRecord"
+              >
+                {{ getRelatedToDisplay(task) }}
+              </span>
+            </span>
+            <span v-else-if="getRelatedToDisplay(task)" class="truncate">{{ getRelatedToDisplay(task) }}</span>
+            <span v-else class="text-gray-400 dark:text-gray-500">Empty</span>
+          </div>
+        </template>
+
         <template #tags>
           <button
             v-if="canEditTask"
@@ -706,591 +747,16 @@
         </RecordStateSection>
       </div>
 
-      <!-- Description -->
       <section
-        v-if="!expandedLeftSection || expandedLeftSection === 'description'"
-        :class="[
-          'group/left-section pt-4 pb-4',
-          expandedLeftSection === 'description'
-            ? 'border-transparent'
-            : ' border-gray-200 dark:border-gray-700'
-        ]"
+        v-if="task && shouldRenderTaskSectionStack"
+        :class="[expandedLeftSection ? 'mt-8' : 'mt-4']"
       >
-        <div class="flex items-center justify-between gap-3 pb-2">
-          <h3 :class="['font-semibold text-gray-900 dark:text-white', expandedLeftSection ? 'text-2xl' : 'text-base']">Description</h3>
-          <div v-if="!expandedLeftSection" class="inline-flex items-center gap-0.5">
-            <button
-              type="button"
-              class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 opacity-100 transition-opacity hover:text-gray-800 hover:bg-gray-50 lg:opacity-0 lg:group-hover/left-section:opacity-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:text-gray-100 dark:hover:bg-gray-800"
-              aria-label="Version history"
-              title="Version history"
-              @click.stop="openDescriptionHistory"
-            >
-              <ClockIcon class="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 opacity-100 transition-opacity hover:text-gray-800 hover:bg-gray-50 lg:opacity-0 lg:group-hover/left-section:opacity-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:text-gray-100 dark:hover:bg-gray-800"
-              aria-label="Expand description"
-              title="Expand"
-              @click.stop="openLeftSection('description')"
-            >
-              <ArrowsPointingOutIcon class="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-        <div v-if="task">
-          <div
-            v-if="!isEditingDescription && canEditTask"
-            ref="descriptionDisplayRef"
-            @click="startEditDescription"
-            :class="[
-              'cursor-text transition-colors rounded-lg',
-              hasDescription
-                ? 'hover:bg-gray-50 dark:hover:bg-gray-800 px-2 py-2 -mx-2 -my-2'
-                : 'border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/70 px-6 py-2 min-h-[60px] flex items-center'
-            ]"
-          >
-            <div v-if="hasDescription">
-              <div
-                class="text-md text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 px-6 py-4 leading-[1.75] [&_p]:mb-2 [&_p:last-child]:mb-0 [&_p]:leading-[1.75] [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:my-4 [&_h1]:mb-2 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:my-4 [&_h2]:mb-2 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:my-4 [&_h3]:mb-2 [&_ul]:my-2 [&_ol]:my-2 [&_ul]:pl-6 [&_ol]:pl-6 [&_ul]:list-disc [&_ol]:list-decimal [&_blockquote]:border-l-4 [&_blockquote]:border-gray-200 [&_blockquote]:pl-4 [&_blockquote]:my-2 [&_blockquote]:text-gray-500 dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400 [&_a]:text-indigo-600 [&_a]:underline dark:[&_a]:text-indigo-400"
-                :style="descriptionContentStyle"
-                v-html="sanitizedDescription"
-              />
-              <button
-                v-if="shouldShowDescriptionViewMore && !isDescriptionExpanded"
-                type="button"
-                class="mt-2 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
-                @click.stop="isDescriptionExpanded = true"
-              >
-                View more
-              </button>
-            </div>
-            <p v-else class="text-sm text-gray-400 dark:text-gray-500 italic m-0 w-full">
-              No description added yet. Click to add.
-            </p>
-          </div>
-          <div
-            v-else-if="isEditingDescription && canEditTask"
-            class="editable-description flex flex-col"
-            :style="descriptionMinHeight != null ? { minHeight: `${descriptionMinHeight}px` } : undefined"
-          >
-            <TaskDescriptionEditor
-              class="min-h-0 flex-1"
-              ref="descriptionEditorRef"
-              v-model="localDescription"
-              placeholder="Write or type '/' for commands"
-              @blur="handleDescriptionBlur"
-              @cancel="handleDescriptionCancel"
-            />
-          </div>
-          <div v-else>
-            <div v-if="hasDescription">
-              <div
-                class="text-sm text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 px-6 py-4 leading-[1.75] [&_p]:mb-2 [&_p:last-child]:mb-0 [&_p]:leading-[1.75] [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:my-4 [&_h1]:mb-2 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:my-4 [&_h2]:mb-2 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:my-4 [&_h3]:mb-2 [&_ul]:my-2 [&_ol]:my-2 [&_ul]:pl-6 [&_ol]:pl-6 [&_ul]:list-disc [&_ol]:list-decimal [&_blockquote]:border-l-4 [&_blockquote]:border-gray-200 [&_blockquote]:pl-4 [&_blockquote]:my-2 [&_blockquote]:text-gray-500 dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400 [&_a]:text-indigo-600 [&_a]:underline dark:[&_a]:text-indigo-400"
-                :style="descriptionContentStyle"
-                v-html="sanitizedDescription"
-              />
-              <button
-                v-if="shouldShowDescriptionViewMore && !isDescriptionExpanded"
-                type="button"
-                class="mt-2 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
-                @click="isDescriptionExpanded = true"
-              >
-                View more
-              </button>
-            </div>
-            <div
-              v-else
-              class="text-sm text-gray-400 dark:text-gray-500 italic border border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50/50 dark:bg-gray-800/50 px-6 py-2 min-h-[60px] flex items-center"
-            >
-              No description added yet.
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <div v-if="task && (!expandedLeftSection || expandedLeftSection === 'details')" class="group/left-section">
-        <div class="pt-4 pb-0 flex items-center justify-between gap-3">
-          <h3 :class="['font-semibold text-gray-900 dark:text-white', expandedLeftSection ? 'text-2xl' : 'text-base']">Details</h3>
-          <button
-            v-if="!expandedLeftSection"
-            type="button"
-            class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 opacity-100 transition-opacity hover:text-gray-800 hover:bg-gray-50 lg:opacity-0 lg:group-hover/left-section:opacity-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:text-gray-100 dark:hover:bg-gray-800"
-            aria-label="Expand details"
-            title="Expand"
-            @click.stop="openLeftSection('details')"
-          >
-            <ArrowsPointingOutIcon class="h-4 w-4" />
-          </button>
-        </div>
-
-        <RecordFieldsSection 
-          :groups="fieldGroups"
-          :collapsible="false"
-          :list-layout="true"
-          :boxed="false"
-        >
-          <template v-for="group in fieldGroups" :key="group.key" #[`group-${group.key}`]>
-            <template v-for="fieldKey in getGroupFields(group.key)" :key="fieldKey">
-              <EditableLabeledValue
-                v-if="fieldKey === 'assignedTo'"
-                class="pl-0"
-                layout="row"
-                :label="getFieldLabel(fieldKey)"
-                :value="task[fieldKey]"
-                type="user"
-                :can-edit="canEditTask && getTaskFieldMetadata(fieldKey)?.editable !== false"
-                :users="users"
-                @save="handleFieldSave(fieldKey, $event)"
-              >
-                <template v-if="task[fieldKey]">
-                  <div class="flex items-center gap-2">
-                    <Avatar
-                      v-if="typeof task[fieldKey] === 'object'"
-                      :user="{
-                        firstName: task[fieldKey].firstName || task[fieldKey].first_name,
-                        lastName: task[fieldKey].lastName || task[fieldKey].last_name,
-                        email: task[fieldKey].email,
-                        avatar: task[fieldKey].avatar
-                      }"
-                      size="sm"
-                    />
-                    <span class="text-sm text-gray-900 dark:text-white">
-                      {{ getUserDisplayName(task[fieldKey]) }}
-                    </span>
-                  </div>
-                </template>
-              </EditableLabeledValue>
-
-              <EditableLabeledValue
-                v-else-if="fieldKey === 'dueDate' || fieldKey === 'startDate'"
-                class="pl-0"
-                layout="row"
-                :label="getFieldLabel(fieldKey)"
-                :value="task[fieldKey]"
-                type="date"
-                :can-edit="canEditTask && getTaskFieldMetadata(fieldKey)?.editable !== false"
-                @save="handleFieldSave(fieldKey, $event)"
-                :format-value="(val) => val ? formatDate(val) : null"
-              >
-                <DateCell v-if="task[fieldKey]" :value="task[fieldKey]" format="short" />
-              </EditableLabeledValue>
-
-              <EditableLabeledValue
-                v-else-if="fieldKey === 'priority' || fieldKey === 'status'"
-                class="pl-0"
-                layout="row"
-                :label="getFieldLabel(fieldKey)"
-                :value="task[fieldKey]"
-                type="select"
-                :can-edit="canEditTask && getTaskFieldMetadata(fieldKey)?.editable !== false"
-                :options="getFieldOptions(fieldKey)"
-                @save="handleFieldSave(fieldKey, $event)"
-                :format-value="fieldKey === 'priority' ? formatPriority : formatStatus"
-              >
-                <span
-                  v-if="fieldKey === 'status'"
-                  :class="[
-                    'inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold',
-                    getStatusPillClass(task[fieldKey])
-                  ]"
-                  :style="getStatusPillStyle(task[fieldKey])"
-                >
-                  {{ formatStatus(task[fieldKey]) }}
-                </span>
-                <span v-else class="text-sm text-gray-900 dark:text-white">
-                  <span class="inline-flex items-center gap-2 text-sm" :class="getPriorityTextClass(task[fieldKey])">
-                    <FlagIconSolid
-                      v-if="task[fieldKey]"
-                      class="h-4 w-4 shrink-0"
-                      :style="getPriorityFlagStyle(task[fieldKey])"
-                    />
-                    {{ formatPriority(task[fieldKey]) }}
-                  </span>
-                </span>
-              </EditableLabeledValue>
-
-              <EditableLabeledValue
-                v-else-if="fieldKey === 'estimatedHours' || fieldKey === 'actualHours'"
-                class="pl-0"
-                layout="row"
-                :label="getFieldLabel(fieldKey)"
-                :value="task[fieldKey]"
-                type="number"
-                :can-edit="canEditTask && getTaskFieldMetadata(fieldKey)?.editable !== false"
-                :min="0"
-                :step="0.5"
-                @save="handleFieldSave(fieldKey, $event)"
-                :format-value="(val) => val ? `${val}h` : null"
-              >
-                <span v-if="task[fieldKey]" class="text-sm text-gray-900 dark:text-white">{{ task[fieldKey] }}h</span>
-              </EditableLabeledValue>
-
-              <div
-                v-else-if="fieldKey === 'tags'"
-                class="flex items-center gap-3 py-2 pl-0 pr-4 min-h-[3rem]"
-              >
-                <span class="flex-shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true">
-                  <TagIcon class="w-4 h-4" />
-                </span>
-                <span class="text-sm text-gray-700 dark:text-gray-300 flex-shrink-0 min-w-[12rem]">{{ getFieldLabel(fieldKey) }}</span>
-                <button
-                  v-if="canEditTask"
-                  ref="tagFieldButtonRef"
-                  type="button"
-                  @click="openTagPopoverFromField($event)"
-                  class="flex-1 min-w-0 min-h-8 flex items-center text-sm text-gray-900 dark:text-white rounded px-2 py-1 -mx-2 -my-1 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
-                >
-                  <div v-if="task.tags && task.tags.length > 0" class="flex flex-wrap gap-1.5 text-left">
-                    <span
-                      v-for="(tag, index) in task.tags"
-                      :key="`${tag}-${index}`"
-                      :class="['inline-block text-xs px-2 py-0.5 rounded', getTagChipClass(tag)]"
-                    >
-                      {{ tag }}
-                    </span>
-                  </div>
-                  <span v-else class="text-gray-400 dark:text-gray-500">Click to add tags</span>
-                </button>
-                <div v-else class="flex-1 min-w-0 min-h-8 text-sm text-gray-900 dark:text-white flex items-center">
-                  <div v-if="task.tags && task.tags.length > 0" class="flex flex-wrap gap-1.5 text-left">
-                    <span
-                      v-for="(tag, index) in task.tags"
-                      :key="`${tag}-${index}`"
-                      :class="['inline-block text-xs px-2 py-0.5 rounded', getTagChipClass(tag)]"
-                    >
-                      {{ tag }}
-                    </span>
-                  </div>
-                  <span v-else class="text-gray-400 dark:text-gray-500">Empty</span>
-                </div>
-              </div>
-
-              <div
-                v-else-if="fieldKey === 'relatedTo'"
-                class="editable-labeled-value editable-labeled-value--row group/relatedTo flex items-center gap-3 py-2 pl-0 pr-4 min-h-[3rem]"
-              >
-                <span class="editable-labeled-value__icon flex-shrink-0 text-gray-400 dark:text-gray-500 w-4 flex items-center justify-center" aria-hidden="true">
-                  <LinkIcon class="w-4 h-4 shrink-0" />
-                </span>
-                <span class="editable-labeled-value__label text-sm text-gray-700 dark:text-gray-300 flex-shrink-0 min-w-[12rem]">{{ getFieldLabel(fieldKey) }}</span>
-                <template v-if="canEditTask">
-                  <div class="editable-labeled-value__value flex-1 min-w-0 min-h-8 flex items-center text-left text-sm rounded px-2 py-1 -mx-2 -my-1 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800">
-                    <RouterLink
-                      v-if="getRelatedToRecordPath(task)"
-                      :to="getRelatedToRecordPath(task)"
-                      @click.stop
-                      class="text-gray-900 dark:text-white group-hover/relatedTo:text-indigo-600 dark:group-hover/relatedTo:text-indigo-400 truncate transition-colors cursor-pointer min-w-0"
-                    >
-                      {{ getRelatedToDisplay(task) }}
-                    </RouterLink>
-                    <button
-                      v-else
-                      type="button"
-                      @click="openRelatedToPopover($event)"
-                      class="text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer"
-                    >
-                      —
-                    </button>
-                    <button
-                      v-if="getRelatedToRecordPath(task)"
-                      type="button"
-                      @click="openRelatedToPopover($event)"
-                      class="flex-1 min-w-0 min-h-6 cursor-pointer"
-                      aria-label="Edit Related To"
-                    />
-                  </div>
-                </template>
-                <div
-                  v-else
-                  class="editable-labeled-value__value flex-1 min-w-0 min-h-8 flex items-center text-sm text-gray-900 dark:text-white"
-                >
-                  <span>{{ getRelatedToDisplay(task) || '—' }}</span>
-                </div>
-              </div>
-
-              <EditableLabeledValue
-                v-else-if="getCustomFieldByKey(fieldKey)"
-                class="pl-0"
-                layout="row"
-                :label="getCustomFieldByKey(fieldKey).label"
-                :value="task[fieldKey] ?? getCustomFieldByKey(fieldKey).value"
-                :type="getCustomFieldEditableType(fieldKey)"
-                :can-edit="canEditTask"
-                :options="getCustomFieldOptions(fieldKey)"
-                :min="getCustomFieldNumberMin(fieldKey)"
-                :step="getCustomFieldNumberStep(fieldKey)"
-                @save="handleFieldSave(fieldKey, $event)"
-              >
-                <span v-if="(task[fieldKey] ?? getCustomFieldByKey(fieldKey).value) !== null && (task[fieldKey] ?? getCustomFieldByKey(fieldKey).value) !== undefined && (task[fieldKey] ?? getCustomFieldByKey(fieldKey).value) !== ''">
-                  {{ task[fieldKey] ?? getCustomFieldByKey(fieldKey).value }}
-                </span>
-                <span v-else class="text-gray-400 dark:text-gray-500">—</span>
-              </EditableLabeledValue>
-            </template>
-          </template>
-        </RecordFieldsSection>
-
-        <div v-if="shouldShowDetailsViewAll" class="mt-2">
-          <button
-            type="button"
-            class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
-            @click="showAllDetails = true"
-          >
-            View all ({{ detailFieldCount }})
-          </button>
-        </div>
-      </div>
-
-      <section v-if="task && (!expandedLeftSection || expandedLeftSection === 'subtasks')" class="group/left-section py-3">
-        <div class="flex items-center justify-between gap-3 pb-2">
-          <h3 :class="['font-semibold text-gray-900 dark:text-white', expandedLeftSection ? 'text-2xl' : 'text-base']">
-            Subtasks ({{ completedSubtasksCount }}/{{ totalSubtasksCount }})
-          </h3>
-          <div class="flex items-center gap-2">
-            <button
-              type="button"
-              :class="[
-                'inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-xs font-semibold transition-all hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 focus:ring-offset-white dark:focus:ring-offset-gray-900',
-                expandedLeftSection
-                  ? 'opacity-100'
-                  : 'opacity-100 lg:opacity-0 lg:pointer-events-none lg:group-hover/left-section:opacity-100 lg:group-hover/left-section:pointer-events-auto'
-              ]"
-              aria-label="Add subtask"
-              title="Add subtask"
-              @click="startCreateSubtask"
-            >
-              <PlusIcon class="h-3.5 w-3.5" />
-              <span>Add subtask</span>
-            </button>
-            <button
-              v-if="!expandedLeftSection"
-              type="button"
-              class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 opacity-100 transition-opacity hover:text-gray-800 hover:bg-gray-50 lg:opacity-0 lg:group-hover/left-section:opacity-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:text-gray-100 dark:hover:bg-gray-800"
-              aria-label="Expand subtasks"
-              title="Expand"
-              @click.stop="openLeftSection('subtasks')"
-            >
-              <ArrowsPointingOutIcon class="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-
-        <div v-if="totalSubtasksCount || isCreatingSubtask" class="overflow-hidden">
-          <div class="flex items-center gap-3 border-b border-gray-200 dark:border-gray-700 px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300">
-            <span class="flex-1">Name</span>
-          </div>
-
-          <label
-            v-for="subtask in visibleSubtasks"
-            :key="subtask._id || subtask.title"
-            class="group/subtask flex items-center gap-3 border-b border-gray-100 dark:border-gray-800 px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer"
-          >
-            <input
-              type="checkbox"
-              :checked="subtask.completed"
-              @change="handleSubtaskToggle(subtask)"
-              class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-            />
-            <span
-              :class="[
-                'text-sm flex-1 min-w-0',
-                subtask.completed
-                  ? 'line-through text-gray-500 dark:text-gray-400'
-                  : 'text-gray-900 dark:text-white'
-              ]"
-            >
-              {{ subtask.title }}
-            </span>
-            <button
-              v-if="canEditTask"
-              type="button"
-              class="inline-flex h-7 w-7 items-center justify-center rounded text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all lg:opacity-0 lg:pointer-events-none lg:group-hover/subtask:opacity-100 lg:group-hover/subtask:pointer-events-auto"
-              :disabled="isDeletingSubtask && deletingSubtaskId === String(subtask._id || '')"
-              @click.stop.prevent="handleDeleteSubtask(subtask)"
-              aria-label="Delete subtask"
-              title="Delete subtask"
-            >
-              <TrashIcon class="h-4 w-4" />
-            </button>
-          </label>
-
-          <div v-if="shouldShowSubtasksViewAll" class="px-4 py-2">
-            <button
-              type="button"
-              class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
-              @click="showAllSubtasks = true"
-            >
-              View all ({{ totalSubtasksCount }})
-            </button>
-          </div>
-
-          <div v-if="canLoadMoreSubtasks" class="px-4 py-2">
-            <button
-              type="button"
-              class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
-              @click="loadMoreSubtasks"
-            >
-              View more
-            </button>
-          </div>
-
-          <div v-if="isCreatingSubtask" class="flex items-center gap-2 px-4 py-2.5 border-t border-gray-100 dark:border-gray-800">
-            <span class="h-4 w-4 rounded-full border-2 border-dashed border-gray-300 dark:border-gray-600 shrink-0" aria-hidden="true"></span>
-            <input
-              ref="newSubtaskInputRef"
-              v-model="newSubtaskTitle"
-              type="text"
-              placeholder="Task Name"
-              class="flex-1 min-w-0 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              @keydown.enter.prevent="saveNewSubtask"
-              @keydown.esc.prevent="cancelCreateSubtask"
-            />
-            <button
-              type="button"
-              class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
-              @click="cancelCreateSubtask"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              :disabled="!newSubtaskTitle.trim() || isSavingNewSubtask"
-              class="px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              @click="saveNewSubtask"
-            >
-              Save
-            </button>
-          </div>
-        </div>
-
-        <div v-else class="py-2 text-sm text-gray-500 dark:text-gray-400">
-          No subtasks yet.
-          <button
-            type="button"
-            class="ml-1 text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
-            @click="startCreateSubtask"
-          >
-            Add subtask
-          </button>
-        </div>
-      </section>
-
-      <section v-if="task && (!expandedLeftSection || expandedLeftSection === 'related')" class="group/left-section py-3">
-        <div class="flex items-center justify-between gap-3 pb-2">
-          <h3 :class="['font-semibold text-gray-900 dark:text-white', expandedLeftSection ? 'text-2xl' : 'text-base']">Related Records</h3>
-          <div class="flex items-center gap-2">
-            <button
-              v-if="canLinkRecords"
-              type="button"
-              @click="openLinkRecordDrawer"
-              :class="[
-                'inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-xs font-semibold transition-all hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 focus:ring-offset-white dark:focus:ring-offset-gray-900',
-                expandedLeftSection
-                  ? 'opacity-100'
-                  : 'opacity-100 lg:opacity-0 lg:pointer-events-none lg:group-hover/left-section:opacity-100 lg:group-hover/left-section:pointer-events-auto'
-              ]"
-            >
-              <PlusIcon class="h-3.5 w-3.5" />
-              <span>Link record</span>
-            </button>
-            <button
-              v-if="!expandedLeftSection"
-              type="button"
-              class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 opacity-100 transition-opacity hover:text-gray-800 hover:bg-gray-50 lg:opacity-0 lg:group-hover/left-section:opacity-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:text-gray-100 dark:hover:bg-gray-800"
-              aria-label="Expand related records"
-              title="Expand"
-              @click.stop="openLeftSection('related')"
-            >
-              <ArrowsPointingOutIcon class="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-
-        <div v-if="hasRelatedRecords" class="space-y-3">
-          <details v-if="task.projectId" class="group/left-related-module" open>
-            <summary class="flex cursor-pointer list-none items-center rounded-lg px-1 py-1 hover:bg-gray-50 dark:hover:bg-gray-800/60 [&::-webkit-details-marker]:hidden [&::marker]:content-['']">
-              <div class="flex items-center gap-2">
-                <ChevronRightIcon class="h-4 w-4 shrink-0 text-gray-400 transition-transform duration-150 group-open/left-related-module:rotate-90" />
-                <h4 class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Project</h4>
-                <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">1</span>
-              </div>
-            </summary>
-            <div class="mt-2">
-              <div class="group/left-related-card flex items-start justify-between gap-3 rounded-xl border border-gray-200/80 dark:border-gray-700 bg-white dark:bg-gray-800/60 px-3 py-2.5 hover:border-indigo-300 dark:hover:border-indigo-600 hover:bg-indigo-50/40 dark:hover:bg-indigo-900/20 transition-colors">
-                <button
-                  type="button"
-                  @click="handleOpenRelated('project', getRelatedRecordId(typeof task.projectId === 'object' ? task.projectId : { _id: task.projectId }))"
-                  class="min-w-0 flex-1 text-left"
-                >
-                  <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{{ getRelatedRecordTitle('project', typeof task.projectId === 'object' ? task.projectId : { _id: task.projectId }) }}</p>
-                  <p v-if="getRelatedRecordMeta('project', typeof task.projectId === 'object' ? task.projectId : { _id: task.projectId })" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate">{{ getRelatedRecordMeta('project', typeof task.projectId === 'object' ? task.projectId : { _id: task.projectId }) }}</p>
-                </button>
-              </div>
-            </div>
-          </details>
-
-          <details v-if="taskEvents && taskEvents.length > 0" class="group/left-related-module" open>
-            <summary class="flex cursor-pointer list-none items-center rounded-lg px-1 py-1 hover:bg-gray-50 dark:hover:bg-gray-800/60 [&::-webkit-details-marker]:hidden [&::marker]:content-['']">
-              <div class="flex items-center gap-2">
-                <ChevronRightIcon class="h-4 w-4 shrink-0 text-gray-400 transition-transform duration-150 group-open/left-related-module:rotate-90" />
-                <h4 class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Events</h4>
-                <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">{{ taskEvents.length }}</span>
-              </div>
-            </summary>
-            <div class="mt-2 space-y-2">
-              <button v-for="event in (taskEvents || []).slice(0, 5)" :key="event._id" type="button" @click="handleOpenRelated('event', event._id)" class="w-full text-left rounded-xl border border-gray-200/80 dark:border-gray-700 bg-white dark:bg-gray-800/60 px-3 py-2.5 hover:border-indigo-300 dark:hover:border-indigo-600 hover:bg-indigo-50/40 dark:hover:bg-indigo-900/20 transition-colors">
-                <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{{ getRelatedRecordTitle('event', event) }}</p>
-                <p v-if="getRelatedRecordMeta('event', event)" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate">{{ getRelatedRecordMeta('event', event) }}</p>
-              </button>
-            </div>
-          </details>
-
-          <details v-if="taskDeals && taskDeals.length > 0" class="group/left-related-module" open>
-            <summary class="flex cursor-pointer list-none items-center rounded-lg px-1 py-1 hover:bg-gray-50 dark:hover:bg-gray-800/60 [&::-webkit-details-marker]:hidden [&::marker]:content-['']">
-              <div class="flex items-center gap-2">
-                <ChevronRightIcon class="h-4 w-4 shrink-0 text-gray-400 transition-transform duration-150 group-open/left-related-module:rotate-90" />
-                <h4 class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Deals</h4>
-                <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">{{ taskDeals.length }}</span>
-              </div>
-            </summary>
-            <div class="mt-2 space-y-2">
-              <button v-for="deal in (taskDeals || []).slice(0, 5)" :key="deal._id" type="button" @click="handleOpenRelated('deal', deal._id)" class="w-full text-left rounded-xl border border-gray-200/80 dark:border-gray-700 bg-white dark:bg-gray-800/60 px-3 py-2.5 hover:border-indigo-300 dark:hover:border-indigo-600 hover:bg-indigo-50/40 dark:hover:bg-indigo-900/20 transition-colors">
-                <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{{ getRelatedRecordTitle('deal', deal) }}</p>
-                <p v-if="getRelatedRecordMeta('deal', deal)" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate">{{ getRelatedRecordMeta('deal', deal) }}</p>
-              </button>
-            </div>
-          </details>
-
-          <details v-if="taskForms && taskForms.length > 0" class="group/left-related-module" open>
-            <summary class="flex cursor-pointer list-none items-center rounded-lg px-1 py-1 hover:bg-gray-50 dark:hover:bg-gray-800/60 [&::-webkit-details-marker]:hidden [&::marker]:content-['']">
-              <div class="flex items-center gap-2">
-                <ChevronRightIcon class="h-4 w-4 shrink-0 text-gray-400 transition-transform duration-150 group-open/left-related-module:rotate-90" />
-                <h4 class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Forms</h4>
-                <span class="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400">{{ taskForms.length }}</span>
-              </div>
-            </summary>
-            <div class="mt-2 space-y-2">
-              <button v-for="form in (taskForms || []).slice(0, 5)" :key="form._id" type="button" @click="handleOpenRelated('form', form._id)" class="w-full text-left rounded-xl border border-gray-200/80 dark:border-gray-700 bg-white dark:bg-gray-800/60 px-3 py-2.5 hover:border-indigo-300 dark:hover:border-indigo-600 hover:bg-indigo-50/40 dark:hover:bg-indigo-900/20 transition-colors">
-                <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{{ getRelatedRecordTitle('form', form) }}</p>
-                <p v-if="getRelatedRecordMeta('form', form)" class="mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate">{{ getRelatedRecordMeta('form', form) }}</p>
-              </button>
-            </div>
-          </details>
-        </div>
-
-        <div v-else class="py-2 text-sm text-gray-400 dark:text-gray-500">
-          No related records yet.
-          <button
-            v-if="canLinkRecords"
-            type="button"
-            @click="openLinkRecordDrawer"
-            class="ml-1 text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
-          >
-            Link record
-          </button>
-        </div>
+        <SectionStack
+          :sections="taskSectionStackSections"
+          :record="task"
+          :adapter="taskSectionStackAdapter"
+          :context="taskSectionStackContext"
+        />
       </section>
     </template>
 
@@ -1309,536 +775,31 @@
       >
         <!-- Activity Tab (Combined Comments + Timeline) -->
         <template #tab-activity>
-          <div class="flex flex-col h-full min-h-0 overflow-hidden">
-            <!-- Activity header - Fixed at top -->
-            <div class="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white dark:bg-gray-900">
-              <h2 class="text-base font-semibold text-gray-900 dark:text-white">Activity</h2>
-              <div class="flex items-center gap-2">
-                <button
-                  v-if="!activitySearchOpen"
-                  type="button"
-                  class="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  aria-label="Search"
-                  title="Search"
-                  @click="() => { activitySearchOpen = true; nextTick(() => { if (activitySearchInputRef) activitySearchInputRef.focus(); }); }"
-                >
-                  <MagnifyingGlassIcon class="w-5 h-5" />
-                </button>
-                <button
-                  v-else
-                  type="button"
-                  class="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  aria-label="Close search"
-                  title="Close"
-                  @click="() => { activitySearchQuery = ''; activitySearchOpen = false; }"
-                >
-                  <XMarkIcon class="w-5 h-5" />
-                </button>
-                <button
-                  type="button"
-                  class="relative p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  aria-label="Notifications"
-                  title="Notifications"
-                >
-                  <BellIcon class="w-5 h-5" />
-                  <span
-                    v-if="task?.notificationCount > 0"
-                    class="absolute top-0 right-0 flex items-center justify-center w-4 h-4 text-xs font-medium text-white bg-red-500 rounded-full"
-                  >
-                    {{ task.notificationCount > 9 ? '9+' : task.notificationCount }}
-                  </span>
-                </button>
-                <Menu as="div" class="relative">
-                  <MenuButton
-                    type="button"
-                    class="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                    aria-label="Filter activities"
-                    title="Filter activities"
-                  >
-                    <FunnelIcon class="w-5 h-5" />
-                  </MenuButton>
-                  <transition
-                    enter-active-class="transition duration-100 ease-out"
-                    enter-from-class="transform scale-95 opacity-0"
-                    enter-to-class="transform scale-100 opacity-100"
-                    leave-active-class="transition duration-75 ease-in"
-                    leave-from-class="transform scale-100 opacity-100"
-                    leave-to-class="transform scale-95 opacity-0"
-                  >
-                    <MenuItems
-                      class="absolute right-0 mt-1 w-56 origin-top-right rounded-lg bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 focus:outline-none z-20 py-1"
-                    >
-                      <div class="px-3 py-2 border-b border-gray-100 dark:border-gray-700">
-                        <div class="flex items-center justify-between">
-                          <span class="text-sm font-semibold text-gray-900 dark:text-white">Activities</span>
-                          <button
-                            v-if="activityFilterComments && activityFilterUpdates"
-                            type="button"
-                            class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
-                            @click="activityFilterComments = false; activityFilterUpdates = false"
-                          >
-                            Unselect all
-                          </button>
-                          <button
-                            v-else
-                            type="button"
-                            class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
-                            @click="activityFilterComments = true; activityFilterUpdates = true"
-                          >
-                            Select all
-                          </button>
-                        </div>
-                      </div>
-                      <MenuItem v-slot="{ active }">
-                        <button
-                          type="button"
-                          :class="[active ? 'bg-gray-50 dark:bg-gray-700/50' : '', 'flex w-full items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300']"
-                          @click="activityFilterComments = !activityFilterComments"
-                        >
-                          <ChatBubbleLeftRightIcon class="w-5 h-5 text-gray-500 dark:text-gray-400 flex-shrink-0" />
-                          <span>Comments</span>
-                          <CheckIcon v-if="activityFilterComments" class="w-5 h-5 text-indigo-600 dark:text-indigo-400 ml-auto flex-shrink-0" />
-                        </button>
-                      </MenuItem>
-                      <MenuItem v-slot="{ active }">
-                        <button
-                          type="button"
-                          :class="[active ? 'bg-gray-50 dark:bg-gray-700/50' : '', 'flex w-full items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300']"
-                          @click="activityFilterUpdates = !activityFilterUpdates"
-                        >
-                          <ArrowPathIcon class="w-5 h-5 text-gray-500 dark:text-gray-400 flex-shrink-0" />
-                          <span>Updates</span>
-                          <CheckIcon v-if="activityFilterUpdates" class="w-5 h-5 text-indigo-600 dark:text-indigo-400 ml-auto flex-shrink-0" />
-                        </button>
-                      </MenuItem>
-                    </MenuItems>
-                  </transition>
-                </Menu>
-              </div>
-            </div>
-            <!-- Search input (shown conditionally below header) -->
-            <transition
-              enter-active-class="transition duration-200 ease-out"
-              enter-from-class="opacity-0 -translate-y-2"
-              enter-to-class="opacity-100 translate-y-0"
-              leave-active-class="transition duration-150 ease-in"
-              leave-from-class="opacity-100 translate-y-0"
-              leave-to-class="opacity-0 -translate-y-2"
-            >
-              <div v-if="activitySearchOpen" class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900" @click.self="() => { if (!activitySearchQuery) activitySearchOpen = false; }">
-                <div class="flex items-center gap-2 border-2 border-indigo-500 dark:border-indigo-400 rounded-lg px-3 py-2 bg-white dark:bg-gray-800">
-                  <MagnifyingGlassIcon class="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                  <input
-                    ref="activitySearchInputRef"
-                    v-model="activitySearchQuery"
-                    @keydown.esc="() => { activitySearchQuery = ''; activitySearchOpen = false; }"
-                    @keydown.enter.prevent
-                    placeholder="Search..."
-                    class="flex-1 text-sm outline-none bg-transparent text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
-                  />
-                  <button
-                    v-if="activitySearchQuery"
-                    type="button"
-                    @click="activitySearchQuery = ''; nextTick(() => { if (activitySearchInputRef) activitySearchInputRef.focus(); })"
-                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
-                    aria-label="Clear search"
-                    title="Clear"
-                  >
-                    <XMarkIcon class="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-            </transition>
-            <div
-              v-if="isThreadViewActive && activeThreadRootComment"
-              class="flex items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-900"
-            >
-              <button
-                type="button"
-                class="inline-flex items-center gap-1.5 text-[13px] font-medium text-gray-600 transition-colors hover:text-gray-800 dark:text-gray-300 dark:hover:text-gray-100"
-                @click="closeCommentThread"
-              >
-                <ArrowLeftIcon class="h-4 w-4" />
-                <span>Back</span>
-              </button>
-              <div class="ml-auto flex items-center gap-1.5 min-w-0 text-sm font-semibold text-gray-900 dark:text-white">
-                <span class="font-medium text-gray-700 dark:text-gray-300">Thread by</span>
-                <Avatar
-                  v-if="activeThreadRootComment.author && typeof activeThreadRootComment.author === 'object'"
-                  :user="activeThreadRootComment.author"
-                  size="sm"
-                />
-                <div v-else class="h-6 w-6 rounded-full bg-gray-500 flex items-center justify-center text-white text-[10px] font-semibold">
-                  {{ getInitials(activeThreadRootComment.author) }}
-                </div>
-                <span class="truncate">{{ getAuthorName(activeThreadRootComment.author) }}</span>
-              </div>
-            </div>
-            <!-- Activity content – scroll lives only inside RecordActivityTimeline (feed between header and comment input) -->
-            <div
-              class="flex-1 min-h-0 flex flex-col transition-opacity duration-200 ease-out"
-              :style="(activityPaneReady || (!activityFilterComments && !activityFilterUpdates)) ? undefined : { opacity: 0, visibility: 'hidden', pointerEvents: 'none' }"
-            >
-              <!-- Empty state when no activity filters are selected -->
-              <div
-                v-if="!isThreadViewActive && !activityFilterComments && !activityFilterUpdates"
-                class="flex-1 min-h-0 flex flex-col items-center justify-center p-8 text-center"
-              >
-                <div class="relative w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
-                  <FunnelIcon class="w-8 h-8 text-gray-400 dark:text-gray-500" />
-                  <span class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <span class="block w-[140%] h-0.5 bg-gray-400 dark:bg-gray-500 origin-center rotate-45" aria-hidden="true" />
-                  </span>
-                </div>
-                <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Nothing found</h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Please select at least one filter.</p>
-                <button
-                  type="button"
-                  class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
-                  @click="activityFilterComments = true; activityFilterUpdates = true"
-                >
-                  Reset filters
-                </button>
-              </div>
-              <RecordActivityTimeline
-                v-else
-                :key="isThreadViewActive ? `thread-${activeThreadRootCommentId}` : 'activity-main'"
-                ref="activityTimelineRef"
-                :events="activityTimelineEvents"
-                :scroll-to-bottom-on-layout="true"
-                :allow-comments="true"
-                :allow-attachments="true"
-                :allow-interactions="true"
-                :expand-to-fill="true"
-                :show-item-borders="false"
-                item-padding-class="py-1.5"
-                class="[&_ul]:py-1"
-                @comment="handleAddComment"
-              >
-                <template #commentInput="{ submit }">
-                  <CommentInput
-                    v-model="newCommentText"
-                    :show-submit="true"
-                    variant="activity"
-                    :placeholder="isThreadViewActive ? 'Reply to comment...' : 'Write a comment...'"
-                    @submit="submit"
-                  />
-                </template>
-                <template #event="{ event, index }">
-                  <div
-                    v-if="isThreadViewActive && index === 1 && threadReplyCount > 0"
-                    class="mb-3 flex items-center gap-3"
-                  >
-                    <span class="text-sm text-gray-500 dark:text-gray-400">{{ threadReplyCount }} {{ threadReplyCount === 1 ? 'reply' : 'replies' }}</span>
-                    <span class="h-px flex-1 bg-gray-200 dark:bg-gray-700"></span>
-                  </div>
-                  <!-- Email thread (comment-style cards) -->
-                  <EmailThreadCard
-                    v-else-if="event.type === 'email_thread' && event.thread"
-                    :thread="event.thread"
-                    :expanded="expandedTaskEmailThreads.has(event.thread.threadId)"
-                    :current-user="authStore.user"
-                    :format-date="formatRelativeActivityTime"
-                    :format-full-date="formatFullTimestamp"
-                    :on-timestamp-pointer-up="handleTimestampPointerUp"
-                    @toggle="toggleTaskEmailThread(event.thread.threadId)"
-                    @create-task="createTaskFromEmailMessage"
-                  />
-                  <!-- System events / Update logs -->
-                  <div v-else-if="event.type === 'system'" class="flex items-start gap-2.5 px-2 py-0.5 text-[13px] text-gray-500 dark:text-slate-400 max-[480px]:flex-wrap max-[480px]:gap-x-2.5 max-[480px]:gap-y-1.5">
-                    <span class="h-1 w-1 mt-[0.45rem] rounded-full bg-slate-400 dark:bg-slate-500 shrink-0" aria-hidden="true"></span>
-                    <div class="flex-1 min-w-0 space-y-1.5">
-                      <template v-if="isFieldChangeSystemEvent(event)">
-                        <div class="flex items-start justify-between gap-2 max-[480px]:flex-wrap max-[480px]:gap-y-1">
-                          <p class="text-[12px] leading-[1.4] text-gray-500 dark:text-slate-400">
-                            <span>{{ getSystemEventActorLabel(event) }}</span>
-                            <span> changed </span>
-                            <span class="font-semibold text-gray-900 dark:text-white">{{ getSystemEventFieldLabel(event) }}</span>
-                          </p>
-                          <span
-                            v-if="event.createdAt"
-                            class="ml-auto whitespace-nowrap text-[12px] text-gray-400 dark:text-slate-500 cursor-help"
-                            :title="formatFullTimestamp(event.createdAt)"
-                            @pointerup="handleTimestampPointerUp($event, event.createdAt)"
-                          >
-                            {{ formatRelativeActivityTime(event.createdAt) }}
-                          </span>
-                        </div>
-                        <p class="text-[12px] leading-[1.4] text-gray-700 dark:text-gray-300">
-                          Changed {{ getSystemEventFieldLabel(event) }} from "{{ getSystemEventFromValue(event) }}" to "{{ getSystemEventToValue(event) }}"
-                        </p>
-                      </template>
-                      <p v-else class="text-[12px] leading-[1.4] text-gray-500 dark:text-slate-400">
-                        {{ getSystemEventMessage(event) }}
-                        <a v-if="event.showMore" href="#" @click.prevent="handleShowMore(event)" class="ml-1 text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
-                          Show more
-                        </a>
-                      </p>
-                      <div
-                        v-if="event.descriptionDiffHtml"
-                        class="rounded-md border border-gray-200 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/50 px-3 py-2 text-[12px] leading-[1.5] text-gray-700 dark:text-gray-300 [&_del]:bg-red-100 [&_del]:dark:bg-red-900/40 [&_del]:text-red-800 [&_del]:dark:text-red-200 [&_del]:line-through [&_ins]:bg-green-100 [&_ins]:dark:bg-green-900/40 [&_ins]:text-green-800 [&_ins]:dark:text-green-200 [&_ins]:no-underline"
-                        v-html="event.descriptionDiffHtml"
-                      />
-                    </div>
-                    <span
-                      v-if="event.createdAt && !isFieldChangeSystemEvent(event)"
-                      class="ml-auto pl-2 whitespace-nowrap text-[12px] text-gray-400 dark:text-slate-500 max-[480px]:ml-4 max-[480px]:pl-0 self-start cursor-help"
-                      :title="formatFullTimestamp(event.createdAt)"
-                      @pointerup="handleTimestampPointerUp($event, event.createdAt)"
-                    >
-                      {{ formatRelativeActivityTime(event.createdAt) }}
-                    </span>
-                  </div>
-                  
-                  <!-- Comment events -->
-                  <div v-else-if="event.type === 'comment'" class="w-full">
-                    <div
-                      :class="[
-                        'group/comment overflow-hidden rounded-md border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900',
-                        commentMentionsCurrentUser(event) ? 'border-l-2 border-l-indigo-500 dark:border-l-indigo-400' : ''
-                      ]"
-                    >
-                      <div class="flex items-start justify-between gap-2 px-4 pt-3 pb-2">
-                        <div class="flex items-center gap-3 min-w-0">
-                          <Avatar
-                            v-if="event.author && typeof event.author === 'object'"
-                            :user="event.author"
-                            size="sm"
-                          />
-                          <div v-else class="w-8 h-8 rounded-full bg-gray-500 flex items-center justify-center text-white text-xs font-medium">
-                            {{ getInitials(event.author) }}
-                          </div>
-                          <div class="min-w-0 flex items-baseline gap-2 flex-wrap">
-                            <span class="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                              {{ getAuthorName(event.author) }}
-                            </span>
-                            <span
-                              v-if="event.createdAt"
-                              class="text-xs text-gray-500 dark:text-gray-400 cursor-help"
-                              :title="formatFullTimestamp(event.createdAt)"
-                              @pointerup="handleTimestampPointerUp($event, event.createdAt)"
-                            >
-                              {{ formatRelativeActivityTime(event.createdAt) }}
-                            </span>
-                            <span v-if="event.editedAt" class="text-xs text-gray-400 dark:text-gray-500">(edited)</span>
-                          </div>
-                        </div>
-                        <Menu
-                          v-if="canEditComment(event)"
-                          as="div"
-                          class="relative ml-2 opacity-0 group-hover/comment:opacity-100 transition-opacity"
-                        >
-                          <MenuButton
-                            class="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                          >
-                            <EllipsisVerticalIcon class="w-4 h-4" />
-                          </MenuButton>
-                          <MenuItems
-                            class="absolute right-0 mt-1 w-36 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 focus:outline-none z-10"
-                          >
-                            <MenuItem v-slot="{ active }">
-                              <button
-                                type="button"
-                                :class="[active ? 'bg-gray-100 dark:bg-gray-700' : '', 'flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300']"
-                                @click="startEditComment(event)"
-                              >
-                                <PencilSquareIcon class="w-4 h-4" />
-                                Edit
-                              </button>
-                            </MenuItem>
-                          </MenuItems>
-                        </Menu>
-                      </div>
-                      <!-- Edit mode -->
-                      <div v-if="editingCommentId === event.id" class="px-4 pb-3.5 text-sm leading-[1.55] text-gray-700 dark:text-gray-300 space-y-2">
-                        <CommentInput
-                          ref="editCommentInputRef"
-                          v-model="editingCommentText"
-                          v-model:existing-attachments="editingCommentAttachments"
-                          :show-submit="true"
-                          :submit-on-enter="true"
-                          variant="activity"
-                          placeholder="Edit comment..."
-                          class="mb-2"
-                          @files-change="handleEditCommentFilesChange"
-                          @submit="saveEditComment"
-                        >
-                          <template #footerActions="{ canSubmit }">
-                            <button
-                              type="button"
-                              class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
-                              @click="cancelEditComment"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              type="button"
-                              :disabled="!canSubmit || !isEditingCommentDirty"
-                              class="px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                              @click="handleSaveEditCommentClick"
-                            >
-                              Save
-                            </button>
-                          </template>
-                        </CommentInput>
-                      </div>
-                      <!-- View mode -->
-                      <div v-else class="px-4 pb-3.5 text-sm leading-[1.55] text-gray-700 dark:text-gray-300 [&_p]:m-0 [&_p]:leading-[1.55]">
-                        <div
-                          v-if="activitySearchQuery.trim()"
-                          v-html="highlightSearchText(event.content || event.text)"
-                          class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap"
-                        ></div>
-                        <CommentContent v-else :content="event.content || event.text" />
-                        <!-- Attachments -->
-                        <div v-if="event.attachments && event.attachments.length > 0" class="mt-3 grid gap-2.5">
-                          <component
-                            v-for="(attachment, idx) in event.attachments"
-                            :key="idx"
-                            :is="hasAttachmentUrl(attachment) ? 'a' : 'div'"
-                            :href="hasAttachmentUrl(attachment) ? getAttachmentUrl(attachment) : undefined"
-                            :target="hasAttachmentUrl(attachment) ? '_blank' : undefined"
-                            :rel="hasAttachmentUrl(attachment) ? 'noopener noreferrer' : undefined"
-                            :class="[
-                              'group/attachment block overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800 transition',
-                              isImageAttachment(attachment) ? '' : 'p-2.5',
-                              hasAttachmentUrl(attachment)
-                                ? (
-                                    isImageAttachment(attachment)
-                                      ? 'cursor-pointer'
-                                      : 'hover:-translate-y-px hover:border-indigo-300 hover:shadow-sm dark:hover:border-indigo-500'
-                                  )
-                                : 'cursor-default'
-                            ]"
-                          >
-                            <div v-if="isImageAttachment(attachment) && hasAttachmentUrl(attachment)" class="relative max-h-[240px] overflow-hidden bg-slate-50 dark:bg-gray-800">
-                              <button
-                                type="button"
-                                class="pointer-events-none absolute right-2 top-2 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-300/90 bg-white/90 text-gray-600 opacity-0 shadow-sm transition-opacity duration-150 hover:bg-white group-hover/attachment:pointer-events-auto group-hover/attachment:opacity-100 dark:border-gray-600 dark:bg-gray-800/90 dark:text-gray-200 dark:hover:bg-gray-800"
-                                :aria-label="`Download ${getAttachmentName(attachment)}`"
-                                @click.prevent.stop="downloadAttachment(attachment)"
-                              >
-                                <ArrowDownTrayIcon class="h-5 w-5" />
-                              </button>
-                              <object
-                                v-if="isSvgAttachment(attachment)"
-                                :data="getAttachmentUrl(attachment)"
-                                type="image/svg+xml"
-                                class="block max-h-[240px] w-full object-contain"
-                              />
-                              <img
-                                v-else
-                                :src="getAttachmentUrl(attachment)"
-                                :alt="getAttachmentName(attachment)"
-                                class="block max-h-[240px] w-full object-contain"
-                                loading="lazy"
-                              />
-                              <div class="flex items-center justify-between gap-2 border-t border-gray-100 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-800">
-                                <span class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{{ getAttachmentName(attachment) }}</span>
-                                <span v-if="attachment.size" class="text-xs text-gray-500 dark:text-gray-400">{{ formatFileSize(attachment.size) }}</span>
-                              </div>
-                            </div>
-                            <div v-else class="flex items-center gap-2.5">
-                              <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400">
-                                <PaperClipIcon class="w-4 h-4" />
-                              </div>
-                              <div class="min-w-0 flex flex-col gap-0.5">
-                                <span class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{{ getAttachmentName(attachment) }}</span>
-                                <span class="text-xs text-gray-500 dark:text-gray-400">{{ getAttachmentLabel(attachment) }}</span>
-                              </div>
-                            </div>
-                          </component>
-                        </div>
-                      </div>
-                      <div v-if="editingCommentId !== event.id" class="flex items-center gap-2 border-t border-gray-200 px-4 py-2 dark:border-gray-700">
-                        <div class="flex flex-wrap items-center gap-1.5">
-                          <template v-if="hasCommentReactions(event)">
-                            <button
-                              v-for="reaction in getCommentReactions(event)"
-                              :key="`${event.id || event.createdAt}-${reaction.emoji}`"
-                              type="button"
-                              :class="[
-                                'inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[1rem] leading-none transition-colors',
-                                isCommentReactionSelected(event, reaction.emoji)
-                                  ? 'border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-200'
-                                  : 'border-blue-500 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-900/20'
-                              ]"
-                              :aria-label="`${reaction.emoji} ${reaction.count} reactions`"
-                              @click="toggleCommentReaction(event, reaction.emoji)"
-                              @mouseenter="handleShowCommentReactionTooltip($event, reaction)"
-                              @mouseleave="handleHideCommentReactionTooltip"
-                            >
-                              <span aria-hidden="true">{{ reaction.emoji }}</span>
-                              <span class="text-xs font-normal leading-none">{{ reaction.count }}</span>
-                            </button>
-                            <button
-                              v-if="!isCommentReactionSelected(event, '👍')"
-                              type="button"
-                              class="inline-flex h-[1.875rem] w-[1.875rem] items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
-                              aria-label="Like comment"
-                              @click="toggleCommentReaction(event, '👍')"
-                            >
-                              <HandThumbUpIcon class="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              class="inline-flex h-[1.875rem] w-[1.875rem] items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
-                              aria-label="React to comment"
-                              :ref="(el) => setCommentReactionButtonRef(event, el)"
-                              @click="toggleCommentReactionPicker(event)"
-                            >
-                              <FaceSmileIcon class="w-4 h-4" />
-                            </button>
-                          </template>
-                          <template v-else>
-                            <button
-                              type="button"
-                              class="inline-flex h-[1.875rem] w-[1.875rem] items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
-                              aria-label="Like comment"
-                              @click="toggleCommentReaction(event, '👍')"
-                            >
-                              <HandThumbUpIcon class="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              class="inline-flex h-[1.875rem] w-[1.875rem] items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
-                              aria-label="React to comment"
-                              :ref="(el) => setCommentReactionButtonRef(event, el)"
-                              @click="toggleCommentReactionPicker(event)"
-                            >
-                              <FaceSmileIcon class="w-4 h-4" />
-                            </button>
-                          </template>
-                        </div>
-                        <button
-                          v-if="!isThreadViewActive"
-                          type="button"
-                          class="ml-auto inline-flex items-center gap-2 text-[13px] font-normal text-gray-400 transition-colors hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400"
-                          @click="openCommentThread(event)"
-                        >
-                          <span>
-                            {{ getCommentThreadReplyCount(event) > 0
-                              ? `${getCommentThreadReplyCount(event)} ${getCommentThreadReplyCount(event) === 1 ? 'reply' : 'replies'}`
-                              : 'Reply' }}
-                          </span>
-                          <template v-if="getCommentThreadReplyCount(event) > 0 && getCommentThreadLatestReplyAuthor(event)">
-                            <Avatar
-                              v-if="typeof getCommentThreadLatestReplyAuthor(event) === 'object'"
-                              :user="getCommentThreadLatestReplyAuthor(event)"
-                              size="sm"
-                            />
-                            <div v-else class="h-6 w-6 rounded-full bg-gray-500 flex items-center justify-center text-white text-[10px] font-semibold">
-                              {{ getInitials(getCommentThreadLatestReplyAuthor(event)) }}
-                            </div>
-                          </template>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </template>
-              </RecordActivityTimeline>
-            </div>
-          </div>
+          <ActivitySection
+            :events="activityTimelineEvents"
+            :ui="taskActivityUi"
+            :is-thread-view-active="isThreadViewActive"
+            :active-thread-root-comment="activeThreadRootComment"
+            :thread-reply-count="threadReplyCount"
+            :activity-pane-ready="activityPaneReady"
+            :activity-search-open="activitySearchOpen"
+            :activity-search-query="activitySearchQuery"
+            :activity-filter-comments="activityFilterComments"
+            :activity-filter-updates="activityFilterUpdates"
+            :activity-filter-email="activityFilterEmail"
+            :new-comment-text="newCommentText"
+            :notification-count="task?.notificationCount || 0"
+            :show-notifications="true"
+            :on-timeline-ref="setActivityTimelineRef"
+            @comment="handleAddComment"
+            @close-thread="closeCommentThread"
+            @update:activitySearchOpen="activitySearchOpen = $event"
+            @update:activitySearchQuery="activitySearchQuery = $event"
+            @update:activityFilterComments="activityFilterComments = $event"
+            @update:activityFilterUpdates="activityFilterUpdates = $event"
+            @update:activityFilterEmail="activityFilterEmail = $event"
+            @update:newCommentText="newCommentText = $event"
+          />
         </template>
         <template #tab-related>
           <div class="flex flex-col h-full">
@@ -2174,7 +1135,7 @@
         </template>
       </RecordRightPane>
     </template>
-  </RecordPageLayout>
+  </RecordPageShell>
   <Teleport to="body">
     <div
       v-if="showCommentReactionPicker"
@@ -2254,7 +1215,8 @@
   <LinkRecordsDrawer
     :isOpen="showLinkRecordDrawer"
     :module-key="''"
-    :record-types="linkRecordDrawerTypes"
+    source-app-key="platform"
+    source-module-key="tasks"
     :multiple="true"
     title="Link Record"
     :context="linkRecordDrawerContext"
@@ -2270,177 +1232,15 @@
       :style="tagPopoverStyle"
       class="fixed z-[120] w-[360px] rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl"
     >
-      <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-        <div class="flex items-center justify-between gap-2">
-          <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Tags</h3>
-          <button
-            v-if="hasInstanceTags"
-            type="button"
-            class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
-            @click="openCreateTagEditor()"
-          >
-            New Tag
-          </button>
-        </div>
-
-        <div class="mt-2">
-          <input
-            ref="tagSearchInputRef"
-            v-model="tagSearchQuery"
-            type="text"
-            placeholder="Search or create a tag"
-            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            @focus="tagListOpen = true"
-            @click="tagListOpen = true"
-            @blur="handleTagSearchBlur"
-          />
-        </div>
-
-        <div v-if="task?.tags?.length" class="mt-2 flex flex-wrap gap-1.5">
-          <span
-            v-for="tagName in task.tags"
-            :key="`selected-${tagName}`"
-            :class="['inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs', getTagChipClass(tagName)]"
-          >
-            <span class="truncate max-w-[180px]">{{ tagName }}</span>
-            <button
-              type="button"
-              class="text-current/80 hover:text-current"
-              @click="removeTagFromRecord(tagName)"
-            >
-              <XMarkIcon class="w-3.5 h-3.5" />
-            </button>
-          </span>
-        </div>
-      </div>
-
-      <div class="max-h-72 overflow-y-auto px-2 py-2">
-        <div v-if="!tagListOpen && !isTagEditorOpen" class="px-2 py-3 text-sm text-gray-500 dark:text-gray-400">
-          Click the search box to view available tags.
-        </div>
-
-        <div v-else-if="!hasInstanceTags && !isTagEditorOpen" class="px-2 py-3 text-sm text-gray-500 dark:text-gray-400">
-          <p>No tags created yet in this instance.</p>
-          <button
-            type="button"
-            class="mt-2 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
-            @click="openCreateTagEditor(tagSearchQuery)"
-          >
-            Create first tag
-          </button>
-        </div>
-
-        <template v-else-if="!isTagEditorOpen">
-          <button
-            v-if="canCreateTagFromSearch"
-            type="button"
-            class="w-full rounded-lg px-3 py-2 text-left text-sm text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
-            @click="openCreateTagEditor(tagSearchQuery)"
-          >
-            Create "{{ normalizedTagSearch }}"
-          </button>
-
-          <button
-            v-for="tagDef in filteredInstanceTags"
-            :key="tagDef.name"
-            type="button"
-            class="group w-full rounded-lg px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-800"
-            @click="toggleTagForRecord(tagDef.name)"
-          >
-            <div class="flex items-center gap-2">
-              <span :class="['h-2.5 w-2.5 rounded-full', getTagDotClass(tagDef.name)]"></span>
-              <span class="flex-1 truncate text-sm text-gray-900 dark:text-white">{{ tagDef.name }}</span>
-              <span
-                v-if="tagDef.isPublic"
-                class="rounded px-1.5 py-0.5 text-[10px] font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
-              >
-                Public
-              </span>
-              <CheckIcon
-                v-if="isTagAssigned(tagDef.name)"
-                class="w-4 h-4 text-indigo-600 dark:text-indigo-400"
-              />
-              <button
-                type="button"
-                class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                @click.stop="openEditTagEditor(tagDef)"
-                aria-label="Edit tag"
-              >
-                <PencilSquareIcon class="w-4 h-4" />
-              </button>
-            </div>
-          </button>
-        </template>
-
-        <template v-else>
-          <div class="px-2 py-2 space-y-3">
-            <div>
-              <label class="text-xs text-gray-500 dark:text-gray-400">Tag Name</label>
-              <input
-                v-model="tagEditor.name"
-                type="text"
-                maxlength="50"
-                class="mt-1 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                placeholder="Enter tag name"
-              />
-            </div>
-
-            <div>
-              <label class="text-xs text-gray-500 dark:text-gray-400">Color</label>
-              <div class="mt-1 flex items-center gap-2">
-                <button
-                  v-for="option in TAG_COLOR_OPTIONS"
-                  :key="option.key"
-                  type="button"
-                  :class="[
-                    'h-6 w-6 rounded-full border-2 transition-colors',
-                    option.swatchClass,
-                    tagEditor.color === option.key ? 'border-gray-900 dark:border-white' : 'border-transparent hover:border-gray-300 dark:hover:border-gray-500'
-                  ]"
-                  @click="tagEditor.color = option.key"
-                ></button>
-              </div>
-            </div>
-
-            <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-              <input
-                v-model="tagEditor.isPublic"
-                type="checkbox"
-                class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-              />
-              Make tag public
-            </label>
-
-            <div class="flex items-center justify-between gap-2 pt-1">
-              <button
-                v-if="tagEditorMode === 'edit'"
-                type="button"
-                class="text-xs font-medium text-red-600 dark:text-red-400 hover:underline"
-                @click="deleteEditingTag"
-              >
-                Delete tag
-              </button>
-              <div class="ml-auto flex items-center gap-2">
-                <button
-                  type="button"
-                  class="rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-                  @click="closeTagEditor"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  class="rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  :disabled="!canSaveTagEditor || isSavingTagState"
-                  @click="saveTagEditor"
-                >
-                  {{ tagEditorMode === 'create' ? 'Create' : 'Save' }}
-                </button>
-              </div>
-            </div>
-          </div>
-        </template>
-      </div>
+      <RecordTagPopover
+        :record="task"
+        :tag-storage-key="tagStorageKey"
+        :can-edit="canEditTask"
+        :persist-tags="persistRecordTagsForTask"
+        instance-tag-source="tasks"
+        :fetch-record="fetchTask"
+        :open="showTagPopover"
+      />
     </div>
   </Teleport>
 
@@ -2547,28 +1347,43 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, onActivated, watch, nextTick, inject } from 'vue';
+import { ref, computed, watch, nextTick, inject } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Menu, MenuButton, MenuItem, MenuItems, Listbox, ListboxButton, ListboxOptions, ListboxOption } from '@headlessui/vue';
 import {
-  RecordPageLayout,
+  RecordPageShell,
   RecordHeader,
   RecordStateSection,
   RecordFieldsSection,
-  RecordActivityTimeline,
   RecordRightPane,
-  EditableLabeledValue
+  EditableLabeledValue,
+  RecordTagPopover
 } from '@/components/record-page';
-import CommentInput from '@/components/record-page/CommentInput.vue';
-import CommentContent from '@/components/record-page/CommentContent.vue';
+import SectionStack from '@/components/record-page/sections/SectionStack.vue';
+import { useRecordTagPopoverPosition } from '@/components/record-page/composables/useRecordTagPopoverPosition';
+import { useRecordTags } from '@/components/record-page/composables/useRecordTags';
+import ActivitySection from '@/components/activity/ActivitySection.vue';
+import { createActivityTimelineRefSetter } from '@/components/activity/useRecordActivityAdapter';
+import { createTaskActivityUi } from '@/components/activity/adapters/taskActivityUiAdapter';
+import { useTaskSections } from '@/components/record-page/composables/useTaskSections';
+import { useTaskSectionDataProviders } from '@/components/record-page/composables/useTaskSectionDataProviders';
+import { useRecordLoading } from '@/components/record-page/composables/useRecordLoading';
+import { useRecordHeaderActions } from '@/components/record-page/composables/useRecordHeaderActions';
+import { useRecordPageLifecycle } from '@/components/record-page/composables/useRecordPageLifecycle';
 import EditableTitle from '@/components/record-page/EditableTitle.vue';
 import TaskDescriptionEditor from '@/components/record-page/TaskDescriptionEditor.vue';
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
+import {
+  normalizeSystemActivityEvent,
+  normalizeCommentActivityEvent,
+  normalizeEmailThreadActivityEvent,
+  sortActivityEventsByDate
+} from '@/components/record-page/activityEventModel';
 import LinkRecordsDrawer from '@/components/common/LinkRecordsDrawer.vue';
 import TaskEditDrawer from '@/components/tasks/TaskEditDrawer.vue';
 import TaskRelatedToField from '@/components/tasks/TaskRelatedToField.vue';
 import DeleteConfirmationModal from '@/components/common/DeleteConfirmationModal.vue';
 import EmailComposeDrawer from '@/components/communications/EmailComposeDrawer.vue';
-import EmailThreadCard from '@/components/communications/EmailThreadCard.vue';
 import DOMPurify from 'dompurify';
 import {
   ChatBubbleLeftRightIcon,
@@ -2591,17 +1406,19 @@ import {
   PencilSquareIcon,
   ArrowPathIcon,
   ArrowLeftIcon,
+  ArrowRightIcon,
   ArrowDownTrayIcon,
   ClipboardDocumentIcon,
   PlusIcon,
   TrashIcon,
-  ArrowsPointingOutIcon,
   ArrowsPointingInIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   HandThumbUpIcon,
   FaceSmileIcon,
-  EnvelopeIcon
+  EnvelopeIcon,
+  DocumentTextIcon,
+  CurrencyDollarIcon
 } from '@heroicons/vue/24/outline';
 import {
   StarIcon as StarIconSolid,
@@ -2613,6 +1430,7 @@ import { getKeyFields } from '@/utils/fieldDisplay';
 import apiClient from '@/utils/apiClient';
 import { openDatePicker } from '@/utils/dateUtils';
 import { useAuthStore } from '@/stores/auth';
+import { useTabs } from '@/composables/useTabs';
 import { 
   TASK_FIELD_METADATA, 
   getCoreTaskFields,
@@ -2622,6 +1440,7 @@ import {
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+const { openTab, replaceActiveTab, activeTabId, updateTabTitle, findTabById } = useTabs();
 const recordLayoutIsMobile = inject('recordLayoutIsMobile', ref(false));
 
 const props = defineProps({
@@ -2647,11 +1466,8 @@ const handleEmbedClose = () => {
 
 const task = ref(null);
 const taskRecordPageRootRef = ref(null);
-const loading = ref(false);
-const error = ref(null);
-const isFollowing = ref(false);
-const showDeleteModal = ref(false);
-const deleting = ref(false);
+const taskNavigationIds = ref([]);
+const { loading, error, runWithLoading } = useRecordLoading();
 const showEditDrawer = ref(false);
 const showEmailModal = ref(false);
 const taskEvents = ref([]);
@@ -2702,7 +1518,6 @@ const customFields = ref([]);
 const users = ref([]);
 const activityTimelineRef = ref(null);
 const rightPaneRef = ref(null);
-const activityScrollTrigger = ref(0); // Incremented on activation to re-run scroll logic
 const activityPaneReady = ref(false); // hide activity content until scrolled to bottom (avoids top flash)
 const leftPaneScrollTop = ref(0);
 const leftPaneScrollElement = ref(null);
@@ -2715,7 +1530,6 @@ const isSavingNewSubtask = ref(false);
 const isDeletingSubtask = ref(false);
 const deletingSubtaskId = ref('');
 const newSubtaskTitle = ref('');
-const newSubtaskInputRef = ref(null);
 // Activity search state (searches comments)
 const activitySearchQuery = ref('');
 const activitySearchInputRef = ref(null);
@@ -2730,15 +1544,20 @@ function loadActivityFilter() {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (typeof parsed?.comments === 'boolean' && typeof parsed?.updates === 'boolean') {
-        return { comments: parsed.comments, updates: parsed.updates };
+        return {
+          comments: parsed.comments,
+          updates: parsed.updates,
+          email: typeof parsed?.email === 'boolean' ? parsed.email : true
+        };
       }
     }
   } catch (_) {}
-  return { comments: true, updates: true };
+  return { comments: true, updates: true, email: true };
 }
 const savedFilter = loadActivityFilter();
 const activityFilterComments = ref(savedFilter.comments);
 const activityFilterUpdates = ref(savedFilter.updates);
+const activityFilterEmail = ref(savedFilter.email);
 const newCommentText = ref('');
 const activeThreadRootCommentId = ref(null);
 const editingCommentId = ref(null);
@@ -2772,14 +1591,7 @@ const COMMENT_REACTION_TOOLTIP_SHOW_DELAY_MS = 220;
 let commentReactionTooltipHideTimer = null;
 let commentReactionTooltipShowTimer = null;
 
-// Link Record Drawer state (right side drawer, same as Link Organization)
 const showLinkRecordDrawer = ref(false);
-const linkRecordDrawerTypes = [
-  { key: 'projects', label: 'Project' },
-  { key: 'deals', label: 'Deal' },
-  { key: 'events', label: 'Event' },
-  { key: 'forms', label: 'Form' }
-];
 const linkRecordDrawerContext = computed(() => (task.value?._id ? { taskId: task.value._id } : {}));
 const openLinkRecordDrawer = () => { showLinkRecordDrawer.value = true; };
 const openLeftSection = (sectionKey) => {
@@ -2789,7 +1601,6 @@ const closeExpandedLeftSection = () => {
   expandedLeftSection.value = null;
 };
 
-// Description version history (full-page)
 const descriptionVersionsLoading = ref(false);
 const descriptionRestoreLoading = ref(false);
 const descriptionVersionsData = ref({ currentDescription: '', versions: [] });
@@ -2799,6 +1610,17 @@ const openDescriptionHistory = () => {
   expandedLeftSection.value = 'description-history';
   selectedDescriptionVersionIndex.value = 0;
   fetchDescriptionVersions();
+};
+
+const saveTaskDescriptionFromSection = async (value) => {
+  if (!task.value || !canEditTask.value) return;
+  const trimmedDescription = String(value || '').trim();
+  const originalDescription = task.value?.description || '';
+  localDescription.value = trimmedDescription;
+  if (trimmedDescription !== originalDescription) {
+    task.value.description = trimmedDescription;
+    await handleFieldSave('description', trimmedDescription);
+  }
 };
 
 const descriptionHistoryList = computed(() => {
@@ -2931,10 +1753,10 @@ const handleRightRelatedModuleToggle = (key, event) => {
     [key]: !!event?.target?.open
   };
 };
+
 const localDescription = ref('');
 const descriptionEditorRef = ref(null);
 
-// RecordStateSection editable fields state
 const isEditingStartDate = ref(false);
 const isEditingDueDate = ref(false);
 const localStartDate = ref('');
@@ -2955,76 +1777,34 @@ const relatedToPopoverInitialValue = ref({ type: 'none', id: null });
 const relatedToPopoverError = ref('');
 const relatedToSaving = ref(false);
 
-const tagHeaderButtonRef = ref(null);
-const tagFieldButtonRef = ref(null);
-const tagPopoverRef = ref(null);
-const tagSearchInputRef = ref(null);
-const showTagPopover = ref(false);
-const tagListOpen = ref(false);
-const tagPopoverAnchor = ref('header');
-const activeTagAnchorEl = ref(null);
-const tagPopoverStyle = ref({ top: '0px', left: '0px' });
-const tagSearchQuery = ref('');
-const instanceTagDefinitions = ref([]);
-const tagEditorMode = ref('none');
-const editingTagName = ref('');
-const isSavingTagState = ref(false);
-const tagEditor = ref({
-  name: '',
-  color: 'slate',
-  isPublic: false
-});
+const {
+  tagHeaderButtonRef,
+  tagFieldButtonRef,
+  tagPopoverRef,
+  showTagPopover,
+  tagPopoverStyle,
+  updateTagPopoverPosition,
+  handleTagIconClick,
+  openTagPopoverFromField,
+  handleTagPopoverMousedown,
+  handleTagPopoverOutsideClick
+} = useRecordTagPopoverPosition();
 
-const TAG_COLOR_OPTIONS = [
-  {
-    key: 'slate',
-    chipClass: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
-    dotClass: 'bg-slate-500',
-    swatchClass: 'bg-slate-500'
-  },
-  {
-    key: 'blue',
-    chipClass: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-    dotClass: 'bg-blue-500',
-    swatchClass: 'bg-blue-500'
-  },
-  {
-    key: 'indigo',
-    chipClass: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
-    dotClass: 'bg-indigo-500',
-    swatchClass: 'bg-indigo-500'
-  },
-  {
-    key: 'violet',
-    chipClass: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
-    dotClass: 'bg-violet-500',
-    swatchClass: 'bg-violet-500'
-  },
-  {
-    key: 'emerald',
-    chipClass: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-    dotClass: 'bg-emerald-500',
-    swatchClass: 'bg-emerald-500'
-  },
-  {
-    key: 'amber',
-    chipClass: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-    dotClass: 'bg-amber-500',
-    swatchClass: 'bg-amber-500'
-  },
-  {
-    key: 'orange',
-    chipClass: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
-    dotClass: 'bg-orange-500',
-    swatchClass: 'bg-orange-500'
-  },
-  {
-    key: 'rose',
-    chipClass: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
-    dotClass: 'bg-rose-500',
-    swatchClass: 'bg-rose-500'
+const tagStorageKey = computed(() => {
+  const organizationId = authStore.user?.organizationId || authStore.organization?._id || 'default-org';
+  return `litedesk-task-tag-definitions-${organizationId}`;
+});
+const hasTaskTags = computed(() => Array.isArray(task.value?.tags) && task.value.tags.length > 0);
+
+const persistRecordTagsForTask = async (cleaned) => {
+  if (!task.value || !canEditTask.value) return;
+  const response = await apiClient.put(`/tasks/${task.value._id}`, { tags: cleaned });
+  if (response?.success && response.data) {
+    task.value.tags = Array.isArray(response.data.tags) ? response.data.tags : cleaned;
+  } else {
+    task.value.tags = cleaned;
   }
-];
+};
 
 const toReadableFieldLabel = (label, key = '') => {
   const fallback = String(key || '').trim();
@@ -3128,6 +1908,50 @@ const getFieldOptions = (fieldKey) => {
     }));
   }
   return undefined;
+};
+
+const isTaskFieldEditableByConfig = (fieldKey) => {
+  if (!fieldKey) return false;
+  const moduleField = getModuleFieldForKey(fieldKey);
+  if (moduleField && typeof moduleField.editable === 'boolean') {
+    return moduleField.editable;
+  }
+  const metadata = getTaskFieldMetadata(fieldKey);
+  if (metadata && typeof metadata.editable === 'boolean') {
+    return metadata.editable;
+  }
+  return true;
+};
+
+const resolveFieldPrefixIcon = (fieldKey, fieldType = '') => {
+  const key = String(fieldKey || '').trim();
+  const keyLower = key.toLowerCase();
+  const map = {
+    status: CheckCircleIcon,
+    startdate: CalendarIcon,
+    duedate: CalendarIcon,
+    estimatedhours: ClockIcon,
+    actualhours: ClockIcon,
+    assignedto: UserIcon,
+    priority: FlagIcon,
+    tags: TagIcon,
+    relatedto: LinkIcon
+  };
+  if (map[keyLower]) return map[keyLower];
+
+  const moduleField = getModuleFieldForKey(key);
+  const dataType = String(moduleField?.dataType || '').toLowerCase();
+  if (['date', 'date-time', 'datetime'].includes(dataType)) return CalendarIcon;
+  if (['integer', 'decimal', 'currency'].includes(dataType)) return CurrencyDollarIcon;
+  if (['picklist', 'multi-picklist'].includes(dataType)) return TagIcon;
+  if (['lookup', 'lookup (relationship)', 'user'].includes(dataType)) return UserIcon;
+
+  const type = String(fieldType || getFieldType(key) || '').toLowerCase();
+  if (type === 'date') return CalendarIcon;
+  if (type === 'number') return CurrencyDollarIcon;
+  if (type === 'select') return TagIcon;
+  if (type === 'user') return UserIcon;
+  return DocumentTextIcon;
 };
 
 const getPlainTextFromHtml = (html) => {
@@ -3289,29 +2113,102 @@ const keyFieldKeys = computed(() => {
   });
 });
 
-const keyFieldIconMap = {
-  status: CheckCircleIcon,
-  startDate: CalendarIcon,
-  dueDate: CalendarIcon,
-  estimatedHours: ClockIcon,
-  assignedTo: UserIcon,
-  priority: FlagIcon,
-  tags: TagIcon
-};
-
 const keyFieldSlotMap = {
   assignedTo: 'owner',
   estimatedHours: 'timeEstimate'
 };
 
+const KEY_SECTION_EDITABLE_TYPES = Object.freeze(new Set(['text', 'number', 'date', 'select', 'user']));
+
+const getKeyFieldRawValue = (fieldKey) => {
+  if (!task.value || !fieldKey) return null;
+  if (fieldKey === 'assignedTo') {
+    const assignedTo = task.value.assignedTo;
+    if (assignedTo && typeof assignedTo === 'object') {
+      return assignedTo._id || assignedTo.id || null;
+    }
+    return assignedTo || null;
+  }
+
+  if (fieldKey === 'dueDate' || fieldKey === 'startDate') return task.value[fieldKey] || null;
+  if (fieldKey === 'priority' || fieldKey === 'status') return task.value[fieldKey] || null;
+  if (fieldKey === 'estimatedHours' || fieldKey === 'actualHours') {
+    return task.value[fieldKey] != null && task.value[fieldKey] !== '' ? Number(task.value[fieldKey]) : null;
+  }
+  if (fieldKey === 'tags') {
+    return Array.isArray(task.value.tags) ? task.value.tags : [];
+  }
+  if (fieldKey === 'relatedTo') return task.value.relatedTo || null;
+
+  const customField = getCustomFieldByKey(fieldKey);
+  if (customField) {
+    return task.value[fieldKey] ?? customField.value ?? null;
+  }
+
+  return task.value[fieldKey] ?? null;
+};
+
+const getKeyFieldResolvedType = (fieldKey) => {
+  if (getCustomFieldByKey(fieldKey)) {
+    return getCustomFieldEditableType(fieldKey);
+  }
+  return getFieldType(fieldKey);
+};
+
+const getKeyFieldResolvedOptions = (fieldKey) => {
+  if (getCustomFieldByKey(fieldKey)) {
+    return getCustomFieldOptions(fieldKey);
+  }
+  return getFieldOptions(fieldKey);
+};
+
+const canEditKeyField = (fieldKey) => {
+  if (!canEditTask.value) return false;
+  if (!isTaskFieldEditableByConfig(fieldKey)) return false;
+  return KEY_SECTION_EDITABLE_TYPES.has(getKeyFieldResolvedType(fieldKey));
+};
+
+const canOpenKeyFieldEditor = (fieldKey) => {
+  if (!canEditTask.value) return false;
+  if (!isTaskFieldEditableByConfig(fieldKey)) return false;
+  if (fieldKey === 'relatedTo') return true;
+  if (fieldKey === 'tags') return true;
+  return false;
+};
+
 const keySectionFields = computed(() => {
   return keyFieldKeys.value.map((fieldKey) => {
     const moduleField = getKeyFields(taskModuleDefinition.value).find(field => field?.key === fieldKey);
+    const fieldType = getKeyFieldResolvedType(fieldKey);
+    const canEdit = canEditKeyField(fieldKey);
+    const canOpenEditor = canOpenKeyFieldEditor(fieldKey);
     return {
       key: fieldKey,
       label: toReadableFieldLabel(moduleField?.label, fieldKey),
-      icon: keyFieldIconMap[fieldKey] || null,
-      slotKey: keyFieldSlotMap[fieldKey] || fieldKey
+      icon: resolveFieldPrefixIcon(fieldKey, fieldType),
+      slotKey: keyFieldSlotMap[fieldKey] || fieldKey,
+      type: fieldType,
+      options: getKeyFieldResolvedOptions(fieldKey),
+      min: getCustomFieldNumberMin(fieldKey),
+      step: getCustomFieldNumberStep(fieldKey),
+      value: getKeyFieldRawValue(fieldKey),
+      displayValue: getKeyFieldDisplayValue(fieldKey),
+      canEdit,
+      canOpenEditor,
+      onEdit: canOpenEditor
+        ? (event) => {
+          if (fieldKey === 'relatedTo') {
+            openRelatedToPopover(event, fieldKey, task.value);
+            return;
+          }
+          if (fieldKey === 'tags') {
+            openTagPopoverFromField(event, fieldKey, task.value);
+          }
+        }
+        : null,
+      onSave: canEdit
+        ? (value) => handleFieldSave(fieldKey, value)
+        : null
     };
   });
 });
@@ -3376,6 +2273,11 @@ function getRelatedToRecordPath(t) {
   return base ? `${base}/${rt.id}` : null;
 }
 
+const openRelatedToRecord = () => {
+  const path = getRelatedToRecordPath(task.value);
+  if (path) openTab(path, { background: false, insertAdjacent: true });
+};
+
 const keyFieldDisplayValues = computed(() => {
   const values = {};
   keyFieldKeys.value.forEach((fieldKey) => {
@@ -3384,162 +2286,139 @@ const keyFieldDisplayValues = computed(() => {
   return values;
 });
 
-// Platform default key fields (used when module not loaded) - these are shown in Key section, not Details
-const TASK_DEFAULT_KEY_FIELDS = Object.freeze(['status', 'priority', 'startDate', 'dueDate', 'assignedTo', 'estimatedHours']);
-
-const detailsSectionExcludedFields = computed(() => {
-  const baseExcluded = ['title', 'description', 'subtasks', 'projectId'];
-  const systemExcluded = [
-    'completedAt', 'deletedAt', 'deletedBy', 'deletionReason',
-    'createdAt', 'updatedAt', 'createdBy', 'relatedToType', 'relatedToId'
-  ];
-  const keys = keyFieldKeys.value.length > 0 ? keyFieldKeys.value : TASK_DEFAULT_KEY_FIELDS;
-  return Array.from(new Set([...baseExcluded, ...systemExcluded, ...keys]));
-});
-
-const showAllDetails = ref(false);
-
-const normalizeFieldKey = (k) => String(k || '').toLowerCase().trim().replace(/\s+/g, '').replace(/-/g, '');
-
-// Details section fields in module configuration order (Settings → Modules & Fields)
-const detailsSectionFieldsOrdered = computed(() => {
-  const excluded = detailsSectionExcludedFields.value;
-  const excludedNorm = new Set(excluded.map(normalizeFieldKey));
-  const mod = taskModuleDefinition.value;
-  const moduleFields = mod?.fields || [];
-
-  if (moduleFields.length === 0) {
-    // Fallback: intent-based order when module not loaded
-    const coreFields = getCoreTaskFields();
-    const displayableFields = coreFields.filter(f => !excluded.includes(f));
-    const core = displayableFields.filter((f) => {
-      const m = getTaskFieldMetadata(f);
-      return m && (m.intent === 'primary' || m.intent === 'state' || m.intent === 'scheduling');
-    });
-    const planning = displayableFields.filter((f) => {
-      const m = getTaskFieldMetadata(f);
-      return m && m.intent === 'tracking';
-    });
-    const relationships = displayableFields.filter((f) => {
-      const m = getTaskFieldMetadata(f);
-      return m && m.intent === 'detail';
-    });
-    if (displayableFields.includes('tags') && !relationships.includes('tags') && !planning.includes('tags')) {
-      planning.push('tags');
-    }
-    const customKeys = (customFields.value || []).map(f => f?.key).filter(Boolean);
-    return [...new Set([...core, ...planning, ...relationships, ...customKeys])];
-  }
-
-  const ordered = [];
-  const seen = new Set();
-  const sorted = [...moduleFields].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
-  for (const f of sorted) {
-    const key = f?.key;
-    if (!key) continue;
-    const keyNorm = normalizeFieldKey(key);
-    if (excludedNorm.has(keyNorm)) continue;
-    if (seen.has(keyNorm)) continue;
-    const showInDetail = f.visibility?.detail;
-    if (showInDetail !== true) {
-      if (keyNorm !== 'relatedto') continue;
-    }
-    seen.add(keyNorm);
-    ordered.push(key);
-  }
-  return ordered;
-});
-
-// Fields that have render templates in the Details section (count must match what's actually displayed)
-const DETAIL_RENDERABLE_KEYS = Object.freeze(new Set([
-  'assignedto', 'duedate', 'startdate', 'priority', 'status',
-  'estimatedhours', 'actualhours', 'tags', 'relatedto'
-]));
-
-const detailFieldsOrdered = computed(() => {
-  const ordered = detailsSectionFieldsOrdered.value;
-  const customKeys = (customFields.value || []).map(f => (f?.key || '').toLowerCase()).filter(Boolean);
-  return ordered.filter((key) => {
-    const norm = normalizeFieldKey(key);
-    return DETAIL_RENDERABLE_KEYS.has(norm) || customKeys.includes(norm);
-  });
-});
-
-const detailGroupFieldsMap = computed(() => ({
-  details: detailFieldsOrdered.value
-}));
-
-const detailFieldCount = computed(() => detailFieldsOrdered.value.length);
-
-const shouldShowDetailsViewAll = computed(() => {
-  return !showAllDetails.value && detailFieldCount.value > 5;
-});
-
-const visibleDetailFieldSet = computed(() => {
-  if (showAllDetails.value || detailFieldCount.value <= 5) {
-    return new Set(detailFieldsOrdered.value);
-  }
-  return new Set(detailFieldsOrdered.value.slice(0, 5));
-});
-
-// Single group: all details fields in module configuration order
-const fieldGroups = computed(() => {
-  const ordered = detailsSectionFieldsOrdered.value;
-  return ordered.length > 0 ? [{ key: 'details', label: '' }] : [];
-});
-
-// Computed: Get fields for each group
-const getGroupFields = (groupKey) => {
-  const rows = detailGroupFieldsMap.value[groupKey] || [];
-  return rows.filter(fieldKey => visibleDetailFieldSet.value.has(fieldKey));
-};
-
-const completedSubtasksCount = computed(() => {
-  return task.value?.subtasks?.filter(st => st.completed).length || 0;
-});
-
-const showAllSubtasks = ref(false);
-const subtasksRenderLimit = ref(20);
-
-const allSubtasks = computed(() => Array.isArray(task.value?.subtasks) ? task.value.subtasks : []);
-const totalSubtasksCount = computed(() => allSubtasks.value.length);
-
-const visibleSubtasks = computed(() => {
-  if (!showAllSubtasks.value) {
-    if (totalSubtasksCount.value <= 5) return allSubtasks.value;
-    return allSubtasks.value.slice(0, 5);
-  }
-
-  if (totalSubtasksCount.value >= 50) {
-    return allSubtasks.value.slice(0, subtasksRenderLimit.value);
-  }
-
-  return allSubtasks.value;
-});
-
-const shouldShowSubtasksViewAll = computed(() => {
-  return !showAllSubtasks.value && totalSubtasksCount.value > 5;
-});
-
-const canLoadMoreSubtasks = computed(() => {
-  return showAllSubtasks.value
-    && totalSubtasksCount.value >= 50
-    && visibleSubtasks.value.length < totalSubtasksCount.value;
-});
-
-const loadMoreSubtasks = () => {
-  subtasksRenderLimit.value = Math.min(subtasksRenderLimit.value + 20, totalSubtasksCount.value);
-};
-
 // Check if user can edit tasks
 const canEditTask = computed(() => {
   return authStore.can('tasks', 'edit');
+});
+
+const { getTagChipClass: getTaskTagChipClass } = useRecordTags(task, {
+  tagStorageKey,
+  canEdit: canEditTask,
+  persistTags: persistRecordTagsForTask,
+  instanceTagSource: 'tasks'
 });
 
 // Check if user can link records (same as edit for now, can be refined)
 const canLinkRecords = computed(() => {
   return authStore.can('tasks', 'edit');
 });
+
+const {
+  showAllDetails,
+  showAllSubtasks,
+  detailFieldCount,
+  shouldShowDetailsViewAll,
+  shouldShowSubtasksViewAll,
+  canLoadMoreSubtasks,
+  completedSubtasksCount,
+  totalSubtasksCount,
+  setShowAllDetails,
+  setShowAllSubtasks,
+  loadMoreSubtasks,
+  resetSectionState,
+  getDetailFields,
+  getSubtasks,
+  getRelatedGroups
+} = useTaskSectionDataProviders({
+  task,
+  expandedLeftSection,
+  taskModuleDefinition,
+  keyFieldKeys,
+  customFields,
+  taskEvents,
+  taskDeals,
+  taskForms,
+  getCoreTaskFields,
+  getTaskFieldMetadata,
+  getAssignedToDisplay: (...args) => getAssignedToDisplay(...args),
+  formatDate: (...args) => formatDate(...args),
+  formatPriority: (...args) => formatPriority(...args),
+  formatStatus: (...args) => formatStatus(...args),
+  getRelatedToDisplay,
+  getCustomFieldByKey,
+  getFieldLabel,
+  getFieldType,
+  getFieldOptions,
+  getCustomFieldEditableType,
+  getCustomFieldOptions,
+  getCustomFieldNumberMin,
+  getCustomFieldNumberStep,
+  canEditRecord: () => canEditTask.value,
+  canEditField: (fieldKey) => canEditTask.value && isTaskFieldEditableByConfig(fieldKey),
+  isFieldEditableByConfig: (fieldKey) => isTaskFieldEditableByConfig(fieldKey),
+  resolveFieldPrefixIcon,
+  openRelatedToEditor: (...args) => openRelatedToPopover(...args),
+  openTagsEditor: (...args) => openTagPopoverFromField(...args),
+  getTagChipClass: getTaskTagChipClass,
+  saveDetailField: (fieldKey, value) => handleFieldSave(fieldKey, value),
+  getRelatedRecordId: (...args) => getRelatedRecordId(...args),
+  getRelatedRecordTitle: (...args) => getRelatedRecordTitle(...args),
+  getRelatedRecordMeta: (...args) => getRelatedRecordMeta(...args),
+  getRelatedToRecordPath: (t) => getRelatedToRecordPath(t)
+});
+
+const taskSectionSources = {
+  task,
+  expandedLeftSection,
+  shouldShowDetailsViewAll,
+  shouldShowSubtasksViewAll,
+  canLoadMoreSubtasks,
+  canLinkRecords,
+  completedSubtasksCount,
+  totalSubtasksCount,
+  detailFieldCount,
+  showAllDetails,
+  showAllSubtasks,
+  setShowAllDetails,
+  setShowAllSubtasks,
+  openLeftSection,
+  startCreateSubtask: (...args) => startCreateSubtask(...args),
+  loadMoreSubtasks,
+  openLinkRecordDrawer,
+  getDescription: (record) => String(record?.description || ''),
+  canEditDescription: () => canEditTask.value,
+  saveDescription: saveTaskDescriptionFromSection,
+  canViewDescriptionHistory: () => true,
+  openDescriptionHistory,
+  getDetailFields,
+  getSubtasks,
+  toggleSubtask: (subtask) => {
+    if (subtask?.raw) {
+      handleSubtaskToggle(subtask.raw);
+    }
+  },
+  canEditSubtasks: () => canEditTask.value,
+  updateSubtaskTitle: (subtask, title) => handleUpdateSubtaskTitle(subtask?.raw || subtask, title),
+  deleteSubtask: (subtask) => handleDeleteSubtask(subtask?.raw || subtask),
+  isDeletingSubtask: () => isDeletingSubtask.value,
+  deletingSubtaskId: () => deletingSubtaskId.value,
+  isCreatingSubtask: () => isCreatingSubtask.value,
+  getNewSubtaskTitle: () => newSubtaskTitle.value,
+  setNewSubtaskTitle: (value) => { newSubtaskTitle.value = value; },
+  isSavingNewSubtask: () => isSavingNewSubtask.value,
+  cancelCreateSubtask: (...args) => cancelCreateSubtask(...args),
+  saveNewSubtask: (...args) => saveNewSubtask(...args),
+  getRelatedGroups,
+  openRelatedItem: (item) => {
+    if (!item?.type || !item?.recordId) return;
+    handleOpenRelated(item.type, item.recordId);
+  },
+  canUnlinkRelated: () => canLinkRecords.value,
+  onUnlinkRelated: (item, group) => {
+    const moduleKey = item?.type || group?.key;
+    const recordRef = { _id: item?.recordId ?? item?.id, recordId: item?.recordId ?? item?.id };
+    if (moduleKey && recordRef._id) handleUnlinkRelated(moduleKey, recordRef);
+  },
+  openTab,
+  getRelatedToRecordPath
+};
+
+const {
+  taskSectionStackAdapter,
+  taskSectionStackSections,
+  taskSectionStackContext,
+  shouldRenderTaskSectionStack
+} = useTaskSections(taskSectionSources);
 
 // Check if there are any related records
 const hasRelatedRecords = computed(() => {
@@ -3550,380 +2429,6 @@ const hasRelatedRecords = computed(() => {
     (taskForms.value && taskForms.value.length > 0)
   );
 });
-
-const hasTaskTags = computed(() => Array.isArray(task.value?.tags) && task.value.tags.length > 0);
-
-const tagStorageKey = computed(() => {
-  const organizationId = authStore.user?.organizationId || authStore.organization?._id || 'default-org';
-  return `litedesk-task-tag-definitions-${organizationId}`;
-});
-
-const hasInstanceTags = computed(() => instanceTagDefinitions.value.length > 0);
-
-const normalizedTagSearch = computed(() => normalizeTagName(tagSearchQuery.value));
-
-const filteredInstanceTags = computed(() => {
-  const search = normalizedTagSearch.value.toLowerCase();
-  const rows = [...instanceTagDefinitions.value].sort((a, b) => a.name.localeCompare(b.name));
-  if (!search) return rows;
-  return rows.filter(tagDef => tagDef.name.toLowerCase().includes(search));
-});
-
-const canCreateTagFromSearch = computed(() => {
-  const search = normalizedTagSearch.value;
-  if (!search) return false;
-  return !instanceTagDefinitions.value.some(tagDef => tagDef.name.toLowerCase() === search.toLowerCase());
-});
-
-const isTagEditorOpen = computed(() => tagEditorMode.value === 'create' || tagEditorMode.value === 'edit');
-
-const canSaveTagEditor = computed(() => {
-  const normalizedName = normalizeTagName(tagEditor.value.name);
-  if (!normalizedName) return false;
-
-  return !instanceTagDefinitions.value.some((tagDef) => {
-    if (tagEditorMode.value === 'edit' && tagDef.name.toLowerCase() === String(editingTagName.value).toLowerCase()) {
-      return false;
-    }
-    return tagDef.name.toLowerCase() === normalizedName.toLowerCase();
-  });
-});
-
-const normalizeTagName = (value) => String(value || '').trim().replace(/\s+/g, ' ');
-
-const getTagColorOption = (tagName) => {
-  const definition = instanceTagDefinitions.value.find(tagDef => tagDef.name === tagName);
-  const key = definition?.color || 'slate';
-  return TAG_COLOR_OPTIONS.find(option => option.key === key) || TAG_COLOR_OPTIONS[0];
-};
-
-const getTagChipClass = (tagName) => getTagColorOption(tagName).chipClass;
-const getTagDotClass = (tagName) => getTagColorOption(tagName).dotClass;
-
-const computeDefaultTagColorKey = (tagName) => {
-  const normalized = normalizeTagName(tagName);
-  if (!normalized) return TAG_COLOR_OPTIONS[0].key;
-  const hash = normalized.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return TAG_COLOR_OPTIONS[hash % TAG_COLOR_OPTIONS.length].key;
-};
-
-const saveTagDefinitionsToStorage = () => {
-  try {
-    localStorage.setItem(tagStorageKey.value, JSON.stringify(instanceTagDefinitions.value));
-  } catch (err) {
-    console.error('Failed to persist tag definitions:', err);
-  }
-};
-
-const loadTagDefinitionsFromStorage = () => {
-  try {
-    const raw = localStorage.getItem(tagStorageKey.value);
-    if (!raw) return;
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return;
-
-    instanceTagDefinitions.value = parsed
-      .map((row) => {
-        const name = normalizeTagName(row?.name);
-        if (!name) return null;
-        const color = TAG_COLOR_OPTIONS.some(option => option.key === row?.color)
-          ? row.color
-          : computeDefaultTagColorKey(name);
-        return {
-          name,
-          color,
-          isPublic: !!row?.isPublic
-        };
-      })
-      .filter(Boolean);
-  } catch (err) {
-    console.error('Failed to read tag definitions:', err);
-  }
-};
-
-const mergeTagDefinitions = (tagNames = []) => {
-  const existingByName = new Map(instanceTagDefinitions.value.map(def => [def.name.toLowerCase(), def]));
-
-  tagNames.forEach((name) => {
-    const normalizedName = normalizeTagName(name);
-    if (!normalizedName) return;
-    const key = normalizedName.toLowerCase();
-    if (existingByName.has(key)) return;
-    const color = computeDefaultTagColorKey(normalizedName);
-    existingByName.set(key, {
-      name: normalizedName,
-      color,
-      isPublic: false
-    });
-  });
-
-  instanceTagDefinitions.value = Array.from(existingByName.values())
-    .sort((a, b) => a.name.localeCompare(b.name));
-  saveTagDefinitionsToStorage();
-};
-
-const fetchInstanceTagDefinitions = async () => {
-  const collectedTags = new Set(Array.isArray(task.value?.tags) ? task.value.tags : []);
-  let page = 1;
-  let totalPages = 1;
-
-  try {
-    while (page <= totalPages && page <= 5) {
-      const response = await apiClient.get('/tasks', {
-        params: {
-          page,
-          limit: 200,
-          sortBy: 'updatedAt',
-          sortOrder: 'desc'
-        }
-      });
-
-      if (!response?.success || !Array.isArray(response.data)) break;
-
-      response.data.forEach((row) => {
-        if (!Array.isArray(row?.tags)) return;
-        row.tags.forEach((tagName) => {
-          const normalizedName = normalizeTagName(tagName);
-          if (!normalizedName) return;
-          collectedTags.add(normalizedName);
-        });
-      });
-
-      totalPages = Number(response.pagination?.totalPages || 1);
-      page += 1;
-    }
-  } catch (err) {
-    console.error('Failed to fetch instance tags:', err);
-  }
-
-  mergeTagDefinitions(Array.from(collectedTags));
-};
-
-const isTagAssigned = (tagName) => Array.isArray(task.value?.tags) && task.value.tags.includes(tagName);
-
-const persistRecordTags = async (nextTagNames) => {
-  if (!task.value || !canEditTask.value) return;
-  const cleaned = Array.from(new Set((nextTagNames || []).map(normalizeTagName).filter(Boolean)));
-
-  try {
-    isSavingTagState.value = true;
-    const response = await apiClient.put(`/tasks/${task.value._id}`, { tags: cleaned });
-    if (response?.success && response.data) {
-      task.value.tags = Array.isArray(response.data.tags) ? response.data.tags : cleaned;
-    } else {
-      task.value.tags = cleaned;
-    }
-    mergeTagDefinitions(cleaned);
-  } catch (err) {
-    console.error('Error updating task tags:', err);
-    await fetchTask();
-  } finally {
-    isSavingTagState.value = false;
-  }
-};
-
-const toggleTagForRecord = async (tagName) => {
-  const currentTags = Array.isArray(task.value?.tags) ? task.value.tags : [];
-  if (currentTags.includes(tagName)) {
-    await persistRecordTags(currentTags.filter(name => name !== tagName));
-    return;
-  }
-  await persistRecordTags([...currentTags, tagName]);
-};
-
-const removeTagFromRecord = async (tagName) => {
-  const currentTags = Array.isArray(task.value?.tags) ? task.value.tags : [];
-  if (!currentTags.includes(tagName)) return;
-  await persistRecordTags(currentTags.filter(name => name !== tagName));
-};
-
-const closeTagEditor = () => {
-  tagEditorMode.value = 'none';
-  editingTagName.value = '';
-  tagEditor.value = {
-    name: '',
-    color: TAG_COLOR_OPTIONS[0].key,
-    isPublic: false
-  };
-};
-
-const openCreateTagEditor = (prefill = '') => {
-  const normalized = normalizeTagName(prefill);
-  tagEditorMode.value = 'create';
-  editingTagName.value = '';
-  tagEditor.value = {
-    name: normalized,
-    color: computeDefaultTagColorKey(normalized),
-    isPublic: false
-  };
-};
-
-const openEditTagEditor = (tagDef) => {
-  if (!tagDef?.name) return;
-  tagEditorMode.value = 'edit';
-  editingTagName.value = tagDef.name;
-  tagEditor.value = {
-    name: tagDef.name,
-    color: tagDef.color || TAG_COLOR_OPTIONS[0].key,
-    isPublic: !!tagDef.isPublic
-  };
-};
-
-const saveTagEditor = async () => {
-  if (!canSaveTagEditor.value) return;
-
-  const nextName = normalizeTagName(tagEditor.value.name);
-  const nextColor = TAG_COLOR_OPTIONS.some(option => option.key === tagEditor.value.color)
-    ? tagEditor.value.color
-    : computeDefaultTagColorKey(nextName);
-  const nextIsPublic = !!tagEditor.value.isPublic;
-
-  if (tagEditorMode.value === 'create') {
-    instanceTagDefinitions.value = [
-      ...instanceTagDefinitions.value,
-      { name: nextName, color: nextColor, isPublic: nextIsPublic }
-    ].sort((a, b) => a.name.localeCompare(b.name));
-    saveTagDefinitionsToStorage();
-    await persistRecordTags([...(task.value?.tags || []), nextName]);
-    tagSearchQuery.value = '';
-    closeTagEditor();
-    return;
-  }
-
-  if (tagEditorMode.value === 'edit' && editingTagName.value) {
-    const previousName = editingTagName.value;
-    instanceTagDefinitions.value = instanceTagDefinitions.value
-      .map((tagDef) => {
-        if (tagDef.name !== previousName) return tagDef;
-        return {
-          name: nextName,
-          color: nextColor,
-          isPublic: nextIsPublic
-        };
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
-    saveTagDefinitionsToStorage();
-
-    if (isTagAssigned(previousName)) {
-      const nextTaskTags = (task.value?.tags || []).map(name => (name === previousName ? nextName : name));
-      await persistRecordTags(nextTaskTags);
-    }
-    tagSearchQuery.value = '';
-    closeTagEditor();
-  }
-};
-
-const deleteEditingTag = async () => {
-  if (tagEditorMode.value !== 'edit' || !editingTagName.value) return;
-  const deletingName = editingTagName.value;
-  instanceTagDefinitions.value = instanceTagDefinitions.value.filter(tagDef => tagDef.name !== deletingName);
-  saveTagDefinitionsToStorage();
-  if (isTagAssigned(deletingName)) {
-    await removeTagFromRecord(deletingName);
-  }
-  closeTagEditor();
-};
-
-const resolveMaybeElement = (refValue) => {
-  if (!refValue) return null;
-
-  if (Array.isArray(refValue)) {
-    for (let i = refValue.length - 1; i >= 0; i -= 1) {
-      const el = resolveMaybeElement(refValue[i]);
-      if (el) return el;
-    }
-    return null;
-  }
-
-  if (refValue instanceof HTMLElement) return refValue;
-  if (refValue?.$el instanceof HTMLElement) return refValue.$el;
-  return null;
-};
-
-const getAnchorElementForPopover = () => {
-  if (activeTagAnchorEl.value instanceof HTMLElement) return activeTagAnchorEl.value;
-  if (tagPopoverAnchor.value === 'field') return resolveMaybeElement(tagFieldButtonRef.value);
-  return resolveMaybeElement(tagHeaderButtonRef.value);
-};
-
-const updateTagPopoverPosition = () => {
-  if (!showTagPopover.value) return;
-  const anchor = getAnchorElementForPopover();
-  if (!anchor) return;
-
-  const rect = anchor.getBoundingClientRect();
-  const width = 360;
-  const margin = 12;
-  const popoverHeight = tagPopoverRef.value?.offsetHeight || 320;
-  const left = Math.min(
-    Math.max(rect.left + window.scrollX, margin),
-    window.scrollX + window.innerWidth - width - margin
-  );
-
-  const belowTop = rect.bottom + window.scrollY + 8;
-  const aboveTop = rect.top + window.scrollY - popoverHeight - 8;
-  const canPlaceBelow = rect.bottom + popoverHeight + margin <= window.innerHeight;
-  const top = canPlaceBelow ? belowTop : Math.max(margin, aboveTop);
-
-  tagPopoverStyle.value = {
-    top: `${top}px`,
-    left: `${left}px`
-  };
-};
-
-const openTagPopover = async (anchor = 'header', anchorEl = null) => {
-  tagPopoverAnchor.value = anchor;
-  activeTagAnchorEl.value = resolveMaybeElement(anchorEl);
-  tagListOpen.value = false;
-  showTagPopover.value = true;
-  await nextTick();
-  updateTagPopoverPosition();
-  requestAnimationFrame(updateTagPopoverPosition);
-};
-
-const closeTagPopover = () => {
-  showTagPopover.value = false;
-  tagSearchQuery.value = '';
-  tagListOpen.value = false;
-  activeTagAnchorEl.value = null;
-  closeTagEditor();
-};
-
-const handleTagSearchBlur = () => {
-  window.setTimeout(() => {
-    if (document.activeElement !== tagSearchInputRef.value) {
-      tagListOpen.value = false;
-    }
-  }, 120);
-};
-
-const handleTagIconClick = (event) => {
-  if (showTagPopover.value) {
-    closeTagPopover();
-    return;
-  }
-  openTagPopover('header', event?.currentTarget || event?.target || null);
-};
-
-const openTagPopoverFromField = (event) => {
-  openTagPopover('field', event?.currentTarget || event?.target || null);
-};
-
-const handleTagPopoverOutsideClick = (event) => {
-  if (!showTagPopover.value) return;
-  const target = event?.target;
-  if (!target) return;
-
-  const popoverEl = tagPopoverRef.value;
-  const clickedInsidePopover = popoverEl && popoverEl.contains(target);
-  const headerButtonEl = resolveMaybeElement(tagHeaderButtonRef.value);
-  const fieldButtonEl = resolveMaybeElement(tagFieldButtonRef.value);
-  const clickedHeaderButton = headerButtonEl && headerButtonEl.contains(target);
-  const clickedFieldButton = fieldButtonEl && fieldButtonEl.contains(target);
-
-  if (clickedInsidePopover || clickedHeaderButton || clickedFieldButton) return;
-  closeTagPopover();
-};
 
 const updateRelatedToPopoverPosition = () => {
   if (!showRelatedToPopover.value) return;
@@ -4176,20 +2681,17 @@ const combinedActivityEvents = computed(() => {
 
   // Add email thread entries
   for (const thread of emailThreads.value || []) {
-    const createdAt = thread.lastActivityAt || thread.firstActivityAt || new Date().toISOString();
-    allEvents.push({
-      type: 'email_thread',
-      _threadEntry: true,
-      thread,
-      createdAt
-    });
+    allEvents.push(normalizeEmailThreadActivityEvent({
+      ...thread,
+      recordRef: {
+        module: 'tasks',
+        id: String(task.value?._id || '')
+      },
+      source: 'integration'
+    }));
   }
 
-  return allEvents.sort((a, b) => {
-    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-    return dateA - dateB; // Oldest first (newest at bottom)
-  });
+  return sortActivityEventsByDate(allEvents);
 });
 
 const getCommentEventId = (event) => {
@@ -4300,7 +2802,8 @@ const filteredActivityEvents = computed(() => {
   const events = combinedActivityEvents.value;
   const showComments = activityFilterComments.value;
   const showUpdates = activityFilterUpdates.value;
-  if (!showComments && !showUpdates) return [];
+  const showEmail = activityFilterEmail.value;
+  if (!showComments && !showUpdates && !showEmail) return [];
 
   const q = (activitySearchQuery.value || '').trim().toLowerCase();
 
@@ -4318,7 +2821,8 @@ const filteredActivityEvents = computed(() => {
   // No search query: filter by the activity type toggles
   return events.filter(e =>
     ((e.type === 'comment' && !getParentCommentId(e)) && showComments) ||
-    ((e.type === 'system' || e.type === 'email_thread') && showUpdates)
+    (e.type === 'system' && showUpdates) ||
+    (e.type === 'email_thread' && showEmail)
   );
 });
 
@@ -4330,9 +2834,9 @@ const activityTimelineEvents = computed(() => {
 });
 
 // Persist activity filter so it survives reload
-watch([activityFilterComments, activityFilterUpdates], ([comments, updates]) => {
+watch([activityFilterComments, activityFilterUpdates, activityFilterEmail], ([comments, updates, email]) => {
   try {
-    localStorage.setItem(ACTIVITY_FILTER_STORAGE_KEY, JSON.stringify({ comments, updates }));
+    localStorage.setItem(ACTIVITY_FILTER_STORAGE_KEY, JSON.stringify({ comments, updates, email }));
   } catch (_) {}
 });
 
@@ -4386,6 +2890,135 @@ const contextRelatedGroups = computed(() => {
   return groups;
 });
 
+// Header navigation (prev/next task) – same pattern as DealRecordPage
+const TASK_NAV_CONTEXT_STORAGE_PREFIX = 'litedesk-task-nav-context:';
+const taskNavigationContextToken = computed(() => String(route.query?.navCtx || '').trim());
+const currentTaskNavigationId = computed(() => String(effectiveTaskId.value || task.value?._id || ''));
+const currentTaskNavigationIndex = computed(() => {
+  const currentId = currentTaskNavigationId.value;
+  if (!currentId) return -1;
+  return taskNavigationIds.value.findIndex((id) => id === currentId);
+});
+const previousTaskId = computed(() => {
+  const index = currentTaskNavigationIndex.value;
+  if (index <= 0) return '';
+  return taskNavigationIds.value[index - 1] || '';
+});
+const nextTaskId = computed(() => {
+  const index = currentTaskNavigationIndex.value;
+  if (index < 0 || index >= taskNavigationIds.value.length - 1) return '';
+  return taskNavigationIds.value[index + 1] || '';
+});
+const canNavigatePreviousTask = computed(() => Boolean(previousTaskId.value));
+const canNavigateNextTask = computed(() => Boolean(nextTaskId.value));
+const navShortcutPrev = computed(() =>
+  typeof navigator !== 'undefined' && /Mac/i.test(navigator.userAgent) ? '⌘+Left' : 'Ctrl+Left'
+);
+const navShortcutNext = computed(() =>
+  typeof navigator !== 'undefined' && /Mac/i.test(navigator.userAgent) ? '⌘+Right' : 'Ctrl+Right'
+);
+
+const fetchTaskNavigationIds = async () => {
+  if (!effectiveTaskId.value || props.embed) {
+    taskNavigationIds.value = [];
+    return;
+  }
+  const currentId = String(effectiveTaskId.value);
+  const navToken = taskNavigationContextToken.value;
+  if (navToken) {
+    try {
+      const raw = sessionStorage.getItem(`${TASK_NAV_CONTEXT_STORAGE_PREFIX}${navToken}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const contextIds = Array.isArray(parsed?.ids)
+          ? parsed.ids.map((id) => String(id || '').trim()).filter(Boolean)
+          : [];
+        if (contextIds.includes(currentId)) {
+          const existing = taskNavigationIds.value;
+          if (Array.isArray(existing) && existing.length > 0 && existing.includes(currentId)) {
+            return;
+          }
+          taskNavigationIds.value = contextIds;
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+  try {
+    const response = await apiClient.get('/tasks', {
+      params: {
+        page: 1,
+        limit: 500,
+        sortBy: 'updatedAt',
+        sortOrder: 'desc'
+      }
+    });
+    const rows = Array.isArray(response?.data)
+      ? response.data
+      : Array.isArray(response)
+        ? response
+        : [];
+    const ids = rows
+      .map((entry) => String(entry?._id || entry?.id || '').trim())
+      .filter(Boolean);
+    if (ids.includes(currentId)) {
+      taskNavigationIds.value = ids;
+      return;
+    }
+    taskNavigationIds.value = [currentId];
+  } catch {
+    taskNavigationIds.value = [currentId];
+  }
+};
+
+const navigateToTaskById = (taskId) => {
+  const targetId = String(taskId || '').trim();
+  if (!targetId) return;
+  const navToken = taskNavigationContextToken.value;
+  const path = navToken
+    ? `/tasks/${targetId}?navCtx=${encodeURIComponent(navToken)}`
+    : `/tasks/${targetId}`;
+  replaceActiveTab(path, { title: 'Task' });
+};
+
+const goToPreviousTask = () => {
+  if (!canNavigatePreviousTask.value) return;
+  navigateToTaskById(previousTaskId.value);
+};
+
+const goToNextTask = () => {
+  if (!canNavigateNextTask.value) return;
+  navigateToTaskById(nextTaskId.value);
+};
+
+const handleHeaderKeydown = (e) => {
+  if (e.repeat) return;
+  const ctrlOrMeta = e.ctrlKey || e.metaKey;
+  if (!ctrlOrMeta) return;
+  // Only the visible task record page should handle: with keep-alive, multiple instances can have listeners.
+  const myId = String(effectiveTaskId.value || '');
+  if (!myId) return;
+  const tab = findTabById(activeTabId.value);
+  const pathShowsMe = tab?.path && tab.path.includes(myId);
+  const routeShowsMe = route.params.id === myId;
+  if (!pathShowsMe && !routeShowsMe) return;
+  const tag = document.activeElement?.tagName?.toLowerCase();
+  const isEditable =
+    tag === 'input' ||
+    tag === 'textarea' ||
+    document.activeElement?.getAttribute?.('contenteditable') === 'true';
+  if (isEditable) return;
+  if (e.key === 'ArrowLeft') {
+    e.preventDefault();
+    goToPreviousTask();
+  } else if (e.key === 'ArrowRight') {
+    e.preventDefault();
+    goToNextTask();
+  }
+};
+
 // Fetch task data
 /** When task.relatedTo has type+id but no display name, fetch the record and set relatedTo.name so details show name instead of raw id */
 const resolveRelatedToDisplayName = async () => {
@@ -4420,29 +3053,20 @@ const resolveRelatedToDisplayName = async () => {
 const fetchTask = async () => {
   const id = effectiveTaskId.value;
   if (!id) return;
-  loading.value = true;
-  error.value = null;
-  try {
+  await runWithLoading(async () => {
     const response = await apiClient(`/tasks/${id}`);
-    if (response.success) {
-      task.value = response.data;
-      // TODO: Load follow state from API if available
-      // isFollowing.value = response.data.isFollowing || false;
-      await Promise.all([
-        fetchRelatedRecords(),
-        fetchActivityEvents(),
-        fetchCustomFields(),
-        fetchUsers(),
-        fetchInstanceTagDefinitions()
-      ]);
-      await resolveRelatedToDisplayName();
-    }
-  } catch (err) {
-    console.error('Error fetching task:', err);
-    error.value = err.message || 'Failed to load task';
-  } finally {
-    loading.value = false;
-  }
+    if (!response?.success) return;
+
+    task.value = response.data;
+    await Promise.all([
+      fetchRelatedRecords(),
+      fetchActivityEvents(),
+      fetchCustomFields(),
+      fetchUsers(),
+      fetchTaskNavigationIds()
+    ]);
+    await resolveRelatedToDisplayName();
+  }, 'Failed to load task');
 };
 
 const fetchRelatedRecords = async () => {
@@ -4578,21 +3202,24 @@ const fetchActivityEvents = async () => {
     if (response.success && response.data) {
       // Convert activity logs to activity events format
       const systemEvents = response.data.map((log) => {
-        const ev = {
-          type: 'system',
-          message: formatActivityLog(log),
-          createdAt: log.timestamp,
-          author: log.user || log.userId,
-          action: log.action,
-          details: log.details
-        };
+        const baseMessage = formatActivityLog(log);
+        let descriptionDiffHtml = null;
+        let message = baseMessage;
         if (log.action === 'field_changed' && log.details?.field === 'description') {
           const fromPlain = getPlainTextFromHtml(log.details.from ?? log.details.oldValue ?? '');
           const toPlain = getPlainTextFromHtml(log.details.to ?? log.details.newValue ?? '');
-          ev.message = `${resolveActorLabel(log.user, log.userId)} changed description`;
-          ev.descriptionDiffHtml = DOMPurify.sanitize(diffWordsToHtml(fromPlain, toPlain), { ALLOWED_TAGS: ['ins', 'del'], ALLOWED_ATTR: ['class'] });
+          message = `${resolveActorLabel(log.user, log.userId)} changed description`;
+          descriptionDiffHtml = DOMPurify.sanitize(diffWordsToHtml(fromPlain, toPlain), { ALLOWED_TAGS: ['ins', 'del'], ALLOWED_ATTR: ['class'] });
         }
-        return ev;
+        return normalizeSystemActivityEvent(log, {
+          message,
+          descriptionDiffHtml,
+          recordRef: {
+            module: 'tasks',
+            id: String(task.value?._id || '')
+          },
+          source: log?.user || log?.userId ? 'user' : 'system'
+        });
       });
       events.push(...systemEvents);
     }
@@ -4613,19 +3240,12 @@ const fetchActivityEvents = async () => {
   try {
     const commentsResponse = await apiClient(`/tasks/${task.value._id}/comments`);
     if (commentsResponse.success && Array.isArray(commentsResponse.data)) {
-      const commentEvents = commentsResponse.data.map(comment => ({
-        type: 'comment',
-        id: comment._id,
-        content: comment.content || comment.text,
-        createdAt: comment.createdAt || comment.timestamp,
-        author: comment.author || comment.user || comment.userId,
-        editedAt: comment.editedAt,
-        parentCommentId: comment.parentCommentId || null,
-        attachments: comment.attachments || [],
-        reactions: comment.reactions || comment.reactionSummary || comment.emojiReactions,
-        myReactions: comment.myReactions || comment.currentUserReactions || [],
-        likes: comment.likes || comment.likedBy,
-        likesCount: comment.likesCount ?? comment.likeCount
+      const commentEvents = commentsResponse.data.map((comment) => normalizeCommentActivityEvent({
+        ...comment,
+        recordRef: {
+          module: 'tasks',
+          id: String(task.value?._id || '')
+        }
       }));
       events.push(...commentEvents);
     }
@@ -4637,13 +3257,7 @@ const fetchActivityEvents = async () => {
   }
   
   // Sort all events by date (oldest first, newest at bottom)
-  events.sort((a, b) => {
-    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-    return dateA - dateB; // Oldest first (newest at bottom)
-  });
-  
-  activityEvents.value = events;
+  activityEvents.value = sortActivityEventsByDate(events);
 
   // Fetch email threads for this task
   try {
@@ -4668,41 +3282,57 @@ const generateUpdateLogsFromTask = () => {
   // Task created
   if (task.value.createdAt) {
     const createdBy = task.value.createdBy;
-    const creatorName = createdBy 
-      ? (typeof createdBy === 'object' 
-        ? getUserDisplayName(createdBy) 
-        : createdBy)
-      : 'System';
-    
-    events.push({
-      type: 'system',
-      message: `created this task`,
-      createdAt: task.value.createdAt,
-      author: createdBy || 'System',
-      action: 'created'
-    });
+
+    events.push(normalizeSystemActivityEvent({
+      _id: `task_created_${task.value._id || ''}`,
+      action: 'created',
+      user: createdBy || 'System',
+      userId: typeof createdBy === 'object' ? createdBy?._id : null,
+      timestamp: task.value.createdAt,
+      details: {}
+    }, {
+      message: 'created this task',
+      recordRef: {
+        module: 'tasks',
+        id: String(task.value?._id || '')
+      },
+      source: createdBy ? 'user' : 'system'
+    }));
   }
   
   // Task updated (if updatedAt differs from createdAt)
   if (task.value.updatedAt && 
       new Date(task.value.updatedAt).getTime() !== new Date(task.value.createdAt).getTime()) {
-    events.push({
-      type: 'system',
-      message: `updated this task`,
-      createdAt: task.value.updatedAt,
-      action: 'updated'
-    });
+    events.push(normalizeSystemActivityEvent({
+      _id: `task_updated_${task.value._id || ''}`,
+      action: 'updated',
+      timestamp: task.value.updatedAt,
+      details: {}
+    }, {
+      message: 'updated this task',
+      recordRef: {
+        module: 'tasks',
+        id: String(task.value?._id || '')
+      },
+      source: 'system'
+    }));
   }
   
   // Status changes (if completed)
   if (task.value.status === 'completed' && task.value.completedDate) {
-    events.push({
-      type: 'system',
-      message: `marked this task as completed`,
-      createdAt: task.value.completedDate,
+    events.push(normalizeSystemActivityEvent({
+      _id: `task_completed_${task.value._id || ''}`,
       action: 'status_changed',
+      timestamp: task.value.completedDate,
       details: { status: 'completed' }
-    });
+    }, {
+      message: 'marked this task as completed',
+      recordRef: {
+        module: 'tasks',
+        id: String(task.value?._id || '')
+      },
+      source: 'system'
+    }));
   }
   
   return events;
@@ -4816,9 +3446,30 @@ const formatActivityLog = (log) => {
       form: 'form',
       forms: 'form'
     })[rawModuleKey] || 'record';
-    const relatedRecordId = String(details.relatedRecordId || details.recordId || '').trim();
-    const idSuffix = relatedRecordId ? ` (${relatedRecordId.slice(-8)})` : '';
-    return `${user} linked a ${moduleLabel}${idSuffix}`;
+    const label = details.relatedRecordLabel && String(details.relatedRecordLabel).trim();
+    const fallbackId = String(details.relatedRecordId || details.recordId || '').trim();
+    const idSuffix = fallbackId ? ` (${fallbackId.slice(-8)})` : '';
+    const recordPart = label ? ` "${label}"` : idSuffix;
+    return `${user} linked a ${moduleLabel}${recordPart}`;
+  }
+
+  if (action === 'record_unlinked') {
+    const rawModuleKey = String(details.relatedModuleKey || details.moduleKey || '').toLowerCase();
+    const moduleLabel = ({
+      project: 'project',
+      projects: 'project',
+      event: 'event',
+      events: 'event',
+      deal: 'deal',
+      deals: 'deal',
+      form: 'form',
+      forms: 'form'
+    })[rawModuleKey] || 'record';
+    const label = details.relatedRecordLabel && String(details.relatedRecordLabel).trim();
+    const fallbackId = String(details.relatedRecordId || details.recordId || '').trim();
+    const idSuffix = fallbackId ? ` (${fallbackId.slice(-8)})` : '';
+    const recordPart = label ? ` "${label}"` : idSuffix;
+    return `${user} unlinked a ${moduleLabel}${recordPart}`;
   }
 
   // Format legacy actions
@@ -5237,10 +3888,6 @@ const saveEditComment = async (submitPayload) => {
   } catch (err) {
     console.error('Error updating comment:', err);
   }
-};
-
-const handleClose = () => {
-  router.push('/tasks');
 };
 
 const handleShowMore = (event) => {
@@ -6201,43 +4848,6 @@ watch(() => task.value?.description, (newDesc) => {
   isDescriptionExpanded.value = false;
 });
 
-// Watch task tags to update local tags
-watch(() => task.value?.tags, (newTags) => {
-  mergeTagDefinitions(Array.isArray(newTags) ? newTags : []);
-}, { deep: true });
-
-// Scroll to bottom when activity events or email threads first load (ref watcher may run before data arrives).
-// Email threads load after activityEvents in fetchActivityEvents; we scroll when either populates.
-watch(activityEvents, (newEvents, oldEvents) => {
-  const hadItems = Array.isArray(oldEvents) && oldEvents.length > 0;
-  const hasItems = Array.isArray(newEvents) && newEvents.length > 0;
-  if (!hadItems && hasItems && !isThreadViewActive.value && activityTimelineRef.value) {
-    scrollActivityToBottom();
-  }
-}, { deep: true });
-
-watch(emailThreads, (newThreads, oldThreads) => {
-  const hadItems = Array.isArray(oldThreads) && oldThreads.length > 0;
-  const hasItems = Array.isArray(newThreads) && newThreads.length > 0;
-  if (!hadItems && hasItems && !isThreadViewActive.value && activityTimelineRef.value) {
-    scrollActivityToBottom();
-  }
-}, { deep: true });
-
-// When reactivated (navigate back) or route returns to this task, scroll to bottom
-watch(activityScrollTrigger, (trigger) => {
-  if (trigger === 0 || props.embed) return;
-  runActivityScrollToBottom();
-});
-
-// Route watcher: when navigating back to this task (tab switch, browser back), scroll
-watch(() => route.fullPath, (path) => {
-  if (props.embed) return;
-  const taskId = effectiveTaskId.value;
-  if (!taskId || !path?.includes(`/tasks/${taskId}`)) return;
-  runActivityScrollToBottom();
-});
-
 function runActivityScrollToBottom() {
   const activeTab = rightPaneRef.value?.activeTab?.value;
   const hasContent = (activityEvents.value?.length ?? 0) > 0 || (emailThreads.value?.length ?? 0) > 0;
@@ -6256,9 +4866,7 @@ function runActivityScrollToBottom() {
 watch(() => task.value, (newTask) => {
   if (newTask) {
     localDescription.value = newTask.description || '';
-    showAllDetails.value = false;
-    showAllSubtasks.value = false;
-    subtasksRenderLimit.value = 20;
+    resetSectionState();
     isDescriptionExpanded.value = false;
     expandedLeftSection.value = null;
   }
@@ -6454,13 +5062,8 @@ const handleSubtaskToggle = async (subtask) => {
 };
 
 const startCreateSubtask = () => {
-  showAllSubtasks.value = true;
+  setShowAllSubtasks(true);
   isCreatingSubtask.value = true;
-  nextTick(() => {
-    if (newSubtaskInputRef.value) {
-      newSubtaskInputRef.value.focus();
-    }
-  });
 };
 
 const cancelCreateSubtask = () => {
@@ -6501,6 +5104,52 @@ const saveNewSubtask = async () => {
     console.error('Error creating subtask:', err);
   } finally {
     isSavingNewSubtask.value = false;
+  }
+};
+
+const handleUpdateSubtaskTitle = async (subtaskToUpdate, nextTitleRaw) => {
+  if (!task.value || !canEditTask.value) return;
+
+  const nextTitle = String(nextTitleRaw || '').trim();
+  if (!nextTitle) return;
+
+  const existingSubtasks = Array.isArray(task.value.subtasks) ? task.value.subtasks : [];
+  const targetId = String(subtaskToUpdate?._id || subtaskToUpdate?.id || '').trim();
+  const targetTitle = String(subtaskToUpdate?.title || '').trim();
+  let didUpdate = false;
+
+  const normalizedSubtasks = existingSubtasks
+    .filter((subtask) => subtask && typeof subtask.title === 'string' && subtask.title.trim())
+    .map((subtask) => {
+      const matchesTarget = targetId
+        ? String(subtask._id || '') === targetId
+        : (!didUpdate && (subtask === subtaskToUpdate
+          || (String(subtask.title || '').trim() === targetTitle && Boolean(subtask.completed) === Boolean(subtaskToUpdate?.completed))));
+
+      if (matchesTarget && !didUpdate) {
+        didUpdate = true;
+      }
+
+      return {
+        ...(subtask._id ? { _id: subtask._id } : {}),
+        title: matchesTarget && !didUpdate ? nextTitle : (matchesTarget ? nextTitle : subtask.title),
+        completed: Boolean(subtask.completed)
+      };
+    });
+
+  if (!didUpdate) return;
+
+  try {
+    const response = await apiClient.put(`/tasks/${task.value._id}`, {
+      subtasks: normalizedSubtasks
+    });
+
+    if (response?.success && response.data) {
+      task.value = response.data;
+      await fetchActivityEvents();
+    }
+  } catch (err) {
+    console.error('Error updating subtask title:', err);
   }
 };
 
@@ -6611,7 +5260,7 @@ const handleUnlinkRelated = async (type, record) => {
 };
 
 // Handle linking records from the right-side Link Record drawer (same pattern as Link Organization)
-const handleLinkRecordDrawerLinked = async ({ moduleKey, ids, context }) => {
+const handleLinkRecordDrawerLinked = async ({ moduleKey, ids, context, relationshipKey: payloadRelationshipKey, targetAppKey: payloadTargetAppKey }) => {
   if (!task.value || !context?.taskId || task.value._id !== context.taskId) return;
   if (!ids?.length) return;
 
@@ -6645,24 +5294,18 @@ const handleLinkRecordDrawerLinked = async ({ moduleKey, ids, context }) => {
       // Task has a single project; use first selected id
       const response = await apiClient.put(`/tasks/${task.value._id}`, { projectId: idsToLink[0] });
       if (response.success && response.data) Object.assign(task.value, response.data);
-    } else if (normalizedModuleKey === 'events' || normalizedModuleKey === 'deals' || normalizedModuleKey === 'forms') {
-      const targetAppKeyByModule = {
-        events: 'platform',
-        deals: 'sales',
-        forms: 'platform'
-      };
-
+    } else if (payloadRelationshipKey && payloadTargetAppKey) {
       for (const recordId of idsToLink) {
         try {
           await apiClient.post('/relationships/link', {
-            relationshipKey: normalizedModuleKey,
+            relationshipKey: payloadRelationshipKey,
             source: {
               appKey: 'platform',
               moduleKey: 'tasks',
               recordId: task.value._id
             },
             target: {
-              appKey: targetAppKeyByModule[normalizedModuleKey],
+              appKey: payloadTargetAppKey,
               moduleKey: normalizedModuleKey,
               recordId
             }
@@ -6673,8 +5316,39 @@ const handleLinkRecordDrawerLinked = async ({ moduleKey, ids, context }) => {
         }
       }
     } else {
-      console.warn(`Unknown module type from drawer: ${normalizedModuleKey}`);
-      return;
+      // Fallback when drawer does not provide relationshipKey/targetAppKey (e.g. legacy recordTypes)
+      const targetAppKeyByModule = {
+        events: 'platform',
+        deals: 'sales',
+        forms: 'platform'
+      };
+      const targetAppKey = targetAppKeyByModule[normalizedModuleKey];
+      const relationshipKey = payloadRelationshipKey || normalizedModuleKey;
+      if (targetAppKey) {
+        for (const recordId of idsToLink) {
+          try {
+            await apiClient.post('/relationships/link', {
+              relationshipKey,
+              source: {
+                appKey: 'platform',
+                moduleKey: 'tasks',
+                recordId: task.value._id
+              },
+              target: {
+                appKey: targetAppKey,
+                moduleKey: normalizedModuleKey,
+                recordId
+              }
+            });
+          } catch (linkErr) {
+            if (linkErr?.status === 409) continue;
+            throw linkErr;
+          }
+        }
+      } else {
+        console.warn(`Unknown module type from drawer: ${normalizedModuleKey}`);
+        return;
+      }
     }
     await fetchRelatedRecords();
     showLinkRecordDrawer.value = false;
@@ -6684,133 +5358,71 @@ const handleLinkRecordDrawerLinked = async ({ moduleKey, ids, context }) => {
   }
 };
 
-// Meta actions handlers
-const handleToggleFollow = async () => {
-  if (!task.value) return;
-  try {
-    // TODO: Implement follow/unfollow API call
-    isFollowing.value = !isFollowing.value;
-    // await apiClient.post(`/tasks/${task.value._id}/follow`);
-  } catch (err) {
-    console.error('Error toggling follow:', err);
-  }
-};
+const {
+  isFollowing,
+  showDeleteModal,
+  deleting,
+  handleClose,
+  handleToggleFollow,
+  handleCopyUrl,
+  handleDuplicate,
+  handleExport,
+  handleDelete,
+  confirmDeleteRecord: confirmDeleteTask
+} = useRecordHeaderActions({
+  recordRef: task,
+  closeRoute: '/tasks',
+  router,
+  toggleFollow: async (_record, current) => !current,
+  duplicate: async (record) => {
+    console.log('Duplicate task:', record._id);
+  },
+  exportConfig: (record, helpers) => {
+    const assignedTo = record.assignedTo ? getUserDisplayName(record.assignedTo) : '';
+    const tags = Array.isArray(record.tags) ? record.tags.join(', ') : '';
+    const safeId = record._id ? String(record._id).slice(-8) : 'task';
 
-const handleCopyUrl = () => {
-  const url = window.location.href;
-  navigator.clipboard.writeText(url).then(() => {
-    // TODO: Show toast notification instead of alert
-    alert('URL copied to clipboard!');
-  }).catch((err) => {
-    console.error('Error copying URL:', err);
-  });
-};
-
-// More actions handlers
-const handleDuplicate = async () => {
-  if (!task.value) return;
-  try {
-    // TODO: Implement duplicate API call
-    console.log('Duplicate task:', task.value._id);
-    // const response = await apiClient.post(`/tasks/${task.value._id}/duplicate`);
-    // router.push(`/tasks/${response.data._id}`);
-  } catch (err) {
-    console.error('Error duplicating task:', err);
-  }
-};
-
-const escapeCsvValue = (value) => {
-  if (value === null || value === undefined) return '';
-  const str = String(value);
-  if (/[",\n]/.test(str)) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-};
-
-const formatExportDate = (dateValue) => {
-  if (!dateValue) return '';
-  const date = new Date(dateValue);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toISOString();
-};
-
-const handleExport = () => {
-  if (!task.value) return;
-  try {
-    const assignedTo = task.value.assignedTo ? getUserDisplayName(task.value.assignedTo) : '';
-    const tags = Array.isArray(task.value.tags) ? task.value.tags.join(', ') : '';
-
-    const headers = [
-      'id',
-      'title',
-      'description',
-      'status',
-      'priority',
-      'start_date',
-      'due_date',
-      'completed_date',
-      'assigned_to',
-      'tags',
-      'estimated_hours',
-      'actual_hours',
-      'created_at',
-      'updated_at'
-    ];
-
-    const row = [
-      task.value._id || '',
-      task.value.title || '',
-      task.value.description || '',
-      task.value.status || '',
-      task.value.priority || '',
-      formatExportDate(task.value.startDate),
-      formatExportDate(task.value.dueDate),
-      formatExportDate(task.value.completedDate),
-      assignedTo,
-      tags,
-      task.value.estimatedHours ?? '',
-      task.value.actualHours ?? '',
-      formatExportDate(task.value.createdAt),
-      formatExportDate(task.value.updatedAt)
-    ].map(escapeCsvValue);
-
-    const csv = `${headers.join(',')}\n${row.join(',')}\n`;
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    const safeId = task.value._id ? task.value._id.slice(-8) : 'task';
-    link.download = `task_${safeId}_${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  } catch (err) {
-    console.error('Error exporting task:', err);
-    alert('Error exporting task. Please try again.');
-  }
-};
-
-const handleDelete = () => {
-  if (!task.value) return;
-  showDeleteModal.value = true;
-};
-
-const confirmDeleteTask = async () => {
-  if (!task.value) return;
-  deleting.value = true;
-  try {
-    await apiClient.delete(`/tasks/${task.value._id}`);
-    showDeleteModal.value = false;
+    return {
+      headers: [
+        'id',
+        'title',
+        'description',
+        'status',
+        'priority',
+        'start_date',
+        'due_date',
+        'completed_date',
+        'assigned_to',
+        'tags',
+        'estimated_hours',
+        'actual_hours',
+        'created_at',
+        'updated_at'
+      ],
+      row: [
+        record._id || '',
+        record.title || '',
+        record.description || '',
+        record.status || '',
+        record.priority || '',
+        helpers.formatExportDate(record.startDate),
+        helpers.formatExportDate(record.dueDate),
+        helpers.formatExportDate(record.completedDate),
+        assignedTo,
+        tags,
+        record.estimatedHours ?? '',
+        record.actualHours ?? '',
+        helpers.formatExportDate(record.createdAt),
+        helpers.formatExportDate(record.updatedAt)
+      ],
+      filename: `task_${safeId}_${new Date().toISOString().split('T')[0]}.csv`
+    };
+  },
+  deleteRecord: async (record) => {
+    await apiClient.delete(`/tasks/${record._id}`);
     router.push('/tasks');
-  } catch (err) {
-    console.error('Error deleting task:', err);
-    alert('Error deleting task. Please try again.');
-  } finally {
-    deleting.value = false;
   }
-};
+});
 
 const handleTaskEditSaved = async () => {
   showEditDrawer.value = false;
@@ -6869,10 +5481,6 @@ const createTaskFromEmailMessage = async (msg) => {
     alert(err.response?.data?.message || err.message || 'Failed to create task');
   }
 };
-
-watch(() => props.taskId, (id) => {
-  if (props.embed && id) fetchTask();
-}, { immediate: false });
 
 watch(() => task.value?._id, (taskId) => {
   if (!taskId) return;
@@ -6941,53 +5549,89 @@ watch(loading, (isLoading) => {
   });
 });
 
-watch(tagStorageKey, () => {
-  loadTagDefinitionsFromStorage();
-}, { immediate: true });
-
-// When navigating back (keep-alive reactivation), trigger scroll – watcher will run when DOM is ready
-onActivated(() => {
-  if (!props.embed) activityScrollTrigger.value += 1;
-  nextTick(() => {
-    if (attachLeftPaneScrollListener()) return;
-    isLeftTitleSticky.value = false;
-    leftPaneScrollTop.value = 0;
-  });
+useRecordPageLifecycle({
+  route,
+  recordId: effectiveTaskId,
+  embed: () => props.embed,
+  routePrefix: '/tasks',
+  fetchRecord: fetchTask,
+  embedRecordIdSource: () => props.taskId,
+  contentReadySources: [() => activityEvents.value, () => emailThreads.value],
+  onContentReady: () => {
+    if (isThreadViewActive.value || !activityTimelineRef.value) return;
+    scrollActivityToBottom();
+  },
+  onReactivated: () => {
+    runActivityScrollToBottom();
+  },
+  onRouteReturn: () => {
+    runActivityScrollToBottom();
+  },
+  onActivated: () => {
+    nextTick(() => {
+      if (attachLeftPaneScrollListener()) return;
+      isLeftTitleSticky.value = false;
+      leftPaneScrollTop.value = 0;
+    });
+  },
+  onMount: [
+    fetchTaskLifecycleFieldOptions,
+    () => document.addEventListener('keydown', handleHeaderKeydown),
+    () => {
+      window.addEventListener('scroll', updateCommentReactionPickerPosition, true);
+      window.addEventListener('scroll', updateCommentReactionTooltipPosition, true);
+      window.addEventListener('scroll', updateTagPopoverPosition, true);
+      window.addEventListener('scroll', updateRelatedToPopoverPosition, true);
+      window.addEventListener('resize', updateCommentReactionPickerPosition);
+      window.addEventListener('resize', updateCommentReactionTooltipPosition);
+      window.addEventListener('resize', updateTagPopoverPosition);
+      window.addEventListener('resize', updateRelatedToPopoverPosition);
+      document.addEventListener('click', handleCommentReactionPickerOutsideClick);
+      document.addEventListener('mousedown', handleTagPopoverMousedown);
+      document.addEventListener('click', handleTagPopoverOutsideClick);
+      document.addEventListener('click', handleRelatedToPopoverOutsideClick);
+    }
+  ],
+  onUnmounted: [
+    () => document.removeEventListener('keydown', handleHeaderKeydown),
+    () => {
+      cancelCommentReactionTooltipShow();
+      cancelCommentReactionTooltipHide();
+      detachLeftPaneScrollListener();
+      window.removeEventListener('scroll', updateCommentReactionPickerPosition, true);
+      window.removeEventListener('scroll', updateCommentReactionTooltipPosition, true);
+      window.removeEventListener('scroll', updateTagPopoverPosition, true);
+      window.removeEventListener('scroll', updateRelatedToPopoverPosition, true);
+      window.removeEventListener('resize', updateCommentReactionPickerPosition);
+      window.removeEventListener('resize', updateCommentReactionTooltipPosition);
+      window.removeEventListener('resize', updateTagPopoverPosition);
+      window.removeEventListener('resize', updateRelatedToPopoverPosition);
+      document.removeEventListener('click', handleCommentReactionPickerOutsideClick);
+      document.removeEventListener('mousedown', handleTagPopoverMousedown);
+      document.removeEventListener('click', handleTagPopoverOutsideClick);
+      document.removeEventListener('click', handleRelatedToPopoverOutsideClick);
+      commentReactionButtonRefs.clear();
+    }
+  ]
 });
 
-onMounted(() => {
-  fetchTask();
-  fetchTaskLifecycleFieldOptions();
-  window.addEventListener('scroll', updateCommentReactionPickerPosition, true);
-  window.addEventListener('scroll', updateCommentReactionTooltipPosition, true);
-  window.addEventListener('scroll', updateTagPopoverPosition, true);
-  window.addEventListener('scroll', updateRelatedToPopoverPosition, true);
-  window.addEventListener('resize', updateCommentReactionPickerPosition);
-  window.addEventListener('resize', updateCommentReactionTooltipPosition);
-  window.addEventListener('resize', updateTagPopoverPosition);
-  window.addEventListener('resize', updateRelatedToPopoverPosition);
-  document.addEventListener('click', handleCommentReactionPickerOutsideClick);
-  document.addEventListener('click', handleTagPopoverOutsideClick);
-  document.addEventListener('click', handleRelatedToPopoverOutsideClick);
-});
-
-onUnmounted(() => {
-  cancelCommentReactionTooltipShow();
-  cancelCommentReactionTooltipHide();
-  detachLeftPaneScrollListener();
-  window.removeEventListener('scroll', updateCommentReactionPickerPosition, true);
-  window.removeEventListener('scroll', updateCommentReactionTooltipPosition, true);
-  window.removeEventListener('scroll', updateTagPopoverPosition, true);
-  window.removeEventListener('scroll', updateRelatedToPopoverPosition, true);
-  window.removeEventListener('resize', updateCommentReactionPickerPosition);
-  window.removeEventListener('resize', updateCommentReactionTooltipPosition);
-  window.removeEventListener('resize', updateTagPopoverPosition);
-  window.removeEventListener('resize', updateRelatedToPopoverPosition);
-  document.removeEventListener('click', handleCommentReactionPickerOutsideClick);
-  document.removeEventListener('click', handleTagPopoverOutsideClick);
-  document.removeEventListener('click', handleRelatedToPopoverOutsideClick);
-  commentReactionButtonRefs.clear();
-});
+// Keep tab title in sync with task title when task loads or title changes.
+// Only update when the tab's path actually contains this task id – never update the list tab (/tasks).
+// This prevents the list tab being renamed when the record tab is closed (race: activeTabId switches before route updates).
+watch(
+  () => [activeTabId.value, task.value?._id, task.value?.title],
+  ([tabId, taskId, title]) => {
+    if (!tabId || !taskId) return;
+    const tab = findTabById(tabId);
+    if (!tab || !tab.path) return;
+    const pathBase = tab.path.split('?')[0].replace(/\/$/, '');
+    if (pathBase === '/tasks') return; // list tab – never overwrite with record name
+    if (!tab.path.includes(String(taskId))) return; // only update the tab that shows this record
+    const displayTitle = String(title ?? 'Task').trim() || 'Task';
+    updateTabTitle(tabId, displayTitle);
+  },
+  { immediate: true }
+);
 
 // Activity search helpers (use functions so template expressions don't access `.value` directly)
 const closeActivitySearch = () => {
@@ -7001,6 +5645,8 @@ const clearActivitySearch = () => {
   });
 };
 
+const setActivityTimelineRef = createActivityTimelineRefSetter(activityTimelineRef);
+
 // Highlight search text within content
 const highlightSearchText = (text) => {
   if (!text) return '';
@@ -7010,5 +5656,65 @@ const highlightSearchText = (text) => {
   const regex = new RegExp(`(${q.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')})`, 'gi');
   return text.replace(regex, '<mark class="bg-yellow-200 dark:bg-yellow-800 font-semibold">$1</mark>');
 };
+
+const setEditingCommentText = (value) => {
+  editingCommentText.value = value;
+};
+
+const setEditingCommentAttachments = (value) => {
+  editingCommentAttachments.value = Array.isArray(value) ? value : [];
+};
+
+const taskActivityUi = createTaskActivityUi({
+  authStore,
+  expandedTaskEmailThreads,
+  editingCommentId,
+  editingCommentText,
+  editingCommentAttachments,
+  isEditingCommentDirty,
+  setEditingCommentText,
+  setEditingCommentAttachments,
+  handleEditCommentFilesChange,
+  saveEditComment,
+  handleSaveEditCommentClick,
+  cancelEditComment,
+  canEditComment,
+  startEditComment,
+  getInitials,
+  getAuthorName,
+  formatFullTimestamp,
+  formatRelativeActivityTime,
+  handleTimestampPointerUp,
+  highlightSearchText,
+  commentMentionsCurrentUser,
+  hasAttachmentUrl,
+  getAttachmentUrl,
+  isImageAttachment,
+  isSvgAttachment,
+  getAttachmentName,
+  downloadAttachment,
+  formatFileSize,
+  getAttachmentLabel,
+  hasCommentReactions,
+  getCommentReactions,
+  isCommentReactionSelected,
+  toggleCommentReaction,
+  handleShowCommentReactionTooltip,
+  handleHideCommentReactionTooltip,
+  setCommentReactionButtonRef,
+  toggleCommentReactionPicker,
+  openCommentThread,
+  getCommentThreadReplyCount,
+  getCommentThreadLatestReplyAuthor,
+  isFieldChangeSystemEvent,
+  getSystemEventActorLabel,
+  getSystemEventFieldLabel,
+  getSystemEventFromValue,
+  getSystemEventToValue,
+  getSystemEventMessage,
+  handleShowMore,
+  toggleTaskEmailThread,
+  createTaskFromEmailMessage
+});
 </script>
 

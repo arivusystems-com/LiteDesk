@@ -1,34 +1,21 @@
 import { useTabs } from '@/composables/useTabs';
 
 /**
- * Utility function to open a record in a new tab
- * Use this in your components to open records in tabs instead of navigating directly
- * 
- * @param {string} path - The route path to navigate to
- * @param {Object} options - Tab options
+ * Utility function to open a record in a new tab (opens adjacent to current tab).
+ * Use this for record/detail opens; use useTabs().openTab for section/sidebar nav (opens at end).
+ *
+ * @param {string} path - The route path to navigate to (e.g. /deals/123, /people/456)
+ * @param {Object} options - Tab options (title, icon, params, background, etc.)
  * @param {string} options.title - Tab title (required)
- * @param {string} options.icon - Tab icon identifier (optional, defaults based on path)
+ * @param {string} options.icon - Icon identifier (optional)
  * @param {Object} options.params - Additional parameters (optional)
- * 
+ *
  * @example
- * // Open a contact detail
- * openRecordInTab(`/contacts/${contact._id}`, {
- *   title: contact.name,
- *   icon: 'users',
- *   params: { name: contact.name }
- * });
- * 
- * @example
- * // Open an organization
- * openRecordInTab(`/organizations/${org._id}`, {
- *   title: org.name,
- *   icon: 'building',
- *   params: { name: org.name }
- * });
+ * openRecordInTab(`/people/${contact._id}`, { title: contact.name, icon: 'users' });
  */
 export function openRecordInTab(path, options = {}) {
   const { openTab } = useTabs();
-  return openTab(path, options);
+  return openTab(path, { ...options, insertAdjacent: true });
 }
 
 /**
@@ -70,7 +57,7 @@ export const vTabLink = {
     
     el.addEventListener('click', (event) => {
       event.preventDefault();
-      openRecordInTab(path, { title, icon, params });
+      openRecordInTab(path, { title, icon, params }); // insertAdjacent: true via openRecordInTab
     });
   }
 };

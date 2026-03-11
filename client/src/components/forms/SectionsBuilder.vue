@@ -267,15 +267,14 @@
                         </select>
                   </div>
                   <label class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all" @click.stop @mousedown.stop>
-                          <input
+                          <HeadlessCheckbox
                       v-model="selectedRootQuestion.mandatory"
-                            type="checkbox"
                       @click.stop="handleQuestionSettingsFocus"
                       @mousedown.stop
                       @change.stop
                       @focus="handleQuestionSettingsFocus"
                       @blur="handleQuestionSettingsBlur"
-                      class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
+                      checkbox-class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
                           />
                     <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Required</span>
                         </label>
@@ -786,15 +785,14 @@
                         </select>
                   </div>
                   <label class="inline-flex items-center gap-2 px-3 py-2 h-[34px]" @click.stop @mousedown.stop>
-                          <input
+                          <HeadlessCheckbox
                       v-model="currentQuestion.mandatory"
-                            type="checkbox"
                       @click.stop="handleQuestionSettingsFocus"
                       @mousedown.stop
                       @change.stop
                       @focus="handleQuestionSettingsFocus"
                       @blur="handleQuestionSettingsBlur"
-                      class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
+                      checkbox-class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
                           />
                     <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Required</span>
                         </label>
@@ -1006,12 +1004,11 @@
                 <!-- Enable Scoring Toggle -->
                 <div>
                   <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                    <input
+                    <HeadlessCheckbox
                       v-model="currentQuestion.scoring.enabled"
-                      type="checkbox"
                       @focus="handleQuestionSettingsFocus"
                       @blur="handleQuestionSettingsBlur"
-                      class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
+                      checkbox-class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
                     />
                     <span>Enable scoring</span>
                   </label>
@@ -1049,8 +1046,7 @@
                           :key="optIdx"
                           class="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded cursor-pointer"
                         >
-                          <input
-                            type="checkbox"
+                          <HeadlessCheckbox
                             :value="option"
                             :checked="(currentQuestion.scoring.passCondition.passOptions || []).includes(option)"
                             @change="(e) => handleDropdownPassOptionChange(e, option)"
@@ -1158,12 +1154,11 @@
                   <!-- Critical Question -->
                   <div>
                     <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                      <input
+                      <HeadlessCheckbox
                         v-model="currentQuestion.scoring.critical"
-                        type="checkbox"
                         @focus="handleQuestionSettingsFocus"
                         @blur="handleQuestionSettingsBlur"
-                        class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
+                        checkbox-class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
                       />
                       <span>Critical question</span>
                     </label>
@@ -1191,9 +1186,8 @@
               <!-- Enable Evidence Toggle -->
               <div class="mb-4" @click.stop @mousedown.stop>
                 <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300" @click.stop @mousedown.stop>
-                  <input
+                  <HeadlessCheckbox
                     :checked="currentQuestion.evidence.enabled"
-                    type="checkbox"
                     @change.stop="(e) => handleEvidenceToggleChange(e)"
                     @click.stop
                     @mousedown.stop
@@ -1405,10 +1399,9 @@
                 File Settings
               </p>
               <label class="inline-flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
-                        <input
+                        <HeadlessCheckbox
                   v-model="currentQuestion.attachmentAllowance"
-                          type="checkbox"
-                  class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
+                  checkbox-class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
                         />
                 Allow multiple files
                       </label>
@@ -1630,6 +1623,7 @@
 </template>
 
 <script setup>
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { computed, ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { openDatePicker } from '@/utils/dateUtils';
 import FormPreviewDrawer from './FormPreviewDrawer.vue';

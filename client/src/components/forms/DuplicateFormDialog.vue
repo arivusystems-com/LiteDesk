@@ -126,7 +126,8 @@ const handleDuplicate = async () => {
         name: `form-builder-${formId}`,
         title: duplicatedForm.name || 'Form Builder',
         component: 'FormBuilder',
-        params: { formId }
+        params: { formId },
+        insertAdjacent: true
       });
       router.push(`/forms/builder/${formId}`);
       

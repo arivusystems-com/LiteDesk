@@ -199,10 +199,9 @@
             <!-- Optional Conditions -->
             <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
               <label class="flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
+                <HeadlessCheckbox
                   v-model="wizardData.hasCondition"
-                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  checkbox-class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
                 <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">
                   Apply only in some cases
@@ -267,10 +266,9 @@
             <!-- Field Behavior -->
             <div class="border border-gray-200 dark:border-gray-700 rounded-lg">
               <label class="flex items-center p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900/50">
-                <input
-                  type="checkbox"
+                <HeadlessCheckbox
                   v-model="wizardData.controls.fieldBehavior"
-                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  checkbox-class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
                 <div class="ml-3 flex-1">
                   <span class="text-sm font-medium text-gray-900 dark:text-white">Control field behavior</span>
@@ -318,10 +316,9 @@
                 </div>
                 <div v-if="wizardData.fieldRule.rule === 'visibility'">
                   <label class="flex items-center">
-                    <input
-                      type="checkbox"
+                    <HeadlessCheckbox
                       v-model="wizardData.fieldRule.value"
-                      class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      checkbox-class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                     />
                     <span class="ml-2 text-xs text-gray-700 dark:text-gray-300">Show field</span>
                   </label>
@@ -335,10 +332,9 @@
             <!-- Ownership & Assignment -->
             <div class="border border-gray-200 dark:border-gray-700 rounded-lg">
               <label class="flex items-center p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900/50">
-                <input
-                  type="checkbox"
+                <HeadlessCheckbox
                   v-model="wizardData.controls.ownership"
-                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  checkbox-class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
                 <div class="ml-3 flex-1">
                   <span class="text-sm font-medium text-gray-900 dark:text-white">Control ownership & assignment</span>
@@ -382,10 +378,9 @@
             <!-- Status / Stage Transitions -->
             <div class="border border-gray-200 dark:border-gray-700 rounded-lg">
               <label class="flex items-center p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900/50">
-                <input
-                  type="checkbox"
+                <HeadlessCheckbox
                   v-model="wizardData.controls.statusGuard"
-                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  checkbox-class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
                 <div class="ml-3 flex-1">
                   <span class="text-sm font-medium text-gray-900 dark:text-white">Control status / stage transitions</span>
@@ -450,10 +445,9 @@
             <!-- Actions -->
             <div class="border border-gray-200 dark:border-gray-700 rounded-lg">
               <label class="flex items-center p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900/50">
-                <input
-                  type="checkbox"
+                <HeadlessCheckbox
                   v-model="wizardData.controls.actions"
-                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  checkbox-class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
                 <div class="ml-3 flex-1">
                   <span class="text-sm font-medium text-gray-900 dark:text-white">Run actions</span>
@@ -669,6 +663,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import apiClient from '@/utils/apiClient';
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 
 const emit = defineEmits(['close', 'saved']);
 

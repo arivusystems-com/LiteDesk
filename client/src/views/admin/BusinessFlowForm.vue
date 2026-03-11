@@ -82,12 +82,11 @@
             :key="process._id"
             class="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors"
           >
-            <input
+            <HeadlessCheckbox
               :id="`process-${process._id}`"
-              type="checkbox"
-              :value="process._id"
-              v-model="formData.processIds"
-              class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+              :checked="formData.processIds.includes(process._id)"
+              @change="toggleProcessSelection(process._id, $event)"
+              checkbox-class="mt-1 w-4 h-4"
             />
             <label :for="`process-${process._id}`" class="flex-1 cursor-pointer">
               <div class="font-medium text-gray-900 dark:text-white">{{ process.name }}</div>
@@ -139,6 +138,7 @@
 </template>
 
 <script setup>
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import apiClient from '@/utils/apiClient';
@@ -211,6 +211,17 @@ const getTriggerSummary = (process) => {
     return `Runs on ${eventType}`;
   }
   return 'Manual trigger';
+};
+
+const toggleProcessSelection = (processId, event) => {
+  const isChecked = !!event?.target?.checked;
+  if (isChecked) {
+    if (!formData.value.processIds.includes(processId)) {
+      formData.value.processIds = [...formData.value.processIds, processId];
+    }
+    return;
+  }
+  formData.value.processIds = formData.value.processIds.filter(id => id !== processId);
 };
 
 const handleSave = async () => {

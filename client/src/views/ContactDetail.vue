@@ -479,8 +479,6 @@ import { useAuthStore } from '@/stores/auth';
 import Avatar from '@/components/common/Avatar.vue';
 import { useRecordContext } from '@/composables/useRecordContext';
 import { getProjectionTypeLabel, getProjectionTypeBadgeClass, getAppLabel } from '@/utils/projectionLabels';
-import { useRecordContext } from '@/composables/useRecordContext';
-import { getProjectionTypeLabel, getProjectionTypeBadgeClass, getAppLabel } from '@/utils/projectionLabels';
 
 const route = useRoute();
 const router = useRouter();
@@ -629,7 +627,8 @@ const openCreateEvent = () => {
 const viewEvent = (eventId) => {
   openTab(`/events/${eventId}`, {
     title: 'Event Detail',
-    icon: '📅'
+    icon: '📅',
+    insertAdjacent: true
   });
 };
 
@@ -649,7 +648,8 @@ const viewOrganization = (organizationId) => {
   openTab(`/organizations/${organizationId}`, {
     title: orgName,
     icon: 'building',
-    params: { name: orgName }
+    params: { name: orgName },
+    insertAdjacent: true
   });
 };
 
@@ -682,7 +682,8 @@ const openCreateDeal = () => {
 const viewDeal = (dealId) => {
   openTab(`/deals/${dealId}`, {
     title: 'Deal Detail',
-    icon: 'briefcase'
+    icon: 'briefcase',
+    insertAdjacent: true
   });
 };
 
@@ -698,7 +699,8 @@ const openCreateTask = () => {
 const viewTask = (taskId) => {
   openTab(`/tasks/${taskId}`, {
     title: 'Task Detail',
-    icon: 'check'
+    icon: 'check',
+    insertAdjacent: true
   });
 };
 

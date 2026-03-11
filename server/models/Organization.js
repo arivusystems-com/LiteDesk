@@ -416,7 +416,6 @@ OrganizationSchema.index({ partnerStatus: 1 });
 OrganizationSchema.index({ vendorStatus: 1 });
 OrganizationSchema.index({ isTenant: 1 });
 OrganizationSchema.index({ legacyOrganizationId: 1 }, { unique: true, sparse: true });
-OrganizationSchema.index({ deletedAt: 1 });
 
 // Prevent createdBy from being modified after creation (for CRM organizations)
 OrganizationSchema.pre('findOneAndUpdate', function() {

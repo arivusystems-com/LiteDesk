@@ -520,7 +520,7 @@ export function getFieldsForTab(tab: keyof FormSettingsTabsMap): FormFieldMappin
  */
 export function getFieldMapping(key: string): FormFieldMapping | undefined {
   for (const tab of Object.values(FORM_SETTINGS_TABS)) {
-    const field = tab.find(f => f.key === key);
+    const field = tab.find((f: FormFieldMapping) => f.key === key);
     if (field) return field;
   }
   return undefined;

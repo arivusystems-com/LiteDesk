@@ -120,10 +120,9 @@
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Additional Settings</h3>
                 <div class="space-y-3">
                   <label class="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
+                    <HeadlessCheckbox
                       v-model="form.canViewAllData"
-                      class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
+                      checkbox-class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
                     />
                     <div>
                       <span class="text-sm font-medium text-gray-900 dark:text-white">Can View All Data</span>
@@ -132,10 +131,9 @@
                   </label>
 
                   <label class="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
+                    <HeadlessCheckbox
                       v-model="form.canManageTeam"
-                      class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
+                      checkbox-class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
                     />
                     <div>
                       <span class="text-sm font-medium text-gray-900 dark:text-white">Can Manage Team</span>
@@ -144,10 +142,9 @@
                   </label>
 
                   <label class="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
+                    <HeadlessCheckbox
                       v-model="form.canExportData"
-                      class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
+                      checkbox-class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
                     />
                     <div>
                       <span class="text-sm font-medium text-gray-900 dark:text-white">Can Export Data</span>
@@ -208,96 +205,86 @@
                           </div>
                         </td>
                         <td class="px-4 py-3 text-center">
-                          <input
-                            type="checkbox"
+                          <HeadlessCheckbox
                             v-model="form.permissions[module.key].read"
                             @change="handleReadChange(module.key)"
-                            class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded"
+                            checkbox-class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded"
                           />
                         </td>
                         <td class="px-4 py-3 text-center">
-                          <input
-                            type="checkbox"
+                          <HeadlessCheckbox
                             v-model="form.permissions[module.key].create"
                             @change="handlePermissionChange(module.key, 'create')"
-                            class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded"
+                            checkbox-class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded"
                           />
                         </td>
                         <td class="px-4 py-3 text-center">
-                          <input
-                            type="checkbox"
+                          <HeadlessCheckbox
                             v-model="form.permissions[module.key].update"
                             @change="handlePermissionChange(module.key, 'update')"
                             :disabled="!form.permissions[module.key].create"
-                            :class="!form.permissions[module.key].create ? 'opacity-50 cursor-not-allowed' : ''"
+                            :checkbox-class="!form.permissions[module.key].create ? 'opacity-50 cursor-not-allowed' : ''"
                             class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded"
                           />
                         </td>
                         <td class="px-4 py-3 text-center">
-                          <input
-                            type="checkbox"
+                          <HeadlessCheckbox
                             v-model="form.permissions[module.key].delete"
                             @change="handlePermissionChange(module.key, 'delete')"
                             :disabled="!form.permissions[module.key].update"
-                            :class="!form.permissions[module.key].update ? 'opacity-50 cursor-not-allowed' : ''"
+                            :checkbox-class="!form.permissions[module.key].update ? 'opacity-50 cursor-not-allowed' : ''"
                             class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded"
                           />
                         </td>
                         <td class="px-4 py-3">
                           <div class="flex flex-col gap-2 items-center">
                             <label class="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
-                              <input
-                                type="checkbox"
+                              <HeadlessCheckbox
                                 v-model="form.permissions[module.key].export"
                                 @change="handlePermissionChange(module.key, 'export')"
-                                class="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500 rounded"
+                                checkbox-class="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500 rounded"
                               />
                               Export
                             </label>
                             <label class="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
-                              <input
-                                type="checkbox"
+                              <HeadlessCheckbox
                                 v-model="form.permissions[module.key].import"
                                 @change="handlePermissionChange(module.key, 'import')"
                                 :disabled="!form.permissions[module.key].create"
-                                :class="!form.permissions[module.key].create ? 'opacity-50 cursor-not-allowed' : ''"
+                                :checkbox-class="!form.permissions[module.key].create ? 'opacity-50 cursor-not-allowed' : ''"
                                 class="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500 rounded"
                               />
                               Import
                             </label>
                             <label v-if="module.key !== 'settings'" class="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
-                              <input
-                                type="checkbox"
+                              <HeadlessCheckbox
                                 v-model="form.permissions[module.key].viewAll"
                                 @change="handlePermissionChange(module.key, 'viewAll')"
-                                class="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500 rounded"
+                                checkbox-class="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500 rounded"
                               />
                               View All
                             </label>
                             <label v-if="module.key === 'settings'" class="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
-                              <input
-                                type="checkbox"
+                              <HeadlessCheckbox
                                 v-model="form.permissions[module.key].manageUsers"
                                 @change="handlePermissionChange(module.key, 'manageUsers')"
-                                class="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500 rounded"
+                                checkbox-class="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500 rounded"
                               />
                               Manage Users
                             </label>
                             <label v-if="module.key === 'settings'" class="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
-                              <input
-                                type="checkbox"
+                              <HeadlessCheckbox
                                 v-model="form.permissions[module.key].manageRoles"
                                 @change="handlePermissionChange(module.key, 'manageRoles')"
-                                class="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500 rounded"
+                                checkbox-class="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500 rounded"
                               />
                               Manage Roles
                             </label>
                             <label v-if="module.key === 'settings'" class="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
-                              <input
-                                type="checkbox"
+                              <HeadlessCheckbox
                                 v-model="form.permissions[module.key].manageBilling"
                                 @change="handlePermissionChange(module.key, 'manageBilling')"
-                                class="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500 rounded"
+                                checkbox-class="w-3.5 h-3.5 text-indigo-600 focus:ring-indigo-500 rounded"
                               />
                               Billing
                             </label>
@@ -353,6 +340,7 @@
 </template>
 
 <script setup>
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, watch, computed, onMounted } from 'vue';
 import apiClient from '@/utils/apiClient';
 

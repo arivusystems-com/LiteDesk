@@ -451,7 +451,7 @@ export function findModulesWhereFieldIsEditable(
   // Import MODULE_KEYS dynamically to avoid circular dependency
   const { MODULE_KEYS } = require('./FieldRegistry');
   
-  return MODULE_KEYS.filter(moduleKey => 
+  return MODULE_KEYS.filter((moduleKey: ModuleKey) => 
     canEditField(moduleKey as ModuleKey, fieldKey, role, options)
   ) as ModuleKey[];
 }

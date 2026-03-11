@@ -9,12 +9,11 @@
     ]"
   >
     <div class="flex items-center flex-1">
-      <input
-        type="checkbox"
+      <HeadlessCheckbox
         :checked="checked"
         :disabled="disabled"
+        checkbox-class="w-4 h-4"
         @change="$emit('update', $event.target.checked)"
-        class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
         :aria-label="`${channel.label} notifications`"
       />
       <div class="ml-3 flex-1">

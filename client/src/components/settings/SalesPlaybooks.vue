@@ -99,11 +99,10 @@
                         </p>
                       </div>
                       <label class="inline-flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer flex-shrink-0">
-                        <input
-                          type="checkbox"
+                        <HeadlessCheckbox
                           v-model="stage.playbook.enabled"
                           @change="handlePlaybookToggle(stage)"
-                          class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                          checkbox-class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                         />
                         <span>Enable</span>
                       </label>
@@ -147,7 +146,7 @@
                           </div>
                           <div>
                             <label class="inline-flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
-                              <input type="checkbox" v-model="stage.playbook.autoAdvance" @change="onPlaybookAutoAdvanceChange(stage)" class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500" />
+                              <HeadlessCheckbox v-model="stage.playbook.autoAdvance" @change="onPlaybookAutoAdvanceChange(stage)" checkbox-class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500" />
                               Auto-move to next stage when criteria met
                             </label>
                             <p class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Automatically progress when conditions are satisfied.</p>
@@ -247,6 +246,7 @@
 </template>
 
 <script setup>
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, computed, onMounted } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/utils/apiClient';

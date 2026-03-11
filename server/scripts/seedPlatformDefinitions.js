@@ -24,6 +24,23 @@ const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || process.en
 // Platform App Definitions
 const APP_DEFINITIONS = [
   {
+    appKey: 'platform',
+    name: 'Platform',
+    description: 'Core platform modules (tasks, events, forms) shared across apps',
+    icon: 'platform',
+    category: 'SYSTEM',
+    owner: 'PLATFORM',
+    enabled: true,
+    order: 0,
+    capabilities: {
+      usesPeople: true,
+      usesOrganization: true,
+      usesTransactions: false,
+      usesAutomation: true
+    },
+    settingsSchema: null
+  },
+  {
     appKey: 'sales',
     name: 'Sales',
     description: 'Sales CRM application for managing leads, contacts, deals, and sales pipeline',
@@ -41,40 +58,6 @@ const APP_DEFINITIONS = [
     settingsSchema: null
   },
   {
-    appKey: 'helpdesk',
-    name: 'Helpdesk',
-    description: 'Customer support and helpdesk application for managing tickets and cases',
-    icon: 'helpdesk',
-    category: 'BUSINESS',
-    owner: 'PLATFORM',
-    enabled: true,
-    order: 2,
-    capabilities: {
-      usesPeople: true,
-      usesOrganization: false,
-      usesTransactions: true,
-      usesAutomation: true
-    },
-    settingsSchema: null
-  },
-  {
-    appKey: 'projects',
-    name: 'Projects',
-    description: 'Project management application for managing projects, tasks, and milestones',
-    icon: 'projects',
-    category: 'BUSINESS',
-    owner: 'PLATFORM',
-    enabled: true,
-    order: 3,
-    capabilities: {
-      usesPeople: false,
-      usesOrganization: false,
-      usesTransactions: false,
-      usesAutomation: true
-    },
-    settingsSchema: null
-  },
-  {
     appKey: 'audit',
     name: 'Audit',
     description: 'Audit management application for managing audit visits, findings, and corrective actions',
@@ -82,7 +65,7 @@ const APP_DEFINITIONS = [
     category: 'BUSINESS',
     owner: 'PLATFORM',
     enabled: true,
-    order: 4,
+    order: 2,
     capabilities: {
       usesPeople: false,
       usesOrganization: true,
@@ -90,12 +73,90 @@ const APP_DEFINITIONS = [
       usesAutomation: true
     },
     settingsSchema: null
+  },
+  {
+    appKey: 'portal',
+    name: 'Portal',
+    description: 'Customer/Partner self-service portal',
+    icon: 'portal',
+    category: 'BUSINESS',
+    owner: 'PLATFORM',
+    enabled: true,
+    order: 3,
+    capabilities: {
+      usesPeople: true,
+      usesOrganization: false,
+      usesTransactions: false,
+      usesAutomation: false
+    },
+    settingsSchema: null
   }
 ];
 
 // Platform Module Definitions
 const MODULE_DEFINITIONS = [
+  // ===== PLATFORM APP MODULES (for relationship definitions: deal_tasks, deal_events, deal_forms) =====
+  {
+    moduleKey: 'tasks',
+    appKey: 'platform',
+    key: 'tasks',
+    label: 'Task',
+    pluralLabel: 'Tasks',
+    entityType: 'ACTIVITY',
+    primaryField: 'title',
+    peopleConstraints: { allowedTypes: ['Contact'], required: false },
+    organizationConstraints: { required: false },
+    lifecycle: { statusField: 'status', allowedStatuses: ['Not Started', 'In Progress', 'Completed', 'Cancelled'] },
+    supports: { ownership: true, assignment: true, comments: true, attachments: true, automation: true },
+    permissions: { create: true, edit: true, delete: true, view: true },
+    organizationId: null
+  },
+  {
+    moduleKey: 'events',
+    appKey: 'platform',
+    key: 'events',
+    label: 'Event',
+    pluralLabel: 'Events',
+    entityType: 'ACTIVITY',
+    primaryField: 'eventName',
+    peopleConstraints: { allowedTypes: ['Contact'], required: false },
+    organizationConstraints: { required: false },
+    lifecycle: { statusField: 'status', allowedStatuses: ['Planned', 'Completed', 'Cancelled'] },
+    supports: { ownership: true, assignment: true, comments: true, attachments: true, automation: true },
+    permissions: { create: true, edit: true, delete: true, view: true },
+    organizationId: null
+  },
+  {
+    moduleKey: 'forms',
+    appKey: 'platform',
+    key: 'forms',
+    label: 'Form',
+    pluralLabel: 'Forms',
+    entityType: 'CORE',
+    primaryField: 'name',
+    peopleConstraints: { allowedTypes: [], required: false },
+    organizationConstraints: { required: false },
+    lifecycle: null,
+    supports: { ownership: true, assignment: false, comments: true, attachments: true, automation: true },
+    permissions: { create: true, edit: true, delete: true, view: true },
+    organizationId: null
+  },
   // ===== SALES APP MODULES =====
+  {
+    moduleKey: 'organizations',
+    appKey: 'sales',
+    key: 'organizations',
+    label: 'Organization',
+    pluralLabel: 'Organizations',
+    entityType: 'CORE',
+    primaryField: 'name',
+    peopleConstraints: { allowedTypes: [], required: false },
+    organizationConstraints: { required: false },
+    lifecycle: null,
+    supports: { ownership: true, assignment: true, comments: true, attachments: true, automation: true },
+    permissions: { create: true, edit: true, delete: false, view: true },
+    organizationId: null
+  },
   {
     moduleKey: 'people',
     appKey: 'sales',
@@ -114,35 +175,6 @@ const MODULE_DEFINITIONS = [
       statusField: 'status',
       allowedStatuses: ['Lead', 'Contact']
     },
-    supports: {
-      ownership: true,
-      assignment: true,
-      comments: true,
-      attachments: true,
-      automation: true
-    },
-    permissions: {
-      create: true,
-      edit: true,
-      delete: false,
-      view: true
-    }
-  },
-  {
-    moduleKey: 'contacts',
-    appKey: 'sales',
-    label: 'Contact',
-    pluralLabel: 'Contacts',
-    entityType: 'CORE',
-    primaryField: 'name',
-    peopleConstraints: {
-      allowedTypes: ['Contact'],
-      required: false
-    },
-    organizationConstraints: {
-      required: false
-    },
-    lifecycle: null,
     supports: {
       ownership: true,
       assignment: true,
@@ -230,231 +262,6 @@ const MODULE_DEFINITIONS = [
     primaryField: 'eventName',
     peopleConstraints: {
       allowedTypes: ['Contact'],
-      required: false
-    },
-    organizationConstraints: {
-      required: false
-    },
-    lifecycle: {
-      statusField: 'status',
-      allowedStatuses: ['Planned', 'Completed', 'Cancelled']
-    },
-    supports: {
-      ownership: true,
-      assignment: true,
-      comments: true,
-      attachments: true,
-      automation: true
-    },
-    permissions: {
-      create: true,
-      edit: true,
-      delete: true,
-      view: true
-    }
-  },
-
-  // ===== HELPDESK APP MODULES =====
-  {
-    moduleKey: 'people',
-    appKey: 'helpdesk',
-    label: 'Contact',
-    pluralLabel: 'Contacts',
-    entityType: 'CORE',
-    primaryField: 'name',
-    peopleConstraints: {
-      allowedTypes: ['Contact'],
-      required: false
-    },
-    organizationConstraints: {
-      required: false
-    },
-    lifecycle: null,
-    supports: {
-      ownership: true,
-      assignment: true,
-      comments: true,
-      attachments: true,
-      automation: true
-    },
-    permissions: {
-      create: true,
-      edit: true,
-      delete: false,
-      view: true
-    }
-  },
-  {
-    moduleKey: 'cases',
-    appKey: 'helpdesk',
-    label: 'Ticket',
-    pluralLabel: 'Tickets',
-    entityType: 'TRANSACTION',
-    primaryField: 'subject',
-    peopleConstraints: {
-      allowedTypes: ['Contact'],
-      required: true
-    },
-    organizationConstraints: {
-      required: false
-    },
-    lifecycle: {
-      statusField: 'status',
-      allowedStatuses: ['New', 'Open', 'In Progress', 'Resolved', 'Closed']
-    },
-    supports: {
-      ownership: true,
-      assignment: true,
-      comments: true,
-      attachments: true,
-      automation: true
-    },
-    permissions: {
-      create: true,
-      edit: true,
-      delete: false,
-      view: true
-    }
-  },
-  {
-    moduleKey: 'tasks',
-    appKey: 'helpdesk',
-    label: 'Case Task',
-    pluralLabel: 'Case Tasks',
-    entityType: 'ACTIVITY',
-    primaryField: 'title',
-    peopleConstraints: {
-      allowedTypes: ['Contact'],
-      required: false
-    },
-    organizationConstraints: {
-      required: false
-    },
-    lifecycle: {
-      statusField: 'status',
-      allowedStatuses: ['Not Started', 'In Progress', 'Completed', 'Cancelled']
-    },
-    supports: {
-      ownership: true,
-      assignment: true,
-      comments: true,
-      attachments: true,
-      automation: true
-    },
-    permissions: {
-      create: true,
-      edit: true,
-      delete: true,
-      view: true
-    }
-  },
-  {
-    moduleKey: 'events',
-    appKey: 'helpdesk',
-    label: 'Site Visit',
-    pluralLabel: 'Site Visits',
-    entityType: 'ACTIVITY',
-    primaryField: 'eventName',
-    peopleConstraints: {
-      allowedTypes: ['Contact'],
-      required: false
-    },
-    organizationConstraints: {
-      required: false
-    },
-    lifecycle: {
-      statusField: 'status',
-      allowedStatuses: ['Planned', 'Completed', 'Cancelled']
-    },
-    supports: {
-      ownership: true,
-      assignment: true,
-      comments: true,
-      attachments: true,
-      automation: true
-    },
-    permissions: {
-      create: true,
-      edit: true,
-      delete: true,
-      view: true
-    }
-  },
-
-  // ===== PROJECTS APP MODULES =====
-  {
-    moduleKey: 'projects',
-    appKey: 'projects',
-    label: 'Project',
-    pluralLabel: 'Projects',
-    entityType: 'CORE',
-    primaryField: 'name',
-    peopleConstraints: {
-      allowedTypes: [],
-      required: false
-    },
-    organizationConstraints: {
-      required: false
-    },
-    lifecycle: {
-      statusField: 'status',
-      allowedStatuses: ['Planning', 'Active', 'On Hold', 'Completed', 'Cancelled']
-    },
-    supports: {
-      ownership: true,
-      assignment: true,
-      comments: true,
-      attachments: true,
-      automation: true
-    },
-    permissions: {
-      create: true,
-      edit: true,
-      delete: false,
-      view: true
-    }
-  },
-  {
-    moduleKey: 'tasks',
-    appKey: 'projects',
-    label: 'Project Task',
-    pluralLabel: 'Project Tasks',
-    entityType: 'ACTIVITY',
-    primaryField: 'title',
-    peopleConstraints: {
-      allowedTypes: [],
-      required: false
-    },
-    organizationConstraints: {
-      required: false
-    },
-    lifecycle: {
-      statusField: 'status',
-      allowedStatuses: ['Not Started', 'In Progress', 'Completed', 'Cancelled']
-    },
-    supports: {
-      ownership: true,
-      assignment: true,
-      comments: true,
-      attachments: true,
-      automation: true
-    },
-    permissions: {
-      create: true,
-      edit: true,
-      delete: true,
-      view: true
-    }
-  },
-  {
-    moduleKey: 'events',
-    appKey: 'projects',
-    label: 'Milestone',
-    pluralLabel: 'Milestones',
-    entityType: 'ACTIVITY',
-    primaryField: 'eventName',
-    peopleConstraints: {
-      allowedTypes: [],
       required: false
     },
     organizationConstraints: {

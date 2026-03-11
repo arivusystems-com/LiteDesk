@@ -19,9 +19,23 @@
       </div>
     </div>
     
-    <!-- Empty State -->
+    <!-- Empty State: no relationships configured -->
     <div v-else-if="!hasRelationships" class="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
       <p>No relationships configured for this record type.</p>
+    </div>
+    
+    <!-- Empty State: relationships exist but no records linked yet -->
+    <div
+      v-else-if="!hasAnyLinkedRecords"
+      class="flex flex-col items-center justify-center py-12 text-center"
+    >
+      <div class="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
+        <LinkIcon class="w-6 h-6 text-gray-400 dark:text-gray-500" />
+      </div>
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">No related records yet.</p>
+      <p class="text-xs text-gray-400 dark:text-gray-500">
+        Link this record to people, organizations, tasks, events, or forms.
+      </p>
     </div>
     
     <!-- Relationships List -->
@@ -70,7 +84,7 @@
 
 <script setup>
 import { computed, onMounted, watch } from 'vue';
-import { ExclamationCircleIcon } from '@heroicons/vue/24/outline';
+import { ExclamationCircleIcon, LinkIcon } from '@heroicons/vue/24/outline';
 import { useRecordContext } from '@/composables/useRecordContext';
 import RelatedRecordSection from './RelatedRecordSection.vue';
 import { useRoute } from 'vue-router';
@@ -138,10 +152,46 @@ const hasRelationships = computed(() => {
   return context.value.relationships.length > 0;
 });
 
-// Get all relationships (flatten from groups)
-const allRelationships = computed(() => {
+// Check if any relationship has linked records (for empty state when none linked)
+const hasAnyLinkedRecords = computed(() => {
+  if (!context.value || !context.value.relationships) return false;
+  return context.value.relationships.some((rel) => {
+    const records = rel.records || rel.linkedRecords || [];
+    return Array.isArray(records) && records.length > 0;
+  });
+});
+
+// Normalize platform cardinality (e.g. MANY_TO_ONE) to lowercase type (many_to_one) once.
+function normalizeCardinality(cardinality) {
+  if (!cardinality) return undefined;
+  const key = String(cardinality).toUpperCase().replace(/-/g, '_');
+  const map = {
+    MANY_TO_ONE: 'many_to_one',
+    ONE_TO_MANY: 'one_to_many',
+    ONE_TO_ONE: 'one_to_one',
+    MANY_TO_MANY: 'many_to_many'
+  };
+  return map[key];
+}
+
+// Normalize relationships once: ensure rel.type is set from type or cardinality so UI only checks rel.type.
+// Fallback to 'unknown' when nothing resolves so malformed relationships are easier to debug.
+const normalizedRelationships = computed(() => {
   if (!context.value || !context.value.relationships) return [];
-  return context.value.relationships;
+  return context.value.relationships.map((rel) => ({
+    ...rel,
+    type: rel.type ?? normalizeCardinality(rel.cardinality) ?? rel.relationshipType ?? 'unknown'
+  }));
+});
+
+// Get all relationships (flatten from groups).
+// Hide reverse (TARGET) list only for lookup-style N:1 (many_to_one + isLookup true).
+const allRelationships = computed(() => {
+  return normalizedRelationships.value.filter((rel) => {
+    const hideReverse =
+      rel.direction === 'TARGET' && rel.type === 'many_to_one' && rel.isLookup === true;
+    return !hideReverse;
+  });
 });
 
 // Phase 2E: Get unsatisfied required relationships for hints

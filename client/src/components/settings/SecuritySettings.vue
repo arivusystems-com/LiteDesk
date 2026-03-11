@@ -85,10 +85,9 @@
           </div>
           <div class="space-y-3">
             <label class="flex items-center gap-3 cursor-pointer">
-              <input
+              <HeadlessCheckbox
                 v-model="form.passwordPolicy.requireUppercase"
-                type="checkbox"
-                class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
+                checkbox-class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
               />
               <div>
                 <span class="text-sm font-medium text-gray-900 dark:text-white">Require Uppercase Letters</span>
@@ -96,10 +95,9 @@
               </div>
             </label>
             <label class="flex items-center gap-3 cursor-pointer">
-              <input
+              <HeadlessCheckbox
                 v-model="form.passwordPolicy.requireLowercase"
-                type="checkbox"
-                class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
+                checkbox-class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
               />
               <div>
                 <span class="text-sm font-medium text-gray-900 dark:text-white">Require Lowercase Letters</span>
@@ -107,10 +105,9 @@
               </div>
             </label>
             <label class="flex items-center gap-3 cursor-pointer">
-              <input
+              <HeadlessCheckbox
                 v-model="form.passwordPolicy.requireNumbers"
-                type="checkbox"
-                class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
+                checkbox-class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
               />
               <div>
                 <span class="text-sm font-medium text-gray-900 dark:text-white">Require Numbers</span>
@@ -118,10 +115,9 @@
               </div>
             </label>
             <label class="flex items-center gap-3 cursor-pointer">
-              <input
+              <HeadlessCheckbox
                 v-model="form.passwordPolicy.requireSpecialChars"
-                type="checkbox"
-                class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
+                checkbox-class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
               />
               <div>
                 <span class="text-sm font-medium text-gray-900 dark:text-white">Require Special Characters</span>
@@ -214,10 +210,9 @@
         <div class="space-y-4">
           <div>
             <label class="flex items-center gap-3 cursor-pointer mb-3">
-              <input
+              <HeadlessCheckbox
                 v-model="form.loginRestrictions.blockFailedAttempts"
-                type="checkbox"
-                class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
+                checkbox-class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
               />
               <div>
                 <span class="text-sm font-medium text-gray-900 dark:text-white">Block Failed Login Attempts</span>
@@ -295,10 +290,9 @@
         </div>
         <div class="space-y-4">
           <label class="flex items-center gap-3 cursor-pointer">
-            <input
+            <HeadlessCheckbox
               v-model="form.twoFactorAuth.enabled"
-              type="checkbox"
-              class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
+              checkbox-class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
             />
             <div>
               <span class="text-sm font-medium text-gray-900 dark:text-white">Enable Two-Factor Authentication</span>
@@ -306,10 +300,9 @@
             </div>
           </label>
           <label v-if="form.twoFactorAuth.enabled" class="flex items-center gap-3 cursor-pointer">
-            <input
+            <HeadlessCheckbox
               v-model="form.twoFactorAuth.required"
-              type="checkbox"
-              class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
+              checkbox-class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
             />
             <div>
               <span class="text-sm font-medium text-gray-900 dark:text-white">Require Two-Factor Authentication</span>
@@ -322,29 +315,26 @@
             </label>
             <div class="space-y-2">
               <label class="flex items-center gap-3 cursor-pointer">
-                <input
+                <HeadlessCheckbox
                   :checked="form.twoFactorAuth.methods.includes('totp')"
                   @change="toggle2FAMethod('totp')"
-                  type="checkbox"
-                  class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
+                  checkbox-class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
                 />
                 <span class="text-sm text-gray-900 dark:text-white">TOTP (Authenticator App)</span>
               </label>
               <label class="flex items-center gap-3 cursor-pointer">
-                <input
+                <HeadlessCheckbox
                   :checked="form.twoFactorAuth.methods.includes('sms')"
                   @change="toggle2FAMethod('sms')"
-                  type="checkbox"
-                  class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
+                  checkbox-class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
                 />
                 <span class="text-sm text-gray-900 dark:text-white">SMS</span>
               </label>
               <label class="flex items-center gap-3 cursor-pointer">
-                <input
+                <HeadlessCheckbox
                   :checked="form.twoFactorAuth.methods.includes('email')"
                   @change="toggle2FAMethod('email')"
-                  type="checkbox"
-                  class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
+                  checkbox-class="w-5 h-5 text-indigo-600 focus:ring-indigo-500 rounded"
                 />
                 <span class="text-sm text-gray-900 dark:text-white">Email</span>
               </label>
@@ -437,6 +427,7 @@
 </template>
 
 <script setup>
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, computed, onMounted } from 'vue';
 import apiClient from '@/utils/apiClient';
 

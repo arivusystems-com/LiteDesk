@@ -972,7 +972,8 @@ const handleSubmit = async () => {
           if (!isEditing.value || !isAlreadyViewing) {
             openTab(recordPath, {
               title: recordTitle,
-              icon: icon
+              icon: icon,
+              insertAdjacent: true
             });
           }
         }

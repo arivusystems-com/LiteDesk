@@ -107,10 +107,9 @@
                           </div>
                           <div>
                             <label class="flex items-center gap-2">
-                              <input
+                              <HeadlessCheckbox
                                 v-model="form.enabled"
-                                type="checkbox"
-                                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                checkbox-class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                               />
                               <span class="text-sm text-gray-700 dark:text-gray-300">Enabled</span>
                             </label>
@@ -350,6 +349,7 @@
 </template>
 
 <script setup>
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, computed, watch, onMounted } from 'vue';
 import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import { XMarkIcon } from '@heroicons/vue/24/outline';

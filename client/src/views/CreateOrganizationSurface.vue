@@ -177,12 +177,11 @@ Post-creation behavior is driven by invocation context via query params:
                 class="flex items-center gap-2"
                 :class="{ 'cursor-pointer': !(mode === 'edit' && typesReadOnly), 'cursor-not-allowed opacity-60': mode === 'edit' && typesReadOnly }"
               >
-                <input
-                  type="checkbox"
-                  :value="type"
-                  v-model="formData.types"
+                <HeadlessCheckbox
+                  :checked="formData.types.includes(type)"
+                  @change="toggleOrganizationType(type, $event)"
                   :disabled="mode === 'edit' && typesReadOnly"
-                  class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  checkbox-class="w-4 h-4 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <span class="text-sm text-gray-700 dark:text-gray-300">{{ type }}</span>
               </label>
@@ -420,6 +419,7 @@ Post-creation behavior is driven by invocation context via query params:
 </template>
 
 <script setup>
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
@@ -660,6 +660,17 @@ if (process.env.NODE_ENV === 'development' && props.mode === 'edit') {
 }
 
 // Methods
+const toggleOrganizationType = (type, event) => {
+  const isChecked = !!event?.target?.checked;
+  if (isChecked) {
+    if (!formData.value.types.includes(type)) {
+      formData.value.types = [...formData.value.types, type];
+    }
+    return;
+  }
+  formData.value.types = formData.value.types.filter(currentType => currentType !== type);
+};
+
 const handleSubmit = async () => {
   // Validate required fields
   validationErrors.value = {};

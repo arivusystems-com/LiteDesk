@@ -74,10 +74,9 @@
               </option>
             </select>
             <div v-else-if="field.dataType === 'Checkbox'" class="flex items-center">
-              <input
+              <HeadlessCheckbox
                 v-model="formData[field.key]"
-                type="checkbox"
-                class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                checkbox-class="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
               />
               <label class="ml-2 text-sm text-gray-700 dark:text-gray-300">
                 {{ field.label }}
@@ -113,6 +112,7 @@
 </template>
 
 <script setup>
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';

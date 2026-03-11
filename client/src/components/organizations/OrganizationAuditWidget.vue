@@ -213,7 +213,8 @@ const viewAudit = (audit) => {
   if (audit.formId && audit.auditId) {
     openTab(`/forms/${audit.formId}/responses/${audit.auditId}`, {
       title: `Audit: ${audit.formName}`,
-      icon: 'clipboard-document'
+      icon: 'clipboard-document',
+      insertAdjacent: true
     });
     router.push(`/forms/${audit.formId}/responses/${audit.auditId}`);
   }

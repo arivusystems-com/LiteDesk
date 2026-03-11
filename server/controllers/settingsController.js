@@ -37,14 +37,15 @@ exports.getCoreModules = async (req, res) => {
             });
         }
 
-        // Get enabled apps for this organization
-        // Filter out invalid app keys
+        // Get enabled apps for this organization (defensive: handle null/undefined entries and legacy shapes)
         const VALID_APPS = ['SALES', 'HELPDESK', 'PROJECTS', 'PORTAL', 'AUDIT', 'LMS'];
-        const enabledAppKeys = (organization.enabledApps || [])
-            .filter(app => app.status === 'ACTIVE')
-            .map(app => typeof app === 'string' ? app : app.appKey)
-            .map(key => key.toUpperCase())
-            .filter(appKey => VALID_APPS.includes(appKey)); // Only include valid apps
+        const rawApps = Array.isArray(organization.enabledApps) ? organization.enabledApps : [];
+        const enabledAppKeys = rawApps
+            .filter(app => app != null && (typeof app === 'object' ? app.status === 'ACTIVE' : typeof app === 'string' && app.length > 0))
+            .map(app => typeof app === 'string' ? app : (app && app.appKey))
+            .filter(Boolean)
+            .map(key => String(key).toUpperCase())
+            .filter(appKey => VALID_APPS.includes(appKey));
 
         // Core platform modules with explicit ordering
         // Order: People, Organization, Task, Event, Item, Form (new modules added at the bottom)
@@ -186,14 +187,15 @@ exports.getCoreModule = async (req, res) => {
             ? orgOverride.name.trim()
             : (module.label || capitalizeFirst(module.moduleKey));
 
-        // Get enabled apps
-        // Filter out invalid app keys
+        // Get enabled apps (defensive: handle null/undefined entries and legacy shapes)
         const VALID_APPS = ['SALES', 'HELPDESK', 'PROJECTS', 'PORTAL', 'AUDIT', 'LMS'];
-        const enabledAppKeys = (organization.enabledApps || [])
-            .filter(app => app.status === 'ACTIVE')
-            .map(app => typeof app === 'string' ? app : app.appKey)
-            .map(key => key.toUpperCase())
-            .filter(appKey => VALID_APPS.includes(appKey)); // Only include valid apps
+        const rawApps = Array.isArray(organization.enabledApps) ? organization.enabledApps : [];
+        const enabledAppKeys = rawApps
+            .filter(app => app != null && (typeof app === 'object' ? app.status === 'ACTIVE' : typeof app === 'string' && app.length > 0))
+            .map(app => typeof app === 'string' ? app : (app && app.appKey))
+            .filter(Boolean)
+            .map(key => String(key).toUpperCase())
+            .filter(appKey => VALID_APPS.includes(appKey));
 
         // Check organization-level overrides for module participation
         const moduleOverrides = organization.moduleOverrides || {};

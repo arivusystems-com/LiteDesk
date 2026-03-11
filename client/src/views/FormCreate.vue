@@ -2027,7 +2027,8 @@ const handleSubmit = async () => {
       // Open the form detail tab (this also navigates to it and makes it active)
       openTab(`/forms/${formId}/detail`, {
         title: response.data.name || 'Form Details',
-        icon: 'clipboard-document'
+        icon: 'clipboard-document',
+        insertAdjacent: true
       });
       
       // Close the edit tab if it exists

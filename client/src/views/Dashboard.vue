@@ -536,7 +536,8 @@ const viewContact = (contactId) => {
   openTab(`/people/${contactId}`, {
     title,
     icon: 'users',
-    params: { name: title }
+    params: { name: title },
+    insertAdjacent: true
   });
 };
 
