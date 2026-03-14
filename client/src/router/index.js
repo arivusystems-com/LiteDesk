@@ -269,8 +269,8 @@ const routes = [
   {
     path: '/deals/:id',
     name: 'deal-detail',
-    component: () => import('@/pages/deals/DealRecordPage.vue'),
-    meta: { requiresAuth: true, requiresPermission: { module: 'deals', action: 'view' } }
+    component: () => import('@/pages/ModuleRecordPage.vue'),
+    meta: { requiresAuth: true, requiresPermission: { module: 'deals', action: 'view' }, moduleKey: 'deals' }
   },
   {
     path: '/tasks',
@@ -281,8 +281,8 @@ const routes = [
   {
     path: '/tasks/:id',
     name: 'task-detail',
-    component: () => import('@/pages/tasks/TaskRecordPage.vue'),
-    meta: { requiresAuth: true, requiresPermission: { module: 'tasks', action: 'view' } }
+    component: () => import('@/pages/ModuleRecordPage.vue'),
+    meta: { requiresAuth: true, requiresPermission: { module: 'tasks', action: 'view' }, moduleKey: 'tasks' }
   },
   {
     path: '/events',
@@ -301,8 +301,8 @@ const routes = [
   {
     path: '/events/:id',
     name: 'event-detail',
-    component: () => import('@/views/EventDetail.vue'),
-    meta: { requiresAuth: true, requiresPermission: { module: 'events', action: 'view' } }
+    component: () => import('@/pages/ModuleRecordPage.vue'),
+    meta: { requiresAuth: true, requiresPermission: { module: 'events', action: 'view' }, moduleKey: 'events' }
   },
   // Invariant:
   // /events/:id/execute is the ONLY route allowed to mutate execution state.

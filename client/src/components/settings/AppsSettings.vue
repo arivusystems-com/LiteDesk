@@ -8,11 +8,21 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
         </button>
-    <div>
-          <h2 class="text-2xl font-bold text-gray-900 dark:text-white">{{ appDisplayName }} Settings</h2>
-          <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">Configure {{ appDisplayName }} app-specific settings and options</p>
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900 dark:text-white">{{ salesPageHeading }}</h2>
+          <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">{{ salesPageSubheading }}</p>
         </div>
       </div>
+      <button
+        v-if="hasSalesAccess && isSalesApp && activeSalesTab === 'schema' && !salesSelectedModule"
+        @click="onCreateCustomModuleClick"
+        class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium transition-colors"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        Create custom module
+      </button>
     </div>
 
     <!-- Sales App Section (only if Sales is installed and selected) -->
@@ -54,45 +64,16 @@
         </div>
       </div>
 
-      <!-- Sales Sub-tabs (when an option is selected) -->
+      <!-- Sales option content (when a card is selected) -->
       <div v-else class="space-y-4">
-        <div class="border-b border-gray-200 dark:border-gray-700 pb-2">
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ getOptionName(activeSalesTab) }}</h3>
-          <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">{{ getOptionDescription(activeSalesTab) }}</p>
-        </div>
-
-      <div class="border-b border-gray-200 dark:border-gray-700">
-        <nav class="-mb-px flex space-x-8">
-          <button
-              @click="activeSalesTab = 'options'"
-              :class="[
-                activeSalesTab === 'options'
-                  ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600',
-                'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors'
-              ]"
-            >
-              ← Back to Options
-            </button>
-            <button
-              v-for="tab in getTabsForOption(activeSalesTab)"
-            :key="tab.id"
-            @click="activeSalesTab = tab.id"
-            :class="[
-              activeSalesTab === tab.id
-                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600',
-              'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors'
-            ]"
-          >
-            {{ tab.name }}
-          </button>
-        </nav>
-      </div>
-
-      <!-- Sales Tab Content -->
-      <div>
-        <component :is="currentSalesTabComponent" />
+        <!-- Sales Tab Content -->
+        <div>
+          <component
+            :is="currentSalesTabComponent"
+            ref="salesTabContentRef"
+            @selected-module-change="salesSelectedModule = $event"
+            :on-navigate-to-pipelines="() => { activeSalesTab = 'pipelines'; }"
+          />
         </div>
       </div>
     </div>
@@ -152,7 +133,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, h } from 'vue';
+import { ref, computed, onMounted, watch, h, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import SalesSchema from './SalesSchema.vue';
@@ -163,6 +144,19 @@ const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const activeSalesTab = ref('options'); // Start with options view
+
+// Ref to current Sales tab content (SalesSchema when on schema tab) so we can call openCreateModal
+const salesTabContentRef = ref(null);
+// Selected module inside Sales Modules (e.g. Deals) – kept in sync via event from SalesSchema for reactive header
+const salesSelectedModule = ref(null);
+
+function onCreateCustomModuleClick() {
+  nextTick(() => {
+    if (typeof salesTabContentRef.value?.openCreateModal === 'function') {
+      salesTabContentRef.value.openCreateModal();
+    }
+  });
+}
 
 // Icon components
 const SchemaIcon = () => h('svg', { class: 'w-6 h-6', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
@@ -209,20 +203,56 @@ const appDisplayName = computed(() => {
   return appNames[selectedApp.value.toLowerCase()] || capitalizeFirst(selectedApp.value);
 });
 
-// Sales app options (Sales-owned configuration only)
+// App descriptions shown below app name in header (when app is opened)
+const appDescriptions = {
+  sales: 'Manage your sales pipeline, deals, and customer relationships',
+  helpdesk: 'Manage tickets, support workflows, and customer issues',
+  projects: 'Plan and track projects, tasks, and deliverables',
+  portal: 'Customer and partner self-service portal',
+  audit: 'Audit and compliance tracking',
+  lms: 'Learning management and training'
+};
+const appDescription = computed(() => {
+  const key = selectedApp.value?.toLowerCase();
+  return key ? appDescriptions[key] || '' : '';
+});
+
+// When a Sales option card is selected, show its name/description in the main header.
+// When inside Sales Modules and a module (e.g. Deals) is selected, show module name like Core Modules.
+const salesPageHeading = computed(() => {
+  if (hasSalesAccess.value && isSalesApp.value && activeSalesTab.value === 'schema') {
+    if (salesSelectedModule.value?.name) return salesSelectedModule.value.name;
+  }
+  if (hasSalesAccess.value && isSalesApp.value && activeSalesTab.value && activeSalesTab.value !== 'options') {
+    return getOptionName(activeSalesTab.value);
+  }
+  return `${appDisplayName.value} Settings`;
+});
+
+const salesPageSubheading = computed(() => {
+  if (hasSalesAccess.value && isSalesApp.value && activeSalesTab.value === 'schema') {
+    if (salesSelectedModule.value?.name) return 'Configure fields, relationships and quick create';
+  }
+  if (hasSalesAccess.value && isSalesApp.value && activeSalesTab.value && activeSalesTab.value !== 'options') {
+    return getOptionDescription(activeSalesTab.value);
+  }
+  return appDescription.value || `Configure ${appDisplayName.value} app-specific settings and options`;
+});
+
+// Sales app options (Sales-owned configuration only) – Sales Modules first
 const salesOptions = [
+  {
+    id: 'schema',
+    name: 'Sales Modules',
+    description: 'Configure Sales app modules, custom fields, and data structure',
+    icon: SchemaIcon,
+    available: true
+  },
   {
     id: 'pipelines',
     name: 'Pipelines & Stages',
     description: 'Configure sales pipelines, deal stages, and workflow automation',
     icon: PipelineIcon,
-    available: true
-  },
-  {
-    id: 'schema',
-    name: 'Deal Schema',
-    description: 'Configure custom fields and data structure for Deals',
-    icon: SchemaIcon,
     available: true
   },
   {
@@ -235,8 +265,8 @@ const salesOptions = [
 ];
 
 const salesTabs = [
+  { id: 'schema', name: 'Sales Modules', component: SalesSchema },
   { id: 'pipelines', name: 'Pipelines & Stages', component: SalesPipelines },
-  { id: 'schema', name: 'Deal Schema', component: SalesSchema },
   { id: 'playbooks', name: 'Playbooks', component: SalesPlaybooks }
 ];
 
@@ -248,6 +278,12 @@ const currentSalesTabComponent = computed(() => {
 
 const navigateToOption = (optionId) => {
   activeSalesTab.value = optionId;
+  // When opening Sales Modules, always show the module list first (clear any previously selected module)
+  if (optionId === 'schema') {
+    nextTick(() => {
+      salesTabContentRef.value?.goBackToModuleList?.();
+    });
+  }
 };
 
 const getOptionName = (optionId) => {
@@ -375,6 +411,18 @@ const getAppOptions = (app) => {
 };
 
 const goBack = () => {
+  // If inside Sales Modules with a module selected, go back to module list first
+  if (hasSalesAccess.value && isSalesApp.value && activeSalesTab.value === 'schema' && salesSelectedModule.value) {
+    salesTabContentRef.value?.goBackToModuleList?.();
+    return;
+  }
+  // If on Sales Modules list (schema tab, no module) or any other Sales option, go back to application detail (sale page)
+  if (hasSalesAccess.value && isSalesApp.value && activeSalesTab.value && activeSalesTab.value !== 'options') {
+    const appKey = selectedApp.value.toUpperCase();
+    router.push({ path: '/settings', query: { tab: 'applications', appKey: appKey } });
+    activeSalesTab.value = 'options';
+    return;
+  }
   // Go back to application detail
   const appKey = selectedApp.value.toUpperCase();
   router.push({ path: '/settings', query: { tab: 'applications', appKey: appKey } });
@@ -387,6 +435,10 @@ const capitalizeFirst = (str) => {
 };
 
 // Watch for app changes in query
+watch(activeSalesTab, (tab) => {
+  if (tab !== 'schema') salesSelectedModule.value = null;
+});
+
 watch(() => route.query.app, (newApp) => {
   if (newApp) {
     // Reset to options view when switching apps

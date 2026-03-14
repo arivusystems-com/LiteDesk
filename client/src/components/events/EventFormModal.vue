@@ -210,11 +210,10 @@
                   {{ geoRequiredDescription }}
                 </p>
               </div>
-              <HeadlessCheckbox
+              <HeadlessSwitch
                 v-model="form.geoRequired"
                 :disabled="!canToggleGeo"
-                variant="switch"
-                checkbox-class="w-11 h-6"
+                switch-class="w-11 h-6"
               />
             </div>
             
@@ -283,10 +282,9 @@
                   Enable only if the auditor is responsible for both execution and approval.
                 </p>
               </div>
-              <HeadlessCheckbox
+              <HeadlessSwitch
                 v-model="form.allowSelfReview"
-                variant="switch"
-                checkbox-class="w-11 h-6"
+                switch-class="w-11 h-6"
               />
             </div>
 

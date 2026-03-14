@@ -21,29 +21,40 @@
             Add
           </button>
         </div>
-        <div class="flex-1 overflow-y-auto divide-y divide-gray-200 dark:divide-gray-800">
+        <div
+          class="flex-1 overflow-y-auto divide-y divide-gray-200 dark:divide-gray-800"
+          @dragover.prevent="onPipelineListDragOver"
+          @drop.prevent="onPipelineListDrop"
+        >
           <div
             v-for="(pipeline, index) in pipelineSettings"
             :key="pipeline.key || index"
             :class="[
-              'p-4 cursor-pointer transition-colors',
+              'p-4 cursor-pointer transition-all duration-200',
               selectedPipelineKey === pipeline.key
                 ? 'bg-indigo-50 dark:bg-indigo-900/20'
-                : 'hover:bg-gray-50 dark:hover:bg-white/5'
+                : 'hover:bg-gray-50 dark:hover:bg-white/5',
+              pipelineDragOverIndex === index ? 'ring-2 ring-indigo-500/60 dark:ring-indigo-400/70' : ''
             ]"
+            draggable="true"
             @click="selectedPipelineKey = pipeline.key"
+            @dragstart="onPipelineDragStart(index, $event)"
+            @dragover.prevent="onPipelineDragOver(index)"
+            @drop.prevent="onPipelineDrop(index)"
+            @dragend="resetPipelineDrag"
           >
             <div class="flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <span class="w-2.5 h-2.5 rounded-full border border-white shadow" :style="{ backgroundColor: pipeline.color || DEFAULT_PIPELINE_COLOR }"></span>
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="cursor-grab active:cursor-grabbing select-none text-gray-400 dark:text-gray-500 flex-shrink-0" title="Drag to reorder">⋮⋮</div>
+                <span class="w-2.5 h-2.5 rounded-full border border-white shadow flex-shrink-0" :style="{ backgroundColor: pipeline.color || DEFAULT_PIPELINE_COLOR }"></span>
                 <div class="min-w-0">
                   <p class="text-sm font-semibold text-gray-900 dark:text-white truncate">{{ pipeline.name }}</p>
                   <p class="text-xs text-gray-500 dark:text-gray-400">{{ pipeline.stages?.length || 0 }} stage{{ (pipeline.stages?.length || 0) === 1 ? '' : 's' }}</p>
                 </div>
               </div>
-              <span v-if="pipeline.isDefault" class="text-xs font-medium text-indigo-600 dark:text-indigo-300">Default</span>
+              <span v-if="pipelineSettings.length > 1 && pipeline.isDefault" class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 flex-shrink-0">Default</span>
             </div>
-            <div class="flex items-center gap-2 mt-3">
+            <div v-if="pipelineSettings.length > 1" class="flex items-center gap-2 mt-3">
               <label class="inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                 <input
                   type="radio"
@@ -56,74 +67,66 @@
               </label>
               <div class="ml-auto flex items-center gap-1">
                 <button
-                  class="p-1 rounded text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white transition-colors"
-                  :disabled="index === 0"
-                  :class="{ 'opacity-40 cursor-not-allowed': index === 0 }"
-                  @click.stop="movePipeline(pipeline.key, -1)"
-                  title="Move up"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
-                    <path fill-rule="evenodd" d="M10 4a.75.75 0 01.53.22l4.5 4.5a.75.75 0 11-1.06 1.06L10 5.81 6.03 9.78a.75.75 0 11-1.06-1.06l4.5-4.5A.75.75 0 0110 4z" clip-rule="evenodd" />
-                    <path d="M5.25 15.25a.75.75 0 01.75-.75h8a.75.75 0 010 1.5h-8a.75.75 0 01-.75-.75z" />
-                  </svg>
-                </button>
-                <button
-                  class="p-1 rounded text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white transition-colors"
-                  :disabled="index === pipelineSettings.length - 1"
-                  :class="{ 'opacity-40 cursor-not-allowed': index === pipelineSettings.length - 1 }"
-                  @click.stop="movePipeline(pipeline.key, 1)"
-                  title="Move down"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
-                    <path fill-rule="evenodd" d="M10 16a.75.75 0 01-.53-.22l-4.5-4.5a.75.75 0 011.06-1.06L10 14.19l3.97-3.97a.75.75 0 111.06 1.06l-4.5 4.5A.75.75 0 0110 16z" clip-rule="evenodd" />
-                    <path d="M5.25 4.75a.75.75 0 01.75-.75h8a.75.75 0 010 1.5h-8a.75.75 0 01-.75-.75z" />
-                  </svg>
-                </button>
-                <button
                   class="p-1 rounded text-red-500 hover:text-red-600 transition-colors"
                   @click.stop="removePipeline(pipeline.key)"
                   title="Remove pipeline"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
-                    <path fill-rule="evenodd" d="M8.75 3a.75.75 0 00-.75.75V5H5.5a.75.75 0 000 1.5h.538l.599 9.27A1.75 1.75 0 008.382 17.5h3.236a1.75 1.75 0 001.745-1.73l.599-9.27h.538a.75.75 0 000-1.5H12v-1.25A.75.75 0 0011.25 3h-2.5zM9.5 6.5v7a.75.75 0 001.5 0v-7a.75.75 0 00-1.5 0zm-2 0v7a.75.75 0 001.5 0v-7a.75.75 0 00-1.5 0z" clip-rule="evenodd" />
-                  </svg>
+                  <TrashIcon class="w-4 h-4" />
                 </button>
               </div>
             </div>
+          </div>
+          <div
+            v-if="pipelineSettings.length > 1"
+            class="p-4 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50/40 dark:bg-white/5 text-center text-xs text-gray-500 dark:text-gray-400 transition-colors"
+            :class="pipelineDragOverIndex === pipelineSettings.length ? 'border-indigo-400 text-indigo-600 dark:text-indigo-300' : ''"
+            @dragover.prevent="onPipelineDragOver(pipelineSettings.length)"
+            @drop.prevent="onPipelineDrop(pipelineSettings.length)"
+          >
+            Drop here to move pipeline to the end
           </div>
           <div v-if="!pipelineSettings.length" class="p-6 text-center text-sm text-gray-500 dark:text-gray-400">
             No pipelines yet.
           </div>
         </div>
       </aside>
-      <section class="flex-1 min-w-0 bg-white dark:bg-gray-900/60 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-y-auto flex flex-col">
+      <section ref="pipelineDetailRef" class="flex-1 min-w-0 bg-white dark:bg-gray-900/60 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-y-auto flex flex-col">
         <div class="p-4 border-b border-gray-200 dark:border-white/10 flex items-center justify-between gap-3">
           <div class="min-w-0">
             <p class="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">
               {{ currentPipeline?.name || 'Select a pipeline' }}
             </p>
             <p v-if="currentPipeline" class="text-xs text-gray-500 dark:text-gray-400">
-              {{ currentPipeline.stages?.length || 0 }} stage{{ (currentPipeline.stages?.length || 0) === 1 ? '' : 's' }} ·
-              {{ currentPipeline.isDefault ? 'Default pipeline' : 'Custom pipeline' }}
+              {{ currentPipeline.stages?.length || 0 }} stage{{ (currentPipeline.stages?.length || 0) === 1 ? '' : 's' }}
+              <template v-if="pipelineSettings.length > 1"> · {{ currentPipeline.isDefault ? 'Default pipeline' : 'Custom pipeline' }}</template>
             </p>
           </div>
-          <button
-            v-if="isDirty"
-            @click="savePipelines"
-            :disabled="isSaving"
-            class="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg transition-colors"
-            :class="[
-              isSaving
-                ? 'bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed'
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm hover:shadow'
-            ]"
-          >
-            <svg v-if="isSaving" class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span>{{ isSaving ? 'Saving…' : 'Save Pipelines' }}</span>
-          </button>
+          <div v-if="isDirty" class="flex items-center gap-2">
+            <button
+              type="button"
+              @click="discardChanges"
+              class="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg transition-colors bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              @click="savePipelines"
+              :disabled="isSaving"
+              class="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg transition-colors"
+              :class="[
+                isSaving
+                  ? 'bg-gray-300 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed'
+                  : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm hover:shadow'
+              ]"
+            >
+              <svg v-if="isSaving" class="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>{{ isSaving ? 'Saving…' : 'Save Pipeline' }}</span>
+            </button>
+          </div>
         </div>
         <div v-if="currentPipeline" class="p-4 space-y-6">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -138,7 +141,7 @@
                 <span class="text-xs text-gray-500 dark:text-gray-400">Used for visual indicators in the UI.</span>
               </div>
             </div>
-            <div class="md:col-span-2 flex items-center gap-3">
+            <div v-if="pipelineSettings.length > 1" class="md:col-span-2 flex items-center gap-3">
               <span v-if="currentPipeline.isDefault" class="px-2 py-0.5 text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded">Default pipeline</span>
               <button
                 v-else
@@ -162,32 +165,55 @@
             </div>
           </div>
 
-          <div class="pr-1 space-y-3 pb-16">
+          <div class="pr-1 space-y-3 pb-16" @dragover.prevent="onStageListDragOver" @drop.prevent="onStageListDrop">
             <div
               v-for="(stage, stageIndex) in currentPipeline.stages"
               :key="stage.key || stageIndex"
-              class="border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900/50 p-4 transition-shadow"
+              class="border rounded-xl p-4 transition-all duration-300"
+              :class="[
+                highlightedStageKey === (stage.key || stageIndex)
+                  ? 'border-indigo-500 dark:border-indigo-400 ring-2 ring-indigo-500/60 dark:ring-indigo-400/70 bg-indigo-50/80 dark:bg-indigo-900/30 shadow-md'
+                  : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/50',
+                !highlightedStageKey && stageDragOverIndex === stageIndex ? 'ring-2 ring-indigo-500/60 dark:ring-indigo-400/70' : ''
+              ]"
+              draggable="true"
+              @dragstart="onStageDragStart(stageIndex, $event)"
+              @dragover.prevent="onStageDragOver(stageIndex)"
+              @drop.prevent="onStageDrop(stageIndex)"
+              @dragend="resetStageDrag"
             >
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                  <span class="text-sm font-semibold text-gray-800 dark:text-gray-200">Stage {{ stageIndex + 1 }}</span>
+              <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2 min-w-0">
+                  <div class="cursor-grab select-none text-gray-400 dark:text-gray-500 flex-shrink-0" title="Drag to reorder">⋮⋮</div>
+                  <span class="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">Stage {{ stageIndex + 1 }}</span>
                 </div>
-                <div class="flex items-center gap-1">
+                <div class="flex items-center gap-1 flex-shrink-0">
                   <button
                     class="p-1 rounded text-red-500 hover:text-red-600 transition-colors"
                     @click="removeStageFromPipeline(currentPipeline, stageIndex)"
                     title="Remove stage"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
-                      <path fill-rule="evenodd" d="M8.75 3a.75.75 0 00-.75.75V5H5.5a.75.75 0 000 1.5h.538l.599 9.27A1.75 1.75 0 008.382 17.5h3.236a1.75 1.75 0 001.745-1.73l.599-9.27h.538a.75.75 0 000-1.5H12v-1.25A.75.75 0 0011.25 3h-2.5zM9.5 6.5v7a.75.75 0 001.5 0v-7a.75.75 0 00-1.5 0zm-2 0v7a.75.75 0 001.5 0v-7a.75.75 0 00-1.5 0z" clip-rule="evenodd" />
-                    </svg>
+                    <TrashIcon class="w-4 h-4" />
                   </button>
                 </div>
               </div>
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
                 <div>
                   <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Stage Name</label>
                   <input v-model="stage.name" class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-gray-700 text-sm" />
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Color</label>
+                  <div class="flex items-center gap-2">
+                    <input
+                      type="color"
+                      :value="stage.color || DEFAULT_STAGE_COLOR"
+                      @input="stage.color = $event.target.value"
+                      class="h-9 w-12 cursor-pointer rounded border border-gray-300 dark:border-gray-600 bg-white p-0.5 dark:bg-gray-800"
+                      title="Stage color"
+                    />
+                    <span class="px-2.5 py-1 rounded-full text-xs font-medium text-white truncate max-w-[6rem]" :style="{ backgroundColor: stage.color || DEFAULT_STAGE_COLOR }">{{ stage.name || 'Stage' }}</span>
+                  </div>
                 </div>
                 <div>
                   <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Probability (%)</label>
@@ -200,6 +226,15 @@
                   </select>
                 </div>
               </div>
+            </div>
+            <div
+              ref="stageListEndRef"
+              class="border border-dashed border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50/40 dark:bg-white/5 text-center text-xs text-gray-500 dark:text-gray-400 py-4 transition-colors"
+              :class="stageDragOverIndex === currentPipeline.stages.length ? 'border-indigo-400 text-indigo-600 dark:text-indigo-300' : ''"
+              @dragover.prevent="onStageDragOver(currentPipeline.stages.length)"
+              @drop.prevent="onStageDrop(currentPipeline.stages.length)"
+            >
+              Drop here to move stage to the end
             </div>
           </div>
         </div>
@@ -215,7 +250,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, nextTick } from 'vue';
+import { TrashIcon } from '@heroicons/vue/24/outline';
 import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/utils/apiClient';
 
@@ -227,15 +263,25 @@ const pipelineSettings = ref([]);
 const selectedPipelineKey = ref('');
 const isSaving = ref(false);
 const originalSnapshot = ref('');
+const stageDragSourceIndex = ref(null);
+const stageDragOverIndex = ref(null);
+const pipelineDragSourceIndex = ref(null);
+const pipelineDragOverIndex = ref(null);
+const pipelineDetailRef = ref(null);
+const stageListEndRef = ref(null);
+const highlightedStageKey = ref(null);
 
 const DEFAULT_PIPELINE_COLOR = '#2563EB';
+const DEFAULT_STAGE_COLOR = '#6B7280';
+const DEFAULT_STAGE_COLORS = ['#6B7280', '#3B82F6', '#8B5CF6', '#06B6D4', '#10B981', '#F59E0B', '#EF4444'];
 const DEFAULT_STAGE_DEFINITIONS = [
-  { name: 'Qualification', probability: 25, status: 'open' },
-  { name: 'Proposal', probability: 50, status: 'open' },
-  { name: 'Negotiation', probability: 70, status: 'open' },
-  { name: 'Contract Sent', probability: 85, status: 'open' },
-  { name: 'Closed Won', probability: 100, status: 'won' },
-  { name: 'Closed Lost', probability: 0, status: 'lost' }
+  { name: 'New', probability: 0, status: 'open', color: DEFAULT_STAGE_COLORS[0] },
+  { name: 'Qualification', probability: 25, status: 'open', color: DEFAULT_STAGE_COLORS[1] },
+  { name: 'Proposal', probability: 50, status: 'open', color: DEFAULT_STAGE_COLORS[2] },
+  { name: 'Negotiation', probability: 70, status: 'open', color: DEFAULT_STAGE_COLORS[3] },
+  { name: 'Contract Sent', probability: 85, status: 'open', color: DEFAULT_STAGE_COLORS[4] },
+  { name: 'Closed Won', probability: 100, status: 'won', color: DEFAULT_STAGE_COLORS[5] },
+  { name: 'Closed Lost', probability: 0, status: 'lost', color: DEFAULT_STAGE_COLORS[6] }
 ];
 
 const pipelineStageStatusOptions = [
@@ -283,6 +329,7 @@ function normalizePipelineSettings(settings = []) {
       if (status === 'won') probability = 100;
       if (status === 'lost') probability = 0;
       probability = Math.min(100, Math.max(0, Number(probability) || 0));
+      const color = stage.color && /^#[0-9A-Fa-f]{6}$/.test(stage.color) ? stage.color : (DEFAULT_STAGE_DEFINITIONS[stageIndex]?.color || DEFAULT_STAGE_COLOR);
       return {
         key: stageKeyRaw,
         name: stageName,
@@ -290,6 +337,7 @@ function normalizePipelineSettings(settings = []) {
         probability,
         status,
         order: stageIndex,
+        color,
         isClosedWon: status === 'won',
         isClosedLost: status === 'lost',
         playbook: stage.playbook || { enabled: false, actions: [], mode: 'sequential', exitCriteria: { type: 'manual' }, notes: '' }
@@ -337,7 +385,7 @@ function normalizePipelineSettings(settings = []) {
 }
 
 function getDefaultPipelineSettingsLocal() {
-  return [createDefaultPipeline('Default Pipeline', { isDefault: true })];
+  return [createDefaultPipeline('Sales Pipeline', { isDefault: true })];
 }
 
 function createDefaultPipeline(name = 'Default Pipeline', { isDefault = false } = {}) {
@@ -349,6 +397,7 @@ function createDefaultPipeline(name = 'Default Pipeline', { isDefault = false } 
     if (status === 'lost') probability = 0;
     probability = Math.min(100, Math.max(0, Number(probability) || 0));
     const key = slugify(`${pipelineKey}-${def.name}-${index}`) || `${pipelineKey}-stage-${index + 1}`;
+    const color = (def.color && /^#[0-9A-Fa-f]{6}$/.test(def.color)) ? def.color : (DEFAULT_STAGE_COLORS[index] || DEFAULT_STAGE_COLOR);
     return {
       key,
       name: def.name,
@@ -356,6 +405,7 @@ function createDefaultPipeline(name = 'Default Pipeline', { isDefault = false } 
       probability,
       status,
       order: index,
+      color,
       isClosedWon: status === 'won',
       isClosedLost: status === 'lost',
       playbook: { enabled: false, actions: [], mode: 'sequential', exitCriteria: { type: 'manual' }, notes: '' }
@@ -401,6 +451,20 @@ async function fetchDealsModule() {
   }
 }
 
+function discardChanges() {
+  if (!originalSnapshot.value) return;
+  try {
+    const restored = JSON.parse(originalSnapshot.value);
+    pipelineSettings.value = normalizePipelineSettings(Array.isArray(restored) ? restored : []);
+    if (pipelineSettings.value.length && !pipelineSettings.value.some(p => p.key === selectedPipelineKey.value)) {
+      selectedPipelineKey.value = pipelineSettings.value[0].key;
+    }
+    highlightedStageKey.value = null;
+  } catch (e) {
+    console.error('Discard changes failed', e);
+  }
+}
+
 async function savePipelines() {
   if (!dealsModule.value || isSaving.value) return;
   isSaving.value = true;
@@ -419,6 +483,7 @@ async function savePipelines() {
       return;
     }
     await fetchDealsModule();
+    highlightedStageKey.value = null;
     alert('Pipelines saved successfully');
   } catch (e) {
     console.error('Save pipelines failed', e);
@@ -439,7 +504,7 @@ function refreshPipelineOrders() {
 
 function addPipeline() {
   const count = pipelineSettings.value.length;
-  const name = count === 0 ? 'Default Pipeline' : `Pipeline ${count + 1}`;
+  const name = count === 0 ? 'Sales Pipeline' : `Pipeline ${count + 1}`;
   const isDefault = count === 0 && !pipelineSettings.value.some(p => p.isDefault);
   const pipeline = createDefaultPipeline(name, { isDefault });
   pipeline.order = count;
@@ -449,30 +514,67 @@ function addPipeline() {
 }
 
 function removePipeline(pipelineKey) {
+  const pipeline = pipelineSettings.value.find(p => p.key === pipelineKey);
+  if (!pipeline) return;
+  if (pipeline.isDefault) {
+    alert('Set another pipeline as default before removing this one.');
+    return;
+  }
   if (pipelineSettings.value.length <= 1) {
     alert('At least one pipeline is required.');
     return;
   }
   const index = pipelineSettings.value.findIndex(p => p.key === pipelineKey);
-  if (index === -1) return;
   const [removed] = pipelineSettings.value.splice(index, 1);
-  if (removed?.isDefault && pipelineSettings.value.length) {
-    pipelineSettings.value[0].isDefault = true;
-  }
   refreshPipelineOrders();
   if (selectedPipelineKey.value === pipelineKey) {
     selectedPipelineKey.value = pipelineSettings.value[0]?.key || '';
   }
 }
 
-function movePipeline(pipelineKey, direction) {
-  const index = pipelineSettings.value.findIndex(p => p.key === pipelineKey);
-  if (index === -1) return;
-  const newIndex = index + direction;
-  if (newIndex < 0 || newIndex >= pipelineSettings.value.length) return;
-  const [pipeline] = pipelineSettings.value.splice(index, 1);
-  pipelineSettings.value.splice(newIndex, 0, pipeline);
+function resetPipelineDrag() {
+  pipelineDragSourceIndex.value = null;
+  pipelineDragOverIndex.value = null;
+}
+
+function onPipelineDragStart(index, event) {
+  pipelineDragSourceIndex.value = index;
+  pipelineDragOverIndex.value = index;
+  if (event?.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(index));
+  }
+}
+
+function onPipelineDragOver(index) {
+  pipelineDragOverIndex.value = index;
+}
+
+function onPipelineDrop(toIndex) {
+  const from = pipelineDragSourceIndex.value;
+  if (from === null) return;
+  let to = toIndex;
+  if (to > pipelineSettings.value.length) to = pipelineSettings.value.length;
+  if (from === to) {
+    resetPipelineDrag();
+    return;
+  }
+  const [pipeline] = pipelineSettings.value.splice(from, 1);
+  if (from < to) to -= 1;
+  pipelineSettings.value.splice(to, 0, pipeline);
   refreshPipelineOrders();
+  if (selectedPipelineKey.value === pipeline.key) {
+    selectedPipelineKey.value = pipeline.key;
+  }
+  resetPipelineDrag();
+}
+
+function onPipelineListDragOver() {
+  pipelineDragOverIndex.value = pipelineSettings.value.length;
+}
+
+function onPipelineListDrop() {
+  onPipelineDrop(pipelineSettings.value.length);
 }
 
 function setDefaultPipeline(pipelineKey) {
@@ -495,12 +597,17 @@ function addStageToPipeline(pipeline) {
     probability,
     status,
     order: stageIndex,
+    color: DEFAULT_STAGE_COLOR,
     isClosedWon: false,
     isClosedLost: false,
     playbook: { enabled: false, actions: [], mode: 'sequential', exitCriteria: { type: 'manual' }, notes: '' }
   };
   pipeline.stages.push(newStage);
   pipeline.stages.forEach((stage, idx) => (stage.order = idx));
+  highlightedStageKey.value = newStage.key;
+  nextTick(() => {
+    stageListEndRef.value?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  });
 }
 
 function removeStageFromPipeline(pipeline, stageIndex) {
@@ -511,6 +618,62 @@ function removeStageFromPipeline(pipeline, stageIndex) {
   }
   pipeline.stages.splice(stageIndex, 1);
   pipeline.stages.forEach((stage, idx) => (stage.order = idx));
+}
+
+function resetStageDrag() {
+  stageDragSourceIndex.value = null;
+  stageDragOverIndex.value = null;
+}
+
+function onStageDragStart(stageIndex, event) {
+  stageDragSourceIndex.value = stageIndex;
+  stageDragOverIndex.value = stageIndex;
+  if (event?.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(stageIndex));
+  }
+}
+
+function onStageDragOver(stageIndex) {
+  stageDragOverIndex.value = stageIndex;
+}
+
+function onStageDrop(stageIndex) {
+  const pipeline = currentPipeline.value;
+  if (!pipeline?.stages?.length) {
+    resetStageDrag();
+    return;
+  }
+  const from = stageDragSourceIndex.value;
+  if (from === null) {
+    resetStageDrag();
+    return;
+  }
+  let to = stageIndex;
+  if (to > pipeline.stages.length) to = pipeline.stages.length;
+  if (from === to) {
+    resetStageDrag();
+    return;
+  }
+  const [stage] = pipeline.stages.splice(from, 1);
+  if (from < to) to -= 1;
+  pipeline.stages.splice(to, 0, stage);
+  pipeline.stages.forEach((s, idx) => (s.order = idx));
+  resetStageDrag();
+}
+
+function onStageListDragOver() {
+  if (currentPipeline.value?.stages?.length != null) {
+    stageDragOverIndex.value = currentPipeline.value.stages.length;
+  }
+}
+
+function onStageListDrop() {
+  if (!currentPipeline.value?.stages?.length) {
+    resetStageDrag();
+    return;
+  }
+  onStageDrop(currentPipeline.value.stages.length);
 }
 
 function clampStageProbability(stage) {

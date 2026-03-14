@@ -75,7 +75,7 @@
                           <DynamicForm
                             v-else
                             :moduleKey="moduleKey"
-                            :moduleOverride="moduleOverrideFromSettings"
+                            :moduleOverride="effectiveModuleOverrideForDrawer"
                             :formData="formData"
                             :errors="errors"
                             :excludeFields="effectiveExcludeFields"
@@ -224,7 +224,7 @@ const effectiveQuickCreateMode = computed(() => {
   if (isEditing.value) return false;
   if (props.quickCreateMode) return true;
   // Default to Quick Create Mode for these modules (drawer follows Settings)
-  const useQuickCreateByDefault = ['organizations', 'tasks', 'items'];
+  const useQuickCreateByDefault = ['organizations', 'tasks', 'items', 'deals'];
   return useQuickCreateByDefault.includes(props.moduleKey?.toLowerCase());
 });
 
@@ -298,6 +298,38 @@ const initialSnapshot = ref({});
 // Module definition fetched when drawer opens so Quick Create fields come from Settings
 const moduleOverrideFromSettings = ref(null);
 const moduleOverrideLoading = ref(false);
+
+// For deals: stage options must come from the selected pipeline only (not default pipeline).
+// Return a stable reference when pipeline and module are unchanged to avoid recursive updates
+// (DynamicForm re-applies on override change -> ready -> initializeForm -> formData -> computed -> loop).
+const dealOverrideCache = { mod: null, pipelineKey: undefined, result: null };
+const effectiveModuleOverrideForDrawer = computed(() => {
+  const mod = moduleOverrideFromSettings.value;
+  if (!mod || props.moduleKey?.toLowerCase() !== 'deals') return mod;
+  const pipelineSettings = mod.pipelineSettings;
+  const pipelineKey = formData.value?.pipeline;
+  if (!Array.isArray(pipelineSettings) || pipelineSettings.length === 0) return mod;
+  // Return cached override when module and pipeline key are unchanged
+  if (dealOverrideCache.mod === mod && dealOverrideCache.pipelineKey === pipelineKey && dealOverrideCache.result)
+    return dealOverrideCache.result;
+  const pipeline = pipelineKey
+    ? pipelineSettings.find((p) => String(p?.key ?? '').trim() === String(pipelineKey).trim())
+    : null;
+  const stages = pipeline?.stages ?? [];
+  const stageOptions = stages.map((s) => {
+    const name = (s?.name ?? '').trim();
+    return name ? { value: name, label: name, color: (s.color && /^#[0-9A-Fa-f]{6}$/.test(String(s.color).trim())) ? String(s.color).trim() : null } : null;
+  }).filter(Boolean);
+  const fields = (mod.fields || []).map((f) => {
+    if ((f?.key || '').toString().toLowerCase() !== 'stage') return f;
+    return { ...f, options: stageOptions };
+  });
+  const result = { ...mod, fields };
+  dealOverrideCache.mod = mod;
+  dealOverrideCache.pipelineKey = pipelineKey;
+  dealOverrideCache.result = result;
+  return result;
+});
 
 // Deal relationship editor state (when moduleKey=deals)
 const relationshipEditorRef = ref(null);
@@ -443,11 +475,14 @@ const initializeForm = (module) => {
 };
 
 const onFormReady = (module) => {
-  // Store module definition for validation
-  if (module) {
-    moduleDefinition.value = module;
+  if (!module) return;
+  // Only initialize form on first load (when we don't have a module yet). For deals, the override
+  // is updated when pipeline changes (to show the right stage options); re-initializing would reset
+  // the user's pipeline selection.
+  const isFirstLoad = !moduleDefinition.value;
+  moduleDefinition.value = module;
+  if (isFirstLoad) {
     initializeForm(module);
-    // Capture initial snapshot after initialization
     initialSnapshot.value = JSON.parse(JSON.stringify(formData.value || {}));
   }
 };
@@ -472,6 +507,9 @@ watch(() => [props.isOpen, props.moduleKey], ([open, key]) => {
     fetchModuleForDrawer();
   } else {
     moduleOverrideFromSettings.value = null;
+    dealOverrideCache.mod = null;
+    dealOverrideCache.pipelineKey = undefined;
+    dealOverrideCache.result = null;
   }
 }, { immediate: true });
 
@@ -499,6 +537,41 @@ watch(() => [props.isOpen, props.moduleKey], async ([open, key]) => {
     dealOrgList.value = [];
   }
 }, { immediate: true });
+
+// Deals: when a pipeline is selected, auto-select the first stage in that pipeline
+watch(() => formData.value?.pipeline, (newPipelineKey) => {
+  if (props.moduleKey?.toLowerCase() !== 'deals' || !newPipelineKey) return;
+  const mod = moduleOverrideFromSettings.value;
+  if (!mod?.pipelineSettings?.length) return;
+  const pipeline = mod.pipelineSettings.find(
+    (p) => String(p?.key ?? '').trim() === String(newPipelineKey).trim()
+  );
+  if (!pipeline?.stages?.length) return;
+  const first = pipeline.stages[0];
+  const firstStageName = (first?.name ?? '').trim() || 'New';
+  const prob = first?.probability ?? 0;
+  if (formData.value?.stage !== firstStageName || formData.value?.probability !== prob) {
+    formData.value = { ...formData.value, stage: firstStageName, probability: prob };
+  }
+});
+
+// Deals: when the stage is selected, set probability from the pipeline's stage config
+watch(() => formData.value?.stage, (newStage) => {
+  if (props.moduleKey?.toLowerCase() !== 'deals' || !newStage || !formData.value?.pipeline) return;
+  const mod = moduleOverrideFromSettings.value;
+  if (!mod?.pipelineSettings?.length) return;
+  const pipeline = mod.pipelineSettings.find(
+    (p) => String(p?.key ?? '').trim() === String(formData.value.pipeline).trim()
+  );
+  if (!pipeline?.stages?.length) return;
+  const stageName = String(newStage).trim();
+  const stageConfig = pipeline.stages.find((s) => (s?.name ?? '').trim() === stageName);
+  if (stageConfig == null) return;
+  const prob = typeof stageConfig.probability === 'number' ? stageConfig.probability : (stageConfig.probability ?? 0);
+  if (formData.value?.probability !== prob) {
+    formData.value = { ...formData.value, probability: prob };
+  }
+});
 
 // Watch for form data changes and clear errors for fields that are now valid
 watch(() => formData.value, (newFormData, oldFormData) => {

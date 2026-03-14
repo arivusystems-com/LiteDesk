@@ -2,6 +2,7 @@
   <span
     ref="triggerRef"
     class="inline-flex"
+    v-bind="$attrs"
     @mouseenter="handleShow"
     @mouseleave="handleHide"
   >
@@ -32,6 +33,8 @@
 <script setup>
 import { ref, computed, watch, onUnmounted } from 'vue';
 import { Teleport } from 'vue';
+
+defineOptions({ inheritAttrs: false });
 
 const props = defineProps({
   /** Tooltip text (used when no content slot) */

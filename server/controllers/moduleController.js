@@ -1419,11 +1419,25 @@ function buildPipelineStage(name, { order = 0, probability = 0, status = 'open',
     };
 }
 
+/** True if pipelineSettings is the legacy default (one pipeline: default_pipeline / "Default Pipeline" without "New" stage). */
+function isLegacyDefaultPipelineSettings(pipelineSettings) {
+    if (!Array.isArray(pipelineSettings) || pipelineSettings.length !== 1) return false;
+    const p = pipelineSettings[0];
+    const key = (p && p.key || '').toString().trim().toLowerCase().replace(/-/g, '_');
+    const name = (p && p.name || '').toString().trim();
+    const isLegacyKey = key === 'default_pipeline';
+    const isLegacyName = name === 'Default Pipeline';
+    if (!isLegacyKey && !isLegacyName) return false;
+    const stages = Array.isArray(p.stages) ? p.stages : [];
+    const firstStageName = (stages[0] && stages[0].name || '').toString().trim();
+    return firstStageName !== 'New';
+}
+
 function getDefaultPipelineSettings() {
     const now = new Date();
     return [{
-        key: 'default_pipeline',
-        name: 'Default Pipeline',
+        key: 'sales_pipeline',
+        name: 'Sales Pipeline',
         description: 'Standard sales pipeline',
         color: '#2563EB',
         isDefault: true,
@@ -1431,15 +1445,53 @@ function getDefaultPipelineSettings() {
         createdAt: now,
         updatedAt: now,
         stages: [
-            buildPipelineStage('Qualification', { order: 0, probability: 25, status: 'open' }),
-            buildPipelineStage('Proposal', { order: 1, probability: 50, status: 'open' }),
-            buildPipelineStage('Negotiation', { order: 2, probability: 70, status: 'open' }),
-            buildPipelineStage('Contract Sent', { order: 3, probability: 85, status: 'open' }),
-            buildPipelineStage('Closed Won', { order: 4, probability: 100, status: 'won' }),
-            buildPipelineStage('Closed Lost', { order: 5, probability: 0, status: 'lost' })
+            buildPipelineStage('New', { order: 0, probability: 0, status: 'open' }),
+            buildPipelineStage('Qualification', { order: 1, probability: 25, status: 'open' }),
+            buildPipelineStage('Proposal', { order: 2, probability: 50, status: 'open' }),
+            buildPipelineStage('Negotiation', { order: 3, probability: 70, status: 'open' }),
+            buildPipelineStage('Contract Sent', { order: 4, probability: 85, status: 'open' }),
+            buildPipelineStage('Closed Won', { order: 5, probability: 100, status: 'won' }),
+            buildPipelineStage('Closed Lost', { order: 6, probability: 0, status: 'lost' })
         ]
     }];
 }
+
+/**
+ * Enrich deals module fields so pipeline and stage options come only from pipelineSettings (Settings).
+ * Used when returning the deals module so forms and lists use settings-driven options only.
+ */
+function enrichDealFieldsWithPipelineSettings(fields, pipelineSettings) {
+    if (!Array.isArray(fields) || !Array.isArray(pipelineSettings)) return fields;
+    const pipelines = pipelineSettings;
+    const defaultPipeline = pipelines.find((p) => p.isDefault) || pipelines[0];
+    const defaultStages = defaultPipeline && Array.isArray(defaultPipeline.stages) ? defaultPipeline.stages : [];
+
+    const pipelineOptions = pipelines.map((p) => ({
+        value: p.key,
+        label: p.name || p.key
+    }));
+    const stageOptions = defaultStages.map((s) => ({
+        value: s.name,
+        label: s.name,
+        color: s.color || null
+    }));
+
+    const defaultPipelineKey = defaultPipeline ? (defaultPipeline.key || pipelineOptions[0]?.value) : null;
+    const defaultStageName = defaultStages.length ? (defaultStages[0].name || 'New') : 'New';
+
+    return fields.map((f) => {
+        const key = (f.key || '').toString().trim().toLowerCase();
+        if (key === 'pipeline') {
+            return { ...f, options: pipelineOptions, defaultValue: defaultPipelineKey, required: true };
+        }
+        if (key === 'stage') {
+            return { ...f, options: stageOptions, defaultValue: defaultStageName };
+        }
+        return f;
+    });
+}
+
+const DEFAULT_STAGE_COLORS = ['#6B7280', '#3B82F6', '#8B5CF6', '#06B6D4', '#10B981', '#F59E0B', '#EF4444'];
 
 function normalizePipelineSettings(pipelines = []) {
     const source = Array.isArray(pipelines) ? pipelines : [];
@@ -1456,6 +1508,8 @@ function normalizePipelineSettings(pipelines = []) {
                 : status === 'lost'
                     ? 0
                     : Math.min(100, Math.max(0, Number(stage.probability) || 0));
+            const validColor = (stage.color && /^#[0-9A-Fa-f]{6}$/.test(String(stage.color).trim())) ? String(stage.color).trim() : null;
+            const color = validColor || DEFAULT_STAGE_COLORS[stageIndex % DEFAULT_STAGE_COLORS.length] || '#6B7280';
             return {
                 key: keyCandidate,
                 name: stageName,
@@ -1465,7 +1519,8 @@ function normalizePipelineSettings(pipelines = []) {
                 order: stageIndex,
                 isClosedWon: status === 'won',
                 isClosedLost: status === 'lost',
-                playbook: buildStagePlaybook(keyCandidate, stageName, status, stage.playbook)
+                playbook: buildStagePlaybook(keyCandidate, stageName, status, stage.playbook),
+                color
             };
         });
 
@@ -2351,7 +2406,7 @@ exports.listModules = async (req, res) => {
                     ? JSON.parse(JSON.stringify(override.pipelineSettings))
                     : JSON.parse(JSON.stringify(sys.pipelineSettings || []));
                 if (sys.key === 'deals') {
-                    if (pipelineSettings.length === 0) {
+                    if (pipelineSettings.length === 0 || isLegacyDefaultPipelineSettings(pipelineSettings)) {
                         pipelineSettings = getDefaultPipelineSettings();
                     }
                     pipelineSettings = normalizePipelineSettings(pipelineSettings);
@@ -2399,6 +2454,12 @@ exports.listModules = async (req, res) => {
                 if (sys.key === 'items' && (!finalQuickCreate || finalQuickCreate.length === 0)) {
                     finalQuickCreate = ['item_name', 'item_type', 'category', 'selling_price'];
                     console.log('📋 Items: Applying canonical default Quick Create:', finalQuickCreate);
+                }
+                // ARCHITECTURE NOTE: Deals Quick Create default: name, amount, stage, expectedCloseDate, ownerId
+                // See: client/src/platform/fields/dealFieldModel.ts getDealQuickCreateFields()
+                if (sys.key === 'deals' && (!finalQuickCreate || finalQuickCreate.length === 0)) {
+                    finalQuickCreate = ['name', 'amount', 'stage', 'expectedCloseDate', 'ownerId'];
+                    console.log('📋 Deals: Applying canonical default Quick Create:', finalQuickCreate);
                 }
                 
                 console.log('✅ Final quickCreate:', {
@@ -2627,6 +2688,9 @@ exports.listModules = async (req, res) => {
                 
                 let finalFields = sys.key === 'tasks' ? normalizeTasksModuleFields(saved) : saved;
                 if (sys.key === 'tasks') finalFields = dedupeFieldsByKey(finalFields);
+                if (sys.key === 'deals') {
+                    finalFields = enrichDealFieldsWithPipelineSettings(finalFields, pipelineSettings);
+                }
                 merged.push({ 
                     ...sys, 
                     fields: finalFields,
@@ -2687,19 +2751,35 @@ exports.listModules = async (req, res) => {
                 if (sys.key === 'items') {
                     defaultQuickCreate = ['item_name', 'item_type', 'category', 'selling_price'];
                 }
+                // ARCHITECTURE NOTE: Deals Quick Create default: name, amount, stage, expectedCloseDate, ownerId
+                // See: client/src/platform/fields/dealFieldModel.ts getDealQuickCreateFields()
+                if (sys.key === 'deals') {
+                    defaultQuickCreate = ['name', 'amount', 'stage', 'expectedCloseDate', 'ownerId'];
+                }
 
                 let taskFields = sys.key === 'tasks' ? normalizeTasksModuleFields(withOrder) : withOrder;
                 if (sys.key === 'tasks') taskFields = dedupeFieldsByKey(taskFields);
+                let dealPipelineSettings = [];
+                if (sys.key === 'deals') {
+                    const raw = JSON.parse(JSON.stringify(sys.pipelineSettings || []));
+                    const toNormalize = (raw.length === 0 || isLegacyDefaultPipelineSettings(raw))
+                        ? getDefaultPipelineSettings()
+                        : raw;
+                    dealPipelineSettings = normalizePipelineSettings(toNormalize);
+                }
+                const fieldsToPush = sys.key === 'deals'
+                    ? enrichDealFieldsWithPipelineSettings(taskFields, dealPipelineSettings)
+                    : taskFields;
                 merged.push({ 
                     ...sys, 
-                    fields: taskFields,
+                    fields: fieldsToPush,
                     quickCreate: defaultQuickCreate,
                     quickCreateLayout: { version: 1, rows: [] },
                     relationships: sys.relationships || [],
                     // Phase 17: Include default notification metadata
                     notifications: sys.notifications || getDefaultNotificationMetadata(sys.key),
                     pipelineSettings: sys.key === 'deals'
-                        ? normalizePipelineSettings(JSON.parse(JSON.stringify(sys.pipelineSettings || [])))
+                        ? dealPipelineSettings
                         : JSON.parse(JSON.stringify(sys.pipelineSettings || []))
                 });
             }
@@ -2806,12 +2886,22 @@ exports.createModule = async (req, res) => {
         if (!key || !name) {
             return res.status(400).json({ success: false, message: 'key and name are required' });
         }
+        const keyStr = String(key).toLowerCase().trim();
+        const nameStr = String(name).trim();
+        const label = nameStr || keyStr.charAt(0).toUpperCase() + keyStr.slice(1);
+        const pluralLabel = label + (label.endsWith('s') ? '' : 's');
         const doc = await ModuleDefinition.create({
             organizationId: req.user.organizationId,
-            key: String(key).toLowerCase().trim(),
-            name: String(name).trim(),
+            key: keyStr,
+            name: nameStr,
             type: 'custom',
-            fields: Array.isArray(fields) ? fields : []
+            fields: Array.isArray(fields) ? fields : [],
+            // Required schema fields (tenant docs still need these for Mongoose validation)
+            moduleKey: keyStr,
+            appKey: 'platform',
+            label,
+            pluralLabel,
+            entityType: 'TRANSACTION'
         });
         res.status(201).json({ success: true, data: doc });
     } catch (error) {
@@ -3875,3 +3965,6 @@ exports.updateSystemModule = async (req, res) => {
         res.status(500).json({ success: false, message: 'Error updating system module', error: error.message });
     }
 };
+
+/** Used by dealController to assign default pipeline/stage when creating a deal without them. */
+exports.getDefaultPipelineSettings = getDefaultPipelineSettings;

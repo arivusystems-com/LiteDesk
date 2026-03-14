@@ -1337,6 +1337,7 @@ const buildTaskCommentResponse = (comment, currentUserId = null) => {
     likesCount: reactionSummary['👍'] || 0
   };
 };
+exports.buildTaskCommentResponse = buildTaskCommentResponse;
 
 const getTaskComments = async (req, res) => {
   try {
@@ -1926,5 +1927,6 @@ module.exports = {
   uploadTaskCommentAttachment,
   getTaskCustomFields,
   getDescriptionVersions,
-  restoreDescriptionVersion
+  restoreDescriptionVersion,
+  buildTaskCommentResponse
 };

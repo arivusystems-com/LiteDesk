@@ -11,6 +11,7 @@ import { getAppRegistry } from '@/utils/getAppRegistry';
 import { createPermissionSnapshot } from '@/types/permission-snapshot.types';
 import { useColorMode } from '@/composables/useColorMode';
 import AppSidebar from '@/components/AppSidebar.vue';
+import { initializeDynamicRoutes } from '@/router';
 import { Dialog, DialogPanel, TransitionChild, TransitionRoot, Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import { 
   Bars3Icon, 
@@ -171,10 +172,15 @@ watch(() => authStore.isAuthenticated, (isAuthenticated) => {
 // are now handled by GlobalSurfacesProvider in App.vue
 // This component can dispatch custom events if needed for UI triggers
 
-// Refresh sidebar when core module display names or config change (e.g. Settings → Module details)
-const onCoreModulesUpdated = () => {
+// Refresh sidebar and dynamic routes when modules change (e.g. Settings → Module details, or new custom module)
+const onCoreModulesUpdated = async () => {
   if (authStore.user && authStore.isAuthenticated) {
     buildSidebar();
+    try {
+      await initializeDynamicRoutes();
+    } catch (e) {
+      console.warn('[Nav] Failed to refresh dynamic routes:', e);
+    }
   }
 };
 

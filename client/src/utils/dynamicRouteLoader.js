@@ -59,19 +59,35 @@ function getViewComponentName(moduleKey, type) {
   return capitalized;
 }
 
+/** Known module keys with dedicated list views. Custom/unknown modules use GenericModule for list. */
+const KNOWN_MODULE_KEYS = new Set([
+  'people', 'contacts', 'organizations', 'deals', 'tasks', 'events', 'items', 'forms',
+  'imports', 'groups', 'responses'
+]);
+
 /**
- * Get lazy-loaded component for a route
- * Gracefully handles missing views
+ * Get lazy-loaded component for a route.
+ * - Detail routes: always use ModuleRecordPage so any new/custom module gets the standard record page.
+ * - List/Create routes: use dedicated view for known modules, GenericModule for custom/unknown.
  */
 function getLazyComponent(moduleKey, type) {
+  const normalizedKey = (moduleKey || '').toLowerCase();
+
+  if (type === 'detail') {
+    return () => import('@/pages/ModuleRecordPage.vue');
+  }
+
+  const useGeneric = !KNOWN_MODULE_KEYS.has(normalizedKey);
+  if (useGeneric) {
+    return () => import('@/views/GenericModule.vue');
+  }
+
   const componentName = getViewComponentName(moduleKey, type);
-  
   return () => {
     return import(`@/views/${componentName}.vue`)
       .catch(error => {
         console.warn(`[DynamicRouteLoader] View not found: ${componentName}.vue for module ${moduleKey} (${type})`, error);
-        // Return a fallback component that shows a message
-        return import('@/views/Dashboard.vue');
+        return import('@/views/GenericModule.vue');
       });
   };
 }

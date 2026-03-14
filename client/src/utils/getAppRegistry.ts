@@ -121,7 +121,16 @@ export async function getAppRegistry(): Promise<AppRegistry> {
     try {
       const entityModulesResponse = await apiClient('/ui/entities');
       if (entityModulesResponse.success && entityModulesResponse.data) {
-        const platformModules = entityModulesResponse.data.map((module: any) => ({
+        // Collect moduleKeys already registered in non-PLATFORM apps to avoid duplicates
+        const moduleKeysInApps = new Set<string>();
+        for (const app of Object.values(registry)) {
+          if (!app || app.appKey === 'PLATFORM') continue;
+          for (const m of app.modules || []) {
+            if (m.moduleKey) moduleKeysInApps.add(m.moduleKey);
+          }
+        }
+
+        const platformModulesRaw = entityModulesResponse.data.map((module: any) => ({
           moduleKey: module.moduleKey,
           label: module.label,
           route: module.routeBase || `/${module.moduleKey}`,
@@ -136,6 +145,11 @@ export async function getAppRegistry(): Promise<AppRegistry> {
           coreEntity: module.coreEntity || false,
           list: module.list || undefined,
         }));
+
+        // Exclude any entity module that already exists in another app (e.g. deal-insights in SALES and platform)
+        const platformModules = platformModulesRaw.filter(
+          (m: { moduleKey: string }) => !moduleKeysInApps.has(m.moduleKey)
+        );
 
         // Add platform modules to a special 'PLATFORM' entry in registry
         // This allows collectAllModules to find them for the Entities section

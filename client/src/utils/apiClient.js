@@ -86,6 +86,17 @@ apiClient.get = (url, options = {}) => {
     return apiClient(url, { ...options, method: 'GET' });
 };
 
+/**
+ * GET that returns null on 404 or 403 instead of throwing.
+ * Use when the missing/forbidden case is expected (e.g. enriching related records that may be deleted or inaccessible).
+ */
+apiClient.getOptional = (url, options = {}) => {
+    return apiClient(url, { ...options, method: 'GET' }).catch((err) => {
+        if (err?.status === 404 || err?.status === 403) return null;
+        throw err;
+    });
+};
+
 apiClient.post = (url, data, options = {}) => {
     return apiClient(url, { ...options, method: 'POST', body: JSON.stringify(data) });
 };

@@ -20,7 +20,10 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
           </svg>
         </div>
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">{{ application?.name || 'Application Detail' }}</h2>
+        <div>
+          <h2 class="text-2xl font-bold text-gray-900 dark:text-white">{{ application?.name || 'Application Detail' }}</h2>
+          <p v-if="application?.description" class="mt-1 text-sm text-gray-600 dark:text-gray-400">{{ application.description }}</p>
+        </div>
       </div>
       <!-- Status Badge -->
       <div v-if="application" class="flex items-center gap-2">
@@ -72,14 +75,6 @@
 
     <!-- Application Details -->
     <div v-else-if="application" class="space-y-6">
-      <!-- Description -->
-      <div>
-        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Description</h3>
-        <p class="text-sm text-gray-600 dark:text-gray-400">
-          {{ application.description }}
-        </p>
-      </div>
-
       <!-- SECTION B: Configure Sales (Primary Actions) -->
       <div v-if="(application.status === 'ENABLED' || application.status === 'TRIAL') && isSalesApp" class="space-y-4">
         <div>
@@ -327,19 +322,19 @@ const PermissionsIcon = () => h('svg', { class: 'w-6 h-6', fill: 'none', stroke:
   h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' })
 ]);
 
-// Sales-owned configuration options
+// Sales-owned configuration options – Sales Modules first
 const salesConfigOptions = [
+  {
+    id: 'schema',
+    name: 'Sales Modules',
+    description: 'Configure Sales app modules, custom fields, and data structure',
+    icon: SchemaIcon
+  },
   {
     id: 'pipelines',
     name: 'Pipelines & Stages',
     description: 'Configure sales pipelines, deal stages, and workflow automation',
     icon: PipelineIcon
-  },
-  {
-    id: 'schema',
-    name: 'Deal Schema',
-    description: 'Configure custom fields and data structure for Deals',
-    icon: SchemaIcon
   },
   {
     id: 'automations',
