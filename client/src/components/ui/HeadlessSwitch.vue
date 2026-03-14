@@ -4,33 +4,35 @@
     type="button"
     :disabled="disabled"
     :model-value="resolvedChecked"
-    role="checkbox"
-    :aria-checked="indeterminate ? 'mixed' : String(resolvedChecked)"
-    data-headless-checkbox="true"
+    role="switch"
+    :aria-checked="String(resolvedChecked)"
+    data-headless-switch="true"
     :class="[
-      'inline-flex items-center justify-center transition-colors rounded border',
+      'inline-flex items-center justify-start rounded-full p-0.5 overflow-hidden flex-shrink-0 transition-colors',
       'focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-gray-900',
-      resolvedChecked || indeterminate
-        ? 'border-indigo-600 bg-indigo-600 text-white dark:border-indigo-500 dark:bg-indigo-500'
-        : 'border-gray-300 bg-white text-transparent dark:border-gray-600 dark:bg-gray-700',
+      resolvedChecked ? 'bg-indigo-600 dark:bg-indigo-500' : 'bg-gray-200 dark:bg-gray-700',
       disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
       sizeClass,
-      checkboxClass
+      switchClass
     ]"
     @update:modelValue="handleToggle"
     @focus="(e) => emit('focus', e)"
     @blur="(e) => emit('blur', e)"
     @click="(e) => emit('click', e)"
   >
-    <MinusIcon v-if="indeterminate" class="h-3 w-3" aria-hidden="true" />
-    <CheckIcon v-else class="h-3 w-3" aria-hidden="true" />
+    <span
+      :class="[
+        'block flex-shrink-0 self-center rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200',
+        thumbClass,
+        resolvedChecked ? thumbOnClass : thumbOffClass
+      ]"
+    />
   </Switch>
 </template>
 
 <script setup>
 import { computed } from 'vue';
 import { Switch } from '@headlessui/vue';
-import { CheckIcon, MinusIcon } from '@heroicons/vue/20/solid';
 
 const props = defineProps({
   modelValue: {
@@ -45,15 +47,11 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
-  indeterminate: {
-    type: Boolean,
-    default: false
-  },
   size: {
     type: String,
     default: 'md'
   },
-  checkboxClass: {
+  switchClass: {
     type: [String, Array, Object],
     default: ''
   }
@@ -68,10 +66,24 @@ const resolvedChecked = computed(() => {
 });
 
 const sizeClass = computed(() => {
-  if (props.size === 'sm') return 'h-3.5 w-3.5';
-  if (props.size === 'lg') return 'h-5 w-5';
+  if (props.size === 'sm') return 'h-4 w-8';
+  if (props.size === 'lg') return 'h-7 w-12';
+  return 'h-5 w-9';
+});
+
+const thumbClass = computed(() => {
+  if (props.size === 'sm') return 'h-3 w-3';
+  if (props.size === 'lg') return 'h-6 w-6';
   return 'h-4 w-4';
 });
+
+const thumbOnClass = computed(() => {
+  if (props.size === 'sm') return 'translate-x-4';
+  if (props.size === 'lg') return 'translate-x-5';
+  return 'translate-x-4';
+});
+
+const thumbOffClass = computed(() => 'translate-x-0');
 
 function createChangeEvent(checked) {
   let defaultPrevented = false;

@@ -335,8 +335,23 @@ const filterByOwnership = (module) => {
     };
 };
 
+/**
+ * Permission check using module key from route params (e.g. for /:moduleKey/records/:recordId).
+ * Usage: checkPermissionFromParam('moduleKey', 'view')
+ */
+const checkPermissionFromParam = (paramName, action) => {
+    return (req, res, next) => {
+        const moduleKey = req.params[paramName];
+        if (!moduleKey) {
+            return res.status(400).json({ message: 'Module key is required', code: 'MISSING_MODULE_KEY' });
+        }
+        return checkPermission(moduleKey, action)(req, res, next);
+    };
+};
+
 module.exports = {
     checkPermission,
+    checkPermissionFromParam,
     requireRole,
     requireAdmin,
     requireOwner,

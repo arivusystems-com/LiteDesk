@@ -2638,32 +2638,31 @@ const getRelatedRecordMeta = (type, record) => {
   return '';
 };
 
-const RELATED_DETAIL_ENDPOINTS = {
-  events: '/events',
-  deals: '/deals',
-  forms: '/forms'
-};
+// Batch-enrich related records via POST /api/modules/:moduleKey/records/batch.
+// Returns only records that exist; missing/inaccessible IDs are left as stubs (no 404s).
+const BATCH_ENRICH_MODULES = ['events', 'deals', 'forms'];
 
 const enrichRelatedRecords = async (moduleKey, rows) => {
   if (!Array.isArray(rows) || rows.length === 0) return [];
-  const endpoint = RELATED_DETAIL_ENDPOINTS[moduleKey];
-  if (!endpoint) return rows;
+  if (!BATCH_ENRICH_MODULES.includes(moduleKey)) return rows;
 
-  const enriched = await Promise.all(rows.map(async (row) => {
-    const id = getRelatedRecordId(row);
-    if (!id) return row;
+  const ids = rows.map((row) => getRelatedRecordId(row)).filter(Boolean);
+  if (ids.length === 0) return rows;
 
-    try {
-      const detailRes = await apiClient.get(`${endpoint}/${id}`);
-      const detail = detailRes?.success ? detailRes.data : null;
-      if (!detail) return row;
-      return { ...row, ...detail, _id: id };
-    } catch {
-      return row;
-    }
-  }));
+  try {
+    const res = await apiClient.post(`/modules/${moduleKey}/records/batch`, { ids });
+    const data = res?.success && Array.isArray(res.data) ? res.data : [];
+    const byId = new Map(data.map((r) => [String(r._id), r]));
 
-  return enriched;
+    return rows.map((row) => {
+      const id = getRelatedRecordId(row);
+      const record = id ? byId.get(String(id)) : null;
+      if (!record) return row;
+      return { ...row, ...record, _id: id };
+    });
+  } catch {
+    return rows;
+  }
 };
 
 // Combined activity events (comments + timeline + email threads) sorted chronologically (oldest first, newest at bottom)

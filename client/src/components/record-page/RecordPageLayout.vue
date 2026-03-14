@@ -36,26 +36,22 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, nextTick, ref, provide, computed } from 'vue';
+import { onMounted, onUpdated, onUnmounted, nextTick, ref, provide, computed } from 'vue';
 
 /**
  * RecordPageLayout – global record page structure.
  * Top: header slot. Main: two columns (left = record content, right = context panel).
- * Related records are composed at bottom of left column by parent.
- * The right slot is a full-height context panel container (typically RecordContextPanel).
- * No business logic. Responsive stacking only.
- *
- * On tablet/mobile (< 1024px), the left column is hidden and its content is shown
- * as a "Summary" tab in the right pane – unless leftExpanded is true (e.g. version history),
- * in which case the left column is shown full-screen and the right pane is hidden by the parent.
+ * All layout CSS variables are set on the layout root so they are scoped and never stale.
  */
 
 const props = defineProps({
-  /** When true, left column is shown full-screen even on mobile/tablet (e.g. description version history). */
   leftExpanded: { type: Boolean, default: false },
-  /** When true, force mobile layout (left hidden, Summary tab in right pane) - e.g. for embed in QuickPreviewDrawer */
   forceMobile: { type: Boolean, default: false }
 });
+
+const MOBILE_BREAKPOINT = 1024;
+const TABLET_MIN_WIDTH = 768;
+const DEFAULT_HEADER_HEIGHT_PX = 72;
 
 const allowTransition = ref(false);
 const leftEl = ref(null);
@@ -64,14 +60,10 @@ const leftScrolling = ref(false);
 let leftScrollHideTimer = null;
 const SCROLL_HIDE_DELAY = 800;
 
-// Mobile detection (< 1024px matches lg: breakpoint)
-const MOBILE_BREAKPOINT = 1024;
-const TABLET_MIN_WIDTH = 768;
-const windowIsMobile = ref(window.innerWidth < MOBILE_BREAKPOINT);
+const windowIsMobile = ref(typeof window !== 'undefined' && window.innerWidth < MOBILE_BREAKPOINT);
 const isMobile = computed(() => props.forceMobile || windowIsMobile.value);
 const summaryTeleportReady = ref(false);
 
-// Provide isMobile to child components (RecordRightPane) - must be ref-like for inject
 provide('recordLayoutIsMobile', computed(() => isMobile.value));
 provide('recordLayoutSummaryTeleportReady', summaryTeleportReady);
 
@@ -84,115 +76,130 @@ function showLeftScrollbar() {
   }, SCROLL_HIDE_DELAY);
 }
 
-function onLeftScroll() {
-  showLeftScrollbar();
-}
+function onLeftScroll() { showLeftScrollbar(); }
+function onLeftWheel() { showLeftScrollbar(); }
 
-function onLeftWheel() {
-  showLeftScrollbar();
-}
-let updateHeaderHeight = null;
-let updateHeaderPosition = null;
+// --- Layout: single source of truth, variables scoped to layout root ---
 let resizeHandler = null;
 let sidebarToggleHandler = null;
+let headerResizeObserver = null;
+let layoutMutationObserver = null;
+let visibilityHandler = null;
+let rafId = null;
+
+function applyLayout() {
+  const root = layoutRootRef.value;
+  if (!root || props.forceMobile) return;
+
+  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
+  const isMobileView = viewportWidth < MOBILE_BREAKPOINT;
+  const mobileTopNavHeight = 64;
+  const tabBarHeight = 48;
+  const isTabletView = isMobileView && viewportWidth >= TABLET_MIN_WIDTH;
+  const tabBarTopOffset = isMobileView
+    ? (isTabletView ? mobileTopNavHeight + tabBarHeight : mobileTopNavHeight)
+    : tabBarHeight;
+
+  let sidebarWidth = 0;
+  let leftOffset = 0;
+  if (!isMobileView && typeof localStorage !== 'undefined') {
+    const collapsed = localStorage.getItem('litedesk-sidebar-collapsed') === 'true';
+    sidebarWidth = collapsed ? 80 : 256;
+    leftOffset = sidebarWidth;
+  }
+
+  const headerEl = root.querySelector('.record-page-layout__header');
+  const headerHeightPx = headerEl ? headerEl.offsetHeight : DEFAULT_HEADER_HEIGHT_PX;
+
+  root.style.setProperty('--tabbar-height', `${tabBarTopOffset}px`);
+  root.style.setProperty('--sidebar-width', `${sidebarWidth}px`);
+  root.style.setProperty('--header-top', `${tabBarTopOffset}px`);
+  root.style.setProperty('--header-left', `${leftOffset}px`);
+  root.style.setProperty('--body-left', `${leftOffset}px`);
+  root.style.setProperty('--header-height', `${headerHeightPx}px`);
+}
+
+function scheduleLayout() {
+  if (rafId !== null) cancelAnimationFrame(rafId);
+  rafId = requestAnimationFrame(() => {
+    rafId = null;
+    applyLayout();
+  });
+}
+
+function observeHeaderWhenPresent() {
+  const root = layoutRootRef.value;
+  if (!root || !headerResizeObserver) return;
+  const header = root.querySelector('.record-page-layout__header');
+  if (header) {
+    try {
+      headerResizeObserver.observe(header);
+    } catch (_) { /* already observed */ }
+  }
+}
 
 onMounted(async () => {
   await nextTick();
   const el = leftEl.value;
   if (el) el.addEventListener('touchstart', showLeftScrollbar, { passive: true });
 
-  if (!props.forceMobile) {
-    // Disable overflow on parent content wrapper to prevent body scroll
-    // Find the parent content wrapper that contains RouterView
-    const recordPageElement = layoutRootRef.value;
-    if (recordPageElement) {
-      let parent = recordPageElement.parentElement;
-      // Traverse up to find the content wrapper with overflow-y-auto
-      while (parent && parent !== document.body) {
-        if (parent.classList.contains('overflow-y-auto') || 
-            getComputedStyle(parent).overflowY === 'auto' ||
-            getComputedStyle(parent).overflowY === 'scroll') {
-          parent.classList.add('record-page-parent-no-scroll');
-          parent.style.overflowY = 'hidden';
-          break;
-        }
-        parent = parent.parentElement;
+  if (props.forceMobile) return;
+
+  const root = layoutRootRef.value;
+  if (root) {
+    let parent = root.parentElement;
+    while (parent && parent !== document.body) {
+      const oy = getComputedStyle(parent).overflowY;
+      if (oy === 'auto' || oy === 'scroll' || parent.classList.contains('overflow-y-auto')) {
+        parent.classList.add('record-page-parent-no-scroll');
+        parent.style.overflowY = 'hidden';
+        break;
       }
+      parent = parent.parentElement;
     }
-
-    // Calculate header height dynamically
-    updateHeaderHeight = () => {
-      const header = layoutRootRef.value?.querySelector('.record-page-layout__header');
-      if (header) {
-        const height = header.offsetHeight;
-        document.documentElement.style.setProperty('--header-height', `${height}px`);
-      } else {
-        // Default height if header not found
-        document.documentElement.style.setProperty('--header-height', '120px');
-      }
-    };
-
-    // Calculate header position (below TabBar and accounting for sidebar)
-    updateHeaderPosition = () => {
-      const header = layoutRootRef.value?.querySelector('.record-page-layout__header');
-      if (!header) return;
-
-      // Get TabBar height - TabBar uses h-12 which is 48px (3rem)
-      // On mobile it's at top-16 (64px), on desktop at top-0
-      const viewportWidth = window.innerWidth;
-      const isMobileView = viewportWidth < MOBILE_BREAKPOINT;
-      const mobileTopNavHeight = 64; // h-16 = 4rem = 64px
-      const tabBarHeight = 48; // h-12 = 3rem = 48px
-      // Phone: no tab bar in this layout, use navbar offset only.
-      // Tablet: tab bar is present below navbar, reserve both heights.
-      const isTabletView = isMobileView && viewportWidth >= TABLET_MIN_WIDTH;
-      const tabBarTopOffset = isMobileView
-        ? (isTabletView ? (mobileTopNavHeight + tabBarHeight) : mobileTopNavHeight)
-        : tabBarHeight;
-
-      // Get sidebar width from localStorage
-      let sidebarWidth = 0;
-      let leftOffset = 0;
-
-      if (!isMobileView) {
-        const sidebarCollapsed = localStorage.getItem('litedesk-sidebar-collapsed') === 'true';
-        sidebarWidth = sidebarCollapsed ? 80 : 256;
-        leftOffset = sidebarWidth;
-      }
-
-      // Set CSS variables for header and body positioning
-      document.documentElement.style.setProperty('--tabbar-height', `${tabBarTopOffset}px`);
-      document.documentElement.style.setProperty('--sidebar-width', `${sidebarWidth}px`);
-      document.documentElement.style.setProperty('--header-top', `${tabBarTopOffset}px`);
-      document.documentElement.style.setProperty('--header-left', `${leftOffset}px`);
-      document.documentElement.style.setProperty('--body-left', `${leftOffset}px`);
-    };
-
-    // Initial setup without transition
-    updateHeaderHeight();
-    updateHeaderPosition();
-
-    // Enable transitions after initial positioning is complete
-    // Use a small delay to ensure initial position is set before enabling transitions
-    setTimeout(() => {
-      allowTransition.value = true;
-    }, 50);
-
-    resizeHandler = () => {
-      updateHeaderHeight();
-      updateHeaderPosition();
-      windowIsMobile.value = window.innerWidth < MOBILE_BREAKPOINT;
-    };
-    window.addEventListener('resize', resizeHandler);
-
-    // Listen for sidebar toggle events - transitions will be enabled by this point
-    sidebarToggleHandler = () => {
-      setTimeout(() => {
-        updateHeaderPosition();
-      }, 0); // Update immediately to sync with TabBar transition
-    };
-    window.addEventListener('sidebar-toggle', sidebarToggleHandler);
   }
+
+  applyLayout();
+  observeHeaderWhenPresent();
+
+  if (root && typeof ResizeObserver !== 'undefined') {
+    headerResizeObserver = new ResizeObserver(() => scheduleLayout());
+    nextTick(observeHeaderWhenPresent);
+  }
+
+  if (root && typeof MutationObserver !== 'undefined') {
+    layoutMutationObserver = new MutationObserver(() => scheduleLayout());
+    layoutMutationObserver.observe(root, { childList: true, subtree: true });
+  }
+
+  visibilityHandler = () => {
+    if (document.visibilityState === 'visible') scheduleLayout();
+  };
+  document.addEventListener('visibilitychange', visibilityHandler);
+
+  setTimeout(() => { allowTransition.value = true; }, 50);
+
+  resizeHandler = () => {
+    windowIsMobile.value = typeof window !== 'undefined' && window.innerWidth < MOBILE_BREAKPOINT;
+    applyLayout();
+  };
+  window.addEventListener('resize', resizeHandler);
+
+  sidebarToggleHandler = () => {
+    requestAnimationFrame(applyLayout);
+  };
+  window.addEventListener('sidebar-toggle', sidebarToggleHandler);
+
+  // Catch header appearing after async record load / prev-next
+  setTimeout(scheduleLayout, 0);
+  setTimeout(scheduleLayout, 150);
+  setTimeout(scheduleLayout, 400);
+});
+
+onUpdated(() => {
+  if (props.forceMobile) return;
+  scheduleLayout();
+  nextTick(observeHeaderWhenPresent);
 });
 
 onUnmounted(() => {
@@ -200,13 +207,17 @@ onUnmounted(() => {
   const el = leftEl.value;
   if (el) el.removeEventListener('touchstart', showLeftScrollbar);
 
-  // Restore overflow on parent content wrapper when component unmounts
+  if (rafId !== null) cancelAnimationFrame(rafId);
+  headerResizeObserver?.disconnect();
+  layoutMutationObserver?.disconnect();
+  if (visibilityHandler) document.removeEventListener('visibilitychange', visibilityHandler);
+
   const parentWithNoScroll = document.querySelector('.record-page-parent-no-scroll');
   if (parentWithNoScroll) {
     parentWithNoScroll.classList.remove('record-page-parent-no-scroll');
     parentWithNoScroll.style.overflowY = '';
   }
-  
+
   if (resizeHandler) window.removeEventListener('resize', resizeHandler);
   if (sidebarToggleHandler) window.removeEventListener('sidebar-toggle', sidebarToggleHandler);
 });

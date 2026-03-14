@@ -54,8 +54,11 @@
             <h3 class="text-base font-semibold text-gray-900 dark:text-white truncate">
               {{ module.name }}
             </h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+              {{ getModuleCounts(module.moduleKey).fields }} Fields · {{ getModuleCounts(module.moduleKey).relationships }} Relationships
+            </p>
             <p
-              v-if="module.description"
+              v-if="showModuleDescription(module)"
               class="text-sm text-gray-600 dark:text-gray-400 mt-0.5 line-clamp-2"
             >
               {{ module.description }}
@@ -67,7 +70,7 @@
         </div>
 
         <!-- Badges -->
-        <div class="flex flex-wrap gap-2 mb-4">
+        <div class="flex flex-wrap gap-2">
           <span
             v-if="module.platformOwned"
             class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
@@ -102,42 +105,6 @@
             </svg>
             Locked
           </span>
-        </div>
-
-        <!-- Applications Summary -->
-        <div class="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
-          <div v-if="module.applications && module.applications.length > 0">
-            <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-              {{ module.applications.length }} {{ module.applications.length === 1 ? 'application' : 'applications' }}
-            </p>
-            <div class="flex flex-wrap gap-1.5">
-              <span
-                v-for="app in module.applications.slice(0, 3)"
-                :key="app.appKey"
-                class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-gray-50 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300 border border-gray-200/60 dark:border-gray-600/60"
-              >
-                {{ app.appName }}
-                <span
-                  v-if="app.required"
-                  class="text-amber-600 dark:text-amber-400"
-                  title="Required"
-                >
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                </span>
-              </span>
-              <span
-                v-if="module.applications.length > 3"
-                class="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700/30"
-              >
-                +{{ module.applications.length - 3 }} more
-              </span>
-            </div>
-          </div>
-          <p v-else class="text-sm text-gray-500 dark:text-gray-400 italic">
-            Not used by any applications
-          </p>
         </div>
       </div>
     </div>
@@ -175,21 +142,32 @@ function getModuleIcon(moduleKey) {
   return moduleIconMap[key] || CubeIcon;
 }
 
+// Hide redundant "[Module name] - Shared platform capability" (section subtitle already states this)
+function showModuleDescription(module) {
+  if (!module.description || !module.name) return false;
+  const d = module.description.trim();
+  const redundant = `${module.name} - Shared platform capability`;
+  return d !== redundant && d.toLowerCase() !== redundant.toLowerCase();
+}
+
 const modules = ref([]);
 const loading = ref(true);
 const error = ref(null);
+// Counts from GET /modules (key -> { fields, relationships })
+const countsByKey = ref({});
 
 const fetchCoreModules = async () => {
   loading.value = true;
   error.value = null;
 
   try {
-    const data = await apiClient('/settings/core-modules', {
-      method: 'GET'
-    });
+    const [coreRes, modulesRes] = await Promise.all([
+      apiClient('/settings/core-modules', { method: 'GET' }),
+      apiClient.get('/modules').catch(() => ({ data: {} }))
+    ]);
 
+    const data = coreRes;
     if (data && data.modules) {
-      // Sort modules by order property (modules without order go to the end)
       modules.value = data.modules.sort((a, b) => {
         const orderA = a.order !== undefined ? a.order : 999;
         const orderB = b.order !== undefined ? b.order : 999;
@@ -198,6 +176,19 @@ const fetchCoreModules = async () => {
     } else {
       modules.value = [];
     }
+
+    // apiClient returns the response body: { success, data: modulesArray }
+    const list = Array.isArray(modulesRes?.data) ? modulesRes.data : [];
+    const map = {};
+    for (const m of list) {
+      const key = (m.key || m.moduleKey || '').toLowerCase();
+      if (!key) continue;
+      map[key] = {
+        fields: typeof m.fieldCount === 'number' ? m.fieldCount : (Array.isArray(m.fields) ? m.fields.length : 0),
+        relationships: Array.isArray(m.relationships) ? m.relationships.length : 0
+      };
+    }
+    countsByKey.value = map;
   } catch (err) {
     console.error('Failed to fetch core modules:', err);
     error.value = err;
@@ -206,6 +197,12 @@ const fetchCoreModules = async () => {
     loading.value = false;
   }
 };
+
+function getModuleCounts(moduleKey) {
+  const key = (moduleKey || '').toLowerCase();
+  const c = countsByKey.value[key];
+  return c ? { fields: c.fields, relationships: c.relationships } : { fields: 0, relationships: 0 };
+}
 
 const viewModuleDetail = (moduleKey) => {
   router.push(`/settings?tab=core-modules&moduleKey=${moduleKey}`);

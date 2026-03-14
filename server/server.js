@@ -146,6 +146,7 @@ const businessFlowRoutes = require('./routes/businessFlowRoutes');
 const businessFlowTemplateRoutes = require('./routes/businessFlowTemplateRoutes');
 const automationContextRoutes = require('./routes/automationContextRoutes');
 const trashRoutes = require('./routes/trashRoutes');
+const moduleRecordRoutes = require('./routes/moduleRecordRoutes');
 
 // Route Linking
 app.use('/api/auth', authRoutes);
@@ -189,6 +190,7 @@ app.use('/api/files', filesRoutes);
 app.use('/api/v2/organization', organizationV2Routes);
 const organizationSurfaceRoutes = require('./routes/organizationSurfaceRoutes');
 app.use('/api/organizations', organizationSurfaceRoutes);
+app.use('/api/modules', moduleRecordRoutes);
 app.use('/api/modules', moduleRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/public/forms', formRoutes); // Public form routes

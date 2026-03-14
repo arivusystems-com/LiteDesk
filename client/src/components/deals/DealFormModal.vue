@@ -65,12 +65,12 @@
               Pipeline
             </label>
             <select 
-              v-model="form.pipeline" 
+              v-model="form.pipeline"
               class="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all cursor-pointer"
             >
               <option :value="null">Select pipeline...</option>
-              <option v-for="pipeline in pipelines" :key="pipeline.key" :value="pipeline.key">
-                {{ pipeline.label }}
+              <option v-for="p in pipelines" :key="String(p.key)" :value="p.key">
+                {{ p.label }}
               </option>
             </select>
           </div>
@@ -83,24 +83,19 @@
                 <span class="ml-2 text-xs text-gray-500 dark:text-gray-400 font-normal">(Primary control)</span>
               </label>
               <select 
+                :key="'stage-' + (form.pipeline || 'none')"
                 v-model="form.stage" 
                 required
                 class="px-4 py-3 bg-white dark:bg-gray-800 border-2 border-indigo-500 dark:border-indigo-400 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all cursor-pointer font-medium"
               >
-                <!-- Config-driven stages (if config exists) -->
+                <!-- Stages from selected pipeline only -->
                 <template v-if="stages.length > 0">
                   <option v-for="stage in stages" :key="stage" :value="stage">
                     {{ stage }}
                   </option>
                 </template>
-                <!-- Legacy stages (fallback when no config) -->
                 <template v-else>
-                  <option value="Qualification">Qualification</option>
-                  <option value="Proposal">Proposal</option>
-                  <option value="Negotiation">Negotiation</option>
-                  <option value="Contract Sent">Contract Sent</option>
-                  <option value="Closed Won">Closed Won</option>
-                  <option value="Closed Lost">Closed Lost</option>
+                  <option value="" disabled>{{ pipelines.length && !form.pipeline ? 'Select a pipeline first' : 'Configure stages in Settings' }}</option>
                 </template>
               </select>
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -314,15 +309,24 @@ const saving = ref(false);
 const contacts = ref([]);
 const users = ref([]);
 const pipelines = ref([]);
-const stages = ref([]);
 const loadingConfig = ref(false);
+
+// Stages derived strictly from the selected pipeline (form.pipeline = pipeline key)
+const stages = computed(() => {
+  const pipelineKey = form.value.pipeline;
+  if (pipelineKey == null || pipelineKey === '' || !pipelines.value.length) return [];
+  const key = String(pipelineKey).trim();
+  const pipeline = pipelines.value.find((p) => String(p?.key ?? '').trim() === key);
+  if (!pipeline || !Array.isArray(pipeline.stages) || !pipeline.stages.length) return [];
+  return pipeline.stages.map((s) => (s.name || '').trim()).filter(Boolean);
+});
 
 const form = ref({
   name: '',
   amount: 0,
   expectedCloseDate: '',
-  stage: 'Qualification',
-  probability: 25,
+  stage: 'New',
+  probability: 0,
   type: '',
   priority: 'Medium',
   source: '',
@@ -402,35 +406,35 @@ const fetchUsers = async () => {
   }
 };
 
-// Fetch pipelines and stages from config registry (non-blocking)
+// Fetch pipelines and stages from Settings (deals module pipelineSettings only)
 const fetchPipelineConfig = async () => {
   try {
     loadingConfig.value = true;
-    const pipelinesData = await apiClient.get('/config-registry/pipelines', {
-      params: { appKey: 'SALES' }
-    });
-    
-    if (pipelinesData.success && pipelinesData.data && pipelinesData.data.length > 0) {
-      pipelines.value = pipelinesData.data;
-      
-      // If deal has a pipeline, fetch its stages
-      if (form.value.pipeline) {
-        const pipeline = pipelinesData.data.find(
-          (p) => p.key === form.value.pipeline || p.label === form.value.pipeline
-        );
-        if (pipeline) {
-          const stagesData = await apiClient.get(`/config-registry/pipelines/${pipeline.key}/stages`, {
-            params: { appKey: 'SALES' }
-          });
-          if (stagesData.success && stagesData.data) {
-            stages.value = stagesData.data.map((s) => s.sourceStatusValue).filter(Boolean);
-          }
-        }
-      }
+    const response = await apiClient.get('/modules', { params: { key: 'deals' } });
+    if (!response?.success || !Array.isArray(response.data) || !response.data[0]) return;
+    const mod = response.data[0];
+    const raw = mod.pipelineSettings || [];
+    if (raw.length === 0) {
+      pipelines.value = [];
+      return;
+    }
+    pipelines.value = raw.map((p) => ({
+      key: p.key,
+      label: p.name || p.key,
+      isDefault: p.isDefault === true,
+      stages: Array.isArray(p.stages) ? p.stages : []
+    }));
+    const defaultPipeline = pipelines.value.find((p) => p.isDefault) || pipelines.value[0];
+    // New deal: auto-select default pipeline so stage options are available (stages are computed from form.pipeline)
+    if (!props.deal && defaultPipeline && defaultPipeline.stages?.length) {
+      form.value.pipeline = defaultPipeline.key;
+      const firstStageName = (defaultPipeline.stages[0]?.name || '').trim() || 'New';
+      form.value.stage = firstStageName;
+      form.value.probability = defaultPipeline.stages[0]?.probability ?? 0;
     }
   } catch (error) {
     console.error('Error fetching pipeline config:', error);
-    // Non-blocking: continue with legacy behavior
+    pipelines.value = [];
   } finally {
     loadingConfig.value = false;
   }
@@ -477,24 +481,33 @@ onMounted(() => {
   fetchPipelineConfig();
 });
 
-// Watch pipeline changes to update stages
-watch(() => form.value.pipeline, async (newPipeline) => {
-  if (newPipeline && pipelines.value.length > 0) {
-    const pipeline = pipelines.value.find(
-      (p) => p.key === newPipeline || p.label === newPipeline
-    );
-    if (pipeline) {
-      try {
-        const stagesData = await apiClient.get(`/config-registry/pipelines/${pipeline.key}/stages`, {
-          params: { appKey: 'SALES' }
-        });
-        if (stagesData.success && stagesData.data) {
-          stages.value = stagesData.data.map((s) => s.sourceStatusValue).filter(Boolean);
-        }
-      } catch (error) {
-        console.error('Error fetching stages for pipeline:', error);
-      }
-    }
+// When a pipeline is selected, auto-select the first stage in that pipeline
+watch(() => form.value.pipeline, (newPipeline) => {
+  if (!newPipeline || !pipelines.value.length) return;
+  const pipeline = pipelines.value.find(
+    (p) => p.key === newPipeline || p.label === newPipeline
+  );
+  if (!pipeline?.stages?.length) return;
+  const firstStage = pipeline.stages[0];
+  form.value.stage = (firstStage?.name || '').trim() || 'New';
+  form.value.probability = firstStage?.probability ?? 0;
+});
+
+// When the stage is selected, set probability from the pipeline's stage config
+watch(() => form.value.stage, (newStage) => {
+  if (!newStage || !form.value.pipeline || !pipelines.value.length) return;
+  const pipeline = pipelines.value.find(
+    (p) => p.key === form.value.pipeline || p.label === form.value.pipeline
+  );
+  if (!pipeline?.stages?.length) return;
+  const stageName = (newStage || '').trim();
+  const stageConfig = pipeline.stages.find(
+    (s) => (s?.name ?? '').trim() === stageName
+  );
+  if (stageConfig != null && typeof stageConfig.probability === 'number') {
+    form.value.probability = stageConfig.probability;
+  } else if (stageConfig != null) {
+    form.value.probability = stageConfig?.probability ?? 0;
   }
 });
 </script>

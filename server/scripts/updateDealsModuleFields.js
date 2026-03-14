@@ -72,6 +72,7 @@ const baseFields = [
     key: 'pipeline',
     label: 'Pipeline',
     dataType: 'Picklist',
+    required: true,
     order: 2,
     options: makeOptions(['Default Pipeline', 'Enterprise Pipeline', 'SMB Pipeline', 'Channel Pipeline'])
   }),

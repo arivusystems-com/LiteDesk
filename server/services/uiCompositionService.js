@@ -199,6 +199,26 @@ class UICompositionService {
         tenantConfigMap[config.moduleKey] = config;
       });
 
+      // Display Name from Module details: org overrides use organizationId + key (no appKey), so query by key/moduleKey
+      const moduleKeysForApp = moduleDefinitions.map((m) => (m.moduleKey || '').toLowerCase()).filter(Boolean);
+      const orgDisplayNameByKey = {};
+      if (moduleKeysForApp.length > 0) {
+        const orgOverrides = await ModuleDefinition.find({
+          organizationId,
+          $or: [
+            { key: { $in: moduleKeysForApp } },
+            { moduleKey: { $in: moduleKeysForApp } }
+          ]
+        })
+          .select('key moduleKey name')
+          .lean();
+        orgOverrides.forEach((orgMod) => {
+          const key = (orgMod.moduleKey || orgMod.key || '').toLowerCase();
+          const name = typeof orgMod.name === 'string' ? orgMod.name.trim() : '';
+          if (key && name) orgDisplayNameByKey[key] = name;
+        });
+      }
+
       // Compose UI metadata for each enabled module
       const uiModules = [];
       const seenModuleKeys = new Set(); // Track seen moduleKeys to prevent duplicates
@@ -246,11 +266,17 @@ class UICompositionService {
           continue;
         }
 
+        // Display name: Module details "Display Name" (org) > tenant labelOverride > moduleDef.name > moduleDef.label
+        const displayName = orgDisplayNameByKey[moduleDef.moduleKey] ||
+          tenantConfig?.labelOverride ||
+          (typeof moduleDef.name === 'string' && moduleDef.name.trim()) ||
+          moduleDef.label;
+
         // Apply tenant overrides on top of platform metadata
         const uiModule = {
           moduleKey: moduleDef.moduleKey,
           appKey: moduleDef.appKey.toUpperCase(),
-          label: tenantConfig?.labelOverride || moduleDef.label,
+          label: displayName,
           pluralLabel: moduleDef.pluralLabel,
           routeBase: moduleDef.ui?.routeBase || `/${moduleDef.moduleKey}`,
           icon: moduleDef.ui?.icon,
@@ -260,8 +286,8 @@ class UICompositionService {
                        tenantConfig?.ui?.order ?? 
                        moduleDef.ui?.sidebarOrder ?? 
                        0,
-          createLabel: moduleDef.ui?.createLabel || `Create ${moduleDef.label}`,
-          listLabel: moduleDef.ui?.listLabel || `All ${moduleDef.pluralLabel}`,
+          createLabel: moduleDef.ui?.createLabel || `Create ${displayName}`,
+          listLabel: moduleDef.ui?.listLabel || `All ${moduleDef.pluralLabel || displayName}`,
           // Navigation intent flags (for four-section sidebar)
           navigationCore: moduleDef.ui?.navigationCore || false,
           navigationEntity: moduleDef.ui?.navigationEntity || false,
@@ -273,6 +299,43 @@ class UICompositionService {
 
         uiModules.push(uiModule);
         seenModuleKeys.add(moduleDef.moduleKey); // Mark as seen
+      }
+
+      // For Sales app: include custom modules (organization-scoped) in sidebar and app nav
+      if (appKeyLower === 'sales') {
+        const customModules = await ModuleDefinition.find({
+          organizationId,
+          type: 'custom',
+          enabled: { $ne: false }
+        })
+          .select('key moduleKey name label pluralLabel')
+          .lean();
+        for (const custom of customModules) {
+          const moduleKey = (custom.key || custom.moduleKey || '').toLowerCase();
+          if (!moduleKey || seenModuleKeys.has(moduleKey)) continue;
+          const displayName = (typeof custom.name === 'string' && custom.name.trim()) ||
+            custom.label ||
+            (moduleKey.charAt(0).toUpperCase() + moduleKey.slice(1));
+          uiModules.push({
+            moduleKey,
+            appKey: 'SALES',
+            label: displayName,
+            pluralLabel: custom.pluralLabel || displayName + 's',
+            routeBase: `/${moduleKey}`,
+            icon: 'cube',
+            showInSidebar: true,
+            sidebarOrder: 999,
+            createLabel: `Create ${displayName}`,
+            listLabel: `All ${custom.pluralLabel || displayName + 's'}`,
+            navigationCore: false,
+            navigationEntity: false,
+            excludeFromApps: false,
+            system: false,
+            coreEntity: false,
+            isCustom: true
+          });
+          seenModuleKeys.add(moduleKey);
+        }
       }
 
       // Sort by sidebarOrder

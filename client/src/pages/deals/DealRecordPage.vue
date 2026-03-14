@@ -1596,13 +1596,27 @@ const selectedDealContactId = computed(() => {
 
 const dealStageField = computed(() => dealStateFields.value.find((field) => field?.key === 'stage') || null);
 
+// Stage options only from the deal's pipeline — fully dependent on pipeline; no fallback to module field options
 const dealStageOptions = computed(() => {
-  const options = Array.isArray(dealStageField.value?.options) ? dealStageField.value.options : [];
-  return options.map((option) => ({
-    value: option?.value,
-    label: String(option?.label ?? option?.value ?? ''),
-    color: option?.color || null
-  })).filter((option) => option.value != null && option.label);
+  const pipelineSettings = dealModuleDefinition.value?.pipelineSettings;
+  const dealPipelineKey = deal.value?.pipeline;
+  if (!dealPipelineKey || !Array.isArray(pipelineSettings) || pipelineSettings.length === 0) {
+    return [];
+  }
+  const pipeline = pipelineSettings.find((p) => p.key === dealPipelineKey)
+    || pipelineSettings.find((p) => p.isDefault)
+    || pipelineSettings[0];
+  const pipelineStages = pipeline?.stages || [];
+  if (pipelineStages.length === 0) return [];
+  return pipelineStages.map((s) => {
+    const name = (s.name || '').trim();
+    if (!name) return null;
+    return {
+      value: name,
+      label: name,
+      color: (s.color && /^#[0-9A-Fa-f]{6}$/.test(String(s.color).trim())) ? String(s.color).trim() : null
+    };
+  }).filter(Boolean);
 });
 
 const canEditDealStage = computed(() => authStore.can('deals', 'edit') && dealStageOptions.value.length > 0);

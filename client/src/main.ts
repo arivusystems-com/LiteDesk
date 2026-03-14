@@ -4,6 +4,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import HeadlessCheckbox from './components/ui/HeadlessCheckbox.vue'
+import HeadlessSwitch from './components/ui/HeadlessSwitch.vue'
 // @ts-ignore: no declaration file for './router'
 import router from './router'
 // @ts-ignore: no declaration file for './composables/useColorMode'
@@ -13,6 +14,7 @@ const app = createApp(App)
 app.use(createPinia())
 app.use(router)
 app.component('HeadlessCheckbox', HeadlessCheckbox)
+app.component('HeadlessSwitch', HeadlessSwitch)
 
 // Platform Permissions Contract Guard (DEV-only)
 // CONTRACT-LOCKED: See docs/architecture/platform-permission-contract.md

@@ -39,28 +39,70 @@
       <div v-if="loading" class="flex items-center justify-center py-12">
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
       </div>
-      <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div v-for="mod in displayModules" :key="mod._id" class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 cursor-pointer" @click="selectModule(mod)">
-          <div class="flex items-start justify-between">
-            <div>
-              <p
-                :class="[
-                  'text-xs uppercase tracking-wider',
-                  mod.type === 'system'
-                    ? 'text-purple-600 dark:text-purple-300'
-                    : 'text-gray-500 dark:text-gray-400'
-                ]"
-              >
-                {{ mod.type }}
-              </p>
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ mod.name }}</h3>
-              <p class="text-sm text-gray-500 dark:text-gray-400">key: {{ mod.key }}</p>
+      <!-- pt-1 prevents hover lift from clipping the top border (overflow-y-auto clips translated content) -->
+      <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
+        <div
+          v-for="mod in displayModules"
+          :key="mod._id"
+          class="relative group flex flex-col h-full"
+        >
+          <button
+            type="button"
+            class="flex flex-col h-full w-full text-left bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 cursor-pointer hover:shadow-lg hover:border-indigo-500/50 dark:hover:border-indigo-400/50 hover:-translate-y-0.5 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+            @click="selectModule(mod)"
+          >
+            <!-- Card Header (match Core Modules) -->
+            <div class="flex items-start gap-3 mb-4">
+              <div class="flex-shrink-0 flex items-center justify-center w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/30 transition-colors">
+                <component :is="getModuleCardIcon(mod.key)" class="w-6 h-6" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-start justify-between gap-2">
+                  <h3 class="text-base font-semibold text-gray-900 dark:text-white truncate min-w-0">
+                    {{ mod.name }}
+                  </h3>
+                  <button
+                    v-if="mod.type === 'custom'"
+                    type="button"
+                    @click.stop="deleteModule(mod)"
+                    class="flex-shrink-0 text-red-600 dark:text-red-400 text-sm hover:underline opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-150"
+                  >
+                    Delete
+                  </button>
+                </div>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                  {{ getModuleCardCounts(mod).fields }} Fields · {{ getModuleCardCounts(mod).relationships }} Relationships
+                </p>
+              </div>
+              <svg class="flex-shrink-0 w-5 h-5 text-gray-400 dark:text-gray-500 group-hover:text-indigo-500 dark:group-hover:text-indigo-400 group-hover:translate-x-0.5 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
             </div>
-            <button v-if="mod.type === 'custom'" @click.stop="deleteModule(mod)" class="text-red-600 dark:text-red-400 text-sm hover:underline">Delete</button>
-          </div>
-          <div class="mt-3">
-            <p class="text-xs text-gray-500 dark:text-gray-400">Fields: {{ mod.fieldCount ?? (mod.fields?.length || 0) }}</p>
-          </div>
+            <!-- Badges (match Core Modules) -->
+            <div class="flex flex-wrap gap-2 mt-auto">
+              <span
+                v-if="mod.type === 'system'"
+                class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+                Core
+              </span>
+              <span
+                v-else-if="mod.type === 'custom'"
+                class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300"
+              >
+                Custom
+              </span>
+              <span
+                v-else
+                class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+              >
+                App
+              </span>
+            </div>
+          </button>
         </div>
       </div>
     </div>
@@ -72,9 +114,10 @@
         <div class="border-b border-gray-200 dark:border-gray-700">
           <nav class="-mb-px flex space-x-6">
             <button
+              type="button"
               v-for="tab in topTabs"
               :key="tab.id"
-              @click="activeTopTab = tab.id"
+              @click.prevent="setActiveTopTab(tab.id)"
               :class="[
                 activeTopTab === tab.id
                   ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
@@ -185,7 +228,7 @@
             <button 
               v-if="selectedModule && !props.hideFieldCreation" 
               @click="openAddField" 
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-xs font-medium transition-colors flex-shrink-0 whitespace-nowrap"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 text-xs font-medium transition-colors flex-shrink-0 whitespace-nowrap"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -229,7 +272,7 @@
                         dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
-                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click.stop="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
                       <span v-if="isCustomField(fieldKey)" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Custom</span>
                       <span v-else class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
@@ -261,7 +304,7 @@
                         dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
-                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click.stop="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
                       <span class="px-1.5 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">{{ appKey }}</span>
                     </button>
@@ -285,7 +328,7 @@
                         getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5'
                       ]">
                     <div class="mr-2 text-xs text-purple-600 dark:text-purple-400" title="System field">🔒</div>
-                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click.stop="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
                       <span class="px-1.5 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">System</span>
                     </button>
@@ -317,7 +360,7 @@
                         dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
-                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click.stop="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
                       <span v-if="isCustomField(fieldKey)" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Custom</span>
                       <span v-else class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
@@ -349,7 +392,7 @@
                         dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
-                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click.stop="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
                       <span class="px-1.5 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">{{ appKey }}</span>
                     </button>
@@ -373,7 +416,7 @@
                         getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5'
                       ]">
                     <div class="mr-2 text-xs text-purple-600 dark:text-purple-400" title="System field">🔒</div>
-                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click.stop="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
                       <span class="px-1.5 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">System</span>
                     </button>
@@ -407,7 +450,7 @@
                         dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
-                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click.stop="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
                       <span v-if="isCustomField(fieldKey)" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Custom</span>
                       <span v-else class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
@@ -439,7 +482,7 @@
                         dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
-                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click.stop="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
                       <span class="px-1.5 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">{{ appKey }}</span>
                     </button>
@@ -463,7 +506,7 @@
                         getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5'
                       ]">
                     <div class="mr-2 text-xs text-purple-600 dark:text-purple-400" title="System field">🔒</div>
-                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click.stop="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
                       <span class="px-1.5 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">System</span>
                     </button>
@@ -496,7 +539,7 @@
                         dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
-                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click.stop="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
                       <span v-if="isCustomField(fieldKey)" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Custom</span>
                       <span v-else class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
@@ -528,7 +571,7 @@
                         dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
-                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click.stop="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
                       <span class="px-1.5 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">{{ appKey }}</span>
                     </button>
@@ -552,7 +595,7 @@
                         getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5'
                       ]">
                     <div class="mr-2 text-xs text-purple-600 dark:text-purple-400" title="System field">🔒</div>
-                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click.stop="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
                       <span class="px-1.5 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">System</span>
                     </button>
@@ -598,7 +641,7 @@
                         getFieldIndex(field.key) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
                         field.isFixed ? 'opacity-90' : ''
                       ]"
-                      @click="selectFieldByKey(field.key)"
+                      @click.stop="selectFieldByKey(field.key)"
                       :style="{ cursor: 'pointer' }"
                     >
                     <div class="flex-1 text-left truncate flex items-center gap-2">
@@ -638,7 +681,7 @@
                         getFieldIndex(field.key) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5',
                         'opacity-90'
                       ]"
-                      @click="selectFieldByKey(field.key)"
+                      @click.stop="selectFieldByKey(field.key)"
                       :style="{ cursor: 'pointer' }"
                     >
                     <div class="flex-1 text-left truncate flex items-center gap-2">
@@ -678,7 +721,7 @@
                         dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
-                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click.stop="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
                       <span v-if="isCustomField(fieldKey)" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Custom</span>
                       <span v-else class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
@@ -710,7 +753,7 @@
                         dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
-                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click.stop="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
                       <span class="px-1.5 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">{{ appKey }}</span>
                     </button>
@@ -734,7 +777,7 @@
                         getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5'
                       ]">
                     <div class="mr-2 text-xs text-purple-600 dark:text-purple-400" title="System field">🔒</div>
-                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click.stop="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
                       <span class="px-1.5 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">System</span>
                     </button>
@@ -766,7 +809,7 @@
                         dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
-                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click.stop="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
                       <span v-if="isCustomField(fieldKey)" class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded">Custom</span>
                       <span v-else class="px-1.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">Core</span>
@@ -798,7 +841,7 @@
                         dragOverIdx === getFieldIndex(fieldKey) ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : ''
                       ]">
                     <div class="cursor-grab select-none mr-2 text-gray-400 dark:text-gray-500">⋮⋮</div>
-                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click.stop="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
                       <span class="px-1.5 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded">{{ appKey }}</span>
                     </button>
@@ -822,7 +865,7 @@
                         getFieldIndex(fieldKey) === selectedFieldIdx ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5'
                       ]">
                     <div class="mr-2 text-xs text-purple-600 dark:text-purple-400" title="System field">🔒</div>
-                    <button class="flex-1 text-left truncate flex items-center gap-2" @click="selectFieldByKey(fieldKey)">
+                    <button class="flex-1 text-left truncate flex items-center gap-2" @click.stop="selectFieldByKey(fieldKey)">
                       <span>{{ getFieldLabel(fieldKey) }}</span>
                       <span class="px-1.5 py-0.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded">System</span>
                     </button>
@@ -1270,8 +1313,22 @@
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     {{ currentField.dataType === 'Multi-Picklist' ? 'Picklist Options (Multi-Select)' : currentField.dataType === 'Radio Button' ? 'Radio Button Options' : 'Picklist Options' }}
                   </label>
-                  <button v-if="!isSystemField(currentField)" @click="showAddOption = true" class="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700">Add Option</button>
+                  <button v-if="!isSystemField(currentField) && !isDealPipelineOrStageField(currentField)" @click="showAddOption = true" class="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700">Add Option</button>
                 </div>
+                <!-- Deal Stage / Pipeline: options are configured in Pipelines & Stages -->
+                <div v-if="isDealPipelineOrStageField(currentField)" class="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 px-4 py-3">
+                  <p class="text-sm text-blue-800 dark:text-blue-300 mb-3">
+                    Options for Pipeline and Deal Stage are configured in <strong>Pipelines & Stages</strong>. Use that section to add or edit pipelines and stages.
+                  </p>
+                  <button
+                    type="button"
+                    @click="navigateToPipelines"
+                    class="px-3 py-1.5 text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors"
+                  >
+                    Open Pipelines & Stages
+                  </button>
+                </div>
+                <template v-else>
                 <div v-if="isTaskStatusField(currentField)" class="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-900/20">
                   <p class="text-xs text-amber-800 dark:text-amber-300">
                     <strong>Note:</strong> The "Completed" status is system-controlled and cannot be modified or removed.
@@ -1331,12 +1388,11 @@
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                     </button>
                     <!-- Enabled Toggle (status/priority) - before delete -->
-                    <HeadlessCheckbox
+                    <HeadlessSwitch
                       v-if="isTaskLifecycleField(currentField) && !isOptionSystemLocked(option)"
                       :checked="option.enabled !== false"
                       @change="updateOptionEnabled(optIdx, $event.target.checked)"
-                      variant="switch"
-                      checkbox-class="w-9 h-5"
+                      switch-class="w-9 h-5"
                     />
                     <button v-if="!isOptionSystemLocked(option) && !(isTaskPriorityField(currentField) && currentField.options.length <= 1)" @click="removeOption(optIdx)" class="p-1.5 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200 rounded" title="Remove">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -1386,6 +1442,7 @@
                     </div>
                   </div>
                 </div>
+                </template>
               </div>
 
               <!-- Number Options (for Integer, Decimal, Currency) -->
@@ -1740,12 +1797,11 @@
                         Allow this field to be used as a filter in list views
                       </p>
                     </div>
-                    <HeadlessCheckbox
+                    <HeadlessSwitch
                       v-model="currentField.filterable"
                       :disabled="isSystemField(currentField)"
                       @change="handleFilterableChange"
-                      variant="switch"
-                      checkbox-class="w-11 h-6"
+                      switch-class="w-11 h-6"
                     />
                   </div>
 
@@ -2513,11 +2569,10 @@
                       </div>
                     </div>
                     <div class="flex items-center gap-3">
-                      <HeadlessCheckbox
+                      <HeadlessSwitch
                         :checked="type.enabled"
                         @change="type.enabled = !type.enabled"
-                        variant="switch"
-                        checkbox-class="w-11 h-6"
+                        switch-class="w-11 h-6"
                       />
                     </div>
                   </div>
@@ -2576,11 +2631,10 @@
                         <span v-else class="text-sm font-medium text-gray-900 dark:text-white">{{ status.label }}</span>
                       </div>
                       <div class="flex items-center gap-2">
-                        <HeadlessCheckbox
+                        <HeadlessSwitch
                           :checked="status.enabled"
                           @change="status.enabled = !status.enabled"
-                          variant="switch"
-                          checkbox-class="w-9 h-5"
+                          switch-class="w-9 h-5"
                         />
                         <button
                           @click="startStatusEdit('customerStatus', index)"
@@ -2645,11 +2699,10 @@
                         <span v-else class="text-sm font-medium text-gray-900 dark:text-white">{{ status.label }}</span>
                       </div>
                       <div class="flex items-center gap-2">
-                        <HeadlessCheckbox
+                        <HeadlessSwitch
                           :checked="status.enabled"
                           @change="status.enabled = !status.enabled"
-                          variant="switch"
-                          checkbox-class="w-9 h-5"
+                          switch-class="w-9 h-5"
                         />
                         <button
                           @click="startStatusEdit('partnerStatus', index)"
@@ -2714,11 +2767,10 @@
                         <span v-else class="text-sm font-medium text-gray-900 dark:text-white">{{ status.label }}</span>
                       </div>
                       <div class="flex items-center gap-2">
-                        <HeadlessCheckbox
+                        <HeadlessSwitch
                           :checked="status.enabled"
                           @change="status.enabled = !status.enabled"
-                          variant="switch"
-                          checkbox-class="w-9 h-5"
+                          switch-class="w-9 h-5"
                         />
                         <button
                           @click="startStatusEdit('vendorStatus', index)"
@@ -2840,11 +2892,10 @@
                       </div>
                     </div>
                     <div class="flex items-center gap-3">
-                      <HeadlessCheckbox
+                      <HeadlessSwitch
                         :checked="type.enabled"
                         @change="type.enabled = !type.enabled"
-                        variant="switch"
-                        checkbox-class="w-11 h-6"
+                        switch-class="w-11 h-6"
                       />
                     </div>
                   </div>
@@ -2900,11 +2951,10 @@
                       <span v-else class="text-sm font-medium text-gray-900 dark:text-white">{{ status.label }}</span>
                     </div>
                     <div class="flex items-center gap-2">
-                      <HeadlessCheckbox
+                      <HeadlessSwitch
                         :checked="status.enabled"
                         @change="status.enabled = !status.enabled"
-                        variant="switch"
-                        checkbox-class="w-9 h-5"
+                        switch-class="w-9 h-5"
                       />
                       <button
                         @click="startItemStatusEdit(index)"
@@ -3005,11 +3055,10 @@
                       </span>
                     </div>
                     <div class="flex items-center gap-2">
-                      <HeadlessCheckbox
+                      <HeadlessSwitch
                         :checked="true"
                         :disabled="true"
-                        variant="switch"
-                        checkbox-class="w-9 h-5"
+                        switch-class="w-9 h-5"
                       />
                       <button
                         disabled
@@ -3365,12 +3414,11 @@
                       >
                         Locked
                       </span>
-                      <HeadlessCheckbox
+                      <HeadlessSwitch
                         v-else
                         :checked="eventGeoRules[eventType] || false"
                         @change="updateEventGeoRule(eventType, $event.target.checked)"
-                        variant="switch"
-                        checkbox-class="w-11 h-6"
+                        switch-class="w-11 h-6"
                       />
                     </div>
                   </div>
@@ -4079,10 +4127,23 @@
                         </button>
                       </div>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
                       <div>
                         <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Stage Name</label>
                         <input v-model="stage.name" class="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-gray-700 text-sm" />
+                      </div>
+                      <div>
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Color</label>
+                        <div class="flex items-center gap-2">
+                          <input
+                            type="color"
+                            :value="stage.color || DEFAULT_STAGE_COLOR"
+                            @input="stage.color = $event.target.value"
+                            class="h-9 w-12 cursor-pointer rounded border border-gray-300 dark:border-gray-600 bg-white p-0.5 dark:bg-gray-800"
+                            title="Stage color"
+                          />
+                          <span class="px-2.5 py-1 rounded-full text-xs font-medium text-white truncate max-w-[6rem]" :style="{ backgroundColor: stage.color || DEFAULT_STAGE_COLOR }">{{ stage.name || 'Stage' }}</span>
+                        </div>
                       </div>
                       <div>
                         <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Probability (%)</label>
@@ -5309,7 +5370,18 @@ import ModuleFormModal from './ModuleFormModal.vue';
 import AddCustomFieldDrawer from './AddCustomFieldDrawer.vue';
 import RelationshipFormDrawer from './RelationshipFormDrawer.vue';
 import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
-import { ArrowsUpDownIcon, ExclamationTriangleIcon } from '@heroicons/vue/24/outline';
+import {
+  ArrowsUpDownIcon,
+  ExclamationTriangleIcon,
+  UsersIcon,
+  BuildingOfficeIcon,
+  CheckCircleIcon,
+  CalendarDaysIcon,
+  FolderIcon,
+  ClipboardDocumentListIcon,
+  BanknotesIcon,
+  CubeIcon
+} from '@heroicons/vue/24/outline';
 
 // DEV-only guards: Forms Settings must never support execution
 if (process.env.NODE_ENV === 'development') {
@@ -5449,6 +5521,16 @@ const props = defineProps({
   hideHeader: {
     type: Boolean,
     default: false
+  },
+  /** When true, do not auto-select a module from URL; show the module cards list first (e.g. Sales Modules) */
+  startWithModuleList: {
+    type: Boolean,
+    default: false
+  },
+  /** Optional callback when user clicks "Open Pipelines & Stages" from Deal Stage/Pipeline field config (e.g. Sales app switches to Pipelines tab) */
+  onNavigateToPipelines: {
+    type: Function,
+    default: null
   }
 });
 
@@ -5497,6 +5579,28 @@ const displayModules = computed(() => {
   }
   return filtered;
 });
+
+// Module card icon (match Core Modules list)
+const moduleCardIconMap = {
+  people: UsersIcon,
+  organizations: BuildingOfficeIcon,
+  tasks: CheckCircleIcon,
+  events: CalendarDaysIcon,
+  items: FolderIcon,
+  forms: ClipboardDocumentListIcon,
+  deals: BanknotesIcon
+};
+function getModuleCardIcon(moduleKey) {
+  const key = (moduleKey || '').toLowerCase();
+  return moduleCardIconMap[key] || CubeIcon;
+}
+
+function getModuleCardCounts(mod) {
+  const fields = typeof mod.fieldCount === 'number' ? mod.fieldCount : (Array.isArray(mod.fields) ? mod.fields.length : 0);
+  const relationships = Array.isArray(mod.relationships) ? mod.relationships.length : 0;
+  return { fields, relationships };
+}
+
 const optionsBuffer = ref('');
 const editingOptionIdx = ref(-1);
 const editOptionValue = ref('');
@@ -5670,6 +5774,23 @@ const getInitialTab = () => {
   return 'fields';
 };
 const activeTopTab = ref(getInitialTab());
+
+function setActiveTopTab(id) {
+  const mod = selectedModule.value;
+  if (!mod) return;
+  const allowed = getAllowedTopTabs(mod.key);
+  if (!allowed.includes(id)) return;
+  const prev = activeTopTab.value;
+  if (prev === id) return;
+  activeTopTab.value = id;
+  // Update URL and localStorage immediately from click handler so the watcher doesn't trigger
+  // a route change (which can cause re-renders and the "two clicks / random tab" bug)
+  router.replace({ query: { ...route.query, module: mod.key, field: editFields.value[selectedFieldIdx.value]?.key || '', mode: id, subtab: activeSubTab.value } });
+  try {
+    localStorage.setItem(`litedesk-modfields-tab-${mod.key}`, id);
+  } catch (e) {}
+}
+
 const moduleNameEdit = ref('');
 const moduleEnabled = ref(true);
 const relationships = ref([]);
@@ -5711,13 +5832,16 @@ const pipelineStageStatusOptions = [
   { value: 'stalled', label: 'Stalled' }
 ];
 const DEFAULT_PIPELINE_COLOR = '#2563EB';
+const DEFAULT_STAGE_COLOR = '#6B7280';
+const DEFAULT_STAGE_COLORS = ['#6B7280', '#3B82F6', '#8B5CF6', '#06B6D4', '#10B981', '#F59E0B', '#EF4444'];
 const DEFAULT_STAGE_DEFINITIONS = [
-  { name: 'Qualification', probability: 25, status: 'open' },
-  { name: 'Proposal', probability: 50, status: 'open' },
-  { name: 'Negotiation', probability: 70, status: 'open' },
-  { name: 'Contract Sent', probability: 85, status: 'open' },
-  { name: 'Closed Won', probability: 100, status: 'won' },
-  { name: 'Closed Lost', probability: 0, status: 'lost' }
+  { name: 'New', probability: 0, status: 'open', color: DEFAULT_STAGE_COLORS[0] },
+  { name: 'Qualification', probability: 25, status: 'open', color: DEFAULT_STAGE_COLORS[1] },
+  { name: 'Proposal', probability: 50, status: 'open', color: DEFAULT_STAGE_COLORS[2] },
+  { name: 'Negotiation', probability: 70, status: 'open', color: DEFAULT_STAGE_COLORS[3] },
+  { name: 'Contract Sent', probability: 85, status: 'open', color: DEFAULT_STAGE_COLORS[4] },
+  { name: 'Closed Won', probability: 100, status: 'won', color: DEFAULT_STAGE_COLORS[5] },
+  { name: 'Closed Lost', probability: 0, status: 'lost', color: DEFAULT_STAGE_COLORS[6] }
 ];
 
 const PLAYBOOK_ACTION_TYPES = [
@@ -5931,6 +6055,7 @@ function buildStageFromDefinition(def, pipelineKey, order) {
   if (status === 'lost') probability = 0;
   probability = Math.min(100, Math.max(0, Number(probability) || 0));
   const key = slugify(`${pipelineKey}-${name}-${order}`) || `${pipelineKey}-stage-${order + 1}`;
+  const color = (def.color && /^#[0-9A-Fa-f]{6}$/.test(def.color)) ? def.color : (DEFAULT_STAGE_COLORS[order] || DEFAULT_STAGE_COLOR);
   return {
     key,
     name,
@@ -5938,6 +6063,7 @@ function buildStageFromDefinition(def, pipelineKey, order) {
     probability,
     status,
     order,
+    color,
     isClosedWon: status === 'won',
     isClosedLost: status === 'lost',
     playbook: createStagePlaybook(key, name, status, def.playbook || null)
@@ -5959,7 +6085,7 @@ function createDefaultPipeline(name = 'Default Pipeline', { isDefault = false } 
 }
 
 function getDefaultPipelineSettingsLocal() {
-  return [createDefaultPipeline('Default Pipeline', { isDefault: true })];
+  return [createDefaultPipeline('Sales Pipeline', { isDefault: true })];
 }
 
 function normalizePipelineSettings(settings = []) {
@@ -5981,6 +6107,7 @@ function normalizePipelineSettings(settings = []) {
       if (status === 'lost') probability = 0;
       probability = Math.min(100, Math.max(0, Number(probability) || 0));
       const stageKey = stageKeyRaw;
+      const color = (stage.color && /^#[0-9A-Fa-f]{6}$/.test(stage.color)) ? stage.color : (DEFAULT_STAGE_DEFINITIONS[stageIndex]?.color || DEFAULT_STAGE_COLOR);
       return {
         key: stageKey,
         name: stageName,
@@ -5988,6 +6115,7 @@ function normalizePipelineSettings(settings = []) {
         probability,
         status,
         order: stageIndex,
+        color,
         isClosedWon: status === 'won',
         isClosedLost: status === 'lost',
         playbook: createStagePlaybook(stageKey, stageName, status, stage.playbook || null)
@@ -6043,6 +6171,7 @@ function normalizePipelineSettings(settings = []) {
       let probability = Math.min(100, Math.max(0, Number(stage.probability) || 0));
       if (status === 'won') probability = 100;
       if (status === 'lost') probability = 0;
+      const color = (stage.color && /^#[0-9A-Fa-f]{6}$/.test(stage.color)) ? stage.color : (DEFAULT_STAGE_COLORS[stageIndex] || DEFAULT_STAGE_COLOR);
       return {
         key: baseKey,
         name: (stage.name || `Stage ${stageIndex + 1}`).trim(),
@@ -6050,6 +6179,7 @@ function normalizePipelineSettings(settings = []) {
         probability,
         status,
         order: stageIndex,
+        color,
         isClosedWon: status === 'won',
         isClosedLost: status === 'lost'
       };
@@ -6161,7 +6291,7 @@ function refreshPipelineOrders() {
 
 function addPipeline() {
   const count = pipelineSettings.value.length;
-  const name = count === 0 ? 'Default Pipeline' : `Pipeline ${count + 1}`;
+  const name = count === 0 ? 'Sales Pipeline' : `Pipeline ${count + 1}`;
   const isDefault = count === 0 && !pipelineSettings.value.some(p => p.isDefault);
   const pipeline = createDefaultPipeline(name, { isDefault });
   pipeline.order = count;
@@ -6171,16 +6301,18 @@ function addPipeline() {
 }
 
 function removePipeline(pipelineKey) {
+  const pipeline = pipelineSettings.value.find(p => p.key === pipelineKey);
+  if (!pipeline) return;
+  if (pipeline.isDefault) {
+    alert('Set another pipeline as default before removing this one.');
+    return;
+  }
   if (pipelineSettings.value.length <= 1) {
     alert('At least one pipeline is required.');
     return;
   }
   const index = pipelineSettings.value.findIndex(p => p.key === pipelineKey);
-  if (index === -1) return;
-  const [removed] = pipelineSettings.value.splice(index, 1);
-  if (removed?.isDefault && pipelineSettings.value.length) {
-    pipelineSettings.value[0].isDefault = true;
-  }
+  pipelineSettings.value.splice(index, 1);
   refreshPipelineOrders();
   ensurePipelineSelection();
 }
@@ -7198,6 +7330,23 @@ function normalizeFieldKey(key) {
   return String(key || '').trim().toLowerCase().replace(/-/g, '');
 }
 
+// Deal Stage and Pipeline options are configured in Pipelines & Stages, not in field options
+function isDealPipelineOrStageField(field) {
+  if (!field?.key || selectedModule.value?.key !== 'deals') return false;
+  const norm = normalizeFieldKey(field.key);
+  return norm === 'stage' || norm === 'pipeline';
+}
+
+function navigateToPipelines() {
+  if (typeof props.onNavigateToPipelines === 'function') {
+    props.onNavigateToPipelines();
+    return;
+  }
+  if (selectedModule.value?.key === 'deals' && !props.excludedTabs?.includes('pipeline')) {
+    activeTopTab.value = 'pipeline';
+  }
+}
+
 // Helper: Check if a field is a custom field (owner: 'org')
 function isCustomField(fieldKey) {
   const field = editFields.value.find(f => f.key === fieldKey);
@@ -8043,8 +8192,8 @@ const fetchModules = async () => {
     const data = await apiClient.get('/modules');
     if (data.success) {
       modules.value = data.data;
-      // Initialize from URL first
-      const moduleKey = typeof route.query.module === 'string' ? route.query.module : null;
+      // Initialize from URL first (unless startWithModuleList: show cards first)
+      const moduleKey = !props.startWithModuleList && typeof route.query.module === 'string' ? route.query.module : null;
       const fieldKey = typeof route.query.field === 'string' ? route.query.field : null;
       const modeKey = typeof route.query.mode === 'string' ? route.query.mode : null;
       const subKey = typeof route.query.subtab === 'string' ? route.query.subtab : null;
@@ -8147,8 +8296,8 @@ const fetchModules = async () => {
             });
           }
         }
-        // Select field by key if provided
-        let idx = fieldKey ? editFields.value.findIndex(f => f.key === fieldKey) : -1;
+        // Select field by key if provided (normalized match so relatedTo / related-to both work)
+        let idx = fieldKey ? getFieldIndex(fieldKey) : -1;
         if (idx < 0) {
           // No fieldKey in URL: For People module, select first Core Identity field
           if (initialMod.key?.toLowerCase() === 'people') {
@@ -8201,7 +8350,8 @@ const fetchModules = async () => {
         }
         // Set directly without triggering watcher during initialization
         activeTopTab.value = tabToSet;
-        if (subKey && ['general','validations','dependencies'].includes(subKey)) {
+        const validSubTabs = ['general', 'validations', 'filters', 'dependencies'];
+        if (subKey && validSubTabs.includes(subKey)) {
           activeSubTab.value = subKey;
         }
         // Ensure URL reflects selection (use the tab we just set)
@@ -8534,12 +8684,14 @@ const fetchModules = async () => {
           });
         }
       }
-      // If no module from URL, use last persisted selection
+      // If no module from URL, use last persisted selection (only if that module is visible in current context)
       if (!initialMod) {
         const storedModuleKey = localStorage.getItem('litedesk-modfields-module') || null;
         if (storedModuleKey) {
           const storedMod = modules.value.find(m => m.key === storedModuleKey) || null;
-          if (storedMod) {
+          // When startWithModuleList or when using a moduleFilter, only restore if the stored module is in the current list (e.g. Sales Schema only shows Deals + custom; don't restore People from Core Entities)
+          const storedModInDisplayList = storedMod && storedMod.key !== 'users' && (!props.moduleFilter || props.moduleFilter(storedMod));
+          if (storedModInDisplayList) {
             selectedModuleId.value = storedMod._id;
             const initial = JSON.parse(JSON.stringify(storedMod.fields || []));
             const sorted = initial.sort((a,b) => (a.order ?? 0) - (b.order ?? 0));
@@ -8756,7 +8908,7 @@ const selectModule = (mod, preferFieldKey = null) => {
   
   editFields.value = normalizedFields;
   if (preferFieldKey) {
-    const idx = editFields.value.findIndex(f => f.key === preferFieldKey);
+    const idx = getFieldIndex(preferFieldKey);
     selectedFieldIdx.value = idx >= 0 ? idx : 0;
   } else {
     // For People module: Select first Core Identity field (better UX)
@@ -8959,6 +9111,10 @@ const closeFormModal = () => {
 const handleModuleSaved = async (savedModule) => {
   closeFormModal();
   await fetchModules();
+  // Refresh sidebar so new custom module appears in app nav
+  if (savedModule?.type === 'custom') {
+    try { window.dispatchEvent(new CustomEvent('litedesk:core-modules-updated')); } catch (e) {}
+  }
   // Find the module from the refreshed list and select it
   const module = modules.value.find(m => m._id === savedModule._id);
   if (module) {
@@ -9584,6 +9740,28 @@ watch(() => currentField.value?.dataType, (newType) => {
   // Load settings from currentField
   loadFieldSettings();
 }, { immediate: true });
+
+// Sync selected field from URL when route.query.field changes (e.g. link click, back/forward).
+// Keeps UI in sync with URL so clicking a field or opening a link with field=relatedTo shows the right field.
+watch(
+  () => [route.query.module, route.query.field, selectedModule.value?.key, activeTopTab.value, editFields.value.length],
+  () => {
+    const mod = selectedModule.value;
+    const queryField = typeof route.query.field === 'string' ? route.query.field.trim() : '';
+    if (!mod || activeTopTab.value !== 'fields' || !editFields.value.length) return;
+    if (route.query.module !== mod.key) return;
+    if (!queryField) return;
+    const currentKey = editFields.value[selectedFieldIdx.value]?.key;
+    if (normalizeFieldKey(queryField) === normalizeFieldKey(currentKey)) return;
+    const idx = getFieldIndex(queryField);
+    if (idx >= 0) {
+      selectedFieldIdx.value = idx;
+      syncOptionsBuffer();
+      loadFieldSettings();
+    }
+  },
+  { flush: 'post' }
+);
 
 // Also watch for field selection changes
 watch(() => selectedFieldIdx.value, () => {
@@ -12395,7 +12573,26 @@ onMounted(async () => {
   });
 });
 
-// Persist top/sub tab selection to URL
+// Keep activeTopTab in sync with URL (route is source of truth). Fixes mismatch when
+// parent remounts due to :key="$route.fullPath" (e.g. PlatformShell) — URL can say
+// mode=relationships while the new instance had initialized with wrong/stale tab.
+watch(
+  () => [route.query.mode, selectedModule.value?.key],
+  ([modeKey]) => {
+    if (typeof modeKey !== 'string') return;
+    const mod = selectedModule.value;
+    if (!mod) return;
+    const allowed = getAllowedTopTabs(mod.key);
+    if (!allowed.includes(modeKey)) return;
+    if (activeTopTab.value === modeKey) return;
+    activeTopTab.value = modeKey;
+  },
+  { immediate: true }
+);
+
+// Persist top tab: only revert invalid tabs and sync localStorage for programmatic changes.
+// Do NOT call router.replace here for valid tab changes — setActiveTopTab already updates
+// the URL on click. Watcher-driven router.replace caused double-click and random-tab bugs.
 watch(activeTopTab, (v, oldValue) => {
   const mod = selectedModule.value;
   if (!mod) return;
@@ -12404,15 +12601,14 @@ watch(activeTopTab, (v, oldValue) => {
     const fallback = allowedTabs.includes(oldValue) ? oldValue : (allowedTabs[0] || 'fields');
     if (fallback !== v) {
       activeTopTab.value = fallback;
+      router.replace({ query: { ...route.query, module: mod.key, field: editFields.value[selectedFieldIdx.value]?.key || '', mode: fallback, subtab: activeSubTab.value } });
     }
     return;
   }
-  // Only update if value actually changed (avoid infinite loops during initialization)
   if (v !== oldValue && oldValue !== undefined) {
-    console.log('Tab changed:', { from: oldValue, to: v, module: mod.key });
-    router.replace({ query: { ...route.query, mode: v } });
-    // Also store in localStorage for persistence across refreshes
-    localStorage.setItem(`litedesk-modfields-tab-${mod.key}`, v);
+    try {
+      localStorage.setItem(`litedesk-modfields-tab-${mod.key}`, v);
+    } catch (e) {}
   }
 }, { immediate: false });
 
@@ -12421,6 +12617,21 @@ watch(activeSubTab, (v) => {
   if (!mod) return;
   router.replace({ query: { ...route.query, subtab: v } });
 });
+
+// Sync activeSubTab from URL when route.query.subtab changes (e.g. after remount due to :key="fullPath", or back/forward).
+// Use route.query.mode so we sync even on first load/remount when selectedModule/activeTopTab aren't set yet (fetchModules still running).
+watch(
+  () => [route.query.subtab, route.query.mode],
+  ([subKey, modeKey]) => {
+    const onFieldsConfig = modeKey === 'fields' || activeTopTab.value === 'fields';
+    if (!onFieldsConfig) return;
+    const validSubTabs = ['general', 'validations', 'filters', 'dependencies'];
+    if (typeof subKey === 'string' && validSubTabs.includes(subKey) && activeSubTab.value !== subKey) {
+      activeSubTab.value = subKey;
+    }
+  },
+  { immediate: true }
+);
 
 // Persist quick mode to URL
 watch(selectedPipelineKey, () => {
@@ -12515,6 +12726,8 @@ function onStageListDrop(pipelineKey) {
   }
   onStageDrop(pipelineKey, pipeline.stages.length);
 }
+
+defineExpose({ openCreateModal, selectedModule, clearSelection });
 </script>
 
 

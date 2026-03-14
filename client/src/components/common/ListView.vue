@@ -1030,12 +1030,11 @@
                           <span class="flex-1 text-sm text-gray-900 dark:text-white">{{ field.label }}</span>
                           <span v-if="props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name'" class="text-xs text-gray-500 dark:text-gray-400 mr-2">Required</span>
                           <span v-if="field.locked" class="text-xs text-gray-500 dark:text-gray-400 mr-2">Locked</span>
-                          <HeadlessCheckbox
+                          <HeadlessSwitch
                             :checked="field.visible"
                             @change="toggleFieldVisibility(field.key)"
                             :disabled="(props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name') || field.locked"
-                            variant="switch"
-                            checkbox-class="w-9 h-5"
+                            switch-class="w-9 h-5"
                           />
                           </div>
                         </template>
@@ -1058,12 +1057,11 @@
                           />
                           <span class="flex-1 text-sm text-gray-900 dark:text-white">{{ field.label }}</span>
                           <span v-if="field.locked" class="text-xs text-gray-500 dark:text-gray-400 mr-2">Locked</span>
-                          <HeadlessCheckbox
+                          <HeadlessSwitch
                             :checked="field.visible"
                             @change="toggleFieldVisibility(field.key)"
                             :disabled="(props.moduleKey === 'forms' && field.key?.toLowerCase() === 'name') || field.locked"
-                            variant="switch"
-                            checkbox-class="w-9 h-5"
+                            switch-class="w-9 h-5"
                           />
                             </div>
                         </template>
@@ -1184,38 +1182,34 @@
                 </Menu>
                 <div class="flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
                   <span>Stack fields</span>
-                  <HeadlessCheckbox
+                  <HeadlessSwitch
                     v-model="kanbanStackFields"
                     @change="saveKanbanOptions()"
-                    variant="switch"
-                    checkbox-class="w-9 h-5"
+                    switch-class="w-9 h-5"
                   />
                 </div>
                 <div class="flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
                   <span>Collapse empty columns</span>
-                  <HeadlessCheckbox
+                  <HeadlessSwitch
                     v-model="kanbanCollapseEmptyColumns"
                     @change="saveKanbanOptions()"
-                    variant="switch"
-                    checkbox-class="w-9 h-5"
+                    switch-class="w-9 h-5"
                   />
                 </div>
                 <div class="flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
                   <span>Show empty fields</span>
-                  <HeadlessCheckbox
+                  <HeadlessSwitch
                     v-model="kanbanShowEmptyFields"
                     @change="saveKanbanOptions()"
-                    variant="switch"
-                    checkbox-class="w-9 h-5"
+                    switch-class="w-9 h-5"
                   />
                 </div>
                 <div class="flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
                   <span>Show closed records</span>
-                  <HeadlessCheckbox
+                  <HeadlessSwitch
                     v-model="kanbanClosedTasks"
                     @change="saveKanbanOptions()"
-                    variant="switch"
-                    checkbox-class="w-9 h-5"
+                    switch-class="w-9 h-5"
                   />
                 </div>
                 <!-- Reset -->
@@ -1308,12 +1302,11 @@
                       <component :is="getFieldIcon(field.dataType)" class="w-4 h-4 text-gray-500 dark:text-gray-400 flex-shrink-0" />
                       <span class="flex-1 text-sm text-gray-900 dark:text-white">{{ field.label || field.key }}</span>
                       <span v-if="field.locked" class="text-xs text-gray-500 dark:text-gray-400 mr-2">Locked</span>
-                      <HeadlessCheckbox
+                      <HeadlessSwitch
                         :checked="field.visible"
                         @change="toggleKanbanFieldVisibility(field.key)"
                         :disabled="field.locked"
-                        variant="switch"
-                        checkbox-class="w-9 h-5"
+                        switch-class="w-9 h-5"
                       />
                     </div>
                   </div>
@@ -1330,11 +1323,10 @@
                     >
                       <component :is="getFieldIcon(field.dataType)" class="w-4 h-4 text-gray-500 dark:text-gray-400 flex-shrink-0" />
                       <span class="flex-1 text-sm text-gray-900 dark:text-white">{{ field.label || field.key }}</span>
-                      <HeadlessCheckbox
+                      <HeadlessSwitch
                         :checked="false"
                         @change="toggleKanbanFieldVisibility(field.key)"
-                        variant="switch"
-                        checkbox-class="w-9 h-5"
+                        switch-class="w-9 h-5"
                       />
                     </div>
                     <div v-if="kanbanHiddenFields.length === 0" class="text-sm text-gray-500 dark:text-gray-400 py-2 text-center">No hidden fields</div>

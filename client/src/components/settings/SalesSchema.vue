@@ -1,23 +1,59 @@
 <template>
-  <ModulesAndFields :module-filter="salesSchemaFilter" :excluded-tabs="['pipeline', 'playbooks']" title="Sales Schema" />
+  <ModulesAndFields
+    ref="modulesAndFieldsRef"
+    :module-filter="salesSchemaFilter"
+    :excluded-tabs="['pipeline', 'playbooks']"
+    title="Sales Modules"
+    :hide-header="true"
+    :start-with-module-list="true"
+    :on-navigate-to-pipelines="onNavigateToPipelines"
+  />
 </template>
 
 <script setup>
+import { ref, watch } from 'vue';
+
+const props = defineProps({
+  /** Callback to open Pipelines & Stages (e.g. switch parent tab when editing Deal Stage/Pipeline field) */
+  onNavigateToPipelines: {
+    type: Function,
+    default: null
+  }
+});
 import { useAuthStore } from '@/stores/auth';
 import ModulesAndFields from './ModulesAndFields.vue';
 
+const emit = defineEmits(['selected-module-change']);
 const authStore = useAuthStore();
+const modulesAndFieldsRef = ref(null);
 
-// Sales schema modules: Only Sales-specific modules (Deals only, all others are core entities)
+watch(
+  () => modulesAndFieldsRef.value?.selectedModule,
+  (mod) => { emit('selected-module-change', mod ?? null); },
+  { immediate: true }
+);
+
+// Sales schema modules: Deals + all custom modules (custom modules appear in Sales module list)
 const salesSchemaFilter = (module) => {
   // Check if Sales app is installed
   if (!authStore.hasAppAccess('SALES')) {
     return false;
   }
-  
-  // Sales-specific modules (only Deals - all others are core entities)
+  // Custom modules always show in Sales module list
+  if (module.type === 'custom') return true;
+  // Sales-specific system modules (Deals only; others are core entities)
   const salesModuleKeys = ['deals'];
   return salesModuleKeys.includes(module.key?.toLowerCase());
 };
+
+function openCreateModal() {
+  modulesAndFieldsRef.value?.openCreateModal?.();
+}
+
+function goBackToModuleList() {
+  modulesAndFieldsRef.value?.clearSelection?.();
+}
+
+defineExpose({ openCreateModal, goBackToModuleList });
 </script>
 

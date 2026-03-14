@@ -42,91 +42,69 @@
       <p class="text-sm text-gray-600 dark:text-gray-400">No applications found.</p>
     </div>
 
-    <!-- Applications List -->
-    <div v-else class="space-y-4">
+    <!-- Applications Grid (same layout as Core Modules) -->
+    <div
+      v-else
+      class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+    >
       <div
         v-for="app in applications"
         :key="app.appKey"
         @click="viewApplicationDetail(app.appKey)"
-        class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md hover:border-indigo-500 dark:hover:border-indigo-400 transition-all cursor-pointer group"
+        class="group flex flex-col h-full bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-lg hover:border-indigo-500/50 dark:hover:border-indigo-400/50 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
       >
-        <!-- Application Header -->
-        <div class="flex items-start justify-between mb-4">
-          <div class="flex items-center gap-3">
-            <!-- Application Icon -->
-            <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/30 transition-colors">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-            </div>
-
-            <!-- Application Name and Description -->
-            <div>
-              <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+        <!-- Card Header -->
+        <div class="flex items-start gap-3">
+          <div class="flex-shrink-0 flex items-center justify-center w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/30 transition-colors">
+            <component :is="getAppIcon(app.appKey)" class="w-6 h-6" />
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2">
+              <h3 class="text-base font-semibold text-gray-900 dark:text-white truncate min-w-0 flex-1">
                 {{ app.name }}
               </h3>
-              <p v-if="app.description" class="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                {{ app.description }}
-              </p>
+              <span
+                :class="[
+                  'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium flex-shrink-0 ml-auto',
+                  getStatusBadgeClass(app.status)
+                ]"
+              >
+                <svg
+                  v-if="app.status === 'ENABLED'"
+                  class="w-3 h-3"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <svg
+                  v-else-if="app.status === 'TRIAL'"
+                  class="w-3 h-3"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <svg
+                  v-else-if="app.status === 'DISABLED'"
+                  class="w-3 h-3"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                {{ getStatusLabel(app.status) }}
+              </span>
             </div>
-          </div>
-
-          <!-- Status Badge -->
-          <div class="flex items-center gap-2">
-            <span
-              :class="[
-                'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium',
-                getStatusBadgeClass(app.status)
-              ]"
+            <p
+              v-if="app.description"
+              class="text-sm text-gray-600 dark:text-gray-400 mt-0.5 line-clamp-2"
             >
-              <svg
-                v-if="app.status === 'ENABLED'"
-                class="w-3 h-3"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-              <svg
-                v-else-if="app.status === 'TRIAL'"
-                class="w-3 h-3"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <svg
-                v-else-if="app.status === 'DISABLED'"
-                class="w-3 h-3"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-              {{ getStatusLabel(app.status) }}
-            </span>
-          </div>
-        </div>
-
-        <!-- Dependencies -->
-        <div v-if="app.dependencies && app.dependencies.length > 0" class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
-            Core Dependencies
-          </h4>
-          <div class="flex flex-wrap gap-2">
-            <div
-              v-for="dep in app.dependencies"
-              :key="dep.moduleKey"
-              class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300"
-            >
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-              {{ dep.moduleName }}
-            </div>
+              {{ app.description }}
+            </p>
           </div>
         </div>
       </div>
@@ -138,8 +116,31 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
+import {
+  CurrencyDollarIcon,
+  LifebuoyIcon,
+  FolderIcon,
+  GlobeAltIcon,
+  ClipboardDocumentCheckIcon,
+  AcademicCapIcon,
+  CubeIcon,
+} from '@heroicons/vue/24/outline';
 
 const router = useRouter();
+
+const appIconMap = {
+  sales: CurrencyDollarIcon,
+  helpdesk: LifebuoyIcon,
+  projects: FolderIcon,
+  portal: GlobeAltIcon,
+  audit: ClipboardDocumentCheckIcon,
+  lms: AcademicCapIcon,
+};
+
+function getAppIcon(appKey) {
+  const key = (appKey || '').toLowerCase();
+  return appIconMap[key] || CubeIcon;
+}
 const applications = ref([]);
 const loading = ref(true);
 const error = ref(null);

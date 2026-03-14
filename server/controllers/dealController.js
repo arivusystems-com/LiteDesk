@@ -15,6 +15,7 @@ const {
   syncLegacyToRoleBased,
   syncRoleBasedToLegacy
 } = require('../services/dealRelationshipService');
+const { getDefaultPipelineSettings } = require('./moduleController');
 
 const DESCRIPTION_VERSION_RETENTION_DAYS = 365;
 
@@ -171,7 +172,14 @@ exports.createDeal = async (req, res) => {
             organizationId: req.user.organizationId,
             ownerId: req.body.ownerId || req.user._id,
             createdBy: req.user._id,
-            modifiedBy: req.user._id
+            modifiedBy: req.user._id,
+            activityLogs: [{
+                user: getActorDisplayName(req.user),
+                userId: req.user._id,
+                action: 'created',
+                details: {},
+                timestamp: new Date()
+            }]
         };
 
         const statusWriteResult = await validateStatusWriteProtection('deal', payload, appKey);
@@ -182,6 +190,16 @@ exports.createDeal = async (req, res) => {
                 message: statusWriteResult.message,
                 errors: statusWriteResult.errors
             });
+        }
+
+        // Every deal must have pipeline and stage. Auto-assign default when missing so user is not forced to pick.
+        if (!payload.pipeline || !payload.stage) {
+            const defaultSettings = getDefaultPipelineSettings();
+            const defaultPipeline = defaultSettings.find((p) => p.isDefault) || defaultSettings[0];
+            if (defaultPipeline && Array.isArray(defaultPipeline.stages) && defaultPipeline.stages.length) {
+                payload.pipeline = payload.pipeline || defaultPipeline.key;
+                payload.stage = payload.stage || (defaultPipeline.stages[0].name || 'New');
+            }
         }
 
         const stagePipelineResult = await validateStageInPipeline({
@@ -307,6 +325,9 @@ exports.getDeals = async (req, res) => {
             } else {
                 query.accountId = req.query.accountId;
             }
+        }
+        if (req.query.pipeline) {
+            query.pipeline = req.query.pipeline;
         }
         
         // Search functionality
@@ -1470,6 +1491,7 @@ const buildDealCommentResponse = (comment, currentUserId = null) => {
     likesCount: reactionSummary['👍'] || 0
   };
 };
+exports.buildDealCommentResponse = buildDealCommentResponse;
 
 // @desc    Get comments for a deal
 // @route   GET /api/deals/:id/comments

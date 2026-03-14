@@ -59,18 +59,24 @@ exports.getCoreModules = async (req, res) => {
         }).lean();
 
         // Get org-specific display name overrides (saved via Settings → Module details)
+        // Query by both key and moduleKey (tenant overrides use key; some docs may have moduleKey)
         const orgOverrides = await ModuleDefinition.find({
             organizationId: req.user.organizationId,
-            key: { $in: coreModuleKeys }
+            $or: [
+                { key: { $in: coreModuleKeys } },
+                { moduleKey: { $in: coreModuleKeys } }
+            ]
         })
-        .select('key name')
+        .select('key moduleKey name')
         .lean();
         const nameOverridesByKey = {};
         for (const o of orgOverrides) {
-            const k = (o.key || '').toLowerCase();
-            if (o.name && typeof o.name === 'string' && o.name.trim()) {
-                nameOverridesByKey[k] = o.name.trim();
-            }
+            const name = typeof o.name === 'string' ? o.name.trim() : '';
+            if (!name) continue;
+            const key = (o.moduleKey || o.key || '').toLowerCase();
+            if (key) nameOverridesByKey[key] = name;
+            const keyAlt = (o.key || o.moduleKey || '').toLowerCase();
+            if (keyAlt && keyAlt !== key) nameOverridesByKey[keyAlt] = name;
         }
         
         // Sort modules according to the defined order (modules not in coreModuleOrder go to the end)
@@ -177,9 +183,10 @@ exports.getCoreModule = async (req, res) => {
         }
 
         // Get org-specific display name override (saved via Settings → Module details)
+        const keyLower = moduleKey.toLowerCase();
         const orgOverride = await ModuleDefinition.findOne({
             organizationId: req.user.organizationId,
-            key: moduleKey.toLowerCase()
+            $or: [{ key: keyLower }, { moduleKey: keyLower }]
         })
         .select('name')
         .lean();

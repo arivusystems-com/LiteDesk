@@ -72,6 +72,7 @@
       @import="showImportModal = true"
       @export="exportDeals"
       @row-click="handleRowClick"
+      @delete="handleDelete"
       @bulk-action="handleBulkAction"
       @filters-changed="handleFiltersChanged"
       @search-changed="handleSearchChanged"
@@ -234,6 +235,18 @@
       class="kanban-view-container mt-4"
       style="min-height: 400px;"
     >
+      <div v-if="pipelines.length > 1" class="flex items-center gap-2 mb-3">
+        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Pipeline</label>
+        <select
+          v-model="selectedPipelineKey"
+          class="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 min-w-[180px]"
+          @change="onPipelineChange"
+        >
+          <option v-for="p in pipelines" :key="p.key" :value="p.key">
+            {{ p.label }}{{ p.isDefault ? ' (Default)' : '' }}
+          </option>
+        </select>
+      </div>
       <KanbanBoard
         :items="kanbanDeals"
         :stages="stages"
@@ -439,9 +452,20 @@ const showFormModal = ref(false);
 const showImportModal = ref(false);
 const editingDeal = ref(null);
 
-const DEFAULT_STAGES = ['Qualification', 'Proposal', 'Negotiation', 'Contract Sent', 'Closed Won', 'Closed Lost'];
-const stages = ref([...DEFAULT_STAGES]);
+// Stages come only from Settings → Deals → Pipelines & stages (no hardcoded fallback)
+const stages = ref([]);
 const stageColorMap = ref({});
+// Pipeline list and selected pipeline for Kanban (stages = selected pipeline's stages)
+const pipelines = ref([]);
+const KANBAN_PIPELINE_KEY = 'litedesk-deals-kanban-pipeline';
+const getStoredPipelineKey = () => {
+  try {
+    return localStorage.getItem(KANBAN_PIPELINE_KEY) || '';
+  } catch {
+    return '';
+  }
+};
+const selectedPipelineKey = ref(getStoredPipelineKey());
 
 // Kanban customize: read from same localStorage keys as ListView Customize Kanban drawer
 const KANBAN_OPTIONS_KEY = 'litedesk-listview-deals-kanban-options';
@@ -636,7 +660,10 @@ const fetchKanbanDeals = async () => {
     params.page = 1;
     params.sortBy = 'stage';
     params.sortOrder = 'asc';
-    
+    if (selectedPipelineKey.value) {
+      params.pipeline = selectedPipelineKey.value;
+    }
+
     const response = await apiClient.get('/deals', { params });
     
     if (response && response.success) {
@@ -751,40 +778,70 @@ const getStageValue = (stage) => {
   return getDealsInStage(stage).reduce((sum, deal) => sum + (Number(deal.amount) || 0), 0);
 };
 
-// Fetch stage options and colors from deals module (picklist) and pipeline config
+// Fetch stage options and colors from deals module; stages = selected pipeline's stages
 const fetchStageOptions = async () => {
   try {
     const response = await apiClient.get('/modules', { params: { key: 'deals' } });
     if (!response?.success || !Array.isArray(response.data) || !response.data[0]) return;
     const mod = response.data[0];
     const fields = mod.fields || [];
-    const pipelines = mod.pipelineSettings || [];
+    const rawPipelines = mod.pipelineSettings || [];
 
-    // Pipeline stages (order) - use default pipeline
-    const defaultPipeline = pipelines.find(p => p.isDefault) || pipelines[0];
-    const pipelineStages = defaultPipeline?.stages || [];
-    if (pipelineStages.length) {
-      stages.value = pipelineStages.map(s => (s.name || '').trim()).filter(Boolean);
+    pipelines.value = rawPipelines.map((p) => ({
+      key: p.key,
+      label: p.name || p.key,
+      isDefault: p.isDefault === true,
+      stages: Array.isArray(p.stages) ? p.stages : []
+    }));
+
+    // Resolve selected pipeline: stored key, or default pipeline, or first
+    const defaultPipeline = pipelines.value.find((p) => p.isDefault) || pipelines.value[0];
+    if (pipelines.value.length && !selectedPipelineKey.value) {
+      selectedPipelineKey.value = defaultPipeline?.key || pipelines.value[0].key;
+      try {
+        localStorage.setItem(KANBAN_PIPELINE_KEY, selectedPipelineKey.value);
+      } catch (_) {}
     }
-    if (!stages.value.length) stages.value = [...DEFAULT_STAGES];
+    const selectedPipeline = pipelines.value.find((p) => p.key === selectedPipelineKey.value) || defaultPipeline || pipelines.value[0];
+    const pipelineStages = selectedPipeline?.stages || [];
+    if (pipelineStages.length) {
+      stages.value = pipelineStages.map((s) => (s.name || '').trim()).filter(Boolean);
+    } else {
+      stages.value = [];
+    }
 
-    // Stage field options (colors) from picklist
-    const stageField = fields.find(f => String(f?.key || '').toLowerCase() === 'stage');
+    // Stage colors: from Stage field options or pipeline stage colors
+    const stageField = fields.find((f) => String(f?.key || '').toLowerCase() === 'stage');
     const opts = stageField?.options || [];
     const map = {};
-    opts.forEach(opt => {
+    opts.forEach((opt) => {
       const val = typeof opt === 'string' ? opt : (opt?.value ?? '');
       const color = typeof opt === 'object' && opt?.color ? String(opt.color).trim() : null;
       if (val && color) map[val] = color;
     });
+    pipelineStages.forEach((s) => {
+      const name = (s.name || '').trim();
+      if (name && !map[name] && s.color && /^#[0-9A-Fa-f]{6}$/.test(String(s.color).trim())) {
+        map[name] = String(s.color).trim();
+      }
+    });
     stageColorMap.value = map;
   } catch (_) {
-    stages.value = [...DEFAULT_STAGES];
+    stages.value = [];
     stageColorMap.value = {};
+    pipelines.value = [];
   }
 };
 
 const getStageColor = (stage) => stageColorMap.value[stage] || null;
+
+const onPipelineChange = () => {
+  try {
+    localStorage.setItem(KANBAN_PIPELINE_KEY, selectedPipelineKey.value);
+  } catch (_) {}
+  fetchStageOptions();
+  fetchKanbanDeals();
+};
 
 function hexToRgba(hex, alpha) {
   if (!hex) return null;
@@ -798,7 +855,10 @@ function hexToRgba(hex, alpha) {
 const createInitialData = ref({});
 
 const openCreateDealInStage = (stage) => {
-  createInitialData.value = { stage };
+  createInitialData.value = {
+    stage,
+    ...(selectedPipelineKey.value ? { pipeline: selectedPipelineKey.value } : {})
+  };
   editingDeal.value = null;
   showFormModal.value = true;
 };
@@ -818,11 +878,24 @@ const viewDeal = (dealId, event = null, titleOverride = null) => {
   openTab(routePath, { title, icon: 'briefcase', params: { name: title }, background: openInBackground, insertAdjacent: true });
 };
 
+// Single delete (from list row action)
+const handleDelete = async (row) => {
+  if (!row?._id) return;
+  try {
+    await apiClient.delete(`/deals/${row._id}`);
+    await fetchKanbanDeals();
+    if (moduleListRef.value?.refresh) moduleListRef.value.refresh();
+  } catch (err) {
+    console.error('Delete deal error:', err);
+    alert(err?.response?.data?.message || 'Error deleting deal. Please try again.');
+  }
+};
+
 // Bulk actions
 const handleBulkAction = async (action, rows) => {
   const dealIds = rows.map(deal => deal._id);
   try {
-    if (action === 'delete') {
+    if (action === 'delete' || action === 'bulk-delete') {
       await Promise.all(dealIds.map(id => apiClient.delete(`/deals/${id}`)));
       await fetchKanbanDeals();
       if (moduleListRef.value?.refresh) moduleListRef.value.refresh();
