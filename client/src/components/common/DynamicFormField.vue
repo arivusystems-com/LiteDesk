@@ -413,7 +413,7 @@
     </div>
     
     <!-- Lookup (Relationship) - with searchable Combobox and modal browse button -->
-    <div v-else-if="field.dataType === 'Lookup (Relationship)'" class="mt-2 relative">
+    <div v-else-if="isLookupField" class="mt-2 relative">
       <!-- Read-only lookup: show static text (no dropdown / no browse icon) -->
       <div
         v-if="isReadOnly"
@@ -458,6 +458,15 @@
             >
               <MagnifyingGlassIcon class="w-5 h-5" />
             </button>
+            <button
+              v-if="canCreateLookupRecord"
+              type="button"
+              @click.stop="openLookupCreateDrawer"
+              class="flex-shrink-0 flex items-center justify-center p-1.5 rounded text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+              title="Create and select"
+            >
+              <PlusIcon class="w-5 h-5" />
+            </button>
             <!-- Dropdown arrow (not absolute) -->
             <span class="pointer-events-none flex-shrink-0 flex items-center p-1">
               <ChevronUpDownIcon class="h-5 w-5 text-gray-400 dark:text-gray-500" aria-hidden="true" />
@@ -497,6 +506,14 @@
                 <div v-if="filteredSearchableLookupOptions.length === 0" class="relative cursor-default select-none px-4 py-2 text-gray-700 dark:text-gray-300">
                   No matching records found.
                 </div>
+                <button
+                  v-if="filteredSearchableLookupOptions.length === 0 && canCreateLookupRecord"
+                  type="button"
+                  class="w-full text-left px-4 py-2 text-sm text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
+                  @click.stop="openLookupCreateDrawer"
+                >
+                  Create new {{ lookupSearchQuery ? `"${lookupSearchQuery}"` : getLookupModuleName() }}
+                </button>
                 <ComboboxOption
                   v-for="item in filteredSearchableLookupOptions"
                   :key="item._id"
@@ -595,6 +612,13 @@
               <!-- Modal Footer -->
               <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
                 <button
+                  v-if="canCreateLookupRecord"
+                  @click="openLookupCreateDrawer"
+                  class="px-4 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 rounded-lg transition-colors"
+                >
+                  Create New
+                </button>
+                <button
                   @click="closeLookupModal"
                   class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
                 >
@@ -605,6 +629,17 @@
           </div>
         </Transition>
       </Teleport>
+
+      <CreateRecordDrawer
+        v-if="canCreateLookupRecord"
+        :isOpen="showLookupCreateDrawer"
+        :moduleKey="lookupTargetModuleKey"
+        :initialData="lookupCreateInitialData"
+        :prefillText="lookupSearchQuery"
+        :prefillFieldKey="lookupCreatePrefillFieldKey"
+        @close="closeLookupCreateDrawer"
+        @saved="handleLookupRecordCreated"
+      />
     </div>
     
     <!-- URL -->
@@ -694,11 +729,12 @@
 import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { Listbox, ListboxButton, ListboxOptions, ListboxOption, Combobox, ComboboxButton, ComboboxInput, ComboboxOptions, ComboboxOption } from '@headlessui/vue';
-import { CheckIcon, ChevronUpDownIcon, XMarkIcon, MagnifyingGlassIcon, ArrowUpTrayIcon } from '@heroicons/vue/24/outline';
+import { CheckIcon, ChevronUpDownIcon, XMarkIcon, MagnifyingGlassIcon, ArrowUpTrayIcon, PlusIcon } from '@heroicons/vue/24/outline';
 import { CheckIcon as CheckSolidIcon } from '@heroicons/vue/24/solid';
 import { Teleport, Transition } from 'vue';
 import DataTable from '@/components/common/DataTable.vue';
 import Avatar from '@/components/common/Avatar.vue';
+import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import apiClient from '@/utils/apiClient';
 import { validateField } from '@/utils/fieldValidation';
 import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
@@ -789,7 +825,10 @@ const isAuditRoleLookupField = computed(() => {
 });
 
 const isLookupField = computed(() => {
-  return props.field?.dataType === 'Lookup (Relationship)';
+  const dataType = String(props.field?.dataType || '').toLowerCase();
+  const hasLookupSettings = !!props.field?.lookupSettings?.targetModule;
+  if (hasLookupSettings) return true;
+  return dataType.includes('lookup') || dataType.includes('reference') || dataType.includes('related');
 });
 
 const helperText = computed(() => {
@@ -840,6 +879,7 @@ const lookupModalCurrentPage = ref(1);
 const lookupModalSearchQuery = ref('');
 const lookupModalSortBy = ref('');
 const lookupModalSortOrder = ref('asc');
+const showLookupCreateDrawer = ref(false);
 const isReadOnly = computed(() => {
   // Check if explicitly locked via prop
   if (props.locked) return true;
@@ -919,6 +959,46 @@ const filteredSearchableLookupOptions = computed(() => {
     const displayText = getLookupDisplay(item).toLowerCase();
     return displayText.includes(query);
   });
+});
+
+const lookupTargetModuleKey = computed(() => {
+  const raw = String(props.field?.lookupSettings?.targetModule || '').toLowerCase().trim();
+  if (!raw) return '';
+  if (raw === 'organization') return 'organizations';
+  if (raw === 'contact' || raw === 'person') return 'people';
+  if (raw === 'deal') return 'deals';
+  if (raw === 'task') return 'tasks';
+  if (raw === 'event') return 'events';
+  if (raw === 'user') return 'users';
+  return raw;
+});
+
+const canCreateLookupRecord = computed(() => {
+  return !isReadOnly.value && !!lookupTargetModuleKey.value && lookupTargetModuleKey.value !== 'users';
+});
+
+const lookupCreateInitialData = computed(() => {
+  const seed = String(lookupSearchQuery.value || '').trim();
+  if (!seed) return {};
+
+  const displayField = String(props.field?.lookupSettings?.displayField || '').trim();
+  if (displayField) {
+    return { [displayField]: seed };
+  }
+
+  const moduleKey = lookupTargetModuleKey.value;
+  if (moduleKey === 'people') return { first_name: seed };
+  if (moduleKey === 'tasks') return { title: seed };
+  return { name: seed };
+});
+
+const lookupCreatePrefillFieldKey = computed(() => {
+  const displayField = String(props.field?.lookupSettings?.displayField || '').trim();
+  if (displayField) return displayField;
+  const moduleKey = lookupTargetModuleKey.value;
+  if (moduleKey === 'people') return 'first_name';
+  if (moduleKey === 'tasks') return 'title';
+  return 'name';
 });
 
 // Real-time validation
@@ -1474,7 +1554,7 @@ const fetchUsers = async ({ autoDefault = false } = {}) => {
 
 // Fetch lookup options for Lookup fields
 const fetchLookupOptions = async () => {
-  if (props.field.dataType !== 'Lookup (Relationship)') return;
+  if (!isLookupField.value) return;
   
   // Users lookup: always use /users/list. Only auto-default for assignee/owner fields (never audit roles).
   if (props.field.lookupSettings?.targetModule === 'users') {
@@ -1530,7 +1610,7 @@ const fetchLookupOptions = async () => {
 // Ensure read-only lookups can still render a human-friendly label
 // by fetching the record by id if it isn't in the option list.
 const fetchLookupOptionById = async (id) => {
-  if (!id || props.field.dataType !== 'Lookup (Relationship)') return;
+  if (!id || !isLookupField.value) return;
   const moduleKey = props.field.lookupSettings?.targetModule;
   if (!moduleKey || moduleKey === 'users') return; // users list is list-only here
 
@@ -1570,6 +1650,26 @@ const openLookupModal = async () => {
   if (isReadOnly.value) return;
   showLookupModal.value = true;
   await fetchLookupModalData();
+};
+
+const openLookupCreateDrawer = () => {
+  if (!canCreateLookupRecord.value) return;
+  showLookupCreateDrawer.value = true;
+};
+
+const closeLookupCreateDrawer = () => {
+  showLookupCreateDrawer.value = false;
+};
+
+const handleLookupRecordCreated = (savedRecord) => {
+  if (!savedRecord || !savedRecord._id) return;
+  const exists = lookupOptions.value.some((opt) => String(opt?._id) === String(savedRecord._id));
+  if (!exists) {
+    lookupOptions.value = [savedRecord, ...lookupOptions.value];
+  }
+  updateValue(savedRecord._id);
+  emit('blur');
+  closeLookupCreateDrawer();
 };
 
 // Close lookup modal
@@ -1701,7 +1801,7 @@ const handleLookupSort = (sortBy, sortOrder) => {
 
 // Handle populated object values - add them to lookupOptions if needed
 const handlePopulatedValue = () => {
-  if (props.field.dataType !== 'Lookup (Relationship)') return;
+  if (!isLookupField.value) return;
   if (!props.value || typeof props.value !== 'object' || !props.value._id) return;
   
   // Check if this populated object is already in lookupOptions
@@ -1718,10 +1818,14 @@ const handlePopulatedValue = () => {
 // Watch for field changes to refetch lookup options
 watch(() => props.field, async (newField, oldField) => {
   // If targetModule changed, refetch
-  if (newField?.dataType === 'Lookup (Relationship)') {
+  const newDataType = String(newField?.dataType || '').toLowerCase();
+  const oldDataType = String(oldField?.dataType || '').toLowerCase();
+  const isNewLookupLike = !!newField?.lookupSettings?.targetModule || newDataType.includes('lookup') || newDataType.includes('reference') || newDataType.includes('related');
+  const isOldLookupLike = !!oldField?.lookupSettings?.targetModule || oldDataType.includes('lookup') || oldDataType.includes('reference') || oldDataType.includes('related');
+  if (isNewLookupLike) {
     const newTargetModule = newField?.lookupSettings?.targetModule;
     const oldTargetModule = oldField?.lookupSettings?.targetModule;
-    if (newTargetModule !== oldTargetModule || !lookupOptions.value.length) {
+    if (!isOldLookupLike || newTargetModule !== oldTargetModule || !lookupOptions.value.length) {
       await fetchLookupOptions();
       handlePopulatedValue();
     }
@@ -1730,14 +1834,14 @@ watch(() => props.field, async (newField, oldField) => {
 
 // Watch for value changes to handle populated objects
 watch(() => props.value, () => {
-  if (props.field.dataType === 'Lookup (Relationship)') {
+  if (isLookupField.value) {
     handlePopulatedValue();
   }
 }, { deep: true, immediate: true });
 
 onMounted(async () => {
   // Fetch lookup options immediately when component mounts
-  if (props.field.dataType === 'Lookup (Relationship)') {
+  if (isLookupField.value) {
     await fetchLookupOptions();
     // Handle populated object value after fetching options
     handlePopulatedValue();

@@ -18,14 +18,32 @@ import {
 } from '@heroicons/vue/24/outline';
 import { getKeyFields, getFieldDisplayLabel } from '@/utils/fieldDisplay';
 import { getGlobalSystemFieldKeys } from '@/platform/fields/fieldCapabilityEngine';
+import { getDefaultTagChipClass } from '@/components/record-page/composables/useRecordTags';
+import { shouldHideDetailField } from '@/components/record-page/fieldVisibilityGuards';
+import { isFieldVisibleInContext } from '@/utils/fieldContextFilter';
 
 const KEY_SECTION_EXCLUDED = new Set(['name', 'title', 'description']);
 const DETAIL_EXCLUDED = new Set([
   'name', 'title', 'description',
   'createdBy', 'createdAt', 'modifiedBy', 'updatedAt',
   'deletedAt', 'deletedBy', 'deletionReason',
+  'organizationId', // Infrastructure: tenant context, never show on record page
   'activityLogs', 'subtasks', 'stageHistory'
 ]);
+
+/** Normalize field key for exclusion matching (lowercase, no spaces/dashes). */
+function normKey(key) {
+  return String(key || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/** Set of field keys to exclude from both Key fields and Details (system + audit). */
+function getDisplayExcludedKeys() {
+  const globalSystem = (getGlobalSystemFieldKeys && getGlobalSystemFieldKeys()) || [];
+  return new Set([
+    ...Array.from(DETAIL_EXCLUDED).map(normKey),
+    ...globalSystem.map(normKey)
+  ]);
+}
 
 function resolveValue(v) {
   if (typeof v === 'function') return v();
@@ -42,13 +60,42 @@ function toReadableLabel(key) {
     .replace(/^./, (c) => c.toUpperCase());
 }
 
-function fieldTypeFromDef(field) {
+function fieldTypeFromDef(field, fieldKey) {
+  const key = String(fieldKey || field?.key || '').trim().toLowerCase();
+  if (key === 'tags') return 'tags';
   const dt = String(field?.dataType || '').toLowerCase();
   if (dt.includes('date') || dt.includes('datetime')) return 'date';
   if (dt.includes('number') || dt.includes('currency') || dt.includes('decimal')) return 'number';
   if (dt.includes('select') || dt.includes('picklist') || dt.includes('status')) return 'select';
-  if (dt.includes('user') || dt.includes('lookup') || dt.includes('entity')) return 'entity';
+  if (dt.includes('user')) return 'user';
+  if (dt.includes('lookup') || dt.includes('entity')) return 'entity';
   return 'text';
+}
+
+function normalizeSelectOptions(options) {
+  if (!Array.isArray(options)) return [];
+  return options
+    .map((option) => {
+      if (option == null) return null;
+      if (typeof option === 'string' || typeof option === 'number') {
+        const value = String(option);
+        return { value, label: value };
+      }
+      const value = option.value ?? option.id ?? option._id ?? option.key ?? option.name;
+      if (value == null) return null;
+      const label = option.label ?? option.name ?? option.title ?? String(value);
+      return { value, label };
+    })
+    .filter(Boolean);
+}
+
+function filterFieldsForRecordSurface(fields, fieldContext) {
+  if (!Array.isArray(fields)) return [];
+  const ctx =
+    fieldContext != null && String(fieldContext).trim() !== ''
+      ? String(fieldContext).toLowerCase()
+      : 'platform';
+  return fields.filter((f) => isFieldVisibleInContext(f, ctx));
 }
 
 function iconForKey(key, field) {
@@ -63,45 +110,52 @@ function iconForKey(key, field) {
   return DocumentTextIcon;
 }
 
-function getStateKeys(moduleDefinition) {
+/**
+ * State keys for RecordStateSection (Key fields). Only fields explicitly marked as key fields
+ * in field configuration (field.keyField === true). No fallback; empty if none configured.
+ */
+function getStateKeys(moduleDefinition, fieldContext = 'platform') {
   const def = resolveValue(moduleDefinition);
-  const keyFields = getKeyFields(def);
-  const keys = keyFields
+  const displayExcluded = getDisplayExcludedKeys();
+  const filteredFields = filterFieldsForRecordSurface(def?.fields || [], fieldContext);
+  const defForKeys = { ...def, fields: filteredFields };
+  const keyFields = getKeyFields(defForKeys);
+  return keyFields
     .map((f) => String(f?.key || '').trim())
-    .filter((k) => k && !KEY_SECTION_EXCLUDED.has(k));
-  if (keys.length) return keys;
-  const fields = Array.isArray(def?.fields) ? def.fields : [];
-  return fields
-    .filter((f) => f?.key && !KEY_SECTION_EXCLUDED.has(f.key))
-    .slice(0, 6)
-    .map((f) => f.key);
+    .filter((k) => k && !KEY_SECTION_EXCLUDED.has(k) && !displayExcluded.has(normKey(k)));
 }
 
-function getDetailFieldKeys(moduleDefinition) {
+function getDetailFieldKeys(moduleDefinition, moduleKey = '', fieldContext = 'platform') {
   const def = resolveValue(moduleDefinition);
-  const globalSystem = (getGlobalSystemFieldKeys && getGlobalSystemFieldKeys()) || [];
-  const excluded = new Set([
-    ...DETAIL_EXCLUDED,
-    ...globalSystem.map((k) => k.toLowerCase().replace(/[^a-z0-9]/g, '')),
-    ...getStateKeys(def)
-  ]);
-  const fields = Array.isArray(def?.fields) ? def.fields : [];
+  const displayExcluded = getDisplayExcludedKeys();
+  const excluded = new Set([...displayExcluded, ...getStateKeys(def, fieldContext).map(normKey)]);
+  const normalizedModuleKey = String(moduleKey || '').toLowerCase().trim();
+  const fields = filterFieldsForRecordSurface(Array.isArray(def?.fields) ? def.fields : [], fieldContext);
   return fields
-    .filter((f) => {
+    .map((f, index) => ({ f, index }))
+    .filter(({ f }) => {
       const key = String(f?.key || '').trim();
       if (!key) return false;
-      const norm = key.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (excluded.has(norm)) return false;
+      if (excluded.has(normKey(key))) return false;
+      if (shouldHideDetailField(f, normalizedModuleKey, { enforceRegistryKnown: true })) return false;
       const vis = f?.visibility;
       return vis?.detail !== false;
     })
-    .sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999))
-    .map((f) => f.key);
+    .sort((a, b) => {
+      const aOrder = Number.isFinite(Number(a?.f?.order)) ? Number(a.f.order) : null;
+      const bOrder = Number.isFinite(Number(b?.f?.order)) ? Number(b.f.order) : null;
+      if (aOrder != null && bOrder != null) return aOrder - bOrder;
+      if (aOrder != null) return -1;
+      if (bOrder != null) return 1;
+      // Preserve configured module.fields order when "order" is absent.
+      return a.index - b.index;
+    })
+    .map(({ f }) => f.key);
 }
 
 /**
  * Create generic record adapter for a module.
- * @param {Object} opts - formatDate, moduleDefinition, canEditDetails, saveDetailField, getRelatedGroups, openRelatedItem, canUnlinkRelated, onUnlinkRelated, handleDescriptionSave, canEditDescription, expandedLeftSection, openLeftSection
+ * @param {Object} opts - formatDate, moduleDefinition, canEditDetails, saveDetailField, getRelatedGroups, openRelatedItem, canUnlinkRelated, onUnlinkRelated, canLinkRecords, openLinkRecordDrawer, openAddRecordDrawer, handleDescriptionSave, canEditDescription, expandedLeftSection, openLeftSection, canViewDescriptionHistory, openDescriptionHistory, getEntityOptions
  */
 export function createGenericRecordAdapter(opts = {}) {
   const {
@@ -113,11 +167,30 @@ export function createGenericRecordAdapter(opts = {}) {
     openRelatedItem,
     canUnlinkRelated,
     onUnlinkRelated,
+    canLinkRecords = false,
+    openLinkRecordDrawer,
+    openAddRecordDrawer,
     handleDescriptionSave,
     canEditDescription = false,
     expandedLeftSection = '',
-    openLeftSection
+    openLeftSection,
+    canViewDescriptionHistory = true,
+    openDescriptionHistory,
+    getEntityOptions
   } = opts;
+
+  /** Normalize entity list to { value, label } options. getEntityOptions(fieldKey) may return [] or array of { _id, name } or { value, label }. */
+  function entityOptionsFor(fieldKey) {
+    if (typeof getEntityOptions !== 'function') return [];
+    const list = getEntityOptions(fieldKey);
+    if (!Array.isArray(list) || list.length === 0) return [];
+    return list.map((item) => {
+      if (item && typeof item === 'object' && 'value' in item && 'label' in item) return { value: item.value, label: item.label };
+      const id = item._id ?? item.id;
+      const label = item.name ?? item.title ?? item.label ?? (id != null ? String(id) : '—');
+      return { value: id, label };
+    });
+  }
 
   return {
     module: 'generic',
@@ -125,14 +198,21 @@ export function createGenericRecordAdapter(opts = {}) {
     getSections(record) {
       const expanded = String(resolveValue(expandedLeftSection) || '').trim();
       const isExpanded = expanded.length > 0;
-      const keys = isExpanded ? ['description', 'details', 'related'].filter((k) => k === expanded) : ['description', 'details', 'related'];
+      // When description-history is open, show no sections (full-page view is shown by the page)
+      const stackKeys = ['description', 'details', 'related'];
+      const descriptionFullPage = expanded === 'description-history';
+      const keys = isExpanded && !descriptionFullPage
+        ? stackKeys.filter((k) => k === expanded)
+        : descriptionFullPage ? [] : stackKeys;
       const sections = {
         description: {
           key: 'description',
           title: 'Description',
           component: DescriptionSection,
           className: 'pt-4 pb-2',
-          actions: [!isExpanded && openLeftSection ? { key: 'expand-description', type: 'expand', label: 'Expand', handler: () => openLeftSection('description') } : null].filter(Boolean)
+          actions: [
+            ...(canViewDescriptionHistory && openDescriptionHistory ? [{ key: 'description-history', type: 'history', label: 'History', handler: () => openDescriptionHistory() }] : [])
+          ].filter(Boolean)
         },
         details: {
           key: 'details',
@@ -146,7 +226,11 @@ export function createGenericRecordAdapter(opts = {}) {
           title: 'Related Records',
           component: RelatedSection,
           className: 'pt-2 pb-3',
-          actions: [!isExpanded && openLeftSection ? { key: 'expand-related', type: 'expand', label: 'Expand', handler: () => openLeftSection('related') } : null].filter(Boolean)
+          actions: [
+            ...(canLinkRecords && openLinkRecordDrawer ? [{ key: 'link-record', type: 'link', label: 'Link record', handler: () => openLinkRecordDrawer() }] : []),
+            ...(canLinkRecords && openAddRecordDrawer ? [{ key: 'add-record', type: 'plus', label: 'Add record', handler: () => openAddRecordDrawer() }] : []),
+            ...(!isExpanded && openLeftSection ? [{ key: 'expand-related', type: 'expand', label: 'Expand', handler: () => openLeftSection('related') }] : [])
+          ]
         }
       };
       return keys.map((k) => sections[k]).filter(Boolean);
@@ -170,32 +254,49 @@ export function createGenericRecordAdapter(opts = {}) {
 
     getStateFields(record, context) {
       const def = resolveValue(moduleDefinition);
-      const keys = getStateKeys(def);
+      const fieldCtx =
+        context?.fieldContext != null && String(context.fieldContext).trim() !== ''
+          ? String(context.fieldContext).toLowerCase()
+          : 'platform';
+      const keys = getStateKeys(def, fieldCtx);
       const fieldsByKey = new Map((def?.fields || []).map((f) => [String(f.key).trim(), f]));
       return keys.map((fieldKey) => {
         const field = fieldsByKey.get(fieldKey);
-        const fieldType = fieldTypeFromDef(field);
-        const canEdit = canEditDetails?.(null, fieldKey) === true && ['text', 'number', 'date', 'select'].includes(fieldType);
+        const fieldType = fieldTypeFromDef(field, fieldKey);
+        const isTags = fieldType === 'tags';
+        const canEdit = !isTags && canEditDetails?.(null, fieldKey) === true && ['text', 'number', 'date', 'select', 'entity', 'user'].includes(fieldType);
+        const canOpenTagsEditor = isTags && typeof context?.openTagsEditor === 'function';
         return {
           key: fieldKey,
           label: field ? getFieldDisplayLabel(field) : toReadableLabel(fieldKey),
           icon: iconForKey(fieldKey, field),
           type: fieldType,
-          options: (fieldType === 'select' && field?.options) ? (field.options || []).map((o) => ({ value: o.value ?? o.id, label: o.label ?? o.name ?? String(o.value ?? o.id) })) : [],
+          options: fieldType === 'select'
+            ? normalizeSelectOptions(field?.options)
+            : ((fieldType === 'entity' || fieldType === 'user') ? entityOptionsFor(fieldKey) : []),
           canEdit,
           onSave: canEdit ? (value) => saveDetailField?.(fieldKey, value) : null,
-          canOpenEditor: false,
-          onEdit: null
+          canOpenEditor: canOpenTagsEditor,
+          onEdit: canOpenTagsEditor ? (e) => context.openTagsEditor(e, fieldKey, record) : null,
+          getTagChipClass: isTags ? (typeof context?.getTagChipClass === 'function' ? context.getTagChipClass : getDefaultTagChipClass) : undefined
         };
       });
     },
 
-    getStateValues(record) {
+    getStateValues(record, context) {
       const def = resolveValue(moduleDefinition);
-      const keys = getStateKeys(def);
+      const fieldCtx =
+        context?.fieldContext != null && String(context.fieldContext).trim() !== ''
+          ? String(context.fieldContext).toLowerCase()
+          : 'platform';
+      const keys = getStateKeys(def, fieldCtx);
       const values = {};
       for (const key of keys) {
         const v = record?.[key];
+        if (key === 'tags') {
+          values[key] = Array.isArray(v) ? v : (v != null && v !== '' ? [].concat(v) : []);
+          continue;
+        }
         if (v == null || v === '') {
           values[key] = null;
           continue;
@@ -217,30 +318,85 @@ export function createGenericRecordAdapter(opts = {}) {
       if (!record) return [];
       const def = resolveValue(moduleDefinition);
       const fieldsByKey = new Map((def?.fields || []).map((f) => [String(f.key).trim(), f]));
-      const detailKeys = getDetailFieldKeys(def);
+      const moduleKey = String(context?.moduleKey || context?.module || '').toLowerCase().trim();
+      const fieldCtx =
+        context?.fieldContext != null && String(context.fieldContext).trim() !== ''
+          ? String(context.fieldContext).toLowerCase()
+          : 'platform';
+      const detailKeys = getDetailFieldKeys(def, moduleKey, fieldCtx);
       return detailKeys.map((fieldKey) => {
         const field = fieldsByKey.get(fieldKey);
-        const fieldType = fieldTypeFromDef(field);
+        const fieldType = fieldTypeFromDef(field, fieldKey);
         const rawValue = record[fieldKey];
+        const normalizedFieldKey = String(fieldKey || '').toLowerCase().trim();
+        const isArrayBackedSelect = fieldType === 'select' && (
+          Array.isArray(rawValue) ||
+          String(field?.dataType || '').toLowerCase().includes('multi') ||
+          field?.allowMultiple === true ||
+          field?.multiple === true ||
+          field?.isArray === true ||
+          normalizedFieldKey === 'types'
+        );
+        const entityOpts = fieldType === 'entity' ? entityOptionsFor(fieldKey) : [];
+        const options = fieldType === 'select'
+          ? normalizeSelectOptions(field?.options)
+          : ((fieldType === 'entity' || fieldType === 'user') ? entityOpts : []);
         let displayValue = rawValue;
-        if (rawValue != null && typeof rawValue === 'object') {
-          displayValue = rawValue.name ?? rawValue.title ?? rawValue.label ?? (`${(rawValue.firstName || '')} ${(rawValue.lastName || '')}`.trim() || rawValue.email || '—');
+        if (fieldKey === 'tags' && Array.isArray(rawValue)) {
+          displayValue = rawValue.length ? rawValue.join(', ') : '';
+        } else if (isArrayBackedSelect && Array.isArray(rawValue)) {
+          const labels = rawValue.map((item) => {
+            const itemId = item != null && typeof item === 'object' ? (item.value ?? item._id ?? item.id) : item;
+            if (itemId == null) return '';
+            const matchedOption = (options || []).find((opt) => {
+              const optId = opt?.value ?? opt?._id ?? opt?.id;
+              return optId != null && String(optId) === String(itemId);
+            });
+            return matchedOption?.label ?? String(itemId);
+          }).filter(Boolean);
+          displayValue = labels.join(', ');
+        } else if (rawValue != null && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
+          displayValue = rawValue.name ?? rawValue.title ?? rawValue.label ?? (`${(rawValue.firstName || '')} ${(rawValue.lastName || '')}`.trim() || rawValue.email || '');
+        } else if ((fieldType === 'select' || fieldType === 'entity' || fieldType === 'user') && rawValue != null && !Array.isArray(rawValue)) {
+          const rawId = String(rawValue);
+          const matchedOption = (options || []).find((opt) => {
+            const optId = opt?.value ?? opt?._id ?? opt?.id;
+            return optId != null && String(optId) === rawId;
+          });
+          displayValue = matchedOption?.label ?? matchedOption?.name ?? rawValue;
         } else if (rawValue != null && typeof rawValue === 'string' && /^\d{4}-\d{2}/.test(rawValue)) {
           displayValue = formatDate ? formatDate(rawValue) : rawValue.slice(0, 10);
         }
-        const canEdit = canEditDetails?.(record, fieldKey) === true && ['text', 'number', 'date', 'select'].includes(fieldType);
+        const isTags = fieldType === 'tags';
+        const canEdit = !isTags && canEditDetails?.(record, fieldKey) === true && ['text', 'number', 'date', 'select', 'entity', 'user'].includes(fieldType);
+        const canOpenTagsEditor = isTags && typeof context?.openTagsEditor === 'function';
+        const orgId = rawValue != null && typeof rawValue === 'object' ? (rawValue._id ?? rawValue.id) : (typeof rawValue === 'string' && rawValue.trim() ? rawValue.trim() : null);
+        const recordPathForEntity = fieldType === 'entity' && orgId != null && /^(organization|account|company)$/.test(String(fieldKey).toLowerCase())
+          ? `/organizations/${orgId}`
+          : undefined;
         return {
           key: fieldKey,
           label: field ? getFieldDisplayLabel(field) : toReadableLabel(fieldKey),
           prefixIcon: iconForKey(fieldKey, field),
-          value: rawValue,
-          displayValue: displayValue != null ? String(displayValue) : '—',
+          value: fieldKey === 'tags' ? (Array.isArray(rawValue) ? rawValue : (rawValue != null && rawValue !== '' ? [].concat(rawValue) : [])) : rawValue,
+          displayValue: displayValue == null || String(displayValue).trim() === '' ? '' : String(displayValue),
           type: fieldType,
-          options: (fieldType === 'select' && field?.options) ? (field.options || []).map((o) => ({ value: o.value ?? o.id, label: o.label ?? o.name ?? String(o.value ?? o.id) })) : [],
+          options,
+          recordPath: recordPathForEntity,
           canEdit,
-          onSave: canEdit ? (value) => saveDetailField?.(fieldKey, value, record) : null,
-          canOpenEditor: false,
-          onEdit: null
+          onSave: canEdit
+            ? (value) => {
+              if (isArrayBackedSelect) {
+                const nextValue = value == null || value === '' ? [] : [value];
+                saveDetailField?.(fieldKey, nextValue, record);
+                return;
+              }
+              saveDetailField?.(fieldKey, value, record);
+            }
+            : null,
+          canOpenEditor: canOpenTagsEditor,
+          onEdit: canOpenTagsEditor ? (e) => context.openTagsEditor(e, fieldKey, record) : null,
+          getTagChipClass: isTags ? (typeof context?.getTagChipClass === 'function' ? context.getTagChipClass : getDefaultTagChipClass) : undefined
         };
       });
     },

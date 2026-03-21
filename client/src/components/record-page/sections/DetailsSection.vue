@@ -1,9 +1,9 @@
 <template>
-  <section v-if="fields.length" class="space-y-2">
+  <section v-if="fields.length" class="details-section space-y-2">
     <h3 v-if="!hideHeader" class="text-base font-semibold text-gray-900 dark:text-white">Details</h3>
     <div class="border-y border-x-0 border-gray-200/70 dark:border-gray-700/70 divide-y divide-gray-200/70 dark:divide-gray-700/70">
       <template
-        v-for="field in fields"
+        v-for="field in visibleFields"
         :key="field.key"
       >
         <!-- Related record link + optional inline listbox: hover → primary; click value → open record. Inline edit via dropdown, never edit drawer. -->
@@ -21,11 +21,11 @@
             as="div"
             :model-value="getRecordPathFieldSelectedId(field)"
             @update:model-value="(v) => field.onSave(v)"
-            class="flex-1 min-w-0 relative"
+            class="flex-1 min-w-0"
           >
             <div class="relative w-full">
               <ListboxButton
-                class="flex items-center gap-2 w-full min-h-8 text-left cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 py-1 -mx-2 -my-1 transition-colors focus:outline-none focus:ring-0"
+                class="flex items-center gap-2 w-full min-h-8 text-left cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 py-1 transition-colors focus:outline-none focus:ring-0"
               >
                 <span
                   v-if="field.displayValue"
@@ -42,9 +42,9 @@
                 </span>
                 <span
                   v-else
-                  class="text-sm min-w-0 flex-1 truncate text-gray-400 dark:text-gray-500"
+                  class="text-sm min-w-0 flex-1 truncate text-record-empty"
                 >
-                  Empty
+                  Select an option
                 </span>
               </ListboxButton>
               <Transition
@@ -57,7 +57,7 @@
                 >
                   <ListboxOption :value="null" v-slot="{ active }">
                     <li :class="['relative cursor-default select-none py-2 pl-4 pr-10', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
-                      <span class="block truncate">Empty</span>
+                      <span :class="['block truncate', active ? '' : 'text-record-empty']">Select an option</span>
                     </li>
                   </ListboxOption>
                   <ListboxOption
@@ -98,7 +98,7 @@
                 {{ field.displayValue }}
               </span>
             </span>
-            <span v-else class="text-gray-400 dark:text-gray-500">Click to link record</span>
+            <span v-else class="text-record-empty">Click to link record</span>
           </button>
 
           <div
@@ -118,7 +118,7 @@
                 {{ field.displayValue }}
               </span>
             </span>
-            <span v-else class="text-gray-100 dark:text-gray-600">—</span>
+            <span v-else class="text-record-empty">—</span>
           </div>
         </div>
 
@@ -140,18 +140,18 @@
                 <span
                   v-for="(tag, index) in field.value"
                   :key="`${tag}-${index}`"
-                  :class="['inline-block text-xs px-2 py-0.5 rounded', (field.getTagChipClass ? field.getTagChipClass(typeof tag === 'object' ? (tag.name || tag.label || '') : tag) : null) || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200']"
+                  :class="['inline-block text-xs px-2 py-0.5 rounded', (field.getTagChipClass ? field.getTagChipClass(tag) : null) || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200']"
                 >
                   {{ typeof tag === 'object' ? (tag.name || tag.label || tag) : tag }}
                 </span>
               </div>
             </template>
             <template v-else-if="field.key === 'tags'">
-              <span class="text-gray-300 dark:text-gray-600">—</span>
+              <span class="text-record-empty">—</span>
             </template>
             <template v-else>
               <span v-if="field.displayValue" class="truncate">{{ field.displayValue }}</span>
-              <span v-else class="text-gray-300 dark:text-gray-600">—</span>
+              <span v-else class="text-record-empty">—</span>
             </template>
           </button>
         </div>
@@ -175,20 +175,20 @@
         />
       </template>
     </div>
-    <div v-if="shouldShowViewAll" class="pt-1">
+    <div v-if="showExpandCollapse" class="pt-1">
       <button
         type="button"
         class="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
-        @click="viewAll"
+        @click="expanded ? collapse() : expand()"
       >
-        View all ({{ detailFieldCount }})
+        {{ expanded ? 'View less' : `View all (${fields.length})` }}
       </button>
     </div>
   </section>
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { Listbox, ListboxButton, ListboxOptions, ListboxOption } from '@headlessui/vue';
 import {
   CurrencyDollarIcon,
@@ -200,10 +200,17 @@ import {
   CheckIcon
 } from '@heroicons/vue/24/outline';
 import EditableLabeledValue from '@/components/record-page/EditableLabeledValue.vue';
+import { shouldHideDetailField } from '@/components/record-page/fieldVisibilityGuards';
 
 function getRecordPathFieldSelectedId(field) {
   const v = field?.value;
   if (v == null || v === '') return null;
+  if (Array.isArray(v)) {
+    const first = v[0];
+    if (first == null || first === '') return null;
+    if (typeof first === 'object') return first._id ?? first.id ?? first.value ?? null;
+    return first;
+  }
   if (typeof v === 'object') return v._id ?? v.id ?? null;
   return v;
 }
@@ -219,12 +226,38 @@ const props = defineProps({
 
 const fields = computed(() => {
   const value = props.adapter?.getDetailFields?.(props.record, props.context);
-  return Array.isArray(value) ? value : [];
+  const list = Array.isArray(value) ? value : [];
+  const moduleKey = (props.context?.moduleKey || props.context?.module || '').toString().toLowerCase().trim();
+  return list.filter((field) => !shouldHideDetailField(field, moduleKey, { enforceRegistryKnown: false }));
 });
 
 const hideHeader = computed(() => props.context?.hideHeader === true);
-const shouldShowViewAll = computed(() => props.adapter?.shouldShowDetailsViewAll?.(props.record, props.context) === true);
-const detailFieldCount = computed(() => props.adapter?.getDetailFieldCount?.(props.record, props.context) || fields.value.length);
+
+const DEFAULT_VISIBLE_FIELDS = 5;
+const isSectionExpanded = computed(() => (props.context?.expandedLeftSection || '').toString().trim() === 'details');
+const expanded = ref(isSectionExpanded.value);
+
+// When the detail section is expanded (e.g. user clicked "Expand"), show all fields
+watch(isSectionExpanded, (expandedMode) => {
+  if (expandedMode) expanded.value = true;
+}, { immediate: false });
+
+const visibleFields = computed(() => {
+  const list = fields.value;
+  if (expanded.value || list.length <= DEFAULT_VISIBLE_FIELDS) return list;
+  return list.slice(0, DEFAULT_VISIBLE_FIELDS);
+});
+
+const showExpandCollapse = computed(() => fields.value.length > DEFAULT_VISIBLE_FIELDS);
+
+function expand() {
+  expanded.value = true;
+  props.adapter?.viewAllDetails?.(props.record, props.context);
+}
+
+function collapse() {
+  expanded.value = false;
+}
 
 const getFieldIcon = (field) => {
   if (field?.prefixIcon) return field.prefixIcon;
@@ -257,7 +290,14 @@ const handleFieldEdit = (field, event) => {
   }
 };
 
-const viewAll = () => {
-  props.adapter?.viewAllDetails?.(props.record, props.context);
-};
 </script>
+
+<style scoped>
+.details-section :deep(.text-record-empty) {
+  color: var(--color-neutral-300) !important;
+}
+
+:global(.dark) .details-section :deep(.text-record-empty) {
+  color: var(--color-neutral-600) !important;
+}
+</style>

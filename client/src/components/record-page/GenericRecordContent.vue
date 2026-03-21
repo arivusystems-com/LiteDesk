@@ -1,5 +1,5 @@
 <template>
-  <div class="generic-record-content flex-1 min-h-0 overflow-hidden flex flex-col">
+  <div ref="genericRecordContentRootRef" class="generic-record-content flex-1 min-h-0 overflow-hidden flex flex-col">
     <RecordPageShell
       :loading="loading"
       :error="error"
@@ -8,9 +8,10 @@
       :layout-props="layoutProps"
       @retry="fetchRecord"
     >
-      <template v-if="record" #header>
+      <!-- No RecordHeader in embed (quick preview): drawer already has prev/next + close; header would fix to viewport and show as extra over the list -->
+      <template v-if="record && !embed" #header>
         <RecordHeader
-          :show-navigation="!embed"
+          :show-navigation="true"
           :can-previous="!!neighbors.previousId"
           :can-next="!!neighbors.nextId"
           :previous-label="`Previous ${moduleLabelSingular}`"
@@ -34,6 +35,26 @@
               <PencilSquareIcon class="w-5 h-5" />
             </button>
             <button
+              v-if="supportsTags"
+              ref="tagHeaderButtonRef"
+              type="button"
+              :class="[
+                'relative inline-flex items-center justify-center p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
+                hasRecordTags
+                  ? 'text-indigo-600 dark:text-indigo-400'
+                  : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+              ]"
+              aria-label="Tags"
+              title="Tags"
+              @click="handleTagIconClick($event)"
+            >
+              <TagIcon class="block w-5 h-5" />
+              <span
+                v-if="hasRecordTags"
+                class="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400"
+              />
+            </button>
+            <button
               type="button"
               class="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
               aria-label="Copy URL"
@@ -42,42 +63,244 @@
             >
               <ClipboardDocumentIcon class="w-5 h-5" />
             </button>
-            <button
-              type="button"
-              class="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-              aria-label="Delete"
-              title="Delete"
-              @click="showDeleteModal = true"
-            >
-              <TrashIcon class="w-5 h-5" />
-            </button>
+            <Menu as="div" class="relative">
+              <MenuButton
+                class="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                aria-label="More actions"
+                title="More actions"
+              >
+                <EllipsisVerticalIcon class="w-5 h-5" />
+              </MenuButton>
+              <transition
+                enter-active-class="transition ease-out duration-100"
+                enter-from-class="transform opacity-0 scale-95"
+                enter-to-class="transform opacity-100 scale-100"
+                leave-active-class="transition ease-in duration-75"
+                leave-from-class="transform opacity-100 scale-100"
+                leave-to-class="transform opacity-0 scale-95"
+              >
+                <MenuItems
+                  class="absolute right-0 top-full mt-2 w-48 rounded-lg shadow-xl py-1 bg-white dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/10 z-50"
+                >
+                  <MenuItem v-slot="{ active }">
+                    <button
+                      type="button"
+                      :class="[
+                        'w-full text-left px-4 py-2 text-sm transition-colors duration-150 flex items-center gap-2',
+                        active ? 'bg-gray-100 dark:bg-gray-700' : 'text-gray-700 dark:text-gray-200'
+                      ]"
+                      @click="handleDuplicate"
+                    >
+                      <DocumentDuplicateIcon class="w-4 h-4" />
+                      <span>Duplicate</span>
+                    </button>
+                  </MenuItem>
+                  <MenuItem v-slot="{ active }">
+                    <button
+                      type="button"
+                      :class="[
+                        'w-full text-left px-4 py-2 text-sm transition-colors duration-150 flex items-center gap-2',
+                        active ? 'bg-gray-100 dark:bg-gray-700' : 'text-gray-700 dark:text-gray-200'
+                      ]"
+                      @click="handleExport"
+                    >
+                      <ArrowDownTrayIcon class="w-4 h-4" />
+                      <span>Export</span>
+                    </button>
+                  </MenuItem>
+                  <MenuItem v-if="supportsEmail" v-slot="{ active }">
+                    <button
+                      type="button"
+                      :class="[
+                        'w-full text-left px-4 py-2 text-sm transition-colors duration-150 flex items-center gap-2',
+                        active ? 'bg-gray-100 dark:bg-gray-700' : 'text-gray-700 dark:text-gray-200'
+                      ]"
+                      @click="showEmailModal = true"
+                    >
+                      <EnvelopeIcon class="w-4 h-4" />
+                      <span>Send email</span>
+                    </button>
+                  </MenuItem>
+                  <hr class="my-1 border-gray-200 dark:border-gray-700" />
+                  <MenuItem v-slot="{ active }">
+                    <button
+                      type="button"
+                      :class="[
+                        'w-full text-left px-4 py-2 text-sm transition-colors duration-150 flex items-center gap-2',
+                        active ? 'bg-gray-100 dark:bg-gray-700' : 'text-red-600 dark:text-red-400'
+                      ]"
+                      @click="showDeleteModal = true"
+                    >
+                      <TrashIcon class="w-4 h-4" />
+                      <span>Delete</span>
+                    </button>
+                  </MenuItem>
+                </MenuItems>
+              </transition>
+            </Menu>
           </template>
         </RecordHeader>
       </template>
 
       <template v-if="record" #left>
-        <div class="mb-6 sticky z-10 border-b border-gray-200/80 dark:border-gray-700/80 bg-white/95 dark:bg-gray-900/95 backdrop-blur py-4 lg:-top-6">
-          <div class="flex items-center gap-3">
-            <div class="min-w-0 flex-1">
-              <EditableTitle
-                :title="recordTitle"
-                :can-edit="canEditRecord"
-                @save="handleTitleSave"
-              />
+        <div
+          v-if="expandedLeftSection"
+          :class="[
+            'flex-shrink-0 mb-4 sticky z-20 bg-white/95 dark:bg-gray-900/95 supports-[backdrop-filter]:bg-white/90 supports-[backdrop-filter]:dark:bg-gray-900/90 backdrop-blur',
+            embed ? 'top-0' : 'top-0 lg:-top-6'
+          ]"
+        >
+          <div class="flex items-center justify-between gap-2 py-2">
+            <button
+              type="button"
+              class="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+              @click="closeExpandedLeftSection"
+            >
+              <ArrowLeftIcon class="h-4 w-4" />
+              <span>Back to {{ moduleLabelSingular }}</span>
+            </button>
+            <button
+              type="button"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 dark:border-gray-700 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              aria-label="Collapse section"
+              title="Collapse"
+              @click="closeExpandedLeftSection"
+            >
+              <ArrowsPointingInIcon class="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Description version history full page -->
+        <div
+          v-if="record && expandedLeftSection === 'description-history'"
+          class="description-history-page flex-1 min-h-0 mt-4 flex flex-col gap-6"
+        >
+          <h2 class="text-2xl font-bold text-gray-900 dark:text-white flex-shrink-0">{{ recordTitle || moduleLabelSingular }}</h2>
+          <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] grid-rows-[1fr] gap-6 min-h-0 flex-1">
+            <div class="flex flex-col min-h-0 min-w-0 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden h-full">
+              <div class="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+                <div
+                  v-if="descriptionHistoryShowDiff && descriptionHistoryDiffHtml"
+                  class="text-md text-gray-900 dark:text-white px-6 py-4 leading-[1.75] [&_del]:px-0.5 [&_ins]:px-0.5"
+                  v-html="descriptionHistoryDiffHtml"
+                />
+                <div
+                  v-else-if="descriptionHistorySelectedHasContent"
+                  class="text-md text-gray-900 dark:text-white px-6 py-4 leading-[1.75] [&_p]:mb-2 [&_p:last-child]:mb-0 [&_p]:leading-[1.75] [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:my-4 [&_h1]:mb-2 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:my-4 [&_h2]:mb-2 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:my-4 [&_h3]:mb-2 [&_ul]:my-2 [&_ol]:my-2 [&_ul]:pl-6 [&_ol]:pl-6 [&_ul]:list-disc [&_ol]:list-decimal [&_blockquote]:border-l-4 [&_blockquote]:border-gray-200 [&_blockquote]:pl-4 [&_blockquote]:my-2 [&_blockquote]:text-gray-500 dark:[&_blockquote]:border-gray-600 dark:[&_blockquote]:text-gray-400 [&_a]:text-indigo-600 [&_a]:underline dark:[&_a]:text-indigo-400"
+                  v-html="descriptionHistorySelectedContent"
+                />
+                <p v-else class="px-6 py-4 text-sm text-gray-400 dark:text-gray-500 italic m-0">
+                  No description in this version.
+                </p>
+              </div>
+            </div>
+            <div class="flex flex-col min-h-0 min-w-0 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden h-full">
+              <h3 class="font-semibold text-gray-900 dark:text-white px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                Version history
+              </h3>
+              <div v-if="descriptionVersionsLoading" class="flex items-center justify-center py-8 flex-1 min-h-0 overflow-hidden">
+                <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+              </div>
+              <div v-else class="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-0">
+                <label
+                  v-for="(ver, idx) in descriptionHistoryList"
+                  :key="ver.isCurrent ? 'current' : `version-${idx}-${ver.createdAt}`"
+                  :class="[
+                    'flex items-start gap-3 py-3 px-3 rounded-lg cursor-pointer transition-colors',
+                    selectedDescriptionVersionIndex === idx
+                      ? 'bg-indigo-50 dark:bg-indigo-900/30'
+                      : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                  ]"
+                >
+                  <input
+                    v-model="selectedDescriptionVersionIndex"
+                    type="radio"
+                    :name="'generic-desc-version-' + (record?._id || '')"
+                    :value="idx"
+                    class="mt-1 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 focus:ring-indigo-500"
+                  />
+                  <div class="min-w-0 flex-1">
+                    <span class="text-sm text-gray-900 dark:text-white block">
+                      {{ formatDescriptionVersionDate(ver.createdAt) }}
+                    </span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mt-0.5">
+                      <span v-if="ver.isCurrent" class="font-medium text-gray-600 dark:text-gray-300">Current Version</span>
+                      <template v-else>
+                        <Avatar
+                          v-if="ver.createdBy"
+                          :record="{ name: ver.createdBy }"
+                          size="sm"
+                          class="shrink-0"
+                        />
+                        {{ ver.createdBy || 'Someone' }}
+                      </template>
+                    </span>
+                  </div>
+                </label>
+              </div>
+              <p class="text-xs text-gray-400 dark:text-gray-500 px-4 py-2 border-t border-gray-100 dark:border-gray-700 flex-shrink-0">
+                Version history is stored for up to 365 days.
+              </p>
+              <div class="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+                <button
+                  type="button"
+                  :disabled="selectedDescriptionVersionIndex === 0 || descriptionRestoreLoading"
+                  class="w-full inline-flex items-center justify-center px-4 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:pointer-events-none"
+                  @click="restoreDescriptionVersion"
+                >
+                  <span v-if="descriptionRestoreLoading">Restoring…</span>
+                  <span v-else>Restore this version</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        <div v-if="genericStateFields.length" class="mt-4">
+        <div v-if="embed && !expandedLeftSection" class="pt-0 flex-shrink-0" aria-hidden="true" />
+        <RecordPageTitleRow
+          v-if="!expandedLeftSection"
+          :sticky="isLeftTitleSticky"
+          :embed="embed"
+        >
+          <Avatar
+            v-if="recordAvatarUser"
+            :user="recordAvatarUser"
+            size="lg"
+            class="shrink-0"
+          />
+          <Avatar
+            v-else
+            :record="{ name: recordTitle }"
+            :icon="recordAvatarIcon"
+            size="lg"
+            class="shrink-0"
+          />
+          <div class="min-w-0 flex-1">
+            <EditableTitle
+              :title="recordTitle"
+              :can-edit="canEditRecord"
+              @save="handleTitleSave"
+            />
+          </div>
+        </RecordPageTitleRow>
+
+        <div
+          v-if="genericStateFields.length && (!expandedLeftSection || expandedLeftSection === 'key-fields')"
+          :class="['group/left-section', expandedLeftSection ? 'mt-8' : 'mt-4']"
+        >
           <RecordStateSection
             heading="Key fields"
             :fields="genericStateFields"
             :field-values="genericStateValues"
-            :enable-legacy-fallback="false"
           />
         </div>
 
-        <section v-if="record && genericSections.length" class="mt-4">
+        <!-- Section stack: show when collapsed, or when expanded to details/related (adapter returns only that section) -->
+        <section
+          v-if="record && genericSections.length && (!expandedLeftSection || expandedLeftSection === 'details' || expandedLeftSection === 'related')"
+          :class="[expandedLeftSection ? 'mt-8' : 'mt-4']"
+        >
           <SectionStack
             :sections="genericSections"
             :record="record"
@@ -99,16 +322,166 @@
           :record-id="record._id"
           @close="$emit('close')"
         >
+          <template v-if="embed && quickPreviewNav" #header-prefix>
+            <div class="flex items-center gap-1 mr-2">
+              <button
+                type="button"
+                class="inline-flex h-7 w-7 items-center justify-center rounded border border-gray-200 text-gray-500 transition-colors dark:border-gray-700 dark:text-gray-400 shrink-0"
+                :class="quickPreviewNav.canPrevious ? 'hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200' : 'opacity-40 cursor-not-allowed'"
+                :disabled="!quickPreviewNav.canPrevious"
+                :aria-label="`Previous ${moduleLabelSingular}`"
+                :title="`Previous ${moduleLabelSingular}`"
+                @click="quickPreviewNav.onPrev()"
+              >
+                <ArrowLeftIcon class="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-7 w-7 items-center justify-center rounded border border-gray-200 text-gray-500 transition-colors dark:border-gray-700 dark:text-gray-400 shrink-0"
+                :class="quickPreviewNav.canNext ? 'hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200' : 'opacity-40 cursor-not-allowed'"
+                :disabled="!quickPreviewNav.canNext"
+                :aria-label="`Next ${moduleLabelSingular}`"
+                :title="`Next ${moduleLabelSingular}`"
+                @click="quickPreviewNav.onNext()"
+              >
+                <ArrowRightIcon class="h-4 w-4" />
+              </button>
+            </div>
+          </template>
+          <template v-if="embed" #header-actions>
+            <button
+              type="button"
+              class="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-label="Open in new tab"
+              title="Open in new tab"
+              @click="openRecordInNewTab"
+            >
+              <ArrowTopRightOnSquareIcon class="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              class="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-label="Edit"
+              title="Edit"
+              @click="showEditModal = true"
+            >
+              <PencilSquareIcon class="w-5 h-5" />
+            </button>
+            <button
+              v-if="supportsTags"
+              ref="tagHeaderButtonRef"
+              type="button"
+              :class="[
+                'relative inline-flex items-center justify-center p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
+                hasRecordTags
+                  ? 'text-indigo-600 dark:text-indigo-400'
+                  : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+              ]"
+              aria-label="Tags"
+              title="Tags"
+              @click="handleTagIconClick($event)"
+            >
+              <TagIcon class="block w-5 h-5" />
+              <span
+                v-if="hasRecordTags"
+                class="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-indigo-600 dark:text-indigo-400"
+              />
+            </button>
+            <button
+              type="button"
+              class="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-label="Copy URL"
+              title="Copy URL"
+              @click="copyRecordUrl"
+            >
+              <ClipboardDocumentIcon class="w-5 h-5" />
+            </button>
+            <Menu as="div" class="relative">
+              <MenuButton
+                class="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                aria-label="More actions"
+                title="More actions"
+              >
+                <EllipsisVerticalIcon class="w-5 h-5" />
+              </MenuButton>
+              <transition
+                enter-active-class="transition ease-out duration-100"
+                enter-from-class="transform opacity-0 scale-95"
+                enter-to-class="transform opacity-100 scale-100"
+                leave-active-class="transition ease-in duration-75"
+                leave-from-class="transform opacity-100 scale-100"
+                leave-to-class="transform opacity-0 scale-95"
+              >
+                <MenuItems
+                  class="absolute right-0 top-full mt-2 w-48 rounded-lg shadow-xl py-1 bg-white dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/10 z-50"
+                >
+                  <MenuItem v-slot="{ active }">
+                    <button
+                      type="button"
+                      :class="[
+                        'w-full text-left px-4 py-2 text-sm transition-colors duration-150 flex items-center gap-2',
+                        active ? 'bg-gray-100 dark:bg-gray-700' : 'text-gray-700 dark:text-gray-200'
+                      ]"
+                      @click="handleDuplicate"
+                    >
+                      <DocumentDuplicateIcon class="w-4 h-4" />
+                      <span>Duplicate</span>
+                    </button>
+                  </MenuItem>
+                  <MenuItem v-slot="{ active }">
+                    <button
+                      type="button"
+                      :class="[
+                        'w-full text-left px-4 py-2 text-sm transition-colors duration-150 flex items-center gap-2',
+                        active ? 'bg-gray-100 dark:bg-gray-700' : 'text-gray-700 dark:text-gray-200'
+                      ]"
+                      @click="handleExport"
+                    >
+                      <ArrowDownTrayIcon class="w-4 h-4" />
+                      <span>Export</span>
+                    </button>
+                  </MenuItem>
+                  <MenuItem v-if="supportsEmail" v-slot="{ active }">
+                    <button
+                      type="button"
+                      :class="[
+                        'w-full text-left px-4 py-2 text-sm transition-colors duration-150 flex items-center gap-2',
+                        active ? 'bg-gray-100 dark:bg-gray-700' : 'text-gray-700 dark:text-gray-200'
+                      ]"
+                      @click="showEmailModal = true"
+                    >
+                      <EnvelopeIcon class="w-4 h-4" />
+                      <span>Send email</span>
+                    </button>
+                  </MenuItem>
+                  <hr class="my-1 border-gray-200 dark:border-gray-700" />
+                  <MenuItem v-slot="{ active }">
+                    <button
+                      type="button"
+                      :class="[
+                        'w-full text-left px-4 py-2 text-sm transition-colors duration-150 flex items-center gap-2',
+                        active ? 'bg-gray-100 dark:bg-gray-700' : 'text-red-600 dark:text-red-400'
+                      ]"
+                      @click="showDeleteModal = true"
+                    >
+                      <TrashIcon class="w-4 h-4" />
+                      <span>Delete</span>
+                    </button>
+                  </MenuItem>
+                </MenuItems>
+              </transition>
+            </Menu>
+          </template>
           <template #tab-activity>
             <ActivitySection
-              :events="activityEvents"
+              :events="filteredActivityEvents"
               :ui="activityUi"
               :activity-pane-ready="true"
               :activity-search-open="activitySearchOpen"
               :activity-search-query="activitySearchQuery"
               :activity-filter-comments="activityFilterComments"
               :activity-filter-updates="activityFilterUpdates"
-              :activity-filter-email="false"
+              :activity-filter-email="activityFilterEmail"
               :new-comment-text="newCommentText"
               :show-notifications="false"
               @comment="handleAddComment"
@@ -116,16 +489,55 @@
               @update:activitySearchQuery="activitySearchQuery = $event"
               @update:activityFilterComments="activityFilterComments = $event"
               @update:activityFilterUpdates="activityFilterUpdates = $event"
+              @update:activityFilterEmail="activityFilterEmail = $event"
               @update:newCommentText="newCommentText = $event"
             />
           </template>
           <template #tab-related>
-            <div class="flex flex-col h-full p-4">
-              <RelatedSection
-                :record="record"
-                :adapter="genericAdapter"
-                :context="{ hideHeader: true }"
-              />
+            <div class="flex flex-col h-full">
+              <div class="record-context-panel__header flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white dark:bg-gray-900">
+                <h2 class="text-base font-semibold text-gray-900 dark:text-white">Related</h2>
+                <div v-if="canLinkRecords" class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    @click="openAddRecordDrawer"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                  >
+                    <PlusIcon class="w-4 h-4" />
+                    Add record
+                  </button>
+                  <button
+                    type="button"
+                    @click="openLinkRecordDrawer"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                  >
+                    <LinkIcon class="w-4 h-4" />
+                    Link record
+                  </button>
+                </div>
+              </div>
+              <div class="p-4 overflow-y-auto flex-1 min-h-0">
+                <RelatedSection
+                  :record="record"
+                  :adapter="genericAdapter"
+                  :context="{ hideHeader: true }"
+                />
+              </div>
+            </div>
+          </template>
+          <template #tab-integrations>
+            <div class="flex flex-col h-full">
+              <div class="record-context-panel__header flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white dark:bg-gray-900">
+                <h2 class="text-base font-semibold text-gray-900 dark:text-white">Integrations</h2>
+              </div>
+              <div class="p-4 overflow-y-auto flex-1 min-h-0">
+                <AutomationContext
+                  v-if="record?._id"
+                  :entity-type="moduleKey"
+                  :entity-id="record._id"
+                />
+                <div v-else class="text-sm text-gray-600 dark:text-gray-400 italic">No integrations configured.</div>
+              </div>
             </div>
           </template>
         </RecordRightPane>
@@ -140,6 +552,13 @@
       @close="showEditModal = false"
       @saved="handleRecordUpdated"
     />
+    <CreateRecordDrawer
+      v-if="showAddRelatedRecordDrawer && addRelatedRecordModuleKey"
+      :is-open="showAddRelatedRecordDrawer"
+      :module-key="addRelatedRecordModuleKey"
+      @close="closeAddRelatedRecordDrawer"
+      @saved="handleAddRelatedRecordSaved"
+    />
 
     <DeleteConfirmationModal
       :show="showDeleteModal"
@@ -149,11 +568,56 @@
       @close="showDeleteModal = false"
       @confirm="confirmDelete"
     />
+
+    <EmailComposeDrawer
+      v-if="record && supportsEmail"
+      :is-open="showEmailModal"
+      :related-to="record?._id ? { moduleKey, recordId: String(record._id) } : null"
+      :initial-to="record?.email || record?.primaryContact?.email || ''"
+      @close="showEmailModal = false"
+      @submit="handleEmailSubmit"
+    />
+
+    <LinkRecordsDrawer
+      v-if="record"
+      :is-open="showLinkRecordDrawer"
+      :module-key="''"
+      :source-app-key="recordContextAppKey"
+      :source-module-key="moduleKey"
+      :multiple="true"
+      :allow-create="allowCreateFromLinkDrawer"
+      :create-and-link="allowCreateFromLinkDrawer"
+      :title="allowCreateFromLinkDrawer ? 'Add and Link Records' : 'Link Record'"
+      :context="linkRecordDrawerContext"
+      @close="closeLinkRecordDrawer"
+      @linked="handleLinkRecordDrawerLinked"
+      @create="handleLinkRecordDrawerCreate"
+    />
+
+    <Teleport to="body">
+      <div
+        v-if="supportsTags && record && showTagPopover"
+        ref="tagPopoverRef"
+        :style="tagPopoverStyle"
+        class="fixed z-[120] w-[360px] rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl"
+      >
+        <RecordTagPopover
+          :record="record"
+          :tag-storage-key="tagStorageKey"
+          :can-edit="canEditRecord"
+          :persist-tags="persistRecordTags"
+          :instance-tag-source="moduleKeyLower"
+          :fetch-record="fetchRecord"
+          :open="showTagPopover"
+        />
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, inject } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount, inject } from 'vue';
+import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';
@@ -161,20 +625,55 @@ import apiClient from '@/utils/apiClient';
 import RecordPageShell from '@/components/record-page/RecordPageShell.vue';
 import RecordHeader from '@/components/record-page/RecordHeader.vue';
 import RecordStateSection from '@/components/record-page/RecordStateSection.vue';
+import RecordPageTitleRow from '@/components/record-page/RecordPageTitleRow.vue';
+import { useStickyTitleRow } from '@/components/record-page/composables/useStickyTitleRow';
 import SectionStack from '@/components/record-page/sections/SectionStack.vue';
 import RelatedSection from '@/components/record-page/sections/RelatedSection.vue';
 import RecordRightPane from '@/components/record-page/RecordRightPane.vue';
 import EditableTitle from '@/components/record-page/EditableTitle.vue';
+import RecordTagPopover from '@/components/record-page/RecordTagPopover.vue';
+import { useRecordTagPopoverPosition } from '@/components/record-page/composables/useRecordTagPopoverPosition';
+import { useRecordContext, invalidateRecordContext } from '@/composables/useRecordContext';
 import ActivitySection from '@/components/activity/ActivitySection.vue';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import DeleteConfirmationModal from '@/components/common/DeleteConfirmationModal.vue';
+import EmailComposeDrawer from '@/components/communications/EmailComposeDrawer.vue';
+import AutomationContext from '@/components/automation/AutomationContext.vue';
+import LinkRecordsDrawer from '@/components/common/LinkRecordsDrawer.vue';
 import { createGenericRecordAdapter } from '@/components/record-page/adapters/genericRecordAdapter';
+import { useRecordTags, getDefaultTagChipClass } from '@/components/record-page/composables/useRecordTags';
 import {
   normalizeSystemActivityEvent,
   normalizeCommentActivityEvent,
+  normalizeEmailThreadActivityEvent,
   sortActivityEventsByDate
 } from '@/components/record-page/activityEventModel';
-import { PencilSquareIcon, ClipboardDocumentIcon, TrashIcon } from '@heroicons/vue/24/outline';
+import { normalizeActivityUiContract } from '@/components/activity/activityUiContract';
+import dateUtils from '@/utils/dateUtils';
+import {
+  PencilSquareIcon,
+  ClipboardDocumentIcon,
+  TrashIcon,
+  UserCircleIcon,
+  BuildingOfficeIcon,
+  CalendarIcon,
+  CubeIcon,
+  DocumentTextIcon,
+  TagIcon,
+  EllipsisVerticalIcon,
+  DocumentDuplicateIcon,
+  ArrowDownTrayIcon,
+  EnvelopeIcon,
+  LinkIcon,
+  PlusIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ArrowsPointingInIcon,
+  ArrowTopRightOnSquareIcon
+} from '@heroicons/vue/24/outline';
+import Avatar from '@/components/common/Avatar.vue';
+import DOMPurify from 'dompurify';
+import { resolveFieldContext } from '@/utils/fieldContextFilter';
 
 const props = defineProps({
   moduleKey: { type: String, required: true },
@@ -187,25 +686,173 @@ const emit = defineEmits(['close']);
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
-const { openTab } = useTabs();
+const { openTab, activeTabId, findTabById, updateTabTitle, replaceActiveTab } = useTabs();
 const recordLayoutIsMobile = inject('recordLayoutIsMobile', ref(false));
+const quickPreviewNav = inject('quickPreviewNav', null);
 
 const record = ref(null);
 const loading = ref(true);
 const error = ref(null);
 const moduleDefinition = ref(null);
 const activityRaw = ref([]);
-const neighbors = ref({ previousId: null, nextId: null });
-const expandedLeftSection = ref('');
-const newCommentText = ref('');
-const activitySearchOpen = ref(false);
-const activitySearchQuery = ref('');
-const activityFilterComments = ref(true);
-const activityFilterUpdates = ref(true);
-const showDeleteModal = ref(false);
+  const emailThreads = ref([]);
+  const neighbors = ref({ previousId: null, nextId: null });
+  const expandedLeftSection = ref('');
+  const descriptionVersionsData = ref({ currentDescription: '', versions: [] });
+  const selectedDescriptionVersionIndex = ref(0);
+  const descriptionVersionsLoading = ref(false);
+  const descriptionRestoreLoading = ref(false);
+  const newCommentText = ref('');
+  const activitySearchOpen = ref(false);
+  const activitySearchQuery = ref('');
+  const activityFilterComments = ref(true);
+  const activityFilterUpdates = ref(true);
+  const activityFilterEmail = ref(true);
+  const expandedTaskEmailThreads = ref(new Set());
+  const showDeleteModal = ref(false);
 const showEditModal = ref(false);
+const showEmailModal = ref(false);
+const showLinkRecordDrawer = ref(false);
+const allowCreateFromLinkDrawer = ref(false);
+const showAddRelatedRecordDrawer = ref(false);
+const addRelatedRecordModuleKey = ref('');
+const pendingAddRelatedLinkPayload = ref(null);
+/** Organization list for people record page (organization field dropdown). Fetched when moduleKey is people. */
+const peopleOrganizationList = ref([]);
+/** Tenant user list used to render user lookup labels (e.g., assignedTo) in generic sections. */
+const userLookupList = ref([]);
 const deleting = ref(false);
 const rightPaneRef = ref(null);
+
+const genericRecordContentRootRef = ref(null);
+const {
+  isLeftTitleSticky,
+  attachWhenReady: attachStickyTitleWhenReady,
+  detach: detachStickyTitle,
+  reset: resetStickyTitle
+} = useStickyTitleRow(genericRecordContentRootRef);
+
+const moduleKeyLower = computed(() => (props.moduleKey || '').toLowerCase());
+const isPeopleModule = computed(() => moduleKeyLower.value === 'people');
+const supportsTags = computed(() => ['people', 'organizations'].includes(moduleKeyLower.value));
+const supportsEmail = computed(() => MODULES_WITH_EMAIL.has(moduleKeyLower.value));
+
+/** App key for record context / link drawer: people and organizations use PLATFORM. */
+const recordContextAppKey = computed(() => {
+  const key = moduleKeyLower.value;
+  return (key === 'people' || key === 'organizations') ? 'PLATFORM' : 'PLATFORM';
+});
+
+const linkRecordDrawerContext = computed(() => {
+  const id = record.value?._id;
+  if (!id) return {};
+  const key = (props.moduleKey || '').toLowerCase();
+  if (key === 'people') return { personId: id };
+  return { sourceRecordId: id };
+});
+
+const openLinkRecordDrawer = () => {
+  allowCreateFromLinkDrawer.value = false;
+  showLinkRecordDrawer.value = true;
+};
+
+const openAddRecordDrawer = () => {
+  allowCreateFromLinkDrawer.value = true;
+  showLinkRecordDrawer.value = true;
+};
+
+const closeLinkRecordDrawer = () => {
+  showLinkRecordDrawer.value = false;
+  allowCreateFromLinkDrawer.value = false;
+};
+
+const closeAddRelatedRecordDrawer = () => {
+  showAddRelatedRecordDrawer.value = false;
+  addRelatedRecordModuleKey.value = '';
+  pendingAddRelatedLinkPayload.value = null;
+};
+
+const canLinkRecords = computed(() => authStore.can(props.moduleKey, 'edit'));
+
+const { context: genericRecordContext, load: loadGenericRecordContext, canUnlink: genericRecordContextCanUnlink } = useRecordContext(
+  () => recordContextAppKey.value,
+  () => props.moduleKey,
+  () => record.value?._id
+);
+watch(record, (r) => {
+  if (r?._id) loadGenericRecordContext();
+}, { immediate: true });
+
+watch(() => props.recordId, () => {
+  expandedLeftSection.value = '';
+});
+
+const genericRelatedGroupsFromContext = computed(() => {
+  const rels = genericRecordContext.value?.relationships;
+  if (!Array.isArray(rels) || rels.length === 0) return [];
+  return rels
+    .filter((rel) => rel.records && rel.records.length > 0)
+    .map((rel) => {
+      const key = rel.relationshipKey || rel.label || 'related';
+      const label = rel.ui?.label || rel.label || key;
+      const direction = (rel.direction || 'SOURCE').toUpperCase();
+      const items = (rel.records || []).map((r) => {
+        const id = r.recordId ?? r.id ?? r._id;
+        const moduleKey = (r.moduleKey || '').toLowerCase();
+        const appKey = (r.appKey || 'SALES').toUpperCase();
+        const path = moduleKey ? `/${moduleKey}/${id}` : null;
+        return {
+          id: id?.toString?.() ?? String(id),
+          title: r.label || r.name || r.title || (id ? String(id).slice(0, 8) : 'Untitled'),
+          meta: r.secondaryText || r.status || '',
+          onOpen: path ? () => openTab(path, { background: false, insertAdjacent: true }) : undefined,
+          relationshipKey: key,
+          appKey,
+          moduleKey,
+          direction
+        };
+      });
+      return { key, label, items };
+    });
+});
+
+const {
+  tagHeaderButtonRef,
+  tagPopoverRef,
+  showTagPopover,
+  tagPopoverStyle,
+  updateTagPopoverPosition,
+  handleTagIconClick,
+  openTagPopoverFromField,
+  handleTagPopoverMousedown,
+  handleTagPopoverOutsideClick
+} = useRecordTagPopoverPosition();
+
+const hasRecordTags = computed(() => Array.isArray(record.value?.tags) && record.value.tags.length > 0);
+
+const tagStorageKey = computed(() => {
+  const organizationId = authStore.user?.organizationId || authStore.organization?._id || 'default-org';
+  return `litedesk-${moduleKeyLower.value || 'record'}-tag-definitions-${organizationId}`;
+});
+
+const persistRecordTags = async (cleaned) => {
+  if (!record.value || !props.recordId) return;
+  try {
+    const moduleKey = moduleKeyLower.value;
+    const supportsDedicatedTagsEndpoint = moduleKey === 'deals' || moduleKey === 'tasks';
+    const response = supportsDedicatedTagsEndpoint
+      ? await apiClient.put(`/${props.moduleKey}/${props.recordId}/tags`, { tags: cleaned })
+      : await apiClient.put(`/${props.moduleKey}/${props.recordId}`, { tags: cleaned });
+    if (response?.success && response?.data) {
+      record.value.tags = Array.isArray(response.data.tags) ? response.data.tags : cleaned;
+    } else {
+      record.value.tags = cleaned;
+    }
+  } catch (e) {
+    console.error('Save record tags error:', e);
+    await fetchRecord();
+  }
+};
 
 const moduleLabel = computed(() => {
   const key = (props.moduleKey || '').toLowerCase();
@@ -224,7 +871,45 @@ const recordTitle = computed(() => {
   return (r.name ?? r.title ?? namePart ?? r.email ?? (r._id || '').slice(-8)) || 'Record';
 });
 
+/** For People module: user-shaped object for Avatar (photo or initials). */
+const recordAvatarUser = computed(() => {
+  const r = record.value;
+  if (!r || (props.moduleKey || '').toLowerCase() !== 'people') return null;
+  const firstName = r.first_name ?? r.firstName ?? '';
+  const lastName = r.last_name ?? r.lastName ?? '';
+  if (!firstName && !lastName && !r.email) return null;
+  return {
+    firstName: String(firstName).trim(),
+    lastName: String(lastName).trim(),
+    email: r.email,
+    avatar: r.avatar ?? r.image ?? ''
+  };
+});
+
+/** Icon for Avatar when no user avatar (non-people modules). */
+const recordAvatarIcon = computed(() => {
+  const key = (props.moduleKey || '').toLowerCase();
+  const map = {
+    people: UserCircleIcon,
+    organizations: BuildingOfficeIcon,
+    events: CalendarIcon,
+    items: CubeIcon,
+    forms: DocumentTextIcon
+  };
+  return map[key] || DocumentTextIcon;
+});
+
 const canEditRecord = computed(() => authStore.can?.(props.moduleKey, 'edit') ?? false);
+
+// Use real tag colors for People (must be after canEditRecord)
+const { getTagChipClass: getTagChipClassFromComposable } = useRecordTags(record, {
+  tagStorageKey,
+  canEdit: canEditRecord,
+  persistTags: (names) => (supportsTags.value ? persistRecordTags(names) : Promise.resolve()),
+  instanceTagSource: moduleKeyLower.value,
+  fetchRecord
+});
+const getPeopleTagChipClass = computed(() => (supportsTags.value ? getTagChipClassFromComposable : getDefaultTagChipClass));
 
 const layoutProps = computed(() => ({
   leftExpanded: !!expandedLeftSection.value,
@@ -239,10 +924,188 @@ const layoutProps = computed(() => ({
   ]
 }));
 
+async function handleUnlinkGenericRelated(item, group, rec) {
+  if (!rec?._id || !item?.id || !group?.key) return;
+  const currentRef = { appKey: (recordContextAppKey.value || 'PLATFORM').toUpperCase(), moduleKey: (props.moduleKey || '').toLowerCase(), recordId: rec._id };
+  const relatedRef = { appKey: (item.appKey || 'SALES').toUpperCase(), moduleKey: (item.moduleKey || '').toLowerCase(), recordId: item.id };
+  const isCurrentSource = (item.direction || 'SOURCE').toUpperCase() === 'SOURCE';
+  const source = isCurrentSource ? currentRef : relatedRef;
+  const target = isCurrentSource ? relatedRef : currentRef;
+  try {
+    await apiClient.post('/relationships/unlink', {
+      relationshipKey: group.key,
+      source,
+      target
+    });
+    invalidateRecordContext(recordContextAppKey.value, props.moduleKey, rec._id);
+    await loadGenericRecordContext(true);
+  } catch (err) {
+    console.error('Error unlinking related record:', err);
+    alert(err?.response?.data?.message || 'Error unlinking record. Please try again.');
+  }
+}
+
 const rightPaneTabs = computed(() => [
   { id: 'activity', name: 'Activity' },
-  { id: 'related', name: 'Related' }
+  { id: 'related', name: 'Related' },
+  { id: 'integrations', name: 'Integrations' }
 ]);
+
+const ALLOWED_DESCRIPTION_TAGS = ['p', 'br', 'strong', 'em', 's', 'u', 'a', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'blockquote'];
+
+const descriptionHistoryList = computed(() => {
+  const rec = record.value;
+  const data = descriptionVersionsData.value;
+  if (!rec) return [];
+  const current = {
+    isCurrent: true,
+    createdAt: rec.updatedAt || rec.createdAt || new Date(),
+    createdBy: null,
+    content: rec.description ?? rec.customFields?.description ?? ''
+  };
+  const currentUserName = authStore.user
+    ? [authStore.user.firstName, authStore.user.lastName].filter(Boolean).join(' ').trim() || authStore.user.email
+    : 'You';
+  const list = [{ ...current, createdBy: currentUserName }];
+  (data.versions || []).forEach((v) => {
+    list.push({
+      isCurrent: false,
+      createdAt: v.createdAt,
+      createdBy: v.createdBy,
+      content: v.content
+    });
+  });
+  return list;
+});
+
+const canViewDescriptionHistory = true;
+
+function formatDescriptionVersionDate(date) {
+  if (!date) return '';
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+}
+
+function getPlainTextFromHtml(html) {
+  if (!html || typeof html !== 'string') return '';
+  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function diffWordsToHtml(oldText, newText) {
+  const oldParts = String(oldText || '').split(/(\s+)/);
+  const newParts = String(newText || '').split(/(\s+)/);
+  const escape = (value) => {
+    const el = document.createElement('div');
+    el.textContent = value;
+    return el.innerHTML;
+  };
+  const result = [];
+  let oldIndex = 0;
+  let newIndex = 0;
+  while (oldIndex < oldParts.length || newIndex < newParts.length) {
+    if (oldIndex < oldParts.length && newIndex < newParts.length && oldParts[oldIndex] === newParts[newIndex]) {
+      result.push(escape(oldParts[oldIndex]));
+      oldIndex += 1;
+      newIndex += 1;
+      continue;
+    }
+    if (newIndex < newParts.length && !oldParts.slice(oldIndex).includes(newParts[newIndex])) {
+      result.push(`<ins class="bg-green-100 dark:bg-green-900/30 text-green-900 dark:text-green-200 no-underline">${escape(newParts[newIndex])}</ins>`);
+      newIndex += 1;
+      continue;
+    }
+    if (oldIndex < oldParts.length) {
+      result.push(`<del class="bg-red-100 dark:bg-red-900/30 text-red-900 dark:text-red-200 line-through">${escape(oldParts[oldIndex])}</del>`);
+      oldIndex += 1;
+      continue;
+    }
+    if (newIndex < newParts.length) {
+      result.push(`<ins class="bg-green-100 dark:bg-green-900/30 text-green-900 dark:text-green-200 no-underline">${escape(newParts[newIndex])}</ins>`);
+      newIndex += 1;
+    }
+  }
+  return result.join('');
+}
+
+const descriptionHistorySelectedContent = computed(() => {
+  const selected = descriptionHistoryList.value[selectedDescriptionVersionIndex.value];
+  const raw = String(selected?.content || '');
+  if (!raw.trim()) return '';
+  return DOMPurify.sanitize(raw, { ALLOWED_TAGS: ALLOWED_DESCRIPTION_TAGS });
+});
+
+const descriptionHistoryShowDiff = computed(
+  () => descriptionHistoryList.value.length > 1 && selectedDescriptionVersionIndex.value > 0
+);
+
+const descriptionHistoryDiffHtml = computed(() => {
+  if (!descriptionHistoryShowDiff.value) return '';
+  const list = descriptionHistoryList.value;
+  const currentVersion = list[0];
+  const selectedVersion = list[selectedDescriptionVersionIndex.value];
+  if (!currentVersion || !selectedVersion) return '';
+  const oldPlain = getPlainTextFromHtml(selectedVersion.content);
+  const newPlain = getPlainTextFromHtml(currentVersion.content);
+  const diffHtml = diffWordsToHtml(oldPlain, newPlain);
+  return DOMPurify.sanitize(diffHtml, { ALLOWED_TAGS: ['ins', 'del'], ALLOWED_ATTR: ['class'] });
+});
+
+const descriptionHistorySelectedHasContent = computed(() => {
+  const selected = descriptionHistoryList.value[selectedDescriptionVersionIndex.value];
+  return Boolean(selected && String(selected.content || '').trim());
+});
+
+function openDescriptionHistory() {
+  selectedDescriptionVersionIndex.value = 0;
+  expandedLeftSection.value = 'description-history';
+  fetchDescriptionVersions();
+}
+
+function closeExpandedLeftSection() {
+  expandedLeftSection.value = '';
+}
+
+async function fetchDescriptionVersions() {
+  if (!record.value?._id || !props.moduleKey) return;
+  descriptionVersionsLoading.value = true;
+  try {
+    const res = await apiClient.get(`/modules/${props.moduleKey}/records/${props.recordId}/description-versions`);
+    descriptionVersionsData.value = res?.data ?? { currentDescription: '', versions: [] };
+  } catch (err) {
+    console.error('Fetch description versions failed:', err);
+    descriptionVersionsData.value = { currentDescription: '', versions: [] };
+  } finally {
+    descriptionVersionsLoading.value = false;
+  }
+}
+
+async function restoreDescriptionVersion() {
+  if (!record.value?._id || !props.moduleKey || selectedDescriptionVersionIndex.value === 0) return;
+  descriptionRestoreLoading.value = true;
+  try {
+    const apiIndex = selectedDescriptionVersionIndex.value - 1;
+    const response = await apiClient.post(
+      `/modules/${props.moduleKey}/records/${props.recordId}/description-versions/restore`,
+      { versionIndex: apiIndex }
+    );
+    const updated = response?.data?.data ?? response?.data;
+    if (updated) {
+      record.value = updated;
+      closeExpandedLeftSection();
+    }
+  } catch (err) {
+    console.error('Restore description version failed:', err);
+  } finally {
+    descriptionRestoreLoading.value = false;
+  }
+}
 
 const genericAdapter = computed(() => {
   if (!record.value || !moduleDefinition.value) return null;
@@ -252,19 +1115,59 @@ const genericAdapter = computed(() => {
     canEditDetails: (_, fieldKey) => canEditRecord.value,
     saveDetailField: async (fieldKey, value) => {
       try {
-        await apiClient.put(`/${props.moduleKey}/${props.recordId}`, { [fieldKey]: value });
-        if (record.value) record.value[fieldKey] = value;
+        const moduleKeyLower = (props.moduleKey || '').toLowerCase();
+
+        // For people records, keep title, first_name, and last_name in sync.
+        if (moduleKeyLower === 'people' && (fieldKey === 'first_name' || fieldKey === 'last_name')) {
+          const current = record.value || {};
+          const next = {
+            first_name: fieldKey === 'first_name' ? value : current.first_name,
+            last_name: fieldKey === 'last_name' ? value : current.last_name
+          };
+          const fullName = [next.first_name, next.last_name].filter(Boolean).join(' ').trim() || undefined;
+
+          const payload = {
+            first_name: next.first_name,
+            last_name: next.last_name
+          };
+          if (fullName) payload.name = fullName;
+
+          const response = await apiClient.put(`/${props.moduleKey}/${props.recordId}`, payload);
+          const updatedRecord = response?.data?.data ?? response?.data ?? null;
+          if (record.value && updatedRecord && typeof updatedRecord === 'object') {
+            Object.assign(record.value, updatedRecord);
+          } else if (record.value) {
+            record.value.first_name = next.first_name;
+            record.value.last_name = next.last_name;
+            if (fullName) record.value.name = fullName;
+          }
+          return;
+        }
+
+        const response = await apiClient.put(`/${props.moduleKey}/${props.recordId}`, { [fieldKey]: value });
+        const updatedRecord = response?.data?.data ?? response?.data ?? null;
+        if (record.value) {
+          // Match task page behavior: reflect the edited field immediately.
+          // Some endpoints (e.g. organizations) return minimal payloads and may omit the edited field.
+          record.value[fieldKey] = value;
+          if (updatedRecord && typeof updatedRecord === 'object') {
+            Object.assign(record.value, updatedRecord);
+          }
+        }
       } catch (e) {
         console.error('Save field error:', e);
       }
     },
-    getRelatedGroups: () => [],
+    getRelatedGroups: () => genericRelatedGroupsFromContext.value,
     openRelatedItem: (item) => {
       const path = item?.recordPath || (item?.moduleKey && item?.id ? `/${item.moduleKey}/${item.id}` : null);
       if (path) openTab(path, { background: false, insertAdjacent: true });
     },
-    canUnlinkRelated: () => false,
-    onUnlinkRelated: () => {},
+    canUnlinkRelated: () => genericRecordContextCanUnlink.value,
+    onUnlinkRelated: handleUnlinkGenericRelated,
+    canLinkRecords: canLinkRecords.value,
+    openLinkRecordDrawer,
+    openAddRecordDrawer,
     handleDescriptionSave: async (value) => {
       try {
         await apiClient.put(`/${props.moduleKey}/${props.recordId}`, { description: value });
@@ -275,20 +1178,189 @@ const genericAdapter = computed(() => {
     },
     canEditDescription: canEditRecord.value,
     expandedLeftSection,
-    openLeftSection: (key) => { expandedLeftSection.value = key; }
+    openLeftSection: (key) => { expandedLeftSection.value = key; },
+    canViewDescriptionHistory,
+    openDescriptionHistory,
+    getEntityOptions: (fieldKey) => {
+      const key = String(fieldKey || '').toLowerCase().trim();
+      if ((props.moduleKey || '').toLowerCase() === 'people' && key === 'organization') {
+        return peopleOrganizationList.value;
+      }
+      const fieldDef = (moduleDefinition.value?.fields || []).find(
+        (f) => String(f?.key || '').toLowerCase().trim() === key
+      );
+      const dataType = String(fieldDef?.dataType || '').toLowerCase();
+      if (dataType.includes('user') || key === 'assignedto' || key === 'ownerid' || key === 'owner') {
+        return userLookupList.value;
+      }
+      return [];
+    }
   });
 });
 
-const genericStateFields = computed(() => (genericAdapter.value ? genericAdapter.value.getStateFields(record.value, {}) : []));
-const genericStateValues = computed(() => (genericAdapter.value ? genericAdapter.value.getStateValues(record.value) : {}));
-const genericSections = computed(() => (genericAdapter.value ? genericAdapter.value.getSections(record.value) : []));
-const sectionContext = computed(() => ({ expandedLeftSection: expandedLeftSection.value, module: 'generic' }));
+const recordFieldContext = computed(() => resolveFieldContext(route.path, route.query));
 
-const activityUi = computed(() => ({
-  moduleKey: props.moduleKey,
-  recordId: props.recordId,
-  addComment: (content, attachments, parentCommentId) => addComment(content, attachments, parentCommentId)
-}));
+const sectionContext = computed(() => {
+  const base = {
+    expandedLeftSection: expandedLeftSection.value,
+    module: 'generic',
+    moduleKey: props.moduleKey,
+    openTab,
+    fieldContext: recordFieldContext.value
+  };
+  if (supportsTags.value) {
+    base.openTagsEditor = (event) => openTagPopoverFromField(event);
+    base.getTagChipClass = typeof getPeopleTagChipClass.value === 'function' ? getPeopleTagChipClass.value : getDefaultTagChipClass;
+  }
+  return base;
+});
+
+const genericStateFields = computed(() => (genericAdapter.value ? genericAdapter.value.getStateFields(record.value, sectionContext.value) : []));
+const genericStateValues = computed(() => (genericAdapter.value ? genericAdapter.value.getStateValues(record.value, sectionContext.value) : []));
+const genericSections = computed(() => (genericAdapter.value ? genericAdapter.value.getSections(record.value) : []));
+
+function getInitials(author) {
+  if (!author) return '?';
+  if (typeof author === 'string') {
+    const parts = author.trim().split(/\s+/).filter(Boolean).slice(0, 2);
+    return parts.map((p) => p.charAt(0).toUpperCase()).join('') || author.charAt(0).toUpperCase() || '?';
+  }
+  const name = [author.firstName, author.lastName, author.first_name, author.last_name].filter(Boolean).join(' ') || author.email || author.username || '';
+  return name ? name.trim().split(/\s+/).slice(0, 2).map((p) => p.charAt(0).toUpperCase()).join('') || '?' : '?';
+}
+
+function getAuthorName(author) {
+  if (!author) return 'Unknown';
+  if (typeof author === 'string') return author.trim() || 'Unknown';
+  const name = [author.firstName, author.lastName, author.first_name, author.last_name].filter(Boolean).join(' ').trim();
+  return name || author.username || author.email || 'Unknown';
+}
+
+function formatFullTimestamp(date) {
+  if (!date) return '';
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString();
+}
+
+function formatRelativeActivityTime(date) {
+  if (!date) return '';
+  return dateUtils.fromNow(date);
+}
+
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+const activityUi = computed(() => {
+  const searchQuery = activitySearchQuery.value || '';
+  const moduleUi = {
+    moduleKey: props.moduleKey,
+    recordId: props.recordId,
+    currentUser: authStore.user || null,
+    expandedTaskEmailThreads: expandedTaskEmailThreads.value,
+    addComment: (content, attachments, parentCommentId) => addComment(content, attachments, parentCommentId),
+    getInitials,
+    getAuthorName,
+    formatFullTimestamp,
+    formatRelativeActivityTime: (date) => formatRelativeActivityTime(date),
+    handleTimestampPointerUp: () => {},
+    highlightSearchText: (text) => {
+      if (!text) return '';
+      const q = searchQuery.trim();
+      if (!q) return String(text);
+      const regex = new RegExp(`(${escapeRegExp(q)})`, 'gi');
+      return String(text).replace(regex, '<mark class="bg-yellow-200 dark:bg-yellow-800 font-semibold">$1</mark>');
+    },
+    commentMentionsCurrentUser: () => false,
+    hasAttachmentUrl: (att) => Boolean(att?.url || att?.path),
+    getAttachmentUrl: (att) => att?.url || att?.path || '',
+    isImageAttachment: (att) => /^image\//i.test(String(att?.mimetype || att?.type || '')) || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(String(att?.filename || att?.name || '')),
+    isSvgAttachment: (att) => /svg/i.test(String(att?.mimetype || att?.type || '')) || /\.svg$/i.test(String(att?.filename || att?.name || '')),
+    getAttachmentName: (att) => String(att?.filename || att?.name || 'attachment'),
+    downloadAttachment: (att) => {
+      const url = att?.url || att?.path;
+      if (!url) return;
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.download = String(att?.filename || att?.name || 'attachment');
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    },
+    formatFileSize: (bytes) => {
+      const n = Number(bytes || 0);
+      if (n <= 0) return '0 B';
+      if (n < 1024) return `${n} B`;
+      if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+      return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+    },
+    getAttachmentLabel: (att) => {
+      const parts = [];
+      if (att?.mimetype) parts.push(String(att.mimetype));
+      if (att?.size != null) parts.push(moduleUi.formatFileSize(att.size));
+      return parts.join(' • ') || 'Attachment';
+    },
+    hasCommentReactions: () => false,
+    getCommentReactions: () => [],
+    isCommentReactionSelected: () => false,
+    toggleCommentReaction: () => {},
+    handleShowCommentReactionTooltip: () => {},
+    handleHideCommentReactionTooltip: () => {},
+    setCommentReactionButtonRef: () => {},
+    toggleCommentReactionPicker: () => {},
+    openCommentThread: () => {},
+    getCommentThreadReplyCount: () => 0,
+    getCommentThreadLatestReplyAuthor: () => null,
+    isFieldChangeSystemEvent: (event) => {
+      if (!event || event.type !== 'system') return false;
+      const details = event?.details || event?.payload?.details || {};
+      return event.action === 'field_changed' || event.action === 'status_changed' || Boolean(details?.field);
+    },
+    getSystemEventActorLabel: (event) => {
+      if (!event) return 'System';
+      const author = event.author ?? event.actor;
+      if (author && typeof author === 'object') {
+        const name = [author.firstName, author.lastName].filter(Boolean).join(' ').trim() || author.username || author.email;
+        return name || 'System';
+      }
+      return typeof author === 'string' ? author : (event.actor || 'System');
+    },
+    getSystemEventFieldLabel: (event) => {
+      const details = event?.details || event?.payload?.details || {};
+      const raw = details.fieldLabel ?? details.field;
+      return String(raw ?? '').trim() || 'field';
+    },
+    getSystemEventFromValue: (event) => {
+      const v = event?.details?.from ?? event?.details?.oldValue ?? event?.payload?.details?.from ?? event?.payload?.details?.oldValue;
+      return v === undefined || v === null || v === '' ? 'Empty' : String(v);
+    },
+    getSystemEventToValue: (event) => {
+      const v = event?.details?.to ?? event?.details?.newValue ?? event?.payload?.details?.to ?? event?.payload?.details?.newValue;
+      return v === undefined || v === null || v === '' ? 'Empty' : String(v);
+    },
+    getSystemEventMessage: (event) => {
+      if (!event) return 'Updated this record';
+      const msg = String(event?.message ?? event?.payload?.message ?? '').trim();
+      if (msg) return msg;
+      return `${event?.action || event?.payload?.action || 'updated'} this record`;
+    },
+    getTagChipClass: (tagNameOrObject) => (typeof getPeopleTagChipClass.value === 'function' ? getPeopleTagChipClass.value(tagNameOrObject) : getDefaultTagChipClass(tagNameOrObject)),
+    handleShowMore: () => {},
+    toggleTaskEmailThread: (threadId) => {
+      const next = new Set(expandedTaskEmailThreads.value);
+      if (next.has(threadId)) next.delete(threadId);
+      else next.add(threadId);
+      expandedTaskEmailThreads.value = next;
+    },
+    createTaskFromEmailMessage: () => {}
+  };
+  return normalizeActivityUiContract(moduleUi);
+});
+
+const MODULES_WITH_EMAIL = new Set(['people', 'organizations', 'deals', 'tasks']);
 
 const activityEvents = computed(() => {
   const raw = activityRaw.value || [];
@@ -300,15 +1372,16 @@ const activityEvents = computed(() => {
         action: e.payload?.action,
         message: e.payload?.message,
         details: e.payload?.details,
-        user: e.actor,
+        user: e.actorProfile || e.actor,
         timestamp: e.createdAt
       }, { recordRef });
     }
     if (e.type === 'comment') {
+      const author = e.actorProfile && typeof e.actorProfile === 'object' ? e.actorProfile : e.actor;
       return normalizeCommentActivityEvent({
         _id: e.payload?.commentId || e.id,
         content: e.payload?.body,
-        author: e.actor,
+        author,
         createdAt: e.createdAt,
         parentCommentId: e.payload?.parentCommentId,
         attachments: e.payload?.attachments || [],
@@ -319,6 +1392,75 @@ const activityEvents = computed(() => {
     return null;
   }).filter(Boolean);
   return sortActivityEventsByDate(events);
+});
+
+/** Combined activity (logs + comments + email threads) for modules that support email. */
+const combinedActivityEvents = computed(() => {
+  const recordRef = { module: props.moduleKey, id: String(props.recordId) };
+  const base = (activityEvents.value || []).filter((ev) => {
+    if (ev?.type === 'system' && ev?.payload?.action === 'email_sent' && ev?.payload?.details?.communicationId) {
+      return false;
+    }
+    return true;
+  });
+  if (!MODULES_WITH_EMAIL.has((props.moduleKey || '').toLowerCase())) {
+    return base;
+  }
+  const threadEvents = (emailThreads.value || []).map((thread) =>
+    normalizeEmailThreadActivityEvent({
+      ...thread,
+      recordRef,
+      source: 'integration'
+    })
+  );
+  return sortActivityEventsByDate([...base, ...threadEvents]);
+});
+
+/** Apply search + type filters for the Activity tab (generic modules). */
+const filteredActivityEvents = computed(() => {
+  const events = combinedActivityEvents.value || [];
+  const showComments = activityFilterComments.value;
+  const showUpdates = activityFilterUpdates.value;
+  const showEmail = activityFilterEmail.value;
+
+  if (!showComments && !showUpdates && !showEmail) return [];
+
+  const q = (activitySearchQuery.value || '').trim().toLowerCase();
+
+  // When searching, show only comment events whose content or author matches.
+  if (q) {
+    return events.filter((e) => {
+      if (e.type !== 'comment') return false;
+      const author = e.author;
+      let authorText = '';
+      if (author) {
+        if (typeof author === 'string') {
+          authorText = author;
+        } else {
+          authorText = [
+            author.firstName,
+            author.first_name,
+            author.lastName,
+            author.last_name,
+            author.username,
+            author.email
+          ]
+            .filter(Boolean)
+            .join(' ');
+        }
+      }
+      const text = `${e.content || e.text || ''} ${authorText}`.toLowerCase();
+      return text.includes(q);
+    });
+  }
+
+  // No search query: respect the type toggles.
+  return events.filter((e) => {
+    if (e.type === 'comment') return showComments;
+    if (e.type === 'system') return showUpdates;
+    if (e.type === 'email_thread') return showEmail;
+    return false;
+  });
 });
 
 async function fetchRecord() {
@@ -355,6 +1497,51 @@ async function fetchRecord() {
 
     if (neighborsRes?.success && neighborsRes.data) neighbors.value = neighborsRes.data;
     else neighbors.value = { previousId: null, nextId: null };
+
+    if (MODULES_WITH_EMAIL.has((props.moduleKey || '').toLowerCase()) && record.value?._id) {
+      try {
+        const threadsRes = await apiClient.get('/communications/threads', {
+          params: { moduleKey: props.moduleKey, recordId: record.value._id }
+        });
+        if (threadsRes?.success && Array.isArray(threadsRes?.data?.threads)) {
+          emailThreads.value = threadsRes.data.threads;
+        } else {
+          emailThreads.value = [];
+        }
+      } catch {
+        emailThreads.value = [];
+      }
+    } else {
+      emailThreads.value = [];
+    }
+
+    if ((props.moduleKey || '').toLowerCase() === 'people') {
+      try {
+        const orgRes = await apiClient.get('/v2/organization', { params: { limit: 500 } });
+        const data = orgRes?.data ?? orgRes;
+        peopleOrganizationList.value = Array.isArray(data) ? data : (data?.data ? (Array.isArray(data.data) ? data.data : []) : []);
+      } catch (e) {
+        console.error('Fetch people organization list error:', e);
+        peopleOrganizationList.value = [];
+      }
+    } else {
+      peopleOrganizationList.value = [];
+    }
+
+    try {
+      const usersRes = await apiClient.get('/users/list', { params: { limit: 500 } });
+      const usersData = usersRes?.data ?? usersRes;
+      const users = Array.isArray(usersData)
+        ? usersData
+        : (Array.isArray(usersData?.data) ? usersData.data : []);
+      userLookupList.value = users.map((u) => ({
+        _id: u?._id || u?.id,
+        name: [u?.firstName, u?.lastName].filter(Boolean).join(' ').trim() || u?.username || u?.email || (u?._id || u?.id || '')
+      })).filter((u) => Boolean(u._id));
+    } catch (userErr) {
+      console.error('Fetch user lookup list error:', userErr);
+      userLookupList.value = [];
+    }
   } catch (e) {
     error.value = e?.message || 'Failed to load record';
     record.value = null;
@@ -383,26 +1570,249 @@ function handleAddComment(payload) {
 
 function handleTitleSave(value) {
   if (!record.value) return;
-  apiClient.put(`/${props.moduleKey}/${props.recordId}`, { name: value }).then(() => {
-    record.value.name = value;
+
+  const moduleKeyLower = (props.moduleKey || '').toLowerCase();
+  const title = String(value || '').trim();
+  if (!title) return;
+
+  // People: parse title into first_name / last_name and keep name in sync.
+  if (moduleKeyLower === 'people') {
+    const parts = title.split(/\s+/).filter(Boolean);
+    let firstName = '';
+    let lastName = '';
+    if (parts.length === 1) {
+      firstName = parts[0];
+    } else if (parts.length > 1) {
+      lastName = parts.pop();
+      firstName = parts.join(' ');
+    }
+
+    const payload = {
+      name: title,
+      first_name: firstName || undefined,
+      last_name: lastName || undefined
+    };
+
+    apiClient.put(`/${props.moduleKey}/${props.recordId}`, payload).then(() => {
+      if (!record.value) return;
+      record.value.name = title;
+      if (firstName !== undefined) record.value.first_name = firstName;
+      if (lastName !== undefined) record.value.last_name = lastName;
+    }).catch((e) => console.error('Save people title error:', e));
+    return;
+  }
+
+  // Other modules: only update the generic name/title field.
+  apiClient.put(`/${props.moduleKey}/${props.recordId}`, { name: title }).then(() => {
+    if (record.value) record.value.name = title;
   }).catch((e) => console.error('Save title error:', e));
 }
 
 function goToPrevious() {
-  if (neighbors.value.previousId) router.push(`/${props.moduleKey}/${neighbors.value.previousId}`);
+  if (!neighbors.value.previousId) return;
+  const path = `/${props.moduleKey}/${neighbors.value.previousId}`;
+  replaceActiveTab(path, { title: moduleLabelSingular.value || 'Record' });
 }
 function goToNext() {
-  if (neighbors.value.nextId) router.push(`/${props.moduleKey}/${neighbors.value.nextId}`);
+  if (!neighbors.value.nextId) return;
+  const path = `/${props.moduleKey}/${neighbors.value.nextId}`;
+  replaceActiveTab(path, { title: moduleLabelSingular.value || 'Record' });
 }
 
 function copyUrl() {
   const url = window.location.href;
-  navigator.clipboard.writeText(url).catch(() => {});
+  if (typeof navigator.clipboard !== 'undefined' && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).catch(fallbackCopyUrl);
+  } else {
+    fallbackCopyUrl();
+  }
+  function fallbackCopyUrl() {
+    const textarea = document.createElement('textarea');
+    textarea.value = url;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    try {
+      document.execCommand('copy');
+    } finally {
+      document.body.removeChild(textarea);
+    }
+  }
+}
+
+function getRecordPageUrl() {
+  if (!record.value?._id) return '';
+  const path = `/${props.moduleKey}/${record.value._id}`;
+  const resolved = router.resolve(path);
+  const href = resolved.href.startsWith('http') ? resolved.href : new URL(resolved.href, window.location.origin).href;
+  return href;
+}
+
+function openRecordInNewTab() {
+  if (!record.value?._id) return;
+  const path = `/${props.moduleKey}/${record.value._id}`;
+  openTab(path, { title: moduleLabelSingular.value || 'Record', background: false, insertAdjacent: true });
+  emit('close');
+}
+
+function copyRecordUrl() {
+  const url = getRecordPageUrl();
+  if (!url) return;
+  if (typeof navigator.clipboard !== 'undefined' && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).catch(() => {});
+  } else {
+    const textarea = document.createElement('textarea');
+    textarea.value = url;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    try {
+      document.execCommand('copy');
+    } finally {
+      document.body.removeChild(textarea);
+    }
+  }
+}
+
+const DUPLICATE_OMIT_KEYS = new Set([
+  '_id', '__v', 'createdAt', 'updatedAt', 'createdBy', 'modifiedBy',
+  'deletedAt', 'deletedBy', 'deletionReason', 'activityLogs', 'organizationId'
+]);
+
+async function handleDuplicate() {
+  if (!record.value) return;
+  try {
+    const r = record.value;
+    const payload = {};
+    for (const key of Object.keys(r)) {
+      if (DUPLICATE_OMIT_KEYS.has(key)) continue;
+      const v = r[key];
+      if (v != null && typeof v === 'object' && v._id != null) {
+        payload[key] = v._id;
+      } else {
+        payload[key] = v;
+      }
+    }
+    const res = await apiClient.post(`/${props.moduleKey}`, payload);
+    const data = res?.data ?? res;
+    const newId = data?._id ?? data?.id;
+    if (newId) {
+      router.push(`/${props.moduleKey}/${newId}`);
+    }
+  } catch (e) {
+    console.error('Duplicate record error:', e);
+  }
+}
+
+function handleExport() {
+  if (!record.value) return;
+  try {
+    const json = JSON.stringify(record.value, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = `${props.moduleKey}-${(record.value._id || 'record').toString().slice(-8)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(objectUrl);
+  } catch (e) {
+    console.error('Export record error:', e);
+  }
+}
+
+async function handleEmailSubmit(payload) {
+  showEmailModal.value = false;
+  try {
+    const res = await apiClient.post('/communications/email', payload);
+    if (res?.success) {
+      await fetchRecord();
+    } else {
+      alert(res?.message || 'Failed to send email');
+    }
+  } catch (err) {
+    const msg = err?.response?.data?.error || err?.response?.data?.message || err?.message;
+    alert(msg || 'Failed to send email');
+  }
 }
 
 function handleRecordUpdated(updated) {
   if (updated && record.value) Object.assign(record.value, updated);
   showEditModal.value = false;
+}
+
+const TARGET_APP_BY_MODULE_KEY = {
+  organizations: 'SALES',
+  people: 'SALES',
+  deals: 'SALES',
+  tasks: 'PLATFORM',
+  events: 'PLATFORM',
+  forms: 'PLATFORM',
+  projects: 'PROJECTS',
+  items: 'PLATFORM'
+};
+
+async function handleLinkRecordDrawerLinked({ moduleKey: targetModuleKey, ids, context, relationshipKey: payloadRelationshipKey, targetAppKey: payloadTargetAppKey }) {
+  const currentId = record.value?._id;
+  const contextId = context?.personId ?? context?.sourceRecordId;
+  if (!currentId || !contextId || currentId !== contextId || !ids?.length) return;
+
+  const normalizedTarget = (targetModuleKey || '').toLowerCase().trim();
+  const relationshipKey = (payloadRelationshipKey || normalizedTarget).toLowerCase();
+  const sourceAppKey = (recordContextAppKey.value || 'PLATFORM').toUpperCase();
+  const sourceModuleKey = (props.moduleKey || '').toLowerCase();
+  const targetAppKey = (payloadTargetAppKey || TARGET_APP_BY_MODULE_KEY[normalizedTarget] || 'PLATFORM').toUpperCase();
+
+  // Relationship direction: when linking from a person, the other record (e.g. deal) is typically the source and person is target (e.g. deal_contacts).
+  for (const recordId of ids) {
+    try {
+      await apiClient.post('/relationships/link', {
+        relationshipKey,
+        source: { appKey: targetAppKey, moduleKey: normalizedTarget, recordId },
+        target: { appKey: sourceAppKey, moduleKey: sourceModuleKey, recordId: currentId }
+      });
+    } catch (err) {
+      console.error('Error linking record:', err);
+      alert(err?.response?.data?.message || 'Failed to link record.');
+      return;
+    }
+  }
+  closeLinkRecordDrawer();
+  invalidateRecordContext(recordContextAppKey.value, props.moduleKey, currentId);
+  await loadGenericRecordContext(true);
+  await fetchRecord();
+}
+
+function handleLinkRecordDrawerCreate(payload = {}) {
+  const moduleKey = String(payload?.moduleKey || '').toLowerCase().trim();
+  if (!moduleKey) return;
+  pendingAddRelatedLinkPayload.value = payload;
+  addRelatedRecordModuleKey.value = moduleKey;
+  closeLinkRecordDrawer();
+  showAddRelatedRecordDrawer.value = true;
+}
+
+async function handleAddRelatedRecordSaved(savedRecord) {
+  const createdId = savedRecord?._id || savedRecord?.id;
+  const payload = pendingAddRelatedLinkPayload.value;
+  if (!createdId || !payload?.moduleKey) {
+    closeAddRelatedRecordDrawer();
+    return;
+  }
+  closeAddRelatedRecordDrawer();
+  await handleLinkRecordDrawerLinked({
+    moduleKey: payload.moduleKey,
+    ids: [createdId],
+    context: payload.context || linkRecordDrawerContext.value,
+    relationshipKey: payload.relationshipKey || undefined,
+    targetAppKey: payload.targetAppKey || undefined
+  });
 }
 
 async function confirmDelete() {
@@ -419,6 +1829,57 @@ async function confirmDelete() {
   }
 }
 
+watch(loading, (isLoading) => {
+  if (isLoading) return;
+  attachStickyTitleWhenReady();
+});
+
+watch(record, (r) => {
+  if (!r) {
+    resetStickyTitle();
+    detachStickyTitle();
+    return;
+  }
+  attachStickyTitleWhenReady();
+}, { immediate: true });
+
+// Keep tab title in sync with people record name when record loads or name changes.
+watch(
+  () => {
+    if (!isPeopleModule.value || !record.value) return null;
+    const r = record.value;
+    const first = (r.first_name ?? r.firstName ?? '').trim();
+    const last = (r.last_name ?? r.lastName ?? '').trim();
+    const full = [first, last].filter(Boolean).join(' ').trim();
+    return full || r.name || r.email || 'Person';
+  },
+  (displayName) => {
+    if (!displayName || !isPeopleModule.value) return;
+    const tabId = activeTabId.value;
+    if (!tabId || !props.recordId) return;
+    const tab = findTabById(tabId);
+    if (!tab?.path) return;
+    const pathBase = tab.path.split('?')[0].replace(/\/$/, '');
+    if (!pathBase.includes(`/people/${props.recordId}`)) return;
+    updateTabTitle(tabId, displayName);
+  },
+  { immediate: true }
+);
+
 watch(() => [props.moduleKey, props.recordId], () => fetchRecord(), { immediate: false });
-onMounted(() => fetchRecord());
+onMounted(() => {
+  fetchRecord();
+  window.addEventListener('scroll', updateTagPopoverPosition, true);
+  window.addEventListener('resize', updateTagPopoverPosition);
+  document.addEventListener('mousedown', handleTagPopoverMousedown);
+  document.addEventListener('click', handleTagPopoverOutsideClick);
+});
+onBeforeUnmount(() => {
+  resetStickyTitle();
+  detachStickyTitle();
+  window.removeEventListener('scroll', updateTagPopoverPosition, true);
+  window.removeEventListener('resize', updateTagPopoverPosition);
+  document.removeEventListener('mousedown', handleTagPopoverMousedown);
+  document.removeEventListener('click', handleTagPopoverOutsideClick);
+});
 </script>

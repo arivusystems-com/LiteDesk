@@ -1025,7 +1025,7 @@ exports.updateCore = async (req, res) => {
 
     // Filter to only core fields (exclude system/audit fields that shouldn't be updated)
     const updatableCoreFields = CORE_FIELD_KEYS.filter(key => 
-      !['organizationId', 'createdBy', 'assignedTo', 'legacyContactId', 'notes', 'activityLogs', 'createdAt', 'updatedAt'].includes(key)
+      !['organizationId', 'createdBy', 'assignedTo', 'legacyContactId', 'activityLogs', 'createdAt', 'updatedAt'].includes(key)
     );
 
     // Build update object with only allowed core fields

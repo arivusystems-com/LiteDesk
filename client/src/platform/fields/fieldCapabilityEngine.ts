@@ -31,6 +31,7 @@ import {
   getIsVisibleInConfigBase,
   getIsComputedBase,
   getIsHideableBase,
+  normalizeFieldKeyForMetadataLookup,
 } from './BaseFieldModel';
 
 // =============================================================================
@@ -62,7 +63,7 @@ export function getGlobalSystemFieldKeys(): string[] {
  * Handles "Deleted By", "deleted-by", "deletedBy" -> "deletedby".
  */
 export function normalizeFieldKeyForSystemMatch(fieldKey: string): string {
-  return (fieldKey || '').toLowerCase().replace(/\s/g, '').replace(/-/g, '');
+  return normalizeFieldKeyForMetadataLookup(fieldKey);
 }
 
 /**
@@ -109,7 +110,7 @@ export function isSystemField(moduleKey: string, field: Field): boolean {
   const metadata = getFieldMetadataFromRegistry(moduleKey, field.key);
   if (metadata) return getIsSystemBase(metadata);
   // Unknown fields that are model-level system fields (trash, etc.) - never show in create/edit
-  const keyLower = (field.key || '').toLowerCase().replace(/-/g, '');
+  const keyLower = normalizeFieldKeyForMetadataLookup(field.key);
   return GLOBAL_SYSTEM_FIELD_KEYS.has(keyLower);
 }
 
@@ -145,7 +146,7 @@ export function isComputedField(moduleKey: string, field: Field): boolean {
  * Engine does NOT use field.editable — metadata + base helpers only.
  */
 export function canEditField(moduleKey: string, field: Field): boolean {
-  const keyLower = (field.key || '').toLowerCase().replace(/-/g, '');
+  const keyLower = normalizeFieldKeyForMetadataLookup(field.key);
   if (GLOBAL_SYSTEM_FIELD_KEYS.has(keyLower)) return false;
   const metadata = getFieldMetadataFromRegistry(moduleKey, field.key);
   if (metadata?.isEditable === false) return false;

@@ -95,9 +95,18 @@ function canWriteField(field, user, moduleKey) {
     return hasAppAccess && hasEditPermission;
   }
   
-  // Org-owned fields: Users with edit permission can edit
+  // Org-owned fields: Users with edit permission can edit.
+  // Tenant-defined app-scoped custom fields use context !== 'global' (lowercase app token, e.g. 'sales').
   if (fieldOwner === 'org') {
-    return hasEditPermission;
+    const fieldContext = (field.context || 'global').toLowerCase();
+    if (fieldContext === 'global') {
+      return hasEditPermission;
+    }
+    const appKey = fieldContext.toUpperCase();
+    const hasAppAccess = user.appAccess?.some(
+      (access) => access.appKey === appKey && access.status === 'ACTIVE'
+    ) || user.allowedApps?.includes(appKey) || false;
+    return hasAppAccess && hasEditPermission;
   }
   
   // Default: deny if ownership is unclear
@@ -166,7 +175,11 @@ function validateFieldWrite(fieldKey, fields, user, moduleKey) {
     } else if (fieldOwner === 'app') {
       reason = 'App-managed fields require app access and edit permission';
     } else if (fieldOwner === 'org') {
-      reason = 'Edit permission required for this field';
+      const fc = (field.context || 'global').toLowerCase();
+      reason =
+        fc !== 'global'
+          ? 'This field is scoped to an application; you need access to that app and edit permission'
+          : 'Edit permission required for this field';
     }
     
     return { allowed: false, reason };

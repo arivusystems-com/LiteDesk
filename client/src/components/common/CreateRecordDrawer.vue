@@ -1,6 +1,6 @@
 <template>
   <TransitionRoot as="template" :show="isOpen">
-    <Dialog class="relative z-50" @close="handleDialogClose">
+    <Dialog class="relative z-[10000]" @close="handleDialogClose">
       <!-- Background overlay -->
       <TransitionChild
         as="template"
@@ -175,6 +175,14 @@ const props = defineProps({
   initialData: {
     type: Object,
     default: () => ({})
+  },
+  prefillText: {
+    type: String,
+    default: ''
+  },
+  prefillFieldKey: {
+    type: String,
+    default: ''
   },
   record: {
     type: Object,
@@ -403,6 +411,44 @@ const updateFormData = (data) => {
   formData.value = { ...data };
 };
 
+const normalizeKey = (value) => String(value || '').toLowerCase().replace(/[\s_-]/g, '');
+
+const getPreferredPrefillField = (module) => {
+  const fields = Array.isArray(module?.fields) ? module.fields : [];
+  if (!fields.length) return null;
+
+  const preferred = normalizeKey(props.prefillFieldKey);
+  if (preferred) {
+    const match = fields.find((f) => normalizeKey(f?.key) === preferred);
+    if (match) return match;
+  }
+
+  const quickCreateKeys = effectiveQuickCreateMode.value && Array.isArray(module?.quickCreate)
+    ? new Set(module.quickCreate.map((k) => normalizeKey(k)).filter(Boolean))
+    : null;
+
+  const candidates = fields.filter((f) => {
+    if (!f?.key) return false;
+    const dataType = String(f.dataType || '').trim();
+    if (!['Text', 'Text-Area', 'Email', 'Phone', 'URL'].includes(dataType)) return false;
+    if (quickCreateKeys && !quickCreateKeys.has(normalizeKey(f.key))) return false;
+    return true;
+  });
+
+  if (!candidates.length) return null;
+  return candidates[0];
+};
+
+const applySearchPrefill = (module) => {
+  const seed = String(props.prefillText || '').trim();
+  if (!seed || isEditing.value) return;
+  const targetField = getPreferredPrefillField(module);
+  if (!targetField?.key) return;
+  const currentValue = formData.value?.[targetField.key];
+  if (currentValue !== null && currentValue !== undefined && String(currentValue).trim() !== '') return;
+  formData.value = { ...formData.value, [targetField.key]: seed };
+};
+
 function normalizedTaskRelatedTo(val) {
   if (!val || typeof val !== 'object') return { type: 'none', id: null };
   const id = val.id != null && typeof val.id === 'object' && val.id._id != null ? val.id._id : (val.id ?? null);
@@ -483,6 +529,7 @@ const onFormReady = (module) => {
   moduleDefinition.value = module;
   if (isFirstLoad) {
     initializeForm(module);
+    applySearchPrefill(module);
     initialSnapshot.value = JSON.parse(JSON.stringify(formData.value || {}));
   }
 };
@@ -1187,6 +1234,11 @@ watch(() => props.isOpen, (isOpen) => {
   if (isOpen) {
     fullMode.value = false;
     errors.value = {};
+    // Re-initialize on every open so initialData/prefill are not stale across reopens.
+    if (moduleDefinition.value) {
+      initializeForm(moduleDefinition.value);
+      applySearchPrefill(moduleDefinition.value);
+    }
     // Capture an initial snapshot immediately on open to avoid race with module load
     initialSnapshot.value = JSON.parse(JSON.stringify(formData.value || {}));
     // Form will be initialized by onFormReady when module loads

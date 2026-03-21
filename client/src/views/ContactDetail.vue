@@ -211,7 +211,7 @@
               <div class="flex items-center justify-between">
                 <div>
                   <p class="text-xs text-gray-600 dark:text-gray-400 font-medium">Notes</p>
-                  <p class="text-xl font-bold text-gray-900 dark:text-white mt-0.5">{{ contact.notes?.length || 0 }}</p>
+                  <p class="text-xl font-bold text-gray-900 dark:text-white mt-0.5">{{ notesCountDisplay }}</p>
                 </div>
                 <div class="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
                   <svg class="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -380,64 +380,19 @@
             :entity-id="contact._id"
           />
 
-          <!-- Activity Timeline -->
-          <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <div class="flex items-center justify-between mb-3">
-              <h3 class="text-base font-bold text-gray-900 dark:text-white">Activity & Notes</h3>
-              <button @click="showNoteForm = true" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                </svg>
-                Add
-              </button>
-            </div>
-
-            <!-- Note Form -->
-            <div v-if="showNoteForm" class="mb-4">
-              <textarea 
-                v-model="newNote" 
-                placeholder="Add a note..."
-                rows="2"
-                class="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent resize-none transition-all"
-              ></textarea>
-              <div class="flex items-center justify-end gap-2 mt-2">
-                <button @click="showNoteForm = false; newNote = ''" class="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white font-medium rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                  Cancel
-                </button>
-                <button @click="addNote" :disabled="!newNote.trim()" class="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors">
-                  Save
-                </button>
-              </div>
-            </div>
-
-            <!-- Notes List -->
-            <div class="space-y-2">
-              <div v-if="contact.notes && contact.notes.length > 0">
-                <div v-for="(note, index) in contact.notes" :key="index" class="flex gap-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                  <div class="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                    {{ note.created_by?.firstName?.[0] || 'U' }}{{ note.created_by?.lastName?.[0] || '' }}
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-1.5 mb-1">
-                      <span class="font-semibold text-gray-900 dark:text-white text-xs">{{ note.created_by?.firstName || 'Unknown' }} {{ note.created_by?.lastName || '' }}</span>
-                      <span class="text-xs text-gray-500 dark:text-gray-400">• {{ formatTimeAgo(note.created_at) }}</span>
-                    </div>
-                    <p class="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">{{ note.text }}</p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Empty State -->
-              <div v-else class="text-center py-8">
-                <div class="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <svg class="w-6 h-6 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
-                  </svg>
-                </div>
-                <p class="text-gray-500 dark:text-gray-400 text-xs font-medium mb-1">No activity yet</p>
-                <p class="text-gray-400 dark:text-gray-500 text-xs">Click "Add" to start tracking</p>
-              </div>
-            </div>
+          <!-- Notes (stored in PersonNote collection, not on People document) -->
+          <div
+            v-if="contact._id"
+            class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4"
+          >
+            <h3 class="text-base font-bold text-gray-900 dark:text-white mb-3">Notes</h3>
+            <Notes
+              entity-type="Person"
+              :entity-id="contact._id"
+              :app-key="String(route.query.appKey || 'SALES')"
+              :can-create="true"
+              @note-created="refreshNotesCount"
+            />
           </div>
         </div>
       </div>
@@ -475,6 +430,7 @@ import RelatedTasksWidget from '@/components/tasks/RelatedTasksWidget.vue';
 import RelatedOrganizationWidget from '@/components/organizations/RelatedOrganizationWidget.vue';
 import RelatedRecordsRenderer from '@/components/relationships/RelatedRecordsRenderer.vue';
 import AutomationContext from '@/components/automation/AutomationContext.vue';
+import Notes from '@/components/Notes.vue';
 import { useAuthStore } from '@/stores/auth';
 import Avatar from '@/components/common/Avatar.vue';
 import { useRecordContext } from '@/composables/useRecordContext';
@@ -491,9 +447,8 @@ const contact = ref(null);
 const loading = ref(true);
 const error = ref(null);
 const showEditModal = ref(false);
-const showNoteForm = ref(false);
-const newNote = ref('');
 const showEventModal = ref(false);
+const notesCount = ref(null);
 const eventsWidgetRef = ref(null);
 const eventToEdit = ref(null);
 const dealsWidgetRef = ref(null);
@@ -522,6 +477,31 @@ const projectionAppLabel = computed(() => {
   return getAppLabel(recordContext.value.record.projection.appKey);
 });
 
+const notesCountDisplay = computed(() => {
+  if (notesCount.value === null || notesCount.value === undefined) return '—';
+  return notesCount.value;
+});
+
+async function refreshNotesCount() {
+  if (!route.params.id) return;
+  try {
+    const r = await apiClient.get(`/notes/Person/${route.params.id}`, {
+      params: {
+        routePath: route.path,
+        routeName: route.name,
+        appKey: route.query.appKey || 'SALES'
+      }
+    });
+    if (r?.success && r?.data?.stats) {
+      notesCount.value = typeof r.data.stats.total === 'number' ? r.data.stats.total : 0;
+    } else {
+      notesCount.value = 0;
+    }
+  } catch {
+    notesCount.value = 0;
+  }
+}
+
 const fetchContact = async () => {
   loading.value = true;
   error.value = null;
@@ -539,6 +519,7 @@ const fetchContact = async () => {
       console.log('Contact loaded:', contact.value);
       console.log('Organization field:', contact.value.organization);
       console.log('Related deals:', contact.value.relatedDeals);
+      await refreshNotesCount();
     }
   } catch (err) {
     console.error('Error fetching contact:', err);
@@ -562,16 +543,6 @@ const formatDate = (date) => {
   });
 };
 
-const formatTimeAgo = (date) => {
-  if (!date) return '';
-  const seconds = Math.floor((new Date() - new Date(date)) / 1000);
-  
-  if (seconds < 60) return `${seconds} secs ago`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)} mins ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`;
-  return `${Math.floor(seconds / 86400)} days ago`;
-};
-
 const editContact = () => {
   showEditModal.value = true;
 };
@@ -592,25 +563,6 @@ const deleteContact = async () => {
   } catch (err) {
     console.error('Error deleting contact:', err);
     alert('Failed to delete contact');
-  }
-};
-
-const addNote = async () => {
-  if (!newNote.value.trim()) return;
-  
-  try {
-    const data = await apiClient.post(`/people/${route.params.id}/notes`, {
-      text: newNote.value.trim()
-    });
-    
-    if (data.success) {
-      contact.value = data.data;
-      newNote.value = '';
-      showNoteForm.value = false;
-    }
-  } catch (err) {
-    console.error('Error adding note:', err);
-    alert('Failed to add note');
   }
 };
 

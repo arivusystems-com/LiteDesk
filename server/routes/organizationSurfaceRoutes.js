@@ -16,10 +16,14 @@
  *   - Filters by tenant context
  * 
  * - PATCH /api/organizations/:id: Update business organization (edit mode)
+ * - PUT /api/organizations/:id: Backward-compatible alias for update (record-page parity)
  *   - Accepts ONLY editable business fields
  *   - Rejects tenant organizations
  *   - Filters by tenant context
  *   - Returns minimal organization identity (id, name, types)
+ *
+ * - GET /api/organizations/:id: Backward-compatible alias for organization detail
+ *   - Maps to v2 organization getById behavior
  * 
  * - GET /api/organizations/:id/surface: OrganizationSurface endpoint
  *   - Alias route for /api/organizations/:id/surface
@@ -54,8 +58,10 @@ router.get('/:id/editable', controller.getEditable);
 // Update business organization (for edit mode)
 // Must be before /:id/surface route
 router.patch('/:id', controller.update);
+router.put('/:id', controller.update);
 
 // OrganizationSurface endpoint
 router.get('/:id/surface', controller.getSurface);
+router.get('/:id', controller.getById);
 
 module.exports = router;

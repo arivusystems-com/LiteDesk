@@ -27,6 +27,11 @@ const { MAX_ATTACHMENT_SIZE_BYTES, MAX_TOTAL_ATTACHMENTS_BYTES } = require('../m
 
 const SUPPORTED_MODULES = new Set(['people', 'organizations', 'deals', 'tasks']);
 
+async function getTenantUserIds(organizationId) {
+  const users = await User.find({ organizationId }).select('_id').lean();
+  return users.map((u) => u._id);
+}
+
 /**
  * Generate RFC Message-ID for threading.
  */
@@ -106,7 +111,13 @@ exports.sendEmail = async (req, res) => {
     if (moduleKey === 'people') {
       record = await People.findOne({ _id: recordId, organizationId: orgId, deletedAt: null }).lean();
     } else if (moduleKey === 'organizations') {
-      record = await Organization.findOne({ _id: recordId, organizationId: orgId, isTenant: false, deletedAt: null }).lean();
+      const tenantUserIds = await getTenantUserIds(orgId);
+      record = await Organization.findOne({
+        _id: recordId,
+        isTenant: false,
+        deletedAt: null,
+        createdBy: { $in: tenantUserIds }
+      }).lean();
     } else if (moduleKey === 'deals') {
       record = await Deal.findOne({ _id: recordId, organizationId: orgId }).lean();
     } else if (moduleKey === 'tasks') {
@@ -256,7 +267,13 @@ exports.sendEmail = async (req, res) => {
     if (moduleKey === 'people') {
       await pushActivityLog(People, { _id: recordId, organizationId: orgId, deletedAt: null });
     } else if (moduleKey === 'organizations') {
-      await pushActivityLog(Organization, { _id: recordId, organizationId: orgId, isTenant: false, deletedAt: null });
+      const tenantUserIds = await getTenantUserIds(orgId);
+      await pushActivityLog(Organization, {
+        _id: recordId,
+        isTenant: false,
+        deletedAt: null,
+        createdBy: { $in: tenantUserIds }
+      });
     } else if (moduleKey === 'tasks') {
       await pushActivityLog(Task, { _id: recordId, organizationId: orgId });
     }
@@ -303,7 +320,13 @@ exports.getThreads = async (req, res) => {
     if (moduleKey === 'people') {
       record = await People.findOne({ _id: recordId, organizationId: orgId, deletedAt: null }).lean();
     } else if (moduleKey === 'organizations') {
-      record = await Organization.findOne({ _id: recordId, organizationId: orgId, isTenant: false, deletedAt: null }).lean();
+      const tenantUserIds = await getTenantUserIds(orgId);
+      record = await Organization.findOne({
+        _id: recordId,
+        isTenant: false,
+        deletedAt: null,
+        createdBy: { $in: tenantUserIds }
+      }).lean();
     } else if (moduleKey === 'deals') {
       record = await Deal.findOne({ _id: recordId, organizationId: orgId }).lean();
     } else if (moduleKey === 'tasks') {

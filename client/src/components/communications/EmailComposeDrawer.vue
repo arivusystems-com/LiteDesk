@@ -3,7 +3,7 @@
     <Transition name="email-compose-drawer">
       <div
         v-if="isOpen"
-        class="fixed inset-0 z-[9990] flex justify-end overflow-x-hidden"
+        class="fixed inset-0 z-[10000] flex justify-end overflow-x-hidden"
         @keydown.esc.prevent="close"
       >
         <!-- Backdrop -->

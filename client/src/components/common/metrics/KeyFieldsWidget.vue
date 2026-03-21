@@ -6,11 +6,19 @@
     </div>
 
     <!-- Key Fields List -->
-    <div v-else-if="keyFields.length > 0" class="flex flex-wrap gap-x-4 gap-y-3">
+    <div
+      v-else-if="keyFields.length > 0"
+      :class="[
+        isMobileLayout ? 'flex flex-col gap-3' : 'flex flex-wrap gap-x-4 gap-y-3'
+      ]"
+    >
       <div
         v-for="fieldDef in keyFields"
         :key="fieldDef.key"
-        class="flex flex-col"
+        :class="[
+          'flex flex-col',
+          isMobileLayout ? 'w-full' : ''
+        ]"
       >
         <div class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
           {{ fieldDef.label }}
@@ -33,7 +41,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, inject } from 'vue';
 import CardWidget from '@/components/common/CardWidget.vue';
 import { getKeyFields, getFieldValue } from '@/utils/fieldDisplay';
 import { KeyIcon } from '@heroicons/vue/24/outline';
@@ -54,6 +62,9 @@ const props = defineProps({
 });
 
 const loading = ref(false);
+
+const recordLayoutIsMobile = inject('recordLayoutIsMobile', null);
+const isMobileLayout = computed(() => Boolean(recordLayoutIsMobile?.value));
 
 // Get key fields from module definition
 const keyFields = computed(() => {

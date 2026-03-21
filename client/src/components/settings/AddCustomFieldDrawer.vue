@@ -89,6 +89,45 @@
                             <span class="text-sm text-gray-900 dark:text-white">Required in Form</span>
                           </label>
                         </div>
+                        <div
+                          v-if="showAppParticipationScope && appScopeOptions.length"
+                          class="border-t border-gray-200 dark:border-gray-700 pt-4 space-y-3"
+                        >
+                          <div>
+                            <label class="block text-sm/6 font-medium text-gray-900 dark:text-white">Field scope</label>
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                              Core fields apply everywhere for this record. App-specific fields appear when you work in that application (for example, opening the record from that app’s list).
+                            </p>
+                          </div>
+                          <div class="flex flex-col gap-2">
+                            <label class="inline-flex items-center gap-2 cursor-pointer">
+                              <input
+                                v-model="draft.participationScope"
+                                type="radio"
+                                value="core"
+                                class="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700"
+                              />
+                              <span class="text-sm text-gray-900 dark:text-white">Core (shared across apps)</span>
+                            </label>
+                            <label class="inline-flex items-center gap-2 cursor-pointer">
+                              <input
+                                v-model="draft.participationScope"
+                                type="radio"
+                                value="app"
+                                class="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700"
+                              />
+                              <span class="text-sm text-gray-900 dark:text-white">App-specific</span>
+                            </label>
+                          </div>
+                          <div v-if="draft.participationScope === 'app'" class="space-y-1">
+                            <label for="add-field-app-scope" class="block text-xs font-medium text-gray-700 dark:text-gray-300">Application</label>
+                            <HeadlessSelect
+                              id="add-field-app-scope"
+                              v-model="draft.appContextToken"
+                              :options="appScopeSelectOptions"
+                            />
+                          </div>
+                        </div>
                         <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
                           <label class="block text-sm/6 font-medium text-gray-900 dark:text-white mb-3">Visibility</label>
                           <div class="flex flex-col gap-2">
@@ -174,7 +213,11 @@ const FIELD_TYPES = [
 const props = defineProps({
   isOpen: { type: Boolean, default: false },
   moduleName: { type: String, default: '' },
-  nextOrder: { type: Number, default: 0 }
+  nextOrder: { type: Number, default: 0 },
+  /** When true and appScopeOptions non-empty, show Core vs App-specific scope (shared core modules). */
+  showAppParticipationScope: { type: Boolean, default: false },
+  /** { value: lowercase app token e.g. 'sales', label: 'Sales' } */
+  appScopeOptions: { type: Array, default: () => [] }
 });
 
 const emit = defineEmits(['close', 'save']);
@@ -182,19 +225,28 @@ const emit = defineEmits(['close', 'save']);
 const fieldTypes = FIELD_TYPES;
 const fieldTypeOptions = computed(() => fieldTypes.map((t) => ({ value: t, label: t })));
 
-const createEmptyDraft = () => ({
-  key: '',
-  label: '',
-  dataType: 'Text',
-  required: false,
-  options: [],
-  defaultValue: null,
-  index: false,
-  visibility: { list: true, detail: true },
-  order: props.nextOrder,
-  owner: 'org',
-  context: 'global'
-});
+const appScopeSelectOptions = computed(() =>
+  (props.appScopeOptions || []).map((o) => ({ value: o.value, label: o.label || o.value }))
+);
+
+const createEmptyDraft = () => {
+  const opts = appScopeSelectOptions.value;
+  const firstApp = opts[0]?.value || 'sales';
+  return {
+    key: '',
+    label: '',
+    dataType: 'Text',
+    required: false,
+    options: [],
+    defaultValue: null,
+    index: false,
+    visibility: { list: true, detail: true },
+    order: props.nextOrder,
+    owner: 'org',
+    participationScope: 'core',
+    appContextToken: firstApp
+  };
+};
 
 const draft = ref(createEmptyDraft());
 
@@ -215,6 +267,17 @@ watch(() => props.isOpen, (open) => {
   }
 });
 
+watch(
+  appScopeSelectOptions,
+  (opts) => {
+    if (!props.isOpen || !opts.length) return;
+    if (!opts.some((o) => o.value === draft.value.appContextToken)) {
+      draft.value.appContextToken = opts[0].value;
+    }
+  },
+  { deep: true }
+);
+
 watch(() => draft.value.label, (label) => {
   if (props.isOpen && label) {
     draft.value.key = labelToKey(label);
@@ -227,10 +290,24 @@ const handleSave = () => {
   if (!draft.value.label?.trim()) return;
   const key = draft.value.key?.trim() || labelToKey(draft.value.label);
   if (!key) return;
+  const showScope = props.showAppParticipationScope && appScopeSelectOptions.value.length > 0;
+  const participationScope = showScope ? draft.value.participationScope : 'core';
+  const appToken =
+    participationScope === 'app' && appScopeSelectOptions.value.length
+      ? String(draft.value.appContextToken || appScopeSelectOptions.value[0].value).toLowerCase()
+      : null;
+  if (showScope && participationScope === 'app' && !appToken) return;
+
+  const { participationScope: _ps, appContextToken: _at, ...rest } = draft.value;
   emit('save', {
-    ...draft.value,
+    ...rest,
     key,
-    label: draft.value.label.trim()
+    label: draft.value.label.trim(),
+    owner: 'org',
+    context:
+      showScope && participationScope === 'app' && appToken
+        ? appToken
+        : 'global'
   });
 };
 </script>

@@ -419,7 +419,7 @@ export function validateAllFieldMetadata<T extends BaseFieldMetadata>(
  * @see .cursor/rules/field-configuration-selection.mdc
  */
 export function normalizeFieldKeyForMetadataLookup(key: string): string {
-  return (key || '').toLowerCase().replace(/-/g, '');
+  return (key || '').toLowerCase().replace(/[\s_-]/g, '');
 }
 
 /**

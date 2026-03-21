@@ -1348,8 +1348,12 @@
       :columns="computedColumns"
       :module-title="title"
       :module-key="moduleKey"
+      :can-navigate-previous="quickPreviewCanPrevious"
+      :can-navigate-next="quickPreviewCanNext"
       @close="() => { showPreviewDrawer = false; saveDrawerState(); }"
       @update="handlePreviewUpdate"
+      @navigate-prev="handleQuickPreviewPrev"
+      @navigate-next="handleQuickPreviewNext"
     />
 
   </div>
@@ -3571,6 +3575,32 @@ const handleView = (row) => {
   showPreviewDrawer.value = true;
   // Save state to current tab
   saveDrawerState();
+};
+
+// Quick preview Prev/Next (e.g. tasks): index in current list
+const quickPreviewIndex = computed(() => {
+  const row = previewRow.value;
+  const list = props.data || [];
+  if (!row?._id || !Array.isArray(list)) return -1;
+  return list.findIndex((r) => String(r?._id || '') === String(row._id));
+});
+const quickPreviewCanPrevious = computed(() => quickPreviewIndex.value > 0);
+const quickPreviewCanNext = computed(() => {
+  const idx = quickPreviewIndex.value;
+  const list = props.data || [];
+  return idx >= 0 && idx < list.length - 1;
+});
+const handleQuickPreviewPrev = () => {
+  const list = props.data || [];
+  const idx = quickPreviewIndex.value;
+  if (idx <= 0 || idx >= list.length) return;
+  previewRow.value = list[idx - 1];
+};
+const handleQuickPreviewNext = () => {
+  const list = props.data || [];
+  const idx = quickPreviewIndex.value;
+  if (idx < 0 || idx >= list.length - 1) return;
+  previewRow.value = list[idx + 1];
 };
 
 // Handle field updates from QuickPreviewDrawer

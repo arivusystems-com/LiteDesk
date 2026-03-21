@@ -12,6 +12,7 @@
 const { resolvePeopleAppContext } = require('../utils/peopleAppContextResolver');
 const { resolveFiles, normalizeFile } = require('../utils/filesResolver');
 const People = require('../models/People');
+const PersonFileAttachment = require('../models/PersonFileAttachment');
 const Organization = require('../models/Organization');
 const User = require('../models/User');
 const { getFileUrl } = require('../middleware/uploadMiddleware');
@@ -40,10 +41,10 @@ exports.getEntityFiles = async (req, res) => {
       });
     }
 
-    // Fetch the person record
     const person = await People.findOne({
       _id: entityId,
-      organizationId: req.user.organizationId
+      organizationId: req.user.organizationId,
+      deletedAt: null
     }).lean();
 
     if (!person) {
@@ -179,13 +180,13 @@ exports.uploadFile = async (req, res) => {
       });
     }
 
-    // Fetch the person record
-    const person = await People.findOne({
+    const personExists = await People.exists({
       _id: entityId,
-      organizationId: req.user.organizationId
+      organizationId: req.user.organizationId,
+      deletedAt: null
     });
 
-    if (!person) {
+    if (!personExists) {
       return res.status(404).json({
         success: false,
         message: 'Person not found.'
@@ -247,46 +248,44 @@ exports.uploadFile = async (req, res) => {
     // Get file URL
     const fileUrl = getFileUrl(req, req.file.filename);
 
-    // Create new file entry
-    const newFile = {
+    const doc = await PersonFileAttachment.create({
+      organizationId: req.user.organizationId,
+      personId: entityId,
       fileName: req.file.originalname,
       fileType: req.file.mimetype,
       fileSize: req.file.size,
       storagePath: fileUrl,
       uploaded_by: req.user._id,
       created_at: new Date(),
-      appContext: appContextResult.appKey // Include app context
-    };
-
-    // Add file to person (use 'attachments' field, or 'files' if attachments doesn't exist)
-    if (!person.attachments) {
-      person.attachments = [];
-    }
-    person.attachments.push(newFile);
-
-    // Create activity log entry for file upload
-    person.activityLogs.push({
-      user: userName,
-      userId: req.user._id,
-      action: 'uploaded a file',
-      details: { 
-        appKey: appContextResult.appKey,
-        fileName: req.file.originalname,
-        fileSize: req.file.size,
-        fileType: req.file.mimetype
-      },
-      appContext: appContextResult.appKey,
-      timestamp: new Date()
+      appContext: appContextResult.appKey
     });
 
-    // Save person record
-    await person.save({ runValidators: true });
+    await People.updateOne(
+      { _id: entityId, organizationId: req.user.organizationId, deletedAt: null },
+      {
+        $push: {
+          activityLogs: {
+            user: userName,
+            userId: req.user._id,
+            action: 'uploaded a file',
+            details: {
+              appKey: appContextResult.appKey,
+              fileName: req.file.originalname,
+              fileSize: req.file.size,
+              fileType: req.file.mimetype
+            },
+            appContext: appContextResult.appKey,
+            timestamp: new Date()
+          }
+        }
+      }
+    );
 
-    // Normalize and populate the uploaded file
+    const newFile = doc.toObject ? doc.toObject() : doc;
     const normalizedFile = normalizeFile(newFile);
     if (normalizedFile) {
       normalizedFile.uploaderName = userName;
-      normalizedFile.id = newFile._id || null;
+      normalizedFile.id = doc._id || null;
     }
 
     res.json({

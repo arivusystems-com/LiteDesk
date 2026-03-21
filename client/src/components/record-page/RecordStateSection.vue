@@ -1,12 +1,19 @@
 <template>
   <section class="record-state-section mb-8 mt-4" aria-labelledby="record-state-heading">
     <h2 id="record-state-heading" class="sr-only">{{ heading }}</h2>
-    <div v-if="hasConfiguredFields" class="grid grid-cols-1 xl:grid-cols-2 gap-x-8 gap-y-2">
-      <div class="space-y-1">
-        <template
-          v-for="field in leftFields"
-          :key="field.key"
-        >
+    <div
+      v-if="hasConfiguredFields"
+      :class="[
+        'grid gap-x-8',
+        singleColumn ? 'grid-cols-1 gap-y-1 record-state-section--compact' : 'grid-cols-1 xl:grid-cols-2 gap-y-2'
+      ]"
+    >
+      <div
+        v-for="(columnFields, colIndex) in columnGroups"
+        :key="colIndex"
+        :class="singleColumn ? 'space-y-0' : 'space-y-1'"
+      >
+        <template v-for="field in columnFields" :key="field.key">
           <EditableLabeledValue
             v-if="shouldRenderEditableField(field)"
             :label="field.label"
@@ -24,230 +31,72 @@
           />
           <div
             v-else-if="shouldRenderActionField(field)"
-            class="record-state-section__row flex items-center gap-x-6"
+            class="record-state-section__row flex items-center gap-3"
           >
-            <div class="flex items-center gap-2 min-w-[140px]">
+            <div class="record-state-section__label flex items-center gap-3 flex-shrink-0">
               <component
                 v-if="field.icon"
                 :is="field.icon"
-                class="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0"
+                class="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0"
               />
-              <span class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ field.label }}</span>
+              <span class="text-sm text-gray-700 dark:text-gray-300">{{ field.label }}</span>
             </div>
-            <div class="flex-1 min-w-0">
+            <div class="flex-1 min-w-0 min-h-8 flex">
               <button
                 type="button"
-                class="w-full min-w-0 text-left text-sm text-gray-900 dark:text-white rounded px-2 py-1 -mx-2 -my-1 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                class="flex-1 min-w-0 w-full min-h-8 text-left text-sm text-gray-900 dark:text-white rounded px-2 py-1 -mx-2 -my-1 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer flex items-center"
                 @click="handleFieldEdit(field, $event)"
               >
-                <span v-if="getFieldValue(field)" class="truncate">{{ getFieldValue(field) }}</span>
-                <span v-else class="text-gray-300 dark:text-gray-600">—</span>
+                <template v-if="field.type === 'tags' && Array.isArray(getFieldRawValue(field)) && getFieldRawValue(field).length > 0">
+                  <div class="flex flex-wrap gap-1.5 text-left">
+                    <span
+                      v-for="(tag, index) in getFieldRawValue(field)"
+                      :key="`${tag}-${index}`"
+                      :class="['inline-block text-xs px-2 py-0.5 rounded', (field.getTagChipClass ? field.getTagChipClass(tag) : null) || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200']"
+                    >
+                      {{ typeof tag === 'object' ? (tag?.name || tag?.label || tag) : tag }}
+                    </span>
+                  </div>
+                </template>
+                <template v-else-if="field.type === 'tags'">
+                  <span class="text-record-empty">—</span>
+                </template>
+                <template v-else>
+                  <span v-if="getFieldValue(field)" class="truncate">{{ getFieldValue(field) }}</span>
+                  <span v-else class="text-record-empty">—</span>
+                </template>
               </button>
             </div>
           </div>
           <div
             v-else
-            class="record-state-section__row flex items-center gap-x-6"
+            class="record-state-section__row flex items-center gap-3"
           >
-          <div class="flex items-center gap-2 min-w-[140px]">
-            <component
-              v-if="field.icon"
-              :is="field.icon"
-              class="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0"
-            />
-            <span class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ field.label }}</span>
-          </div>
-          <div class="flex-1 min-w-0">
-            <slot :name="field.slotKey || field.key">
-              <span
-                v-if="getFieldValue(field) != null && getFieldValue(field) !== ''"
-                class="block w-full text-sm text-gray-900 dark:text-white"
-              >
-                {{ getFieldValue(field) }}
-              </span>
-              <span v-else class="block w-full text-sm text-gray-300 dark:text-gray-600">—</span>
-            </slot>
-          </div>
-          </div>
-        </template>
-      </div>
-
-      <div class="space-y-1">
-        <template
-          v-for="field in rightFields"
-          :key="field.key"
-        >
-          <EditableLabeledValue
-            v-if="shouldRenderEditableField(field)"
-            :label="field.label"
-            :value="getFieldRawValue(field)"
-            :type="field.type || 'text'"
-            :prefix-icon="field.icon || null"
-            row-padding-class="record-state-section__row"
-            :can-edit="field.canEdit === true"
-            :options="Array.isArray(field.options) ? field.options : []"
-            :min="field.min"
-            :step="field.step"
-            :format-value="() => getFieldValue(field)"
-            layout="row"
-            @save="(value) => handleFieldSave(field, value)"
-          />
-          <div
-            v-else-if="shouldRenderActionField(field)"
-            class="record-state-section__row flex items-center gap-x-6"
-          >
-            <div class="flex items-center gap-2 min-w-[140px]">
+            <div class="record-state-section__label flex items-center gap-3 flex-shrink-0">
               <component
                 v-if="field.icon"
                 :is="field.icon"
-                class="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0"
+                class="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0"
               />
-              <span class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ field.label }}</span>
+              <span class="text-sm text-gray-700 dark:text-gray-300">{{ field.label }}</span>
             </div>
-            <div class="flex-1 min-w-0">
-              <button
-                type="button"
-                class="w-full min-w-0 text-left text-sm text-gray-900 dark:text-white rounded px-2 py-1 -mx-2 -my-1 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer"
-                @click="handleFieldEdit(field, $event)"
-              >
-                <span v-if="getFieldValue(field)" class="truncate">{{ getFieldValue(field) }}</span>
-                <span v-else class="text-gray-300 dark:text-gray-600">—</span>
-              </button>
+            <div class="flex-1 min-w-0 min-h-8 flex items-center rounded px-2 -mx-2 -my-1 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800">
+              <slot :name="field.slotKey || field.key">
+                <span
+                  v-if="getFieldValue(field) != null && getFieldValue(field) !== ''"
+                  class="block w-full min-w-0 text-sm text-gray-900 dark:text-white"
+                >
+                  {{ getFieldValue(field) }}
+                </span>
+                <span v-else class="block w-full min-w-0 text-sm text-record-empty">—</span>
+              </slot>
             </div>
-          </div>
-          <div
-            v-else
-            class="record-state-section__row flex items-center gap-x-6"
-          >
-          <div class="flex items-center gap-2 min-w-[140px]">
-            <component
-              v-if="field.icon"
-              :is="field.icon"
-              class="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0"
-            />
-            <span class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ field.label }}</span>
-          </div>
-          <div class="flex-1 min-w-0">
-            <slot :name="field.slotKey || field.key">
-              <span
-                v-if="getFieldValue(field) != null && getFieldValue(field) !== ''"
-                class="block w-full text-sm text-gray-900 dark:text-white"
-              >
-                {{ getFieldValue(field) }}
-              </span>
-              <span v-else class="block w-full text-sm text-gray-300 dark:text-gray-600">—</span>
-            </slot>
-          </div>
           </div>
         </template>
       </div>
     </div>
 
-    <div v-else-if="enableLegacyFallback" class="grid grid-cols-1 xl:grid-cols-2 gap-x-8 gap-y-2">
-      <div class="space-y-2">
-        <div class="record-state-section__row flex items-center gap-x-6">
-          <div class="flex items-center gap-2 min-w-[140px]">
-            <component
-              v-if="statusIcon"
-              :is="statusIcon"
-              class="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0"
-            />
-            <span class="text-sm font-semibold text-gray-900 dark:text-white">Status</span>
-          </div>
-          <div class="flex-1 min-w-0">
-            <slot name="status">
-              <span v-if="status != null && status !== ''" class="block w-full text-sm text-gray-900 dark:text-white">{{ status }}</span>
-              <span v-else class="block w-full text-sm text-gray-300 dark:text-gray-600">—</span>
-            </slot>
-          </div>
-        </div>
-        <div class="record-state-section__row flex items-center gap-x-6">
-          <div class="flex items-center gap-2 min-w-[140px]">
-            <component
-              v-if="dateIcon"
-              :is="dateIcon"
-              class="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0"
-            />
-            <span class="text-sm font-semibold text-gray-900 dark:text-white">Start date</span>
-          </div>
-          <div class="flex-1 min-w-0">
-            <slot name="startDate">
-              <span v-if="startDate != null && startDate !== ''" class="block w-full text-sm text-gray-900 dark:text-white">{{ startDate }}</span>
-              <span v-else class="block w-full text-sm text-gray-300 dark:text-gray-600">—</span>
-            </slot>
-          </div>
-        </div>
-        <div class="record-state-section__row flex items-center gap-x-6">
-          <div class="flex items-center gap-2 min-w-[140px]">
-            <component
-              v-if="dateIcon"
-              :is="dateIcon"
-              class="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0"
-            />
-            <span class="text-sm font-semibold text-gray-900 dark:text-white">Due date</span>
-          </div>
-          <div class="flex-1 min-w-0">
-            <slot name="dueDate">
-              <span v-if="dueDate != null && dueDate !== ''" class="block w-full text-sm text-gray-900 dark:text-white">{{ dueDate }}</span>
-              <span v-else class="block w-full text-sm text-gray-300 dark:text-gray-600">—</span>
-            </slot>
-          </div>
-        </div>
-        <div class="record-state-section__row flex items-center gap-x-6">
-          <div class="flex items-center gap-2 min-w-[140px]">
-            <component
-              v-if="timeIcon"
-              :is="timeIcon"
-              class="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0"
-            />
-            <span class="text-sm font-semibold text-gray-900 dark:text-white">Time estimate</span>
-          </div>
-          <div class="flex-1 min-w-0">
-            <slot name="timeEstimate">
-              <span v-if="timeEstimate != null && timeEstimate !== ''" class="block w-full text-sm text-gray-900 dark:text-white">{{ timeEstimate }}</span>
-              <span v-else class="block w-full text-sm text-gray-300 dark:text-gray-600">—</span>
-            </slot>
-          </div>
-        </div>
-      </div>
-
-      <div class="space-y-2">
-        <div class="record-state-section__row flex items-center gap-x-6">
-          <div class="flex items-center gap-2 min-w-[140px]">
-            <component
-              v-if="ownerIcon"
-              :is="ownerIcon"
-              class="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0"
-            />
-            <span class="text-sm font-semibold text-gray-900 dark:text-white">Assignees</span>
-          </div>
-          <div class="flex-1 min-w-0">
-            <slot name="owner">
-              <span v-if="owner != null && owner !== ''" class="block w-full text-sm text-gray-900 dark:text-white">{{ owner }}</span>
-              <span v-else class="block w-full text-sm text-gray-300 dark:text-gray-600">—</span>
-            </slot>
-          </div>
-        </div>
-        <div class="record-state-section__row flex items-center gap-x-6">
-          <div class="flex items-center gap-2 min-w-[140px]">
-            <component
-              v-if="priorityIcon"
-              :is="priorityIcon"
-              class="w-5 h-5 text-gray-400 dark:text-gray-500 flex-shrink-0"
-            />
-            <span class="text-sm font-semibold text-gray-900 dark:text-white">Priority</span>
-          </div>
-          <div class="flex-1 min-w-0">
-            <slot name="priority">
-              <span v-if="priority != null && priority !== ''" class="block w-full text-sm text-gray-900 dark:text-white">{{ priority }}</span>
-              <span v-else class="block w-full text-sm text-gray-300 dark:text-gray-600">—</span>
-            </slot>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- Signals and hints below the grid -->
+    <!-- Optional: signals and hint below the grid (e.g. Task: Overdue, Due today, next action) -->
     <div v-if="signals && signals.length > 0" class="record-state-section__signals flex flex-wrap gap-1.5 mt-4">
       <span
         v-for="(signal, i) in signals"
@@ -264,33 +113,27 @@
 </template>
 
 <script setup>
-import { computed, useSlots } from 'vue';
+import { computed, useSlots, inject } from 'vue';
 import EditableLabeledValue from '@/components/record-page/EditableLabeledValue.vue';
 
 /**
- * RecordStateSection – current state and signals in two-column layout.
- * Matches reference design with icons, labels, and values.
- * Read-first. Not a card. Clean, intuitive layout.
+ * RecordStateSection – Key fields in two-column layout (or single-column when embed/quick preview).
+ *
+ * Standardized: single data-driven path. Props `fields` + `fieldValues` define all rows;
+ * one template renders both columns via v-for over columnGroups (single list when singleColumn).
+ * Field contract: key, label, icon, type, canEdit, onSave, options; adapters supply this.
+ * Optional: slots by field key for custom cell content; signals + nextActionHint below grid.
  */
 const props = defineProps({
   heading: { type: String, default: 'Record state' },
   fields: { type: Array, default: () => [] },
   fieldValues: { type: Object, default: () => ({}) },
-  enableLegacyFallback: { type: Boolean, default: true },
-  status: { type: String, default: null },
-  owner: { type: String, default: null },
-  startDate: { type: String, default: null },
-  dueDate: { type: String, default: null },
-  priority: { type: String, default: null },
-  timeEstimate: { type: String, default: null },
   signals: { type: Array, default: () => [] },
-  nextActionHint: { type: String, default: null },
-  statusIcon: { type: [Object, Function], default: null },
-  dateIcon: { type: [Object, Function], default: null },
-  timeIcon: { type: [Object, Function], default: null },
-  ownerIcon: { type: [Object, Function], default: null },
-  priorityIcon: { type: [Object, Function], default: null }
+  nextActionHint: { type: String, default: null }
 });
+
+const recordLayoutIsMobile = inject('recordLayoutIsMobile', null);
+const singleColumn = computed(() => Boolean(recordLayoutIsMobile?.value));
 
 const hasConfiguredFields = computed(() => Array.isArray(props.fields) && props.fields.length > 0);
 const slots = useSlots();
@@ -307,6 +150,13 @@ const rightFields = computed(() => {
   const explicitlyRight = props.fields.filter(field => field?.column === 'right');
   if (explicitlyRight.length > 0) return explicitlyRight;
   return props.fields.filter((_, index) => index % 2 === 1);
+});
+
+/** When singleColumn (e.g. quick preview), one group with all fields in order; otherwise left + right. */
+const columnGroups = computed(() => {
+  if (!hasConfiguredFields.value) return [];
+  if (singleColumn.value) return [props.fields];
+  return [leftFields.value, rightFields.value];
 });
 
 const getFieldValue = (field) => {
@@ -362,7 +212,20 @@ const handleFieldEdit = (field, event) => {
 </script>
 
 <style scoped>
+/* Match DetailsSection and EditableLabeledValue default row: same padding and min-height for consistent label–value spacing across People, Task, etc. */
 .record-state-section__row {
   min-height: 2.5rem;
+  padding: 0.5rem 1rem; /* py-2 px-4 */
+}
+
+/* Tighter spacing in quick preview / single-column (embed) layout */
+.record-state-section--compact .record-state-section__row {
+  min-height: 2.5rem;
+  padding: 0.25rem 1rem;
+}
+
+/* Match EditableLabeledValue row layout: same label width so key fields align across People, Tasks, etc. */
+.record-state-section__label {
+  min-width: 12rem;
 }
 </style>

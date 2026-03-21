@@ -691,6 +691,30 @@ exports.updateForm = async (req, res) => {
                 delete req.body.publicLink.slug;
             }
         }
+
+        // Generic description versioning: store previous description before update.
+        if (Object.prototype.hasOwnProperty.call(req.body || {}, 'description')) {
+            try {
+                const prevDesc = String(existingForm?.description ?? existingForm?.customFields?.description ?? '');
+                const nextDesc = String(req.body.description ?? '');
+                if (prevDesc !== nextDesc) {
+                    await Form.updateOne(
+                        { _id: req.params.id, organizationId: req.user.organizationId },
+                        {
+                            $push: {
+                                descriptionVersions: {
+                                    content: prevDesc,
+                                    createdAt: new Date(),
+                                    createdBy: req.user?._id
+                                }
+                            }
+                        }
+                    );
+                }
+            } catch (versionErr) {
+                console.warn('Description version push (form) failed:', versionErr?.message || versionErr);
+            }
+        }
         
         // Perform update
         const updatedForm = await Form.findOneAndUpdate(

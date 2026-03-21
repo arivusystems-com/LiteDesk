@@ -50,7 +50,8 @@ export const createTaskActivityUi = ({
   getSystemEventMessage,
   handleShowMore,
   toggleTaskEmailThread,
-  createTaskFromEmailMessage
+  createTaskFromEmailMessage,
+  getTagChipClass
 }) => computed(() => buildRecordActivityUi({
   currentUser: authStore.user || null,
   expandedTaskEmailThreads: expandedTaskEmailThreads.value,
@@ -107,5 +108,6 @@ export const createTaskActivityUi = ({
   handleShowMore,
 
   toggleTaskEmailThread,
-  createTaskFromEmailMessage
+  createTaskFromEmailMessage,
+  getTagChipClass
 }));

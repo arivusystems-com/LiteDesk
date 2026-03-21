@@ -177,6 +177,28 @@
     line-height: var(--line-height-meta);
     font-weight: var(--font-weight-meta);
   }
+
+  /**
+   * Record page inline values rendered by EditableLabeledValue.
+   * Keep a stable typography baseline across listbox/display/read-only branches.
+   */
+  .editable-labeled-value__text {
+    font-size: var(--font-size-value);
+    line-height: var(--line-height-value);
+    font-weight: var(--font-weight-value);
+  }
+
+  /**
+   * Record surfaces — empty / placeholder field value (em dash, "Empty", "Select…", link prompts).
+   * Single class keeps key fields, details, drawers, and page-level slots aligned; adjust color via @theme neutral-* only here.
+   */
+  .text-record-empty {
+    color: var(--color-neutral-300);
+  }
+
+  .dark .text-record-empty {
+    color: var(--color-neutral-600);
+  }
 }
 @import 'gridstack/dist/gridstack.min.css';
 

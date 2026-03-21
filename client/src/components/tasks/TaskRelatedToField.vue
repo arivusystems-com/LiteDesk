@@ -61,13 +61,22 @@
           <div class="relative">
             <ComboboxButton
               :class="[
-                'relative w-full h-[2.5rem] flex items-center cursor-default rounded-md bg-gray-100 dark:bg-gray-700 py-0 pl-3 pr-10 text-left text-sm text-gray-900 dark:text-white outline-1 -outline-offset-1 outline-gray-300/20 focus:outline-2 focus:outline-indigo-500 border-0',
+                'relative w-full h-[2.5rem] flex items-center cursor-default rounded-md bg-gray-100 dark:bg-gray-700 py-0 pl-3 pr-20 text-left text-sm text-gray-900 dark:text-white outline-1 -outline-offset-1 outline-gray-300/20 focus:outline-2 focus:outline-indigo-500 border-0',
                 (disabled || optionsLoading) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
               ]"
             >
               <span class="block truncate">
                 {{ selectedRecordLabel || (optionsLoading ? 'Loading...' : `Select ${typeLabel}...`) }}
               </span>
+              <button
+                v-if="canCreateRelatedRecord"
+                type="button"
+                @click.stop="openCreateDrawer"
+                class="absolute inset-y-0 right-8 flex items-center pr-1 text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                title="Create and select"
+              >
+                <PlusIcon class="h-5 w-5" />
+              </button>
               <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
                 <ChevronUpDownIcon class="h-5 w-5 text-gray-400 dark:text-gray-500" aria-hidden="true" />
               </span>
@@ -97,6 +106,14 @@
                   <div v-if="filteredOptions.length === 0" class="relative cursor-default select-none px-4 py-2 text-gray-700 dark:text-gray-300">
                     {{ optionsLoading ? 'Loading...' : 'No matching records found.' }}
                   </div>
+                  <button
+                    v-if="!optionsLoading && filteredOptions.length === 0 && canCreateRelatedRecord"
+                    type="button"
+                    class="w-full text-left px-4 py-2 text-sm text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+                    @click.stop="openCreateDrawer"
+                  >
+                    Create new {{ recordSearchQuery ? `"${recordSearchQuery}"` : typeLabel }}
+                  </button>
                   <ComboboxOption v-for="opt in filteredOptions" :key="opt._id" :value="opt._id" v-slot="{ active, selected }">
                     <li
                       :class="[
@@ -117,6 +134,15 @@
         </Combobox>
       </div>
     </div>
+    <CreateRecordDrawer
+      v-if="canCreateRelatedRecord"
+      :isOpen="showCreateDrawer"
+      :moduleKey="createDrawerModuleKey"
+      :prefillText="recordSearchQuery"
+      :prefillFieldKey="createDrawerPrefillFieldKey"
+      @close="closeCreateDrawer"
+      @saved="handleRelatedRecordCreated"
+    />
     <p v-if="error" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
   </div>
 </template>
@@ -124,8 +150,9 @@
 <script setup>
 import { ref, watch, computed, nextTick } from 'vue';
 import { Listbox, ListboxButton, ListboxOptions, ListboxOption, Combobox, ComboboxButton, ComboboxOptions, ComboboxOption } from '@headlessui/vue';
-import { CheckIcon, ChevronUpDownIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline';
+import { CheckIcon, ChevronUpDownIcon, MagnifyingGlassIcon, PlusIcon } from '@heroicons/vue/24/outline';
 import apiClient from '@/utils/apiClient';
+import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 
 const props = defineProps({
   modelValue: {
@@ -142,10 +169,10 @@ const emit = defineEmits(['update:modelValue']);
 
 // Use "People" for the contact/people module
 const RELATED_TYPE_OPTIONS = {
-  contact: { label: 'People', endpoint: '/people', displayField: 'name' },
-  deal: { label: 'Deal', endpoint: '/deals', displayField: 'name' },
-  organization: { label: 'Organization', endpoint: '/v2/organization', displayField: 'name' },
-  project: { label: 'Project', endpoint: '/projects', displayField: 'name' }
+  contact: { label: 'People', endpoint: '/people', displayField: 'name', moduleKey: 'people', prefillFieldKey: 'name' },
+  deal: { label: 'Deal', endpoint: '/deals', displayField: 'name', moduleKey: 'deals', prefillFieldKey: 'name' },
+  organization: { label: 'Organization', endpoint: '/v2/organization', displayField: 'name', moduleKey: 'organizations', prefillFieldKey: 'name' },
+  project: { label: 'Project', endpoint: '/projects', displayField: 'name', moduleKey: 'projects', prefillFieldKey: 'title' }
 };
 
 const typeOptions = [
@@ -162,6 +189,7 @@ const options = ref([]);
 const optionsLoading = ref(false);
 const recordSearchQuery = ref('');
 const recordSearchInputRef = ref(null);
+const showCreateDrawer = ref(false);
 
 function normalizeType(t) {
   const v = (t || 'none').toLowerCase();
@@ -186,6 +214,18 @@ const selectedRecordLabel = computed(() => {
   if (!localId.value) return '';
   const opt = options.value.find((o) => String(o._id) === String(localId.value));
   return opt ? getOptionLabel(opt) : '';
+});
+
+const createDrawerModuleKey = computed(() => {
+  return RELATED_TYPE_OPTIONS[localType.value]?.moduleKey || '';
+});
+
+const createDrawerPrefillFieldKey = computed(() => {
+  return RELATED_TYPE_OPTIONS[localType.value]?.prefillFieldKey || 'name';
+});
+
+const canCreateRelatedRecord = computed(() => {
+  return !props.disabled && !!createDrawerModuleKey.value && localType.value !== 'none';
 });
 
 function getOptionLabel(opt) {
@@ -238,6 +278,26 @@ function emitValue() {
   const id = type === 'none' ? null : (localId.value || null);
   const displayLabel = type !== 'none' && id ? (selectedRecordLabel.value || undefined) : undefined;
   emit('update:modelValue', { type, id, displayLabel });
+}
+
+function openCreateDrawer() {
+  if (!canCreateRelatedRecord.value) return;
+  showCreateDrawer.value = true;
+}
+
+function closeCreateDrawer() {
+  showCreateDrawer.value = false;
+}
+
+async function handleRelatedRecordCreated(savedRecord) {
+  if (!savedRecord?._id) return;
+  const exists = options.value.some((opt) => String(opt?._id) === String(savedRecord._id));
+  if (!exists) {
+    options.value = [savedRecord, ...options.value];
+  }
+  localId.value = savedRecord._id;
+  emitValue();
+  closeCreateDrawer();
 }
 
 function focusRecordSearch() {

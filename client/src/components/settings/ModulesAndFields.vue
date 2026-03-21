@@ -977,6 +977,52 @@
               </nav>
             </div>
             <div v-if="activeSubTab === 'general'" class="space-y-4">
+              <div
+                v-if="showCustomFieldParticipationScope && currentField?.owner === 'org' && customFieldAppScopeOptions.length"
+                class="mb-2 p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/90 dark:bg-gray-900/50 space-y-3"
+              >
+                <div>
+                  <label class="block text-sm font-medium text-gray-900 dark:text-white">Field scope</label>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Core fields apply everywhere for this record. App-specific fields appear when you work in that application (for example, opening the person or organization from that app’s list).
+                  </p>
+                </div>
+                <div class="flex flex-col gap-2">
+                  <label class="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      class="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700"
+                      :checked="orgCustomFieldIsCoreScope"
+                      @change="setOrgCustomFieldScopeCore"
+                    />
+                    <span class="text-sm text-gray-900 dark:text-white">Core (shared across apps)</span>
+                  </label>
+                  <label class="inline-flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      class="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700"
+                      :checked="!orgCustomFieldIsCoreScope"
+                      @change="setOrgCustomFieldScopeApp"
+                    />
+                    <span class="text-sm text-gray-900 dark:text-white">App-specific</span>
+                  </label>
+                </div>
+                <div v-if="!orgCustomFieldIsCoreScope" class="space-y-1">
+                  <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Application</label>
+                  <select
+                    v-model="orgCustomAppContextToken"
+                    class="w-full px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-sm text-gray-900 dark:text-white"
+                  >
+                    <option
+                      v-for="opt in customFieldAppScopeOptions"
+                      :key="opt.value"
+                      :value="opt.value"
+                    >
+                      {{ opt.label }}
+                    </option>
+                  </select>
+                </div>
+              </div>
               <!-- Form Type Editor (Forms module only) -->
               <!-- 
                 ARCHITECTURE NOTE: Form Type is a CORE domain field.
@@ -5306,6 +5352,8 @@
       :is-open="showAddFieldDrawer"
       :module-name="selectedModule?.name || ''"
       :next-order="editFields.length"
+      :show-app-participation-scope="showCustomFieldParticipationScope && customFieldAppScopeOptions.length > 0"
+      :app-scope-options="customFieldAppScopeOptions"
       @close="showAddFieldDrawer = false"
       @save="handleAddFieldFromDrawer"
     />
@@ -6936,6 +6984,40 @@ const isDealsModule = computed(() => {
   return selectedModule.value?.key?.toLowerCase() === 'deals';
 });
 
+/** Shared core modules where custom fields may be Core vs app-participation scoped. */
+const CUSTOM_FIELD_APP_SCOPE_MODULES = new Set(['people', 'organizations', 'tasks', 'events', 'items', 'deals']);
+
+const showCustomFieldParticipationScope = computed(() =>
+  CUSTOM_FIELD_APP_SCOPE_MODULES.has((selectedModule.value?.key || '').toLowerCase())
+);
+
+const ENABLE_APP_LABELS = {
+  SALES: 'Sales',
+  HELPDESK: 'Helpdesk',
+  MARKETING: 'Marketing',
+  AUDIT: 'Audit',
+  PORTAL: 'Portal',
+  PROJECTS: 'Projects',
+  LMS: 'LMS'
+};
+
+const customFieldAppScopeOptions = computed(() => {
+  const raw = authStore.organization?.enabledApps;
+  if (!Array.isArray(raw) || !raw.length) return [];
+  const keys = new Set();
+  for (const entry of raw) {
+    const key = typeof entry === 'string' ? entry : (entry?.appKey || entry?.key || '');
+    const upper = String(key || '').trim().toUpperCase();
+    if (upper) keys.add(upper);
+  }
+  return Array.from(keys)
+    .sort()
+    .map((appKey) => ({
+      value: appKey.toLowerCase(),
+      label: ENABLE_APP_LABELS[appKey] || `${appKey.charAt(0)}${appKey.slice(1).toLowerCase()}`
+    }));
+});
+
 // DEV-only guard: Ensure Forms module never supports execution
 if (process.env.NODE_ENV === 'development') {
   watch(() => isFormsModule.value, (isForms) => {
@@ -7012,17 +7094,47 @@ const quickCreateAvailableFields = computed(() => {
           participationFields.push(field);
         }
       } catch (err) {
-        console.warn(`Could not determine owner for field "${field.key}"`);
+        // Org custom fields are not part of PEOPLE_FIELD_METADATA by design.
+        if (field?.owner === 'org') {
+          coreFields.push(field);
+        }
       }
+    });
+    const canonicalCoreOrder = [
+      'first_name',
+      'last_name',
+      'email',
+      'phone',
+      'mobile',
+      'organization',
+      'assignedTo',
+      'source',
+      'do_not_contact',
+      'tags'
+    ];
+    const canonicalRank = new Map(
+      canonicalCoreOrder.map((key, index) => [normalizeFieldKey(key), index])
+    );
+    coreFields.sort((a, b) => {
+      const aRank = canonicalRank.get(normalizeFieldKey(a.key));
+      const bRank = canonicalRank.get(normalizeFieldKey(b.key));
+      const aPinned = typeof aRank === 'number';
+      const bPinned = typeof bRank === 'number';
+      if (aPinned && bPinned) return aRank - bRank;
+      if (aPinned) return -1;
+      if (bPinned) return 1;
+      return 0;
     });
     return [...coreFields, ...participationFields];
   }
 
-  // For Organizations: all fields except system (and optionally tenant fields when hidden)
+  // For Organizations: only metadata-declared quick-create eligible fields
+  // (excludes system and participation fields by design)
   if (isOrganizationsModule.value) {
+    const eligibleKeys = new Set(getOrganizationQuickCreateFields());
     return editFields.value.filter(f => {
       if (!f.key) return false;
-      if (isSystemField(f)) return false;
+      if (!eligibleKeys.has(f.key)) return false;
       if (!showTenantFields.value) {
         const keyLower = f.key.toLowerCase();
         const tenantFieldPatterns = ['subscription.', 'limits.', 'settings.', 'slug', 'isactive', 'enabledmodules'];
@@ -7094,10 +7206,19 @@ const groupedFields = computed(() => {
 
   for (const fieldKey of allFieldKeys) {
     try {
-      // Custom fields (owner: 'org') always go to core group, never system
+      // Custom fields (owner: 'org'): core when context is global; otherwise group by app (field.context token → SALES, etc.)
       const fieldObj = editFields.value.find(f => f.key === fieldKey);
       if (fieldObj?.owner === 'org') {
-        coreIdentity.push(fieldKey);
+        const ctx = (fieldObj.context || 'global').toLowerCase();
+        if (ctx === 'global') {
+          coreIdentity.push(fieldKey);
+        } else {
+          const scopeKey = ctx.toUpperCase();
+          if (!participation[scopeKey]) {
+            participation[scopeKey] = [];
+          }
+          participation[scopeKey].push(fieldKey);
+        }
         continue;
       }
 
@@ -7320,6 +7441,34 @@ const groupedFields = computed(() => {
       // For now, treat as system field to prevent breaking
       system.push(fieldKey);
     }
+  }
+
+  if (isPeopleModule.value) {
+    const canonicalCoreOrder = [
+      'first_name',
+      'last_name',
+      'email',
+      'phone',
+      'mobile',
+      'organization',
+      'assignedTo',
+      'source',
+      'do_not_contact',
+      'tags'
+    ];
+    const canonicalRank = new Map(
+      canonicalCoreOrder.map((key, index) => [normalizeFieldKey(key), index])
+    );
+    coreIdentity.sort((a, b) => {
+      const aRank = canonicalRank.get(normalizeFieldKey(a));
+      const bRank = canonicalRank.get(normalizeFieldKey(b));
+      const aPinned = typeof aRank === 'number';
+      const bPinned = typeof bRank === 'number';
+      if (aPinned && bPinned) return aRank - bRank;
+      if (aPinned) return -1;
+      if (bPinned) return 1;
+      return 0;
+    });
   }
 
   return { coreIdentity, participation, system };
@@ -8188,8 +8337,8 @@ function cancelOptionEdit(index) {
 const fetchModules = async () => {
   loading.value = true;
   try {
-    // Use apiClient.get() for GET requests
-    const data = await apiClient.get('/modules');
+    // Use context=all so Settings receives both global and app-specific custom fields
+    const data = await apiClient.get('/modules', { params: { context: 'all' } });
     if (data.success) {
       modules.value = data.data;
       // Initialize from URL first (unless startWithModuleList: show cards first)
@@ -8841,7 +8990,8 @@ const selectModule = (mod, preferFieldKey = null) => {
   if (mod.key?.toLowerCase() === 'people') {
     const missingFields = [];
     for (const field of normalizedFields) {
-      if (field.key) {
+      // Org custom fields are intentionally runtime-defined and not listed in PEOPLE_FIELD_METADATA.
+      if (field.key && field.owner !== 'org') {
         try {
           getFieldMetadata(field.key);
         } catch (err) {
@@ -9142,6 +9292,7 @@ const openAddField = () => {
 };
 
 const handleAddFieldFromDrawer = async (field) => {
+  const rawCtx = field.context != null && String(field.context).trim() !== '' ? String(field.context).trim().toLowerCase() : 'global';
   const newField = {
     ...field,
     options: field.options || [],
@@ -9149,7 +9300,7 @@ const handleAddFieldFromDrawer = async (field) => {
     index: field.index ?? false,
     order: editFields.value.length,
     owner: 'org',
-    context: 'global'
+    context: rawCtx === 'global' ? 'global' : rawCtx
   };
   const newFieldKey = newField.key?.trim() || field.key?.trim();
   editFields.value.push(newField);
@@ -9474,6 +9625,41 @@ const selectField = (idx) => {
 
 const currentField = computed(() => editFields.value[selectedFieldIdx.value]);
 const currentFieldTitle = computed(() => formatFieldLabelForDisplay(currentField.value?.label, currentField.value?.key) || 'Field');
+
+const orgCustomFieldIsCoreScope = computed(() => {
+  const f = currentField.value;
+  if (!f || f.owner !== 'org') return true;
+  return (f.context || 'global').toLowerCase() === 'global';
+});
+
+const orgCustomAppContextToken = computed({
+  get() {
+    const f = currentField.value;
+    const opts = customFieldAppScopeOptions.value;
+    if (!f || f.owner !== 'org') return opts[0]?.value || '';
+    const c = (f.context || 'global').toLowerCase();
+    if (c === 'global') return opts[0]?.value || '';
+    return opts.some((o) => o.value === c) ? c : (opts[0]?.value || c);
+  },
+  set(v) {
+    const f = editFields.value[selectedFieldIdx.value];
+    if (f?.owner === 'org' && v) f.context = String(v).toLowerCase();
+  }
+});
+
+function setOrgCustomFieldScopeCore() {
+  const f = editFields.value[selectedFieldIdx.value];
+  if (f?.owner === 'org') f.context = 'global';
+}
+
+function setOrgCustomFieldScopeApp() {
+  const f = editFields.value[selectedFieldIdx.value];
+  const opts = customFieldAppScopeOptions.value;
+  if (f?.owner !== 'org' || !opts.length) return;
+  const cur = (f.context || 'global').toLowerCase();
+  if (cur !== 'global' && opts.some((o) => o.value === cur)) return;
+  f.context = opts[0].value;
+}
 
 // Default value bindings for type-specific inputs
 const defaultValueMultiPicklist = computed({
@@ -11184,28 +11370,8 @@ async function saveQuickCreate() {
           );
           
           const isValid = isCoreIdentity || isAllowedSystemField;
-          
-          if (!isValid) {
-            console.warn(`⚠️  Key "${key}" is not eligible for Quick Create (must be core identity field OR system field with allowOnCreate)`, {
-              key,
-              metadata: {
-                owner: metadata.owner,
-                intent: metadata.intent,
-                editable: metadata.editable,
-                allowOnCreate: metadata.allowOnCreate
-              },
-              expected: [
-                { owner: 'core', intent: 'identity', editable: true },
-                { owner: 'system', editable: true, allowOnCreate: true }
-              ]
-            });
-          }
           return isValid;
         } catch (err) {
-          console.warn(`⚠️  Key "${key}" metadata not found, excluding from Quick Create`, {
-            key,
-            error: err.message
-          });
           return false;
         }
       });

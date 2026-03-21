@@ -14,6 +14,19 @@ function resolveMaybeElement(refValue) {
   return null;
 }
 
+function eventHitsMenuSurface(event) {
+  const target = event?.target;
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.closest('[role="menu"]')) return true;
+  if (target.closest('[role="menuitem"]')) return true;
+  if (target.closest('[role="menuitemcheckbox"]')) return true;
+  if (target.closest('[role="menuitemradio"]')) return true;
+  // Headless UI elements commonly carry this attribute; keep popover open
+  // while interacting with menu controls even when they are portalled.
+  if (target.closest('[data-headlessui-state]')) return true;
+  return false;
+}
+
 /**
  * Composable for tag popover visibility and positioning.
  * Use with RecordTagPopover: bind refs to the popover container and header/field buttons.
@@ -88,6 +101,10 @@ export function useRecordTagPopoverPosition() {
 
   const handleTagPopoverMousedown = (event) => {
     if (!showTagPopover.value) return;
+    if (eventHitsMenuSurface(event)) {
+      mousedownInsidePopover.value = true;
+      return;
+    }
     const target = event?.target;
     if (!target) return;
     const popoverEl = tagPopoverRef.value;
@@ -104,6 +121,7 @@ export function useRecordTagPopoverPosition() {
 
   const handleTagPopoverOutsideClick = (event) => {
     if (!showTagPopover.value) return;
+    if (eventHitsMenuSurface(event)) return;
     if (mousedownInsidePopover.value) {
       mousedownInsidePopover.value = false;
       return;

@@ -1,13 +1,24 @@
 <template>
   <div class="module-record-page-root flex-1 min-h-0 overflow-hidden flex flex-col">
     <!-- Deals and tasks use their full-featured pages; all other modules use the generic record page. -->
-    <DealRecordPage v-if="adapterKey === 'deal'" />
-    <TaskRecordPage v-else-if="adapterKey === 'task'" />
+    <DealRecordPage
+      v-if="adapterKey === 'deal'"
+      :embed="embed"
+      :deal-id="effectiveRecordId"
+      @close="$emit('close')"
+    />
+    <TaskRecordPage
+      v-else-if="adapterKey === 'task'"
+      :embed="embed"
+      :task-id="effectiveRecordId"
+      @close="$emit('close')"
+    />
     <GenericRecordContent
       v-else
-      :module-key="moduleKey"
+      :module-key="effectiveModuleKey"
       :record-id="effectiveRecordId"
       :embed="embed"
+      @close="$emit('close')"
     />
   </div>
 </template>
@@ -23,12 +34,17 @@ import GenericRecordContent from '@/components/record-page/GenericRecordContent.
 const props = defineProps({
   embed: { type: Boolean, default: false },
   /** When embed, pass record id explicitly; otherwise from route */
-  recordId: { type: String, default: null }
+  recordId: { type: String, default: null },
+  /** When embed, pass module key explicitly (e.g. from QuickPreviewDrawer); otherwise from route */
+  moduleKey: { type: String, default: null }
 });
+
+const emit = defineEmits(['close']);
 
 const route = useRoute();
 
-const moduleKey = computed(() => {
+const effectiveModuleKey = computed(() => {
+  if (props.embed && props.moduleKey) return String(props.moduleKey).toLowerCase().trim();
   const meta = route.meta?.moduleKey;
   if (meta) return String(meta).toLowerCase().trim();
   if (route.name === 'deal-detail') return 'deals';
@@ -44,5 +60,5 @@ const effectiveRecordId = computed(() => {
   return route.params?.id ?? route.params?.recordId ?? '';
 });
 
-const adapterKey = computed(() => getRecordAdapterKey(moduleKey.value));
+const adapterKey = computed(() => getRecordAdapterKey(effectiveModuleKey.value));
 </script>

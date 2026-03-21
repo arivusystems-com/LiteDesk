@@ -18,8 +18,25 @@
             {{ ui.formatRelativeActivityTime(event.createdAt) }}
           </span>
         </div>
+        <!-- Tags field: show colored chips instead of raw JSON -->
         <p
-          v-if="!event.descriptionDiffHtml"
+          v-if="!event.descriptionDiffHtml && isTagsFieldChange"
+          class="text-[12px] leading-[1.4] text-gray-700 dark:text-gray-300"
+        >
+          <span class="mr-1">Changed {{ ui.getSystemEventFieldLabel(event) }} to</span>
+          <span v-if="parsedToTags.length > 0" class="inline-flex flex-wrap gap-1 align-middle">
+            <span
+              v-for="(tagName, i) in parsedToTags"
+              :key="i"
+              :class="['inline-block text-xs px-2 py-0.5 rounded', (ui.getTagChipClass && ui.getTagChipClass(tagName)) || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200']"
+            >
+              {{ tagName }}
+            </span>
+          </span>
+          <span v-else class="text-gray-500 dark:text-gray-400">—</span>
+        </p>
+        <p
+          v-else-if="!event.descriptionDiffHtml"
           class="text-[12px] leading-[1.4] text-gray-700 dark:text-gray-300"
         >
           Changed {{ ui.getSystemEventFieldLabel(event) }} from "{{ ui.getSystemEventFromValue(event) }}" to "{{ ui.getSystemEventToValue(event) }}"
@@ -49,8 +66,41 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue';
+
+const props = defineProps({
   event: { type: Object, required: true },
   ui: { type: Object, required: true }
+});
+
+const details = computed(() => props.event?.payload?.details || props.event?.details || {});
+const isTagsFieldChange = computed(() => String(details.value?.field || '').toLowerCase() === 'tags');
+
+function parseTagsFromValue(value) {
+  if (value == null || value === '' || value === 'Empty') return [];
+  // Already an array (e.g. from event.details.to stored as array)
+  if (Array.isArray(value)) {
+    return value.map((t) => (t && typeof t === 'object' ? (t.name || t.label || t) : String(t))).filter(Boolean);
+  }
+  const s = typeof value === 'string' ? value.trim() : String(value);
+  if (!s) return [];
+  try {
+    const parsed = JSON.parse(s);
+    return Array.isArray(parsed) ? parsed.map((t) => (t && typeof t === 'object' ? (t.name || t.label || t) : String(t))).filter(Boolean) : [];
+  } catch {
+    // Task (and some) APIs store tags as comma-separated string
+    return s.split(',').map((t) => t.trim()).filter(Boolean);
+  }
+}
+
+const parsedToTags = computed(() => {
+  const details = props.event?.payload?.details || props.event?.details || {};
+  const rawTo = details.to ?? details.newValue;
+  if (Array.isArray(rawTo)) return parseTagsFromValue(rawTo);
+  if (props.ui.getSystemEventToValue) {
+    const toStr = props.ui.getSystemEventToValue(props.event);
+    return parseTagsFromValue(toStr);
+  }
+  return parseTagsFromValue(rawTo);
 });
 </script>

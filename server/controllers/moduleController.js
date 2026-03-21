@@ -451,6 +451,18 @@ function getBaseFieldsForKey(key) {
             'relatedTo',
             'estimatedHours'
         ];
+        const peopleDefaultFieldOrder = [
+            'first_name',
+            'last_name',
+            'email',
+            'phone',
+            'mobile',
+            'organization',
+            'assignedTo',
+            'source',
+            'do_not_contact',
+            'tags'
+        ];
         const modelByKey = {
             people: require('../models/People'),
             organizations: require('../models/Organization'),
@@ -510,6 +522,12 @@ function getBaseFieldsForKey(key) {
             'dueDate',
             'priority',
             'estimatedHours'
+        ]);
+        const peopleDefaultKeyFields = new Set([
+            'organization',
+            'email',
+            'phone',
+            'assignedTo'  // owner (assigned user)
         ]);
         const baseFields = Object.entries(model.schema.paths)
             .filter(([name]) => {
@@ -952,7 +970,7 @@ function getBaseFieldsForKey(key) {
                     key: name,
                     label: fieldLabel,
                     dataType: dataType,
-                    keyField: key === 'tasks' && taskDefaultKeyFields.has(name),
+                    keyField: (key === 'tasks' && taskDefaultKeyFields.has(name)) || (key === 'people' && peopleDefaultKeyFields.has(name)),
                     // IMPORTANT: Some schema fields are conditionally required (function-based required).
                     // For dependency-driven required fields (like events.reviewerId), the module definition must NOT mark them required globally.
                     required: (key === 'events' && name === 'reviewerId') ? false : !!path.isRequired,
@@ -976,15 +994,16 @@ function getBaseFieldsForKey(key) {
                 };
             });
 
-        if (key !== 'tasks') {
+        if (key !== 'tasks' && key !== 'people') {
             return baseFields;
         }
 
-        const sortedTaskFields = [...baseFields].sort((a, b) => {
+        const sortOrder = key === 'tasks' ? taskDefaultFieldOrder : peopleDefaultFieldOrder;
+        const sortedFields = [...baseFields].sort((a, b) => {
             const aKey = String(a?.key || '');
             const bKey = String(b?.key || '');
-            const aPinnedIndex = taskDefaultFieldOrder.indexOf(aKey);
-            const bPinnedIndex = taskDefaultFieldOrder.indexOf(bKey);
+            const aPinnedIndex = sortOrder.indexOf(aKey);
+            const bPinnedIndex = sortOrder.indexOf(bKey);
             const aPinned = aPinnedIndex !== -1;
             const bPinned = bPinnedIndex !== -1;
 
@@ -994,7 +1013,7 @@ function getBaseFieldsForKey(key) {
             return 0;
         });
 
-        return sortedTaskFields.map((field, index) => ({
+        return sortedFields.map((field, index) => ({
             ...field,
             order: index
         }));
@@ -1993,6 +2012,10 @@ exports.listModules = async (req, res) => {
                         if (savedField.required === undefined) {
                             savedField.required = baseField.required;
                         }
+                        // Default keyField from base so default key fields (e.g. people: organization, email, phone, assignedTo) show in field configuration
+                        if (savedField.keyField === undefined) {
+                            savedField.keyField = !!baseField.keyField;
+                        }
                         // Use base label if saved label is empty, technical default, or same as key (e.g. camelCase key stored as label).
                         // Ensures UI always gets human-readable labels from field configuration.
                         if (baseField.label) {
@@ -2853,9 +2876,11 @@ exports.listModules = async (req, res) => {
         });
 
         // Apply context filtering to all modules' fields
+        // context=all skips filtering so Settings can configure both global and app-specific custom fields
+        const skipContextFilter = currentContext === 'all';
         let filteredMerged = merged.map(module => ({
             ...module,
-            fields: filterFieldsByContext(module.fields || [], currentContext)
+            fields: skipContextFilter ? (module.fields || []) : filterFieldsByContext(module.fields || [], currentContext)
         }));
 
         // Apply READ access filtering based on user permissions
@@ -3216,7 +3241,18 @@ exports.updateModule = async (req, res) => {
 };
 
 /** Canonical People Quick Create default when no org/platform config. Show in drawer initially. */
-const PEOPLE_QUICK_CREATE_DEFAULT = ['first_name', 'last_name', 'email', 'phone', 'organization'];
+const PEOPLE_QUICK_CREATE_DEFAULT = [
+    'first_name',
+    'last_name',
+    'email',
+    'phone',
+    'mobile',
+    'organization',
+    'assignedTo',
+    'source',
+    'do_not_contact',
+    'tags'
+];
 
 /**
  * GET /modules/people/quick-create

@@ -11,46 +11,47 @@
     <div
       :class="[
         'editable-labeled-value__value flex-1 min-w-0 flex items-center min-h-8 text-sm rounded px-2 -mx-2 -my-1 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800',
-        hasDisplayValue ? 'text-gray-900 dark:text-white' : 'text-gray-300 dark:text-gray-600'
+        hasDisplayValue ? 'text-gray-900 dark:text-white' : 'text-record-empty',
+        isValueCellClickable ? 'cursor-text' : ''
       ]"
+      @click="onValueCellClick"
     >
       <!-- Select/User/Entity: dropdown or tag display -->
       <Listbox
         v-if="layout === 'row' && canEdit && (type === 'select' || type === 'user' || type === 'entity')"
         :model-value="selectModelValue"
         @update:model-value="handleSelectChange"
-        class="w-full min-w-0"
+        class="w-full min-w-0 flex-1"
       >
-        <div class="relative w-full min-w-0">
+        <div class="relative w-full min-w-0 flex-1 flex">
           <ListboxButton
             :class="[
-              'editable-labeled-value__display w-full min-w-0 text-left rounded transition-colors cursor-pointer',
-              'min-h-8 flex items-center',
-              'hover:bg-gray-50 dark:hover:bg-gray-800',
+              'editable-labeled-value__display flex-1 min-w-0 w-full min-h-8 text-left rounded transition-colors cursor-pointer',
+              'flex items-center hover:bg-gray-50 dark:hover:bg-gray-800',
               'px-2 -mx-2 -my-1'
             ]"
           >
             <slot v-if="type === 'user'">
-              <span v-if="displayValue" class="block truncate">{{ displayValue }}</span>
-              <span v-else class="text-gray-300 dark:text-gray-600">—</span>
+              <span v-if="displayValue" class="editable-labeled-value__text block truncate">{{ displayValue }}</span>
+              <span v-else class="text-record-empty">—</span>
             </slot>
             <template v-else>
-              <span v-if="displayValue" class="block truncate">{{ displayValue }}</span>
-              <span v-else class="text-gray-300 dark:text-gray-600">—</span>
+              <span v-if="displayValue" class="editable-labeled-value__text block truncate">{{ displayValue }}</span>
+              <span v-else class="text-record-empty">—</span>
             </template>
           </ListboxButton>
           <Transition leave-active-class="transition duration-100 ease-in" leave-from-class="opacity-100" leave-to-class="opacity-0">
             <ListboxOptions
-              class="absolute z-10 mt-1 left-0 max-h-60 min-w-[140px] overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm"
+              class="absolute left-0 top-full !bottom-auto z-10 mt-1 max-h-60 min-w-[140px] overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm"
             >
               <ListboxOption v-if="allowEmpty || type === 'user' || type === 'entity'" :value="null" v-slot="{ active }">
                 <li :class="['relative cursor-default select-none py-2 pl-4 pr-10', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
-                  <span class="block truncate">{{ type === 'user' ? 'Unassigned' : (type === 'entity' ? 'Empty' : (emptyLabel || '—')) }}</span>
+                  <span :class="['editable-labeled-value__text block truncate', active ? '' : 'text-gray-500 dark:text-gray-400']">{{ type === 'user' ? 'Unassigned' : (type === 'entity' ? 'Select an option' : (emptyLabel || 'Select an option')) }}</span>
                 </li>
               </ListboxOption>
               <ListboxOption v-for="option in selectOptions" :key="option.value" :value="option.value" v-slot="{ active, selected }">
                 <li :class="['relative cursor-default select-none py-2 pl-4 pr-10', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
-                  <span :class="['block truncate', selected ? 'font-medium' : 'font-normal']">{{ option.label }}</span>
+                  <span :class="['editable-labeled-value__text block truncate', selected ? 'font-medium' : 'font-normal']">{{ option.label }}</span>
                   <span v-if="selected" class="absolute inset-y-0 right-0 flex items-center pr-3 text-indigo-600 dark:text-indigo-400">
                     <CheckIcon class="h-5 w-5" aria-hidden="true" />
                   </span>
@@ -61,19 +62,19 @@
         </div>
       </Listbox>
       <!-- Select/User/Entity read-only: tag or dash -->
-      <span
+      <div
         v-else-if="layout === 'row' && !canEdit && (type === 'select' || type === 'user' || type === 'entity')"
-        class="min-w-0 block w-full min-h-8 flex items-center"
+        class="flex-1 min-w-0 w-full min-h-8 flex items-center rounded px-2 -mx-2 -my-1 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
       >
         <slot v-if="type === 'user'">
-          <span v-if="displayValue">{{ displayValue }}</span>
-          <span v-else class="text-gray-300 dark:text-gray-600">—</span>
+          <span v-if="displayValue" class="editable-labeled-value__text block truncate">{{ displayValue }}</span>
+          <span v-else class="text-record-empty">—</span>
         </slot>
         <template v-else>
-          <span v-if="displayValue">{{ displayValue }}</span>
-          <span v-else class="text-gray-300 dark:text-gray-600">—</span>
+          <span v-if="displayValue" class="editable-labeled-value__text block truncate">{{ displayValue }}</span>
+          <span v-else class="text-record-empty">—</span>
         </template>
-      </span>
+      </div>
       <!-- Row: text/number/date display or edit -->
       <div
         v-else-if="layout === 'row' && isEditing && canEdit"
@@ -124,8 +125,7 @@
       </div>
       <div
         v-else-if="layout === 'row'"
-        @click="handleClick"
-        :class="['editable-labeled-value__display w-full min-w-0 min-h-8 flex items-center', canEdit ? 'cursor-text hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 py-1 -mx-2 -my-1 transition-colors' : '']"
+        :class="['editable-labeled-value__display flex-1 min-w-0 w-full min-h-8 flex items-center rounded px-2 -mx-2 -my-1 transition-colors', canEdit ? 'cursor-text hover:bg-gray-50 dark:hover:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800']"
       >
         <div v-if="type === 'tags'" class="flex flex-wrap gap-1.5 min-w-0">
           <span
@@ -135,11 +135,11 @@
           >
             {{ tag }}
           </span>
-          <span v-if="tagList.length === 0" class="text-gray-300 dark:text-gray-600">—</span>
+          <span v-if="tagList.length === 0" class="text-record-empty">—</span>
         </div>
         <slot v-else>
-          <span v-if="displayValue !== null && displayValue !== undefined && displayValue !== ''">{{ displayValue }}</span>
-          <span v-else class="text-gray-300 dark:text-gray-600">—</span>
+          <span v-if="displayValue !== null && displayValue !== undefined && displayValue !== ''" class="editable-labeled-value__text block truncate">{{ displayValue }}</span>
+          <span v-else class="editable-labeled-value__text block truncate text-record-empty">—</span>
         </slot>
       </div>
     </div>
@@ -163,8 +163,8 @@
             ]"
           >
             <slot>
-              <span v-if="displayValue !== null && displayValue !== undefined && displayValue !== ''" class="block truncate">{{ displayValue }}</span>
-              <span v-else class="block truncate w-full text-gray-300 dark:text-gray-600">—</span>
+              <span v-if="displayValue !== null && displayValue !== undefined && displayValue !== ''" class="editable-labeled-value__text block truncate">{{ displayValue }}</span>
+              <span v-else class="editable-labeled-value__text block truncate w-full text-record-empty">—</span>
             </slot>
           </ListboxButton>
           <Transition
@@ -173,11 +173,11 @@
             leave-to-class="opacity-0"
           >
             <ListboxOptions
-              class="absolute z-10 mt-1 max-h-60 w-full min-w-[140px] overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm"
+              class="absolute left-0 top-full !bottom-auto z-10 mt-1 max-h-60 w-full min-w-[140px] overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm"
             >
               <ListboxOption v-if="allowEmpty || type === 'user' || type === 'entity'" :value="null" v-slot="{ active }">
                 <li :class="['relative cursor-default select-none py-2 pl-4 pr-10', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
-                  <span class="block truncate">{{ type === 'user' ? 'Unassigned' : (type === 'entity' ? 'Empty' : (emptyLabel || '—')) }}</span>
+                  <span :class="['editable-labeled-value__text block truncate', active ? '' : 'text-gray-500 dark:text-gray-400']">{{ type === 'user' ? 'Unassigned' : (type === 'entity' ? 'Select an option' : (emptyLabel || 'Select an option')) }}</span>
                 </li>
               </ListboxOption>
               <ListboxOption
@@ -187,7 +187,7 @@
                 v-slot="{ active, selected }"
               >
                 <li :class="['relative cursor-default select-none py-2 pl-4 pr-10', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
-                  <span :class="['block truncate', selected ? 'font-medium' : 'font-normal']">{{ option.label }}</span>
+                  <span :class="['editable-labeled-value__text block truncate', selected ? 'font-medium' : 'font-normal']">{{ option.label }}</span>
                   <span v-if="selected" class="absolute inset-y-0 right-0 flex items-center pr-3 text-indigo-600 dark:text-indigo-400">
                     <CheckIcon class="h-5 w-5" aria-hidden="true" />
                   </span>
@@ -204,8 +204,8 @@
         class="editable-labeled-value__display"
       >
         <slot>
-          <span v-if="displayValue !== null && displayValue !== undefined && displayValue !== ''">{{ displayValue }}</span>
-          <span v-else class="w-full text-gray-300 dark:text-gray-600">—</span>
+          <span v-if="displayValue !== null && displayValue !== undefined && displayValue !== ''" class="editable-labeled-value__text block truncate">{{ displayValue }}</span>
+          <span v-else class="editable-labeled-value__text block truncate w-full text-record-empty">—</span>
         </slot>
       </div>
 
@@ -279,11 +279,11 @@
           >
             {{ tag }}
           </span>
-          <span v-if="tagList.length === 0" class="text-gray-300 dark:text-gray-600">—</span>
+          <span v-if="tagList.length === 0" class="text-record-empty">—</span>
         </div>
         <slot v-else>
-          <span v-if="displayValue !== null && displayValue !== undefined && displayValue !== ''">{{ displayValue }}</span>
-          <span v-else class="w-full text-gray-300 dark:text-gray-600">—</span>
+          <span v-if="displayValue !== null && displayValue !== undefined && displayValue !== ''" class="editable-labeled-value__text block truncate">{{ displayValue }}</span>
+          <span v-else class="editable-labeled-value__text block truncate w-full text-record-empty">—</span>
         </slot>
       </div>
     </dd>
@@ -310,7 +310,7 @@ const props = defineProps({
     required: true
   },
   value: {
-    type: [String, Number, Object, Array, null],
+    type: [String, Number, Object, Array, Boolean, null],
     default: null
   },
   type: {
@@ -480,6 +480,16 @@ const hasDisplayValue = computed(() => {
   return v !== null && v !== undefined && v !== '';
 });
 
+/** When true, the whole value cell is clickable to enter edit (row layout, text/number/date/tags, not editing). */
+const isValueCellClickable = computed(() => {
+  return props.layout === 'row' && props.canEdit && !isEditing.value &&
+    ['text', 'number', 'date', 'tags'].includes(props.type);
+});
+
+const onValueCellClick = () => {
+  if (isValueCellClickable.value) handleClick();
+};
+
 const tagList = computed(() => {
   if (props.type !== 'tags') return [];
   const v = props.value;
@@ -505,10 +515,18 @@ const selectOptions = computed(() => {
   if (props.type === 'select') return props.options || [];
   if (props.type === 'entity') return props.options || [];
   if (props.type === 'user') {
-    return (users.value || []).map(u => ({
+    const mapped = (users.value || []).map(u => ({
       value: u._id,
       label: getUserDisplayName(u)
     }));
+    const selectedId = selectModelValue.value;
+    if (selectedId != null && !mapped.some((opt) => opt.value === selectedId)) {
+      const fallbackLabel = typeof props.value === 'object'
+        ? getUserDisplayName(props.value)
+        : String(props.value);
+      mapped.unshift({ value: selectedId, label: fallbackLabel || 'Unknown user' });
+    }
+    return mapped;
   }
   return [];
 });
@@ -579,5 +597,10 @@ const handleCancel = () => {
 <style scoped>
 .editable-labeled-value__display {
   min-height: 1.5rem;
+}
+
+.editable-labeled-value__text {
+  display: block;
+  min-width: 0;
 }
 </style>

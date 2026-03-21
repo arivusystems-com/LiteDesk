@@ -252,8 +252,8 @@ const routes = [
   {
     path: '/people/:id',
     name: 'person-detail',
-    component: () => import('@/views/PeopleSurface.vue'),
-    meta: { requiresAuth: true, requiresPermission: { module: 'people', action: 'view' } }
+    component: () => import('@/pages/ModuleRecordPage.vue'),
+    meta: { requiresAuth: true, requiresPermission: { module: 'people', action: 'view' }, moduleKey: 'people' }
   },
   // Backward-compat redirects
   { path: '/contacts', redirect: { name: 'people' } },
@@ -363,13 +363,11 @@ const routes = [
     props: (route) => ({ mode: 'edit', organizationId: route.params.id }),
     meta: { requiresAuth: true, requiresPermission: { module: 'organizations', action: 'update' } }
   },
-  // OrganizationSurface is a contextual surface.
-  // It is accessed via People, Work items, or Search.
-  // It must not appear in primary navigation.
+  // Organization detail route uses generic module record page.
   {
     path: '/organizations/:id',
     name: 'organization-detail',
-    component: () => import('@/views/OrganizationSurface.vue'),
+    component: () => import('@/pages/ModuleRecordPage.vue'),
     meta: { requiresAuth: true, requiresPermission: { module: 'organizations', action: 'view' } },
     beforeEnter: async (to, from, next) => {
       const authStore = useAuthStore();

@@ -319,9 +319,17 @@ const getUserDisplayName = (user) => {
 };
 
 // Event handlers
+const getPersonDisplayName = (row) => {
+  if (!row) return null;
+  const first = (row.first_name ?? row.firstName ?? '').trim();
+  const last = (row.last_name ?? row.lastName ?? '').trim();
+  const full = [first, last].filter(Boolean).join(' ').trim();
+  return full || row.name || row.email || null;
+};
+
 const handleRowClick = (row, event = null) => {
   // Navigate to PeopleSurface only (no edit/delete from list)
-  viewContact(row._id, event);
+  viewContact(row._id, event, row);
 };
 
 // Participation visibility helpers
@@ -427,8 +435,8 @@ const getAppBadgeClass = (app) => {
   return classMap[app] || 'bg-gray-100 text-gray-800 dark:bg-gray-900/40 dark:text-gray-200';
 };
 
-const viewContact = (contactId, event = null) => {
-  const title = 'Person Detail';
+const viewContact = (contactId, event = null, row = null) => {
+  const title = getPersonDisplayName(row) || 'Person';
   
   const openInBackground = event && (
     event.button === 1 ||

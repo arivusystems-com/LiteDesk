@@ -5,22 +5,28 @@
       layoutIsMobile ? 'w-full' : (activeTab ? 'w-full lg:w-[500px]' : 'w-20')
     ]"
   >
-    <!-- Header -->
+    <!-- Header: in embed/quick-preview mode (showHeader + showCloseButton) only show prefix and close to avoid duplicating the main page header -->
     <div v-if="showHeader" class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white dark:bg-gray-900 z-20 relative">
-      <div class="flex items-center gap-2">
-        <span v-if="title" class="text-sm font-medium text-gray-900 dark:text-white">{{ title }}</span>
-        <ChevronDownIcon v-if="title" class="w-4 h-4 text-gray-400 dark:text-gray-500" />
-        <span v-if="recordId" class="text-xs text-gray-500 dark:text-gray-400 font-mono">
-          {{ recordId.slice(-8) }}
-        </span>
+      <div class="flex items-center gap-2 min-w-0">
+        <slot name="header-prefix" />
+        <template v-if="!showCloseButton">
+          <span v-if="title" class="text-sm font-medium text-gray-900 dark:text-white">{{ title }}</span>
+          <span v-if="title && recordId" class="w-1 h-1 rounded-full bg-gray-400 dark:bg-gray-500 shrink-0" aria-hidden="true" />
+          <span v-if="recordId" class="text-xs text-gray-500 dark:text-gray-400 font-mono shrink-0">
+            {{ recordId.slice(-8) }}
+          </span>
+        </template>
       </div>
-      <button
-        v-if="showCloseButton"
-        @click="$emit('close')"
-        class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors cursor-pointer"
-      >
-        <XMarkIcon class="w-5 h-5 text-gray-500 dark:text-gray-400" />
-      </button>
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <slot name="header-actions" />
+        <button
+          v-if="showCloseButton"
+          @click="$emit('close')"
+          class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors cursor-pointer"
+        >
+          <XMarkIcon class="w-5 h-5 text-gray-500 dark:text-gray-400" />
+        </button>
+      </div>
     </div>
 
     <!-- Content - Split Layout -->
@@ -111,7 +117,6 @@
 import { ref, watch, onMounted, onUpdated, onBeforeUnmount, computed, inject, nextTick } from 'vue';
 import { 
   XMarkIcon, 
-  ChevronDownIcon, 
   RectangleStackIcon, 
   DocumentTextIcon,
   ClockIcon,

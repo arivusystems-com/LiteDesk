@@ -35,7 +35,7 @@
                   <div class="flex-1 overflow-hidden flex flex-col">
                     <!-- Record type selector (when no moduleKey and no type selected yet) -->
                     <div v-if="showTypeSelector && !effectiveModuleKey" class="flex-1 overflow-auto p-4">
-                      <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Select a record type to link</p>
+                      <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">{{ typeSelectorPrompt }}</p>
                       <div v-if="linkableTargetsLoading" class="flex items-center justify-center py-8">
                         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
                       </div>
@@ -155,7 +155,8 @@ const props = defineProps({
   title: { type: String, default: null },
   context: { type: Object, default: () => ({}) }, // e.g., { organizationId, contactId, taskId }
   preselectedIds: { type: Array, default: () => [] }, // already linked IDs
-  allowCreate: { type: Boolean, default: false } // If true, show "Create New" button
+  allowCreate: { type: Boolean, default: false }, // If true, show "Create New" button
+  createAndLink: { type: Boolean, default: false } // If true, selecting module type starts create+link
 });
 
 const emit = defineEmits(['close', 'linked', 'create']);
@@ -234,6 +235,10 @@ const computedTitle = computed(() => {
   return 'Link Record';
 });
 
+const typeSelectorPrompt = computed(() => (
+  props.createAndLink ? 'Select a record type to add and link' : 'Select a record type to link'
+));
+
 const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
 
 // Client-side filtered view to ensure search works even if backend doesn't support it
@@ -257,6 +262,11 @@ const closeDrawer = () => {
 };
 
 const selectRecordType = (opt) => {
+  if (props.createAndLink && props.allowCreate) {
+    handleCreate(opt);
+    closeDrawer();
+    return;
+  }
   selectedModuleKey.value = opt.key;
   selectedRecordTypeOption.value = opt.relationshipKey != null ? opt : null;
 };
@@ -284,8 +294,16 @@ const fetchLinkableTargets = async () => {
   }
 };
 
-const handleCreate = () => {
-  emit('create');
+const handleCreate = (optOverride = null) => {
+  const moduleKey = normalizeModuleKey(optOverride?.key || effectiveModuleKey.value);
+  const relationshipKey = optOverride?.relationshipKey ?? selectedRecordTypeOption.value?.relationshipKey ?? null;
+  const targetAppKey = optOverride?.targetAppKey ?? selectedRecordTypeOption.value?.targetAppKey ?? null;
+  emit('create', {
+    moduleKey,
+    context: props.context,
+    relationshipKey,
+    targetAppKey
+  });
 };
 
 // Allow closing only when no selection changes were made
@@ -335,12 +353,12 @@ const fetchPrelinked = async () => {
   try {
     const modKey = effectiveModuleKey.value;
     if (!modKey) return;
-    // When context is task (or other "link to this record") we already have preselectedIds from parent; don't overwrite with a full list fetch
-    if (props.context?.taskId) {
+    // When context has taskId (Task page passes preselectedIds from parent), skip prelinked fetch here
+    if (props.context?.taskId && props.sourceModuleKey === 'tasks') {
       return;
     }
-    // When linking from a Deal (or other source record), fetch already-linked target IDs via relationships/links
-    const sourceRecordId = props.context?.dealId;
+    // When linking from a source record (Deal, Task, Person, etc.), fetch already-linked target IDs via relationships/links
+    const sourceRecordId = props.context?.dealId ?? props.context?.taskId ?? props.context?.personId ?? props.context?.sourceRecordId;
     if (sourceRecordId && props.sourceAppKey && props.sourceModuleKey && selectedRecordTypeOption.value?.relationshipKey) {
       try {
         const res = await apiClient.get('/relationships/links', {

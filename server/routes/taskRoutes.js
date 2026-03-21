@@ -13,6 +13,7 @@ const {
   getTasks,
   getTaskById,
   updateTask,
+  updateTaskTags,
   deleteTask,
   updateTaskStatus,
   toggleSubtask,
@@ -63,6 +64,8 @@ router.route('/:id')
   .get(checkPermission('tasks', 'view'), getTaskById)
   .put(checkPermission('tasks', 'edit'), updateTask)
   .delete(checkPermission('tasks', 'delete'), deleteTask);
+router.put('/:id/tags', checkPermission('tasks', 'edit'), updateTaskTags);
+router.patch('/:id/tags', checkPermission('tasks', 'edit'), updateTaskTags);
 
 // Quick actions
 router.patch('/:id/status', checkPermission('tasks', 'edit'), updateTaskStatus);

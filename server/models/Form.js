@@ -244,6 +244,11 @@ const FormSchema = new Schema({
         type: String,
         trim: true
     },
+    descriptionVersions: [{
+        content: { type: String, default: '' },
+        createdAt: { type: Date, default: Date.now, required: true },
+        createdBy: { type: Schema.Types.ObjectId, ref: 'User' }
+    }],
     formType: {
         type: String,
         enum: ['Audit', 'Survey', 'Feedback'],

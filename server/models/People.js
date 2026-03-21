@@ -8,7 +8,6 @@
  * - Organization reference (multi-tenancy)
  * - Assignment tracking
  * - Activity logs (generic audit trail)
- * - Notes (generic notes system)
  * 
  * ⚠️ ARCHITECTURAL NOTE: Contains SALES-specific fields
  *    - Lead/Contact type distinction (type: 'Lead' | 'Contact')
@@ -102,26 +101,6 @@ const PeopleSchema = new Schema({
     index: true
   },
   
-  // Notes & Activities
-  notes: [{
-    text: { type: String, required: true },
-    created_by: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    created_at: { type: Date, default: Date.now },
-    appContext: { type: String }, // App context (appKey) - optional for backward compatibility
-    updated_at: { type: Date, default: Date.now } // For future edit support
-  }],
-  
-  // Attachments (Files - app-aware, entity-attached)
-  attachments: [{
-    fileName: { type: String, required: true },
-    fileType: { type: String, required: true }, // MIME type
-    fileSize: { type: Number, required: true }, // Size in bytes
-    storagePath: { type: String, required: true }, // URL or path to file
-    uploaded_by: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    created_at: { type: Date, default: Date.now },
-    appContext: { type: String } // App context (appKey) - optional for backward compatibility
-  }],
-  
   // Trash (soft delete) - See docs/TRASH_IMPLEMENTATION_SPEC.md
   deletedAt: { type: Date, default: null, index: true },
   deletedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
@@ -138,6 +117,13 @@ const PeopleSchema = new Schema({
     details: { type: Schema.Types.Mixed },
     appContext: { type: String }, // App context (appKey) - optional for backward compatibility
     timestamp: { type: Date, default: Date.now, required: true }
+  }],
+
+  // Description version history (native, task/deal parity)
+  descriptionVersions: [{
+    content: { type: String, default: '' },
+    createdAt: { type: Date, default: Date.now, required: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User' }
   }],
 
   // Custom fields (user-defined via Settings → Modules & Fields)

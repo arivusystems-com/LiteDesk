@@ -997,6 +997,30 @@ exports.updateEvent = async (req, res) => {
             });
         }
         
+        // Generic description versioning: store previous description before update.
+        if (Object.prototype.hasOwnProperty.call(updateData, 'description')) {
+            try {
+                const prevDesc = String(currentEvent?.description ?? currentEvent?.customFields?.description ?? '');
+                const nextDesc = String(updateData.description ?? '');
+                if (prevDesc !== nextDesc) {
+                    await Event.updateOne(
+                        query,
+                        {
+                            $push: {
+                                descriptionVersions: {
+                                    content: prevDesc,
+                                    createdAt: new Date(),
+                                    createdBy: req.user?._id
+                                }
+                            }
+                        }
+                    );
+                }
+            } catch (versionErr) {
+                console.warn('Description version push (event) failed:', versionErr?.message || versionErr);
+            }
+        }
+
         const { buildUpdateWithCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
         const $set = buildUpdateWithCustomFields(updateData, Event);
 
@@ -1012,6 +1036,22 @@ exports.updateEvent = async (req, res) => {
             .populate('relatedToId', 'name')
             .populate('modifiedBy', 'firstName lastName')
             .populate('linkedFormId', 'name formId formType status');
+
+        try {
+            const { appendFieldChangeLogs } = require('../utils/recordActivityLogger');
+            await appendFieldChangeLogs({
+                organizationId: req.user.organizationId,
+                moduleKey: 'events',
+                recordId: updatedEvent._id,
+                authorId: req.user._id,
+                previous: currentEvent.toObject ? currentEvent.toObject() : currentEvent,
+                updated: updatedEvent.toObject ? updatedEvent.toObject() : updatedEvent,
+                updateDataKeys: Object.keys(req.body || {}),
+                fieldLabels: moduleDef && Array.isArray(moduleDef.fields) ? moduleDef.fields : undefined
+            });
+        } catch (logErr) {
+            console.warn('Record activity log (event update) failed:', logErr?.message || logErr);
+        }
         
         res.status(200).json({
             success: true,

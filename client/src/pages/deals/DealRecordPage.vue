@@ -19,9 +19,10 @@
       }"
       @retry="fetchDeal"
     >
-      <template v-if="deal" #header>
+      <!-- No RecordHeader in embed (quick preview): drawer shows prev/next + close only; header would fix to viewport and show as extra over the list -->
+      <template v-if="deal && !props.embed" #header>
         <RecordHeader
-          :show-navigation="!props.embed"
+          :show-navigation="true"
           :can-previous="canNavigatePreviousDeal"
           :can-next="canNavigateNextDeal"
           previous-label="Previous deal"
@@ -280,6 +281,7 @@
             </div>
           </div>
 
+          <div v-if="props.embed && deal && !expandedLeftSection" class="pt-0 flex-shrink-0" aria-hidden="true" />
           <div
             v-if="deal && !expandedLeftSection"
             :class="[
@@ -315,7 +317,6 @@
               heading="Key fields"
               :fields="dealStateFields"
               :field-values="dealStateValues"
-              :enable-legacy-fallback="false"
             >
               <template #stage>
                 <Listbox
@@ -394,7 +395,7 @@
                     @blur="handleAmountBlur"
                     @keydown.enter="handleAmountBlur"
                     @keydown.esc="handleAmountCancel"
-                    class="text-xs h-8 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full"
+                    class="text-xs h-8 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full min-w-0 flex-1"
                     placeholder="Expected value"
                   />
                   <span
@@ -402,7 +403,7 @@
                     @click="startAmountEdit"
                     :class="[
                       'block w-full h-8 text-sm cursor-text hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 transition-colors flex items-center',
-                      deal?.amount != null ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+                      deal?.amount != null ? 'text-gray-900 dark:text-white' : 'text-record-empty'
                     ]"
                   >
                     {{ formatDealAmount(deal?.amount) || 'Empty' }}
@@ -410,7 +411,7 @@
                 </div>
                 <span
                   v-else
-                  :class="['block w-full text-sm', formatDealAmount(deal?.amount) ? 'text-gray-900 dark:text-white' : 'text-gray-300 dark:text-gray-600']"
+                  :class="['block w-full text-sm', formatDealAmount(deal?.amount) ? 'text-gray-900 dark:text-white' : 'text-record-empty']"
                 >
                   {{ formatDealAmount(deal?.amount) || '—' }}
                 </span>
@@ -429,7 +430,7 @@
                     @blur="handleProbabilityBlur"
                     @keydown.enter="handleProbabilityBlur"
                     @keydown.esc="handleProbabilityCancel"
-                    class="text-xs h-8 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full"
+                    class="text-xs h-8 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full min-w-0 flex-1"
                     placeholder="Probability"
                   />
                   <span
@@ -437,7 +438,7 @@
                     @click="startProbabilityEdit"
                     :class="[
                       'block w-full h-8 text-sm cursor-text hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 transition-colors flex items-center',
-                      deal?.probability != null ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+                      deal?.probability != null ? 'text-gray-900 dark:text-white' : 'text-record-empty'
                     ]"
                   >
                     {{ formatDealProbability(deal?.probability) || 'Empty' }}
@@ -445,7 +446,7 @@
                 </div>
                 <span
                   v-else
-                  :class="['block w-full text-sm', formatDealProbability(deal?.probability) ? 'text-gray-900 dark:text-white' : 'text-gray-300 dark:text-gray-600']"
+                  :class="['block w-full text-sm', formatDealProbability(deal?.probability) ? 'text-gray-900 dark:text-white' : 'text-record-empty']"
                 >
                   {{ formatDealProbability(deal?.probability) || '—' }}
                 </span>
@@ -461,7 +462,7 @@
                     @blur="handleExpectedCloseDateBlur"
                     @keydown.enter="handleExpectedCloseDateBlur"
                     @keydown.esc="handleExpectedCloseDateCancel"
-                    class="text-xs h-8 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full cursor-pointer"
+                    class="text-xs h-8 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full min-w-0 flex-1 cursor-pointer"
                     placeholder="Close date"
                   />
                   <span
@@ -469,7 +470,7 @@
                     @click="startExpectedCloseDateEdit"
                     :class="[
                       'block w-full h-8 text-sm cursor-text hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 transition-colors flex items-center',
-                      deal?.expectedCloseDate ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+                      deal?.expectedCloseDate ? 'text-gray-900 dark:text-white' : 'text-record-empty'
                     ]"
                   >
                     {{ formatDealCloseDate(deal?.expectedCloseDate) || 'Empty' }}
@@ -477,7 +478,7 @@
                 </div>
                 <span
                   v-else
-                  :class="['block w-full text-sm', formatDealCloseDate(deal?.expectedCloseDate) ? 'text-gray-900 dark:text-white' : 'text-gray-300 dark:text-gray-600']"
+                  :class="['block w-full text-sm', formatDealCloseDate(deal?.expectedCloseDate) ? 'text-gray-900 dark:text-white' : 'text-record-empty']"
                 >
                   {{ formatDealCloseDate(deal?.expectedCloseDate) || '—' }}
                 </span>
@@ -501,7 +502,7 @@
                       <span
                         :class="[
                           'text-sm flex-1 truncate',
-                          formatDealOwnerName(deal) ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+                          formatDealOwnerName(deal) ? 'text-gray-900 dark:text-white' : 'text-record-empty'
                         ]"
                       >
                         {{ formatDealOwnerName(deal) || 'Empty' }}
@@ -547,7 +548,7 @@
                   <span
                     :class="[
                       'text-sm',
-                      formatDealOwnerName(deal) ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+                      formatDealOwnerName(deal) ? 'text-gray-900 dark:text-white' : 'text-record-empty'
                     ]"
                   >
                     {{ formatDealOwnerName(deal) || 'Empty' }}
@@ -582,7 +583,7 @@
                         v-else
                         :class="[
                           'text-sm min-w-0 flex-1 truncate',
-                          formatDealOrganizationName(deal) ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+                          formatDealOrganizationName(deal) ? 'text-gray-900 dark:text-white' : 'text-record-empty'
                         ]"
                       >
                         {{ formatDealOrganizationName(deal) || 'Empty' }}
@@ -633,7 +634,7 @@
                 </span>
                 <span
                   v-else
-                  :class="['block w-full text-sm', formatDealOrganizationName(deal) ? 'text-gray-900 dark:text-white' : 'text-gray-300 dark:text-gray-600']"
+                  :class="['block w-full text-sm', formatDealOrganizationName(deal) ? 'text-gray-900 dark:text-white' : 'text-record-empty']"
                 >
                   {{ formatDealOrganizationName(deal) || '—' }}
                 </span>
@@ -666,7 +667,7 @@
                         v-else
                         :class="[
                           'text-sm min-w-0 flex-1 truncate',
-                          formatDealContactName(deal) ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+                          formatDealContactName(deal) ? 'text-gray-900 dark:text-white' : 'text-record-empty'
                         ]"
                       >
                         {{ formatDealContactName(deal) || 'Empty' }}
@@ -717,7 +718,7 @@
                 </span>
                 <span
                   v-else
-                  :class="['block w-full text-sm', formatDealContactName(deal) ? 'text-gray-900 dark:text-white' : 'text-gray-300 dark:text-gray-600']"
+                  :class="['block w-full text-sm', formatDealContactName(deal) ? 'text-gray-900 dark:text-white' : 'text-record-empty']"
                 >
                   {{ formatDealContactName(deal) || '—' }}
                 </span>
@@ -750,6 +751,167 @@
           :record-id="deal._id"
           @close="handleEmbedClose"
         >
+          <template v-if="props.embed && quickPreviewNav" #header-prefix>
+            <div class="flex items-center gap-1 mr-2">
+              <button
+                type="button"
+                class="inline-flex h-7 w-7 items-center justify-center rounded border border-gray-200 text-gray-500 transition-colors dark:border-gray-700 dark:text-gray-400 shrink-0"
+                :class="quickPreviewNav.canPrevious ? 'hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200' : 'opacity-40 cursor-not-allowed'"
+                :disabled="!quickPreviewNav.canPrevious"
+                aria-label="Previous deal"
+                title="Previous deal"
+                @click="quickPreviewNav.onPrev()"
+              >
+                <ArrowLeftIcon class="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-7 w-7 items-center justify-center rounded border border-gray-200 text-gray-500 transition-colors dark:border-gray-700 dark:text-gray-400 shrink-0"
+                :class="quickPreviewNav.canNext ? 'hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200' : 'opacity-40 cursor-not-allowed'"
+                :disabled="!quickPreviewNav.canNext"
+                aria-label="Next deal"
+                title="Next deal"
+                @click="quickPreviewNav.onNext()"
+              >
+                <ArrowRightIcon class="h-4 w-4" />
+              </button>
+            </div>
+          </template>
+          <template v-if="props.embed" #header-actions>
+            <button
+              type="button"
+              class="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-label="Open in new tab"
+              title="Open in new tab"
+              @click="openDealInNewTab"
+            >
+              <ArrowTopRightOnSquareIcon class="w-5 h-5" />
+            </button>
+            <button
+              v-if="primaryContact?.email"
+              type="button"
+              class="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-label="Email contact"
+              title="Email contact"
+              @click="showEmailModal = true"
+            >
+              <EnvelopeIcon class="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              class="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-label="Edit deal"
+              title="Edit deal"
+              @click="showEditModal = true"
+            >
+              <PencilSquareIcon class="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              ref="tagHeaderButtonRef"
+              @click="handleTagIconClick($event)"
+              :class="[
+                'relative inline-flex items-center justify-center p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
+                hasDealTags
+                  ? 'text-indigo-600 dark:text-indigo-400'
+                  : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+              ]"
+              aria-label="Tag"
+              title="Tag"
+            >
+              <TagIcon class="block w-5 h-5" />
+              <span
+                v-if="hasDealTags"
+                class="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-indigo-600 dark:text-indigo-400"
+              ></span>
+            </button>
+            <button
+              type="button"
+              class="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-label="Copy URL"
+              title="Copy URL"
+              @click="copyDealUrl"
+            >
+              <ClipboardDocumentIcon class="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              :class="[
+                'p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
+                isFollowing ? 'text-yellow-500 dark:text-yellow-400' : ''
+              ]"
+              :aria-label="isFollowing ? 'Unstar' : 'Star'"
+              :title="isFollowing ? 'Unstar' : 'Star'"
+              @click="isFollowing = !isFollowing"
+            >
+              <StarIcon v-if="!isFollowing" class="w-5 h-5" />
+              <StarIconSolid v-else class="w-5 h-5" />
+            </button>
+            <Menu as="div" class="relative">
+              <MenuButton
+                class="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                aria-label="More actions"
+              >
+                <EllipsisVerticalIcon class="w-5 h-5" />
+              </MenuButton>
+              <transition
+                enter-active-class="transition ease-out duration-100"
+                enter-from-class="transform opacity-0 scale-95"
+                enter-to-class="transform opacity-100 scale-100"
+                leave-active-class="transition ease-in duration-75"
+                leave-from-class="transform opacity-100 scale-100"
+                leave-to-class="transform opacity-0 scale-95"
+              >
+                <MenuItems class="absolute right-0 top-full mt-2 w-48 rounded-lg shadow-xl py-1 bg-white dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/10 z-50">
+                  <MenuItem v-slot="{ active }">
+                    <button
+                      @click="handleDuplicate"
+                      :class="[
+                        'w-full text-left px-4 py-2 text-sm transition-colors duration-150',
+                        active ? 'bg-gray-100 dark:bg-gray-700' : 'text-gray-700 dark:text-gray-200'
+                      ]"
+                    >
+                      Duplicate
+                    </button>
+                  </MenuItem>
+                  <MenuItem v-slot="{ active }">
+                    <button
+                      @click="handleExport"
+                      :class="[
+                        'w-full text-left px-4 py-2 text-sm transition-colors duration-150',
+                        active ? 'bg-gray-100 dark:bg-gray-700' : 'text-gray-700 dark:text-gray-200'
+                      ]"
+                    >
+                      Export
+                    </button>
+                  </MenuItem>
+                  <MenuItem v-slot="{ active }">
+                    <button
+                      @click="showEmailModal = true"
+                      :class="[
+                        'w-full text-left px-4 py-2 text-sm transition-colors duration-150',
+                        active ? 'bg-gray-100 dark:bg-gray-700' : 'text-gray-700 dark:text-gray-200'
+                      ]"
+                    >
+                      Email contact
+                    </button>
+                  </MenuItem>
+                  <hr class="my-1 border-gray-200 dark:border-gray-700" />
+                  <MenuItem v-slot="{ active }">
+                    <button
+                      @click="showDeleteModal = true"
+                      :class="[
+                        'w-full text-left px-4 py-2 text-sm transition-colors duration-150',
+                        active ? 'bg-gray-100 dark:bg-gray-700' : 'text-red-600 dark:text-red-400'
+                      ]"
+                    >
+                      Delete
+                    </button>
+                  </MenuItem>
+                </MenuItems>
+              </transition>
+            </Menu>
+          </template>
           <template #tab-activity>
             <ActivitySection
               :events="activitySectionEvents"
@@ -781,14 +943,24 @@
             <div class="flex flex-col h-full">
               <div class="record-context-panel__header flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white dark:bg-gray-900">
                 <h2 class="text-base font-semibold text-gray-900 dark:text-white">Related</h2>
-                <button
-                  type="button"
-                  @click="showLinkRecordDrawer = true"
-                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
-                >
-                  <PlusIcon class="w-4 h-4" />
-                  Link record
-                </button>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    @click="openAddRecordDrawer"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                  >
+                    <PlusIcon class="w-4 h-4" />
+                    Add record
+                  </button>
+                  <button
+                    type="button"
+                    @click="openLinkRecordDrawer"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                  >
+                    <LinkIcon class="w-4 h-4" />
+                    Link record
+                  </button>
+                </div>
               </div>
             <div class="p-4 overflow-y-auto flex-1 min-h-0">
               <section v-if="deal._id">
@@ -836,6 +1008,13 @@
       @close="showEventModal = false"
       @saved="handleEventSaved"
     />
+    <CreateRecordDrawer
+      v-if="showAddRelatedRecordDrawer && addRelatedRecordModuleKey"
+      :isOpen="showAddRelatedRecordDrawer"
+      :moduleKey="addRelatedRecordModuleKey"
+      @close="closeAddRelatedRecordDrawer"
+      @saved="handleAddRelatedRecordSaved"
+    />
 
     <EmailComposeDrawer
       :is-open="showEmailModal"
@@ -851,10 +1030,13 @@
       source-app-key="SALES"
       source-module-key="deals"
       :multiple="true"
-      title="Link Record"
+      :allow-create="allowCreateFromLinkDrawer"
+      :create-and-link="allowCreateFromLinkDrawer"
+      :title="allowCreateFromLinkDrawer ? 'Add and Link Records' : 'Link Record'"
       :context="linkRecordDrawerContext"
-      @close="showLinkRecordDrawer = false"
+      @close="closeLinkRecordDrawer"
       @linked="handleLinkRecordDrawerLinked"
+      @create="handleLinkRecordDrawerCreate"
     />
 
     <Teleport to="body">
@@ -919,6 +1101,7 @@ import {
   ArrowLeftIcon,
   ArrowRightIcon,
   ArrowsPointingInIcon,
+  ArrowTopRightOnSquareIcon,
   CheckIcon,
   ChevronDownIcon,
   EnvelopeIcon,
@@ -950,6 +1133,7 @@ const router = useRouter();
 const { openTab, replaceActiveTab, activeTabId, updateTabTitle, findTabById } = useTabs();
 const authStore = useAuthStore();
 const recordLayoutIsMobile = inject('recordLayoutIsMobile', ref(false));
+const quickPreviewNav = inject('quickPreviewNav', null);
 
 const props = defineProps({
   embed: { type: Boolean, default: false },
@@ -985,6 +1169,10 @@ const activitySearchQuery = ref('');
 const activitySearchOpen = ref(false);
 const activeThreadRootCommentId = ref(null);
 const showLinkRecordDrawer = ref(false);
+const allowCreateFromLinkDrawer = ref(false);
+const showAddRelatedRecordDrawer = ref(false);
+const addRelatedRecordModuleKey = ref('');
+const pendingAddRelatedLinkPayload = ref(null);
 const relatedRefreshKey = ref(0);
 const dealRecordPageRootRef = ref(null);
 const leftPaneScrollElement = ref(null);
@@ -1038,7 +1226,7 @@ const canEditDeal = computed(() => authStore.can('deals', 'edit'));
 
 const persistRecordTagsForDeal = async (cleaned) => {
   if (!deal.value || !canEditDeal.value) return;
-  const response = await apiClient.put(`/deals/${deal.value._id}`, { tags: cleaned });
+  const response = await apiClient.put(`/deals/${deal.value._id}/tags`, { tags: cleaned });
   if (response?.success && response?.data) {
     deal.value.tags = Array.isArray(response.data.tags) ? response.data.tags : cleaned;
   } else {
@@ -1501,6 +1689,27 @@ const setRightPaneActiveTab = (tabId) => {
   rightPaneRef.value.activeTab = tabId;
 };
 
+const openLinkRecordDrawer = () => {
+  allowCreateFromLinkDrawer.value = false;
+  showLinkRecordDrawer.value = true;
+};
+
+const openAddRecordDrawer = () => {
+  allowCreateFromLinkDrawer.value = true;
+  showLinkRecordDrawer.value = true;
+};
+
+const closeLinkRecordDrawer = () => {
+  showLinkRecordDrawer.value = false;
+  allowCreateFromLinkDrawer.value = false;
+};
+
+const closeAddRelatedRecordDrawer = () => {
+  showAddRelatedRecordDrawer.value = false;
+  addRelatedRecordModuleKey.value = '';
+  pendingAddRelatedLinkPayload.value = null;
+};
+
 const getDealRelatedGroups = () => dealRelatedGroupsFromContext.value;
 
 const openDealRelatedItem = (item) => {
@@ -1550,9 +1759,8 @@ const dealRecordAdapter = computed(() => createDealRecordAdapter({
   canUnlinkRelated: () => canLinkRecords.value,
   onUnlinkRelated: handleUnlinkDealRelated,
   canLinkRecords: canLinkRecords.value,
-  openLinkRecordDrawer: () => {
-    showLinkRecordDrawer.value = true;
-  },
+  openLinkRecordDrawer,
+  openAddRecordDrawer,
   handleDescriptionSave: handleDealDescriptionSave,
   canEditDescription: true,
   canViewDescriptionHistory: () => true,
@@ -2611,6 +2819,30 @@ const handleCopyUrl = async () => {
   }
 };
 
+function getDealPageUrl() {
+  if (!deal.value?._id) return '';
+  const path = `/deals/${deal.value._id}`;
+  const resolved = router.resolve(path);
+  return resolved.href.startsWith('http') ? resolved.href : new URL(resolved.href, window.location.origin).href;
+}
+
+function openDealInNewTab() {
+  if (!deal.value?._id) return;
+  const path = `/deals/${deal.value._id}`;
+  openTab(path, { title: 'Deal', background: false, insertAdjacent: true });
+  handleEmbedClose();
+}
+
+async function copyDealUrl() {
+  const url = getDealPageUrl();
+  if (!url) return;
+  try {
+    await navigator.clipboard.writeText(url);
+  } catch {
+    alert('Failed to copy URL');
+  }
+}
+
 const handleDuplicate = () => {
   alert('Duplicate action is not implemented yet for deals.');
 };
@@ -3082,7 +3314,8 @@ const dealActivityUi = createDealActivityUi({
   getSystemEventMessage,
   handleShowMore,
   toggleTaskEmailThread,
-  createTaskFromEmailMessage
+  createTaskFromEmailMessage,
+  getTagChipClass: getDealTagChipClass
 });
 
 const openCreateEvent = () => {
@@ -3164,7 +3397,7 @@ const handleLinkRecordDrawerLinked = async ({ moduleKey, ids, context, relations
     }
   }
 
-  showLinkRecordDrawer.value = false;
+  closeLinkRecordDrawer();
   invalidateRecordContext('SALES', 'deals', deal.value._id);
   // Invalidate linked records’ context so their Related Records refresh when user navigates there
   if (normalizedModuleKey === 'events') {
@@ -3172,6 +3405,32 @@ const handleLinkRecordDrawerLinked = async ({ moduleKey, ids, context, relations
   }
   relatedRefreshKey.value += 1;
   await fetchDeal();
+};
+
+const handleLinkRecordDrawerCreate = (payload = {}) => {
+  const moduleKey = String(payload?.moduleKey || '').toLowerCase().trim();
+  if (!moduleKey) return;
+  pendingAddRelatedLinkPayload.value = payload;
+  addRelatedRecordModuleKey.value = moduleKey;
+  closeLinkRecordDrawer();
+  showAddRelatedRecordDrawer.value = true;
+};
+
+const handleAddRelatedRecordSaved = async (savedRecord) => {
+  const createdId = savedRecord?._id || savedRecord?.id;
+  const payload = pendingAddRelatedLinkPayload.value;
+  if (!createdId || !payload?.moduleKey) {
+    closeAddRelatedRecordDrawer();
+    return;
+  }
+  closeAddRelatedRecordDrawer();
+  await handleLinkRecordDrawerLinked({
+    moduleKey: payload.moduleKey,
+    ids: [createdId],
+    context: payload.context || linkRecordDrawerContext.value,
+    relationshipKey: payload.relationshipKey || undefined,
+    targetAppKey: payload.targetAppKey || undefined
+  });
 };
 
 const updateStickyTitleState = (scrollTop) => {

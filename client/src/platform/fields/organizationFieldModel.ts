@@ -24,7 +24,7 @@
  *    - This field model covers CRM organization fields only
  * 
  * 2. Core business fields are platform-scoped
- *    - `name`, `industry`, `website`, `phone`, `address`, `types`
+ *    - `name`, `industry`, `website`, `phone`, `address`, `types`, `tags`
  *    - These exist independently of any app participation
  *    - fieldScope: 'CORE' indicates platform-level ownership
  * 
@@ -260,6 +260,16 @@ export const ORGANIZATION_FIELD_METADATA: Record<string, OrganizationFieldMetada
     filterable: true,
     filterType: 'multi-select',
     filterPriority: 3,
+  },
+  tags: {
+    owner: 'core',
+    intent: 'state',
+    fieldScope: 'CORE',
+    editable: true,
+    allowOnCreate: false,
+    filterable: true,
+    filterType: 'multi-select',
+    filterPriority: 4,
   },
   
   // ==========================================================================
