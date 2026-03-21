@@ -9,34 +9,59 @@
  * - If current context is 'platform' or unknown → show ONLY global fields
  */
 
+/** First path segment when it matches a known app surface (lowercase). */
+const APP_PATH_PREFIXES = [
+  'sales',
+  'support',
+  'audit',
+  'portal',
+  'lms',
+  'helpdesk',
+  'marketing',
+  'projects'
+];
+
+/**
+ * Normalize tenant app key (e.g. SALES, HELPDESK) to field `context` token (lowercase).
+ */
+export function appKeyToFieldContextToken(appKey) {
+  if (appKey == null || appKey === '') return '';
+  return String(appKey).trim().toLowerCase();
+}
+
 /**
  * Determine current context from route path
- * 
+ *
  * @param {string} path - Current route path
  * @returns {string} - Current context ('sales', 'support', 'platform', etc.) or 'platform' as default
  */
 export function getCurrentContext(path) {
   if (!path) return 'platform';
-  
-  // Extract context from path
-  // Examples:
-  // /sales/deals → 'sales'
-  // /support/tickets → 'support'
-  // /people → 'platform'
-  // /deals → 'platform' (legacy, no app prefix)
-  
-  const pathParts = path.split('/').filter(p => p);
-  
-  // Check for app prefixes in path
-  // Common app contexts: sales, support, audit, portal, lms
-  const appContexts = ['sales', 'support', 'audit', 'portal', 'lms'];
-  
-  if (pathParts.length > 0 && appContexts.includes(pathParts[0].toLowerCase())) {
+
+  const pathOnly = path.split('?')[0] || path;
+  const pathParts = pathOnly.split('/').filter((p) => p);
+
+  if (pathParts.length > 0 && APP_PATH_PREFIXES.includes(pathParts[0].toLowerCase())) {
     return pathParts[0].toLowerCase();
   }
-  
-  // Default to platform context
+
   return 'platform';
+}
+
+/**
+ * Resolve field visibility context: query overrides path (e.g. person record opened from Sales with ?appKey=SALES).
+ *
+ * @param {string} path - Full path or path+query
+ * @param {Record<string, unknown>} [query] - Vue Router query object
+ * @returns {string} - 'platform' or lowercase app token (e.g. 'sales', 'helpdesk')
+ */
+export function resolveFieldContext(path, query = {}) {
+  const qApp = query.appKey ?? query.app ?? query.surface;
+  if (qApp != null && String(qApp).trim() !== '') {
+    return appKeyToFieldContextToken(String(qApp).trim());
+  }
+  const pathOnly = (path || '').split('?')[0];
+  return getCurrentContext(pathOnly);
 }
 
 /**
@@ -50,16 +75,13 @@ export function filterFieldsByContext(fields, currentContext) {
   if (!Array.isArray(fields)) return [];
   if (!currentContext) currentContext = 'platform'; // Safe default
   
-  return fields.filter(field => {
-    if (!field || !field.context) {
-      // If context is missing, default to 'global' for backward compatibility
-      // But only show in platform context as a safe default
-      return currentContext === 'platform';
-    }
-    
-    const fieldContext = field.context.toLowerCase();
-    
-    // Global fields are visible everywhere
+  return fields.filter((field) => {
+    if (!field) return false;
+    // Missing context: treat like global (visible in every surface), aligned with isFieldVisibleInContext
+    const fieldContext = field.context != null && String(field.context).trim() !== ''
+      ? String(field.context).toLowerCase()
+      : 'global';
+
     if (fieldContext === 'global') {
       return true;
     }

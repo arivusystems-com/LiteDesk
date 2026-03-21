@@ -336,6 +336,13 @@ exports.update = async (req, res) => {
     const userIds = tenantUserIds.map(u => u._id);
 
     const { buildUpdateWithCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+    const previous = await Organization.findOne({
+      _id: req.params.id,
+      isTenant: false,
+      deletedAt: null,
+      createdBy: { $in: userIds }
+    }).lean();
+
     const $set = buildUpdateWithCustomFields(req.body, Organization);
 
     // Only allow update of Sales organizations created by users from this tenant
@@ -352,6 +359,25 @@ exports.update = async (req, res) => {
       .populate('createdBy', 'firstName lastName email avatar username')
       .populate('assignedTo', 'firstName lastName email avatar username');
     if (!updated) return res.status(404).json({ success: false, message: 'Not found' });
+
+    try {
+      const { appendFieldChangeLogs } = require('../utils/recordActivityLogger');
+      const ModuleDefinition = require('../models/ModuleDefinition');
+      const moduleDef = await ModuleDefinition.findOne({ organizationId: tenantOrganizationId, key: 'organizations' });
+      await appendFieldChangeLogs({
+        organizationId: tenantOrganizationId,
+        moduleKey: 'organizations',
+        recordId: req.params.id,
+        authorId: req.user._id,
+        previous: previous || {},
+        updated: updated.toObject ? updated.toObject() : updated,
+        updateDataKeys: Object.keys(req.body || {}),
+        fieldLabels: moduleDef && Array.isArray(moduleDef.fields) ? moduleDef.fields : undefined
+      });
+    } catch (logErr) {
+      console.warn('Record activity log (organization update) failed:', logErr?.message || logErr);
+    }
+
     res.json({ success: true, data: flattenCustomFieldsForResponse(updated) });
   } catch (error) {
     res.status(400).json({ success: false, message: 'Error updating organization', error: error.message });
@@ -614,7 +640,7 @@ exports.getEditable = async (req, res) => {
  * Updates ONLY editable business fields for CreateOrganizationSurface edit mode.
  * 
  * MUST:
- * - Accept ONLY: name, address, website, phone, industry, types
+ * - Accept business-editable fields (including custom fields) while blocking tenant/system fields
  * - Reject tenant organizations (isTenant: false only)
  * - Filter by tenant context (createdBy must be from tenant)
  * - Ignore any extra fields silently
@@ -665,8 +691,20 @@ exports.update = async (req, res) => {
       });
     }
     
-    // ALLOWED FIELDS ONLY (strict filtering)
-    const allowedFields = ['name', 'types', 'industry', 'website', 'phone', 'address'];
+    // Block tenant/system/infrastructure fields from generic record-page updates.
+    // All other business fields (including custom fields) are allowed.
+    const blockedFields = new Set([
+      '_id', '__v', 'organizationId', 'createdAt', 'updatedAt', 'createdBy', 'modifiedBy',
+      'deletedAt', 'deletedBy', 'deletionReason', 'activityLogs', 'legacyOrganizationId',
+      'subscription', 'limits', 'enabledApps', 'enabledModules', 'slug', 'settings', 'security',
+      'billing', 'isTenant', 'database', 'integrations', 'moduleOverrides', 'crmInitialized', 'dataRegion'
+    ]);
+
+    const updatePayload = {};
+    for (const [key, value] of Object.entries(req.body || {})) {
+      if (blockedFields.has(key)) continue;
+      updatePayload[key] = value;
+    }
     
     // REJECT tenant-only fields if provided
     const tenantOnlyFields = [
@@ -687,7 +725,7 @@ exports.update = async (req, res) => {
     // Note: This endpoint only allows specific fields, but check for completeness
     const { validateStatusWriteProtection } = require('../services/derivedStatusService');
     const appKey = req.appKey || req.query.appKey || 'SALES';
-    const statusWriteProtectionResult = await validateStatusWriteProtection('organization', req.body, appKey);
+    const statusWriteProtectionResult = await validateStatusWriteProtection('organization', updatePayload, appKey);
     
     if (statusWriteProtectionResult && !statusWriteProtectionResult.valid) {
       return res.status(400).json({
@@ -704,7 +742,7 @@ exports.update = async (req, res) => {
       moduleKey: 'organizations',
       recordId: req.params.id,
       organizationId: tenantOrganizationId,
-      updateData: req.body,
+      updateData: updatePayload,
       appKey
     });
     
@@ -718,7 +756,7 @@ exports.update = async (req, res) => {
     }
     
     // Validate type mutation invariants if types are being updated
-    if (req.body.types !== undefined && Array.isArray(req.body.types)) {
+    if (updatePayload.types !== undefined && Array.isArray(updatePayload.types)) {
       const { validateTypeMutation, validateRoleInvariant } = require('../services/systemInvariants');
       
       // Validate type mutation (additive only)
@@ -726,7 +764,7 @@ exports.update = async (req, res) => {
         moduleKey: 'organizations',
         recordId: req.params.id,
         organizationId: tenantOrganizationId,
-        updateData: { types: req.body.types }
+        updateData: { types: updatePayload.types }
       });
       
       if (!typeMutationResult.valid) {
@@ -739,12 +777,12 @@ exports.update = async (req, res) => {
       }
       
       // Validate role invariant if primaryContact is also being updated
-      if (req.body.primaryContact !== undefined) {
+      if (updatePayload.primaryContact !== undefined) {
         const roleInvariantResult = await validateRoleInvariant({
           moduleKey: 'organizations',
           recordId: req.params.id,
           organizationId: tenantOrganizationId,
-          updateData: { types: req.body.types, primaryContact: req.body.primaryContact }
+          updateData: { types: updatePayload.types, primaryContact: updatePayload.primaryContact }
         });
         
         if (!roleInvariantResult.valid) {
@@ -763,20 +801,49 @@ exports.update = async (req, res) => {
 
     // Update only allowed fields
     let hasChanges = false;
-    allowedFields.forEach(field => {
-      if (req.body[field] !== undefined) {
-        // Handle types array specially
-        if (field === 'types') {
-          if (Array.isArray(req.body[field])) {
-            org[field] = req.body[field];
+    const updatedKeys = [];
+    Object.entries(updatePayload).forEach(([field, fieldValue]) => {
+      if (fieldValue !== undefined) {
+        // Handle array fields specially
+        if (field === 'types' || field === 'tags') {
+          if (Array.isArray(fieldValue)) {
+            const nextArray = field === 'tags'
+              ? fieldValue.map((tag) => String(tag || '').trim()).filter(Boolean)
+              : fieldValue;
+            const currentArray = Array.isArray(org[field]) ? org[field] : [];
+            if (JSON.stringify(currentArray) !== JSON.stringify(nextArray)) {
+              org[field] = nextArray;
+              hasChanges = true;
+              updatedKeys.push(field);
+            }
+          }
+        } else if (Array.isArray(fieldValue)) {
+          const currentArray = Array.isArray(org[field]) ? org[field] : [];
+          if (JSON.stringify(currentArray) !== JSON.stringify(fieldValue)) {
+            org[field] = fieldValue;
             hasChanges = true;
+            updatedKeys.push(field);
+          }
+        } else if (field === 'description') {
+          if (!org.customFields || typeof org.customFields !== 'object') {
+            org.customFields = {};
+          }
+          const nextDescription = fieldValue == null ? '' : String(fieldValue);
+          const currentDescription = org.customFields?.description == null ? '' : String(org.customFields.description);
+          if (currentDescription !== nextDescription) {
+            org.customFields.description = nextDescription;
+            // customFields is Mixed; mark modified so Mongoose persists nested updates.
+            org.markModified('customFields');
+            hasChanges = true;
+            updatedKeys.push(field);
           }
         } else {
           // For other fields, allow empty strings (will be stored as empty)
-          const newValue = req.body[field] !== null ? (req.body[field] || '') : '';
+          const newValue = fieldValue !== null ? (fieldValue || '') : '';
           if (org[field] !== newValue) {
             org[field] = newValue;
             hasChanges = true;
+            updatedKeys.push(field);
           }
         }
       }
@@ -795,6 +862,24 @@ exports.update = async (req, res) => {
     if (hasChanges) {
       // Trim name
       org.name = org.name.trim();
+
+      // Generic description versioning: push previous content before saving new description.
+      if (updatedKeys.includes('description')) {
+        try {
+          const prevDesc = String(previousSnapshot?.description ?? previousSnapshot?.customFields?.description ?? '');
+          const nextDesc = String(org.customFields?.description ?? org.description ?? '');
+          if (prevDesc !== nextDesc) {
+            if (!Array.isArray(org.descriptionVersions)) org.descriptionVersions = [];
+            org.descriptionVersions.push({
+              content: prevDesc,
+              createdAt: new Date(),
+              createdBy: req.user?._id
+            });
+          }
+        } catch (versionErr) {
+          console.warn('Description version push (organization) failed:', versionErr?.message || versionErr);
+        }
+      }
       
       // Get user name for activity log
       let userName = 'System';
@@ -813,13 +898,31 @@ exports.update = async (req, res) => {
         user: userName,
         userId: req.user?._id || null,
         action: 'updated this record',
-        details: { type: 'update', fields: allowedFields.filter(f => req.body[f] !== undefined) },
+        details: { type: 'update', fields: updatedKeys },
         timestamp: new Date()
       });
+
+      try {
+        const { appendFieldChangeLogs } = require('../utils/recordActivityLogger');
+        const ModuleDefinition = require('../models/ModuleDefinition');
+        const moduleDef = await ModuleDefinition.findOne({ organizationId: tenantOrganizationId, key: 'organizations' });
+        await appendFieldChangeLogs({
+          organizationId: tenantOrganizationId,
+          moduleKey: 'organizations',
+          recordId: req.params.id,
+          authorId: req.user._id,
+          previous: previousSnapshot,
+          updated: org.toObject ? org.toObject() : { ...org },
+          updateDataKeys: updatedKeys,
+          fieldLabels: moduleDef && Array.isArray(moduleDef.fields) ? moduleDef.fields : undefined
+        });
+      } catch (logErr) {
+        console.warn('Record activity log (organization update) failed:', logErr?.message || logErr);
+      }
       
       // Check if lifecycle or type fields changed and compute derived status
       const { hasLifecycleOrTypeChanged, computeAndSetDerivedStatus, hasConfiguration } = require('../services/derivedStatusService');
-      const shouldComputeDerivedStatus = hasLifecycleOrTypeChanged('organization', org, req.body);
+      const shouldComputeDerivedStatus = hasLifecycleOrTypeChanged('organization', org, updatePayload);
       const appKey = req.appKey || req.query.appKey || 'SALES';
       
       await org.save();
@@ -867,17 +970,10 @@ exports.update = async (req, res) => {
       }
     }
     
-    // Return minimal organization identity (id, name, types)
-    const response = {
-      _id: org._id,
-      id: org._id.toString(),
-      name: org.name,
-      types: org.types || []
-    };
-    
+    const { flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
     res.json({
       success: true,
-      data: response
+      data: flattenCustomFieldsForResponse(org)
     });
   } catch (error) {
     console.error('Error updating organization:', error);

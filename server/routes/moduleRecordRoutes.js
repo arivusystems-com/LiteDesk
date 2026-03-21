@@ -43,10 +43,25 @@ router.post(
   checkPermissionFromParam('moduleKey', 'edit'),
   controller.createComment
 );
+router.post(
+  '/:moduleKey/tags/delete',
+  checkPermissionFromParam('moduleKey', 'edit'),
+  controller.deleteTagFromModule
+);
 router.get(
   '/:moduleKey/records/:recordId/neighbors',
   checkPermissionFromParam('moduleKey', 'view'),
   controller.getNeighbors
+);
+router.get(
+  '/:moduleKey/records/:recordId/description-versions',
+  checkPermissionFromParam('moduleKey', 'view'),
+  controller.getDescriptionVersions
+);
+router.post(
+  '/:moduleKey/records/:recordId/description-versions/restore',
+  checkPermissionFromParam('moduleKey', 'edit'),
+  controller.restoreDescriptionVersion
 );
 
 module.exports = router;

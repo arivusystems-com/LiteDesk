@@ -84,6 +84,7 @@ export const createTaskSectionStackAdapter = (context = {}) => {
           className: 'py-3',
           actions: [
             ...(canLinkRecords ? [{ key: 'link-record', type: 'link', label: 'Link record' }] : []),
+            ...(canLinkRecords ? [{ key: 'add-record', type: 'plus', label: 'Add record' }] : []),
             ...(!isExpandedMode ? [{ key: 'expand-related', type: 'expand', label: 'Expand' }] : [])
           ]
         }

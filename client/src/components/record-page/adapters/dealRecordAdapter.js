@@ -196,12 +196,12 @@ const resolveDetailRawValue = (record, fieldKey, fieldType) => {
 };
 
 const resolveDetailDisplayValue = (record, fieldKey, fieldType, formatDate) => {
-  if (!record || !fieldKey) return '—';
+  if (!record || !fieldKey) return '';
   const rawValue = record?.[fieldKey];
-  if (rawValue == null || rawValue === '') return '—';
+  if (rawValue == null || rawValue === '') return '';
 
   if (fieldType === 'date') {
-    return formatDate(rawValue) || '—';
+    return formatDate(rawValue) || '';
   }
 
   if (Array.isArray(rawValue)) {
@@ -211,21 +211,21 @@ const resolveDetailDisplayValue = (record, fieldKey, fieldType, formatDate) => {
         return item.name || item.label || item.title || item.email || item._id || null;
       }
       return String(item);
-    }).filter(Boolean).join(', ') : '—';
+    }).filter(Boolean).join(', ') : '';
   }
 
   if (typeof rawValue === 'object') {
     if (fieldKey === 'ownerId') {
-      return [rawValue.firstName, rawValue.lastName].filter(Boolean).join(' ') || rawValue.email || '—';
+      return [rawValue.firstName, rawValue.lastName].filter(Boolean).join(' ') || rawValue.email || '';
     }
     // People/contact: prefer first_name + last_name (server) or firstName + lastName, then name, then email
     if (fieldKey === 'contactId') {
       const first = rawValue.first_name ?? rawValue.firstName ?? '';
       const last = rawValue.last_name ?? rawValue.lastName ?? '';
       const name = [first, last].filter(Boolean).join(' ').trim();
-      return name || rawValue.name || rawValue.label || rawValue.title || rawValue.email || '—';
+      return name || rawValue.name || rawValue.label || rawValue.title || rawValue.email || '';
     }
-    return rawValue.name || rawValue.label || rawValue.title || rawValue.email || rawValue._id || '—';
+    return rawValue.name || rawValue.label || rawValue.title || rawValue.email || rawValue._id || '';
   }
 
   return String(rawValue);
@@ -365,6 +365,7 @@ export const createDealRecordAdapter = ({
   onUnlinkRelated,
   canLinkRecords = false,
   openLinkRecordDrawer,
+  openAddRecordDrawer,
   handleDescriptionSave,
   canEditDescription = false,
   canViewDescriptionHistory,
@@ -418,7 +419,7 @@ export const createDealRecordAdapter = ({
           className: 'pt-2 pb-3',
           actions: [
             ...(canLinkRecords ? [{ key: 'link-record', type: 'link', label: 'Link record', handler: () => openLinkRecordDrawer?.() }] : []),
-            { key: 'add-event', type: 'plus', label: 'Add event', handler: () => openCreateEvent?.(record) },
+            ...(canLinkRecords ? [{ key: 'add-record', type: 'plus', label: 'Add record', handler: () => openAddRecordDrawer?.() }] : []),
             ...(!isExpandedMode ? [{ key: 'expand-related', type: 'expand', label: 'Expand', handler: () => openLeftSection?.('related') }] : [])
           ]
         }

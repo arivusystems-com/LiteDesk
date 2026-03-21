@@ -207,6 +207,36 @@ exports.updateItem = async (req, res) => {
         delete req.body.organizationId;
         req.body.modifiedBy = req.user._id;
         
+        const previous = await Item.findOne({
+            _id: req.params.id,
+            organizationId: req.user.organizationId,
+            deletedAt: null
+        }).lean();
+
+        // Generic description versioning: store previous description before update.
+        if (Object.prototype.hasOwnProperty.call(req.body || {}, 'description')) {
+            try {
+                const prevDesc = String(previous?.description ?? previous?.customFields?.description ?? '');
+                const nextDesc = String(req.body.description ?? '');
+                if (prevDesc !== nextDesc) {
+                    await Item.updateOne(
+                        { _id: req.params.id, organizationId: req.user.organizationId, deletedAt: null },
+                        {
+                            $push: {
+                                descriptionVersions: {
+                                    content: prevDesc,
+                                    createdAt: new Date(),
+                                    createdBy: req.user?._id
+                                }
+                            }
+                        }
+                    );
+                }
+            } catch (versionErr) {
+                console.warn('Description version push (item) failed:', versionErr?.message || versionErr);
+            }
+        }
+
         const { buildUpdateWithCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
         const $set = buildUpdateWithCustomFields(req.body, Item);
         
@@ -228,6 +258,27 @@ exports.updateItem = async (req, res) => {
                 success: false,
                 message: 'Item not found or access denied.' 
             });
+        }
+
+        try {
+            const { appendFieldChangeLogs } = require('../utils/recordActivityLogger');
+            const ModuleDefinition = require('../models/ModuleDefinition');
+            const moduleDef = await ModuleDefinition.findOne({
+                organizationId: req.user.organizationId,
+                key: 'items'
+            });
+            await appendFieldChangeLogs({
+                organizationId: req.user.organizationId,
+                moduleKey: 'items',
+                recordId: req.params.id,
+                authorId: req.user._id,
+                previous: previous || {},
+                updated: updatedItem.toObject ? updatedItem.toObject() : updatedItem,
+                updateDataKeys: Object.keys(req.body || {}),
+                fieldLabels: moduleDef && Array.isArray(moduleDef.fields) ? moduleDef.fields : undefined
+            });
+        } catch (logErr) {
+            console.warn('Record activity log (item update) failed:', logErr?.message || logErr);
         }
         
         res.status(200).json({

@@ -65,11 +65,9 @@
 
     <template #left>
       <RecordStateSection
-        status="Open"
-        owner="Placeholder User"
-        startDate="—"
-        dueDate="—"
-        priority="Normal"
+        heading="Key fields"
+        :fields="exampleKeyFields"
+        :field-values="exampleKeyFieldValues"
         :signals="['Signal A', 'Signal B']"
         next-action-hint="Next: Review and approve."
       />
@@ -204,4 +202,20 @@ const contextTabs = [
     icon: PuzzlePieceIcon
   }
 ];
+
+// Standardized key fields example (same contract as adapters)
+const exampleKeyFields = [
+  { key: 'status', label: 'Status', column: 'left' },
+  { key: 'owner', label: 'Assignees', column: 'left' },
+  { key: 'startDate', label: 'Start date', column: 'left' },
+  { key: 'dueDate', label: 'Due date', column: 'right' },
+  { key: 'priority', label: 'Priority', column: 'right' }
+];
+const exampleKeyFieldValues = {
+  status: 'Open',
+  owner: 'Placeholder User',
+  startDate: '—',
+  dueDate: '—',
+  priority: 'Normal'
+};
 </script>

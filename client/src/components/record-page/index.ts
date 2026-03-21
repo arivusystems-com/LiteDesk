@@ -16,6 +16,7 @@ export { default as RecordContextTabs } from './RecordContextTabs.vue';
 export { default as RecordRightPane } from './RecordRightPane.vue';
 export { default as AccordionSection } from './AccordionSection.vue';
 export { default as EditableTitle } from './EditableTitle.vue';
+export { default as RecordPageTitleRow } from './RecordPageTitleRow.vue';
 export { default as EditableLabeledValue } from './EditableLabeledValue.vue';
 export { default as CommentInput } from './CommentInput.vue';
 export { default as CommentContent } from './CommentContent.vue';

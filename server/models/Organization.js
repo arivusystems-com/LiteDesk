@@ -271,6 +271,7 @@ const OrganizationSchema = new mongoose.Schema({
     website: { type: String, trim: true },
     phone: { type: String, trim: true },
     address: { type: String, trim: true },
+    tags: [{ type: String, trim: true }],
     
     // Ownership/links (SALES)
     createdBy: { 
@@ -370,6 +371,13 @@ const OrganizationSchema = new mongoose.Schema({
             default: Date.now, 
             required: true 
         }
+    }],
+
+    // Description version history (native, task/deal parity)
+    descriptionVersions: [{
+        content: { type: String, default: '' },
+        createdAt: { type: Date, default: Date.now, required: true },
+        createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
     }],
     
     // Legacy support (for migration)

@@ -1749,7 +1749,13 @@ const handlePaginationUpdate = (p) => {
 const handleRowClick = (row) => {
   const viewAction = listDefinition.value?.rowActions?.find(a => a.type === 'view');
   if (viewAction?.route) {
-    const route = viewAction.route.replace(':id', row._id);
+    let route = viewAction.route.replace(':id', row._id);
+    const mod = (props.moduleKey || '').toLowerCase();
+    const ak = props.appKey && String(props.appKey).trim();
+    if (ak && (mod === 'people' || mod === 'organizations')) {
+      const sep = route.includes('?') ? '&' : '?';
+      route = `${route}${sep}appKey=${encodeURIComponent(ak)}`;
+    }
     openTab(route, {
       title: row.name || row.title || row.first_name || 'Detail',
       background: false,

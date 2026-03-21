@@ -1347,10 +1347,10 @@
                             {{ ' ' }}
                             <span class="mr-0.5">
                               <template v-for="(tag, tagIdx) in activityItem.tags" :key="tag.name">
-                                <span class="inline-flex items-center gap-x-1.5 rounded-full px-2 py-1 text-xs font-medium text-gray-900 dark:text-white bg-gray-200 dark:bg-gray-700 ring-1 ring-gray-300 dark:ring-gray-600">
-                                  <svg :class="[tag.color, 'size-1.5']" viewBox="0 0 6 6" aria-hidden="true">
+                                <span :class="['inline-flex items-center gap-x-1.5 rounded-full px-2 py-1 text-xs font-medium', getDefaultTagChipClass(tag)]">
+                                  <svg :class="[getDefaultTagDotClass(tag), 'size-1.5']" viewBox="0 0 6 6" aria-hidden="true">
                                     <circle cx="3" cy="3" r="3" />
-                    </svg>
+                                  </svg>
                                   {{ tag.name }}
                                 </span>
                                 {{ ' ' }}
@@ -1660,9 +1660,10 @@ import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import BadgeCell from '@/components/common/table/BadgeCell.vue';
 import DateCell from '@/components/common/table/DateCell.vue';
 import Avatar from '@/components/common/Avatar.vue';
+import { getDefaultTagChipClass, getDefaultTagDotClass } from '@/components/record-page/composables/useRecordTags';
 import { getFieldDependencyState, evaluateDependency } from '@/utils/dependencyEvaluation';
 import { useRouter, useRoute } from 'vue-router';
-import { getCurrentContext, filterFieldsByContext } from '@/utils/fieldContextFilter';
+import { resolveFieldContext, filterFieldsByContext } from '@/utils/fieldContextFilter';
 import {
   MagnifyingGlassIcon,
   HeartIcon,
@@ -1726,7 +1727,7 @@ const route = useRoute();
 const authStore = useAuthStore();
 
 // Get current context from route
-const currentContext = computed(() => getCurrentContext(route.path));
+const currentContext = computed(() => resolveFieldContext(route.path, route.query));
 
 // Force recompute trigger (similar to TabBar viewportWidth)
 const recomputeTrigger = ref(0);
@@ -2519,10 +2520,7 @@ const activityItems = computed(() => {
       if (tagMatch) {
         const tagName = tagMatch[1].replace(/^"|"$/g, ''); // Remove quotes if present
         const isRemoved = lowerAction.includes('removed');
-        tags = [{
-          name: tagName,
-          color: 'fill-indigo-500'
-        }];
+        tags = [{ name: tagName }];
         actionText = isRemoved ? 'removed tag' : 'added tag';
       } else {
         // Fallback for tag actions without proper format

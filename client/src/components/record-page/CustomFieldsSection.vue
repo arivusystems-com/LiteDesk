@@ -41,7 +41,7 @@
               <span v-if="field.value !== null && field.value !== undefined && field.value !== ''">
                 {{ field.value }}
               </span>
-              <span v-else class="text-gray-400 dark:text-gray-500">—</span>
+              <span v-else class="text-record-empty">—</span>
             </slot>
           </div>
         </div>

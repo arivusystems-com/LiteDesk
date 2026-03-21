@@ -5,22 +5,19 @@
 
 export interface RecordStateSectionProps {
   heading?: string;
-  enableLegacyFallback?: boolean;
   fields?: Array<{
     key: string;
     label: string;
     icon?: unknown;
+    type?: string;
+    canEdit?: boolean;
+    onSave?: (value: unknown) => void;
+    options?: Array<{ value: unknown; label: string }>;
     column?: 'left' | 'right';
     slotKey?: string;
     valueKey?: string;
   }>;
   fieldValues?: Record<string, string | null | undefined>;
-  status?: string | null;
-  owner?: string | null;
-  startDate?: string | null;
-  dueDate?: string | null;
-  priority?: string | null;
-  timeEstimate?: string | null;
   signals?: string[];
   nextActionHint?: string | null;
 }

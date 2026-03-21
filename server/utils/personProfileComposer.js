@@ -60,8 +60,7 @@ const CORE_FIELD_KEYS = [
   'assignedTo',
   'legacyContactId',
 
-  // Notes & activity
-  'notes',
+  // Activity
   'activityLogs',
 
   // Timestamps (from Mongoose timestamps option)

@@ -83,6 +83,10 @@ function getRecordId(req) {
   return req.params.recordId;
 }
 
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * GET /api/modules/:moduleKey/records/:recordId/activity
  * Returns merged activity logs + comments for the record (all modules).
@@ -223,22 +227,30 @@ exports.getActivity = async (req, res) => {
         .sort({ createdAt: 1 })
         .lean();
       for (const entry of generic) {
+        const author = entry.author;
+        const actorDisplay = author ? `${(author.firstName || '').trim()} ${(author.lastName || '').trim()}`.trim() || author.username || author.email : 'Unknown';
+        const actorProfile = author ? {
+          _id: author._id?.toString(),
+          firstName: author.firstName,
+          lastName: author.lastName,
+          email: author.email,
+          username: author.username
+        } : null;
         if (entry.type === 'activity') {
-          const actor = entry.author ? `${(entry.author.firstName || '').trim()} ${(entry.author.lastName || '').trim()}`.trim() || entry.author.username || entry.author.email : 'Unknown';
           events.push({
             id: `activity-${entry._id}`,
             type: 'system',
-            actor,
+            actor: actorDisplay,
+            actorProfile,
             createdAt: entry.createdAt ? new Date(entry.createdAt).toISOString() : null,
             payload: { action: entry.action || 'updated', message: entry.message || '', details: entry.details || {} }
           });
         } else {
-          const author = entry.author;
-          const actor = author ? `${(author.firstName || '').trim()} ${(author.lastName || '').trim()}`.trim() || author.username || author.email : 'Unknown';
           events.push({
             id: `comment-${entry._id}`,
             type: 'comment',
-            actor,
+            actor: actorDisplay,
+            actorProfile,
             createdAt: entry.createdAt ? new Date(entry.createdAt).toISOString() : null,
             payload: {
               body: entry.content,
@@ -457,6 +469,269 @@ exports.getNeighbors = async (req, res) => {
   }
 };
 
+const RecordDescriptionVersion = require('../models/RecordDescriptionVersion');
+const { getRecordDescription, setRecordDescription } = require('../utils/descriptionVersionHelper');
+
+const MODULES_WITH_NATIVE_DESCRIPTION_VERSIONS = new Set(['deals', 'tasks']);
+const DESCRIPTION_VERSION_RETENTION_DAYS = 365;
+
+/**
+ * GET /api/modules/:moduleKey/records/:recordId/description-versions
+ * Returns { currentDescription, versions } for any module (generic or deal/task).
+ */
+exports.getDescriptionVersions = async (req, res) => {
+  try {
+    const moduleKey = getModuleKey(req);
+    const recordId = getRecordId(req);
+    const organizationId = req.user.organizationId;
+
+    if (!moduleKey || !recordId) {
+      return res.status(400).json({ success: false, message: 'moduleKey and recordId are required' });
+    }
+
+    const key = moduleKey.toLowerCase();
+
+    if (MODULES_WITH_NATIVE_DESCRIPTION_VERSIONS.has(key)) {
+      const Model = key === 'deals' ? Deal : Task;
+      const record = await Model.findOne({
+        _id: recordId,
+        organizationId,
+        deletedAt: null
+      })
+        .select('description descriptionVersions')
+        .lean();
+
+      if (!record) {
+        return res.status(404).json({ success: false, message: 'Record not found or access denied' });
+      }
+
+      const versions = (record.descriptionVersions || [])
+        .map((v) => ({ content: v.content, createdAt: v.createdAt, createdBy: v.createdBy }))
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      const createdByIds = [...new Set(versions.map((v) => v.createdBy).filter(Boolean))];
+      let createdByMap = {};
+      if (createdByIds.length > 0) {
+        const users = await User.find({ _id: { $in: createdByIds }, organizationId })
+          .select('firstName lastName')
+          .lean();
+        users.forEach((u) => {
+          const name = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
+          createdByMap[String(u._id)] = name || 'Unknown';
+        });
+      }
+
+      const list = versions.map((v) => ({
+        content: v.content,
+        createdAt: v.createdAt,
+        createdBy: v.createdBy ? createdByMap[String(v.createdBy)] || 'Unknown' : 'Unknown',
+        createdById: v.createdBy
+      }));
+
+      return res.json({
+        success: true,
+        data: {
+          currentDescription: (record.description || '').toString(),
+          versions: list
+        }
+      });
+    }
+
+    const getModel = MODEL_BY_KEY[key];
+    if (!getModel) {
+      return res.status(400).json({ success: false, message: `Unsupported module: ${moduleKey}` });
+    }
+
+    const Model = getModel();
+    const query = {
+      _id: recordId,
+      ...(Model.schema.paths.deletedAt ? { deletedAt: null } : {})
+    };
+    if (key === 'organizations') {
+      const tenantUsers = await User.find({ organizationId }).select('_id').lean();
+      const tenantUserIds = tenantUsers.map((u) => u._id);
+      query.isTenant = false;
+      query.createdBy = { $in: tenantUserIds };
+    } else {
+      query.organizationId = organizationId;
+    }
+
+    const record = await Model.findOne(query)
+      .select('description customFields descriptionVersions')
+      .lean();
+
+    if (!record) {
+      return res.status(404).json({ success: false, message: 'Record not found or access denied' });
+    }
+
+    const currentDescription = getRecordDescription(record);
+    let rawVersions = Array.isArray(record.descriptionVersions) ? record.descriptionVersions : [];
+    if (rawVersions.length === 0) {
+      const versionDoc = await RecordDescriptionVersion.findOne({
+        organizationId,
+        moduleKey: key,
+        recordId: String(recordId)
+      }).lean();
+      rawVersions = (versionDoc && versionDoc.versions) || [];
+    }
+    const versions = rawVersions
+      .map((v) => ({ content: v.content, createdAt: v.createdAt, createdBy: v.createdBy }))
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    const createdByIds = [...new Set(versions.map((v) => v.createdBy).filter(Boolean))];
+    let createdByMap = {};
+    if (createdByIds.length > 0) {
+      const users = await User.find({ _id: { $in: createdByIds }, organizationId })
+        .select('firstName lastName')
+        .lean();
+      users.forEach((u) => {
+        const name = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
+        createdByMap[String(u._id)] = name || 'Unknown';
+      });
+    }
+
+    const list = versions.map((v) => ({
+      content: v.content,
+      createdAt: v.createdAt,
+      createdBy: v.createdBy ? createdByMap[String(v.createdBy)] || 'Unknown' : 'Unknown',
+      createdById: v.createdBy
+    }));
+
+    return res.json({
+      success: true,
+      data: { currentDescription, versions: list }
+    });
+  } catch (err) {
+    console.error('getDescriptionVersions error:', err);
+    return res.status(500).json({ success: false, message: 'Error fetching description versions', error: err.message });
+  }
+};
+
+/**
+ * POST /api/modules/:moduleKey/records/:recordId/description-versions/restore
+ * Body: { versionIndex: number }
+ */
+exports.restoreDescriptionVersion = async (req, res) => {
+  try {
+    const moduleKey = getModuleKey(req);
+    const recordId = getRecordId(req);
+    const organizationId = req.user.organizationId;
+    const userId = req.user._id;
+
+    if (!moduleKey || !recordId) {
+      return res.status(400).json({ success: false, message: 'moduleKey and recordId are required' });
+    }
+
+    const { versionIndex } = req.body;
+    if (typeof versionIndex !== 'number' || versionIndex < 0) {
+      return res.status(400).json({ success: false, message: 'Invalid versionIndex' });
+    }
+
+    const key = moduleKey.toLowerCase();
+
+    if (MODULES_WITH_NATIVE_DESCRIPTION_VERSIONS.has(key)) {
+      const Model = key === 'deals' ? Deal : Task;
+      const record = await Model.findOne({
+        _id: recordId,
+        organizationId,
+        deletedAt: null
+      });
+
+      if (!record) {
+        return res.status(404).json({ success: false, message: 'Record not found or access denied' });
+      }
+
+      const versions = (record.descriptionVersions || []).slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      const version = versions[versionIndex];
+      if (!version) {
+        return res.status(404).json({ success: false, message: 'Version not found' });
+      }
+
+      const previousDescription = record.description;
+      record.description = version.content || '';
+      if (!Array.isArray(record.descriptionVersions)) record.descriptionVersions = [];
+      if (previousDescription !== undefined && previousDescription !== null) {
+        record.descriptionVersions.push({
+          content: typeof previousDescription === 'string' ? previousDescription : '',
+          createdAt: new Date(),
+          createdBy: userId
+        });
+      }
+      const retentionCutoff = new Date();
+      retentionCutoff.setDate(retentionCutoff.getDate() - DESCRIPTION_VERSION_RETENTION_DAYS);
+      record.descriptionVersions = record.descriptionVersions.filter((e) => e && e.createdAt >= retentionCutoff);
+      await record.save();
+
+      const populated = await Model.findById(record._id).lean();
+      const { flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+      return res.status(200).json({ success: true, data: flattenCustomFieldsForResponse(populated) });
+    }
+
+    const getModel = MODEL_BY_KEY[key];
+    if (!getModel) {
+      return res.status(400).json({ success: false, message: `Unsupported module: ${moduleKey}` });
+    }
+
+    const Model = getModel();
+
+    const query = {
+      _id: recordId,
+      ...(Model.schema.paths.deletedAt ? { deletedAt: null } : {})
+    };
+    if (key === 'organizations') {
+      const tenantUsers = await User.find({ organizationId }).select('_id').lean();
+      const tenantUserIds = tenantUsers.map((u) => u._id);
+      query.isTenant = false;
+      query.createdBy = { $in: tenantUserIds };
+    } else {
+      query.organizationId = organizationId;
+    }
+
+    const record = await Model.findOne(query);
+
+    if (!record) {
+      return res.status(404).json({ success: false, message: 'Record not found or access denied' });
+    }
+
+    let versions = Array.isArray(record.descriptionVersions) ? record.descriptionVersions.slice() : [];
+    if (versions.length === 0) {
+      const versionDoc = await RecordDescriptionVersion.findOne({
+        organizationId,
+        moduleKey: key,
+        recordId: String(recordId)
+      }).lean();
+      versions = Array.isArray(versionDoc?.versions) ? versionDoc.versions.slice() : [];
+    }
+    const sorted = versions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const version = sorted[versionIndex];
+    if (!version) {
+      return res.status(404).json({ success: false, message: 'Version not found' });
+    }
+
+    const previousContent = getRecordDescription(record.toObject ? record.toObject() : record);
+    setRecordDescription(record, version.content || '', Model);
+    if (!Array.isArray(record.descriptionVersions)) record.descriptionVersions = [];
+    if (previousContent !== undefined && previousContent !== null) {
+      record.descriptionVersions.push({
+        content: typeof previousContent === 'string' ? previousContent : '',
+        createdAt: new Date(),
+        createdBy: userId
+      });
+    }
+    const retentionCutoff = new Date();
+    retentionCutoff.setDate(retentionCutoff.getDate() - DESCRIPTION_VERSION_RETENTION_DAYS);
+    record.descriptionVersions = record.descriptionVersions.filter((e) => e && e.createdAt >= retentionCutoff);
+    await record.save();
+
+    const populated = await Model.findById(record._id).lean();
+    const { flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+    return res.status(200).json({ success: true, data: flattenCustomFieldsForResponse(populated) });
+  } catch (err) {
+    console.error('restoreDescriptionVersion error:', err);
+    return res.status(500).json({ success: false, message: 'Error restoring description version', error: err.message });
+  }
+};
+
 /** Modules that support batch fetch for related-record enrichment (deals, events, forms). */
 const BATCH_MODULES = new Set(['deals', 'events', 'forms']);
 
@@ -513,5 +788,52 @@ exports.getRecordsBatch = async (req, res) => {
   } catch (err) {
     console.error('getRecordsBatch error:', err);
     return res.status(500).json({ success: false, message: 'Error fetching records batch', error: err.message });
+  }
+};
+
+/**
+ * POST /api/modules/:moduleKey/tags/delete
+ * Body: { tagName: string }
+ * Removes the tag from all records in the module for the current organization.
+ */
+exports.deleteTagFromModule = async (req, res) => {
+  try {
+    const moduleKey = getModuleKey(req);
+    const organizationId = req.user.organizationId;
+    const tagName = String(req.body?.tagName || '').trim();
+
+    if (!moduleKey) {
+      return res.status(400).json({ success: false, message: 'moduleKey is required' });
+    }
+    if (!tagName) {
+      return res.status(400).json({ success: false, message: 'tagName is required' });
+    }
+
+    const getModel = MODEL_BY_KEY[moduleKey];
+    if (!getModel) {
+      return res.status(400).json({ success: false, message: `Unsupported module: ${moduleKey}` });
+    }
+
+    const Model = getModel();
+    const query = { organizationId };
+    if (moduleKey === 'organizations') query.isTenant = false;
+    if (Model.schema?.paths?.deletedAt) query.deletedAt = null;
+
+    const tagRegex = new RegExp(`^${escapeRegExp(tagName)}$`, 'i');
+    const result = await Model.updateMany(query, {
+      $pull: { tags: { $regex: tagRegex } }
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        moduleKey,
+        tagName,
+        modifiedCount: Number(result?.modifiedCount || 0)
+      }
+    });
+  } catch (err) {
+    console.error('deleteTagFromModule error:', err);
+    return res.status(500).json({ success: false, message: 'Error deleting tag from module', error: err.message });
   }
 };

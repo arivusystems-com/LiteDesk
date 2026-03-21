@@ -48,6 +48,9 @@ export const handleTaskSectionAction = (action, payload, context = {}) => {
     case 'link-record':
       context.openLinkRecordDrawer?.();
       return;
+    case 'add-record':
+      context.openAddRecordDrawer?.();
+      return;
     default:
       if (action?.type === 'expand' && sectionKey) {
         context.openLeftSection?.(sectionKey);

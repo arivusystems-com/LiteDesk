@@ -703,6 +703,11 @@ const updateTask = async (req, res) => {
         if (['_id', '__v', 'organizationId', 'createdAt', 'updatedAt', 'createdBy'].includes(fieldKey)) {
           continue;
         }
+        // Tags are a shared record-page capability and must remain editable
+        // even if module field metadata does not explicitly define them.
+        if (fieldKey === 'tags') {
+          continue;
+        }
         
         const validation = validateFieldWrite(fieldKey, moduleDef.fields, req.user, 'tasks');
         if (!validation.allowed) {
@@ -722,6 +727,28 @@ const updateTask = async (req, res) => {
           violations: fieldViolations
         });
       }
+    }
+
+    // Fast path: tags-only update should not be blocked by unrelated task
+    // validators. Keep tag add/remove reliable across all records.
+    const nonSystemKeys = Object.keys(req.body || {}).filter(
+      (fieldKey) => !['_id', '__v', 'organizationId', 'createdAt', 'updatedAt', 'createdBy'].includes(fieldKey)
+    );
+    if (nonSystemKeys.length === 1 && nonSystemKeys[0] === 'tags') {
+      const nextTags = Array.isArray(req.body.tags)
+        ? req.body.tags.map((tag) => String(tag || '').trim()).filter(Boolean)
+        : [];
+      task.tags = nextTags;
+      if (task.customFields && Object.prototype.hasOwnProperty.call(task.customFields, 'tags')) {
+        delete task.customFields.tags;
+        task.markModified('customFields');
+      }
+      await task.save();
+      const { flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+      return res.status(200).json({
+        success: true,
+        data: flattenCustomFieldsForResponse(task)
+      });
     }
 
     // Validate assignedTo if being updated
@@ -822,6 +849,12 @@ const updateTask = async (req, res) => {
       task.customFields = { ...(task.customFields || {}), ...customFieldsSet };
       task.markModified('customFields');
     }
+    // If tags are updated via canonical field, ensure stale customFields.tags
+    // cannot resurrect old values on flattened responses.
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'tags') && task.customFields && Object.prototype.hasOwnProperty.call(task.customFields, 'tags')) {
+      delete task.customFields.tags;
+      task.markModified('customFields');
+    }
 
     await task.save();
 
@@ -880,6 +913,56 @@ const updateTask = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error updating task',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Update task tags only
+// @route   PATCH /api/tasks/:id/tags
+// @access  Private
+const updateTaskTags = async (req, res) => {
+  try {
+    const task = await Task.findOne({
+      _id: req.params.id,
+      organizationId: req.user.organizationId,
+      deletedAt: null
+    });
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found'
+      });
+    }
+
+    const nextTags = Array.isArray(req.body?.tags)
+      ? req.body.tags.map((tag) => String(tag || '').trim()).filter(Boolean)
+      : [];
+    task.tags = nextTags;
+
+    if (task.customFields && Object.prototype.hasOwnProperty.call(task.customFields, 'tags')) {
+      delete task.customFields.tags;
+      task.markModified('customFields');
+    }
+
+    await task.save();
+
+    const updatedTask = await Task.findById(task._id)
+      .populate('assignedTo', 'firstName lastName email avatar')
+      .populate('assignedBy', 'firstName lastName')
+      .populate('createdBy', 'firstName lastName');
+
+    const { flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+    return res.status(200).json({
+      success: true,
+      data: flattenCustomFieldsForResponse(updatedTask)
+    });
+  } catch (error) {
+    console.error('Update task tags error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error updating task tags',
       error: error.message
     });
   }
@@ -1914,6 +1997,7 @@ module.exports = {
   getTasks,
   getTaskById,
   updateTask,
+  updateTaskTags,
   deleteTask,
   updateTaskStatus,
   toggleSubtask,

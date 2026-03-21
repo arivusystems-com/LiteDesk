@@ -225,7 +225,7 @@ import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
 import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
 import { useAuthStore } from '@/stores/auth';
 import { useRoute } from 'vue-router';
-import { getCurrentContext, filterFieldsByContext } from '@/utils/fieldContextFilter';
+import { resolveFieldContext, filterFieldsByContext } from '@/utils/fieldContextFilter';
 import { getGlobalSystemFieldKeys, normalizeFieldKeyForSystemMatch } from '@/platform/fields/fieldCapabilityEngine';
 
 const props = defineProps({
@@ -298,7 +298,7 @@ const currentContext = computed(() => {
   if (props.context) {
     return props.context;
   }
-  return getCurrentContext(route.path);
+  return resolveFieldContext(route.path, route.query);
 });
 
 // Field rendering helpers - case-insensitive lookup

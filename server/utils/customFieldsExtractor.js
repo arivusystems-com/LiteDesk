@@ -81,7 +81,10 @@ function buildUpdateWithCustomFields(payload, model) {
 function flattenCustomFieldsForResponse(record) {
   if (!record) return record;
   const obj = record.toObject ? record.toObject() : { ...record };
-  return { ...obj, ...(obj.customFields || {}) };
+  // Merge custom fields first so schema-backed top-level fields always win.
+  // This prevents stale customFields keys (e.g. customFields.tags) from
+  // overriding canonical fields like `tags` in API responses.
+  return { ...(obj.customFields || {}), ...obj };
 }
 
 module.exports = {

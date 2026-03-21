@@ -92,9 +92,6 @@ router.use((req, res, next) => {
 router.post('/', controller.create);
 router.get('/', controller.list);
 
-// Add note to person (must be before /:id route)
-router.post('/:id/notes', controller.addNote);
-
 // Activity logs (must be before /:id route)
 router.get('/:id/activity-logs', controller.getActivityLogs);
 router.post('/:id/activity-logs', controller.addActivityLog);

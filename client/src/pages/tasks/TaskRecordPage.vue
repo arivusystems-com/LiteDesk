@@ -298,28 +298,22 @@
         </div>
       </div>
 
+      <div v-if="embed && task && !expandedLeftSection" class="pt-0 flex-shrink-0" aria-hidden="true" />
       <!-- Editable Title Section -->
-      <div
+      <RecordPageTitleRow
         v-if="task && !expandedLeftSection"
-        :class="[
-          'mb-6 sticky z-10 border-b transition-[padding,background-color,border-color,backdrop-filter] duration-200 ease-out',
-          embed ? 'top-0 py-2 lg:py-4 lg:mb-0 mb-0' : 'top-0 lg:-top-6',
-          isLeftTitleSticky
-            ? 'border-b border-gray-200/80 dark:border-gray-700/80 bg-white/95 dark:bg-gray-900/95 supports-[backdrop-filter]:bg-white/90 supports-[backdrop-filter]:dark:bg-gray-900/90 backdrop-blur py-4'
-            : 'border-b border-gray-200/80 dark:border-gray-700/80 bg-white/95 dark:bg-gray-900/95 supports-[backdrop-filter]:bg-white/90 supports-[backdrop-filter]:dark:bg-gray-900/90 backdrop-blur py-4 lg:border-transparent lg:bg-transparent lg:shadow-none lg:py-0'
-        ]"
+        :sticky="isLeftTitleSticky"
+        :embed="embed"
       >
-        <div class="flex items-center gap-3">
-          <Avatar :record="{ name: TASK_MODULE_NAME }" :icon="CheckCircleIcon" size="lg" class="shrink-0" />
-          <div class="min-w-0 flex-1">
-            <EditableTitle
-              :title="task.title || ''"
-              :can-edit="canEditTask"
-              @save="handleTitleSave"
-            />
-          </div>
+        <Avatar :record="{ name: TASK_MODULE_NAME }" :icon="CheckCircleIcon" size="lg" class="shrink-0" />
+        <div class="min-w-0 flex-1">
+          <EditableTitle
+            :title="task.title || ''"
+            :can-edit="canEditTask"
+            @save="handleTitleSave"
+          />
         </div>
-      </div>
+      </RecordPageTitleRow>
 
       <!-- RecordStateSection - Core properties in two-column layout -->
       <div
@@ -330,7 +324,6 @@
           heading="Key fields"
           :fields="keySectionFields"
           :field-values="keyFieldDisplayValues"
-          :enable-legacy-fallback="false"
           :signals="computeSignals(task)"
           :next-action-hint="getNextActionHint(task)"
         >
@@ -402,111 +395,103 @@
         
         <!-- Editable Start Date slot -->
         <template #startDate>
-          <div v-if="canEditTask">
-            <div class="w-full min-h-8 px-2 py-1 -mx-2 -my-1 flex items-center">
-              <input
-                v-show="isEditingStartDate"
-                ref="startDateInputRef"
-                v-model="localStartDate"
-                type="date"
-                @click="openDatePicker"
-                @blur="handleStartDateBlur"
-                @keydown.enter="handleStartDateBlur"
-                @keydown.esc="handleStartDateCancel"
-                class="text-xs h-8 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full cursor-pointer"
-                placeholder="Start date"
-              />
-              <span
-                v-show="!isEditingStartDate"
-                @click="isEditingStartDate = true"
-                :class="[
-                  'block w-full h-8 text-sm cursor-text hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 transition-colors flex items-center',
-                  task.startDate ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
-                ]"
-              >
-                {{ formatStateDate(task.startDate) || 'Empty' }}
-              </span>
-            </div>
+          <div v-if="canEditTask" class="flex-1 min-w-0 w-full min-h-8 flex items-center" @click="onStartDateCellClick">
+            <input
+              v-show="isEditingStartDate"
+              ref="startDateInputRef"
+              v-model="localStartDate"
+              type="date"
+              @click.stop="openDatePicker"
+              @blur="handleStartDateBlur"
+              @keydown.enter="handleStartDateBlur"
+              @keydown.esc="handleStartDateCancel"
+              class="text-xs h-8 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full cursor-pointer"
+              placeholder="Start date"
+            />
+            <span
+              v-show="!isEditingStartDate"
+              :class="[
+                'block w-full min-h-8 text-sm cursor-text rounded px-2 transition-colors flex items-center',
+                task.startDate ? 'text-gray-900 dark:text-white' : 'text-record-empty'
+              ]"
+            >
+              {{ formatStateDate(task.startDate) || 'Empty' }}
+            </span>
           </div>
           <span
             v-else
             :class="[
               'block w-full min-h-8 text-sm rounded px-2 py-1 cursor-default select-none bg-gray-50 dark:bg-gray-800/60 flex items-center',
-              task.startDate ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+              task.startDate ? 'text-gray-900 dark:text-white' : 'text-record-empty'
             ]"
           >{{ formatStateDate(task.startDate) || 'Empty' }}</span>
         </template>
 
         <!-- Editable Due Date slot -->
         <template #dueDate>
-          <div v-if="canEditTask">
-            <div class="w-full min-h-8 px-2 py-1 -mx-2 -my-1 flex items-center">
-              <input
-                v-show="isEditingDueDate"
-                ref="dueDateInputRef"
-                v-model="localDueDate"
-                type="date"
-                @click="openDatePicker"
-                @blur="handleDueDateBlur"
-                @keydown.enter="handleDueDateBlur"
-                @keydown.esc="handleDueDateCancel"
-                class="text-xs h-8 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full cursor-pointer"
-                placeholder="Due date"
-              />
-              <span
-                v-show="!isEditingDueDate"
-                @click="isEditingDueDate = true"
-                :class="[
-                  'block w-full h-8 text-sm cursor-text hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 transition-colors flex items-center',
-                  task.dueDate ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
-                ]"
-              >
-                {{ formatStateDate(task.dueDate) || 'Empty' }}
-              </span>
-            </div>
+          <div v-if="canEditTask" class="flex-1 min-w-0 w-full min-h-8 flex items-center" @click="onDueDateCellClick">
+            <input
+              v-show="isEditingDueDate"
+              ref="dueDateInputRef"
+              v-model="localDueDate"
+              type="date"
+              @click.stop="openDatePicker"
+              @blur="handleDueDateBlur"
+              @keydown.enter="handleDueDateBlur"
+              @keydown.esc="handleDueDateCancel"
+              class="text-xs h-8 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full cursor-pointer"
+              placeholder="Due date"
+            />
+            <span
+              v-show="!isEditingDueDate"
+              :class="[
+                'block w-full min-h-8 text-sm cursor-text rounded px-2 transition-colors flex items-center',
+                task.dueDate ? 'text-gray-900 dark:text-white' : 'text-record-empty'
+              ]"
+            >
+              {{ formatStateDate(task.dueDate) || 'Empty' }}
+            </span>
           </div>
           <span
             v-else
             :class="[
               'block w-full min-h-8 text-sm rounded px-2 py-1 cursor-default select-none bg-gray-50 dark:bg-gray-800/60 flex items-center',
-              task.dueDate ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+              task.dueDate ? 'text-gray-900 dark:text-white' : 'text-record-empty'
             ]"
           >{{ formatStateDate(task.dueDate) || 'Empty' }}</span>
         </template>
         
         <!-- Editable Time Estimate slot -->
         <template #timeEstimate>
-          <div v-if="canEditTask">
-            <div class="w-full min-h-8 px-2 py-1 -mx-2 -my-1 flex items-center">
-              <input
-                v-show="isEditingTimeEstimate"
-                ref="timeEstimateInputRef"
-                v-model.number="localTimeEstimate"
-                type="number"
-                min="0"
-                step="0.5"
-                @blur="handleTimeEstimateBlur"
-                @keydown.enter="handleTimeEstimateBlur"
-                @keydown.esc="handleTimeEstimateCancel"
-                class="text-sm h-8 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-24"
-              />
-              <span
-                v-show="!isEditingTimeEstimate"
-                @click="isEditingTimeEstimate = true"
-                :class="[
-                  'block w-full h-8 text-sm cursor-text hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 transition-colors flex items-center',
-                  task.estimatedHours ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
-                ]"
-              >
-                {{ task.estimatedHours ? `${task.estimatedHours}h` : 'Empty' }}
-              </span>
-            </div>
+          <div v-if="canEditTask" class="flex-1 min-w-0 w-full min-h-8 flex items-center" @click="onTimeEstimateCellClick">
+            <input
+              v-show="isEditingTimeEstimate"
+              ref="timeEstimateInputRef"
+              v-model.number="localTimeEstimate"
+              type="number"
+              min="0"
+              step="0.5"
+              @blur="handleTimeEstimateBlur"
+              @keydown.enter="handleTimeEstimateBlur"
+              @keydown.esc="handleTimeEstimateCancel"
+              @click.stop
+              class="text-sm h-8 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full min-w-0 flex-1"
+            />
+            <span
+              v-show="!isEditingTimeEstimate"
+              :class="[
+                'block w-full min-h-8 text-sm cursor-text rounded px-2 transition-colors flex items-center',
+                task.estimatedHours ? 'text-gray-900 dark:text-white' : 'text-record-empty'
+              ]"
+            >
+              {{ task.estimatedHours ? `${task.estimatedHours}h` : 'Empty' }}
+            </span>
           </div>
           <span
             v-else
             :class="[
               'block w-full min-h-8 text-sm rounded px-2 py-1 cursor-default select-none bg-gray-50 dark:bg-gray-800/60 flex items-center',
-              task.estimatedHours ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+              task.estimatedHours ? 'text-gray-900 dark:text-white' : 'text-record-empty'
             ]"
           >{{ task.estimatedHours ? `${task.estimatedHours}h` : 'Empty' }}</span>
         </template>
@@ -535,7 +520,7 @@
                 <span
                   :class="[
                     'text-sm flex-1 truncate',
-                    task.assignedTo ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+                    task.assignedTo ? 'text-gray-900 dark:text-white' : 'text-record-empty'
                   ]"
                 >
                   {{ task.assignedTo ? getUserDisplayName(task.assignedTo) : 'Empty' }}
@@ -586,7 +571,7 @@
             <span
               :class="[
                 'text-sm',
-                task.assignedTo ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+                task.assignedTo ? 'text-gray-900 dark:text-white' : 'text-record-empty'
               ]"
             >
               {{ task.assignedTo ? getUserDisplayName(task.assignedTo) : 'Empty' }}
@@ -689,7 +674,7 @@
               </span>
             </span>
             <span v-else-if="getRelatedToDisplay(task)" class="min-w-0 flex-1 truncate">{{ getRelatedToDisplay(task) }}</span>
-            <span v-else class="min-w-0 flex-1 text-gray-400 dark:text-gray-500">Click to link record</span>
+            <span v-else class="min-w-0 flex-1 text-record-empty">Click to link record</span>
           </button>
 
           <div v-else class="w-full min-w-0 min-h-8 text-sm text-gray-900 dark:text-white rounded px-2 py-1 cursor-default select-none bg-gray-50 dark:bg-gray-800/60 flex items-center">
@@ -707,7 +692,7 @@
               </span>
             </span>
             <span v-else-if="getRelatedToDisplay(task)" class="truncate">{{ getRelatedToDisplay(task) }}</span>
-            <span v-else class="text-gray-400 dark:text-gray-500">Empty</span>
+            <span v-else class="text-record-empty">Empty</span>
           </div>
         </template>
 
@@ -728,7 +713,7 @@
                 {{ tag }}
               </span>
             </div>
-            <span v-else class="text-gray-400 dark:text-gray-500">Click to add tags</span>
+            <span v-else class="text-record-empty">Click to add tags</span>
           </button>
 
           <div v-else class="w-full min-w-0 min-h-8 text-sm text-gray-900 dark:text-white rounded px-2 py-1 cursor-default select-none bg-gray-50 dark:bg-gray-800/60 flex items-center">
@@ -741,7 +726,7 @@
                 {{ tag }}
               </span>
             </div>
-            <span v-else class="text-gray-400 dark:text-gray-500">Empty</span>
+            <span v-else class="text-record-empty">Empty</span>
           </div>
         </template>
         </RecordStateSection>
@@ -773,6 +758,161 @@
         :record-id="task._id"
         @close="handleEmbedClose"
       >
+        <!-- Quick preview: Prev/Next in header (left of "Task") -->
+        <template v-if="embed && quickPreviewNav" #header-prefix>
+          <div class="flex items-center gap-1 mr-2">
+            <button
+              type="button"
+              class="inline-flex h-7 w-7 items-center justify-center rounded border border-gray-200 text-gray-500 transition-colors dark:border-gray-700 dark:text-gray-400 shrink-0"
+              :class="quickPreviewNav.canPrevious ? 'hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200' : 'opacity-40 cursor-not-allowed'"
+              :disabled="!quickPreviewNav.canPrevious"
+              aria-label="Previous task"
+              title="Previous task"
+              @click="quickPreviewNav.onPrev()"
+            >
+              <ArrowLeftIcon class="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              class="inline-flex h-7 w-7 items-center justify-center rounded border border-gray-200 text-gray-500 transition-colors dark:border-gray-700 dark:text-gray-400 shrink-0"
+              :class="quickPreviewNav.canNext ? 'hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200' : 'opacity-40 cursor-not-allowed'"
+              :disabled="!quickPreviewNav.canNext"
+              aria-label="Next task"
+              title="Next task"
+              @click="quickPreviewNav.onNext()"
+            >
+              <ArrowRightIcon class="h-4 w-4" />
+            </button>
+          </div>
+        </template>
+        <template v-if="embed" #header-actions>
+          <button
+            type="button"
+            class="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            aria-label="Open in new tab"
+            title="Open in new tab"
+            @click="openTaskInNewTab"
+          >
+            <ArrowTopRightOnSquareIcon class="w-5 h-5" />
+          </button>
+          <button
+            type="button"
+            @click="showEditDrawer = true"
+            class="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            aria-label="Edit task"
+            title="Edit task"
+          >
+            <PencilSquareIcon class="w-5 h-5" />
+          </button>
+          <button
+            type="button"
+            ref="tagHeaderButtonRef"
+            @click="handleTagIconClick($event)"
+            :class="[
+              'relative inline-flex items-center justify-center p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
+              hasTaskTags
+                ? 'text-indigo-600 dark:text-indigo-400'
+                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+            ]"
+            aria-label="Tag"
+            title="Tag"
+          >
+            <TagIcon class="block w-5 h-5" />
+            <span
+              v-if="hasTaskTags"
+              class="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-indigo-600 dark:text-indigo-400"
+            ></span>
+          </button>
+          <button
+            type="button"
+            @click="copyTaskUrl"
+            class="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            aria-label="Copy URL"
+            title="Copy URL"
+          >
+            <ClipboardDocumentIcon class="w-5 h-5" />
+          </button>
+          <button
+            type="button"
+            @click="handleToggleFollow"
+            :class="[
+              'p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
+              isFollowing ? 'text-yellow-500 dark:text-yellow-400' : ''
+            ]"
+            :aria-label="isFollowing ? 'Unstar' : 'Star'"
+            :title="isFollowing ? 'Unstar' : 'Star'"
+          >
+            <StarIcon v-if="!isFollowing" class="w-5 h-5" />
+            <StarIconSolid v-else class="w-5 h-5" />
+          </button>
+          <Menu as="div" class="relative">
+            <MenuButton
+              class="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-label="More actions"
+            >
+              <EllipsisVerticalIcon class="w-5 h-5" />
+            </MenuButton>
+            <transition
+              enter-active-class="transition ease-out duration-100"
+              enter-from-class="transform opacity-0 scale-95"
+              enter-to-class="transform opacity-100 scale-100"
+              leave-active-class="transition ease-in duration-75"
+              leave-from-class="transform opacity-100 scale-100"
+              leave-to-class="transform opacity-0 scale-95"
+            >
+              <MenuItems
+                class="absolute right-0 top-full mt-2 w-48 rounded-lg shadow-xl py-1 bg-white dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/10 z-50"
+              >
+                <MenuItem v-slot="{ active }">
+                  <button
+                    @click="handleDuplicate"
+                    :class="[
+                      'w-full text-left px-4 py-2 text-sm transition-colors duration-150 flex items-center gap-2',
+                      active ? 'bg-gray-100 dark:bg-gray-700' : 'text-gray-700 dark:text-gray-200'
+                    ]"
+                  >
+                    <span>Duplicate</span>
+                  </button>
+                </MenuItem>
+                <MenuItem v-slot="{ active }">
+                  <button
+                    @click="handleExport"
+                    :class="[
+                      'w-full text-left px-4 py-2 text-sm transition-colors duration-150 flex items-center gap-2',
+                      active ? 'bg-gray-100 dark:bg-gray-700' : 'text-gray-700 dark:text-gray-200'
+                    ]"
+                  >
+                    <span>Export</span>
+                  </button>
+                </MenuItem>
+                <MenuItem v-slot="{ active }">
+                  <button
+                    @click="showEmailModal = true"
+                    :class="[
+                      'w-full text-left px-4 py-2 text-sm transition-colors duration-150 flex items-center gap-2',
+                      active ? 'bg-gray-100 dark:bg-gray-700' : 'text-gray-700 dark:text-gray-200'
+                    ]"
+                  >
+                    <EnvelopeIcon class="w-4 h-4" />
+                    <span>Email assignee</span>
+                  </button>
+                </MenuItem>
+                <hr class="my-1 border-gray-200 dark:border-gray-700" />
+                <MenuItem v-slot="{ active }">
+                  <button
+                    @click="handleDelete"
+                    :class="[
+                      'w-full text-left px-4 py-2 text-sm transition-colors duration-150 flex items-center gap-2',
+                      active ? 'bg-gray-100 dark:bg-gray-700' : 'text-red-600 dark:text-red-400'
+                    ]"
+                  >
+                    <span>Delete</span>
+                  </button>
+                </MenuItem>
+              </MenuItems>
+            </transition>
+          </Menu>
+        </template>
         <!-- Activity Tab (Combined Comments + Timeline) -->
         <template #tab-activity>
           <ActivitySection
@@ -806,15 +946,24 @@
             <!-- Related Records header with Link action -->
             <div class="record-context-panel__header flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white dark:bg-gray-900">
               <h2 class="text-base font-semibold text-gray-900 dark:text-white">Related</h2>
-              <button
-                v-if="canLinkRecords"
-                type="button"
-                @click="openLinkRecordDrawer"
-                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
-              >
-                <PlusIcon class="w-4 h-4" />
-                Link record
-              </button>
+              <div v-if="canLinkRecords" class="flex items-center gap-2">
+                <button
+                  type="button"
+                  @click="openAddRecordDrawer"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                >
+                  <PlusIcon class="w-4 h-4" />
+                  Add record
+                </button>
+                <button
+                  type="button"
+                  @click="openLinkRecordDrawer"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                >
+                  <LinkIcon class="w-4 h-4" />
+                  Link record
+                </button>
+              </div>
             </div>
             <!-- Related Records content -->
             <div class="flex-1 min-h-0 overflow-y-auto p-4">
@@ -1218,11 +1367,21 @@
     source-app-key="platform"
     source-module-key="tasks"
     :multiple="true"
-    title="Link Record"
+    :allow-create="allowCreateFromLinkDrawer"
+    :create-and-link="allowCreateFromLinkDrawer"
+    :title="allowCreateFromLinkDrawer ? 'Add and Link Records' : 'Link Record'"
     :context="linkRecordDrawerContext"
     :preselected-ids="linkedRecordIds"
-    @close="showLinkRecordDrawer = false"
+    @close="closeLinkRecordDrawer"
     @linked="handleLinkRecordDrawerLinked"
+    @create="handleLinkRecordDrawerCreate"
+  />
+  <CreateRecordDrawer
+    v-if="showAddRelatedRecordDrawer && addRelatedRecordModuleKey"
+    :isOpen="showAddRelatedRecordDrawer"
+    :moduleKey="addRelatedRecordModuleKey"
+    @close="closeAddRelatedRecordDrawer"
+    @saved="handleAddRelatedRecordSaved"
   />
 
   <Teleport to="body">
@@ -1370,6 +1529,8 @@ import { useTaskSectionDataProviders } from '@/components/record-page/composable
 import { useRecordLoading } from '@/components/record-page/composables/useRecordLoading';
 import { useRecordHeaderActions } from '@/components/record-page/composables/useRecordHeaderActions';
 import { useRecordPageLifecycle } from '@/components/record-page/composables/useRecordPageLifecycle';
+import { useStickyTitleRow } from '@/components/record-page/composables/useStickyTitleRow';
+import RecordPageTitleRow from '@/components/record-page/RecordPageTitleRow.vue';
 import EditableTitle from '@/components/record-page/EditableTitle.vue';
 import TaskDescriptionEditor from '@/components/record-page/TaskDescriptionEditor.vue';
 import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
@@ -1380,6 +1541,7 @@ import {
   sortActivityEventsByDate
 } from '@/components/record-page/activityEventModel';
 import LinkRecordsDrawer from '@/components/common/LinkRecordsDrawer.vue';
+import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import TaskEditDrawer from '@/components/tasks/TaskEditDrawer.vue';
 import TaskRelatedToField from '@/components/tasks/TaskRelatedToField.vue';
 import DeleteConfirmationModal from '@/components/common/DeleteConfirmationModal.vue';
@@ -1407,6 +1569,7 @@ import {
   ArrowPathIcon,
   ArrowLeftIcon,
   ArrowRightIcon,
+  ArrowTopRightOnSquareIcon,
   ArrowDownTrayIcon,
   ClipboardDocumentIcon,
   PlusIcon,
@@ -1442,6 +1605,7 @@ const router = useRouter();
 const authStore = useAuthStore();
 const { openTab, replaceActiveTab, activeTabId, updateTabTitle, findTabById } = useTabs();
 const recordLayoutIsMobile = inject('recordLayoutIsMobile', ref(false));
+const quickPreviewNav = inject('quickPreviewNav', null);
 
 const props = defineProps({
   /** When true, renders in embed mode for QuickPreviewDrawer (mobile layout, no header, close button) */
@@ -1519,12 +1683,14 @@ const users = ref([]);
 const activityTimelineRef = ref(null);
 const rightPaneRef = ref(null);
 const activityPaneReady = ref(false); // hide activity content until scrolled to bottom (avoids top flash)
-const leftPaneScrollTop = ref(0);
-const leftPaneScrollElement = ref(null);
-const isLeftTitleSticky = ref(false);
-const STICKY_TITLE_ENABLE_OFFSET = 10;
-const STICKY_TITLE_DISABLE_OFFSET = 2;
 const TASK_MODULE_NAME = 'Task';
+const {
+  isLeftTitleSticky,
+  attach: attachStickyTitle,
+  attachWhenReady: attachStickyTitleWhenReady,
+  detach: detachStickyTitle,
+  reset: resetStickyTitle
+} = useStickyTitleRow(taskRecordPageRootRef);
 const isCreatingSubtask = ref(false);
 const isSavingNewSubtask = ref(false);
 const isDeletingSubtask = ref(false);
@@ -1592,8 +1758,28 @@ let commentReactionTooltipHideTimer = null;
 let commentReactionTooltipShowTimer = null;
 
 const showLinkRecordDrawer = ref(false);
+const allowCreateFromLinkDrawer = ref(false);
+const showAddRelatedRecordDrawer = ref(false);
+const addRelatedRecordModuleKey = ref('');
+const pendingAddRelatedLinkPayload = ref(null);
 const linkRecordDrawerContext = computed(() => (task.value?._id ? { taskId: task.value._id } : {}));
-const openLinkRecordDrawer = () => { showLinkRecordDrawer.value = true; };
+const openLinkRecordDrawer = () => {
+  allowCreateFromLinkDrawer.value = false;
+  showLinkRecordDrawer.value = true;
+};
+const openAddRecordDrawer = () => {
+  allowCreateFromLinkDrawer.value = true;
+  showLinkRecordDrawer.value = true;
+};
+const closeLinkRecordDrawer = () => {
+  showLinkRecordDrawer.value = false;
+  allowCreateFromLinkDrawer.value = false;
+};
+const closeAddRelatedRecordDrawer = () => {
+  showAddRelatedRecordDrawer.value = false;
+  addRelatedRecordModuleKey.value = '';
+  pendingAddRelatedLinkPayload.value = null;
+};
 const openLeftSection = (sectionKey) => {
   expandedLeftSection.value = sectionKey;
 };
@@ -1768,6 +1954,16 @@ const isEditingTimeEstimate = ref(false);
 const localTimeEstimate = ref(0);
 const timeEstimateInputRef = ref(null);
 
+const onStartDateCellClick = () => {
+  if (!isEditingStartDate.value) isEditingStartDate.value = true;
+};
+const onDueDateCellClick = () => {
+  if (!isEditingDueDate.value) isEditingDueDate.value = true;
+};
+const onTimeEstimateCellClick = () => {
+  if (!isEditingTimeEstimate.value) isEditingTimeEstimate.value = true;
+};
+
 const relatedToPopoverAnchorEl = ref(null);
 const relatedToPopoverRef = ref(null);
 const showRelatedToPopover = ref(false);
@@ -1798,7 +1994,7 @@ const hasTaskTags = computed(() => Array.isArray(task.value?.tags) && task.value
 
 const persistRecordTagsForTask = async (cleaned) => {
   if (!task.value || !canEditTask.value) return;
-  const response = await apiClient.put(`/tasks/${task.value._id}`, { tags: cleaned });
+  const response = await apiClient.put(`/tasks/${task.value._id}/tags`, { tags: cleaned });
   if (response?.success && response.data) {
     task.value.tags = Array.isArray(response.data.tags) ? response.data.tags : cleaned;
   } else {
@@ -2375,6 +2571,7 @@ const taskSectionSources = {
   startCreateSubtask: (...args) => startCreateSubtask(...args),
   loadMoreSubtasks,
   openLinkRecordDrawer,
+  openAddRecordDrawer,
   getDescription: (record) => String(record?.description || ''),
   canEditDescription: () => canEditTask.value,
   saveDescription: saveTaskDescriptionFromSection,
@@ -4004,7 +4201,7 @@ const formatPriority = (priority) => {
 };
 
 const getPriorityTextClass = (priority) => {
-  if (!priority) return 'text-gray-400 dark:text-gray-500';
+  if (!priority) return 'text-record-empty';
   return 'text-gray-900 dark:text-white';
 };
 
@@ -5285,7 +5482,7 @@ const handleLinkRecordDrawerLinked = async ({ moduleKey, ids, context, relations
     const idsToLink = ids.filter(id => !existingIds.has(String(id)));
 
     if (idsToLink.length === 0) {
-      showLinkRecordDrawer.value = false;
+      closeLinkRecordDrawer();
       return;
     }
 
@@ -5350,11 +5547,37 @@ const handleLinkRecordDrawerLinked = async ({ moduleKey, ids, context, relations
       }
     }
     await fetchRelatedRecords();
-    showLinkRecordDrawer.value = false;
+    closeLinkRecordDrawer();
   } catch (err) {
     console.error('Error linking record:', err);
     alert(`Error linking ${moduleKey}. Please try again.`);
   }
+};
+
+const handleLinkRecordDrawerCreate = (payload = {}) => {
+  const moduleKey = String(payload?.moduleKey || '').toLowerCase().trim();
+  if (!moduleKey) return;
+  pendingAddRelatedLinkPayload.value = payload;
+  addRelatedRecordModuleKey.value = moduleKey;
+  closeLinkRecordDrawer();
+  showAddRelatedRecordDrawer.value = true;
+};
+
+const handleAddRelatedRecordSaved = async (savedRecord) => {
+  const createdId = savedRecord?._id || savedRecord?.id;
+  const payload = pendingAddRelatedLinkPayload.value;
+  if (!createdId || !payload?.moduleKey) {
+    closeAddRelatedRecordDrawer();
+    return;
+  }
+  closeAddRelatedRecordDrawer();
+  await handleLinkRecordDrawerLinked({
+    moduleKey: payload.moduleKey,
+    ids: [createdId],
+    context: payload.context || linkRecordDrawerContext.value,
+    relationshipKey: payload.relationshipKey || undefined,
+    targetAppKey: payload.targetAppKey || undefined
+  });
 };
 
 const {
@@ -5422,6 +5645,31 @@ const {
     router.push('/tasks');
   }
 });
+
+function getTaskPageUrl() {
+  if (!task.value?._id) return '';
+  const path = `/tasks/${task.value._id}`;
+  const resolved = router.resolve(path);
+  return resolved.href.startsWith('http') ? resolved.href : new URL(resolved.href, window.location.origin).href;
+}
+
+function openTaskInNewTab() {
+  if (!task.value?._id) return;
+  const path = `/tasks/${task.value._id}`;
+  openTab(path, { title: 'Task', background: false, insertAdjacent: true });
+  handleEmbedClose();
+}
+
+async function copyTaskUrl() {
+  const url = getTaskPageUrl();
+  if (!url) return;
+  try {
+    await navigator.clipboard.writeText(url);
+    alert('URL copied to clipboard!');
+  } catch (err) {
+    console.error('Error copying URL:', err);
+  }
+}
 
 const handleTaskEditSaved = async () => {
   showEditDrawer.value = false;
@@ -5492,60 +5740,9 @@ watch(rightRelatedModuleOpen, () => {
   persistRightRelatedAccordionState();
 }, { deep: true });
 
-const updateStickyTitleState = (scrollTop) => {
-  if (isLeftTitleSticky.value) {
-    if (scrollTop <= STICKY_TITLE_DISABLE_OFFSET) {
-      isLeftTitleSticky.value = false;
-    }
-    return;
-  }
-
-  if (scrollTop >= STICKY_TITLE_ENABLE_OFFSET) {
-    isLeftTitleSticky.value = true;
-  }
-};
-
-const handleLeftPaneScrollForStickyTitle = (event) => {
-  const nextScrollTop = event?.target?.scrollTop || 0;
-  leftPaneScrollTop.value = nextScrollTop;
-  updateStickyTitleState(nextScrollTop);
-};
-
-const detachLeftPaneScrollListener = () => {
-  if (!leftPaneScrollElement.value) return;
-  leftPaneScrollElement.value.removeEventListener('scroll', handleLeftPaneScrollForStickyTitle);
-  leftPaneScrollElement.value = null;
-};
-
-const attachLeftPaneScrollListener = () => {
-  const rootEl = taskRecordPageRootRef.value;
-  const leftPaneEl = rootEl instanceof HTMLElement
-    ? rootEl.querySelector('.record-page-layout__left')
-    : null;
-  if (!leftPaneEl) return false;
-  if (leftPaneScrollElement.value === leftPaneEl) {
-    const nextScrollTop = leftPaneEl.scrollTop || 0;
-    leftPaneScrollTop.value = nextScrollTop;
-    updateStickyTitleState(nextScrollTop);
-    return true;
-  }
-  detachLeftPaneScrollListener();
-  leftPaneScrollElement.value = leftPaneEl;
-  const nextScrollTop = leftPaneEl.scrollTop || 0;
-  leftPaneScrollTop.value = nextScrollTop;
-  updateStickyTitleState(nextScrollTop);
-  leftPaneEl.addEventListener('scroll', handleLeftPaneScrollForStickyTitle, { passive: true });
-  return true;
-};
-
 watch(loading, (isLoading) => {
   if (isLoading) return;
-  nextTick(() => {
-    if (attachLeftPaneScrollListener()) return;
-    requestAnimationFrame(() => {
-      attachLeftPaneScrollListener();
-    });
-  });
+  attachStickyTitleWhenReady();
 });
 
 useRecordPageLifecycle({
@@ -5568,9 +5765,7 @@ useRecordPageLifecycle({
   },
   onActivated: () => {
     nextTick(() => {
-      if (attachLeftPaneScrollListener()) return;
-      isLeftTitleSticky.value = false;
-      leftPaneScrollTop.value = 0;
+      if (!attachStickyTitle()) resetStickyTitle();
     });
   },
   onMount: [
@@ -5596,7 +5791,7 @@ useRecordPageLifecycle({
     () => {
       cancelCommentReactionTooltipShow();
       cancelCommentReactionTooltipHide();
-      detachLeftPaneScrollListener();
+      detachStickyTitle();
       window.removeEventListener('scroll', updateCommentReactionPickerPosition, true);
       window.removeEventListener('scroll', updateCommentReactionTooltipPosition, true);
       window.removeEventListener('scroll', updateTagPopoverPosition, true);
@@ -5713,7 +5908,8 @@ const taskActivityUi = createTaskActivityUi({
   getSystemEventMessage,
   handleShowMore,
   toggleTaskEmailThread,
-  createTaskFromEmailMessage
+  createTaskFromEmailMessage,
+  getTagChipClass: getTaskTagChipClass
 });
 </script>
 

@@ -4,6 +4,7 @@ const {
     getDeals, 
     getDealById, 
     updateDeal, 
+    updateDealTags,
     deleteDeal,
     addNote,
     updateDealNote,
@@ -54,6 +55,8 @@ router.route('/:id')
     .get(checkPermission('deals', 'view'), getDealById)
     .put(checkPermission('deals', 'edit'), updateDeal)
     .delete(checkPermission('deals', 'delete'), deleteDeal);
+router.put('/:id/tags', checkPermission('deals', 'edit'), updateDealTags);
+router.patch('/:id/tags', checkPermission('deals', 'edit'), updateDealTags);
 
 // Update deal stage
 router.patch('/:id/stage', checkPermission('deals', 'edit'), updateStage);

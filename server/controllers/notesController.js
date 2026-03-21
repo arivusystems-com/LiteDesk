@@ -12,6 +12,7 @@
 const { resolvePeopleAppContext } = require('../utils/peopleAppContextResolver');
 const { resolveNotes, normalizeNote } = require('../utils/notesResolver');
 const People = require('../models/People');
+const PersonNote = require('../models/PersonNote');
 const Organization = require('../models/Organization');
 const User = require('../models/User');
 
@@ -39,10 +40,10 @@ exports.getEntityNotes = async (req, res) => {
       });
     }
 
-    // Fetch the person record
     const person = await People.findOne({
       _id: entityId,
-      organizationId: req.user.organizationId
+      organizationId: req.user.organizationId,
+      deletedAt: null
     }).lean();
 
     if (!person) {
@@ -89,8 +90,12 @@ exports.getEntityNotes = async (req, res) => {
       userAppAccess: userAppAccess
     });
 
-    // Get raw notes from person record
-    const rawNotes = person.notes || [];
+    const rawNotes = await PersonNote.find({
+      personId: entityId,
+      organizationId: req.user.organizationId
+    })
+      .sort({ created_at: -1 })
+      .lean();
 
     // Resolve and filter notes
     const notesResult = resolveNotes({
@@ -178,10 +183,10 @@ exports.createNote = async (req, res) => {
       });
     }
 
-    // Fetch the person record
     const person = await People.findOne({
       _id: entityId,
-      organizationId: req.user.organizationId
+      organizationId: req.user.organizationId,
+      deletedAt: null
     });
 
     if (!person) {
@@ -243,39 +248,40 @@ exports.createNote = async (req, res) => {
     const user = await User.findById(req.user._id).select('firstName lastName username');
     const userName = user ? (user.firstName || user.lastName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : user.username) || 'User' : 'System';
 
-    // Create new note
-    const newNote = {
+    const doc = await PersonNote.create({
+      organizationId: req.user.organizationId,
+      personId: entityId,
       text: content.trim(),
       created_by: req.user._id,
       created_at: new Date(),
-      appContext: appContextResult.appKey, // Include app context
-      updated_at: new Date()
-    };
-
-    // Add note to person
-    person.notes.push(newNote);
-
-    // Create activity log entry for note creation
-    person.activityLogs.push({
-      user: userName,
-      userId: req.user._id,
-      action: 'created a note',
-      details: { 
-        appKey: appContextResult.appKey,
-        noteLength: content.trim().length
-      },
       appContext: appContextResult.appKey,
-      timestamp: new Date()
+      updated_at: new Date()
     });
 
-    // Save person record
-    await person.save({ runValidators: true });
+    await People.updateOne(
+      { _id: entityId, organizationId: req.user.organizationId, deletedAt: null },
+      {
+        $push: {
+          activityLogs: {
+            user: userName,
+            userId: req.user._id,
+            action: 'created a note',
+            details: {
+              appKey: appContextResult.appKey,
+              noteLength: content.trim().length
+            },
+            appContext: appContextResult.appKey,
+            timestamp: new Date()
+          }
+        }
+      }
+    );
 
-    // Normalize and populate the created note
+    const newNote = doc.toObject ? doc.toObject() : doc;
     const normalizedNote = normalizeNote(newNote);
     if (normalizedNote) {
       normalizedNote.authorName = userName;
-      normalizedNote.id = newNote._id || null;
+      normalizedNote.id = doc._id || null;
     }
 
     res.json({

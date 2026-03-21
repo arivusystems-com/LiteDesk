@@ -108,8 +108,8 @@ export const PEOPLE_FIELD_METADATA: Record<string, FieldMetadata> = {
   // SYSTEM FIELDS (platform-managed, read-only, infrastructure-scoped)
   // Type A: Infrastructure (never visible): organizationId, legacyContactId
   // Type B: Audit (visible, read-only): createdAt, updatedAt, createdBy
-  // assignedTo: system but editable (special case for People)
-  // Type C: Computed: activityLogs, derivedStatus
+  // assignedTo belongs to core identity (editable owner assignment)
+  // Type C: Computed: activityLogs, derivedStatus, descriptionVersions
   // ==========================================================================
   organizationId: {
     owner: 'system',
@@ -128,15 +128,14 @@ export const PEOPLE_FIELD_METADATA: Record<string, FieldMetadata> = {
     isVisibleInConfig: true,
   },
   assignedTo: {
-    owner: 'system',
-    intent: 'system',
+    owner: 'core',
+    intent: 'identity',
     fieldScope: 'CORE',
     editable: true,
-    allowOnCreate: true, // Explicitly allowed at creation time
     filterable: true,
     filterType: 'user',
     filterPriority: 1,
-    isSystem: true,
+    isSystem: false,
     isVisibleInConfig: true,
   },
   legacyContactId: {
@@ -172,23 +171,16 @@ export const PEOPLE_FIELD_METADATA: Record<string, FieldMetadata> = {
     isComputed: true,
     isVisibleInConfig: false, // Managed internally, too verbose for config
   },
-  notes: {
-    owner: 'system',
-    intent: 'system',
-    fieldScope: 'CORE',
-    editable: false,
-    isSystem: true,
-    isVisibleInConfig: true,
-  },
-  attachments: {
-    owner: 'system',
-    intent: 'system',
-    fieldScope: 'CORE',
-    editable: false,
-    isSystem: true,
-    isVisibleInConfig: true,
-  },
   derivedStatus: {
+    owner: 'system',
+    intent: 'system',
+    fieldScope: 'CORE',
+    editable: false,
+    isSystem: true,
+    isComputed: true,
+    isVisibleInConfig: true,
+  },
+  descriptionVersions: {
     owner: 'system',
     intent: 'system',
     fieldScope: 'CORE',
@@ -438,7 +430,12 @@ export const PEOPLE_QUICK_CREATE_DEFAULT = [
   'last_name',
   'email',
   'phone',
+  'mobile',
   'organization',
+  'assignedTo',
+  'source',
+  'do_not_contact',
+  'tags',
 ];
 
 /**

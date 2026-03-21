@@ -498,6 +498,11 @@ exports.updateDeal = async (req, res) => {
                 if (['_id', '__v', 'organizationId', 'createdAt', 'updatedAt', 'modifiedBy'].includes(fieldKey)) {
                     continue;
                 }
+                // Tags are a shared record-page capability and must remain editable
+                // even if module field metadata does not explicitly define them.
+                if (fieldKey === 'tags') {
+                    continue;
+                }
                 
                 const validation = validateFieldWrite(fieldKey, moduleDef.fields, req.user, 'deals');
                 if (!validation.allowed) {
@@ -517,6 +522,38 @@ exports.updateDeal = async (req, res) => {
                     violations: fieldViolations
                 });
             }
+        }
+
+        // Fast path: tags-only update should not be blocked by unrelated
+        // lifecycle/stage validators. This keeps tag add/remove reliable.
+        const nonSystemKeys = Object.keys(req.body || {}).filter((fieldKey) => !['_id', '__v', 'organizationId', 'createdAt', 'updatedAt', 'modifiedBy'].includes(fieldKey));
+        if (nonSystemKeys.length === 1 && nonSystemKeys[0] === 'tags') {
+            const nextTags = Array.isArray(req.body.tags)
+                ? req.body.tags.map((tag) => String(tag || '').trim()).filter(Boolean)
+                : [];
+            const updatedForTags = await Deal.findOneAndUpdate(
+                { _id: req.params.id, organizationId: req.user.organizationId, deletedAt: null },
+                {
+                    $set: { tags: nextTags, modifiedBy: req.user._id },
+                    $unset: { 'customFields.tags': 1 }
+                },
+                { new: true, runValidators: true }
+            )
+                .populate('contactId', 'first_name last_name email')
+                .populate('ownerId', 'firstName lastName email')
+                .populate('accountId', 'name industry')
+                .populate('dealPeople.personId', 'first_name last_name email')
+                .populate('dealOrganizations.organizationId', 'name');
+
+            if (!updatedForTags) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Deal not found or access denied.'
+                });
+            }
+
+            const { flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+            return res.status(200).json({ success: true, data: flattenCustomFieldsForResponse(updatedForTags) });
         }
         
         const appKey = req.appKey || req.query.appKey || 'SALES';
@@ -683,6 +720,12 @@ exports.updateDeal = async (req, res) => {
             if (!Array.isArray(updatedDeal.activityLogs)) updatedDeal.activityLogs = [];
             updatedDeal.activityLogs.push(...fieldChangeLogs);
         }
+        // If tags are updated via canonical field, ensure stale customFields.tags
+        // cannot resurrect old values on flattened responses.
+        if (Object.prototype.hasOwnProperty.call(req.body || {}, 'tags') && updatedDeal.customFields && Object.prototype.hasOwnProperty.call(updatedDeal.customFields, 'tags')) {
+            delete updatedDeal.customFields.tags;
+            updatedDeal.markModified('customFields');
+        }
 
         if (Object.prototype.hasOwnProperty.call(req.body || {}, 'description') && previousDescriptionExists) {
             if (!Array.isArray(updatedDeal.descriptionVersions)) updatedDeal.descriptionVersions = [];
@@ -724,6 +767,48 @@ exports.updateDeal = async (req, res) => {
             success: false,
             message: 'Error updating deal.', 
             error: error.message 
+        });
+    }
+};
+
+// @desc    Update deal tags only
+// @route   PATCH /api/deals/:id/tags
+// @access  Private
+exports.updateDealTags = async (req, res) => {
+    try {
+        const nextTags = Array.isArray(req.body?.tags)
+            ? req.body.tags.map((tag) => String(tag || '').trim()).filter(Boolean)
+            : [];
+
+        const { flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+        const updatedDeal = await Deal.findOneAndUpdate(
+            { _id: req.params.id, organizationId: req.user.organizationId, deletedAt: null },
+            {
+                $set: { tags: nextTags, modifiedBy: req.user._id },
+                $unset: { 'customFields.tags': 1 }
+            },
+            { new: true, runValidators: true }
+        )
+            .populate('contactId', 'first_name last_name email')
+            .populate('ownerId', 'firstName lastName email')
+            .populate('accountId', 'name industry')
+            .populate('dealPeople.personId', 'first_name last_name email')
+            .populate('dealOrganizations.organizationId', 'name');
+
+        if (!updatedDeal) {
+            return res.status(404).json({
+                success: false,
+                message: 'Deal not found or access denied.'
+            });
+        }
+
+        return res.status(200).json({ success: true, data: flattenCustomFieldsForResponse(updatedDeal) });
+    } catch (error) {
+        console.error('Update deal tags error:', error);
+        return res.status(400).json({
+            success: false,
+            message: 'Error updating deal tags.',
+            error: error.message
         });
     }
 };

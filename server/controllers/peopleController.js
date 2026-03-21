@@ -543,8 +543,7 @@ exports.getById = async (req, res) => {
       .populate('organization', 'name industry status email phone website')
       .populate('assignedTo', 'firstName lastName email avatar')
       .populate('createdBy', 'firstName lastName email avatar username')
-      .populate('lead_owner', 'firstName lastName email avatar username')
-      .populate('notes.created_by', 'firstName lastName');
+      .populate('lead_owner', 'firstName lastName email avatar username');
     if (!record) return res.status(404).json({ success: false, message: 'Not found' });
     res.json({ success: true, data: flattenCustomFieldsForResponse(record) });
   } catch (error) {
@@ -676,12 +675,34 @@ exports.update = async (req, res) => {
     // Check if lifecycle or type fields changed
     const { hasLifecycleOrTypeChanged, computeAndSetDerivedStatus, hasConfiguration } = require('../services/derivedStatusService');
     const shouldComputeDerivedStatus = hasLifecycleOrTypeChanged('people', null, updateData);
-    
-    let previous = null;
-    if (shouldComputeDerivedStatus) {
-      previous = await People.findOne(
-        { _id: req.params.id, organizationId: req.user.organizationId, deletedAt: null }
-      ).lean();
+
+    // Load previous for derived-status logic and for activity log (field-level changes)
+    const previous = await People.findOne(
+      { _id: req.params.id, organizationId: req.user.organizationId, deletedAt: null }
+    ).lean();
+
+    // Push previous description to native descriptionVersions before updating.
+    if (Object.prototype.hasOwnProperty.call(updateData, 'description')) {
+      try {
+        const prevDesc = String(previous?.description ?? previous?.customFields?.description ?? '');
+        const nextDesc = String(updateData.description ?? '');
+        if (prevDesc !== nextDesc) {
+          await People.updateOne(
+            { _id: req.params.id, organizationId: req.user.organizationId, deletedAt: null },
+            {
+              $push: {
+                descriptionVersions: {
+                  content: prevDesc,
+                  createdAt: new Date(),
+                  createdBy: req.user._id
+                }
+              }
+            }
+          );
+        }
+      } catch (versionErr) {
+        console.warn('Description version push (people) failed:', versionErr?.message || versionErr);
+      }
     }
 
     const { buildUpdateWithCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
@@ -729,6 +750,25 @@ exports.update = async (req, res) => {
       }
     }
     
+    // Log field-level changes to RecordActivity for ModuleRecordPage Activity panel (Updates tab)
+    try {
+      const { appendFieldChangeLogs } = require('../utils/recordActivityLogger');
+      const updatedObj = updated.toObject ? updated.toObject() : updated;
+      const prevObj = previous || {};
+      await appendFieldChangeLogs({
+        organizationId: req.user.organizationId,
+        moduleKey: 'people',
+        recordId: req.params.id,
+        authorId: req.user._id,
+        previous: prevObj,
+        updated: updatedObj,
+        updateDataKeys: Object.keys(updateData),
+        fieldLabels: moduleDef && Array.isArray(moduleDef.fields) ? moduleDef.fields : undefined
+      });
+    } catch (logErr) {
+      console.warn('Record activity log (people update) failed:', logErr?.message || logErr);
+    }
+
     // Re-fetch with populated fields to ensure populate works correctly
     const populatedRecord = await People.findById(updated._id)
       .populate('assignedTo', 'firstName lastName email avatar')
@@ -784,60 +824,6 @@ exports.remove = async (req, res) => {
     res.json({ success: true, data: req.params.id, message: 'Moved to trash', retentionExpiresAt: result.retentionExpiresAt });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error deleting record', error: error.message });
-  }
-};
-
-// Add note to person
-exports.addNote = async (req, res) => {
-  try {
-    const { text } = req.body;
-    
-    if (!text || !text.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Note text is required'
-      });
-    }
-    
-    const person = await People.findOneAndUpdate(
-      { 
-        _id: req.params.id, 
-        organizationId: req.user.organizationId,
-        deletedAt: null
-      },
-      {
-        $push: {
-          notes: {
-            text: text.trim(),
-            created_by: req.user._id,
-            created_at: new Date()
-          }
-        }
-      },
-      { new: true, runValidators: true }
-    )
-    .populate('organization', 'name industry status email phone website')
-    .populate('assignedTo', 'firstName lastName email')
-    .populate('notes.created_by', 'firstName lastName');
-    
-    if (!person) {
-      return res.status(404).json({
-        success: false,
-        message: 'Person not found or access denied'
-      });
-    }
-    
-    res.status(200).json({
-      success: true,
-      data: person
-    });
-  } catch (error) {
-    console.error('Add note error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error adding note',
-      error: error.message
-    });
   }
 };
 

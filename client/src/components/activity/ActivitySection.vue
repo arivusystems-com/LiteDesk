@@ -201,7 +201,7 @@
       <RecordActivityTimeline
         v-else
         ref="timelineRef"
-        :events="events"
+        :events="filteredEvents"
         :scroll-to-bottom-on-layout="true"
         :allow-comments="true"
         :allow-attachments="true"
@@ -243,7 +243,7 @@
 </template>
 
 <script setup>
-import { nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue';
 import {
   MagnifyingGlassIcon,
@@ -291,6 +291,21 @@ const emit = defineEmits([
 
 const activitySearchInputRef = ref(null);
 const timelineRef = ref(null);
+
+/** Filter events by type based on Comments / Updates / Email toggles. */
+const filteredEvents = computed(() => {
+  const list = props.events || [];
+  const showComments = props.activityFilterComments;
+  const showUpdates = props.activityFilterUpdates;
+  const showEmail = props.activityFilterEmail;
+  return list.filter((e) => {
+    const type = String(e?.type || '').trim();
+    if (type === 'comment') return showComments;
+    if (type === 'system') return showUpdates;
+    if (type === 'email_thread') return showEmail;
+    return false;
+  });
+});
 
 watch(timelineRef, (value) => {
   if (props.onTimelineRef) props.onTimelineRef(value);

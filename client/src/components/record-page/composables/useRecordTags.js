@@ -1,5 +1,6 @@
 import { ref, computed, watch } from 'vue';
 import apiClient from '@/utils/apiClient';
+const TAG_REMOVE_UNDO_MS = 5000;
 
 const TAG_COLOR_OPTIONS = [
   { key: 'slate', chipClass: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200', dotClass: 'bg-slate-500', swatchClass: 'bg-slate-500' },
@@ -12,9 +13,44 @@ const TAG_COLOR_OPTIONS = [
   { key: 'rose', chipClass: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300', dotClass: 'bg-rose-500', swatchClass: 'bg-rose-500' }
 ];
 
+/** Hash-based default chip class for a tag name (no definitions). Use when context has no getTagChipClass. */
+export function getDefaultTagChipClass(tagNameOrObject) {
+  const name = typeof tagNameOrObject === 'object' && tagNameOrObject != null
+    ? (tagNameOrObject.name || tagNameOrObject.label || tagNameOrObject.title || '')
+    : String(tagNameOrObject || '');
+  const normalized = name.trim().replace(/\s+/g, ' ');
+  if (!normalized) return TAG_COLOR_OPTIONS[0].chipClass;
+  const colorFromObject = typeof tagNameOrObject === 'object' && tagNameOrObject != null && tagNameOrObject.color;
+  const key = (colorFromObject && TAG_COLOR_OPTIONS.some(o => o.key === colorFromObject))
+    ? colorFromObject
+    : (() => {
+        const hash = normalized.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        return TAG_COLOR_OPTIONS[hash % TAG_COLOR_OPTIONS.length].key;
+      })();
+  const option = TAG_COLOR_OPTIONS.find(o => o.key === key) || TAG_COLOR_OPTIONS[0];
+  return option.chipClass;
+}
+
+/** Hash-based fill class for a tag dot (e.g. SVG). Use when context has no getTagChipClass. */
+export function getDefaultTagDotClass(tagNameOrObject) {
+  const name = typeof tagNameOrObject === 'object' && tagNameOrObject != null
+    ? (tagNameOrObject.name || tagNameOrObject.label || tagNameOrObject.title || '')
+    : String(tagNameOrObject || '');
+  const normalized = name.trim().replace(/\s+/g, ' ');
+  if (!normalized) return 'fill-slate-500';
+  const colorFromObject = typeof tagNameOrObject === 'object' && tagNameOrObject != null && tagNameOrObject.color;
+  const key = (colorFromObject && TAG_COLOR_OPTIONS.some(o => o.key === colorFromObject))
+    ? colorFromObject
+    : (() => {
+        const hash = normalized.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        return TAG_COLOR_OPTIONS[hash % TAG_COLOR_OPTIONS.length].key;
+      })();
+  return `fill-${key}-500`;
+}
+
 /**
  * @param {import('vue').Ref<{ _id: string, tags?: string[] }|null>} recordRef
- * @param {{ tagStorageKey: import('vue').ComputedRef<string>|string, canEdit: import('vue').ComputedRef<boolean>|boolean, persistTags: (nextTagNames: string[]) => Promise<void>, instanceTagSource: 'tasks'|'deals', fetchRecord?: () => Promise<void> }} options
+ * @param {{ tagStorageKey: import('vue').ComputedRef<string>|string, canEdit: import('vue').ComputedRef<boolean>|boolean, persistTags: (nextTagNames: string[]) => Promise<void>, instanceTagSource: 'tasks'|'deals'|'people'|'organizations', fetchRecord?: () => Promise<void> }} options
  */
 export function useRecordTags(recordRef, options) {
   const tagStorageKey = typeof options.tagStorageKey === 'function' || (options.tagStorageKey && typeof options.tagStorageKey === 'object' && 'value' in options.tagStorageKey)
@@ -34,6 +70,11 @@ export function useRecordTags(recordRef, options) {
   const tagEditorMode = ref('none');
   const editingTagName = ref('');
   const isSavingTagState = ref(false);
+  const tagSaveError = ref('');
+  const pendingTagRemoval = ref(null); // { tagName, previousTags, nextTags, expiresAt }
+  const pendingTagRemovalTimer = ref(null);
+  const pendingTagRemovalCountdownTimer = ref(null);
+  const pendingTagRemovalSecondsLeft = ref(0);
   const tagEditor = ref({
     name: '',
     color: TAG_COLOR_OPTIONS[0].key,
@@ -41,8 +82,11 @@ export function useRecordTags(recordRef, options) {
   });
 
   const normalizeTagName = (value) => String(value || '').trim().replace(/\s+/g, ' ');
+  const normalizeTagKey = (value) => normalizeTagName(value).toLowerCase();
 
   const hasRecordTags = computed(() => Array.isArray(recordRef.value?.tags) && recordRef.value.tags.length > 0);
+  const hasPendingTagRemoval = computed(() => Boolean(pendingTagRemoval.value));
+  const pendingTagRemovalTagName = computed(() => pendingTagRemoval.value?.tagName || '');
   const hasInstanceTags = computed(() => instanceTagDefinitions.value.length > 0);
   const normalizedTagSearch = computed(() => normalizeTagName(tagSearchQuery.value));
   const filteredInstanceTags = computed(() => {
@@ -66,13 +110,21 @@ export function useRecordTags(recordRef, options) {
     });
   });
 
-  const getTagColorOption = (tagName) => {
-    const definition = instanceTagDefinitions.value.find(tagDef => tagDef.name === tagName);
-    const key = definition?.color || 'slate';
+  const getTagColorOption = (tagNameOrObject) => {
+    const name = typeof tagNameOrObject === 'object' && tagNameOrObject != null
+      ? (tagNameOrObject.name || tagNameOrObject.label || tagNameOrObject.title || '')
+      : String(tagNameOrObject || '').trim();
+    const colorFromObject = typeof tagNameOrObject === 'object' && tagNameOrObject != null && tagNameOrObject.color;
+    const definition = name
+      ? instanceTagDefinitions.value.find(tagDef => String(tagDef.name).toLowerCase() === String(name).toLowerCase())
+      : null;
+    const key = (colorFromObject && TAG_COLOR_OPTIONS.some(o => o.key === colorFromObject))
+      ? colorFromObject
+      : (definition?.color || computeDefaultTagColorKey(name));
     return TAG_COLOR_OPTIONS.find(option => option.key === key) || TAG_COLOR_OPTIONS[0];
   };
-  const getTagChipClass = (tagName) => getTagColorOption(tagName).chipClass;
-  const getTagDotClass = (tagName) => getTagColorOption(tagName).dotClass;
+  const getTagChipClass = (tagNameOrObject) => getTagColorOption(tagNameOrObject).chipClass;
+  const getTagDotClass = (tagNameOrObject) => getTagColorOption(tagNameOrObject).dotClass;
   const computeDefaultTagColorKey = (tagName) => {
     const normalized = normalizeTagName(tagName);
     if (!normalized) return TAG_COLOR_OPTIONS[0].key;
@@ -91,9 +143,15 @@ export function useRecordTags(recordRef, options) {
   const loadTagDefinitionsFromStorage = () => {
     try {
       const raw = localStorage.getItem(tagStorageKey.value);
-      if (!raw) return;
+      if (!raw) {
+        instanceTagDefinitions.value = [];
+        return;
+      }
       const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return;
+      if (!Array.isArray(parsed)) {
+        instanceTagDefinitions.value = [];
+        return;
+      }
       instanceTagDefinitions.value = parsed
         .map((row) => {
           const name = normalizeTagName(row?.name);
@@ -104,6 +162,7 @@ export function useRecordTags(recordRef, options) {
         .filter(Boolean);
     } catch (err) {
       console.error('Failed to read tag definitions:', err);
+      instanceTagDefinitions.value = [];
     }
   };
 
@@ -120,11 +179,40 @@ export function useRecordTags(recordRef, options) {
     saveTagDefinitionsToStorage();
   };
 
+  // Rebuild definitions from live module tags (prunes stale local-only entries),
+  // while preserving color/public metadata for tags that still exist.
+  const syncTagDefinitions = (tagNames = []) => {
+    const existingByName = new Map(
+      instanceTagDefinitions.value.map((def) => [String(def.name || '').toLowerCase(), def])
+    );
+    const next = Array.from(
+      new Set((tagNames || []).map((name) => normalizeTagName(name)).filter(Boolean).map((name) => name.toLowerCase()))
+    ).map((lowerName) => {
+      const existing = existingByName.get(lowerName);
+      const name = existing?.name || tagNames.find((n) => normalizeTagName(n).toLowerCase() === lowerName) || lowerName;
+      return {
+        name: normalizeTagName(name),
+        color: existing?.color || computeDefaultTagColorKey(name),
+        isPublic: !!existing?.isPublic
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+
+    instanceTagDefinitions.value = next;
+    saveTagDefinitionsToStorage();
+  };
+
   const fetchInstanceTagDefinitions = async () => {
     const collectedTags = new Set(Array.isArray(recordRef.value?.tags) ? recordRef.value.tags : []);
     let page = 1;
     let totalPages = 1;
-    const path = instanceTagSource === 'deals' ? '/deals' : '/tasks';
+    const pathBySource = {
+      deals: '/deals',
+      people: '/people',
+      organizations: '/v2/organization',
+      tasks: '/tasks'
+    };
+    const path = pathBySource[instanceTagSource];
+    if (!path) return;
     try {
       while (page <= totalPages && page <= 5) {
         const response = await apiClient.get(path, { params: { page, limit: 200, sortBy: 'updatedAt', sortOrder: 'desc' } });
@@ -142,39 +230,159 @@ export function useRecordTags(recordRef, options) {
     } catch (err) {
       console.error('Failed to fetch instance tags:', err);
     }
-    mergeTagDefinitions(Array.from(collectedTags));
+    syncTagDefinitions(Array.from(collectedTags));
   };
 
   const isTagAssigned = (tagName) => Array.isArray(recordRef.value?.tags) && recordRef.value.tags.includes(tagName);
 
   const persistRecordTags = async (nextTagNames) => {
     if (!recordRef.value || !canEdit.value) return;
-    const cleaned = Array.from(new Set((nextTagNames || []).map(normalizeTagName).filter(Boolean)));
+    const deduped = [];
+    const seen = new Set();
+    (nextTagNames || []).forEach((name) => {
+      const normalizedName = normalizeTagName(name);
+      if (!normalizedName) return;
+      const key = normalizeTagKey(normalizedName);
+      if (seen.has(key)) return;
+      seen.add(key);
+      deduped.push(normalizedName);
+    });
+    const cleaned = deduped;
     try {
       isSavingTagState.value = true;
+      tagSaveError.value = '';
       await persistTags(cleaned);
+      if (recordRef.value) recordRef.value.tags = cleaned;
       mergeTagDefinitions(cleaned);
     } catch (err) {
       console.error('Error updating record tags:', err);
+      tagSaveError.value = err?.response?.data?.message || err?.message || 'Failed to update tags.';
       await fetchRecord();
     } finally {
       isSavingTagState.value = false;
     }
   };
 
+  const clearPendingTagRemovalTimer = () => {
+    if (pendingTagRemovalTimer.value) {
+      clearTimeout(pendingTagRemovalTimer.value);
+      pendingTagRemovalTimer.value = null;
+    }
+    if (pendingTagRemovalCountdownTimer.value) {
+      clearInterval(pendingTagRemovalCountdownTimer.value);
+      pendingTagRemovalCountdownTimer.value = null;
+    }
+    pendingTagRemovalSecondsLeft.value = 0;
+  };
+
+  const commitPendingTagRemoval = async () => {
+    if (!pendingTagRemoval.value) return;
+    const pending = pendingTagRemoval.value;
+    clearPendingTagRemovalTimer();
+    pendingTagRemoval.value = null;
+    await persistRecordTags(pending.nextTags || []);
+  };
+
+  const undoPendingTagRemoval = () => {
+    if (!pendingTagRemoval.value) return;
+    const pending = pendingTagRemoval.value;
+    clearPendingTagRemovalTimer();
+    pendingTagRemoval.value = null;
+    if (recordRef.value) {
+      recordRef.value.tags = Array.isArray(pending.previousTags) ? pending.previousTags : [];
+    }
+    tagSaveError.value = '';
+  };
+
+  const scheduleRemoveTagFromRecord = async (tagName) => {
+    const currentTags = Array.isArray(recordRef.value?.tags) ? recordRef.value.tags.map(normalizeTagName).filter(Boolean) : [];
+    const targetKey = normalizeTagKey(tagName);
+    if (!currentTags.some((name) => normalizeTagKey(name) === targetKey)) return;
+
+    // Only one pending undo action at a time; finalize previous before replacing.
+    if (pendingTagRemoval.value) {
+      await commitPendingTagRemoval();
+    }
+
+    const nextTags = currentTags.filter((name) => normalizeTagKey(name) !== targetKey);
+    if (recordRef.value) recordRef.value.tags = nextTags;
+    tagSaveError.value = '';
+    pendingTagRemoval.value = {
+      tagName: normalizeTagName(tagName),
+      previousTags: currentTags,
+      nextTags,
+      expiresAt: Date.now() + TAG_REMOVE_UNDO_MS
+    };
+    pendingTagRemovalSecondsLeft.value = Math.ceil(TAG_REMOVE_UNDO_MS / 1000);
+    pendingTagRemovalCountdownTimer.value = setInterval(() => {
+      if (!pendingTagRemoval.value) {
+        clearPendingTagRemovalTimer();
+        return;
+      }
+      const msLeft = Math.max(0, pendingTagRemoval.value.expiresAt - Date.now());
+      pendingTagRemovalSecondsLeft.value = Math.ceil(msLeft / 1000);
+      if (msLeft <= 0) {
+        if (pendingTagRemovalCountdownTimer.value) {
+          clearInterval(pendingTagRemovalCountdownTimer.value);
+          pendingTagRemovalCountdownTimer.value = null;
+        }
+      }
+    }, 250);
+    pendingTagRemovalTimer.value = setTimeout(() => {
+      commitPendingTagRemoval().catch((err) => {
+        console.error('Commit pending tag removal failed:', err);
+      });
+    }, TAG_REMOVE_UNDO_MS);
+  };
+
   const toggleTagForRecord = async (tagName) => {
-    const currentTags = Array.isArray(recordRef.value?.tags) ? recordRef.value.tags : [];
-    if (currentTags.includes(tagName)) {
-      await persistRecordTags(currentTags.filter(name => name !== tagName));
+    if (pendingTagRemoval.value) {
+      await commitPendingTagRemoval();
+    }
+    const currentTags = Array.isArray(recordRef.value?.tags) ? recordRef.value.tags.map(normalizeTagName).filter(Boolean) : [];
+    const targetKey = normalizeTagKey(tagName);
+    if (currentTags.some((name) => normalizeTagKey(name) === targetKey)) {
+      await scheduleRemoveTagFromRecord(tagName);
       return;
     }
-    await persistRecordTags([...currentTags, tagName]);
+    await persistRecordTags([...currentTags, normalizeTagName(tagName)]);
   };
 
   const removeTagFromRecord = async (tagName) => {
-    const currentTags = Array.isArray(recordRef.value?.tags) ? recordRef.value.tags : [];
-    if (!currentTags.includes(tagName)) return;
-    await persistRecordTags(currentTags.filter(name => name !== tagName));
+    await scheduleRemoveTagFromRecord(tagName);
+  };
+
+  const getTagDefinitionByName = (tagName) => {
+    const key = normalizeTagKey(tagName);
+    return instanceTagDefinitions.value.find((tagDef) => normalizeTagKey(tagDef?.name) === key) || null;
+  };
+
+  const deleteTagDefinition = async (tagName) => {
+    if (!canEdit.value) return;
+    const targetKey = normalizeTagKey(tagName);
+    if (!targetKey) return;
+    const deletingName = normalizeTagName(tagName);
+    tagSaveError.value = '';
+    try {
+      await apiClient.post(`/modules/${instanceTagSource}/tags/delete`, { tagName: deletingName });
+      if (pendingTagRemoval.value) {
+        clearPendingTagRemovalTimer();
+        pendingTagRemoval.value = null;
+      }
+      instanceTagDefinitions.value = instanceTagDefinitions.value.filter((tagDef) => normalizeTagKey(tagDef?.name) !== targetKey);
+      saveTagDefinitionsToStorage();
+      const currentTags = Array.isArray(recordRef.value?.tags) ? recordRef.value.tags.map(normalizeTagName).filter(Boolean) : [];
+      if (currentTags.some((name) => normalizeTagKey(name) === targetKey)) {
+        if (recordRef.value) {
+          recordRef.value.tags = currentTags.filter((name) => normalizeTagKey(name) !== targetKey);
+        }
+      }
+      await fetchInstanceTagDefinitions();
+      await fetchRecord();
+    } catch (err) {
+      console.error('Delete tag definition error:', err);
+      tagSaveError.value = err?.response?.data?.message || err?.message || 'Failed to delete tag from module.';
+    }
   };
 
   const closeTagEditor = () => {
@@ -237,19 +445,34 @@ export function useRecordTags(recordRef, options) {
 
   const handleTagSearchBlur = () => {
     window.setTimeout(() => {
-      if (document.activeElement !== tagSearchInputRef.value) tagListOpen.value = false;
+      const activeEl = document.activeElement;
+      if (activeEl === tagSearchInputRef.value) return;
+      if (activeEl instanceof HTMLElement) {
+        if (activeEl.closest('[role="menu"]')) return;
+        if (activeEl.closest('[role="menuitem"]')) return;
+        if (activeEl.closest('[role="menuitemcheckbox"]')) return;
+        if (activeEl.closest('[role="menuitemradio"]')) return;
+        if (activeEl.closest('[data-headlessui-state]')) return;
+      }
+      tagListOpen.value = false;
     }, 120);
   };
 
   const resetOnClose = () => {
     tagSearchQuery.value = '';
     tagListOpen.value = false;
+    tagSaveError.value = '';
     closeTagEditor();
   };
 
   watch(recordRef, (newRecord) => {
     if (newRecord?._id) {
+      clearPendingTagRemovalTimer();
+      pendingTagRemoval.value = null;
       loadTagDefinitionsFromStorage();
+      // Merge current record's tags so they have definitions (and colors) immediately
+      const recordTags = Array.isArray(newRecord?.tags) ? newRecord.tags : [];
+      if (recordTags.length > 0) mergeTagDefinitions(recordTags);
       fetchInstanceTagDefinitions();
     }
   }, { immediate: true });
@@ -265,23 +488,30 @@ export function useRecordTags(recordRef, options) {
     tagEditorMode,
     editingTagName,
     isSavingTagState,
+    tagSaveError,
     tagEditor,
     hasRecordTags,
     hasInstanceTags,
     normalizedTagSearch,
     filteredInstanceTags,
     canCreateTagFromSearch,
+    hasPendingTagRemoval,
+    pendingTagRemovalTagName,
+    pendingTagRemovalSecondsLeft,
     isTagEditorOpen,
     canSaveTagEditor,
     getTagChipClass,
     getTagDotClass,
     openCreateTagEditor,
     openEditTagEditor,
+    getTagDefinitionByName,
+    deleteTagDefinition,
     closeTagEditor,
     saveTagEditor,
     deleteEditingTag,
     toggleTagForRecord,
     removeTagFromRecord,
+    undoPendingTagRemoval,
     handleTagSearchBlur,
     resetOnClose
   };

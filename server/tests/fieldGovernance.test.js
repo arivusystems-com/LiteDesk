@@ -127,6 +127,18 @@ describe('Field Governance Tests', () => {
         const user = createUser(false, { contacts: { view: true } });
         expect(canWriteField(orgField, user, 'people')).toBe(false);
       });
+
+      test('Org-owned fields with non-global context require app access to write (tenant app-scoped custom fields)', () => {
+        const scopedOrgField = createField('tenant_sales_custom', 'org', 'sales');
+        const withSales = createUser(
+          false,
+          { contacts: { edit: true } },
+          [{ appKey: 'SALES', status: 'ACTIVE' }]
+        );
+        const editOnly = createUser(false, { contacts: { edit: true } });
+        expect(canWriteField(scopedOrgField, withSales, 'people')).toBe(true);
+        expect(canWriteField(scopedOrgField, editOnly, 'people')).toBe(false);
+      });
     });
   });
   
