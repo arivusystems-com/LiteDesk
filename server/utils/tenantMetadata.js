@@ -18,9 +18,9 @@
 
 const TenantAppConfiguration = require('../models/TenantAppConfiguration');
 const TenantModuleConfiguration = require('../models/TenantModuleConfiguration');
+const ModuleDefinition = require('../models/ModuleDefinition');
 const TenantRelationshipConfiguration = require('../models/TenantRelationshipConfiguration');
 const AppDefinition = require('../models/AppDefinition');
-const ModuleDefinition = require('../models/ModuleDefinition');
 const RelationshipDefinition = require('../models/RelationshipDefinition');
 
 /**
@@ -331,11 +331,488 @@ async function isModuleEnabledForTenant(organizationId, appKey, moduleKey) {
   }
 }
 
+/** Defaults when tenant has no peopleTypes for that app key */
+const DEFAULT_PEOPLE_TYPES = {
+  SALES: ['Lead', 'Contact'],
+  HELPDESK: ['Customer', 'Agent']
+};
+
+const PEOPLE_TYPE_COLOR_ROTATION = [
+  'indigo',
+  'blue',
+  'emerald',
+  'amber',
+  'violet',
+  'rose',
+  'cyan',
+  'orange',
+  'teal',
+  'pink',
+  'green',
+  'purple'
+];
+const PEOPLE_TYPE_COLOR_SET = new Set([
+  ...PEOPLE_TYPE_COLOR_ROTATION,
+  'slate',
+  'red',
+  'yellow',
+  'gray'
+]);
+
+function normalizeHexPeopleTypeColor(input) {
+  const s = String(input || '').trim();
+  const m = /^#?([0-9A-Fa-f]{6})$/.exec(s);
+  if (!m) return null;
+  return `#${m[1].toLowerCase()}`;
+}
+
+/** Semantic keys → hex (align with client picklist / BadgeCell). */
+const PEOPLE_TYPE_SEMANTIC_HEX = {
+  indigo: '#6366f1',
+  blue: '#3b82f6',
+  emerald: '#10b981',
+  amber: '#f59e0b',
+  violet: '#8b5cf6',
+  rose: '#f43f5e',
+  cyan: '#06b6d4',
+  orange: '#ea580c',
+  teal: '#14b8a6',
+  pink: '#ec4899',
+  green: '#22c55e',
+  purple: '#a855f7',
+  slate: '#64748b',
+  red: '#ef4444',
+  yellow: '#eab308',
+  gray: '#6b7280'
+};
+
+function peopleParticipationStoredColorToHex(color) {
+  const hex = normalizeHexPeopleTypeColor(color);
+  if (hex) return hex;
+  const k = String(color || '')
+    .toLowerCase()
+    .trim();
+  return PEOPLE_TYPE_SEMANTIC_HEX[k] || '#64748b';
+}
+
+/**
+ * Picklist-shaped options for People `type` field (must match Types tab + forms).
+ * @param {Array<{ value: string, color?: string }>} typeDefs
+ * @returns {Array<{ value: string, label: string, color: string }>}
+ */
+function typeDefsToPeopleTypePicklistOptions(typeDefs) {
+  if (!Array.isArray(typeDefs) || typeDefs.length === 0) {
+    return [
+      { value: 'Lead', label: 'Lead', color: '#f59e0b' },
+      { value: 'Contact', label: 'Contact', color: '#22c55e' }
+    ];
+  }
+  return typeDefs.map((d) => ({
+    value: d.value,
+    label: d.value,
+    color: peopleParticipationStoredColorToHex(d.color)
+  }));
+}
+
+function normalizePeopleTypeStoredColor(input, fallbackIndex) {
+  const hex = normalizeHexPeopleTypeColor(input);
+  if (hex) return hex;
+  const k = String(input || '')
+    .toLowerCase()
+    .trim();
+  if (PEOPLE_TYPE_COLOR_SET.has(k)) return k;
+  const i = Number.isFinite(fallbackIndex) ? fallbackIndex : 0;
+  return PEOPLE_TYPE_COLOR_ROTATION[i % PEOPLE_TYPE_COLOR_ROTATION.length];
+}
+
+function typeDefsFromStringArray(strings) {
+  return strings.map((value, i) => ({
+    value,
+    color: normalizePeopleTypeStoredColor(undefined, i)
+  }));
+}
+
+/** Virtual role / type picker keys — not shown as "participation detail" field picks */
+const PARTICIPATION_TYPE_VIRTUAL_KEYS = new Set(['sales_type', 'helpdesk_role', 'type']);
+
+/**
+ * Fallback participation field keys when platform/tenant module definitions are empty (aligned with client peopleFieldModel).
+ */
+const PARTICIPATION_FIELD_FALLBACK_BY_APP = {
+  SALES: [
+    'lead_status',
+    'contact_status',
+    'lead_owner',
+    'lead_score',
+    'interest_products',
+    'qualification_date',
+    'qualification_notes',
+    'estimated_value',
+    'role',
+    'birthday',
+    'preferred_contact_method'
+  ],
+  HELPDESK: []
+};
+
+/**
+ * Union of module field keys scoped to an app (People module), excluding virtual type pickers.
+ * @param {string|import('mongoose').Types.ObjectId} organizationId
+ * @param {string} appKeyUpper - e.g. SALES
+ * @returns {Promise<Set<string>>}
+ */
+async function collectAllowedPeopleParticipationFieldKeys(organizationId, appKeyUpper) {
+  const upper = String(appKeyUpper || '').toUpperCase();
+  const allowed = new Set();
+  const appLower = upper.toLowerCase();
+
+  try {
+    const platformMod = await ModuleDefinition.findOne({
+      appKey: appLower,
+      moduleKey: 'people'
+    })
+      .select('fields')
+      .lean();
+
+    const addFields = (fields) => {
+      if (!Array.isArray(fields)) return;
+      for (const f of fields) {
+        const key = String(f?.key ?? '').trim();
+        if (!key) continue;
+        const fk =
+          f.appKey != null && String(f.appKey).trim() !== '' ? String(f.appKey).toUpperCase() : '';
+        if (fk !== upper) continue;
+        if (PARTICIPATION_TYPE_VIRTUAL_KEYS.has(key.toLowerCase())) continue;
+        allowed.add(key);
+      }
+    };
+
+    addFields(platformMod?.fields);
+
+    const tenantRows = await TenantModuleConfiguration.find({
+      organizationId,
+      moduleKey: 'people'
+    })
+      .select('fields')
+      .lean();
+
+    for (const row of tenantRows) {
+      addFields(row.fields);
+    }
+  } catch (error) {
+    console.error('[tenantMetadata] collectAllowedPeopleParticipationFieldKeys:', error);
+  }
+
+  const fallback = PARTICIPATION_FIELD_FALLBACK_BY_APP[upper];
+  if (Array.isArray(fallback)) {
+    for (const k of fallback) {
+      allowed.add(k);
+    }
+  }
+
+  return allowed;
+}
+
+function typeDefsFromStoredTypesArray(arr) {
+  if (!Array.isArray(arr) || arr.length === 0) return null;
+  const first = arr[0];
+  const isObjectShape =
+    first != null &&
+    typeof first === 'object' &&
+    !Array.isArray(first) &&
+    (first.value != null || first.label != null);
+
+  if (isObjectShape) {
+    const out = [];
+    for (let i = 0; i < arr.length; i++) {
+      const item = arr[i];
+      if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+      const value = String(item.value ?? item.label ?? '').trim();
+      if (!value) continue;
+      const row = {
+        value,
+        color: normalizePeopleTypeStoredColor(item.color, out.length)
+      };
+      if (Array.isArray(item.fields)) {
+        if (item.fields.length === 0) {
+          row.fields = [];
+        } else {
+          const fields = [];
+          const seenF = new Set();
+          for (const x of item.fields) {
+            const fk = String(x ?? '').trim();
+            if (!fk) continue;
+            const low = fk.toLowerCase();
+            if (seenF.has(low)) continue;
+            seenF.add(low);
+            fields.push(fk);
+          }
+          row.fields = fields;
+        }
+      }
+      out.push(row);
+    }
+    return out.length ? out : null;
+  }
+
+  const strings = arr.map((t) => String(t).trim()).filter(Boolean);
+  if (strings.length === 0) return null;
+  return typeDefsFromStringArray(strings);
+}
+
+/**
+ * Validate and normalize people type rows from API PUT body.
+ * Accepts string[] or { value, color, fields?: string[] }[] (mixed allowed).
+ * @param {unknown} typesIn
+ * @param {{ allowedFieldKeys?: Set<string> }} [options] - when provided and non-empty, `fields` entries must match (case-insensitive).
+ * @returns {{ ok: true, typeDefs: Array<{value: string, color: string, fields?: string[]}> } | { ok: false, message: string }}
+ */
+function sanitizePeopleTypeDefsForSave(typesIn, options = {}) {
+  if (!Array.isArray(typesIn)) {
+    return { ok: false, message: 'types must be an array' };
+  }
+  const allowedFieldKeys = options.allowedFieldKeys;
+  const validateFields = allowedFieldKeys instanceof Set && allowedFieldKeys.size > 0;
+
+  const normalizedDefs = [];
+  const seen = new Set();
+  for (let i = 0; i < typesIn.length; i++) {
+    const item = typesIn[i];
+    let value;
+    let color;
+    /** @type {string[] | undefined} */
+    let fieldsArr;
+    if (typeof item === 'string') {
+      value = item.trim();
+      color = normalizePeopleTypeStoredColor(undefined, normalizedDefs.length);
+    } else if (item && typeof item === 'object' && !Array.isArray(item)) {
+      value = String(item.value ?? '').trim();
+      color = normalizePeopleTypeStoredColor(item.color, normalizedDefs.length);
+      if (Array.isArray(item.fields)) {
+        if (item.fields.length > 0 && !validateFields) {
+          return {
+            ok: false,
+            message:
+              'Per-type fields are not available until participation fields exist for this app in Modules & Fields.'
+          };
+        }
+        fieldsArr = [];
+        const seenF = new Set();
+        for (let j = 0; j < item.fields.length; j++) {
+          const raw = item.fields[j];
+          const fk = String(raw ?? '').trim();
+          if (!fk) continue;
+          const flo = fk.toLowerCase();
+          if (seenF.has(flo)) continue;
+          seenF.add(flo);
+          if (validateFields) {
+            let canon = null;
+            for (const ak of allowedFieldKeys) {
+              if (String(ak).toLowerCase() === flo) {
+                canon = ak;
+                break;
+              }
+            }
+            if (!canon) {
+              return {
+                ok: false,
+                message: `Invalid field "${fk}" for role "${value}"`
+              };
+            }
+            fieldsArr.push(canon);
+          } else {
+            fieldsArr.push(fk);
+          }
+        }
+      }
+    } else {
+      return { ok: false, message: 'Each entry must be a string or an object with value' };
+    }
+    if (!value) {
+      return { ok: false, message: 'Role names cannot be empty' };
+    }
+    const low = value.toLowerCase();
+    if (seen.has(low)) {
+      return { ok: false, message: 'Duplicate role names are not allowed' };
+    }
+    seen.add(low);
+    const row = { value, color };
+    if (fieldsArr !== undefined) {
+      row.fields = fieldsArr;
+    }
+    normalizedDefs.push(row);
+  }
+  if (normalizedDefs.length < 1) {
+    return { ok: false, message: 'At least one role is required' };
+  }
+  return { ok: true, typeDefs: normalizedDefs };
+}
+
+function defaultPeopleTypeDefsForApp(upperKey) {
+  const fb = DEFAULT_PEOPLE_TYPES[upperKey] || DEFAULT_PEOPLE_TYPES.SALES;
+  return typeDefsFromStringArray([...fb]);
+}
+
+/**
+ * Normalize one app's peopleTypes value from tenant config.
+ * Legacy: string[] — implicit default = first item; colors rotate by index.
+ * Stored: { types: (string | { value, color })[], default: string }
+ *
+ * @param {unknown} raw
+ * @param {string} upperKey - e.g. 'SALES'
+ * @returns {{ types: string[], defaultRole: string, typeDefs: Array<{value: string, color: string}> } | null}
+ */
+function normalizePeopleTypesAppEntry(raw, _upperKey) {
+  if (raw == null) return null;
+
+  if (Array.isArray(raw)) {
+    if (raw.length === 0) return null;
+    const strings = raw.map((t) => String(t).trim()).filter(Boolean);
+    if (strings.length === 0) return null;
+    const typeDefs = typeDefsFromStringArray(strings);
+    const types = typeDefs.map((d) => d.value);
+    return { types, defaultRole: types[0], typeDefs };
+  }
+
+  if (typeof raw === 'object' && Array.isArray(raw.types)) {
+    const typeDefs = typeDefsFromStoredTypesArray(raw.types);
+    if (!typeDefs || typeDefs.length === 0) return null;
+    const types = typeDefs.map((d) => d.value);
+    let def =
+      raw.default != null && String(raw.default).trim()
+        ? String(raw.default).trim()
+        : raw.defaultRole != null && String(raw.defaultRole).trim()
+          ? String(raw.defaultRole).trim()
+          : '';
+    if (!def) def = types[0];
+    const match = types.find((t) => t.toLowerCase() === def.toLowerCase());
+    const defaultRole = match || types[0];
+    return { types, defaultRole, typeDefs };
+  }
+
+  return null;
+}
+
+function pickPeopleTypesEntry(peopleTypesMap, upper) {
+  if (!peopleTypesMap || typeof peopleTypesMap !== 'object') return null;
+  const raw = peopleTypesMap[upper];
+  return normalizePeopleTypesAppEntry(raw, upper);
+}
+
+/**
+ * Resolved types + explicit default for an app (tenant config + fallbacks).
+ * @param {string|ObjectId} organizationId
+ * @param {string} appKey
+ * @returns {Promise<{ types: string[], defaultRole: string, typeDefs: Array<{value: string, color: string}> }>}
+ */
+async function getPeopleTypesConfig(organizationId, appKey) {
+  const upper = (appKey || 'SALES').toUpperCase();
+
+  try {
+    let tenantConfig = await TenantModuleConfiguration.findOne({
+      organizationId,
+      appKey: upper,
+      moduleKey: 'people'
+    }).lean();
+
+    let entry = pickPeopleTypesEntry(tenantConfig?.settings?.peopleTypes, upper);
+    if (entry) return entry;
+
+    const salesRow = await TenantModuleConfiguration.findOne({
+      organizationId,
+      appKey: 'SALES',
+      moduleKey: 'people'
+    }).lean();
+    entry = pickPeopleTypesEntry(salesRow?.settings?.peopleTypes, upper);
+    if (entry) return entry;
+
+    const crmRow = await TenantModuleConfiguration.findOne({
+      organizationId,
+      appKey: 'CRM',
+      moduleKey: 'people'
+    }).lean();
+    entry = pickPeopleTypesEntry(crmRow?.settings?.peopleTypes, upper);
+    if (entry) return entry;
+
+    const anyRow = await TenantModuleConfiguration.findOne({
+      organizationId,
+      moduleKey: 'people',
+      'settings.peopleTypes': { $exists: true, $ne: null }
+    }).lean();
+    entry = pickPeopleTypesEntry(anyRow?.settings?.peopleTypes, upper);
+    if (entry) return entry;
+
+    const typeDefs = defaultPeopleTypeDefsForApp(upper);
+    const types = typeDefs.map((d) => d.value);
+    return { types, defaultRole: types[0] || 'Lead', typeDefs };
+  } catch (error) {
+    console.error(`[tenantMetadata] Error getting people types config for ${organizationId}, ${appKey}:`, error);
+    const typeDefs = defaultPeopleTypeDefsForApp(upper);
+    const types = typeDefs.map((d) => d.value);
+    return { types, defaultRole: types[0] || 'Lead', typeDefs };
+  }
+}
+
+/**
+ * Get people types for an app from TenantModuleConfiguration.settings.peopleTypes
+ * The map is usually stored on the primary sales/CRM people module row; we fall back across common appKeys.
+ * @param {string|ObjectId} organizationId
+ * @param {string} appKey - e.g. 'SALES', 'HELPDESK'
+ * @returns {Promise<string[]>} - Array of type strings
+ */
+async function getPeopleTypes(organizationId, appKey) {
+  const { types } = await getPeopleTypesConfig(organizationId, appKey);
+  return types;
+}
+
+/**
+ * Validate and normalize a people type value against tenant config.
+ * @param {string|ObjectId} organizationId
+ * @param {string} appKey - e.g. 'SALES'
+ * @param {string} typeValue - Incoming type (e.g. 'LEAD', 'Lead', 'Contact')
+ * @returns {Promise<{valid: boolean, canonicalValue?: string, allowedTypes: string[], message?: string}>}
+ */
+async function validatePeopleType(organizationId, appKey, typeValue) {
+  const allowedTypes = await getPeopleTypes(organizationId, appKey);
+  if (!typeValue || typeof typeValue !== 'string') {
+    return { valid: false, allowedTypes, message: 'Type is required' };
+  }
+  const trimmed = typeValue.trim();
+  if (!trimmed) {
+    return { valid: false, allowedTypes, message: 'Type is required' };
+  }
+  // Normalize legacy keys: LEAD -> Lead, CONTACT -> Contact
+  let canonical = trimmed;
+  if (trimmed.toUpperCase() === 'LEAD') canonical = 'Lead';
+  else if (trimmed.toUpperCase() === 'CONTACT') canonical = 'Contact';
+  else {
+    // Match against allowed types (case-insensitive)
+    const match = allowedTypes.find(t => t.toLowerCase() === trimmed.toLowerCase());
+    canonical = match || trimmed;
+  }
+  const isValid = allowedTypes.some(t => t === canonical);
+  if (!isValid) {
+    return {
+      valid: false,
+      allowedTypes,
+      message: `Type "${typeValue}" is not allowed. Allowed types: ${allowedTypes.join(', ')}`
+    };
+  }
+  return { valid: true, canonicalValue: canonical, allowedTypes };
+}
+
 module.exports = {
   getEnabledAppsForTenant,
   getEnabledModulesForApp,
   getTenantModuleConfig,
   getEffectiveRelationships,
   isAppEnabledForTenant,
-  isModuleEnabledForTenant
+  isModuleEnabledForTenant,
+  getPeopleTypes,
+  getPeopleTypesConfig,
+  validatePeopleType,
+  sanitizePeopleTypeDefsForSave,
+  collectAllowedPeopleParticipationFieldKeys,
+  typeDefsToPeopleTypePicklistOptions,
+  DEFAULT_PEOPLE_TYPES
 };

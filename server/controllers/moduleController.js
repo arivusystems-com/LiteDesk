@@ -2,6 +2,11 @@ const ModuleDefinition = require('../models/ModuleDefinition');
 const relationshipRegistry = require('../utils/relationshipRegistry');
 const { getOutgoingRelationships } = require('../utils/relationshipRegistry');
 const { filterFieldsByReadAccess, filterFieldsByWriteAccess, validateFieldWrite } = require('../utils/fieldAccessControl');
+const {
+    normalizePeopleModuleFields,
+    migratePeopleQuickCreateKeys,
+    migratePeopleQuickCreateLayoutKeys,
+} = require('../utils/normalizePeopleModuleConfig');
 
 /** Canonical key for field dedup: lowercase, trim, strip spaces and hyphens (so "deleted-by", "deletedBy", "Deleted By" all match) */
 function fieldKeyCanonical(k) {
@@ -235,7 +240,7 @@ function getFieldDataType(key, fieldName, path) {
         'createdBy': 'Lookup (Relationship)',
         'assignedTo': 'Lookup (Relationship)',
         'source': 'Picklist',
-        'type': 'Picklist',
+        'sales_type': 'Picklist',
         'first_name': 'Text',
         'last_name': 'Text',
         'email': 'Email',
@@ -439,6 +444,58 @@ function getFieldDataType(key, fieldName, path) {
     return inferDataType(path);
 }
 
+/** People virtual fields: participation roles exposed as configurable fields (no extra DB columns). */
+function getPeopleVirtualBaseFields() {
+    return [
+        {
+            key: 'sales_type',
+            label: 'Type',
+            dataType: 'Picklist',
+            keyField: false,
+            required: false,
+            options: ['Lead', 'Contact'],
+            defaultValue: null,
+            visibility: { list: true, detail: true },
+            owner: 'platform',
+            context: 'app',
+            isVirtual: true,
+            appKey: 'SALES',
+            filterable: true,
+            filterType: 'multi-select',
+            filterPriority: 2,
+            dependencies: [],
+            validations: [],
+            lookupSettings: null,
+            index: false,
+            placeholder: '',
+            order: 0
+        },
+        {
+            key: 'helpdesk_role',
+            label: 'Role',
+            dataType: 'Picklist',
+            keyField: false,
+            required: false,
+            options: ['Customer', 'Agent'],
+            defaultValue: null,
+            visibility: { list: true, detail: true },
+            owner: 'platform',
+            context: 'app',
+            isVirtual: true,
+            appKey: 'HELPDESK',
+            filterable: true,
+            filterType: 'multi-select',
+            filterPriority: 2,
+            dependencies: [],
+            validations: [],
+            lookupSettings: null,
+            index: false,
+            placeholder: '',
+            order: 0
+        }
+    ];
+}
+
 function getBaseFieldsForKey(key) {
     try {
         const taskDefaultFieldOrder = [
@@ -529,7 +586,7 @@ function getBaseFieldsForKey(key) {
             'phone',
             'assignedTo'  // owner (assigned user)
         ]);
-        const baseFields = Object.entries(model.schema.paths)
+        let baseFields = Object.entries(model.schema.paths)
             .filter(([name]) => {
                 // Exclude if the field name is in the excluded set
                 if (excluded.has(name)) return false;
@@ -993,6 +1050,17 @@ function getBaseFieldsForKey(key) {
                     context: 'global'   // Default: global context (not app-specific)
                 };
             });
+
+        if (key === 'people') {
+            const virtualPeople = getPeopleVirtualBaseFields();
+            const have = new Set(baseFields.map((f) => String(f.key || '').toLowerCase()));
+            for (const v of virtualPeople) {
+                if (!have.has(String(v.key || '').toLowerCase())) {
+                    baseFields.push(v);
+                    have.add(String(v.key || '').toLowerCase());
+                }
+            }
+        }
 
         if (key !== 'tasks' && key !== 'people') {
             return baseFields;
@@ -1479,6 +1547,22 @@ function getDefaultPipelineSettings() {
  * Enrich deals module fields so pipeline and stage options come only from pipelineSettings (Settings).
  * Used when returning the deals module so forms and lists use settings-driven options only.
  */
+/**
+ * Enrich People module `sales_type` options from TenantModuleConfiguration.settings.peopleTypes (Types tab).
+ * @param {Array} fields
+ * @param {Array<{ value: string, color?: string }>} typeDefs - from getPeopleTypesConfig().typeDefs
+ */
+function enrichPeopleFieldsWithPeopleTypes(fields, typeDefs) {
+    if (!Array.isArray(fields)) return fields;
+    const { typeDefsToPeopleTypePicklistOptions } = require('../utils/tenantMetadata');
+    const options = typeDefsToPeopleTypePicklistOptions(Array.isArray(typeDefs) ? typeDefs : []);
+    return fields.map((f) => {
+        const key = (f.key || '').toString().trim().toLowerCase();
+        if (key === 'sales_type') return { ...f, options };
+        return f;
+    });
+}
+
 function enrichDealFieldsWithPipelineSettings(fields, pipelineSettings) {
     if (!Array.isArray(fields) || !Array.isArray(pipelineSettings)) return fields;
     const pipelines = pipelineSettings;
@@ -2492,6 +2576,11 @@ exports.listModules = async (req, res) => {
                 });
                 let finalQuickCreateLayout = override.quickCreateLayout || { version: 1, rows: [] };
 
+                if (sys.key === 'people') {
+                    finalQuickCreate = migratePeopleQuickCreateKeys(finalQuickCreate);
+                    finalQuickCreateLayout = migratePeopleQuickCreateLayoutKeys(finalQuickCreateLayout);
+                }
+
                 // Events Quick Create defaults:
                 // If quickCreate is empty / underconfigured, the create drawer will not show optional-but-important audit controls
                 // like allowSelfReview (even though it's dependency-gated to audit event types).
@@ -2709,10 +2798,20 @@ exports.listModules = async (req, res) => {
                     }
                 }
                 
-                let finalFields = sys.key === 'tasks' ? normalizeTasksModuleFields(saved) : saved;
-                if (sys.key === 'tasks') finalFields = dedupeFieldsByKey(finalFields);
+                let finalFields = saved;
+                if (sys.key === 'tasks') {
+                    finalFields = normalizeTasksModuleFields(finalFields);
+                    finalFields = dedupeFieldsByKey(finalFields);
+                } else if (sys.key === 'people') {
+                    finalFields = normalizePeopleModuleFields(finalFields);
+                }
                 if (sys.key === 'deals') {
                     finalFields = enrichDealFieldsWithPipelineSettings(finalFields, pipelineSettings);
+                }
+                if (sys.key === 'people') {
+                    const { getPeopleTypesConfig } = require('../utils/tenantMetadata');
+                    const peopleCfg = await getPeopleTypesConfig(req.user.organizationId, 'SALES');
+                    finalFields = enrichPeopleFieldsWithPeopleTypes(finalFields, peopleCfg.typeDefs);
                 }
                 merged.push({ 
                     ...sys, 
@@ -2780,8 +2879,13 @@ exports.listModules = async (req, res) => {
                     defaultQuickCreate = ['name', 'amount', 'stage', 'expectedCloseDate', 'ownerId'];
                 }
 
-                let taskFields = sys.key === 'tasks' ? normalizeTasksModuleFields(withOrder) : withOrder;
-                if (sys.key === 'tasks') taskFields = dedupeFieldsByKey(taskFields);
+                let taskFields = withOrder;
+                if (sys.key === 'tasks') {
+                    taskFields = normalizeTasksModuleFields(taskFields);
+                    taskFields = dedupeFieldsByKey(taskFields);
+                } else if (sys.key === 'people') {
+                    taskFields = normalizePeopleModuleFields(taskFields);
+                }
                 let dealPipelineSettings = [];
                 if (sys.key === 'deals') {
                     const raw = JSON.parse(JSON.stringify(sys.pipelineSettings || []));
@@ -2790,9 +2894,14 @@ exports.listModules = async (req, res) => {
                         : raw;
                     dealPipelineSettings = normalizePipelineSettings(toNormalize);
                 }
-                const fieldsToPush = sys.key === 'deals'
+                let fieldsToPush = sys.key === 'deals'
                     ? enrichDealFieldsWithPipelineSettings(taskFields, dealPipelineSettings)
                     : taskFields;
+                if (sys.key === 'people') {
+                    const { getPeopleTypesConfig } = require('../utils/tenantMetadata');
+                    const peopleCfg = await getPeopleTypesConfig(req.user.organizationId, 'SALES');
+                    fieldsToPush = enrichPeopleFieldsWithPeopleTypes(fieldsToPush, peopleCfg.typeDefs);
+                }
                 merged.push({ 
                     ...sys, 
                     fields: fieldsToPush,
@@ -3308,6 +3417,9 @@ exports.getPeopleQuickCreate = async (req, res) => {
             }
         }
 
+        quickCreate = migratePeopleQuickCreateKeys(quickCreate);
+        quickCreateLayout = migratePeopleQuickCreateLayoutKeys(quickCreateLayout);
+
         const baseFields = getBaseFieldsForKey('people');
         const withOrder = baseFields.map((f, i) => {
             const ff = { ...f, order: i };
@@ -3328,11 +3440,15 @@ exports.getPeopleQuickCreate = async (req, res) => {
             });
         }
         const filtered = filterFieldsByContext(fields, 'platform');
+        const normalizedFields = normalizePeopleModuleFields(filtered);
+        const { getPeopleTypesConfig } = require('../utils/tenantMetadata');
+        const peopleCfg = await getPeopleTypesConfig(orgId, 'SALES');
+        const enrichedFields = enrichPeopleFieldsWithPeopleTypes(normalizedFields, peopleCfg.typeDefs);
 
         const out = {
             key: 'people',
             name: 'People',
-            fields: filtered,
+            fields: enrichedFields,
             quickCreate,
             quickCreateLayout
         };
@@ -3405,6 +3521,12 @@ exports.updateSystemModule = async (req, res) => {
             if (key === 'tasks') {
                 fieldsOut = dedupeFieldsByKey(fieldsOut);
                 fieldsOut = normalizeTasksModuleFields(fieldsOut);
+            }
+            if (key === 'people') {
+                const { getPeopleTypesConfig } = require('../utils/tenantMetadata');
+                const peopleCfg = await getPeopleTypesConfig(req.user.organizationId, 'SALES');
+                fieldsOut = normalizePeopleModuleFields(fieldsOut);
+                fieldsOut = enrichPeopleFieldsWithPeopleTypes(fieldsOut, peopleCfg.typeDefs);
             }
             updateObj.fields = fieldsOut;
         }
@@ -3487,6 +3609,9 @@ exports.updateSystemModule = async (req, res) => {
             if (key === 'events') {
                 qc = qc.filter(k => !deprecatedEventAliasKeys.has(String(k || '').toLowerCase()));
             }
+            if (key === 'people') {
+                qc = migratePeopleQuickCreateKeys(qc);
+            }
             updateObj.quickCreate = qc;
             console.log('📝 Setting quickCreate in updateObj:', {
                 value: updateObj.quickCreate,
@@ -3513,6 +3638,9 @@ exports.updateSystemModule = async (req, res) => {
                         }))
                         .filter(r => Array.isArray(r?.cols) ? r.cols.length > 0 : true)
                 };
+            }
+            if (key === 'people') {
+                layout = migratePeopleQuickCreateLayoutKeys(layout);
             }
             updateObj.quickCreateLayout = layout;
             console.log('📝 Setting quickCreateLayout in updateObj:', {

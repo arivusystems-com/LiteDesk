@@ -6,6 +6,10 @@
  */
 
 import type { FilterType } from '@/platform/fields/peopleFieldModel';
+import {
+  getPeopleFieldQueryPath,
+  getPeopleRegistryItem,
+} from '@/platform/fields/peopleFieldRegistry';
 
 export interface FilterConfig {
   key: string;
@@ -58,11 +62,17 @@ export function getFiltersForModule(
 
   // Map to filter configurations
   const filters: FilterConfig[] = sortedFields.map(field => {
+    const mappedPath =
+      moduleKey === 'people' && field.key
+        ? getPeopleRegistryItem(field.key)
+          ? getPeopleFieldQueryPath(field.key)
+          : field.fieldPath || field.key
+        : field.fieldPath || field.key;
     const filter: FilterConfig = {
       key: field.key,
       label: field.label || field.key,
       filterType: field.filterType!,
-      fieldPath: field.key,
+      fieldPath: mappedPath,
       priority: field.filterPriority ?? 999,
     };
 

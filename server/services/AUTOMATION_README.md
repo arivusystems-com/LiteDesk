@@ -8,7 +8,7 @@ Emitted from service/controller layer, **only on real changes**:
 
 | Entity       | Event Types                                                                 |
 | ------------ | --------------------------------------------------------------------------- |
-| People       | `people.lifecycle.changed`, `people.type.changed`                            |
+| People       | `people.lifecycle.changed`, `people.sales_type.changed` — run `npm run migrate:people-legacy` (dry-run) then `npm run migrate:people-legacy:apply` to migrate rules + People docs across DBs |
 | Organization | `organization.lifecycle.changed`, `organization.type.changed`                |
 | Deal         | `deal.stage.changed`, `deal.pipeline.changed`, `deal.deal.won`, `deal.deal.lost` |
 

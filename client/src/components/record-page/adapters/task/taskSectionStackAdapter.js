@@ -57,9 +57,7 @@ export const createTaskSectionStackAdapter = (context = {}) => {
           title: 'Details',
           component: DetailsSection,
           className: 'pt-4 pb-2',
-          actions: [
-            ...(!isExpandedMode ? [{ key: 'expand-details', type: 'expand', label: 'Expand' }] : [])
-          ]
+          actions: (!isExpandedMode ? [{ key: 'expand-details', type: 'expand', label: 'Expand' }] : [])
         },
         subtasks: {
           key: 'subtasks',

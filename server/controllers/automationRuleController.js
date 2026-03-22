@@ -19,7 +19,7 @@ const log = createLogger('automationRuleController');
 const DOMAIN_EVENT_TYPES = [
   // People events
   'people.lifecycle.changed',
-  'people.type.changed',
+  'people.sales_type.changed',
   // Organization events
   'organization.lifecycle.changed',
   'organization.type.changed',

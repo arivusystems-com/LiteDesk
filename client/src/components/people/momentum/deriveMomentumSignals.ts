@@ -30,7 +30,7 @@
 
 import type { MomentumSignal } from './momentumSignal';
 import { createMomentumSignal } from './momentumSignal';
-import { PEOPLE_FIELD_METADATA, getFieldMetadata } from '@/platform/fields/peopleFieldModel';
+import { PEOPLE_FIELD_METADATA } from '@/platform/fields/peopleFieldModel';
 
 export interface ProfileData {
   core?: {
@@ -43,6 +43,7 @@ export interface ProfileData {
   apps?: {
     [appKey: string]: {
       fields?: {
+        sales_type?: string;
         type?: string;
         lead_status?: string;
         contact_status?: string;
@@ -86,7 +87,9 @@ export function deriveMomentumSignals(
   const coreFields = profileData.core?.fields || {};
   const apps = profileData.apps || {};
   const suppression = suppressionContext || {};
-  
+  const salesAppFields = apps.SALES?.fields;
+  const salesRoleTop = salesAppFields?.sales_type;
+
   // Signal 1: Do Not Contact flag (critical)
   // Type: DO_NOT_CONTACT_FLAG
   if (coreFields.do_not_contact === true) {
@@ -117,7 +120,7 @@ export function deriveMomentumSignals(
   
   // Signal 3: SALES Lead without status (info)
   // Type: LEAD_STATUS_MISSING
-  if (apps.SALES?.fields?.type === 'Lead' && !apps.SALES.fields.lead_status) {
+  if (salesRoleTop === 'Lead' && salesAppFields && !salesAppFields.lead_status) {
     result.push(createMomentumSignal(
       'LEAD_STATUS_MISSING',
       'Lead status has not been set.',
@@ -143,7 +146,7 @@ export function deriveMomentumSignals(
   
   // Signal 4: SALES Contact with DoNotContact status (warning)
   // Type: CONTACT_DO_NOT_CONTACT_STATUS
-  if (apps.SALES?.fields?.type === 'Contact' && apps.SALES.fields.contact_status === 'DoNotContact') {
+  if (salesRoleTop === 'Contact' && salesAppFields?.contact_status === 'DoNotContact') {
     result.push(createMomentumSignal(
       'CONTACT_DO_NOT_CONTACT_STATUS',
       'Contact status is set to Do Not Contact.',
@@ -157,9 +160,10 @@ export function deriveMomentumSignals(
   // Check each app participation for missing required fields
   Object.entries(apps).forEach(([appKey, appSection]) => {
     const appFields = appSection.fields || {};
-    
+    const appSalesRole = appFields.sales_type;
+
     // Only check if person actually participates in this app
-    if (appKey === 'SALES' && !appFields.type) {
+    if (appKey === 'SALES' && !appSalesRole) {
       return; // Not participating in SALES
     }
     
@@ -176,15 +180,15 @@ export function deriveMomentumSignals(
     // Hidden fields are not included in profileData, so they won't be in appFields
     // This ensures we only flag missing fields that the user can actually see/edit
     const missingFields: string[] = [];
-    participationFields.forEach(([fieldName, metadata]) => {
+    participationFields.forEach(([fieldName, _metadata]) => {
       // For SALES app, check type-specific requirements:
       // - lead_status is only required when type === 'Lead'
       // - contact_status is only required when type === 'Contact'
       if (appKey === 'SALES') {
-        if (fieldName === 'lead_status' && appFields.type !== 'Lead') {
+        if (fieldName === 'lead_status' && appSalesRole !== 'Lead') {
           return; // Skip lead_status check for Contacts
         }
-        if (fieldName === 'contact_status' && appFields.type !== 'Contact') {
+        if (fieldName === 'contact_status' && appSalesRole !== 'Contact') {
           return; // Skip contact_status check for Leads
         }
       }
@@ -213,7 +217,7 @@ export function deriveMomentumSignals(
       // Determine app name based on type (for SALES)
       let appName: string;
       if (appKey === 'SALES') {
-        const participationType = appFields.type;
+        const participationType = appSalesRole;
         if (participationType === 'Contact') {
           appName = 'Sales Contact';
         } else if (participationType === 'Lead') {
@@ -252,7 +256,7 @@ export function deriveMomentumSignals(
   // Type: LEAD_READY_FOR_CONVERSION
   // Condition: appKey === SALES, type === 'Lead', lead_status === 'Qualified'
   // Suppress if convert modal is open (user is actively resolving)
-  if (apps.SALES?.fields?.type === 'Lead' && apps.SALES.fields.lead_status === 'Qualified') {
+  if (salesRoleTop === 'Lead' && salesAppFields?.lead_status === 'Qualified') {
     if (!suppression.convertModalOpen) {
       result.push(createMomentumSignal(
         'LEAD_READY_FOR_CONVERSION',
@@ -281,9 +285,10 @@ export function deriveMomentumSignals(
   // Condition: Participation exists, no activity in last N days (30)
   Object.entries(apps).forEach(([appKey, appSection]) => {
     const appFields = appSection.fields || {};
-    
+    const appSalesRole = appFields.sales_type;
+
     // Only check if person actually participates in this app
-    if (appKey === 'SALES' && !appFields.type) {
+    if (appKey === 'SALES' && !appSalesRole) {
       return; // Not participating in SALES
     }
     

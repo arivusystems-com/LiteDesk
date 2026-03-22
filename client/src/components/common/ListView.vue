@@ -2168,7 +2168,7 @@ const normalizeColumnOrder = (columns) => {
 
   // Handle specific ordering for the 'people' module
   if (props.moduleKey === 'people') {
-    const peopleSpecificOrder = ['name', 'organization', 'type', 'email', 'phone', 'assignedTo'];
+    const peopleSpecificOrder = ['name', 'organization', 'sales_type', 'email', 'phone', 'assignedTo'];
     const orderedColumns = [];
     const processedKeys = new Set();
 

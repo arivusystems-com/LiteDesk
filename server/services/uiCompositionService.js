@@ -70,8 +70,18 @@ class UICompositionService {
 
       // Map to UI format
       let uiApps = appDefinitions.map(app => {
-        let defaultRoute = app.ui?.defaultRoute || '/dashboard';
-        
+        const appKeyLower = app.appKey.toLowerCase();
+        // Avoid every app inheriting the same `/dashboard` (registry validation + deep links)
+        const defaultHomeByApp = {
+          sales: '/sales/dashboard',
+          audit: '/audit/dashboard',
+          portal: '/portal/dashboard'
+        };
+        let defaultRoute = app.ui?.defaultRoute;
+        if (!defaultRoute || defaultRoute === '/dashboard') {
+          defaultRoute = defaultHomeByApp[appKeyLower] || `/dashboard/${appKeyLower}`;
+        }
+
         // Normalize invalid routes (fix for old data)
         if (defaultRoute === '/portal/me') {
           // /portal/me is an API endpoint, not a frontend route

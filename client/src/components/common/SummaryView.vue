@@ -1627,6 +1627,7 @@
     :fields="popupModalConfig.fields"
     :initial-data="props.record || {}"
     :all-fields="moduleDefinition?.fields || []"
+    :module-key="props.recordType"
     @close="closePopupModal"
     @save="handlePopupSave"
   />
@@ -1651,6 +1652,7 @@ import FormPreview from '@/components/forms/FormPreview.vue';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import LinkRecordsDrawer from '@/components/common/LinkRecordsDrawer.vue';
 import apiClient from '@/utils/apiClient';
+import { PEOPLE_SALES_ROLE_MODULE_DEFINITION_KEYS } from '@/utils/peopleParticipationUi';
 import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';
 import PermissionButton from '@/components/common/PermissionButton.vue';
@@ -1940,7 +1942,9 @@ const getFieldState = (field) => {
   }
   // Use record data for dependency evaluation
   const currentFormData = props.record || {};
-  return getFieldDependencyState(field, currentFormData, moduleDefinition.value?.fields || []);
+  return getFieldDependencyState(field, currentFormData, moduleDefinition.value?.fields || [], {
+    moduleKey: props.recordType,
+  });
 };
 
 // Get fields with their definitions for details tab
@@ -4868,7 +4872,9 @@ const checkForPopupTriggers = () => {
     for (const dep of field.dependencies) {
       if (dep.type === 'popup' && dep.popupFields && Array.isArray(dep.popupFields) && dep.popupFields.length > 0) {
         // Evaluate if dependency conditions are met
-        const conditionMet = evaluateDependency(dep, currentFormData, allFields);
+        const conditionMet = evaluateDependency(dep, currentFormData, allFields, {
+          moduleKey: props.recordType,
+        });
         
         if (conditionMet) {
           const triggerKey = `${field.key}-${dep.name || 'popup'}-${dep.popupFields.join(',')}`;
@@ -5352,22 +5358,23 @@ const getLifecycleStatusFields = computed(() => {
   // Use record.value (reactive ref) to ensure reactivity
   const currentRecord = record.value;
   
-  // For People module, show type + lead_status/contact_status
+  // For People module, show sales_type + lead_status/contact_status
   if (props.recordType === 'people') {
-    // Type field - use record.value.type for reactivity
-    const typeField = getFieldDefinition('type');
+    const salesKind =
+      currentRecord?.sales_type;
+    const typeField = PEOPLE_SALES_ROLE_MODULE_DEFINITION_KEYS.map((k) => getFieldDefinition(k)).find(Boolean);
     if (typeField) {
       statusFields.push({
-        key: 'type',
-        label: 'Type',
-        value: record.value?.type, // Use reactive ref
+        key: 'sales_type',
+        label: typeField.label || 'Type',
+        value: salesKind,
         options: typeField.options || [],
         fieldDef: typeField
       });
     }
     
-    // Lead status (if type is Lead) - use record.value.type for condition check
-    if (record.value?.type === 'Lead') {
+    // Lead status (if SALES role is Lead)
+    if (salesKind === 'Lead') {
       const leadStatusField = getFieldDefinition('lead_status');
       if (leadStatusField) {
         statusFields.push({
@@ -5380,8 +5387,8 @@ const getLifecycleStatusFields = computed(() => {
       }
     }
     
-    // Contact status (if type is Contact) - use record.value.type for condition check
-    if (record.value?.type === 'Contact') {
+    // Contact status (if SALES role is Contact)
+    if (salesKind === 'Contact') {
       const contactStatusField = getFieldDefinition('contact_status');
       if (contactStatusField) {
         statusFields.push({
@@ -6073,7 +6080,7 @@ const refreshAllWidgets = () => {
 const getCreateDrawerTitle = () => {
   if (createDrawerRecord.value) return null; // let drawer compute edit title
   const titles = {
-    'people': 'New Contact',
+    'people': 'New Person',
     'organizations': 'New Organization',
     'deals': 'New Deal',
     'tasks': 'New Task',

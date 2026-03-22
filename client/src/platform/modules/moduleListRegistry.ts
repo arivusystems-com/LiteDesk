@@ -13,7 +13,6 @@
  * fully reusable across all modules.
  */
 
-import { useAuthStore } from '@/stores/auth';
 import { getItemFieldMetadata } from '@/platform/fields/itemFieldModel';
 import { dateFilterValueToParams } from '@/utils/dateFilterOptions';
 
@@ -67,7 +66,6 @@ export function buildDefaultColumns(
   config: DefaultColumnConfig
 ): any[] {
   const { defaultVisibleColumns, excludedFromDefault = [], lockedColumn } = config;
-  const defaultVisibleKeys = new Set(defaultVisibleColumns);
   const processedColumns = [];
   const processedKeys = new Set();
   const excludedSet = new Set(excludedFromDefault);
@@ -213,7 +211,7 @@ function computeOrganizationsStatistics(data: any[], currentUserId?: string): Re
  * Generic filter normalizer using schema-driven approach
  * Uses filterType from field definitions to normalize filters
  */
-function createGenericFilterNormalizer(moduleKey: string) {
+function createGenericFilterNormalizer(_moduleKey: string) {
   return (filters: Record<string, any>, currentUserId?: string): Record<string, any> => {
     // Try to get filter configs from field definitions
     // For now, use known filter types based on common patterns
@@ -234,7 +232,7 @@ function createGenericFilterNormalizer(moduleKey: string) {
     try {
       const { normalizeFiltersForAPI } = require('@/platform/filters/filterNormalizer');
       return normalizeFiltersForAPI(filters, filterConfigs, currentUserId);
-    } catch (error) {
+    } catch {
       // Fallback to basic normalization
       const normalized = { ...filters };
       if ('assignedTo' in normalized) {
@@ -252,7 +250,7 @@ function createGenericFilterNormalizer(moduleKey: string) {
 /**
  * Generic view filter normalizer
  */
-function createGenericViewFilterNormalizer(moduleKey: string) {
+function createGenericViewFilterNormalizer(_moduleKey: string) {
   return (filters: Record<string, any>, currentUserId?: string): Record<string, any> => {
     const filterConfigs: Array<{ key: string; filterType: string }> = [];
     
@@ -269,7 +267,7 @@ function createGenericViewFilterNormalizer(moduleKey: string) {
     try {
       const { normalizeFiltersForUI } = require('@/platform/filters/filterNormalizer');
       return normalizeFiltersForUI(filters, filterConfigs, currentUserId);
-    } catch (error) {
+    } catch {
       // Fallback to basic normalization
       const normalized = { ...filters };
       if ('assignedTo' in normalized) {
@@ -288,7 +286,14 @@ function createGenericViewFilterNormalizer(moduleKey: string) {
  * Normalize People filters (backward compatibility)
  */
 function normalizePeopleFilters(filters: Record<string, any>, currentUserId?: string): Record<string, any> {
-  return createGenericFilterNormalizer('people')(filters, currentUserId);
+  const normalized = createGenericFilterNormalizer('people')(filters, currentUserId);
+  const out = { ...normalized };
+  // Saved views / legacy UI may still store `type`; API accepts `sales_type` only
+  if (out.type !== undefined && out.sales_type === undefined) {
+    out.sales_type = out.type;
+  }
+  delete out.type;
+  return out;
 }
 
 /**
@@ -644,7 +649,7 @@ function normalizeDealsViewFilters(filters: Record<string, any>, currentUserId?:
 /**
  * Compute Items statistics
  */
-function computeItemsStatistics(data: any[], currentUserId?: string): Record<string, number> {
+function computeItemsStatistics(data: any[], _currentUserId?: string): Record<string, number> {
   const stats = {
     totalItems: data.length,
     activeItems: 0,
@@ -692,7 +697,7 @@ function computeItemsStatistics(data: any[], currentUserId?: string): Record<str
 /**
  * Normalize Items filters
  */
-function normalizeItemsFilters(filters: Record<string, any>, currentUserId?: string): Record<string, any> {
+function normalizeItemsFilters(filters: Record<string, any>, _currentUserId?: string): Record<string, any> {
   const normalized = { ...filters };
 
   // Normalize status filter
@@ -735,7 +740,7 @@ function normalizeItemsViewFilters(filters: Record<string, any>, currentUserId?:
 export const MODULE_LIST_REGISTRY: Record<string, ModuleListConfig> = {
   people: {
     defaultColumns: {
-      defaultVisibleColumns: ['name', 'organization', 'type', 'email', 'phone', 'assignedTo'],
+      defaultVisibleColumns: ['name', 'organization', 'sales_type', 'email', 'phone', 'assignedTo'],
       lockedColumn: 'name',
       excludedFromDefault: []
     },

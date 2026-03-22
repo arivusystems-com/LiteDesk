@@ -107,7 +107,7 @@ export interface CreatePersonIntentContext {
    * Excluded fields (optional)
    * 
    * Structural fields that should not be rendered in creation forms.
-   * Examples: 'type' (participation type is shown via badge, not field)
+   * Examples: 'sales_type' (SALES role is shown via badge / intent, not as a free field)
    * 
    * These fields are excluded from rendering but may still be set programmatically.
    */

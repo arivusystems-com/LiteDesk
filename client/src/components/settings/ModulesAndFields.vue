@@ -1359,7 +1359,13 @@
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     {{ currentField.dataType === 'Multi-Picklist' ? 'Picklist Options (Multi-Select)' : currentField.dataType === 'Radio Button' ? 'Radio Button Options' : 'Picklist Options' }}
                   </label>
-                  <button v-if="!isSystemField(currentField) && !isDealPipelineOrStageField(currentField)" @click="showAddOption = true" class="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700">Add Option</button>
+                  <button
+                    v-if="!isSystemField(currentField) && !isDealPipelineOrStageField(currentField) && !isPeopleTypesTabPicklistField(currentField)"
+                    @click="showAddOption = true"
+                    class="px-3 py-1.5 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700"
+                  >
+                    Add Option
+                  </button>
                 </div>
                 <!-- Deal Stage / Pipeline: options are configured in Pipelines & Stages -->
                 <div v-if="isDealPipelineOrStageField(currentField)" class="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 px-4 py-3">
@@ -1373,6 +1379,38 @@
                   >
                     Open Pipelines & Stages
                   </button>
+                </div>
+                <!-- People participation role picklists: single source of truth = Types tab (tenant peopleTypes per app) -->
+                <div
+                  v-else-if="peopleTypesTabFieldInfo"
+                  class="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 px-4 py-3"
+                >
+                  <p class="text-sm text-blue-800 dark:text-blue-300 mb-2">
+                    <strong>{{ peopleTypesTabFieldInfo.article }}</strong> ({{ peopleTypesTabFieldInfo.scopeLabel }}) options and colors are managed in <strong>Types</strong>. They stay in sync with this picklist for forms and lists—edit them there, not here.
+                  </p>
+                  <button
+                    v-if="!excludedTabs?.includes('people-types')"
+                    type="button"
+                    @click="navigateToPeopleTypes(peopleTypesTabFieldInfo.appKey)"
+                    class="px-3 py-1.5 text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors mb-3"
+                  >
+                    Open Types
+                  </button>
+                  <p class="text-xs font-medium text-blue-900 dark:text-blue-200 mb-2">Current options (read-only)</p>
+                  <div v-if="!normalizedOptions.length" class="text-xs text-blue-800/80 dark:text-blue-300/80">No types loaded yet.</div>
+                  <ul v-else class="space-y-2">
+                    <li
+                      v-for="(opt, oi) in normalizedOptions"
+                      :key="`${getOptionValue(opt) || oi}`"
+                      class="flex items-center gap-3 text-sm text-blue-900 dark:text-blue-100"
+                    >
+                      <span
+                        class="w-3 h-3 rounded-full shrink-0 border border-blue-300/50 dark:border-blue-600/50"
+                        :style="{ backgroundColor: getOptionColor(opt) }"
+                      />
+                      <span class="font-medium">{{ getOptionDisplayLabel(opt) }}</span>
+                    </li>
+                  </ul>
                 </div>
                 <template v-else>
                 <div v-if="isTaskStatusField(currentField)" class="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-900/20">
@@ -2849,6 +2887,11 @@
               </button>
             </div>
           </div>
+        </div>
+
+        <!-- Types Tab (People module): per-app participation roles -->
+        <div class="flex-1 overflow-y-auto" v-else-if="activeTopTab === 'people-types' && isPeopleModule">
+          <PeopleTypesSettings />
         </div>
 
         <!-- Status & Priority Tab (Tasks module only) - Summary view, edit in Field Configurations -->
@@ -4564,11 +4607,11 @@
                 <!-- Simple mode: checkboxes with grouped sections -->
                 <template v-if="isPeopleModule">
                   <!-- Core Identity Fields -->
-                  <div v-if="quickCreateAvailableFields.some(f => getFieldMetadata(f.key)?.owner === 'core')" class="mb-4">
+                  <div v-if="quickCreateAvailableFields.some(f => getPeopleFieldMetadata(f.key)?.owner === 'core')" class="mb-4">
                     <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Core Identity</div>
                     <ul class="space-y-1">
                       <li
-                        v-for="f in quickCreateAvailableFields.filter(f => getFieldMetadata(f.key)?.owner === 'core')"
+                        v-for="f in quickCreateAvailableFields.filter(f => getPeopleFieldMetadata(f.key)?.owner === 'core')"
                         :key="f.key"
                         class="px-3 py-2 rounded flex items-center gap-2 cursor-pointer"
                         :class="quickCreateSelected.has(f.key) ? 'bg-gray-100 dark:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/5'"
@@ -4582,11 +4625,11 @@
                   </div>
                   
                   <!-- Participation Fields -->
-                  <div v-if="quickCreateAvailableFields.some(f => getFieldMetadata(f.key)?.owner === 'participation')" class="mb-4">
+                  <div v-if="quickCreateAvailableFields.some(f => getPeopleFieldMetadata(f.key)?.owner === 'participation')" class="mb-4">
                     <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Participation</div>
                     <ul class="space-y-1">
                       <li
-                        v-for="f in quickCreateAvailableFields.filter(f => getFieldMetadata(f.key)?.owner === 'participation')"
+                        v-for="f in quickCreateAvailableFields.filter(f => getPeopleFieldMetadata(f.key)?.owner === 'participation')"
                         :key="f.key"
                         class="px-3 py-2 rounded flex items-center gap-2 cursor-pointer"
                         :class="quickCreateSelected.has(f.key) ? 'bg-gray-100 dark:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/5'"
@@ -4600,11 +4643,29 @@
                   </div>
                   
                   <!-- System Fields -->
-                  <div v-if="quickCreateAvailableFields.some(f => getFieldMetadata(f.key)?.owner === 'system')" class="mb-4">
+                  <div v-if="quickCreateAvailableFields.some(f => getPeopleFieldMetadata(f.key)?.owner === 'system')" class="mb-4">
                     <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">System</div>
                     <ul class="space-y-1">
                       <li
-                        v-for="f in quickCreateAvailableFields.filter(f => getFieldMetadata(f.key)?.owner === 'system')"
+                        v-for="f in quickCreateAvailableFields.filter(f => getPeopleFieldMetadata(f.key)?.owner === 'system')"
+                        :key="f.key"
+                        class="px-3 py-2 rounded flex items-center gap-2 cursor-pointer"
+                        :class="quickCreateSelected.has(f.key) ? 'bg-gray-100 dark:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/5'"
+                        @click="toggleQuickRow(f)"
+                        :title="f.required ? 'Required field is always included' : ''"
+                      >
+                        <HeadlessCheckbox :checked="quickCreateSelected.has(f.key)" :disabled="f.required" @change="toggleQuickCreate(f.key, $event.target.checked)" @click.stop />
+                        <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
+                      </li>
+                    </ul>
+                  </div>
+                  
+                  <!-- Custom / org-defined fields (not in PEOPLE_FIELD_METADATA) -->
+                  <div v-if="quickCreateAvailableFields.some(f => f.key && !getPeopleFieldMetadata(f.key))" class="mb-4">
+                    <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Custom</div>
+                    <ul class="space-y-1">
+                      <li
+                        v-for="f in quickCreateAvailableFields.filter(f => f.key && !getPeopleFieldMetadata(f.key))"
                         :key="f.key"
                         class="px-3 py-2 rounded flex items-center gap-2 cursor-pointer"
                         :class="quickCreateSelected.has(f.key) ? 'bg-gray-100 dark:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/5'"
@@ -5413,8 +5474,15 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { Switch, Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import apiClient from '@/utils/apiClient';
+import { parsePeopleTypesApiPayload, peopleTypeColorToHex } from '@/utils/peopleTypeColors';
+import { peopleTypesCacheVersion } from '@/utils/peopleTypesInvalidate';
+import {
+  isPeopleSalesRoleFieldKey,
+  PEOPLE_SALES_ROLE_FIELD_KEYS_NORMALIZED
+} from '@/utils/peopleParticipationUi';
 import { openDatePicker } from '@/utils/dateUtils';
 import ModuleFormModal from './ModuleFormModal.vue';
+import PeopleTypesSettings from './PeopleTypesSettings.vue';
 import AddCustomFieldDrawer from './AddCustomFieldDrawer.vue';
 import RelationshipFormDrawer from './RelationshipFormDrawer.vue';
 import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
@@ -5706,6 +5774,9 @@ function getAllowedTopTabs(moduleKey) {
   if (moduleKey === 'deals') {
     return [...TOP_TAB_IDS_BASE, 'pipeline', 'playbooks'];
   }
+  if (moduleKey === 'people') {
+    return [...TOP_TAB_IDS_BASE, 'people-types'];
+  }
   if (moduleKey === 'organizations') {
     // Organizations module has Status & Types tab
     return [...TOP_TAB_IDS_BASE, 'status-types'];
@@ -5756,6 +5827,12 @@ const topTabs = computed(() => {
       tabs.push({ id: 'playbooks', name: 'Playbook Configuration' });
     }
   }
+  if (moduleKey === 'people') {
+    const fieldsTabIndex = tabs.findIndex(tab => tab.id === 'fields');
+    if (fieldsTabIndex >= 0) {
+      tabs.splice(fieldsTabIndex + 1, 0, { id: 'people-types', name: 'Types' });
+    }
+  }
   if (moduleKey === 'organizations') {
     // Insert "Status & Types" tab after "Field Configurations" and before "Relationships"
     const fieldsTabIndex = tabs.findIndex(tab => tab.id === 'fields');
@@ -5797,6 +5874,7 @@ const topTabs = computed(() => {
 const tabTitleMap = {
   details: 'Module Details',
   fields: 'Field Configurations',
+  'people-types': 'Types',
   'status-types': 'Status & Types',
   'status-priority': 'Status & Priority',
   'status': 'Status',
@@ -5815,7 +5893,7 @@ const getInitialTab = () => {
   // First check URL query
   const route = useRoute();
   const modeKey = typeof route.query.mode === 'string' ? route.query.mode : null;
-  if (modeKey && ['details', 'fields', 'status-types', 'status-priority', 'status', 'roles-rules', 'relationships', 'quick', 'logic', 'outcomes', 'access'].includes(modeKey)) {
+  if (modeKey && ['details', 'fields', 'people-types', 'status-types', 'status-priority', 'status', 'roles-rules', 'relationships', 'quick', 'logic', 'outcomes', 'access'].includes(modeKey)) {
     return modeKey;
   }
   // If no URL param, we'll check localStorage after module loads
@@ -7496,6 +7574,45 @@ function navigateToPipelines() {
   }
 }
 
+/** Fields whose picklist options come from Settings → Types (per app), not inline field options. */
+function getPeopleTypesTabFieldInfo(field) {
+  if (!field?.key || selectedModule.value?.key?.toLowerCase() !== 'people') return null;
+  const k = normalizeFieldKey(field.key);
+  // snake_case (API) or camelCase after normalize (e.g. salesType → salestype)
+  if (isPeopleSalesRoleFieldKey(field.key)) {
+    return { appKey: 'SALES', article: 'Type', scopeLabel: 'Sales role' };
+  }
+  if (k === 'helpdesk_role' || k === 'helpdeskrole') {
+    return { appKey: 'HELPDESK', article: 'Role', scopeLabel: 'Helpdesk' };
+  }
+  return null;
+}
+
+function isPeopleTypesTabPicklistField(field) {
+  return getPeopleTypesTabFieldInfo(field) != null;
+}
+
+function navigateToPeopleTypes(appKey = 'SALES') {
+  if (props.excludedTabs?.includes('people-types')) return;
+  const mod = selectedModule.value;
+  if (!mod) return;
+  const key = String(appKey || 'SALES').toUpperCase() === 'HELPDESK' ? 'HELPDESK' : 'SALES';
+  activeTopTab.value = 'people-types';
+  router.replace({
+    query: {
+      ...route.query,
+      module: mod.key,
+      field: editFields.value[selectedFieldIdx.value]?.key || '',
+      mode: 'people-types',
+      subtab: activeSubTab.value,
+      peopleTypesApp: key
+    }
+  });
+  try {
+    localStorage.setItem(`litedesk-modfields-tab-${mod.key}`, 'people-types');
+  } catch (e) {}
+}
+
 // Helper: Check if a field is a custom field (owner: 'org')
 function isCustomField(fieldKey) {
   const field = editFields.value.find(f => f.key === fieldKey);
@@ -8382,6 +8499,16 @@ const fetchModules = async () => {
               filterType: 'multi-select',
               filterPriority: 2
             },
+            'sales_type': {
+              filterable: true,
+              filterType: 'multi-select',
+              filterPriority: 2
+            },
+            'helpdesk_role': {
+              filterable: true,
+              filterType: 'multi-select',
+              filterPriority: 2
+            },
             'do_not_contact': {
               filterable: true,
               filterType: 'boolean',
@@ -8862,6 +8989,16 @@ const fetchModules = async () => {
                   filterType: 'multi-select',
                   filterPriority: 2
                 },
+                'sales_type': {
+                  filterable: true,
+                  filterType: 'multi-select',
+                  filterPriority: 2
+                },
+                'helpdesk_role': {
+                  filterable: true,
+                  filterType: 'multi-select',
+                  filterPriority: 2
+                },
                 'do_not_contact': {
                   filterable: true,
                   filterType: 'boolean',
@@ -9017,6 +9154,16 @@ const selectModule = (mod, preferFieldKey = null) => {
         filterPriority: 1
       },
       'type': {
+        filterable: true,
+        filterType: 'multi-select',
+        filterPriority: 2
+      },
+      'sales_type': {
+        filterable: true,
+        filterType: 'multi-select',
+        filterPriority: 2
+      },
+      'helpdesk_role': {
         filterable: true,
         filterType: 'multi-select',
         filterPriority: 2
@@ -9235,6 +9382,52 @@ const selectModule = (mod, preferFieldKey = null) => {
   
   
 };
+
+async function refreshPeopleTypesOptionsFromTenant(appKey, normalizedFieldKeys) {
+  const fb = appKey === 'HELPDESK' ? ['Customer', 'Agent'] : ['Lead', 'Contact'];
+  const dr = fb[0] || '';
+  const res = await apiClient.get('/settings/core-modules/people/people-types', {
+    params: { appKey }
+  });
+  const payload = res && typeof res === 'object' && 'data' in res ? res.data : res;
+  const parsed = parsePeopleTypesApiPayload(payload, fb, dr);
+  const options = parsed.typeDefs.map((d) => ({
+    value: d.value,
+    label: d.value,
+    color: peopleTypeColorToHex(d.color)
+  }));
+  const next = [...editFields.value];
+  let changed = false;
+  for (let i = 0; i < next.length; i++) {
+    const nk = normalizeFieldKey(next[i]?.key);
+    if (normalizedFieldKeys.includes(nk)) {
+      next[i] = { ...next[i], options };
+      changed = true;
+    }
+  }
+  if (changed) {
+    editFields.value = next;
+  }
+}
+
+watch(peopleTypesCacheVersion, async () => {
+  if (selectedModule.value?.key?.toLowerCase() !== 'people') return;
+  const salesNormsList = [...PEOPLE_SALES_ROLE_FIELD_KEYS_NORMALIZED];
+  const helpdeskNorms = new Set(['helpdesk_role', 'helpdeskrole']);
+  const hasSalesField = editFields.value.some((f) => isPeopleSalesRoleFieldKey(f?.key));
+  const hasHelpdeskField = editFields.value.some((f) => helpdeskNorms.has(normalizeFieldKey(f?.key)));
+  if (!hasSalesField && !hasHelpdeskField) return;
+  try {
+    if (hasSalesField) {
+      await refreshPeopleTypesOptionsFromTenant('SALES', salesNormsList);
+    }
+    if (hasHelpdeskField) {
+      await refreshPeopleTypesOptionsFromTenant('HELPDESK', [...helpdeskNorms]);
+    }
+  } catch (e) {
+    console.warn('[ModulesAndFields] Failed to refresh People Types tab picklist options', e);
+  }
+});
 
 watch(pipelineSettings, () => {
   if (!pipelineTabEnabled.value) return;
@@ -9624,6 +9817,8 @@ const selectField = (idx) => {
 };
 
 const currentField = computed(() => editFields.value[selectedFieldIdx.value]);
+/** People type / sales_type / helpdesk_role — options synced from Types tab */
+const peopleTypesTabFieldInfo = computed(() => getPeopleTypesTabFieldInfo(currentField.value));
 const currentFieldTitle = computed(() => formatFieldLabelForDisplay(currentField.value?.label, currentField.value?.key) || 'Field');
 
 const orgCustomFieldIsCoreScope = computed(() => {
@@ -12311,37 +12506,37 @@ async function fetchStatusTypes() {
         console.log('[Status Types] Module fetch failed but tenant overrides exist, using tenant overrides');
         // Apply tenant overrides (same logic as above)
         if (tenantOverrides.organizationTypes && Array.isArray(tenantOverrides.organizationTypes)) {
-          organizationTypes.value = [...tenantOverrides.organizationTypes.map(t => ({
+          organizationTypes.value = tenantOverrides.organizationTypes.map(t => ({
             value: t.value,
             label: t.label || t.value,
             enabled: t.enabled !== undefined ? t.enabled : true,
             description: `${t.value} organizations`
-          }))];
+          }));
         }
         if (tenantOverrides.statusPicklists) {
           if (tenantOverrides.statusPicklists.customerStatus && Array.isArray(tenantOverrides.statusPicklists.customerStatus)) {
-            statusPicklists.value.customerStatus = [...tenantOverrides.statusPicklists.customerStatus.map(s => ({
+            statusPicklists.value.customerStatus = tenantOverrides.statusPicklists.customerStatus.map(s => ({
               value: s.value,
               label: s.label || s.value,
               enabled: s.enabled !== undefined ? s.enabled : true,
               editing: false
-            }))];
+            }));
           }
           if (tenantOverrides.statusPicklists.partnerStatus && Array.isArray(tenantOverrides.statusPicklists.partnerStatus)) {
-            statusPicklists.value.partnerStatus = [...tenantOverrides.statusPicklists.partnerStatus.map(s => ({
+            statusPicklists.value.partnerStatus = tenantOverrides.statusPicklists.partnerStatus.map(s => ({
               value: s.value,
               label: s.label || s.value,
               enabled: s.enabled !== undefined ? s.enabled : true,
               editing: false
-            }))];
+            }));
           }
           if (tenantOverrides.statusPicklists.vendorStatus && Array.isArray(tenantOverrides.statusPicklists.vendorStatus)) {
-            statusPicklists.value.vendorStatus = [...tenantOverrides.statusPicklists.vendorStatus.map(s => ({
+            statusPicklists.value.vendorStatus = tenantOverrides.statusPicklists.vendorStatus.map(s => ({
               value: s.value,
               label: s.label || s.value,
               enabled: s.enabled !== undefined ? s.enabled : true,
               editing: false
-            }))];
+            }));
           }
         }
         // Save snapshot

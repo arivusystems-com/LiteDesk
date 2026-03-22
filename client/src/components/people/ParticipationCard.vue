@@ -123,6 +123,10 @@ import { useAuthStore } from '@/stores/auth';
 import { PEOPLE_PERMISSIONS } from '@/platform/permissions/peoplePermissions';
 import { hasPeoplePermission } from '@/platform/permissions/peoplePermissionHelper';
 import { getDetailFields, getFieldMetadata, PEOPLE_FIELD_METADATA } from '@/platform/fields/peopleFieldModel';
+import {
+  getPeopleSalesRoleValueFromFields,
+  isPeopleSalesLeadFromFields,
+} from '@/utils/peopleParticipationUi';
 
 const props = defineProps({
   appKey: {
@@ -199,9 +203,9 @@ const participationRole = computed(() => {
   return 'Participant';
 });
 
-// Participation type (normalized)
+// Participation type (normalized) — profile uses sales_type
 const participationType = computed(() => {
-  return normalizeParticipationType(props.appSection.fields?.type);
+  return normalizeParticipationType(getPeopleSalesRoleValueFromFields(props.appSection.fields || {}));
 });
 
 // Check if this is a Sales participation (for inline status editing)
@@ -227,7 +231,8 @@ const currentState = computed(() => {
   
   // For SALES app
   if (props.appKey === 'SALES') {
-    if (fields.type === 'Lead') {
+    const pt = participationType.value;
+    if (pt === 'Lead') {
       if (fields.lead_status) {
         return {
           type: 'info',
@@ -241,7 +246,7 @@ const currentState = computed(() => {
         };
       }
     }
-    if (fields.type === 'Contact') {
+    if (pt === 'Contact') {
       if (fields.contact_status) {
         return {
           type: fields.contact_status === 'DoNotContact' ? 'danger' : 'success',
@@ -498,10 +503,10 @@ const formatFieldValue = (fieldKey, value) => {
 // Get participation actions from action map
 const participationActions = computed(() => {
   const fields = props.appSection.fields || {};
-  const participationType = normalizeParticipationType(fields.type);
-  
+  const normalizedType = normalizeParticipationType(getPeopleSalesRoleValueFromFields(fields));
+
   // Get contextual actions from participation action map
-  const actions = getParticipationActions(props.appKey, participationType);
+  const actions = getParticipationActions(props.appKey, normalizedType);
   
   if (actions) {
     return actions;
@@ -514,7 +519,7 @@ const participationActions = computed(() => {
   };
   
   // Convert Lead to Contact (for SALES Lead) - special case
-  if (props.appKey === 'SALES' && (fields.type === 'Lead' || fields.type === 'lead')) {
+  if (props.appKey === 'SALES' && isPeopleSalesLeadFromFields(fields)) {
     fallbackActions.primary = {
       label: 'Convert to Contact',
       variant: 'secondary',

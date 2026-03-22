@@ -291,6 +291,7 @@
     <!-- ARCHITECTURAL INTENT: Opens in same tab, not navigating to new route -->
     <PeopleQuickCreateDrawer
       :isOpen="showPeopleDrawer"
+      :context-app-key="peopleDrawerContextAppKey"
       @close="handlePeopleDrawerClose"
       @saved="handlePeopleDrawerSaved"
     />
@@ -415,6 +416,7 @@ const linkDrawerAllowCreate = ref(false);
 // Create drawer state (for create action commands)
 const showCreateDrawer = ref(false);
 const showPeopleDrawer = ref(false);
+const peopleDrawerContextAppKey = ref<string | null>(null);
 const showEventDrawer = ref(false);
 const createDrawerModuleKey = ref('');
 const createDrawerInitialData = ref<Record<string, any>>({});
@@ -617,7 +619,7 @@ const handleCreateDrawerOpen = (event: CustomEvent) => {
   }
   
   // Enhance initial data with current user assignment for tasks
-  const enhancedInitialData = { ...(initialData || {}) };
+  const enhancedInitialData = { ...initialData };
   
   if (moduleKey === 'tasks') {
     // Auto-assign to current user if not already set
@@ -660,7 +662,9 @@ const handleOrganizationQuickCreateOpen = (event: CustomEvent) => {
  * Handle People Quick Create drawer open event
  * ARCHITECTURAL INTENT: Opens drawer in same tab, not navigating to new route
  */
-const handlePeopleQuickCreateOpen = () => {
+const handlePeopleQuickCreateOpen = (e?: Event) => {
+  const ev = e as CustomEvent<{ contextAppKey?: string | null }> | undefined;
+  peopleDrawerContextAppKey.value = ev?.detail?.contextAppKey ?? null;
   showPeopleDrawer.value = true;
   // Close the command palette when opening the drawer
   close();
@@ -668,6 +672,7 @@ const handlePeopleQuickCreateOpen = () => {
 
 const handlePeopleDrawerClose = () => {
   showPeopleDrawer.value = false;
+  peopleDrawerContextAppKey.value = null;
 };
 
 const handlePeopleDrawerSaved = (person: any) => {

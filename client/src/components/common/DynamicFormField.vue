@@ -1763,7 +1763,7 @@ const generateLookupModalColumns = () => {
   ];
   
   // Add common fields
-  const commonFields = ['email', 'phone', 'status', 'type'];
+  const commonFields = ['email', 'phone', 'status', 'sales_type'];
   commonFields.forEach(field => {
     if (field !== displayField) {
       columns.push({ key: field, label: field.charAt(0).toUpperCase() + field.slice(1), sortable: true });

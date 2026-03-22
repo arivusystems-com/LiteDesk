@@ -62,7 +62,7 @@
  * ```typescript
  * // Get default filters for a module
  * const defaultFilters = getDefaultFiltersForModule('people');
- * // Returns: ['assignedTo', 'type', 'do_not_contact', 'organization']
+ * // Returns: ['assignedTo', 'sales_type', 'do_not_contact', 'organization']
  * 
  * // Get with custom limit
  * const topFilters = getDefaultFiltersForModule('tasks', { maxFilters: 3 });

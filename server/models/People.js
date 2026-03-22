@@ -2,29 +2,28 @@
  * ============================================================================
  * PLATFORM CORE: People (Contacts) Model
  * ============================================================================
- * 
+ *
  * This model represents people/contacts (app-agnostic):
  * - Basic contact information (name, email, phone)
  * - Organization reference (multi-tenancy)
  * - Assignment tracking
  * - Activity logs (generic audit trail)
- * 
- * ⚠️ ARCHITECTURAL NOTE: Contains SALES-specific fields
- *    - Lead/Contact type distinction (type: 'Lead' | 'Contact')
- *    - Lead-specific fields (lead_status, lead_score, qualification_date)
- *    - Contact-specific fields (contact_status, role, birthday)
- *    
- *    These fields are used by the SALES app but don't break platform core
- *    since they're optional. For pure platform core usage, ignore SALES fields.
- *    Future: Could split into People (platform core) + SalesContact (SALES app)
- *            if stricter separation is needed.
- * 
+ * - participations: app-specific data (e.g. SALES: role, lead_status, contact_status)
+ *
+ * SALES participation fields (role, lead_status, contact_status) live in
+ * participations.SALES only. See syncSalesParticipation, getSalesParticipationValues.
+ *
  * See PLATFORM_CORE_ANALYSIS.md for details.
  * ============================================================================
  */
 
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
+const {
+  PEOPLE_SALES_ROLE_PATH,
+  PEOPLE_SALES_LEAD_STATUS_PATH,
+  PEOPLE_SALES_CONTACT_STATUS_PATH,
+} = require('../utils/peopleFieldRegistry');
 
 const PeopleSchema = new Schema({
   // Multi-tenancy
@@ -37,9 +36,6 @@ const PeopleSchema = new Schema({
 
   // Core
   source: { type: String, trim: true },
-  // ⚠️ SALES-SPECIFIC: Lead/Contact distinction (used by SALES app)
-  // NOTE: This field is optional - participation is set via Attach-to-App, not during creation
-  type: { type: String, enum: ['Lead', 'Contact'], required: false },
 
   first_name: { type: String, trim: true, required: true }, // Default: required (can be configured by admin)
   last_name: {
@@ -62,11 +58,7 @@ const PeopleSchema = new Schema({
   do_not_contact: { type: Boolean, default: false },
 
   // ⚠️ SALES-SPECIFIC: Lead-specific fields (used by SALES app)
-  // Lead-specific
-  lead_status: {
-    type: String,
-    enum: ['New', 'Contacted', 'Qualified', 'Disqualified', 'Nurturing', 'Re-Engage']
-  },
+  // Lead-specific (lead_status lives in participations.SALES only)
   lead_owner: { type: Schema.Types.ObjectId, ref: 'User' },
   lead_score: { type: Number, min: 0 },
 
@@ -76,11 +68,7 @@ const PeopleSchema = new Schema({
   estimated_value: { type: Number, min: 0 },
 
   // ⚠️ SALES-SPECIFIC: Contact-specific fields (used by SALES app)
-  // Contact-specific
-  contact_status: {
-    type: String,
-    enum: ['Active', 'Inactive', 'DoNotContact']
-  },
+  // Contact-specific (contact_status lives in participations.SALES only)
   role: {
     type: String,
     enum: ['Decision Maker', 'Influencer', 'Support', 'Other']
@@ -114,6 +102,8 @@ const PeopleSchema = new Schema({
     user: { type: String, required: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User' },
     action: { type: String, required: true }, // Generic action type (values are app-specific)
+    /** Human-readable line for activity timeline (optional; older entries may omit). */
+    message: { type: String, trim: true },
     details: { type: Schema.Types.Mixed },
     appContext: { type: String }, // App context (appKey) - optional for backward compatibility
     timestamp: { type: Date, default: Date.now, required: true }
@@ -130,16 +120,23 @@ const PeopleSchema = new Schema({
   customFields: {
     type: Schema.Types.Mixed,
     default: {}
+  },
+
+  // Multi-app participation structure (appKey -> { role, lead_status, contact_status, ... })
+  // SALES: role (Lead/Contact), lead_status, contact_status. Sole source of truth.
+  participations: {
+    type: Schema.Types.Mixed,
+    default: () => ({})
   }
 }, {
   timestamps: true
 });
 
 PeopleSchema.index({ organizationId: 1, assignedTo: 1 });
-PeopleSchema.index({ organizationId: 1, type: 1 });
 PeopleSchema.index({ organizationId: 1, email: 1 }, { unique: false, sparse: true });
-PeopleSchema.index({ organizationId: 1, lead_status: 1 });
-PeopleSchema.index({ organizationId: 1, contact_status: 1 });
+PeopleSchema.index({ organizationId: 1, [PEOPLE_SALES_ROLE_PATH]: 1 });
+PeopleSchema.index({ organizationId: 1, [PEOPLE_SALES_LEAD_STATUS_PATH]: 1 });
+PeopleSchema.index({ organizationId: 1, [PEOPLE_SALES_CONTACT_STATUS_PATH]: 1 });
 PeopleSchema.index({ organizationId: 1, legacyContactId: 1 }, { unique: false, sparse: true });
 PeopleSchema.index({ organizationId: 1, deletedAt: 1 });
 

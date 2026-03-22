@@ -1,5 +1,10 @@
 const mongoose = require('mongoose');
 const { MongoClient } = require('mongodb');
+const {
+  PEOPLE_SALES_ROLE_PATH,
+  PEOPLE_SALES_LEAD_STATUS_PATH,
+  PEOPLE_SALES_CONTACT_STATUS_PATH,
+} = require('./peopleFieldRegistry');
 
 /**
  * Database Connection Manager
@@ -217,10 +222,10 @@ class DatabaseConnectionManager {
       
       // ===== PEOPLE/CONTACTS INDEXES =====
       await db.collection('people').createIndex({ organizationId: 1, assignedTo: 1 });
-      await db.collection('people').createIndex({ organizationId: 1, type: 1 });
       await db.collection('people').createIndex({ organizationId: 1, email: 1 }, { sparse: true });
-      await db.collection('people').createIndex({ organizationId: 1, lead_status: 1 });
-      await db.collection('people').createIndex({ organizationId: 1, contact_status: 1 });
+      await db.collection('people').createIndex({ organizationId: 1, [PEOPLE_SALES_ROLE_PATH]: 1 });
+      await db.collection('people').createIndex({ organizationId: 1, [PEOPLE_SALES_LEAD_STATUS_PATH]: 1 });
+      await db.collection('people').createIndex({ organizationId: 1, [PEOPLE_SALES_CONTACT_STATUS_PATH]: 1 });
       await db.collection('people').createIndex({ organizationId: 1, legacyContactId: 1 }, { sparse: true });
       await db.collection('people').createIndex({ createdBy: 1 });
       await db.collection('people').createIndex({ assignedTo: 1 });

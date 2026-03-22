@@ -18,12 +18,12 @@
  * ARCHITECTURAL NOTES:
  * 
  * 1. People has NO global type
- *    - The `type` field (Lead/Contact) is SALES-participation-scoped
+ *    - SALES role (Lead/Contact) is virtual field `sales_type` → participations.SALES.role
  *    - Other apps may define their own `type` fields independently
  *    - Shared labels do NOT imply shared semantics
  * 
  * 2. Classification fields are participation-scoped
- *    - `type`, `lead_status`, `contact_status` are SALES-specific
+ *    - `sales_type`, `lead_status`, `contact_status` are SALES-specific
  *    - These fields exist only because of SALES app participation
  *    - They are NOT core identity attributes
  * 
@@ -48,6 +48,8 @@ import type {
   BaseFilterType,
 } from './BaseFieldModel';
 import { validateBaseFieldMetadata } from './BaseFieldModel';
+
+export { mergePeopleVirtualFieldDefinitions } from './peopleFieldRegistry';
 
 // =============================================================================
 // PEOPLE-SPECIFIC TYPE ALIASES (for backward compatibility)
@@ -91,6 +93,16 @@ export interface FieldMetadata extends Omit<BaseFieldMetadata, 'intent'> {
    * People uses 'identity' for core fields (vs 'primary' in base model).
    */
   intent: FieldIntent;
+
+  /**
+   * When true, the field is stored under participations[appKey] (e.g. role), not as a top-level document key.
+   */
+  isVirtual?: boolean;
+
+  /**
+   * App participation bucket (e.g. SALES, HELPDESK). Used with isVirtual.
+   */
+  appKey?: string;
 }
 
 // =============================================================================
@@ -170,6 +182,14 @@ export const PEOPLE_FIELD_METADATA: Record<string, FieldMetadata> = {
     isSystem: true,
     isComputed: true,
     isVisibleInConfig: false, // Managed internally, too verbose for config
+  },
+  participations: {
+    owner: 'system',
+    intent: 'system',
+    fieldScope: 'CORE',
+    editable: false,
+    isSystem: true,
+    isVisibleInConfig: false, // App participation data; type/lead_status/contact_status are flattened for config
   },
   derivedStatus: {
     owner: 'system',
@@ -256,19 +276,9 @@ export const PEOPLE_FIELD_METADATA: Record<string, FieldMetadata> = {
 
   // ==========================================================================
   // SALES PARTICIPATION — STATE FIELDS
-  // These fields define workflow/lifecycle state and cannot be hidden.
-  // DB field: `type` (enum: 'Lead' | 'Contact')
+  // Canonical SALES role (Lead/Contact) is virtual field sales_type → participations.SALES.role
   // ==========================================================================
-  type: {
-    owner: 'participation',
-    intent: 'state',
-    fieldScope: 'SALES',
-    editable: true,
-    requiredFor: ['SALES'], // Declarative: SALES app requires this field
-    filterable: true,
-    filterType: 'multi-select',
-    filterPriority: 2,
-  },
+  // ⚠️ Do NOT use person.type directly in UI. Use getParticipation(person, 'SALES') or sales_type.
   lead_status: {
     owner: 'participation',
     intent: 'state',
@@ -282,6 +292,31 @@ export const PEOPLE_FIELD_METADATA: Record<string, FieldMetadata> = {
     fieldScope: 'SALES',
     editable: true,
     requiredFor: ['SALES'], // Declarative: SALES app requires this field
+  },
+
+  sales_type: {
+    owner: 'participation',
+    intent: 'state',
+    fieldScope: 'SALES',
+    editable: true,
+    requiredFor: ['SALES'],
+    isVirtual: true,
+    appKey: 'SALES',
+    filterable: true,
+    filterType: 'multi-select',
+    filterPriority: 2,
+  },
+  // Virtual: HELPDESK participation role
+  helpdesk_role: {
+    owner: 'participation',
+    intent: 'state',
+    fieldScope: 'HELPDESK',
+    editable: true,
+    isVirtual: true,
+    appKey: 'HELPDESK',
+    filterable: true,
+    filterType: 'multi-select',
+    filterPriority: 2,
   },
 
   // ==========================================================================
@@ -403,7 +438,8 @@ validateAllMetadata();
  * Throws if field is not found (fail-fast)
  */
 export function getFieldMetadata(fieldName: string): FieldMetadata {
-  const metadata = PEOPLE_FIELD_METADATA[fieldName];
+  const key = fieldName === 'type' ? 'sales_type' : fieldName;
+  const metadata = PEOPLE_FIELD_METADATA[key];
   if (!metadata) {
     throw new Error(
       `Field "${fieldName}" is missing from PEOPLE_FIELD_METADATA. ` +
@@ -439,6 +475,21 @@ export const PEOPLE_QUICK_CREATE_DEFAULT = [
 ];
 
 /**
+ * Get quick create fields from people module config.
+ * Source of truth: Settings → People → Quick Create.
+ *
+ * @param module - People module definition (from /modules/people/quick-create)
+ * @returns Field keys for quick create (identity creation)
+ */
+export function getPeopleQuickCreateFields(module: { quickCreate?: string[] } | null | undefined): string[] {
+  const qc = module?.quickCreate;
+  if (Array.isArray(qc) && qc.length > 0) {
+    return qc.map((f) => (typeof f === 'string' ? f : (f as any)?.key ?? f)).filter(Boolean);
+  }
+  return [...PEOPLE_QUICK_CREATE_DEFAULT];
+}
+
+/**
  * Get all core identity fields
  */
 export function getCoreIdentityFields(): string[] {
@@ -449,28 +500,45 @@ export function getCoreIdentityFields(): string[] {
     .map(([fieldName]) => fieldName);
 }
 
+/** SALES: prefer virtual `sales_type`; legacy `type` is API-only, not listed in UI field enumerations. */
+function excludeLegacySalesTypeKey(appKey: string, fieldNames: string[]): string[] {
+  if (appKey !== 'SALES') return fieldNames;
+  return fieldNames.filter((n) => n !== 'type');
+}
+
+/**
+ * HELPDESK: virtual `helpdesk_role` is the same storage as AppSection "Type" (participations.HELPDESK.role).
+ * Never list it as an extra dependent field — including for tenant-defined types not in APP_ROLE_FIELDS.
+ */
+function excludeHelpdeskRoleDuplicate(appKey: string, fieldKeys: string[]): string[] {
+  if (appKey !== 'HELPDESK') return fieldKeys;
+  return fieldKeys.filter((k) => k !== 'helpdesk_role');
+}
+
 /**
  * Get all participation fields for a specific app
  */
 export function getParticipationFields(appKey: string): string[] {
-  return Object.entries(PEOPLE_FIELD_METADATA)
+  const names = Object.entries(PEOPLE_FIELD_METADATA)
     .filter(([_, metadata]) => 
       metadata.owner === 'participation' && metadata.fieldScope === appKey
     )
     .map(([fieldName]) => fieldName);
+  return excludeLegacySalesTypeKey(appKey, names);
 }
 
 /**
  * Get all state fields for a specific app
  */
 export function getStateFields(appKey: string): string[] {
-  return Object.entries(PEOPLE_FIELD_METADATA)
+  const names = Object.entries(PEOPLE_FIELD_METADATA)
     .filter(([_, metadata]) => 
       metadata.owner === 'participation' &&
       metadata.fieldScope === appKey &&
       metadata.intent === 'state'
     )
     .map(([fieldName]) => fieldName);
+  return excludeLegacySalesTypeKey(appKey, names);
 }
 
 /**
@@ -484,4 +552,74 @@ export function getDetailFields(appKey: string): string[] {
       metadata.intent === 'detail'
     )
     .map(([fieldName]) => fieldName);
+}
+
+/**
+ * Role → fields mapping per app. Used by getAppFields() for dynamic field resolution.
+ * Extensible: add new apps/roles as they are introduced.
+ */
+const APP_ROLE_FIELDS: Record<string, Record<string, string[]>> = {
+  SALES: {
+    Lead: ['lead_status', 'lead_score', 'lead_owner', 'interest_products', 'qualification_date', 'qualification_notes', 'estimated_value'],
+    Contact: ['contact_status', 'role', 'birthday', 'preferred_contact_method'],
+  },
+  HELPDESK: {
+    Customer: [], // Type is chosen in AppSection; no extra participation fields yet
+    Agent: [],
+  },
+};
+
+/** Optional tenant type rows from Settings → People → Types (`fields` per type overrides defaults). */
+export type PeopleTypeFieldDef = { value: string; fields?: string[] };
+
+/**
+ * Get app-specific participation fields for a given role/type.
+ * Used when creating a person in app context (e.g. SALES + Lead → lead_status, etc.).
+ *
+ * @param appKey - App key (e.g. 'SALES', 'HELPDESK')
+ * @param role - Selected type/role (e.g. 'Lead', 'Contact', 'Customer')
+ * @param typeDefs - When the matching type has `fields` defined (including `[]`), that list is used; otherwise platform defaults apply.
+ * @returns Field keys to show for this app + role combo
+ */
+export function getAppFields(
+  appKey: string,
+  role: string,
+  typeDefs?: ReadonlyArray<PeopleTypeFieldDef> | null
+): string[] {
+  const normalizedApp = appKey?.trim().toUpperCase();
+  const normalizedRole = role?.trim();
+  if (!normalizedApp || !normalizedRole) return [];
+
+  let out: string[] | undefined;
+
+  if (typeDefs?.length) {
+    const match = typeDefs.find(
+      (d) => String(d?.value ?? '').trim().toLowerCase() === normalizedRole.toLowerCase()
+    );
+    if (match && match.fields !== undefined) {
+      out = Array.isArray(match.fields) ? [...match.fields] : [];
+    }
+  }
+
+  if (out === undefined) {
+    const appMapping = APP_ROLE_FIELDS[normalizedApp];
+    if (!appMapping) {
+      out = getParticipationFields(normalizedApp);
+    } else {
+      let fields = appMapping[normalizedRole];
+      if (!Array.isArray(fields)) {
+        const key = Object.keys(appMapping).find(
+          (k) => k.toLowerCase() === normalizedRole.toLowerCase()
+        );
+        if (key !== undefined) fields = appMapping[key];
+      }
+      if (Array.isArray(fields)) {
+        out = [...fields];
+      } else {
+        out = getParticipationFields(normalizedApp);
+      }
+    }
+  }
+
+  return excludeHelpdeskRoleDuplicate(normalizedApp, out);
 }

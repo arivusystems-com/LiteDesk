@@ -85,7 +85,13 @@ async function createTenantModuleConfigs() {
                             organizationId: org._id,
                             appKey: 'SALES',
                             moduleKey: 'people',
-                            enabled: true
+                            enabled: true,
+                            settings: {
+                                peopleTypes: {
+                                    SALES: ['Lead', 'Contact'],
+                                    HELPDESK: ['Customer', 'Agent']
+                                }
+                            }
                         });
                         created++;
                         console.log(`  ✅ Created TenantModuleConfiguration for People`);

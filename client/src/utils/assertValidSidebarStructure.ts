@@ -3,6 +3,7 @@ import type { SidebarStructure, SidebarItem } from '@/types/sidebar.types';
 const ALLOWED_KINDS = new Set<SidebarItem['kind']>(['surface', 'coreModule', 'app', 'platform']);
 
 const FORBIDDEN_RAW_ENTITY_MODULE_KEYS = new Set([
+  'people',
   'tasks',
   'events',
   'forms',

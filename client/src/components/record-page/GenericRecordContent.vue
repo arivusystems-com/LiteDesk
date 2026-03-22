@@ -282,6 +282,20 @@
               :can-edit="canEditRecord"
               @save="handleTitleSave"
             />
+            <!-- People: participation badges under name (Sales, Lead) -->
+            <div
+              v-if="isPeopleModule && peopleHeaderBadges.length"
+              class="flex flex-wrap gap-1.5 mt-1.5"
+            >
+              <span
+                v-for="(b, i) in peopleHeaderBadges"
+                :key="`badge-${i}`"
+                class="inline-flex px-2 py-0.5 rounded text-xs font-medium"
+                :class="peopleContextIsAppView ? 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' : b.appKey ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'"
+              >
+                {{ b.label }}
+              </span>
+            </div>
           </div>
         </RecordPageTitleRow>
 
@@ -294,6 +308,83 @@
             :fields="genericStateFields"
             :field-values="genericStateValues"
           />
+        </div>
+
+        <!-- App Participation: people only, shows roles per app (e.g. Sales → Lead) -->
+        <div
+          v-if="isPeopleModule && record && (!expandedLeftSection || expandedLeftSection === 'key-fields')"
+          :class="['group/left-section', expandedLeftSection ? 'mt-8' : 'mt-4']"
+        >
+          <section class="record-state-section mb-8 mt-4" aria-labelledby="app-participation-heading">
+            <h2 id="app-participation-heading" class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              App participation
+            </h2>
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <template v-if="peopleParticipationEntriesVisible.length">
+                <div
+                  v-for="(entry, i) in peopleParticipationEntriesVisible"
+                  :key="`${entry.appKey}-${i}`"
+                  class="inline-flex items-center gap-1.5"
+                >
+                  <template v-if="peopleContextIsAppView">
+                    <span class="text-sm text-gray-900 dark:text-white">{{ entry.role }}</span>
+                  </template>
+                  <template v-else>
+                    <span
+                      class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                      :class="participationAppBadgeClass(entry.appLabel)"
+                    >
+                      {{ entry.appLabel }}
+                    </span>
+                    <BadgeCell
+                      :value="entry.role"
+                      :options="badgeOptionsForParticipationApp(entry.appKey)"
+                      :variant-map="participationRoleBadgeVariantMap"
+                    />
+                  </template>
+                  <button
+                    v-if="canEditParticipationFor(entry.appKey)"
+                    type="button"
+                    class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
+                    title="Edit participation"
+                    @click="openParticipationEdit(entry.appKey)"
+                  >
+                    Edit
+                  </button>
+                </div>
+                <button
+                  v-for="app in attachableAppsForRecordContext"
+                  :key="`attach-${app}`"
+                  type="button"
+                  class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                  @click="openAttachToAppModal(app)"
+                >
+                  <PlusIcon class="w-3.5 h-3.5" />
+                  Add to {{ getAppLabel(app) }}
+                </button>
+              </template>
+              <template v-else>
+                <span class="text-sm text-gray-500 dark:text-gray-400 italic">
+                  <template v-if="peopleContextIsAppView">
+                    Not participating in {{ getAppLabel(routeParticipationContext) }} yet
+                  </template>
+                  <template v-else>
+                    This person is not part of any app yet
+                  </template>
+                </span>
+                <button
+                  v-for="app in attachableAppsForRecordContext"
+                  :key="`attach-empty-${app}`"
+                  type="button"
+                  class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                  @click="openAttachToAppModal(app)"
+                >
+                  <PlusIcon class="w-3.5 h-3.5" />
+                  Add to {{ getAppLabel(app) }}
+                </button>
+              </template>
+            </div>
+          </section>
         </div>
 
         <!-- Section stack: show when collapsed, or when expanded to details/related (adapter returns only that section) -->
@@ -569,6 +660,27 @@
       @confirm="confirmDelete"
     />
 
+    <AttachToAppModal
+      v-if="record && isPeopleModule"
+      :key="attachModalTargetApp"
+      :is-open="showAttachModal"
+      :person-id="record._id"
+      :app-key="attachModalTargetApp"
+      :participation-type="attachModalParticipationType"
+      @close="closeAttachToAppModal"
+      @attached="handleAttachModalComplete"
+    />
+
+    <ParticipationEditModal
+      v-if="record && isPeopleModule && participationEditAppKey"
+      :is-open="!!participationEditAppKey"
+      :person-id="record._id"
+      :app-key="participationEditAppKey"
+      :participation-data="participationEditData"
+      @close="participationEditAppKey = null"
+      @updated="handleParticipationEditUpdated"
+    />
+
     <EmailComposeDrawer
       v-if="record && supportsEmail"
       :is-open="showEmailModal"
@@ -672,8 +784,26 @@ import {
   ArrowTopRightOnSquareIcon
 } from '@heroicons/vue/24/outline';
 import Avatar from '@/components/common/Avatar.vue';
+import BadgeCell from '@/components/common/table/BadgeCell.vue';
 import DOMPurify from 'dompurify';
 import { resolveFieldContext } from '@/utils/fieldContextFilter';
+import { getParticipation } from '@/utils/getParticipation';
+import { getAppLabel } from '@/utils/getRoleDisplay';
+import {
+  getPeopleParticipationEntries,
+  filterParticipationEntriesByContext,
+  isPeopleListAppContext,
+  PEOPLE_PARTICIPATION_APP_KEYS
+} from '@/utils/peopleParticipationUi';
+import { usePeopleTypes } from '@/composables/usePeopleTypes';
+import { typeDefsToBadgeOptions } from '@/utils/peopleTypeColors';
+import AttachToAppModal from '@/components/people/AttachToAppModal.vue';
+import ParticipationEditModal from '@/components/people/ParticipationEditModal.vue';
+import { getParticipationFields } from '@/platform/fields/peopleFieldModel';
+import { hasPeoplePermission } from '@/platform/permissions/peoplePermissionHelper';
+import { PEOPLE_PERMISSIONS } from '@/platform/permissions/peoplePermissions';
+
+const formatAppLabel = (appKey) => getAppLabel(appKey) || appKey || 'App';
 
 const props = defineProps({
   moduleKey: { type: String, required: true },
@@ -717,6 +847,75 @@ const allowCreateFromLinkDrawer = ref(false);
 const showAddRelatedRecordDrawer = ref(false);
 const addRelatedRecordModuleKey = ref('');
 const pendingAddRelatedLinkPayload = ref(null);
+const showAttachModal = ref(false);
+const attachModalTargetApp = ref('SALES');
+/** Preset SALES classifier (Lead/Contact); null for HELPDESK (picker uses tenant types). */
+const attachModalParticipationType = ref('LEAD');
+
+function openAttachToAppModal(appKey) {
+  attachModalTargetApp.value = appKey;
+  attachModalParticipationType.value = appKey === 'SALES' ? 'LEAD' : null;
+  showAttachModal.value = true;
+}
+
+function closeAttachToAppModal() {
+  showAttachModal.value = false;
+}
+const participationEditAppKey = ref(null);
+
+/** Build participationData for ParticipationEditModal */
+function buildParticipationDataForEdit(person, appKey) {
+  const part = getParticipation(person, appKey);
+  const fields = {};
+  const upper = String(appKey || '').toUpperCase();
+
+  if (part && upper === 'SALES') {
+    if (part.role != null && part.role !== '') fields.sales_type = part.role;
+    if (part.lead_status != null && part.lead_status !== '') fields.lead_status = part.lead_status;
+    if (part.contact_status != null && part.contact_status !== '') fields.contact_status = part.contact_status;
+  }
+  if (part && upper === 'HELPDESK') {
+    if (part.role != null && part.role !== '') fields.helpdesk_role = part.role;
+  }
+
+  const fieldKeys = getParticipationFields(appKey);
+  for (const fk of fieldKeys) {
+    const v = person?.[fk];
+    if (v != null && v !== '' && fields[fk] == null) fields[fk] = v;
+  }
+
+  // Flattened people API aliases when participations block above did not set state
+  if (upper === 'SALES' && (fields.sales_type == null || fields.sales_type === '')) {
+    const st = person?.sales_type;
+    if (st != null && st !== '') fields.sales_type = st;
+  }
+  if (upper === 'HELPDESK' && (fields.helpdesk_role == null || fields.helpdesk_role === '')) {
+    const hr = person?.helpdesk_role;
+    if (hr != null && hr !== '') fields.helpdesk_role = hr;
+  }
+
+  return { fields };
+}
+
+const participationEditData = computed(() => {
+  if (!record.value || !participationEditAppKey.value) return { fields: {} };
+  return buildParticipationDataForEdit(record.value, participationEditAppKey.value);
+});
+
+function canEditParticipationFor(appKey) {
+  const perm = PEOPLE_PERMISSIONS.EDIT_PARTICIPATION[appKey] || PEOPLE_PERMISSIONS.EDIT_PARTICIPATION.BASE;
+  return hasPeoplePermission(perm, authStore);
+}
+
+function openParticipationEdit(appKey) {
+  participationEditAppKey.value = appKey;
+}
+
+async function handleParticipationEditUpdated(updated) {
+  participationEditAppKey.value = null;
+  if (updated && record.value) Object.assign(record.value, updated);
+  await fetchRecord();
+}
 /** Organization list for people record page (organization field dropdown). Fetched when moduleKey is people. */
 const peopleOrganizationList = ref([]);
 /** Tenant user list used to render user lookup labels (e.g., assignedTo) in generic sections. */
@@ -735,6 +934,100 @@ const {
 const moduleKeyLower = computed(() => (props.moduleKey || '').toLowerCase());
 const isPeopleModule = computed(() => moduleKeyLower.value === 'people');
 const supportsTags = computed(() => ['people', 'organizations'].includes(moduleKeyLower.value));
+
+const peopleParticipationEntries = computed(() => {
+  const r = record.value;
+  if (!r || !isPeopleModule.value) return [];
+  return getPeopleParticipationEntries(r);
+});
+
+const routeParticipationContext = computed(() =>
+  String(route.query?.context || route.query?.participationContext || 'ALL').toUpperCase()
+);
+
+/** Route context is SALES | HELPDESK: show only that app’s participation (role-only in header/section). */
+const peopleContextIsAppView = computed(() =>
+  isPeopleListAppContext(routeParticipationContext.value)
+);
+
+/** Participation rows visible for current route context (ALL = every app with data). */
+const peopleParticipationEntriesVisible = computed(() =>
+  filterParticipationEntriesByContext(
+    peopleParticipationEntries.value,
+    routeParticipationContext.value
+  )
+);
+
+const participationRoleBadgeVariantMap = {
+  Lead: 'warning',
+  Contact: 'success',
+  Qualified: 'info',
+  Opportunity: 'primary',
+  Customer: 'success',
+  Agent: 'info',
+  Lost: 'danger'
+};
+
+const { typeDefs: salesPeopleTypeDefsRecord } = usePeopleTypes('SALES');
+const { typeDefs: helpdeskPeopleTypeDefsRecord } = usePeopleTypes('HELPDESK');
+
+const peopleTypeBadgeOptionsByAppRecord = computed(() => ({
+  SALES: typeDefsToBadgeOptions(salesPeopleTypeDefsRecord.value),
+  HELPDESK: typeDefsToBadgeOptions(helpdeskPeopleTypeDefsRecord.value)
+}));
+
+function badgeOptionsForParticipationApp(appKey) {
+  return peopleTypeBadgeOptionsByAppRecord.value[appKey] || [];
+}
+
+function participationAppBadgeClass(appLabel) {
+  const classMap = {
+    Sales: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
+    Helpdesk: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
+    Audit: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200',
+    Portal: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200',
+    Projects: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200'
+  };
+  return classMap[appLabel] || 'bg-gray-100 text-gray-800 dark:bg-gray-900/40 dark:text-gray-200';
+}
+
+/** Header badges for People — app route: current app role only; ALL: [App][Role] per participation */
+const peopleHeaderBadges = computed(() => {
+  if (!isPeopleModule.value) return [];
+  const visible = peopleParticipationEntriesVisible.value;
+  if (!visible.length) return [];
+  const badges = [];
+  for (const e of visible) {
+    if (peopleContextIsAppView.value) {
+      badges.push({ label: e.role });
+    } else {
+      badges.push({ label: e.appLabel, appKey: e.appKey });
+      badges.push({ label: e.role });
+    }
+  }
+  return badges;
+});
+
+/** Apps from PEOPLE_PARTICIPATION_APP_KEYS where the person has no participation and user may attach */
+const attachableAppsMissingParticipation = computed(() => {
+  const r = record.value;
+  if (!isPeopleModule.value || !r) return [];
+  return [...PEOPLE_PARTICIPATION_APP_KEYS].filter((app) => {
+    if (getParticipation(r, app)) return false;
+    const perm = PEOPLE_PERMISSIONS.ATTACH[app] || PEOPLE_PERMISSIONS.ATTACH.BASE;
+    return hasPeoplePermission(perm, authStore);
+  });
+});
+
+/** In app route context, only offer attach for that app */
+const attachableAppsForRecordContext = computed(() => {
+  const raw = attachableAppsMissingParticipation.value;
+  const ctx = routeParticipationContext.value;
+  if (isPeopleListAppContext(ctx)) {
+    return raw.filter((app) => app === ctx);
+  }
+  return raw;
+});
 const supportsEmail = computed(() => MODULES_WITH_EMAIL.has(moduleKeyLower.value));
 
 /** App key for record context / link drawer: people and organizations use PLATFORM. */
@@ -1317,7 +1610,12 @@ const activityUi = computed(() => {
     isFieldChangeSystemEvent: (event) => {
       if (!event || event.type !== 'system') return false;
       const details = event?.details || event?.payload?.details || {};
-      return event.action === 'field_changed' || event.action === 'status_changed' || Boolean(details?.field);
+      return (
+        event.action === 'field_changed' ||
+        event.action === 'status_changed' ||
+        event.action === 'participation_changed' ||
+        Boolean(details?.field)
+      );
     },
     getSystemEventActorLabel: (event) => {
       if (!event) return 'System';
@@ -1345,7 +1643,15 @@ const activityUi = computed(() => {
       if (!event) return 'Updated this record';
       const msg = String(event?.message ?? event?.payload?.message ?? '').trim();
       if (msg) return msg;
-      return `${event?.action || event?.payload?.action || 'updated'} this record`;
+      const action = String(event?.action || event?.payload?.action || 'updated').trim();
+      const mod = (props.moduleKey || '').toLowerCase();
+      if (action === 'record_created') {
+        return mod === 'people' ? 'Created this person' : 'Created this record';
+      }
+      if (action === 'participation_attached') {
+        return mod === 'people' ? 'Joined an app' : 'Updated app participation';
+      }
+      return `${action} this record`;
     },
     getTagChipClass: (tagNameOrObject) => (typeof getPeopleTagChipClass.value === 'function' ? getPeopleTagChipClass.value(tagNameOrObject) : getDefaultTagChipClass(tagNameOrObject)),
     handleShowMore: () => {},
@@ -1745,6 +2051,11 @@ async function handleEmailSubmit(payload) {
 function handleRecordUpdated(updated) {
   if (updated && record.value) Object.assign(record.value, updated);
   showEditModal.value = false;
+}
+
+async function handleAttachModalComplete() {
+  showAttachModal.value = false;
+  await fetchRecord();
 }
 
 const TARGET_APP_BY_MODULE_KEY = {

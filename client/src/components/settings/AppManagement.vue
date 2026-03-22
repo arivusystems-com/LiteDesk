@@ -161,22 +161,28 @@ const organization = ref(null);
 const capabilities = ref([]);
 const processing = ref(null);
 
-// App display names
+// App display names (keep in sync with server organization enable/disable VALID_APPS)
 const appDisplayNames = {
-  SALES: 'SALES',
+  SALES: 'Sales',
+  HELPDESK: 'Helpdesk',
+  PROJECTS: 'Projects',
+  PORTAL: 'Portal',
   AUDIT: 'Audit',
-  PORTAL: 'Portal'
+  LMS: 'LMS'
 };
 
 // App descriptions
 const appDescriptions = {
   SALES: 'Sales - Manage contacts, pipeline entities, and customer interactions.',
+  HELPDESK: 'Helpdesk - Support tickets, cases, and customer service workflows.',
+  PROJECTS: 'Projects - Plan and track project work across your organization.',
+  PORTAL: 'Customer Portal - Provide external users access to their information and services.',
   AUDIT: 'Audit & Compliance - Conduct audits, track findings, and manage corrective actions.',
-  PORTAL: 'Customer Portal - Provide external users access to their information and services.'
+  LMS: 'LMS - Learning management and training content.'
 };
 
-// All apps from registry (hardcoded to match appRegistry)
-const allAppKeys = ['SALES', 'AUDIT', 'PORTAL'];
+// All tenant-manageable apps (must match server: settingsController enable/disable VALID_APPS)
+const allAppKeys = ['SALES', 'HELPDESK', 'PROJECTS', 'PORTAL', 'AUDIT', 'LMS'];
 
 // Computed: All apps with status and seat info
 const allApps = computed(() => {

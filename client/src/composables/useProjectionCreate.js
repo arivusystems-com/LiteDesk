@@ -175,7 +175,7 @@ export function useProjectionCreate(moduleKey, appKey = null) {
    */
   function getTypeFieldName(moduleKey) {
     const normalized = (moduleKey || '').toLowerCase();
-    if (normalized === 'people') return 'type';
+    if (normalized === 'people') return 'sales_type';
     if (normalized === 'forms' || normalized === 'form') return 'formType';
     if (normalized === 'events' || normalized === 'event') return 'eventType';
     if (normalized === 'organizations' || normalized === 'organization') return 'type';

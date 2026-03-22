@@ -249,15 +249,18 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue';
-import { 
-  PEOPLE_FIELD_METADATA, 
-  getStateFields, 
+import {
+  PEOPLE_FIELD_METADATA,
+  getStateFields,
   getDetailFields,
-  getFieldMetadata 
+  getFieldMetadata,
+  getAppFields
 } from '@/platform/fields/peopleFieldModel';
 import apiClient from '@/utils/apiClient';
+import { usePeopleTypes } from '@/composables/usePeopleTypes';
 import { openDatePicker } from '@/utils/dateUtils';
 import { assertLifecyclePermission } from '@/platform/permissions/peopleGuards';
+import { isPeopleSalesRoleFieldKey } from '@/utils/peopleParticipationUi';
 
 const props = defineProps({
   isOpen: {
@@ -283,27 +286,30 @@ const defaultPrefilledFields = ref(new Set());
 const appKey = 'SALES';
 const classifierValue = 'Contact'; // Always Contact for conversion
 
+const { typeDefs: peopleTypeDefs } = usePeopleTypes(appKey);
+
+const contactParticipationKeys = computed(() => {
+  const keys = getAppFields(appKey, classifierValue, peopleTypeDefs.value);
+  return keys.length > 0 ? new Set(keys) : null;
+});
+
 // Get state fields for SALES app
 const stateFields = computed(() => {
   return getStateFields(appKey);
 });
 
-// Get visible state fields (only Contact-relevant)
+// Get visible state fields (Contact — same field set as Settings → Types / attach / quick create)
 const visibleStateFields = computed(() => {
   return stateFields.value.filter(fieldName => {
-    // Hide classifier field (type) - we know it's Contact, no need to show it
-    if (fieldName === 'type') {
+    if (isPeopleSalesRoleFieldKey(fieldName)) {
       return false;
     }
-    // Only show Contact-specific state fields
-    // Hide Lead-specific fields
-    if (fieldName === 'lead_status') {
-      return false;
+    const set = contactParticipationKeys.value;
+    if (set && set.size > 0) {
+      return set.has(fieldName);
     }
-    // Show Contact-specific state fields
-    if (fieldName === 'contact_status') {
-      return true;
-    }
+    if (fieldName === 'lead_status') return false;
+    if (fieldName === 'contact_status') return true;
     return false;
   });
 });
@@ -313,20 +319,21 @@ const allDetailFields = computed(() => {
   return getDetailFields(appKey);
 });
 
-// Get visible detail fields (only Contact-relevant, hide Lead-specific)
 const detailFields = computed(() => {
+  const set = contactParticipationKeys.value;
+  if (set && set.size > 0) {
+    return allDetailFields.value.filter(fieldName => set.has(fieldName));
+  }
   return allDetailFields.value.filter(fieldName => {
-    // Hide Lead-specific detail fields
-    if (fieldName.startsWith('lead_') || 
-        fieldName.startsWith('qualification_') ||
-        fieldName === 'estimated_value' ||
-        fieldName === 'interest_products') {
+    if (
+      fieldName.startsWith('lead_') ||
+      fieldName.startsWith('qualification_') ||
+      fieldName === 'estimated_value' ||
+      fieldName === 'interest_products'
+    ) {
       return false;
     }
-    // Show Contact-specific detail fields
-    if (fieldName === 'role' || 
-        fieldName === 'birthday' || 
-        fieldName === 'preferred_contact_method') {
+    if (fieldName === 'role' || fieldName === 'birthday' || fieldName === 'preferred_contact_method') {
       return true;
     }
     return false;
@@ -349,8 +356,8 @@ const isFieldRequired = (fieldName) => {
 
 // Get field component type
 const getFieldComponent = (fieldName) => {
-  const enumFields = ['type', 'lead_status', 'contact_status', 'role', 'preferred_contact_method'];
-  if (enumFields.includes(fieldName)) {
+  const enumFields = ['lead_status', 'contact_status', 'role', 'preferred_contact_method'];
+  if (isPeopleSalesRoleFieldKey(fieldName) || enumFields.includes(fieldName)) {
     return 'select';
   }
   const textFields = ['qualification_notes'];
@@ -362,8 +369,10 @@ const getFieldComponent = (fieldName) => {
 
 // Get field options for select fields
 const getFieldOptions = (fieldName) => {
+  if (isPeopleSalesRoleFieldKey(fieldName)) {
+    return ['Lead', 'Contact'];
+  }
   const optionsMap = {
-    'type': ['Lead', 'Contact'],
     'lead_status': ['New', 'Contacted', 'Qualified', 'Disqualified', 'Nurturing', 'Re-Engage'],
     'contact_status': ['Active', 'Inactive', 'DoNotContact'],
     'role': ['Decision Maker', 'Influencer', 'Support', 'Other'],
@@ -416,8 +425,8 @@ const isFieldPrefilledWithDefault = (fieldName) => {
 const applySmartDefaults = () => {
   // Apply defaults to visible state fields
   visibleStateFields.value.forEach(fieldName => {
-    // Skip classifier field (type) - it's locked to Contact
-    if (fieldName === 'type') {
+    // Skip classifier — locked to Contact via sales_type
+    if (isPeopleSalesRoleFieldKey(fieldName)) {
       return;
     }
     
@@ -450,8 +459,8 @@ const initializeFormData = () => {
   formData.value = {};
   defaultPrefilledFields.value.clear();
   
-  // Lock type to Contact
-  formData.value.type = 'Contact';
+  // Locked target role (not sent as legacy `type` — API rejects it)
+  formData.value.sales_type = 'Contact';
   
   // Initialize all visible fields with empty values
   [...visibleStateFields.value, ...detailFields.value].forEach(fieldName => {
@@ -530,14 +539,13 @@ const handleSubmit = async () => {
     }
   });
   
-  // Build conversion payload - only include Contact fields
+  // Build conversion payload — sales_type only (server rejects top-level `type`)
   const conversionData = {
-    type: 'Contact', // Always Contact
-    // Include Contact-specific fields
     ...Object.fromEntries(
       Object.entries(cleanedFormData).filter(([key, value]) => {
+        if (isPeopleSalesRoleFieldKey(key)) return false;
         // Exclude Lead-specific fields
-        if (key.startsWith('lead_') || 
+        if (key.startsWith('lead_') ||
             key.startsWith('qualification_') ||
             key === 'estimated_value' ||
             key === 'interest_products') {
@@ -546,7 +554,8 @@ const handleSubmit = async () => {
         // Include only non-empty Contact fields
         return value !== null && value !== '' && (!Array.isArray(value) || value.length > 0);
       })
-    )
+    ),
+    sales_type: 'Contact',
   };
   
   loading.value = true;

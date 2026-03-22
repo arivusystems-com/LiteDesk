@@ -878,13 +878,6 @@ const handleDetached = async (detachData) => {
   await loadProfile();
 };
 
-const handleEdit = (appKey) => {
-  // For now, just show attach modal - edit functionality can be added later
-  // This maintains existing behavior without adding new logic
-  console.log('Edit requested for app:', appKey);
-  // TODO: Wire up edit functionality if needed
-};
-
 // Handle edit details (participation detail fields only)
 const handleEditDetails = (appKey) => {
   // Guard: Check edit participation permission before opening modal
@@ -904,6 +897,9 @@ const handleEditDetails = (appKey) => {
     console.error('Permission denied for Edit Details:', error);
   }
 };
+
+/** Primary "Edit participation" uses the same participation editor as "Edit details". */
+const handleEdit = handleEditDetails;
 
 // Handle participation update success
 const handleParticipationUpdated = async () => {

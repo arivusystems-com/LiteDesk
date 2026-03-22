@@ -1,3 +1,8 @@
+declare module '@/stores/appShell' {
+  // JS Pinia store (no TS declarations yet)
+  export function useAppShellStore(): { activeApp?: string | null };
+}
+
 declare module '@/stores/auth' {
   // JS Pinia store (no TS declarations yet)
   export function useAuthStore(): any;

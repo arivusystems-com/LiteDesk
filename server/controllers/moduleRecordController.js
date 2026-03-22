@@ -87,6 +87,99 @@ function escapeRegExp(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+const { getAppDisplayName } = require('../utils/personProfileComposer');
+
+/**
+ * Fallback message for legacy People.activityLogs entries (no `message` field).
+ * @param {Record<string, any>} log
+ * @returns {string}
+ */
+function peopleEmbeddedActivityMessage(log) {
+  if (log.message && String(log.message).trim()) return String(log.message).trim();
+  const d = log.details || {};
+  const appKey = d.appKey || log.appContext;
+  const appLabel = appKey ? getAppDisplayName(String(appKey)) : '';
+  const role =
+    d.participationType ||
+    d.peopleType ||
+    (typeof d.role === 'string' ? d.role : null);
+  if (d.type === 'create') {
+    if (role && appLabel) return `Created this person and joined ${appLabel} as ${role}`;
+    if (appLabel) return `Created this person (${appLabel})`;
+    return 'Created this person';
+  }
+  if (log.action === 'app_context_attached' || d.type === 'attach') {
+    if (role && appLabel) return `Joined ${appLabel} as ${role}`;
+    if (appLabel) return `Joined ${appLabel}`;
+    return 'Joined an app';
+  }
+  const a = String(log.action || '');
+  const legacy = a.match(/^added_to_(\w+)_as_(.+)$/i);
+  if (legacy) {
+    const rawApp = legacy[1].toLowerCase();
+    const app = rawApp === 'sales' ? 'Sales' : rawApp === 'helpdesk' ? 'Helpdesk' : legacy[1];
+    const typePart = legacy[2].replace(/_/g, ' ');
+    return `Joined ${app} as ${typePart}`;
+  }
+  if (a === 'created this record' || a === 'record_created') return 'Created this person';
+  return '';
+}
+
+/**
+ * Merge embedded People.activityLogs into unified activity events (ModuleRecordPage).
+ * @param {Array<Record<string, any>>} events
+ * @param {string} recordId
+ * @param {import('mongoose').Types.ObjectId} organizationId
+ */
+async function mergePeopleEmbeddedActivity(events, recordId, organizationId) {
+  const People = require('../models/People');
+  const person = await People.findOne({
+    _id: recordId,
+    organizationId,
+    deletedAt: null
+  })
+    .select('activityLogs')
+    .lean();
+  if (!person || !Array.isArray(person.activityLogs)) return;
+  const userIds = [...new Set(person.activityLogs.map((l) => l.userId).filter(Boolean))];
+  let usersMap = {};
+  if (userIds.length > 0) {
+    const users = await User.find({ _id: { $in: userIds } }).select('firstName lastName username email').lean();
+    usersMap = users.reduce((acc, u) => {
+      acc[u._id.toString()] = u;
+      return acc;
+    }, {});
+  }
+  for (const log of person.activityLogs) {
+    const u = log.userId && usersMap[log.userId.toString()];
+    const actor = u
+      ? `${(u.firstName || '').trim()} ${(u.lastName || '').trim()}`.trim() || u.username || u.email || 'Unknown'
+      : (log.user || 'Unknown');
+    const actorProfile = u
+      ? {
+          _id: u._id?.toString(),
+          firstName: u.firstName,
+          lastName: u.lastName,
+          email: u.email,
+          username: u.username
+        }
+      : null;
+    const message = peopleEmbeddedActivityMessage(log);
+    events.push({
+      id: `people-embedded-${log.timestamp}-${log._id || ''}`,
+      type: 'system',
+      actor,
+      actorProfile,
+      createdAt: log.timestamp ? new Date(log.timestamp).toISOString() : null,
+      payload: {
+        action: log.action || 'updated',
+        message: message || '',
+        details: log.details || {}
+      }
+    });
+  }
+}
+
 /**
  * GET /api/modules/:moduleKey/records/:recordId/activity
  * Returns merged activity logs + comments for the record (all modules).
@@ -262,6 +355,10 @@ exports.getActivity = async (req, res) => {
             meta: { authorId: entry.author?._id?.toString() }
           });
         }
+      }
+
+      if (moduleKey === 'people') {
+        await mergePeopleEmbeddedActivity(events, recordId, organizationId);
       }
     }
 

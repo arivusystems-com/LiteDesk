@@ -133,7 +133,7 @@ const getActionIconClass = (action) => {
 
 const getSectionContext = (section) => {
   return {
-    ...(props.context || {}),
+    ...props.context,
     sectionKey: section?.key,
     hideHeader: true
   };

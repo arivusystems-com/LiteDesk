@@ -136,7 +136,7 @@ describe('Configuration Registry', () => {
         })
       });
 
-      const status = await computeDerivedStatus('people', { type: 'Lead' });
+      const status = await computeDerivedStatus('people', { participations: { SALES: { role: 'Lead' } } });
 
       expect(status).toBeNull();
     });
@@ -175,8 +175,7 @@ describe('Configuration Registry', () => {
       });
 
       const status = await computeDerivedStatus('people', {
-        type: 'Lead',
-        lead_status: 'New'
+        participations: { SALES: { role: 'Lead', lead_status: 'New' } }
       });
 
       expect(status).toBe('New');
@@ -206,8 +205,7 @@ describe('Configuration Registry', () => {
       });
 
       const status = await computeDerivedStatus('people', {
-        type: 'Lead',
-        lead_status: 'Unknown'
+        participations: { SALES: { role: 'Lead', lead_status: 'Unknown' } }
       });
 
       expect(status).toBeNull();

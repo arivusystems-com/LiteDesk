@@ -69,11 +69,16 @@ export async function getAppRegistry(): Promise<AppRegistry> {
       });
       
       // Normalize dashboardRoute to expected format: /dashboard or /dashboard/:appKey
-      let dashboardRoute = app.defaultRoute || `/${app.appKey.toLowerCase()}`;
-      
+      const appKeyLower = app.appKey.toLowerCase();
+      let dashboardRoute = app.defaultRoute || `/${appKeyLower}`;
+
+      // API may still send legacy shared /dashboard for multiple apps — scope per app
+      if (dashboardRoute === '/dashboard') {
+        dashboardRoute = `/dashboard/${appKeyLower}`;
+      }
+
       // Preserve special app routes that have their own routing structure
       // (Audit, Portal, Helpdesk, Projects use their own route prefixes)
-      const appKeyLower = app.appKey.toLowerCase();
       const specialAppRoutes = ['/audit/', '/portal/', '/helpdesk/', '/projects/'];
       const isSpecialAppRoute = specialAppRoutes.some(prefix => dashboardRoute.startsWith(prefix));
       

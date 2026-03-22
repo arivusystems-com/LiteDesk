@@ -20,6 +20,7 @@
 
 const { getProjection } = require('./moduleProjectionResolver');
 const { isPlatformOwnedPrimitive } = require('./moduleProjectionResolver');
+const { getPeopleFieldQueryPath } = require('./peopleFieldRegistry');
 
 /**
  * Apply projection filter to a MongoDB query
@@ -70,6 +71,7 @@ function applyProjectionFilter({ appKey, moduleKey, baseQuery = {}, projectionMe
     // Determine the type field name based on module
     let typeField = 'type';
     let isArrayField = false; // Whether the type field is an array (e.g., organizations.types)
+    let useParticipationsRole = false; // People: use participations.SALES.role
     if (moduleKey === 'events') {
       typeField = 'eventType';
     } else if (moduleKey === 'forms') {
@@ -77,8 +79,10 @@ function applyProjectionFilter({ appKey, moduleKey, baseQuery = {}, projectionMe
     } else if (moduleKey === 'organizations') {
       typeField = 'types'; // Organizations use 'types' array field
       isArrayField = true;
+    } else if (moduleKey === 'people') {
+      typeField = getPeopleFieldQueryPath('sales_type');
+      useParticipationsRole = true;
     }
-    // For other modules (people, tasks), use 'type'
 
     // Map projection types to model values
     // Projection metadata uses uppercase (LEAD, CONTACT), but models use different cases
@@ -215,17 +219,16 @@ function applyProjectionFilter({ appKey, moduleKey, baseQuery = {}, projectionMe
       // OR filter only if type exists AND is in allowed list, otherwise show all
       
       // For forms and events, we'll be more permissive - only filter if explicitly provided
-      // For people, we're permissive to include people without type (identity-only records)
-      // Type is NOT required - participation is set via Attach-to-App, not during creation
-      if (moduleKey === 'people') {
-        // People: Include people with allowed types OR people without type (identity-only)
-        // This allows newly created people (without participation) to be visible
+      // For people, we're permissive to include people without participation (identity-only records)
+      // Role is NOT required - participation is set via Attach-to-App, not during creation
+      if (moduleKey === 'people' && useParticipationsRole) {
+        // People: participations.SALES.role - include allowed roles OR no SALES participation (identity-only)
         projectionFilter = {
           $or: [
-            { [typeField]: { $in: modelAllowedTypes } }, // Type is in allowed types
-            { [typeField]: { $exists: false } }, // Field doesn't exist (identity-only person)
-            { [typeField]: null }, // Field is null (identity-only person)
-            { [typeField]: '' } // Field is empty string (identity-only person)
+            { [typeField]: { $in: modelAllowedTypes } }, // Role is in allowed types
+            { [typeField]: { $exists: false } }, // No SALES participation (identity-only)
+            { [typeField]: null }, // Role is null (identity-only person)
+            { [typeField]: '' } // Role is empty string (identity-only person)
           ]
         };
       } else {

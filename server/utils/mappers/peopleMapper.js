@@ -1,9 +1,16 @@
 // Maps Contact (v1) <-> People (new)
 
+const { getSalesParticipationValues } = require('../getSalesParticipationValues');
+const { setSalesParticipationIn } = require('../syncSalesParticipation');
+
 exports.contactToPeopleDoc = function(contactDoc, context) {
   const orgId = contactDoc.organizationId || context?.organizationId;
   const ownerId = contactDoc.owner_id || context?.assignedTo;
   const createdBy = context?.createdBy || ownerId;
+
+  const role = contactDoc.lifecycle_stage === 'Lead' ? 'Lead' : 'Contact';
+  const lead_status = mapLeadStatus(contactDoc.lifecycle_stage);
+  const contact_status = mapContactStatus(contactDoc.status);
 
   return {
     organizationId: orgId,
@@ -13,7 +20,6 @@ exports.contactToPeopleDoc = function(contactDoc, context) {
 
     // core
     source: contactDoc.lead_source,
-    type: contactDoc.lifecycle_stage === 'Lead' ? 'Lead' : 'Contact',
     first_name: contactDoc.first_name,
     last_name: contactDoc.last_name,
     email: contactDoc.email,
@@ -23,19 +29,23 @@ exports.contactToPeopleDoc = function(contactDoc, context) {
     tags: contactDoc.tags || [],
     do_not_contact: !!contactDoc.do_not_contact,
 
-    // lead-specific
-    lead_status: mapLeadStatus(contactDoc.lifecycle_stage),
+    // lead-specific (non-participation)
     lead_owner: contactDoc.owner_id,
     lead_score: contactDoc.score,
 
-    // contact-specific
-    contact_status: mapContactStatus(contactDoc.status),
-    preferred_contact_method: contactDoc.preferred_channel ? capitalize(contactDoc.preferred_channel) : undefined
+    // contact-specific (non-participation)
+    preferred_contact_method: contactDoc.preferred_channel ? capitalize(contactDoc.preferred_channel) : undefined,
+
+    // participations as sole source of truth
+    participations: setSalesParticipationIn({}, { role, lead_status, contact_status })
   };
 };
 
 // Map People doc to a Contact-like view for backward-compatible responses
 exports.peopleToContactView = function(people) {
+  const { role, contact_status } = getSalesParticipationValues(people);
+  const type = role;
+  const contactStatus = contact_status;
   return {
     _id: people.legacyContactId || people._id,
     organizationId: people.organizationId,
@@ -49,8 +59,8 @@ exports.peopleToContactView = function(people) {
     tags: people.tags,
     do_not_contact: people.do_not_contact,
     lead_source: people.source,
-    lifecycle_stage: people.type === 'Lead' ? 'Lead' : 'Customer',
-    status: people.contact_status === 'DoNotContact' ? 'Inactive' : (people.contact_status || 'Active'),
+    lifecycle_stage: type === 'Lead' ? 'Lead' : 'Customer',
+    status: contactStatus === 'DoNotContact' ? 'Inactive' : (contactStatus || 'Active'),
     preferred_channel: people.preferred_contact_method ? people.preferred_contact_method.toLowerCase() : undefined,
     createdAt: people.createdAt,
     updatedAt: people.updatedAt

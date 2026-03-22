@@ -13,10 +13,17 @@ const { resolvePeopleAppContext } = require('../utils/peopleAppContextResolver')
 const { resolvePeopleTypes } = require('../utils/peopleTypeResolver');
 const { resolveQuickCreateContext } = require('../utils/peopleQuickCreateContextResolver');
 const { composePersonProfile, CORE_FIELD_KEYS, APP_FIELD_KEYS_BY_APP, hasAppParticipation, getAppDisplayName } = require('../utils/personProfileComposer');
-const { getSalesParticipationFields } = require('./peopleController');
+const { setSalesParticipationIn, syncSalesParticipation } = require('../utils/syncSalesParticipation');
+const { getSalesParticipationValues } = require('../utils/getSalesParticipationValues');
+const { getSalesParticipationFields, flattenPeopleForResponse } = require('./peopleController');
+const { validatePeopleType } = require('../utils/tenantMetadata');
 const appRegistry = require('../constants/appRegistry');
 const People = require('../models/People');
 const User = require('../models/User');
+const {
+  helpdeskTypeAliasViolation,
+  peopleLegacyTopLevelTypeViolation,
+} = require('../utils/warnDeprecatedPeopleTypeAlias');
 
 /**
  * Resolve app context for People flows
@@ -281,20 +288,19 @@ exports.composeProfile = async (req, res) => {
     } else {
       // Check person's actual participation - prioritize apps where they actually participate
       // This ensures we show the correct app context even when no query param is provided
-      
-      // Direct check for SALES participation via type field (most reliable)
-      // SALES participation is indicated by type being 'Lead' or 'Contact'
-      const personType = person?.type;
-      const hasSalesParticipation = personType === 'Lead' || personType === 'Contact';
+      //
+      // Use participations.SALES.role (source of truth); never top-level type/lead_status/contact_status
+      const { role: personType, lead_status, contact_status } = getSalesParticipationValues(person);
+      const hasSalesParticipation = !!personType;
       
       console.log('[People Profile] Person participation check:', {
         personId: id,
         personType: personType,
         hasSalesParticipation,
         personRaw: {
-          type: person?.type,
-          lead_status: person?.lead_status,
-          contact_status: person?.contact_status
+          type: personType,
+          lead_status,
+          contact_status
         },
         enabledApps: enabledApps,
         userAppAccess: userAppAccess
@@ -304,7 +310,7 @@ exports.composeProfile = async (req, res) => {
         navigationIntent = {
           sourceAppKey: 'SALES'
         };
-        console.log('[People Profile] Setting navigationIntent to SALES based on type field:', personType);
+        console.log('[People Profile] Setting navigationIntent to SALES based on participations.SALES.role:', personType);
       }
     }
     
@@ -315,10 +321,9 @@ exports.composeProfile = async (req, res) => {
       userAppAccess: Array.isArray(userAppAccess) ? userAppAccess : []
     });
     
-    // Override: If person participates in SALES (has type field), always use SALES
-    // This ensures we show the correct app context regardless of resolver ambiguity
-    const personType = person?.type;
-    const hasSalesType = personType === 'Lead' || personType === 'Contact';
+    // Override: If person participates in SALES (has role in participations), always use SALES
+    const { role: resolvedPersonType } = getSalesParticipationValues(person);
+    const hasSalesType = !!resolvedPersonType;
     
     if (hasSalesType) {
       const normalizedEnabledApps = enabledApps.map(k => 
@@ -327,8 +332,8 @@ exports.composeProfile = async (req, res) => {
       if (normalizedEnabledApps.includes('SALES')) {
         appContextResult.appKey = 'SALES';
         appContextResult.confidence = 'HIGH';
-        appContextResult.reason = `Person participates in SALES app (type: ${personType}) - using SALES context`;
-        console.log('[People Profile] Overriding app context to SALES based on type field:', personType);
+        appContextResult.reason = `Person participates in SALES app (role: ${resolvedPersonType}) - using SALES context`;
+        console.log('[People Profile] Overriding app context to SALES based on participations.SALES.role:', resolvedPersonType);
       } else {
         console.log('[People Profile] Person has SALES type but SALES is not enabled. Enabled apps:', normalizedEnabledApps);
       }
@@ -416,7 +421,8 @@ exports.createOrAttach = async (req, res) => {
   try {
     const { 
       appKey,           // Final resolved app key (required)
-      selectedType,     // Selected People type (e.g., 'LEAD', 'CONTACT')
+      role,             // Role for participation (e.g., 'Lead', 'Contact') - preferred
+      selectedType,     // Legacy: Selected People type (e.g., 'LEAD', 'CONTACT')
       formData          // Form data with core + app-specific fields
     } = req.body;
 
@@ -438,15 +444,27 @@ exports.createOrAttach = async (req, res) => {
     }
 
     const normalizedAppKey = appKey.trim().toUpperCase();
-    // Normalize type - only set if explicitly provided and not empty
-    const normalizedType = selectedType && selectedType.trim() 
-      ? selectedType.trim().toUpperCase() 
-      : null;
+    const helpdeskViolCreate = helpdeskTypeAliasViolation(normalizedAppKey, formData);
+    if (helpdeskViolCreate) {
+      return res.status(helpdeskViolCreate.status).json(helpdeskViolCreate.body);
+    }
+    const legacyTypeCreate = peopleLegacyTopLevelTypeViolation(formData);
+    if (legacyTypeCreate) {
+      return res.status(legacyTypeCreate.status).json(legacyTypeCreate.body);
+    }
+
+    // SALES: sales_type; HELPDESK: helpdesk_role only (or role / selectedType on body)
+    const typeInput =
+      normalizedAppKey === 'HELPDESK'
+        ? role ?? selectedType ?? formData?.helpdesk_role
+        : role ?? selectedType ?? formData?.sales_type;
+    const normalizedType = typeInput && String(typeInput).trim() ? String(typeInput).trim() : null;
     
     // Debug: Log what we received
     console.log('[createOrAttach] 📥 Request received:', {
       appKey: normalizedAppKey,
-      selectedType: selectedType,
+      role,
+      selectedType,
       normalizedType: normalizedType,
       formDataKeys: Object.keys(formData || {})
     });
@@ -515,16 +533,20 @@ exports.createOrAttach = async (req, res) => {
       }
     });
 
-    // Set type if provided and it's an app field
-    // ⚠️ IMPORTANT: This will only be used when ATTACHING to existing person
-    // For NEW person creation, we create identity-only (no type field)
-    // CRITICAL: Only set type if normalizedType is explicitly provided (not null/empty)
-    if (normalizedType && appFieldKeys.includes('type')) {
-      // Map type key to model value (LEAD -> Lead, CONTACT -> Contact)
-      const typeValue = normalizedType === 'LEAD' ? 'Lead' : 
-                        normalizedType === 'CONTACT' ? 'Contact' : 
-                        normalizedType;
-      appFields.type = typeValue;
+    // Validate type/role if provided (for SALES writes to participations only)
+    // Do NOT set appFields.type - type is deprecated, use participations.SALES.role
+    let validatedRole = null;
+    if (normalizedType && normalizedAppKey === 'SALES') {
+      const typeValidation = await validatePeopleType(req.user.organizationId, normalizedAppKey, normalizedType);
+      if (!typeValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          message: typeValidation.message,
+          code: 'TYPE_NOT_ALLOWED',
+          allowedTypes: typeValidation.allowedTypes
+        });
+      }
+      validatedRole = typeValidation.canonicalValue;
     }
     
     // Debug: Log extracted fields
@@ -533,7 +555,7 @@ exports.createOrAttach = async (req, res) => {
       appFieldsKeys: Object.keys(appFields),
       appFields: appFields,
       normalizedType: normalizedType,
-      hasTypeInAppFields: 'type' in appFields
+      validatedRole
     });
 
     // Check for duplicate by email (identity rule)
@@ -558,10 +580,9 @@ exports.createOrAttach = async (req, res) => {
       // Enforce uniqueness: Check if person already has participation in this app
       if (hasAppParticipation(existingPerson, normalizedAppKey)) {
         const appName = getAppDisplayName(normalizedAppKey);
-        // Get current participation type for better error message
         let currentType = null;
-        if (normalizedAppKey === 'SALES' && existingPerson.type) {
-          currentType = existingPerson.type;
+        if (normalizedAppKey === 'SALES') {
+          currentType = getSalesParticipationValues(existingPerson).role;
         }
         
         const errorMessage = currentType 
@@ -576,51 +597,65 @@ exports.createOrAttach = async (req, res) => {
       }
       
       // Attach app context to existing person
-      // Only update app-specific fields if they don't already exist
       const updateData = {};
-      
-      // Only set app fields that are not already set
-      Object.entries(appFields).forEach(([key, value]) => {
+
+      // SALES: strip role aliases + lifecycle fields from top-level $set (canonical: participations.SALES)
+      const salesKeys = ['sales_type', 'lead_status', 'contact_status'];
+      const appFieldsForUpdate = { ...appFields };
+      let salesParticipation = null;
+      if (normalizedAppKey === 'SALES') {
+        salesParticipation = {
+          role: validatedRole ?? getSalesParticipationValues(existingPerson).role ?? null,
+          lead_status: appFields.lead_status ?? getSalesParticipationValues(existingPerson).lead_status ?? null,
+          contact_status: appFields.contact_status ?? getSalesParticipationValues(existingPerson).contact_status ?? null
+        };
+        salesKeys.forEach(k => delete appFieldsForUpdate[k]);
+      }
+
+      // Only set app fields (excluding type/lead_status/contact_status for SALES) that are not already set
+      Object.entries(appFieldsForUpdate).forEach(([key, value]) => {
         if (existingPerson[key] === undefined || existingPerson[key] === null || existingPerson[key] === '') {
           updateData[key] = value;
         }
       });
 
+      if (normalizedAppKey === 'SALES' && salesParticipation && (salesParticipation.role ?? salesParticipation.lead_status ?? salesParticipation.contact_status)) {
+        updateData.participations = setSalesParticipationIn(existingPerson.participations || {}, salesParticipation);
+      }
+
       // Update core fields if provided (but don't overwrite existing non-empty values)
       Object.entries(coreFields).forEach(([key, value]) => {
-        // Skip system fields
-        if (['organizationId', 'createdBy', 'assignedTo'].includes(key)) {
-          return;
-        }
-        // Filter out empty strings for ObjectId fields to prevent BSON casting errors
-        if (objectIdFields.includes(key) && (value === '' || value === null || value === undefined)) {
-          return;
-        }
-        // Only update if current value is empty/null
+        if (['organizationId', 'createdBy', 'assignedTo'].includes(key)) return;
+        if (objectIdFields.includes(key) && (value === '' || value === null || value === undefined)) return;
         if (!existingPerson[key] || existingPerson[key] === '') {
           updateData[key] = value;
         }
       });
 
       if (Object.keys(updateData).length > 0) {
-        // Add activity log for app context attachment
-        updateData.$push = {
-          activityLogs: {
-            user: userName,
-            userId: req.user._id,
-            action: `app_context_attached`,
-            details: { 
-              appKey: normalizedAppKey,
-              type: 'attach',
-              attachedFields: Object.keys(updateData)
-            },
-            timestamp: new Date()
-          }
+        const attachedFieldKeys = Object.keys(updateData);
+        const appDisplay = getAppDisplayName(normalizedAppKey);
+        const roleForMsg = validatedRole || normalizedType || null;
+        const activityEntry = {
+          user: userName,
+          userId: req.user._id,
+          action: 'participation_attached',
+          message: roleForMsg
+            ? `Joined ${appDisplay} as ${roleForMsg}`
+            : `Joined ${appDisplay}`,
+          details: {
+            appKey: normalizedAppKey,
+            type: 'attach',
+            participationType: roleForMsg,
+            attachedFields: attachedFieldKeys
+          },
+          appContext: normalizedAppKey,
+          timestamp: new Date()
         };
 
         result = await People.findOneAndUpdate(
           { _id: existingPerson._id, organizationId: req.user.organizationId },
-          { $set: updateData },
+          { $set: updateData, $push: { activityLogs: activityEntry } },
           { new: true, runValidators: true }
         );
       } else {
@@ -655,12 +690,14 @@ exports.createOrAttach = async (req, res) => {
         activityLogs: [{
           user: userName,
           userId: req.user._id,
-          action: 'created this record',
-          details: { 
+          action: 'record_created',
+          message: 'Created this person',
+          details: {
             type: 'create',
             appKey: normalizedAppKey,
-            peopleType: normalizedType // Store in activity log, not in person record
+            peopleType: normalizedType
           },
+          appContext: normalizedAppKey,
           timestamp: new Date()
         }]
       };
@@ -683,26 +720,49 @@ exports.createOrAttach = async (req, res) => {
       if (normalizedType) {
         // Attach app participation to the newly created person
         const attachUpdateData = {};
-        
-        // Set app-specific fields (including type)
-        Object.entries(appFields).forEach(([key, value]) => {
-          attachUpdateData[key] = value;
-        });
-        
-        // Ensure type is set if normalizedType was provided
-        if (appFieldKeys.includes('type') && normalizedType) {
-          const typeValue = normalizedType === 'LEAD' ? 'Lead' : 
-                            normalizedType === 'CONTACT' ? 'Contact' : 
-                            normalizedType;
-          attachUpdateData.type = typeValue;
+        const salesKeys = ['sales_type', 'lead_status', 'contact_status'];
+
+        if (normalizedAppKey === 'SALES') {
+          const salesParticipation = {
+            role: validatedRole ?? null,
+            lead_status: appFields.lead_status ?? null,
+            contact_status: appFields.contact_status ?? null
+          };
+          attachUpdateData.participations = setSalesParticipationIn(result.participations || {}, salesParticipation);
+          Object.entries(appFields).forEach(([key, value]) => {
+            if (!salesKeys.includes(key)) attachUpdateData[key] = value;
+          });
+        } else {
+          Object.entries(appFields).forEach(([key, value]) => { attachUpdateData[key] = value; });
         }
-        
-        // Update the person with app fields
+
         if (Object.keys(attachUpdateData).length > 0) {
           console.log('[createOrAttach] 🔗 Attaching participation fields:', Object.keys(attachUpdateData));
+          const appDisplay = getAppDisplayName(normalizedAppKey);
+          const roleForMsg = validatedRole || normalizedType || null;
           result = await People.findOneAndUpdate(
             { _id: result._id, organizationId: req.user.organizationId },
-            { $set: attachUpdateData },
+            {
+              $set: attachUpdateData,
+              $push: {
+                activityLogs: {
+                  user: userName,
+                  userId: req.user._id,
+                  action: 'participation_attached',
+                  message: roleForMsg
+                    ? `Joined ${appDisplay} as ${roleForMsg}`
+                    : `Joined ${appDisplay}`,
+                  details: {
+                    type: 'attach',
+                    appKey: normalizedAppKey,
+                    participationType: roleForMsg,
+                    attachedFields: Object.keys(attachUpdateData)
+                  },
+                  appContext: normalizedAppKey,
+                  timestamp: new Date()
+                }
+              }
+            },
             { new: true, runValidators: true }
           );
           
@@ -733,7 +793,7 @@ exports.createOrAttach = async (req, res) => {
 
     res.status(wasAttached ? 200 : 201).json({
       success: true,
-      data: populated,
+      data: flattenPeopleForResponse(populated),
       meta: {
         wasAttached,
         appKey: normalizedAppKey,
@@ -775,7 +835,7 @@ exports.createOrAttach = async (req, res) => {
 exports.attachAppParticipation = async (req, res) => {
   try {
     const personId = req.params.id;
-    const { appKey, participationType, formData } = req.body;
+    const { appKey, role, participationType, formData } = req.body;
 
     // Validate required fields
     if (!appKey) {
@@ -786,16 +846,34 @@ exports.attachAppParticipation = async (req, res) => {
       });
     }
 
-    if (!participationType) {
-      return res.status(400).json({
-        success: false,
-        message: 'participationType is required',
-        code: 'MISSING_PARTICIPATION_TYPE'
-      });
+    const normalizedAppKey = appKey.trim().toUpperCase();
+
+    if (formData && typeof formData === 'object') {
+      const helpdeskViolAttach = helpdeskTypeAliasViolation(normalizedAppKey, formData);
+      if (helpdeskViolAttach) {
+        return res.status(helpdeskViolAttach.status).json(helpdeskViolAttach.body);
+      }
+      const legacyAttach = peopleLegacyTopLevelTypeViolation(formData);
+      if (legacyAttach) {
+        return res.status(legacyAttach.status).json(legacyAttach.body);
+      }
     }
 
-    const normalizedAppKey = appKey.trim().toUpperCase();
-    const normalizedType = participationType.trim().toUpperCase();
+    // HELPDESK: helpdesk_role only (not legacy type)
+    const typeValue =
+      role ??
+      participationType ??
+      (normalizedAppKey === 'HELPDESK'
+        ? formData?.helpdesk_role
+        : formData?.sales_type);
+    if (!typeValue || (typeof typeValue === 'string' && !typeValue.trim())) {
+      return res.status(400).json({
+        success: false,
+        message: 'role or participationType is required',
+        code: 'MISSING_ROLE_OR_PARTICIPATION_TYPE'
+      });
+    }
+    const typeInput = typeof typeValue === 'string' ? typeValue.trim() : String(typeValue);
 
     // Verify app is enabled for organization
     const Organization = require('../models/Organization');
@@ -845,22 +923,25 @@ exports.attachAppParticipation = async (req, res) => {
       }
     });
     
+    const salesValues = normalizedAppKey === 'SALES' ? getSalesParticipationValues(person) : null;
     console.log('[attachAppParticipation] 🔍 Checking participation:', {
       personId: personId,
       appKey: normalizedAppKey,
       hasAppParticipation: hasAppParticipation(person, normalizedAppKey),
       personAppFields: personAppFields,
-      type: person.type,
-      lead_status: person.lead_status,
-      contact_status: person.contact_status
+      type: salesValues?.role,
+      lead_status: salesValues?.lead_status,
+      contact_status: salesValues?.contact_status
     });
     
     if (hasAppParticipation(person, normalizedAppKey)) {
       const appName = getAppDisplayName(normalizedAppKey);
       // Get current participation type for better error message
       let currentType = null;
-      if (normalizedAppKey === 'SALES' && person.type) {
-        currentType = person.type;
+      if (normalizedAppKey === 'SALES' && salesValues?.role) {
+        currentType = salesValues.role;
+      } else if (normalizedAppKey === 'HELPDESK' && person.participations?.HELPDESK?.role) {
+        currentType = person.participations.HELPDESK.role;
       }
       
       const errorMessage = currentType 
@@ -891,13 +972,32 @@ exports.attachAppParticipation = async (req, res) => {
       });
     }
 
-    // Set type if it's an app field
-    if (normalizedType && appFieldKeys.includes('type')) {
-      const typeValue = normalizedType === 'LEAD' ? 'Lead' : 
-                        normalizedType === 'CONTACT' ? 'Contact' : 
-                        normalizedType;
-      appFields.type = typeValue;
+    // Validate type/role for participations only (type is deprecated, never persist directly)
+    let validatedRole = null;
+    if (typeInput && normalizedAppKey === 'SALES') {
+      const typeValidation = await validatePeopleType(req.user.organizationId, normalizedAppKey, typeInput);
+      if (!typeValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          message: typeValidation.message,
+          code: 'TYPE_NOT_ALLOWED',
+          allowedTypes: typeValidation.allowedTypes
+        });
+      }
+      validatedRole = typeValidation.canonicalValue;
+    } else if (typeInput && normalizedAppKey === 'HELPDESK') {
+      const typeValidation = await validatePeopleType(req.user.organizationId, normalizedAppKey, typeInput);
+      if (!typeValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          message: typeValidation.message,
+          code: 'TYPE_NOT_ALLOWED',
+          allowedTypes: typeValidation.allowedTypes
+        });
+      }
+      validatedRole = typeValidation.canonicalValue;
     }
+    const normalizedType = validatedRole ?? typeInput;
 
     // Clean enum fields: convert empty strings to null
     const enumFields = ['lead_status', 'contact_status', 'role', 'source'];
@@ -907,13 +1007,34 @@ exports.attachAppParticipation = async (req, res) => {
       }
     });
 
-    // Prepare update data - only set fields that don't already exist
+    // Prepare update data - SALES: role/lead_status/contact_status go to participations only (type deprecated)
     const fieldsToSet = {};
-    Object.entries(appFields).forEach(([key, value]) => {
+    const salesKeys = ['lead_status', 'contact_status'];
+    const appFieldsForSet = normalizedAppKey === 'SALES'
+      ? Object.fromEntries(Object.entries(appFields).filter(([k]) => !salesKeys.includes(k)))
+      : appFields;
+
+    Object.entries(appFieldsForSet).forEach(([key, value]) => {
       if (person[key] === undefined || person[key] === null || person[key] === '') {
         fieldsToSet[key] = value;
       }
     });
+
+    if (normalizedAppKey === 'SALES') {
+      const prevSales = getSalesParticipationValues(person);
+      const salesParticipation = {
+        role: validatedRole ?? prevSales.role ?? null,
+        lead_status: appFields.lead_status ?? prevSales.lead_status ?? null,
+        contact_status: appFields.contact_status ?? prevSales.contact_status ?? null
+      };
+      if (salesParticipation.role ?? salesParticipation.lead_status ?? salesParticipation.contact_status) {
+        fieldsToSet.participations = setSalesParticipationIn(person.participations || {}, salesParticipation);
+      }
+    } else if (normalizedAppKey === 'HELPDESK' && validatedRole) {
+      const base = person.participations && typeof person.participations === 'object' ? { ...person.participations } : {};
+      base.HELPDESK = { role: validatedRole };
+      fieldsToSet.participations = base;
+    }
 
     // Get user name for activity log
     const user = await User.findById(req.user._id).select('firstName lastName username');
@@ -921,17 +1042,23 @@ exports.attachAppParticipation = async (req, res) => {
       (user.firstName || user.lastName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : user.username) || 'User' 
       : 'System';
 
-    // Build update object with $set and $push at the same level
+    const appDisplay = getAppDisplayName(normalizedAppKey);
+    const attachMessage = normalizedType
+      ? `Joined ${appDisplay} as ${normalizedType}`
+      : `Joined ${appDisplay}`;
+
     const updateObject = {
       $set: fieldsToSet,
       $push: {
         activityLogs: {
           user: userName,
           userId: req.user._id,
-          action: `added_to_${normalizedAppKey.toLowerCase()}_as_${normalizedType.toLowerCase()}`,
-          details: { 
+          action: 'participation_attached',
+          message: attachMessage,
+          details: {
+            type: 'attach',
             appKey: normalizedAppKey,
-            participationType: normalizedType,
+            participationType: normalizedType || null,
             attachedFields: Object.keys(fieldsToSet)
           },
           appContext: normalizedAppKey,
@@ -955,7 +1082,7 @@ exports.attachAppParticipation = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: populated,
+      data: flattenPeopleForResponse(populated),
       message: `Successfully added ${normalizedAppKey} participation`,
       meta: {
         appKey: normalizedAppKey,
@@ -1005,6 +1132,11 @@ exports.updateCore = async (req, res) => {
         success: false,
         message: 'Form data is required.'
       });
+    }
+
+    const legacyCore = peopleLegacyTopLevelTypeViolation(formData);
+    if (legacyCore) {
+      return res.status(legacyCore.status).json(legacyCore.body);
     }
 
     // Import CORE_FIELD_KEYS to filter allowed fields
@@ -1125,7 +1257,7 @@ exports.updateCore = async (req, res) => {
     res.json({
       success: true,
       message: 'Core information updated successfully.',
-      data: updatedPerson
+      data: flattenPeopleForResponse(updatedPerson)
     });
   } catch (error) {
     console.error('Error updating core Person fields:', error);
@@ -1170,12 +1302,21 @@ exports.updateAppFields = async (req, res) => {
     // Normalize app key
     const normalizedAppKey = appKey.toUpperCase();
 
+    const helpdeskViolApp = helpdeskTypeAliasViolation(normalizedAppKey, formData);
+    if (helpdeskViolApp) {
+      return res.status(helpdeskViolApp.status).json(helpdeskViolApp.body);
+    }
+    const legacyAppFields = peopleLegacyTopLevelTypeViolation(formData);
+    if (legacyAppFields) {
+      return res.status(legacyAppFields.status).json(legacyAppFields.body);
+    }
+
     // Import APP_FIELD_KEYS_BY_APP to filter allowed fields
     const { APP_FIELD_KEYS_BY_APP } = require('../utils/personProfileComposer');
 
-    // Get allowed fields for this app
-    const allowedFields = APP_FIELD_KEYS_BY_APP[normalizedAppKey];
-    if (!allowedFields || !Array.isArray(allowedFields) || allowedFields.length === 0) {
+    const allowedFields = APP_FIELD_KEYS_BY_APP[normalizedAppKey] || [];
+    const isRoleOnlyParticipationApp = normalizedAppKey === 'HELPDESK';
+    if (!isRoleOnlyParticipationApp && (!Array.isArray(allowedFields) || allowedFields.length === 0)) {
       return res.status(400).json({
         success: false,
         message: `No app-specific fields defined for app: ${normalizedAppKey}`
@@ -1216,30 +1357,58 @@ exports.updateAppFields = async (req, res) => {
       });
     }
 
-    // Build update object with only allowed app-specific fields
+    // Build update object - SALES: role/lead_status/contact_status go to participations only
     const updateData = {};
+    const salesKeys = ['lead_status', 'contact_status'];
     let hasUpdates = false;
 
-    for (const key of allowedFields) {
-      if (formData.hasOwnProperty(key)) {
-        // Special handling for type field: map uppercase values to enum values
-        if (key === 'type') {
-          const typeValue = formData[key];
-          if (typeof typeValue === 'string') {
-            const normalizedType = typeValue.trim().toUpperCase();
-            // Map type key to model value (LEAD -> Lead, CONTACT -> Contact)
-            updateData[key] = normalizedType === 'LEAD' ? 'Lead' : 
-                              normalizedType === 'CONTACT' ? 'Contact' : 
-                              typeValue; // Fallback to original if not recognized
-          } else {
-            updateData[key] = typeValue;
-          }
-        } else {
-          // Allow null/empty values for optional fields
-          updateData[key] = formData[key];
-        }
-        hasUpdates = true;
+    // Map sales_type / helpdesk_role → participations.*.role; never persist top-level aliases
+    let roleFromType = null;
+    const roleCandidate =
+      normalizedAppKey === 'SALES'
+        ? formData.sales_type
+        : normalizedAppKey === 'HELPDESK'
+          ? formData.helpdesk_role
+          : null;
+    if (roleCandidate !== undefined && roleCandidate !== null && String(roleCandidate).trim()) {
+      const typeValidation = await validatePeopleType(
+        req.user.organizationId,
+        normalizedAppKey,
+        String(roleCandidate).trim()
+      );
+      if (!typeValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          message: typeValidation.message,
+          code: 'TYPE_NOT_ALLOWED',
+          allowedTypes: typeValidation.allowedTypes
+        });
       }
+      roleFromType = typeValidation.canonicalValue;
+      hasUpdates = true;
+    }
+
+    for (const key of allowedFields) {
+      if (!formData.hasOwnProperty(key)) continue;
+      updateData[key] = formData[key];
+      hasUpdates = true;
+    }
+
+    if (normalizedAppKey === 'HELPDESK') {
+      if (!roleFromType) {
+        return res.status(400).json({
+          success: false,
+          message: 'Role is required (send as helpdesk_role).',
+          code: 'MISSING_ROLE'
+        });
+      }
+      const base =
+        person.participations && typeof person.participations === 'object'
+          ? { ...person.participations }
+          : {};
+      base.HELPDESK = { role: roleFromType };
+      updateData.participations = base;
+      hasUpdates = true;
     }
 
     if (!hasUpdates) {
@@ -1247,6 +1416,17 @@ exports.updateAppFields = async (req, res) => {
         success: false,
         message: 'No valid app-specific fields to update.'
       });
+    }
+
+    if (normalizedAppKey === 'SALES') {
+      const prevSales = getSalesParticipationValues(person);
+      const salesParticipation = {
+        role: roleFromType ?? prevSales.role ?? null,
+        lead_status: updateData.lead_status ?? prevSales.lead_status ?? null,
+        contact_status: updateData.contact_status ?? prevSales.contact_status ?? null
+      };
+      updateData.participations = setSalesParticipationIn(person.participations || {}, salesParticipation);
+      salesKeys.forEach(k => delete updateData[k]);
     }
 
     // Update the person record
@@ -1281,7 +1461,7 @@ exports.updateAppFields = async (req, res) => {
     res.json({
       success: true,
       message: `${normalizedAppKey} app fields updated successfully.`,
-      data: updatedPerson
+      data: flattenPeopleForResponse(updatedPerson)
     });
   } catch (error) {
     console.error('Error updating app-specific Person fields:', error);
@@ -1330,7 +1510,8 @@ exports.convertLeadToContact = async (req, res) => {
     }
 
     // Validate: Person must have Sales participation as Lead
-    if (!person.type || person.type !== 'Lead') {
+    const { role } = getSalesParticipationValues(person);
+    if (!role || role !== 'Lead') {
       return res.status(400).json({
         success: false,
         message: 'Person is not a Sales Lead. Conversion is only available for Leads.',
@@ -1367,13 +1548,15 @@ exports.convertLeadToContact = async (req, res) => {
 
     // Get formData from request body (if provided)
     const { formData } = req.body || {};
-    
-    // Convert Lead to Contact
-    // Update type field and clear Lead-specific fields
+    if (formData && typeof formData === 'object') {
+      const legacyConvert = peopleLegacyTopLevelTypeViolation(formData);
+      if (legacyConvert) {
+        return res.status(legacyConvert.status).json(legacyConvert.body);
+      }
+    }
+
+    // Convert Lead to Contact - participations only for type/lead_status/contact_status
     const updateData = {
-      type: 'Contact',
-      // Clear Lead-specific fields
-      lead_status: null,
       lead_owner: null,
       lead_score: null,
       interest_products: [],
@@ -1381,26 +1564,28 @@ exports.convertLeadToContact = async (req, res) => {
       qualification_notes: null,
       estimated_value: null
     };
-    
-    // Apply Contact-specific fields from formData if provided
+
     if (formData && typeof formData === 'object') {
-      // Only include Contact-specific fields (exclude Lead fields)
       const contactFields = ['contact_status', 'role', 'birthday', 'preferred_contact_method'];
       contactFields.forEach(field => {
         if (formData.hasOwnProperty(field)) {
           const value = formData[field];
-          // Only set non-empty values
           if (value !== null && value !== undefined && value !== '') {
             updateData[field] = value;
           }
         }
       });
     }
-    
-    // Set default Contact status if not provided in formData and not already set
-    if (!updateData.contact_status && !person.contact_status) {
-      updateData.contact_status = 'Active';
-    }
+
+    const { contact_status: resolvedContactStatus } = getSalesParticipationValues(person);
+    const contactStatusValue = updateData.contact_status ?? resolvedContactStatus ?? 'Active';
+    delete updateData.contact_status;
+
+    updateData.participations = setSalesParticipationIn(person.participations || {}, {
+      role: 'Contact',
+      lead_status: null,
+      contact_status: contactStatusValue
+    });
 
     // Build activity log entry
     const activityLogEntry = {
@@ -1460,7 +1645,7 @@ exports.convertLeadToContact = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: populated,
+      data: flattenPeopleForResponse(populated),
       message: 'Successfully converted Sales Lead to Contact',
       meta: {
         appKey: 'SALES',
@@ -1646,18 +1831,24 @@ exports.detachFromApp = async (req, res) => {
       console.log(`[DetachFromApp] No app-specific fields found for ${normalizedAppKey}`);
     }
 
-    // Build update data: clear all app-specific fields
+    // Build update data: clear app fields; SALES: role aliases + lifecycle via participations only
     const updateData = {};
+    const salesKeys = ['sales_type', 'lead_status', 'contact_status'];
+
     appFieldKeys.forEach(fieldKey => {
-      // Set to null to clear the field
+      if (normalizedAppKey === 'SALES' && salesKeys.includes(fieldKey)) return;
       updateData[fieldKey] = null;
     });
 
-    // Special handling for array fields (set to empty array)
     if (normalizedAppKey === 'SALES') {
       if (appFieldKeys.includes('interest_products')) {
         updateData.interest_products = [];
       }
+      updateData.participations = setSalesParticipationIn(person.participations || {}, {
+        role: null,
+        lead_status: null,
+        contact_status: null
+      });
     }
 
     // Get user name for activity log
@@ -1710,7 +1901,7 @@ exports.detachFromApp = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: populated,
+      data: flattenPeopleForResponse(populated),
       message: `Successfully detached from ${normalizedAppKey}`,
       meta: {
         appKey: normalizedAppKey,

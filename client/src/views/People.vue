@@ -1,5 +1,42 @@
 <template>
   <div class="mx-auto w-full">
+    <!-- Context switcher -->
+    <div class="mb-4 flex items-center gap-3">
+      <Listbox v-model="peopleContext" as="div" class="relative min-w-[160px]">
+        <ListboxButton
+          class="inline-flex items-center gap-2 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-left text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+        >
+          <span>{{ peopleContextLabel }}</span>
+          <ChevronDownIcon class="h-5 w-5 text-gray-400" aria-hidden="true" />
+        </ListboxButton>
+        <Transition
+          leave-active-class="transition ease-in duration-100"
+          leave-from-class="opacity-100"
+          leave-to-class="opacity-0"
+        >
+          <ListboxOptions
+            class="absolute left-0 z-50 mt-2 w-full origin-top-left rounded-lg bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none"
+          >
+            <ListboxOption
+              v-for="opt in contextOptions"
+              :key="opt.value"
+              :value="opt.value"
+              v-slot="{ active }"
+            >
+              <li
+                :class="[
+                  active ? 'bg-indigo-50 dark:bg-indigo-900/30' : '',
+                  'relative cursor-default select-none px-4 py-2 text-sm'
+                ]"
+              >
+                <span class="block truncate">{{ opt.label }}</span>
+              </li>
+            </ListboxOption>
+          </ListboxOptions>
+        </Transition>
+      </Listbox>
+    </div>
+
     <!-- Entity Description -->
     <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
       <p class="text-sm text-gray-700 dark:text-gray-300">
@@ -12,6 +49,7 @@
       ref="moduleListRef"
       module-key="people"
       app-key="PLATFORM"
+      :people-context="peopleContext"
       @create="openCreateModal"
       @import="showImportModal = true"
       @export="exportContacts"
@@ -30,8 +68,20 @@
             size="md"
           />
           <div class="min-w-0">
-            <div class="font-semibold text-gray-900 dark:text-white truncate">
-              {{ row.first_name }} {{ row.last_name }}
+            <div class="flex items-center gap-2">
+              <span class="font-semibold text-gray-900 dark:text-white truncate">
+                {{ row.first_name }} {{ row.last_name }}
+              </span>
+              <span
+                v-if="nameCellParticipationIndicator(row).show"
+                class="inline-flex items-center shrink-0"
+                :title="nameCellParticipationIndicator(row).title"
+              >
+                <span
+                  class="h-2 w-2 rounded-full bg-blue-500 dark:bg-blue-400"
+                  aria-hidden="true"
+                />
+              </span>
             </div>
             <div v-if="row.email" class="text-sm text-gray-500 dark:text-gray-400 truncate">
               {{ row.email }}
@@ -122,21 +172,22 @@
         <DateCell :value="value" format="short" />
       </template>
 
-      <!-- Participation Visibility Column (Read-Only) - Uses type column slot if available -->
+      <!-- Participation column (canonical key sales_type; cell-type = legacy saved layouts) -->
+      <template #cell-sales_type="{ row }">
+        <PeopleListParticipationTypeCell
+          :row="row"
+          :people-context="peopleContext"
+          :badge-options-by-app="participationBadgeOptionsByApp"
+          :role-badge-variant-map="roleBadgeVariantMap"
+        />
+      </template>
       <template #cell-type="{ row }">
-        <div class="flex flex-wrap gap-1.5">
-          <template v-if="getParticipatingApps(row).length > 0">
-            <span
-              v-for="app in getParticipatingApps(row)"
-              :key="app"
-              class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
-              :class="getAppBadgeClass(app)"
-            >
-              {{ app }}{{ row.type && app === 'Sales' ? `: ${row.type}` : '' }}
-            </span>
-          </template>
-          <span v-else class="text-xs text-gray-400 dark:text-gray-500">-</span>
-        </div>
+        <PeopleListParticipationTypeCell
+          :row="row"
+          :people-context="peopleContext"
+          :badge-options-by-app="participationBadgeOptionsByApp"
+          :role-badge-variant-map="roleBadgeVariantMap"
+        />
       </template>
 
       <!-- Participation-aware rendering for SALES participation fields -->
@@ -211,10 +262,13 @@
       </template>
     </ModuleList>
 
-    <!-- Quick Create Drawer -->
-    <!-- ARCHITECTURAL INTENT: Drawer requires intent context -->
-    <!-- People.vue redirects to /people/create for intent selection -->
-    <!-- Intent must be selected before drawer can open -->
+    <!-- Quick Create Drawer (context-aware: AppSection when peopleContext is an app) -->
+    <PeopleQuickCreateDrawer
+      :isOpen="showQuickCreate"
+      :context-app-key="peopleContext === 'ALL' ? null : peopleContext"
+      @close="handlePeopleDrawerClose"
+      @saved="handlePersonCreated"
+    />
 
     <!-- CSV Import Modal -->
     <CSVImportModal 
@@ -227,10 +281,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, onActivated } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';
+import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from '@headlessui/vue';
+import { ChevronDownIcon } from '@heroicons/vue/24/outline';
 import apiClient from '@/utils/apiClient';
 import ModuleList from '@/components/module-list/ModuleList.vue';
 import BadgeCell from '@/components/common/table/BadgeCell.vue';
@@ -239,10 +295,46 @@ import CSVImportModal from '@/components/import/CSVImportModal.vue';
 import PeopleQuickCreateDrawer from '@/components/people/PeopleQuickCreateDrawer.vue';
 import Avatar from '@/components/common/Avatar.vue';
 import { getFieldMetadata } from '@/platform/fields/peopleFieldModel';
+import { getParticipation } from '@/utils/getParticipation';
+import { getRoleDisplay, getAppLabel } from '@/utils/getRoleDisplay';
+import PeopleListParticipationTypeCell from '@/components/people/PeopleListParticipationTypeCell.vue';
+import {
+  getPeopleParticipationEntries,
+  isPeopleListAppContext
+} from '@/utils/peopleParticipationUi';
+import { usePeopleTypes } from '@/composables/usePeopleTypes';
+import { typeDefsToBadgeOptions } from '@/utils/peopleTypeColors';
 
 const router = useRouter();
 const authStore = useAuthStore();
 const { openTab } = useTabs();
+
+/** @type {import('vue').Ref<'ALL' | 'SALES' | 'HELPDESK'>} */
+const peopleContext = ref('ALL');
+
+const contextOptions = [
+  { label: 'All People', value: 'ALL' },
+  { label: getAppLabel('SALES'), value: 'SALES' },
+  { label: getAppLabel('HELPDESK'), value: 'HELPDESK' }
+];
+
+const peopleContextLabel = computed(() =>
+  contextOptions.find(o => o.value === peopleContext.value)?.label ?? 'All People'
+);
+
+const { typeDefs: salesPeopleTypeDefs } = usePeopleTypes('SALES');
+const { typeDefs: helpdeskPeopleTypeDefs } = usePeopleTypes('HELPDESK');
+
+const participationBadgeOptionsByApp = computed(() => ({
+  SALES: typeDefsToBadgeOptions(salesPeopleTypeDefs.value),
+  HELPDESK: typeDefsToBadgeOptions(helpdeskPeopleTypeDefs.value)
+}));
+
+watch(peopleContext, () => {
+  if (moduleListRef.value?.refresh) {
+    moduleListRef.value.refresh();
+  }
+});
 
 // State
 const moduleListRef = ref(null);
@@ -332,19 +424,41 @@ const handleRowClick = (row, event = null) => {
   viewContact(row._id, event, row);
 };
 
-// Participation visibility helpers
+// Participation visibility helpers - use getParticipation / getRoleDisplay, never person.type directly
+function nameCellParticipationIndicator(row) {
+  const ctx = peopleContext.value;
+  if (ctx === 'ALL') {
+    const entries = getPeopleParticipationEntries(row);
+    if (!entries.length) return { show: false, title: '' };
+    return {
+      show: true,
+      title: entries.map((e) => `${e.appLabel} — ${e.role}`).join('; ')
+    };
+  }
+  if (!isPeopleListAppContext(ctx)) return { show: false, title: '' };
+  const d = getRoleDisplay(row, ctx);
+  if (!d) return { show: false, title: '' };
+  return { show: true, title: `In ${d.appLabel} as ${d.role}` };
+}
+
+const roleBadgeVariantMap = {
+  Lead: 'warning',
+  Contact: 'success',
+  Qualified: 'info',
+  Opportunity: 'primary',
+  Customer: 'success',
+  Lost: 'danger'
+};
+
 const getParticipatingApps = (row) => {
   const apps = [];
-  
-  // Check for SALES participation (type field indicates SALES participation)
-  if (row.type) {
-    apps.push('Sales');
+  const salesPart = getParticipation(row, 'SALES');
+  if (salesPart) {
+    apps.push(getAppLabel('SALES'));
   }
   
-  // Check for HELPDESK participation (presence of helpdesk-specific fields)
-  // Note: Add more checks as other apps are integrated
-  if (row.helpdesk_ticket_count || row.helpdesk_status) {
-    apps.push('Helpdesk');
+  if (getParticipation(row, 'HELPDESK')) {
+    apps.push(getAppLabel('HELPDESK'));
   }
   
   // Check for AUDIT participation
@@ -376,10 +490,9 @@ const participatesInApp = (row, appKey) => {
   
   switch (appKeyUpper) {
     case 'SALES':
-      // SALES participation is indicated by presence of 'type' field
-      return !!row.type;
+      return getParticipation(row, 'SALES') != null;
     case 'HELPDESK':
-      return !!(row.helpdesk_ticket_count || row.helpdesk_status);
+      return getParticipation(row, 'HELPDESK') != null;
     case 'AUDIT':
       return !!(row.audit_member_id || row.audit_role);
     case 'PORTAL':
@@ -395,7 +508,7 @@ const participatesInApp = (row, appKey) => {
  * Get participation-aware cell value for a field
  * For participation fields, returns "-" if person doesn't participate in that app
  * Otherwise returns the actual value
- * @param {String} fieldKey - Field key (e.g., 'type', 'lead_status')
+ * @param {String} fieldKey - Field key (e.g., 'sales_type', 'lead_status')
  * @param {Object} row - Person record
  * @param {*} rawValue - Raw field value from row
  * @returns {*} - Value to display ("-" if not participating, otherwise rawValue)
@@ -424,17 +537,6 @@ const getParticipationAwareCellValue = (fieldKey, row, rawValue) => {
   }
 };
 
-const getAppBadgeClass = (app) => {
-  const classMap = {
-    'Sales': 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
-    'Helpdesk': 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
-    'Audit': 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200',
-    'Portal': 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200',
-    'Projects': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200'
-  };
-  return classMap[app] || 'bg-gray-100 text-gray-800 dark:bg-gray-900/40 dark:text-gray-200';
-};
-
 const viewContact = (contactId, event = null, row = null) => {
   const title = getPersonDisplayName(row) || 'Person';
   
@@ -443,8 +545,14 @@ const viewContact = (contactId, event = null, row = null) => {
     event.metaKey ||
     event.ctrlKey
   );
-  
-  openTab(`/people/${contactId}`, {
+
+  const ctx = peopleContext.value;
+  const path =
+    ctx === 'SALES' || ctx === 'HELPDESK'
+      ? `/people/${contactId}?context=${ctx}`
+      : `/people/${contactId}`;
+
+  openTab(path, {
     title,
     icon: 'users',
     params: { name: title },
@@ -454,11 +562,12 @@ const viewContact = (contactId, event = null, row = null) => {
 };
 
 const openCreateModal = () => {
-  // ARCHITECTURAL INTENT: All entry points open drawer in Quick Create mode
-  // Open drawer in same tab, not navigating to new route
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('litedesk:open-people-quick-create'));
-  }
+  // Open local drawer with current context (AppSection when peopleContext is an app)
+  showQuickCreate.value = true;
+};
+
+const handlePeopleDrawerClose = () => {
+  showQuickCreate.value = false;
 };
 
 const handlePersonCreated = () => {

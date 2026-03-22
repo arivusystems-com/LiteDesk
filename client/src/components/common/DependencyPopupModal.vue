@@ -41,7 +41,7 @@
                 :value="formData[field.key]"
                 @update:value="updateField(field.key, $event)"
                 :errors="errors"
-                :dependency-state="getFieldDependencyState(field, formData, allFields)"
+                :dependency-state="getFieldDependencyState(field, formData, allFields, { moduleKey: props.moduleKey })"
               />
             </div>
           </div>
@@ -97,6 +97,10 @@ const props = defineProps({
   allFields: {
     type: Array,
     default: () => []
+  },
+  moduleKey: {
+    type: String,
+    default: ''
   }
 });
 

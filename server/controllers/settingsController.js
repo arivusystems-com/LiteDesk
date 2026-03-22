@@ -16,9 +16,11 @@
  * ============================================================================
  */
 
+const mongoose = require('mongoose');
 const ModuleDefinition = require('../models/ModuleDefinition');
 const Organization = require('../models/Organization');
 const User = require('../models/User');
+const People = require('../models/People');
 const TenantModuleConfiguration = require('../models/TenantModuleConfiguration');
 const integrationRegistry = require('../constants/integrationRegistry');
 const emailService = require('../services/emailService');
@@ -2027,6 +2029,251 @@ exports.updateOrganizationStatusTypes = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to update organization status-types',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Per-role usage counts for participations.{appKey}.role (non-deleted people).
+ * GET /api/settings/core-modules/people/people-types/usage?appKey=SALES|HELPDESK
+ */
+exports.getPeopleTypesUsage = async (req, res) => {
+    try {
+        const organizationId = req.user.organizationId;
+        const appKey = (req.query.appKey || 'SALES').toUpperCase();
+
+        if (!organizationId) {
+            return res.status(401).json({
+                success: false,
+                message: 'Unauthorized'
+            });
+        }
+
+        const allowedApps = new Set(['SALES', 'HELPDESK']);
+        if (!allowedApps.has(appKey)) {
+            return res.status(400).json({
+                success: false,
+                message: 'appKey must be SALES or HELPDESK'
+            });
+        }
+
+        const orgOid = mongoose.Types.ObjectId.isValid(String(organizationId))
+            ? new mongoose.Types.ObjectId(String(organizationId))
+            : organizationId;
+
+        const rows = await People.aggregate([
+            {
+                $match: {
+                    organizationId: orgOid,
+                    $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }]
+                }
+            },
+            {
+                $project: {
+                    role: `$participations.${appKey}.role`
+                }
+            },
+            {
+                $match: {
+                    role: { $type: 'string', $nin: [null, ''] }
+                }
+            },
+            {
+                $group: {
+                    _id: '$role',
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        const byRole = {};
+        for (const row of rows) {
+            if (row._id != null) {
+                byRole[String(row._id)] = row.count;
+            }
+        }
+
+        res.json({
+            success: true,
+            data: byRole,
+            appKey
+        });
+    } catch (error) {
+        console.error('Get people-types usage error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get people type usage',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Get people types (e.g. Lead, Contact) from TenantModuleConfiguration.settings.peopleTypes
+ * GET /api/settings/core-modules/people/people-types?appKey=SALES|HELPDESK
+ * Returns { types, defaultRole, typeDefs } where each typeDef may include optional `fields: string[]` for per-type participation fields in quick create / attach.
+ */
+exports.getPeopleTypes = async (req, res) => {
+    try {
+        const organizationId = req.user.organizationId;
+        const appKey = (req.query.appKey || 'SALES').toUpperCase();
+
+        if (!organizationId) {
+            return res.status(401).json({
+                success: false,
+                message: 'Unauthorized'
+            });
+        }
+
+        const { getPeopleTypesConfig } = require('../utils/tenantMetadata');
+        const { types, defaultRole, typeDefs } = await getPeopleTypesConfig(organizationId, appKey);
+
+        res.json({
+            success: true,
+            data: {
+                types,
+                defaultRole,
+                typeDefs
+            },
+            appKey
+        });
+    } catch (error) {
+        console.error('Get people-types error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get people types',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Update people types for one app (SALES / HELPDESK) on TenantModuleConfiguration.settings.peopleTypes
+ * PUT /api/settings/core-modules/people/people-types
+ * Body: { appKey, types: (string | { value, color, fields?: string[] })[], defaultRole?: string }
+ * Stored shape per app: { types: { value, color, fields?: string[] }[], default: string }
+ */
+exports.updatePeopleTypes = async (req, res) => {
+    try {
+        const organizationId = req.user.organizationId;
+        if (!organizationId) {
+            return res.status(401).json({
+                success: false,
+                message: 'Unauthorized'
+            });
+        }
+
+        const appKey = String(req.body?.appKey || '').toUpperCase().trim();
+        const typesIn = req.body?.types;
+        const defaultIn = req.body?.defaultRole != null ? req.body.defaultRole : req.body?.default;
+        const allowedApps = new Set(['SALES', 'HELPDESK']);
+
+        if (!allowedApps.has(appKey)) {
+            return res.status(400).json({
+                success: false,
+                message: 'appKey must be SALES or HELPDESK'
+            });
+        }
+
+        const {
+            sanitizePeopleTypeDefsForSave,
+            collectAllowedPeopleParticipationFieldKeys
+        } = require('../utils/tenantMetadata');
+        const allowedFieldKeys = await collectAllowedPeopleParticipationFieldKeys(organizationId, appKey);
+        const parsed = sanitizePeopleTypeDefsForSave(typesIn, { allowedFieldKeys });
+        if (!parsed.ok) {
+            return res.status(400).json({
+                success: false,
+                message: parsed.message
+            });
+        }
+
+        const normalizedDefs = parsed.typeDefs;
+        const normalized = normalizedDefs.map((d) => d.value);
+
+        // Default must always be a member of types (e.g. if client removed the old default role)
+        let defaultCanonical = normalized[0];
+        if (defaultIn != null && String(defaultIn).trim()) {
+            const want = String(defaultIn).trim();
+            const match = normalized.find((t) => t.toLowerCase() === want.toLowerCase());
+            defaultCanonical = match || normalized[0];
+        }
+
+        let tenantConfig = await TenantModuleConfiguration.findOne({
+            organizationId,
+            moduleKey: 'people',
+            'settings.peopleTypes': { $exists: true, $ne: null }
+        });
+
+        if (!tenantConfig) {
+            tenantConfig = await TenantModuleConfiguration.findOne({
+                organizationId,
+                appKey: 'SALES',
+                moduleKey: 'people'
+            });
+        }
+
+        if (!tenantConfig) {
+            tenantConfig = await TenantModuleConfiguration.findOne({
+                organizationId,
+                moduleKey: 'people'
+            });
+        }
+
+        if (!tenantConfig) {
+            tenantConfig = new TenantModuleConfiguration({
+                organizationId,
+                appKey: 'SALES',
+                moduleKey: 'people',
+                enabled: true
+            });
+        }
+
+        if (!tenantConfig.settings) {
+            tenantConfig.settings = {};
+        }
+        if (!tenantConfig.settings.peopleTypes || typeof tenantConfig.settings.peopleTypes !== 'object') {
+            tenantConfig.settings.peopleTypes = {};
+        }
+
+        tenantConfig.settings.peopleTypes[appKey] = {
+            types: normalizedDefs,
+            default: defaultCanonical
+        };
+        tenantConfig.markModified('settings');
+        tenantConfig.markModified('settings.peopleTypes');
+        await tenantConfig.save();
+
+        console.log(
+            JSON.stringify({
+                type: 'SETTINGS_AUDIT',
+                event: 'people_types_updated',
+                organizationId: String(organizationId),
+                userId: req.user?._id != null ? String(req.user._id) : null,
+                appKey,
+                types: normalized,
+                typeDefs: normalizedDefs,
+                default: defaultCanonical,
+                at: new Date().toISOString()
+            })
+        );
+
+        res.json({
+            success: true,
+            message: 'People types updated',
+            data: {
+                types: normalized,
+                defaultRole: defaultCanonical,
+                typeDefs: normalizedDefs
+            },
+            appKey
+        });
+    } catch (error) {
+        console.error('Update people-types error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update people types',
             error: error.message
         });
     }

@@ -470,7 +470,7 @@ const ruleCards = computed(() => {
 const getEventTypeLabel = (eventType) => {
   const labels = {
     'people.lifecycle.changed': 'When a Person\'s lifecycle changes',
-    'people.type.changed': 'When a Person\'s type changes',
+    'people.sales_type.changed': 'When a Person\'s SALES role changes (Lead/Contact)',
     'organization.lifecycle.changed': 'When an Organization\'s lifecycle changes',
     'organization.type.changed': 'When an Organization\'s type changes',
     'deal.stage.changed': 'When a Deal\'s stage changes',
