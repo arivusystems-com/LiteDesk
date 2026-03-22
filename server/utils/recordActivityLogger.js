@@ -4,6 +4,7 @@
  * ModuleRecordPage Activity panel shows "Updates" when records are edited.
  */
 const RecordActivity = require('../models/RecordActivity');
+const { getSalesParticipationValues } = require('./getSalesParticipationValues');
 const mongoose = require('mongoose');
 
 const SYSTEM_KEYS = new Set([
@@ -32,6 +33,33 @@ function formatValueForLog(value, maxLength = 200) {
 }
 
 /**
+ * Short human summary of participations.* for activity logs (not raw JSON).
+ * @param {*} participations
+ * @returns {string}
+ */
+function summarizeParticipationsForLog(participations) {
+  if (participations === undefined || participations === null) return 'Empty';
+  if (typeof participations !== 'object' || Array.isArray(participations)) {
+    return formatValueForLog(participations);
+  }
+  const parts = [];
+  const sales = getSalesParticipationValues({ participations });
+  if (sales.role || sales.lead_status || sales.contact_status) {
+    const bits = [
+      sales.role || null,
+      sales.lead_status ? `Lead status: ${sales.lead_status}` : null,
+      sales.contact_status ? `Contact status: ${sales.contact_status}` : null
+    ].filter(Boolean);
+    parts.push(bits.length ? `Sales — ${bits.join(', ')}` : 'Sales');
+  }
+  const hd = participations.HELPDESK;
+  if (hd && String(hd.role || '').trim()) {
+    parts.push(`Helpdesk — ${String(hd.role).trim()}`);
+  }
+  return parts.length > 0 ? parts.join('; ') : 'Empty';
+}
+
+/**
  * Get display label for a field key from module definition or humanize the key.
  * @param {string} fieldKey
  * @param {Array<{ key?: string, name?: string, label?: string }>} [fields]
@@ -47,6 +75,79 @@ function getFieldLabel(fieldKey, fields) {
     .replace(/([A-Z])/g, ' $1')
     .replace(/^\w/, (c) => c.toUpperCase())
     .trim();
+}
+
+/**
+ * @param {*} value
+ * @returns {mongoose.Types.ObjectId|null}
+ */
+function extractObjectIdRef(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'object' && !Array.isArray(value) && value._id != null) {
+    const id = value._id;
+    if (mongoose.Types.ObjectId.isValid(id) && String(id).length === 24) {
+      return new mongoose.Types.ObjectId(id);
+    }
+    return null;
+  }
+  if (mongoose.Types.ObjectId.isValid(value) && String(value).length === 24) {
+    return new mongoose.Types.ObjectId(value);
+  }
+  return null;
+}
+
+/**
+ * Resolve CRM organization (isTenant: false) names visible to this tenant.
+ * Matches organization list scoping (createdBy ∈ tenant users).
+ * @param {Set<string>|string[]} idStrings
+ * @param {mongoose.Types.ObjectId} tenantOrganizationId
+ * @returns {Promise<Map<string, string>>}
+ */
+async function resolveCrmOrganizationNames(idStrings, tenantOrganizationId) {
+  const map = new Map();
+  if (!tenantOrganizationId || !idStrings || (idStrings.size !== undefined && idStrings.size === 0)) {
+    return map;
+  }
+  const arr = idStrings instanceof Set ? [...idStrings] : idStrings;
+  const ids = arr.filter((id) => mongoose.Types.ObjectId.isValid(id)).map((id) => new mongoose.Types.ObjectId(id));
+  if (ids.length === 0) return map;
+
+  const User = require('../models/User');
+  const Organization = require('../models/Organization');
+  const tenantUserIds = await User.find({ organizationId: tenantOrganizationId }).select('_id').lean();
+  const userIds = tenantUserIds.map((u) => u._id);
+  if (userIds.length === 0) return map;
+
+  const orgs = await Organization.find({
+    _id: { $in: ids },
+    isTenant: false,
+    createdBy: { $in: userIds }
+  })
+    .select('name')
+    .lean();
+
+  for (const o of orgs) {
+    map.set(o._id.toString(), (o.name && String(o.name).trim()) || '—');
+  }
+  return map;
+}
+
+/**
+ * @param {*} value
+ * @param {Map<string, string>} nameMap
+ * @returns {string}
+ */
+function formatPeopleOrganizationForLog(value, nameMap) {
+  if (value === undefined || value === null || value === '') return 'Empty';
+  if (typeof value === 'object' && !Array.isArray(value) && value !== null) {
+    const n = value.name;
+    if (typeof n === 'string' && n.trim()) return n.trim();
+  }
+  const id = extractObjectIdRef(value);
+  if (!id) return formatValueForLog(value);
+  const key = id.toString();
+  if (nameMap && nameMap.has(key)) return nameMap.get(key);
+  return formatValueForLog(id);
 }
 
 /**
@@ -106,20 +207,50 @@ async function appendFieldChangeLogs({
     ? updateDataKeys
     : Object.keys(updated || {}).filter((k) => !SYSTEM_KEYS.has(k));
   const prev = previous || {};
+  const mod = String(moduleKey || '').toLowerCase();
+
+  const orgIdsToResolve = new Set();
+  if (mod === 'people') {
+    for (const fieldKey of keys) {
+      if (SYSTEM_KEYS.has(fieldKey) || fieldKey !== 'organization') continue;
+      const fromId = extractObjectIdRef(prev[fieldKey]);
+      const toId = extractObjectIdRef(updated[fieldKey]);
+      if (fromId) orgIdsToResolve.add(fromId.toString());
+      if (toId) orgIdsToResolve.add(toId.toString());
+    }
+  }
+  const crmOrgNameMap =
+    orgIdsToResolve.size > 0 ? await resolveCrmOrganizationNames(orgIdsToResolve, organizationId) : new Map();
+
   const entries = [];
 
   for (const fieldKey of keys) {
     if (SYSTEM_KEYS.has(fieldKey)) continue;
     const fromVal = prev[fieldKey];
     const toVal = updated[fieldKey];
-    const fromStr = formatValueForLog(fromVal);
-    const toStr = formatValueForLog(toVal);
+    let fromStr;
+    let toStr;
+    let fieldLabel;
+    if (fieldKey === 'participations') {
+      fromStr = summarizeParticipationsForLog(fromVal);
+      toStr = summarizeParticipationsForLog(toVal);
+      fieldLabel = 'App participation';
+    } else if (mod === 'people' && fieldKey === 'organization') {
+      fromStr = formatPeopleOrganizationForLog(fromVal, crmOrgNameMap);
+      toStr = formatPeopleOrganizationForLog(toVal, crmOrgNameMap);
+      fieldLabel = getFieldLabel(fieldKey, fieldLabels);
+    } else {
+      fromStr = formatValueForLog(fromVal);
+      toStr = formatValueForLog(toVal);
+      fieldLabel = getFieldLabel(fieldKey, fieldLabels);
+    }
     if (fromStr === toStr) continue;
 
-    const fieldLabel = getFieldLabel(fieldKey, fieldLabels);
     const action = fieldKey === 'status' || fieldKey === 'stage' || fieldKey === 'lead_status' || fieldKey === 'contact_status'
       ? 'status_changed'
-      : 'field_changed';
+      : fieldKey === 'participations'
+        ? 'participation_changed'
+        : 'field_changed';
 
     entries.push({
       organizationId,
@@ -147,6 +278,7 @@ module.exports = {
   appendRecordActivityLog,
   appendFieldChangeLogs,
   formatValueForLog,
+  summarizeParticipationsForLog,
   getFieldLabel,
   SYSTEM_KEYS
 };

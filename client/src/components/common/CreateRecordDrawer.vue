@@ -154,6 +154,9 @@ import { isAuditEventType } from '@/utils/eventUtils';
 import { useTabs } from '@/composables/useTabs';
 import { getTaskSystemFields } from '@/platform/fields/taskFieldModel';
 import { getGlobalSystemFieldKeys, normalizeFieldKeyForSystemMatch } from '@/platform/fields/fieldCapabilityEngine';
+import { useCreationContext } from '@/utils/creationContext';
+import { getParticipationFields, getCoreIdentityFields, mergePeopleVirtualFieldDefinitions } from '@/platform/fields/peopleFieldModel';
+import { getFormFieldValue, syncPeopleVirtualFieldKeys, applyVirtualFieldDefault } from '@/utils/getFieldValue';
 
 const props = defineProps({
   isOpen: {
@@ -215,6 +218,8 @@ const emit = defineEmits(['close', 'saved']);
 
 const authStore = useAuthStore();
 const { openTab, activeTab } = useTabs();
+// Omit override = infer from route + activeApp on /people (null would mean explicit global-only)
+const { isSalesContext } = useCreationContext();
 const isEditing = computed(() => !!props.record);
 const fullMode = ref(false);
 
@@ -238,7 +243,7 @@ const effectiveQuickCreateMode = computed(() => {
 
 // Module name mapping for titles
 const moduleNameMap = {
-  'people': 'Contact',
+  'people': 'Person',
   'organizations': 'Organization',
   'deals': 'Deal',
   'tasks': 'Task',
@@ -289,6 +294,9 @@ async function fetchModuleForDrawer() {
     if (mod) {
       if (!mod.quickCreate) mod.quickCreate = [];
       if (!mod.quickCreateLayout) mod.quickCreateLayout = { version: 1, rows: [] };
+      if ((mod.key || '').toLowerCase() === 'people' && Array.isArray(mod.fields)) {
+        mod.fields = mergePeopleVirtualFieldDefinitions(mod.fields);
+      }
       moduleOverrideFromSettings.value = mod;
     }
   } catch (e) {
@@ -511,6 +519,16 @@ const initializeForm = (module) => {
       formData.value = initialForm;
     }
   }
+  if (props.moduleKey === 'people') {
+    const fd = { ...formData.value };
+    syncPeopleVirtualFieldKeys(fd);
+    for (const field of fields) {
+      if (field.isVirtual && field.defaultValue !== null && field.defaultValue !== undefined && field.defaultValue !== '') {
+        applyVirtualFieldDefault(fd, field, field.defaultValue, { moduleKey: props.moduleKey });
+      }
+    }
+    formData.value = fd;
+  }
   if (props.moduleKey === 'tasks') {
     formData.value.relatedTo = normalizedTaskRelatedTo(formData.value?.relatedTo);
     if (!Array.isArray(formData.value.subtasks)) {
@@ -683,14 +701,19 @@ const handleSubmit = async () => {
       const requiredFields = allFields.filter(f => {
         const keyNorm = normalizeFieldKeyForSystemMatch(f.key);
         if (!f.key || systemFieldKeys.includes(keyNorm)) return false;
-        const depState = getFieldDependencyState(f, formData.value, allFields);
+        const depState = getFieldDependencyState(f, formData.value, allFields, {
+          moduleKey: props.moduleKey,
+        });
         // Only validate when visible and required
         return depState.required === true && depState.visible !== false;
       });
       
       // Validate each required field
       for (const field of requiredFields) {
-        const value = formData.value[field.key];
+        const value =
+          props.moduleKey === 'people'
+            ? getFormFieldValue(formData.value, field.key, field, { moduleKey: props.moduleKey })
+            : formData.value[field.key];
         const isEmpty = value === null || 
                        value === undefined || 
                        value === '' || 
@@ -937,7 +960,28 @@ const handleSubmit = async () => {
       submitData.dealPeople = people;
       submitData.dealOrganizations = orgs;
     }
-    
+
+    // People create: Global = identity only (no type), Sales = create→attach (Lead)
+    if (props.moduleKey === 'people' && !isEditing.value) {
+      // Strip type and all participation fields - never send to identity-only endpoint
+      const participationFields = getParticipationFields('SALES');
+      const toStrip = new Set(['type', ...participationFields].map((k) => k.toLowerCase()));
+      Object.keys(submitData).forEach((key) => {
+        if (toStrip.has(key.toLowerCase())) delete submitData[key];
+      });
+      // Restrict to core fields only (align with PeopleQuickCreateDrawer)
+      const coreFieldSet = new Set((getCoreIdentityFields() || []).map((k) => k.toLowerCase()));
+        const quickCreateKeys = (moduleDefinition.value?.quickCreate || []).map((f) =>
+          (typeof f === 'string' ? f : (f?.key ?? f) || '').toLowerCase()
+        ).filter(Boolean);
+      const allowedKeys = new Set([...coreFieldSet, ...quickCreateKeys]);
+      if (allowedKeys.size > 0) {
+        Object.keys(submitData).forEach((key) => {
+          if (!allowedKeys.has(key.toLowerCase())) delete submitData[key];
+        });
+      }
+    }
+
     // Determine API endpoint based on module key
     // Note: apiClient already prepends /api, so we don't include it here
     let endpoint = '';
@@ -1003,18 +1047,28 @@ const handleSubmit = async () => {
       delete submitData.assignedTo;
     }
     
+    // People create in Sales context: use create→attach flow (existing endpoint)
+    const usePeopleCreateFlow = props.moduleKey === 'people' && !isEditing.value && isSalesContext.value;
+
     console.log('[CreateRecordDrawer] 📤 Making API call:', {
       method: isEditing.value ? 'PUT' : 'POST',
-      endpoint: isEditing.value ? `${endpoint}/${props.record._id}` : endpoint,
+      endpoint: usePeopleCreateFlow ? '/people/create' : (isEditing.value ? `${endpoint}/${props.record._id}` : endpoint),
       payloadKeys: Object.keys(submitData)
     });
-    
+
     let response;
     if (isEditing.value && props.record?._id) {
       // Update existing record
       response = await apiClient.put(`${endpoint}/${props.record._id}`, submitData);
+    } else if (usePeopleCreateFlow) {
+      // People create in Sales context: create→attach as Lead (standardized: appKey + role)
+      response = await apiClient.post('/people/create', {
+        appKey: 'SALES',
+        role: 'Lead',
+        formData: submitData
+      });
     } else {
-      // Create new record
+      // Create new record (including people in Global context)
       response = await apiClient.post(endpoint, submitData);
     }
     

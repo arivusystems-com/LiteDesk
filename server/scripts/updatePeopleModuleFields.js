@@ -10,7 +10,7 @@ const peopleFieldMappings = {
   'createdBy': 'Lookup (Relationship)',
   'assignedTo': 'Lookup (Relationship)',
   'source': 'Picklist',
-  'type': 'Picklist',
+  'sales_type': 'Picklist',
   'first_name': 'Text',
   'last_name': 'Text',
   'email': 'Email',
@@ -35,7 +35,7 @@ const peopleFieldMappings = {
 
 // Enum values from People schema
 const enumMappings = {
-  'type': ['Lead', 'Contact'],
+  'sales_type': ['Lead', 'Contact'],
   'lead_status': ['New', 'Contacted', 'Qualified', 'Disqualified', 'Nurturing', 'Re-Engage'],
   'contact_status': ['Active', 'Inactive', 'DoNotContact'],
   'role': ['Decision Maker', 'Influencer', 'Support', 'Other'],
@@ -247,7 +247,7 @@ async function updatePeopleModuleFields(organizationId = null) {
           logic: 'AND',
           conditions: [
             {
-              fieldKey: 'type',
+              fieldKey: 'sales_type',
               operator: 'equals',
               value: 'Lead'
             }
@@ -261,7 +261,7 @@ async function updatePeopleModuleFields(organizationId = null) {
           logic: 'AND',
           conditions: [
             {
-              fieldKey: 'type',
+              fieldKey: 'sales_type',
               operator: 'equals',
               value: 'Contact'
             }
@@ -292,14 +292,14 @@ async function updatePeopleModuleFields(organizationId = null) {
       };
       
       // Add filter metadata from peopleFieldModel.ts metadata
-      // Default filters: assignedTo, type, do_not_contact (max 3 per module)
+      // Default filters: assignedTo, sales_type, do_not_contact (max 3 per module)
       const peopleFilterMetadata = {
         'assignedTo': {
           filterable: true,
           filterType: 'user',
           filterPriority: 1
         },
-        'type': {
+        'sales_type': {
           filterable: true,
           filterType: 'multi-select',
           filterPriority: 2
@@ -357,11 +357,35 @@ async function updatePeopleModuleFields(organizationId = null) {
       fields.push(fieldDef);
     }
 
+    const hasSalesTypeField = fields.some((f) => String(f.key || '').toLowerCase() === 'sales_type');
+    if (!hasSalesTypeField) {
+      fields.push({
+        key: 'sales_type',
+        label: 'Type',
+        dataType: 'Picklist',
+        required: false,
+        options: normalizeOptions(['Lead', 'Contact']),
+        defaultValue: null,
+        index: false,
+        visibility: { list: true, detail: true },
+        order: fields.length,
+        validations: [],
+        dependencies: [],
+        filterable: true,
+        filterType: 'multi-select',
+        filterPriority: 2,
+        isVirtual: true,
+        appKey: 'SALES',
+        owner: 'platform',
+        context: 'app',
+      });
+    }
+
     // Sort fields by a logical order (system fields first, then core, then lead/contact specific)
     const fieldOrder = [
       'organizationId',
       'assignedTo',
-      'type',
+      'sales_type',
       'source',
       'first_name',
       'last_name',

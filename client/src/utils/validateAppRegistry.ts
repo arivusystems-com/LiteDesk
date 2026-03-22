@@ -53,7 +53,6 @@ export function validateAppRegistry(appRegistry: AppRegistry): ValidationResult 
   // 2. Validate each app entry
   const appKeys = Object.keys(appRegistry);
   const seenRoutes = new Set<string>();
-  const seenModuleKeys = new Map<string, string>(); // moduleKey -> appKey
 
   for (const appKey of appKeys) {
     const app = appRegistry[appKey];
@@ -99,8 +98,9 @@ export function validateAppRegistry(appRegistry: AppRegistry): ValidationResult 
       seenRoutes.add(app.dashboardRoute);
     }
 
-    // 2.2. Validate modules
+    // 2.2. Validate modules (moduleKey may repeat across apps — e.g. cases in HELPDESK vs AUDIT)
     if (app.modules && Array.isArray(app.modules)) {
+      const seenModuleKeysInApp = new Set<string>();
       for (const module of app.modules) {
         if (!module.moduleKey || typeof module.moduleKey !== 'string') {
           errors.push(
@@ -111,15 +111,15 @@ export function validateAppRegistry(appRegistry: AppRegistry): ValidationResult 
           continue;
         }
 
-        // Check for duplicate module keys across apps
-        const existingApp = seenModuleKeys.get(module.moduleKey);
-        if (existingApp && existingApp !== appKey) {
-          warnings.push(
-            `Module ${module.moduleKey} exists in both ${existingApp} and ${appKey}`
+        if (seenModuleKeysInApp.has(module.moduleKey)) {
+          errors.push(
+            createRegistryError(
+              `Duplicate moduleKey ${module.moduleKey} in app ${appKey}`,
+              { module }
+            )
           );
-        } else {
-          seenModuleKeys.set(module.moduleKey, appKey);
         }
+        seenModuleKeysInApp.add(module.moduleKey);
 
         if (!module.label || typeof module.label !== 'string') {
           errors.push(

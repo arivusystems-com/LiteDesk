@@ -222,6 +222,13 @@ import TaskRelatedToField from '@/components/tasks/TaskRelatedToField.vue';
 import TaskSubtasksField from '@/components/tasks/TaskSubtasksField.vue';
 import apiClient from '@/utils/apiClient';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
+import {
+  getFormFieldValue,
+  setFieldValue,
+  syncPeopleVirtualFieldKeys,
+  getPeopleRegistryItem,
+} from '@/utils/getFieldValue';
+import { mergePeopleVirtualFieldDefinitions } from '@/platform/fields/peopleFieldModel';
 import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
 import { useAuthStore } from '@/stores/auth';
 import { useRoute } from 'vue-router';
@@ -490,7 +497,9 @@ const orderedFields = computed(() => {
           // Check dependency-based visibility
           let isVisible = true;
           if (field.dependencies && Array.isArray(field.dependencies) && field.dependencies.length > 0) {
-            const depState = getFieldDependencyState(field, currentFormData, allFields);
+            const depState = getFieldDependencyState(field, currentFormData, allFields, {
+              moduleKey: props.moduleKey,
+            });
             isVisible = depState.visible !== false;
           }
           
@@ -512,7 +521,9 @@ const orderedFields = computed(() => {
         // Check dependency-based visibility
         let isVisible = true;
         if (field.dependencies && Array.isArray(field.dependencies) && field.dependencies.length > 0) {
-          const depState = getFieldDependencyState(field, currentFormData, allFields);
+          const depState = getFieldDependencyState(field, currentFormData, allFields, {
+            moduleKey: props.moduleKey,
+          });
           isVisible = depState.visible !== false;
         }
         
@@ -548,7 +559,9 @@ const orderedFields = computed(() => {
       // Check dependency-based visibility
       let isVisible = true;
       if (field.dependencies && Array.isArray(field.dependencies) && field.dependencies.length > 0) {
-        const depState = getFieldDependencyState(field, currentFormData, allFields);
+        const depState = getFieldDependencyState(field, currentFormData, allFields, {
+          moduleKey: props.moduleKey,
+        });
         isVisible = depState.visible !== false;
       }
       
@@ -654,7 +667,9 @@ const orderedFields = computed(() => {
     // Check dependency-based visibility using current form data
     let isVisible = true;
     if (field.dependencies && Array.isArray(field.dependencies) && field.dependencies.length > 0) {
-      const depState = getFieldDependencyState(field, currentFormData, allFields);
+      const depState = getFieldDependencyState(field, currentFormData, allFields, {
+        moduleKey: props.moduleKey,
+      });
       isVisible = depState.visible !== false; // Default to visible if undefined
     }
     
@@ -702,7 +717,9 @@ const orderedFields = computed(() => {
       // Check dependency visibility for required fields too
       let isVisible = true;
       if (field.dependencies && Array.isArray(field.dependencies) && field.dependencies.length > 0) {
-        const depState = getFieldDependencyState(field, currentFormData, allFields);
+        const depState = getFieldDependencyState(field, currentFormData, allFields, {
+          moduleKey: props.moduleKey,
+        });
         isVisible = depState.visible !== false;
       }
       
@@ -853,7 +870,9 @@ const shouldShowField = (field) => {
   // Access localFormData.value to ensure Vue tracks this dependency
   const currentFormData = localFormData.value || {};
   if (field.dependencies && Array.isArray(field.dependencies) && field.dependencies.length > 0) {
-    const depState = getFieldDependencyState(field, currentFormData, moduleDefinition.value?.fields || []);
+    const depState = getFieldDependencyState(field, currentFormData, moduleDefinition.value?.fields || [], {
+      moduleKey: props.moduleKey,
+    });
     // Only hide if explicitly set to false, default to visible if undefined
     if (depState.visible === false) return false;
   }
@@ -875,7 +894,10 @@ const getFieldState = (field) => {
   }
   // Access localFormData.value to ensure reactivity - Vue tracks this dependency
   const currentFormData = localFormData.value;
-  return getFieldDependencyState(field, currentFormData, moduleDefinition.value?.fields || [], { currentUser: authStore.user });
+  return getFieldDependencyState(field, currentFormData, moduleDefinition.value?.fields || [], {
+    currentUser: authStore.user,
+    moduleKey: props.moduleKey,
+  });
 };
 
 function normalizedRelatedTo(val) {
@@ -885,7 +907,13 @@ function normalizedRelatedTo(val) {
 }
 
 const updateField = (key, value) => {
-  localFormData.value[key] = value;
+  if (props.moduleKey?.toLowerCase() === 'people' && getPeopleRegistryItem(key)?.setValue) {
+    const next = { ...localFormData.value };
+    setFieldValue(next, key, value);
+    localFormData.value = next;
+  } else {
+    localFormData.value[key] = value;
+  }
   emit('update:formData', { ...localFormData.value });
 };
 
@@ -901,26 +929,47 @@ watch(
     let changed = false;
     for (const field of fields) {
       if (!field?.key) continue;
-      const depState = getFieldDependencyState(field, localFormData.value, fields, { currentUser: authStore.user });
+      const depState = getFieldDependencyState(field, localFormData.value, fields, {
+        currentUser: authStore.user,
+        moduleKey: props.moduleKey,
+      });
 
       // 1) Forced values (dependency-driven)
       if (depState && depState.setValue !== null && depState.setValue !== undefined) {
-        const current = localFormData.value[field.key];
+        const current =
+          props.moduleKey?.toLowerCase() === 'people' && getPeopleRegistryItem(field.key)?.setValue
+            ? getFormFieldValue(localFormData.value, field.key, field, { moduleKey: props.moduleKey })
+            : localFormData.value[field.key];
         const currentNorm = (current && typeof current === 'object' && current._id) ? String(current._id) : (current == null ? null : String(current));
         const forcedNorm = (depState.setValue && typeof depState.setValue === 'object' && depState.setValue._id)
           ? String(depState.setValue._id)
           : (depState.setValue == null ? null : String(depState.setValue));
         if (currentNorm !== forcedNorm) {
-          localFormData.value[field.key] = depState.setValue;
+          if (props.moduleKey?.toLowerCase() === 'people' && getPeopleRegistryItem(field.key)?.setValue) {
+            const next = { ...localFormData.value };
+            setFieldValue(next, field.key, depState.setValue);
+            localFormData.value = next;
+          } else {
+            localFormData.value[field.key] = depState.setValue;
+          }
           changed = true;
         }
       }
 
       // 2) Readonly+required checkbox => true (generic)
       if (field.dataType === 'Checkbox' && depState?.readonly === true && depState?.required === true) {
-        const current = localFormData.value[field.key];
+        const current =
+          props.moduleKey?.toLowerCase() === 'people' && getPeopleRegistryItem(field.key)?.setValue
+            ? getFormFieldValue(localFormData.value, field.key, field, { moduleKey: props.moduleKey })
+            : localFormData.value[field.key];
         if (current !== true) {
-          localFormData.value[field.key] = true;
+          if (props.moduleKey?.toLowerCase() === 'people' && getPeopleRegistryItem(field.key)?.setValue) {
+            const next = { ...localFormData.value };
+            setFieldValue(next, field.key, true);
+            localFormData.value = next;
+          } else {
+            localFormData.value[field.key] = true;
+          }
           changed = true;
         }
       }
@@ -935,12 +984,19 @@ watch(
 
 // Watch for external formData changes
 watch(() => props.formData, (newData) => {
-  localFormData.value = { ...newData };
+  const merged = { ...newData };
+  if (props.moduleKey?.toLowerCase() === 'people') {
+    syncPeopleVirtualFieldKeys(merged);
+  }
+  localFormData.value = merged;
 }, { deep: true });
 
 
 function applyModule(mod) {
   if (!mod) return;
+  if ((mod.key || '').toLowerCase() === 'people' && Array.isArray(mod.fields)) {
+    mod.fields = mergePeopleVirtualFieldDefinitions(mod.fields);
+  }
   moduleDefinition.value = mod;
   loading.value = false;
   error.value = null;
@@ -1109,7 +1165,11 @@ onMounted(() => {
     hasModuleOverride: !!props.moduleOverride
   });
   fetchModule();
-  localFormData.value = { ...props.formData };
+  const initial = { ...props.formData };
+  if (props.moduleKey?.toLowerCase() === 'people') {
+    syncPeopleVirtualFieldKeys(initial);
+  }
+  localFormData.value = initial;
 });
 
 // When moduleOverride is provided async (e.g. drawer fetches then passes), apply it

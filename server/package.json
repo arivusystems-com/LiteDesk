@@ -4,6 +4,10 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "test:people": "node --test utils/__tests__/peopleFieldRegistry.test.js utils/__tests__/warnDeprecatedPeopleTypeAlias.test.js utils/__tests__/normalizePeopleModuleConfig.test.js utils/__tests__/peopleTypeDefsFields.test.js utils/__tests__/collectAllowedPeopleParticipationFieldKeys.test.js",
+    "migrate:people-automation": "node scripts/migratePeopleAutomationTriggers.js",
+    "migrate:people-legacy": "node scripts/runPeopleLegacyMigrations.js",
+    "migrate:people-legacy:apply": "node scripts/runPeopleLegacyMigrations.js --apply",
     "start": "node server.js",
     "security:audit": "npm audit",
     "security:fix": "npm audit fix",

@@ -1,5 +1,10 @@
 const People = require('../models/People');
 const Organization = require('../models/Organization');
+const { flattenPeopleForResponse } = require('./peopleController');
+const {
+  PEOPLE_SALES_ROLE_AGG_REF,
+  getPeopleFieldQueryPath,
+} = require('../utils/peopleFieldRegistry');
 
 // @desc    Get all contacts across all organizations (Admin only)
 // @route   GET /api/admin/contacts/all
@@ -25,12 +30,13 @@ const getAllContactsAcrossOrgs = async (req, res) => {
             ];
         }
         
-        // Filters
+        // Filters (participations.SALES is source of truth)
         if (req.query.lifecycle_stage) {
-            query.type = req.query.lifecycle_stage === 'Lead' ? 'Lead' : 'Contact';
+            query[getPeopleFieldQueryPath('sales_type')] =
+              req.query.lifecycle_stage === 'Lead' ? 'Lead' : 'Contact';
         }
         if (req.query.status) {
-            query.contact_status = req.query.status;
+            query['participations.SALES.contact_status'] = req.query.status;
         }
         
         // Sorting
@@ -49,14 +55,14 @@ const getAllContactsAcrossOrgs = async (req, res) => {
         
         const total = await People.countDocuments(query);
         
-        // Get statistics across all organizations
+        // Get statistics across all organizations (participations.SALES.role)
         const stats = await People.aggregate([
             {
                 $group: {
                     _id: null,
                     totalContacts: { $sum: 1 },
-                    leadContacts: { $sum: { $cond: [{ $eq: ['$type', 'Lead'] }, 1, 0] } },
-                    customerContacts: { $sum: { $cond: [{ $eq: ['$type', 'Contact'] }, 1, 0] } }
+                    leadContacts: { $sum: { $cond: [{ $eq: [PEOPLE_SALES_ROLE_AGG_REF, 'Lead'] }, 1, 0] } },
+                    customerContacts: { $sum: { $cond: [{ $eq: [PEOPLE_SALES_ROLE_AGG_REF, 'Contact'] }, 1, 0] } }
                 }
             }
         ]);
@@ -90,9 +96,12 @@ const getAllContactsAcrossOrgs = async (req, res) => {
             { $limit: 10 }
         ]);
         
+        // Flatten for API contract: type, lead_status, contact_status from participations.SALES
+        const flattenedContacts = contacts.map(c => flattenPeopleForResponse(c));
+
         res.status(200).json({
             success: true,
-            data: contacts,
+            data: flattenedContacts,
             pagination: {
                 currentPage: page,
                 limit,

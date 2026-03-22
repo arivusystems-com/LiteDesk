@@ -278,7 +278,10 @@ const allEditableFields = computed(() => {
   const form = formData.value || {};
   let list = all.filter((f) => {
     if (f.dependencies?.length) {
-      const state = getFieldDependencyState(f, form, mod.fields || [], { currentUser: authStore.user });
+      const state = getFieldDependencyState(f, form, mod.fields || [], {
+        currentUser: authStore.user,
+        moduleKey: 'tasks',
+      });
       return state.visible !== false;
     }
     return true;
@@ -306,7 +309,7 @@ const quickFields = computed(() => {
       .map((f) => f.key?.toLowerCase())
       .filter(Boolean)
   );
-  const quickKeys = new Set([...qcSet]);
+  const quickKeys = new Set(qcSet);
   requiredKeys.forEach((k) => quickKeys.add(k));
   const allEditable = allEditableFields.value;
   const byKey = new Map(allEditable.map((f) => [f.key?.toLowerCase(), f]));
@@ -364,7 +367,7 @@ function getFieldState(field) {
     field,
     formData.value,
     moduleDefinition.value?.fields || [],
-    { currentUser: authStore.user }
+    { currentUser: authStore.user, moduleKey: 'tasks' }
   );
 }
 
@@ -504,7 +507,7 @@ async function handleSubmit() {
     const allFields = mod?.fields || [];
     const requiredFields = allFields.filter(f => {
       if (!f.key || isTaskSystemField(f.key)) return false;
-      const state = getFieldDependencyState(f, formData.value, allFields);
+      const state = getFieldDependencyState(f, formData.value, allFields, { moduleKey: 'tasks' });
       return state.required === true && state.visible !== false;
     });
     for (const field of requiredFields) {

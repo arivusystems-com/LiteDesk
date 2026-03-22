@@ -37,6 +37,7 @@ const LAST_ACTIVE_APP_ID_KEY = 'litedesk-sidebar-last-active-app-id';
  * represented as sidebar navigation items in the locked contract.
  */
 const FORBIDDEN_RAW_ENTITY_MODULE_KEYS = new Set([
+  'people',
   'tasks',
   'events',
   'forms',
@@ -419,7 +420,7 @@ if (import.meta.env.DEV) {
   }
 
   // Assert: Forbidden raw entities do not appear.
-  const forbidden = new Set(['items', 'forms', 'tasks', 'events']);
+  const forbidden = new Set(['people', 'items', 'forms', 'tasks', 'events', 'organizations']);
   for (const item of sidebar.appNav.modules) {
     if (item.kind === 'app' && typeof item.moduleKey === 'string' && forbidden.has(item.moduleKey)) {
       throw new Error(`[SidebarInvariantViolation] Forbidden module leaked into sidebar: ${item.moduleKey}`);

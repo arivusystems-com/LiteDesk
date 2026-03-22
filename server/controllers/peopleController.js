@@ -19,6 +19,38 @@
 const People = require('../models/People');
 const { applyProjectionFilter } = require('../utils/appProjectionQuery');
 const { getProjection } = require('../utils/moduleProjectionResolver');
+const { getSalesParticipationValues } = require('../utils/getSalesParticipationValues');
+const { flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+const {
+  PEOPLE_SALES_ROLE_PATH,
+  PEOPLE_SALES_ROLE_AGG_REF,
+  getPeopleFieldQueryPath,
+} = require('../utils/peopleFieldRegistry');
+const {
+  helpdeskTypeAliasViolation,
+  peopleLegacyTopLevelTypeViolation,
+} = require('../utils/warnDeprecatedPeopleTypeAlias');
+
+/**
+ * Flatten People record for API response: expose participations as top-level aliases.
+ * Canonical: participations.SALES.role, participations.HELPDESK.role
+ */
+function flattenPeopleForResponse(record) {
+  const flat = flattenCustomFieldsForResponse(record);
+  if (!flat) return flat;
+  // Never expose legacy top-level `type` (SALES role lives in participations + `sales_type` alias)
+  const { type: _legacyTopLevelType, ...rest } = flat;
+  const { role, lead_status, contact_status } = getSalesParticipationValues(rest);
+  const helpdeskRole = rest.participations?.HELPDESK?.role ?? null;
+  const sales_type = role ?? null;
+  return {
+    ...rest,
+    sales_type,
+    helpdesk_role: helpdeskRole,
+    lead_status: lead_status ?? null,
+    contact_status: contact_status ?? null,
+  };
+}
 
 /**
  * Get list of Sales participation fields that should not be set during Person creation
@@ -37,12 +69,15 @@ function getSalesParticipationFields() {
     'estimated_value',   // Detail field - Estimated deal value
     'role',              // Detail field - Contact role
     'birthday',          // Detail field - Birthday
-    'preferred_contact_method' // Detail field - Contact preference
+    'preferred_contact_method', // Detail field - Contact preference
+    'sales_type',
+    'helpdesk_role'
   ];
 }
 
 // Export for use in other controllers
 exports.getSalesParticipationFields = getSalesParticipationFields;
+exports.flattenPeopleForResponse = flattenPeopleForResponse;
 
 // Create People
 exports.create = async (req, res) => {
@@ -74,7 +109,7 @@ exports.create = async (req, res) => {
       (user.firstName || user.lastName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : user.username) || 'User' 
       : 'System';
     
-    const { extractCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+    const { extractCustomFields } = require('../utils/customFieldsExtractor');
     const { standardPayload, customFieldsSet } = extractCustomFields(strippedBody, People);
 
     const body = {
@@ -86,7 +121,8 @@ exports.create = async (req, res) => {
       activityLogs: [{
         user: userName,
         userId: req.user._id,
-        action: 'created this record',
+        action: 'record_created',
+        message: 'Created this person',
         details: { type: 'create' },
         timestamp: new Date()
       }]
@@ -103,7 +139,7 @@ exports.create = async (req, res) => {
       await record.save();
     }
     
-    res.status(201).json({ success: true, data: flattenCustomFieldsForResponse(record) });
+    res.status(201).json({ success: true, data: flattenPeopleForResponse(record) });
   } catch (error) {
     console.error('Error creating people record:', error);
     console.error('Error name:', error.name);
@@ -225,10 +261,13 @@ exports.list = async (req, res) => {
       finalAppKey: appKey
     });
     
-    // Only apply type filter if explicitly requested (not for PLATFORM appKey)
-    // This ensures identity-only people (without type) are included
-    if (req.query.type && appKey !== 'PLATFORM') {
-      query.type = req.query.type;
+    // Role filters: sales_type query param → participations.SALES.role via registry
+    const salesRoleParam = req.query.sales_type;
+    if (salesRoleParam && appKey !== 'PLATFORM') {
+      query[getPeopleFieldQueryPath('sales_type')] = salesRoleParam;
+    }
+    if (req.query.helpdesk_role && appKey !== 'PLATFORM') {
+      query[getPeopleFieldQueryPath('helpdesk_role')] = req.query.helpdesk_role;
     }
     if (req.query.email) query.email = req.query.email;
     
@@ -289,21 +328,12 @@ exports.list = async (req, res) => {
         projectionMeta
       });
     } else {
-      // For PLATFORM appKey, explicitly ensure we're not filtering by type
-      // This is a safety check to ensure identity-only records are included
-      // Explicitly ensure query doesn't exclude records without type field
-      // Remove any existing type filter that might have been added earlier
-      if (query.type && typeof query.type === 'object' && query.type.$exists === false) {
-        // Type filter is checking for non-existence - this is fine
-      } else if (query.type && query.type !== null) {
-        // If there's a type filter that's not checking for null/existence, remove it
-        // unless it was explicitly requested in query params (which we already handled above)
-        // Since we only set query.type above if req.query.type exists, we should be safe
-        // But let's be extra safe and ensure no type filter exists for PLATFORM
-        if (!req.query.type) {
-          // No explicit type filter requested, ensure we don't filter by type
-          // The query should already not have type filter at this point, but double-check
-          delete query.type;
+      // For PLATFORM appKey, explicitly ensure we're not filtering by role
+      if (query[PEOPLE_SALES_ROLE_PATH] && typeof query[PEOPLE_SALES_ROLE_PATH] === 'object' && query[PEOPLE_SALES_ROLE_PATH].$exists === false) {
+        // Role filter is checking for non-existence - this is fine
+      } else if (query[PEOPLE_SALES_ROLE_PATH] && query[PEOPLE_SALES_ROLE_PATH] !== null) {
+        if (!req.query.sales_type) {
+          delete query[PEOPLE_SALES_ROLE_PATH];
         }
       }
       console.log('[PeopleController] PLATFORM appKey detected - skipping projection filter to show all people');
@@ -342,28 +372,17 @@ exports.list = async (req, res) => {
 
     const User = require('../models/User');
     
-    // CRITICAL: Final safety check for PLATFORM appKey - ensure no type filtering
-    if (appKey === 'PLATFORM' && !req.query.type) {
-      // Explicitly remove any type filter to ensure all records are included
-      if (query.type && typeof query.type !== 'object') {
-        // Remove direct type filter (like { type: 'Lead' })
-        delete query.type;
-        console.log('[PeopleController] Removed type filter for PLATFORM appKey');
+    // CRITICAL: Final safety check for PLATFORM appKey - ensure no role filtering
+    if (appKey === 'PLATFORM' && !req.query.sales_type) {
+      if (query[PEOPLE_SALES_ROLE_PATH] && typeof query[PEOPLE_SALES_ROLE_PATH] !== 'object') {
+        delete query[PEOPLE_SALES_ROLE_PATH];
+        console.log('[PeopleController] Removed role filter for PLATFORM appKey');
       }
-      // Also check for type in $or conditions from projection filter (shouldn't exist for PLATFORM, but be safe)
-      if (query.$or) {
-        // Check if any $or condition filters by type in a way that excludes null/missing
-        // This shouldn't happen since we skip projection filter for PLATFORM, but check anyway
-        const hasRestrictiveTypeFilter = query.$or.some(condition => 
-          condition.type && 
-          typeof condition.type === 'object' && 
-          condition.type.$in && 
-          !condition.type.$in.includes(null) &&
-          !condition.type.$exists
-        );
-        if (hasRestrictiveTypeFilter) {
-          console.warn('[PeopleController] Warning: Found restrictive type filter in $or for PLATFORM appKey');
-        }
+    }
+    if (appKey === 'PLATFORM' && !req.query.helpdesk_role) {
+      const helpdeskPath = getPeopleFieldQueryPath('helpdesk_role');
+      if (query[helpdeskPath] && typeof query[helpdeskPath] !== 'object') {
+        delete query[helpdeskPath];
       }
     }
     
@@ -374,7 +393,7 @@ exports.list = async (req, res) => {
       middlewareAppKey: req.appKey,
       hasProjectionFilter: appKey !== 'PLATFORM',
       hasSearch: !!searchCondition,
-      hasTypeFilter: !!query.type,
+      hasRoleFilter: !!query[PEOPLE_SALES_ROLE_PATH],
       queryString: JSON.stringify(query, null, 2),
       queryKeys: Object.keys(query)
     });
@@ -398,10 +417,11 @@ exports.list = async (req, res) => {
     
     const total = await People.countDocuments(query);
     
-    // Log types distribution to see if records without type are in results
+    // Log types distribution (from participations.SALES.role)
     const typesInResults = {};
     data.forEach(r => {
-      const type = r.type || 'NO_TYPE';
+      const { role } = getSalesParticipationValues(r);
+      const type = role ?? 'NO_TYPE';
       typesInResults[type] = (typesInResults[type] || 0) + 1;
     });
     
@@ -411,26 +431,29 @@ exports.list = async (req, res) => {
       limit: limit,
       total: total,
       typesDistribution: typesInResults,
-      sampleIds: data.slice(0, 5).map(r => ({ 
-        id: r._id, 
-        name: `${r.first_name} ${r.last_name}`, 
-        type: r.type || 'NO_TYPE',
-        createdAt: r.createdAt
-      }))
+      sampleIds: data.slice(0, 5).map(r => {
+        const { role } = getSalesParticipationValues(r);
+        return {
+          id: r._id,
+          name: `${r.first_name} ${r.last_name}`,
+          type: role ?? 'NO_TYPE',
+          createdAt: r.createdAt
+        };
+      })
     });
     
     console.log('[PeopleController] Total count:', total);
     
     // Calculate statistics with projection filter applied
-    // Use the same query so stats match the filtered results
+    // Use participations.SALES.role (source of truth)
     const statistics = await People.aggregate([
       { $match: query },
       {
         $group: {
           _id: null,
           totalContacts: { $sum: 1 },
-          leadContacts: { $sum: { $cond: [{ $eq: ['$type', 'Lead'] }, 1, 0] } },
-          customerContacts: { $sum: { $cond: [{ $eq: ['$type', 'Contact'] }, 1, 0] } }
+          leadContacts: { $sum: { $cond: [{ $eq: [PEOPLE_SALES_ROLE_AGG_REF, 'Lead'] }, 1, 0] } },
+          customerContacts: { $sum: { $cond: [{ $eq: [PEOPLE_SALES_ROLE_AGG_REF, 'Contact'] }, 1, 0] } }
         }
       }
     ]);
@@ -443,10 +466,10 @@ exports.list = async (req, res) => {
       createdAt: { $gte: oneWeekAgo }
     });
     
-    // Get new customers this week
+    // Get new customers this week (participations.SALES.role = Contact)
     const newCustomers = await People.countDocuments({
       ...query,
-      type: 'Contact',
+      [getPeopleFieldQueryPath('sales_type')]: 'Contact',
       createdAt: { $gte: oneWeekAgo }
     });
     
@@ -509,10 +532,18 @@ exports.list = async (req, res) => {
         removed: data.length - filteredData.length
       });
     }
+
+    // Backfill participations on read and flatten for API response
+    const { syncSalesParticipation } = require('../utils/syncSalesParticipation');
+    const responseData = filteredData.map((r) => {
+      const obj = r.toObject ? r.toObject() : { ...r };
+      syncSalesParticipation(obj);
+      return flattenPeopleForResponse(obj);
+    });
     
     res.json({ 
       success: true, 
-      data: filteredData, 
+      data: responseData, 
       pagination: {
         currentPage: page,
         totalPages: Math.ceil(total / limit),
@@ -545,7 +576,11 @@ exports.getById = async (req, res) => {
       .populate('createdBy', 'firstName lastName email avatar username')
       .populate('lead_owner', 'firstName lastName email avatar username');
     if (!record) return res.status(404).json({ success: false, message: 'Not found' });
-    res.json({ success: true, data: flattenCustomFieldsForResponse(record) });
+    // Backfill participations on read and flatten for API response
+    const { syncSalesParticipation } = require('../utils/syncSalesParticipation');
+    const data = record.toObject ? record.toObject() : { ...record };
+    syncSalesParticipation(data);
+    res.json({ success: true, data: flattenPeopleForResponse(data) });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error fetching record', error: error.message });
   }
@@ -556,6 +591,16 @@ exports.update = async (req, res) => {
   try {
     // Remove createdBy from body to prevent it from being changed
     const { createdBy, ...updateData } = req.body;
+
+    const appKeyForHelpdeskGuard = req.appKey || req.query.appKey || 'SALES';
+    const helpdeskViol = helpdeskTypeAliasViolation(appKeyForHelpdeskGuard, updateData);
+    if (helpdeskViol) {
+      return res.status(helpdeskViol.status).json(helpdeskViol.body);
+    }
+    const legacyTypeViol = peopleLegacyTopLevelTypeViolation(updateData);
+    if (legacyTypeViol) {
+      return res.status(legacyTypeViol.status).json(legacyTypeViol.body);
+    }
     
     // If someone tried to change createdBy, log a warning (but don't fail the request)
     if (createdBy !== undefined) {
@@ -613,6 +658,22 @@ exports.update = async (req, res) => {
         message: statusInvariantResult.message,
         errors: statusInvariantResult.errors
       });
+    }
+
+    // Validate SALES role when sent as sales_type; canonical write is participations.SALES.role only (via extractSalesFromUpdate)
+    const rawSalesRole = updateData.sales_type;
+    if (rawSalesRole !== undefined && rawSalesRole !== null && String(rawSalesRole).trim()) {
+      const { validatePeopleType } = require('../utils/tenantMetadata');
+      const typeValidation = await validatePeopleType(req.user.organizationId, appKey, rawSalesRole);
+      if (!typeValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          message: typeValidation.message,
+          code: 'TYPE_NOT_ALLOWED',
+          allowedTypes: typeValidation.allowedTypes
+        });
+      }
+      updateData.sales_type = typeValidation.canonicalValue;
     }
     
     // Validate field-level write access
@@ -681,6 +742,19 @@ exports.update = async (req, res) => {
       { _id: req.params.id, organizationId: req.user.organizationId, deletedAt: null }
     ).lean();
 
+    // Redirect type / sales_type / lead_status / contact_status / helpdesk_role → participations (source of truth)
+    const {
+      setSalesParticipationIn,
+      extractSalesFromUpdate,
+      extractHelpdeskRoleFromUpdate,
+      mergeHelpdeskRoleIntoParticipations
+    } = require('../utils/syncSalesParticipation');
+    const { helpdeskRole, cleaned: afterHelpdesk, touched: helpdeskTouched } = extractHelpdeskRoleFromUpdate(updateData);
+    const { sales, cleaned: updateDataWithoutSales } = extractSalesFromUpdate(afterHelpdesk);
+    const hasSalesWrite =
+      sales != null &&
+      (sales.role != null || sales.lead_status != null || sales.contact_status != null);
+
     // Push previous description to native descriptionVersions before updating.
     if (Object.prototype.hasOwnProperty.call(updateData, 'description')) {
       try {
@@ -705,8 +779,26 @@ exports.update = async (req, res) => {
       }
     }
 
-    const { buildUpdateWithCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
-    const $set = buildUpdateWithCustomFields(updateData, People);
+    const { buildUpdateWithCustomFields } = require('../utils/customFieldsExtractor');
+    let $set = buildUpdateWithCustomFields(updateDataWithoutSales, People);
+
+    // Write SALES / HELPDESK to participations only (do not set type/lead_status/contact_status on document root)
+    if (hasSalesWrite || helpdeskTouched) {
+      let nextParticipations = { ...(previous?.participations || {}) };
+      if (hasSalesWrite) {
+        const prevSales = previous ? getSalesParticipationValues(previous) : {};
+        const mergedSales = {
+          role: sales.role ?? prevSales.role ?? null,
+          lead_status: sales.lead_status ?? prevSales.lead_status ?? null,
+          contact_status: sales.contact_status ?? prevSales.contact_status ?? null
+        };
+        nextParticipations = setSalesParticipationIn(nextParticipations, mergedSales);
+      }
+      if (helpdeskTouched) {
+        nextParticipations = mergeHelpdeskRoleIntoParticipations(nextParticipations, helpdeskRole);
+      }
+      $set.participations = nextParticipations;
+    }
 
     const updated = await People.findOneAndUpdate(
       { _id: req.params.id, organizationId: req.user.organizationId, deletedAt: null },
@@ -731,21 +823,36 @@ exports.update = async (req, res) => {
     if (shouldComputeDerivedStatus) {
       const computedDerivedStatus = await computeAndSetDerivedStatus('people', updated, appKey);
       
-      // If config exists and derivedStatus was computed, update status field to match
+      // If config exists and derivedStatus was computed, write to participations (not top-level)
       const configExists = await hasConfiguration('people', appKey);
       if (configExists && computedDerivedStatus) {
-        // Update the appropriate status field based on type
-        if (updated.type === 'Lead' && updated.lead_status !== computedDerivedStatus) {
-          updated.lead_status = computedDerivedStatus;
-        } else if (updated.type === 'Contact' && updated.contact_status !== computedDerivedStatus) {
-          updated.contact_status = computedDerivedStatus;
+        const { role, lead_status, contact_status } = getSalesParticipationValues(updated);
+        const resolvedType = role;
+        const resolvedLeadStatus = lead_status;
+        const resolvedContactStatus = contact_status;
+        let participationsChanged = false;
+        if (resolvedType === 'Lead' && resolvedLeadStatus !== computedDerivedStatus) {
+          updated.participations = setSalesParticipationIn(updated.participations || {}, {
+            role,
+            lead_status: computedDerivedStatus,
+            contact_status
+          });
+          participationsChanged = true;
+        } else if (resolvedType === 'Contact' && resolvedContactStatus !== computedDerivedStatus) {
+          updated.participations = setSalesParticipationIn(updated.participations || {}, {
+            role,
+            lead_status,
+            contact_status: computedDerivedStatus
+          });
+          participationsChanged = true;
         }
+        if (participationsChanged) updated.markModified('participations');
       }
-      
-      // Save if derivedStatus or status was updated
+
+      // Save if derivedStatus or participations was updated
       if (updated.derivedStatus !== undefined && updated.isModified('derivedStatus')) {
         await updated.save();
-      } else if (updated.isModified('lead_status') || updated.isModified('contact_status')) {
+      } else if (updated.isModified('participations')) {
         await updated.save();
       }
     }
@@ -762,7 +869,10 @@ exports.update = async (req, res) => {
         authorId: req.user._id,
         previous: prevObj,
         updated: updatedObj,
-        updateDataKeys: Object.keys(updateData),
+        updateDataKeys: [
+          ...Object.keys(updateDataWithoutSales),
+          ...((hasSalesWrite || helpdeskTouched) ? ['participations'] : [])
+        ],
         fieldLabels: moduleDef && Array.isArray(moduleDef.fields) ? moduleDef.fields : undefined
       });
     } catch (logErr) {
@@ -786,7 +896,7 @@ exports.update = async (req, res) => {
       assignedToKeys: populatedRecord.assignedTo && typeof populatedRecord.assignedTo === 'object' ? Object.keys(populatedRecord.assignedTo) : null
     });
     
-    res.json({ success: true, data: flattenCustomFieldsForResponse(populatedRecord) });
+    res.json({ success: true, data: flattenPeopleForResponse(populatedRecord) });
   } catch (error) {
     console.error('❌ Error updating People record:', error);
     res.status(400).json({ success: false, message: 'Error updating record', error: error.message });

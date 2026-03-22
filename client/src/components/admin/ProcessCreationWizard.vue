@@ -138,7 +138,7 @@
               <option value="">Select an event type...</option>
               <optgroup v-if="wizardData.entityType === 'people' || !wizardData.entityType" label="People Events">
                 <option value="people.lifecycle.changed">Lifecycle Changed</option>
-                <option value="people.type.changed">Type Changed</option>
+                <option value="people.sales_type.changed">Sales role changed</option>
               </optgroup>
               <optgroup v-if="wizardData.entityType === 'organization' || !wizardData.entityType" label="Organization Events">
                 <option value="organization.lifecycle.changed">Lifecycle Changed</option>
@@ -835,7 +835,7 @@ const getTriggerDescription = () => {
   }
   const eventLabels = {
     'people.lifecycle.changed': 'When a Person\'s lifecycle changes',
-    'people.type.changed': 'When a Person\'s type changes',
+    'people.sales_type.changed': 'When a Person\'s SALES role changes (Lead/Contact)',
     'organization.lifecycle.changed': 'When an Organization\'s lifecycle changes',
     'organization.type.changed': 'When an Organization\'s type changes',
     'deal.stage.changed': 'When a Deal\'s stage changes',

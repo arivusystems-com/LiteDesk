@@ -1,3 +1,11 @@
+import { getFormFieldValue } from '@/utils/getFieldValue';
+
+function findFieldByKey(allFields, fieldKey) {
+  if (!fieldKey || !Array.isArray(allFields)) return null;
+  const k = String(fieldKey).toLowerCase();
+  return allFields.find((f) => f && String(f.key || '').toLowerCase() === k) || null;
+}
+
 /**
  * Evaluates if a dependency condition is met based on form data
  * @param {Object} dependency - The dependency rule
@@ -5,10 +13,13 @@
  * @param {Array} allFields - All field definitions for lookups
  * @returns {boolean} - True if condition is met
  */
-export function evaluateDependencyCondition(condition, formData, allFields = []) {
+export function evaluateDependencyCondition(condition, formData, allFields = [], context = {}) {
   if (!condition || !condition.fieldKey) return false;
 
-  const fieldValue = formData[condition.fieldKey];
+  const controllingField = findFieldByKey(allFields, condition.fieldKey);
+  const fieldValue = getFormFieldValue(formData, condition.fieldKey, controllingField, {
+    moduleKey: context.moduleKey,
+  });
   const operator = condition.operator || 'equals';
   const conditionValue = condition.value;
 
@@ -73,7 +84,7 @@ export function evaluateDependencyCondition(condition, formData, allFields = [])
  * @param {Array} allFields - All field definitions
  * @returns {boolean} - True if dependency conditions are met
  */
-export function evaluateDependency(dependency, formData, allFields = []) {
+export function evaluateDependency(dependency, formData, allFields = [], context = {}) {
   if (!dependency) return false;
 
   // Handle simple condition (backward compatible)
@@ -82,7 +93,8 @@ export function evaluateDependency(dependency, formData, allFields = []) {
     return evaluateDependencyCondition(
       { fieldKey: dependency.fieldKey, operator: dependency.operator || 'equals', value: dependency.value },
       formData,
-      allFields
+      allFields,
+      context
     );
   }
 
@@ -91,7 +103,7 @@ export function evaluateDependency(dependency, formData, allFields = []) {
 
   const logic = dependency.logic || 'AND';
   const results = dependency.conditions.map(condition => 
-    evaluateDependencyCondition(condition, formData, allFields)
+    evaluateDependencyCondition(condition, formData, allFields, context)
   );
 
   if (logic === 'AND') {
@@ -139,7 +151,10 @@ export function getFieldDependencyState(field, formData, allFields = [], context
       }
       if (s.startsWith('$field:')) {
         const key = s.slice('$field:'.length).trim();
-        const v = formData ? formData[key] : undefined;
+        const fld = findFieldByKey(allFields, key);
+        const v = formData
+          ? getFormFieldValue(formData, key, fld, { moduleKey: context.moduleKey })
+          : undefined;
         // If the form stores populated objects, normalize to _id when present
         if (v && typeof v === 'object' && v._id) return v._id;
         return v;
@@ -163,12 +178,12 @@ export function getFieldDependencyState(field, formData, allFields = [], context
   // If no visibility dependencies, field is visible by default
   let visible = true;
   if (visibilityDeps.length > 0) {
-    visible = visibilityDeps.some(dep => evaluateDependency(dep, formData, allFields));
+    visible = visibilityDeps.some(dep => evaluateDependency(dep, formData, allFields, context));
   }
 
   // Handle other dependency types (readonly, required, picklist)
   for (const dep of otherDeps) {
-    const conditionMet = evaluateDependency(dep, formData, allFields);
+    const conditionMet = evaluateDependency(dep, formData, allFields, context);
     
     if (!conditionMet) continue;
 
@@ -198,7 +213,10 @@ export function getFieldDependencyState(field, formData, allFields = [], context
       case 'picklistValue':
         // For picklistValue, filter options based on parent field value
         if (dep.parentFieldKey && dep.mappings && Array.isArray(dep.mappings)) {
-          const parentValue = formData[dep.parentFieldKey];
+          const parentFld = findFieldByKey(allFields, dep.parentFieldKey);
+          const parentValue = getFormFieldValue(formData, dep.parentFieldKey, parentFld, {
+            moduleKey: context.moduleKey,
+          });
           if (parentValue !== null && parentValue !== undefined && parentValue !== '') {
             // Find matching mapping for current parent value
             const matchingMapping = dep.mappings.find(m => 
@@ -247,7 +265,7 @@ export function getFieldDependencyState(field, formData, allFields = [], context
   let popupTrigger = null;
   for (const dep of field.dependencies) {
     if (dep.type === 'popup') {
-      const conditionMet = evaluateDependency(dep, formData, allFields);
+      const conditionMet = evaluateDependency(dep, formData, allFields, context);
       if (conditionMet && dep.popupFields && Array.isArray(dep.popupFields) && dep.popupFields.length > 0) {
         popupTrigger = {
           dependencyName: dep.name || '',

@@ -247,10 +247,11 @@ async function getRecordContext(organizationId, appKey, moduleKey, recordId, opt
         const normalizedModuleKey = moduleKey.toLowerCase();
         
         if (normalizedModuleKey === 'people') {
-          record = await People.findOne({ _id: recordId, organizationId }).select('type').lean();
-          if (record?.type) {
+          record = await People.findOne({ _id: recordId, organizationId }).select('participations').lean();
+          const role = record?.participations?.SALES?.role;
+          if (role) {
             // Map 'Lead'/'Contact' to 'LEAD'/'CONTACT'
-            currentType = record.type.toUpperCase();
+            currentType = role.toUpperCase();
           }
         } else if (normalizedModuleKey === 'events') {
           record = await Event.findOne({ 

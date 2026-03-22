@@ -104,7 +104,12 @@ function iconForKey(key, field) {
   if (['ownerid', 'owner_id', 'assignedto', 'user'].includes(k) || dt.includes('user')) return UserIcon;
   if (['date', 'createdat', 'updatedat', 'closedate'].some((x) => k.includes(x)) || dt.includes('date')) return CalendarIcon;
   if (['amount', 'currency', 'number'].some((x) => k.includes(x)) || dt.includes('currency')) return CurrencyDollarIcon;
-  if (['stage', 'status', 'tags', 'type'].some((x) => k.includes(x)) || dt.includes('select')) return TagIcon;
+  const isSelectLikeTypeKey =
+    k === 'sales_type' ||
+    k === 'item_type' ||
+    k === 'types' ||
+    k === 'helpdesk_role';
+  if (['stage', 'status', 'tags'].some((x) => k.includes(x)) || isSelectLikeTypeKey || dt.includes('select')) return TagIcon;
   if (['organization', 'account', 'company'].some((x) => k.includes(x))) return BuildingOfficeIcon;
   if (['link', 'related'].some((x) => k.includes(x))) return LinkIcon;
   return DocumentTextIcon;
@@ -210,9 +215,7 @@ export function createGenericRecordAdapter(opts = {}) {
           title: 'Description',
           component: DescriptionSection,
           className: 'pt-4 pb-2',
-          actions: [
-            ...(canViewDescriptionHistory && openDescriptionHistory ? [{ key: 'description-history', type: 'history', label: 'History', handler: () => openDescriptionHistory() }] : [])
-          ].filter(Boolean)
+          actions: (canViewDescriptionHistory && openDescriptionHistory ? [{ key: 'description-history', type: 'history', label: 'History', handler: () => openDescriptionHistory() }] : []).filter(Boolean)
         },
         details: {
           key: 'details',

@@ -17,6 +17,11 @@ router.patch('/core-modules/:moduleKey/applications/:appKey', controller.toggleA
 router.get('/core-modules/organizations/status-types', controller.getOrganizationStatusTypes);
 router.patch('/core-modules/organizations/status-types', controller.updateOrganizationStatusTypes);
 
+// People types endpoint (tenant-configurable, e.g. Lead, Contact)
+router.get('/core-modules/people/people-types/usage', controller.getPeopleTypesUsage);
+router.get('/core-modules/people/people-types', controller.getPeopleTypes);
+router.put('/core-modules/people/people-types', controller.updatePeopleTypes);
+
 // Applications endpoints
 router.get('/applications', controller.getApplications);
 router.get('/applications/:appKey', controller.getApplication);

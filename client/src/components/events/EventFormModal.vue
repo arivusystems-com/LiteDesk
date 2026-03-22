@@ -609,7 +609,8 @@ const linkedFormIdDependencyState = computed(() => {
   return getFieldDependencyState(
     field,
     form.value,
-    eventsModuleDefinition.value?.fields || []
+    eventsModuleDefinition.value?.fields || [],
+    { moduleKey: 'events' }
   );
 });
 
@@ -637,7 +638,8 @@ const allowSelfReviewDependencyState = computed(() => {
   return getFieldDependencyState(
     field,
     form.value,
-    eventsModuleDefinition.value?.fields || []
+    eventsModuleDefinition.value?.fields || [],
+    { moduleKey: 'events' }
   );
 });
 

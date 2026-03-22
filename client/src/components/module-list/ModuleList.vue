@@ -101,21 +101,23 @@ import { EmptyStateType } from '@/types/empty-state.types';
 import ListView from '@/components/common/ListView.vue';
 import apiClient from '@/utils/apiClient';
 import { getStateFields, getFieldMetadata, getParticipationFields } from '@/platform/fields/peopleFieldModel';
+import { getParticipation } from '@/utils/getParticipation';
+import { isPeopleSalesRoleFieldKey } from '@/utils/peopleParticipationUi';
 import { getModuleListConfig, hasModuleListConfig, getSystemViews } from '@/platform/modules/moduleListRegistry';
 import { getFiltersForModule } from '@/platform/filters/filterResolver';
 
 /**
- * Check if a person participates in an app using state fields
- * A person participates in an app IFF at least one participation state field for that app is non-null
- * Uses getStateFields(appKey) from peopleFieldModel.ts - no hardcoded field names
+ * Check if a person participates in an app.
+ * For SALES: use getParticipation abstraction (never person.type).
+ * For other apps: use state fields from metadata.
  */
 function participatesInApp(person, appKey) {
   if (!person || !appKey) return false;
-  
-  // Get all state fields for this app from metadata
+  const key = String(appKey).toUpperCase();
+  if (key === 'SALES' || key === 'HELPDESK') {
+    return getParticipation(person, key) != null;
+  }
   const stateFields = getStateFields(appKey);
-  
-  // Check if any state field has a non-null value
   return stateFields.some(fieldKey => {
     const value = person[fieldKey];
     return value !== null && value !== undefined && value !== '';
@@ -135,6 +137,12 @@ const props = defineProps({
   viewMode: {
     type: String,
     default: null
+  },
+  /** People page context: 'ALL' = no filter; otherwise filter getParticipation(person, context) != null */
+  peopleContext: {
+    type: String,
+    default: 'ALL',
+    validator: (v) => !v || v === 'ALL' || v === 'SALES' || v === 'HELPDESK'
   }
 });
 
@@ -153,6 +161,13 @@ const statistics = ref({});
 const statsConfig = ref([]);
 const sortField = ref('');
 const sortOrder = ref('desc'); // Default to newest first so new records appear on page 1
+
+/** People list: API/registry use sales_type; legacy layouts may still reference type */
+const normalizePeopleListSortField = (key) => {
+  if (props.moduleKey !== 'people' || key == null || key === '') return key;
+  return String(key).trim() === 'type' ? 'sales_type' : key;
+};
+
 const pagination = ref({
   currentPage: 1,
   totalPages: 1,
@@ -220,19 +235,13 @@ const buildList = async () => {
       registry,
       snapshot
     );
-    
-    console.log('[ModuleList] Building list for module:', props.moduleKey);
-    console.log('[ModuleList] List definition:', definition);
-    console.log('[ModuleList] Columns:', definition?.columns);
-    console.log('[ModuleList] Primary Actions:', definition?.primaryActions);
-    console.log('[ModuleList] Empty State:', definition?.emptyState);
-    
+
     if (authStore.user && authStore.isAuthenticated) {
       listDefinition.value = definition;
       
       // Initialize sort from definition
       if (definition?.defaultSort) {
-        sortField.value = definition.defaultSort.column;
+        sortField.value = normalizePeopleListSortField(definition.defaultSort.column);
         // For people module, prefer 'desc' (newest first) for better UX
         // This ensures new identity-only records appear on page 1
         if (props.moduleKey === 'people' && definition.defaultSort.column === 'createdAt') {
@@ -377,7 +386,12 @@ const fetchModuleFieldDefinitions = async () => {
             filterType: 'user',
             filterPriority: 1
           },
-          'type': {
+          'sales_type': {
+            filterable: true,
+            filterType: 'multi-select',
+            filterPriority: 2
+          },
+          'helpdesk_role': {
             filterable: true,
             filterType: 'multi-select',
             filterPriority: 2
@@ -398,37 +412,22 @@ const fetchModuleFieldDefinitions = async () => {
             filterPriority: 4
           }
         };
-        
-        // Debug: Log all field keys to see what we're working with
-        console.log('[ModuleList] All field keys from backend:', fields.map(f => f.key));
-        
-        // Initialize filter metadata for fields that should have it
-        let initializedCount = 0;
-        fields = fields.map(field => {
+
+        fields = fields.map((field) => {
           if (field.key && peopleFilterMetadata[field.key]) {
             const filterMeta = peopleFilterMetadata[field.key];
-            // Always set filterable to true for known filterable fields (enable by default)
-            const updated = {
+            return {
               ...field,
               filterable: filterMeta.filterable,
               filterType: field.filterType || filterMeta.filterType,
-              filterPriority: field.filterPriority ?? filterMeta.filterPriority
+              filterPriority: field.filterPriority ?? filterMeta.filterPriority,
             };
-            console.log(`[ModuleList] ✅ Initialized filter metadata for field: ${field.key}`, {
-              before: { filterable: field.filterable, filterType: field.filterType, filterPriority: field.filterPriority },
-              after: { filterable: updated.filterable, filterType: updated.filterType, filterPriority: updated.filterPriority }
-            });
-            initializedCount++;
-            return updated;
           }
-          // Ensure filterable defaults to false if not set
           if (field.filterable === undefined) {
             return { ...field, filterable: false };
           }
           return field;
         });
-        
-        console.log(`[ModuleList] Initialized ${initializedCount} filterable fields out of ${Object.keys(peopleFilterMetadata).length} expected`);
       }
       
       // Initialize filter metadata for Organizations module fields if missing
@@ -455,37 +454,22 @@ const fetchModuleFieldDefinitions = async () => {
             filterPriority: 3
           }
         };
-        
-        // Debug: Log all field keys to see what we're working with
-        console.log('[ModuleList] All field keys from backend:', fields.map(f => f.key));
-        
-        // Initialize filter metadata for fields that should have it
-        let initializedCount = 0;
-        fields = fields.map(field => {
+
+        fields = fields.map((field) => {
           if (field.key && organizationFilterMetadata[field.key]) {
             const filterMeta = organizationFilterMetadata[field.key];
-            // Always set filterable to true for known filterable fields (enable by default)
-            const updated = {
+            return {
               ...field,
               filterable: filterMeta.filterable,
               filterType: field.filterType || filterMeta.filterType,
-              filterPriority: field.filterPriority ?? filterMeta.filterPriority
+              filterPriority: field.filterPriority ?? filterMeta.filterPriority,
             };
-            console.log(`[ModuleList] ✅ Initialized filter metadata for field: ${field.key}`, {
-              before: { filterable: field.filterable, filterType: field.filterType, filterPriority: field.filterPriority },
-              after: { filterable: updated.filterable, filterType: updated.filterType, filterPriority: updated.filterPriority }
-            });
-            initializedCount++;
-            return updated;
           }
-          // Ensure filterable defaults to false if not set
           if (field.filterable === undefined) {
             return { ...field, filterable: false };
           }
           return field;
         });
-        
-        console.log(`[ModuleList] Initialized ${initializedCount} filterable fields out of ${Object.keys(organizationFilterMetadata).length} expected`);
       }
       
       // Initialize filter metadata for Tasks module fields if missing
@@ -517,141 +501,32 @@ const fetchModuleFieldDefinitions = async () => {
             filterPriority: 3
           }
         };
-        
-        // Debug: Log all field keys to see what we're working with
-        console.log('[ModuleList] All field keys from backend:', fields.map(f => f.key));
-        
-        // Initialize filter metadata for fields that should have it
-        let initializedCount = 0;
-        fields = fields.map(field => {
+
+        fields = fields.map((field) => {
           if (field.key && tasksFilterMetadata[field.key]) {
             const filterMeta = tasksFilterMetadata[field.key];
-            // Always set filterable to true for known filterable fields (enable by default)
-            const updated = {
+            return {
               ...field,
               filterable: filterMeta.filterable,
               filterType: field.filterType || filterMeta.filterType,
-              filterPriority: field.filterPriority ?? filterMeta.filterPriority
+              filterPriority: field.filterPriority ?? filterMeta.filterPriority,
             };
-            console.log(`[ModuleList] ✅ Initialized filter metadata for field: ${field.key}`, {
-              before: { filterable: field.filterable, filterType: field.filterType, filterPriority: field.filterPriority },
-              after: { filterable: updated.filterable, filterType: updated.filterType, filterPriority: updated.filterPriority }
-            });
-            initializedCount++;
-            return updated;
           }
-          // Ensure filterable defaults to false if not set
           if (field.filterable === undefined) {
             return { ...field, filterable: false };
           }
           return field;
         });
-        
-        console.log(`[ModuleList] Initialized ${initializedCount} filterable fields out of ${Object.keys(tasksFilterMetadata).length} expected`);
       }
       
       moduleFieldDefinitions.value = fields;
-      
-      // Debug: Log filterable fields
-      const filterableFields = moduleFieldDefinitions.value.filter(f => f.filterable === true);
-      console.log('[ModuleList] Fetched field definitions:', moduleFieldDefinitions.value.length);
-      console.log('[ModuleList] Filterable fields:', filterableFields.map(f => ({
-        key: f.key,
-        filterable: f.filterable,
-        filterType: f.filterType,
-        filterPriority: f.filterPriority
-      })));
-      
-      // Debug: Check specific fields that should be filterable
-      if (props.moduleKey === 'people') {
-        const expectedFilterableFields = ['assignedTo', 'assigned_to', 'type', 'do_not_contact', 'doNotContact', 'organization'];
-        console.log('[ModuleList] Checking expected filterable fields:');
-        expectedFilterableFields.forEach(fieldKey => {
-          const field = moduleFieldDefinitions.value.find(f => f.key === fieldKey);
-          if (field) {
-            console.log(`  - ${fieldKey}:`, {
-              exists: true,
-              filterable: field.filterable,
-              filterType: field.filterType,
-              filterPriority: field.filterPriority,
-              hasFilterable: 'filterable' in field
-            });
-          } else {
-            console.log(`  - ${fieldKey}: NOT FOUND in field definitions`);
-          }
-        });
-      }
-      
-      // If no filterable fields found, log all fields to debug
-      if (filterableFields.length === 0 && (props.moduleKey === 'people' || props.moduleKey === 'organizations' || props.moduleKey === 'tasks')) {
-        console.warn(`[ModuleList] No filterable fields found for ${props.moduleKey}! Sample fields:`, 
-          moduleFieldDefinitions.value.slice(0, 5).map(f => ({
-            key: f.key,
-            hasFilterable: 'filterable' in f,
-            filterable: f.filterable,
-            filterType: f.filterType
-          }))
-        );
-      }
-      
-      // Debug: Check expected filterable fields for Organizations
-      if (props.moduleKey === 'organizations') {
-        const expectedFilterableFields = ['assignedTo', 'assigned_to', 'isActive', 'types'];
-        console.log('[ModuleList] Checking expected filterable fields for Organizations:');
-        expectedFilterableFields.forEach(fieldKey => {
-          const field = moduleFieldDefinitions.value.find(f => f.key === fieldKey);
-          if (field) {
-            console.log(`  - ${fieldKey}:`, {
-              exists: true,
-              filterable: field.filterable,
-              filterType: field.filterType,
-              filterPriority: field.filterPriority,
-              hasFilterable: 'filterable' in field
-            });
-          } else {
-            console.log(`  - ${fieldKey}: NOT FOUND in field definitions`);
-          }
-        });
-      }
-      
-      // Debug: Check expected filterable fields for Tasks
-      if (props.moduleKey === 'tasks') {
-        const expectedFilterableFields = ['assignedTo', 'assigned_to', 'status', 'dueDate', 'due_date'];
-        console.log('[ModuleList] Checking expected filterable fields for Tasks:');
-        expectedFilterableFields.forEach(fieldKey => {
-          const field = moduleFieldDefinitions.value.find(f => f.key === fieldKey);
-          if (field) {
-            console.log(`  - ${fieldKey}:`, {
-              exists: true,
-              filterable: field.filterable,
-              filterType: field.filterType,
-              filterPriority: field.filterPriority,
-              hasFilterable: 'filterable' in field
-            });
-          } else {
-            console.log(`  - ${fieldKey}: NOT FOUND in field definitions`);
-          }
-        });
-      }
-      
-      // Debug: Check expected filterable fields for Tasks
-      if (props.moduleKey === 'tasks') {
-        const expectedFilterableFields = ['assignedTo', 'assigned_to', 'status', 'dueDate', 'due_date'];
-        console.log('[ModuleList] Checking expected filterable fields for Tasks:');
-        expectedFilterableFields.forEach(fieldKey => {
-          const field = moduleFieldDefinitions.value.find(f => f.key === fieldKey);
-          if (field) {
-            console.log(`  - ${fieldKey}:`, {
-              exists: true,
-              filterable: field.filterable,
-              filterType: field.filterType,
-              filterPriority: field.filterPriority,
-              hasFilterable: 'filterable' in field
-            });
-          } else {
-            console.log(`  - ${fieldKey}: NOT FOUND in field definitions`);
-          }
-        });
+
+      const filterableFields = moduleFieldDefinitions.value.filter((f) => f.filterable === true);
+      if (
+        filterableFields.length === 0 &&
+        (props.moduleKey === 'people' || props.moduleKey === 'organizations' || props.moduleKey === 'tasks')
+      ) {
+        console.warn(`[ModuleList] No filterable fields for ${props.moduleKey}`);
       }
     } else {
       moduleFieldDefinitions.value = [];
@@ -727,29 +602,7 @@ const adaptedFilters = computed(() => {
   if (moduleFieldDefinitions.value.length > 0) {
     try {
       const schemaFilters = getFiltersForModule(props.moduleKey, moduleFieldDefinitions.value);
-      
-      // Debug: Log schema filters
-      console.log(`[ModuleList] adaptedFilters computed for ${props.moduleKey}:`, {
-        fieldDefinitionsCount: moduleFieldDefinitions.value.length,
-        schemaFiltersCount: schemaFilters.length,
-        schemaFilters: schemaFilters.map(f => ({ key: f.key, filterType: f.filterType, priority: f.priority }))
-      });
-      
-      // If no filters found, log why
-      if (schemaFilters.length === 0 && props.moduleKey === 'people') {
-        const filterableFields = moduleFieldDefinitions.value.filter(f => f.filterable === true);
-        console.warn('[ModuleList] No schema filters found!', {
-          totalFields: moduleFieldDefinitions.value.length,
-          filterableFieldsCount: filterableFields.length,
-          filterableFields: filterableFields.map(f => ({
-            key: f.key,
-            filterable: f.filterable,
-            filterType: f.filterType,
-            filterPriority: f.filterPriority
-          }))
-        });
-      }
-      
+
       // Enrich filters with options based on filterType
       return schemaFilters.map(filter => {
         const enrichedFilter = { ...filter };
@@ -830,8 +683,8 @@ const adaptedFilters = computed(() => {
           const fieldDef = moduleFieldDefinitions.value.find(f => f.key === filter.key);
           if (fieldDef?.options) {
             enrichedFilter.options = fieldDef.options;
-          } else if (filter.key === 'type' && props.moduleKey === 'people') {
-            // Special handling for People type field (participation)
+          } else if ((isPeopleSalesRoleFieldKey(filter.key) || filter.key === 'helpdesk_role') && props.moduleKey === 'people') {
+            // Special handling for People type / virtual role filters (participation)
             const participationOptions = [];
             if (appRegistry.value) {
               for (const appKey of knownParticipationApps) {
@@ -843,7 +696,7 @@ const adaptedFilters = computed(() => {
                   for (const fieldKey of stateFields) {
                     try {
                       const metadata = getFieldMetadata(fieldKey);
-                      if (fieldKey === 'type' && appKey === 'SALES') {
+                      if (isPeopleSalesRoleFieldKey(fieldKey) && appKey === 'SALES') {
                         roles.push('Lead');
                         roles.push('Contact');
                       } else if (appKey === 'HELPDESK' && roles.length === 0) {
@@ -890,10 +743,6 @@ const adaptedFilters = computed(() => {
   
   // Fallback: use filters from definition (for backward compatibility)
   if (!listDefinition.value?.filters) {
-    // Debug: Log why no filters
-    if (props.moduleKey === 'people') {
-      console.log('[ModuleList] No filters - field definitions:', moduleFieldDefinitions.value.length, 'listDefinition filters:', listDefinition.value?.filters);
-    }
     return [];
   }
   
@@ -905,16 +754,6 @@ const adaptedFilters = computed(() => {
     filterType: filter.filterType || 'select'
   }));
 });
-
-// Debug: Watch adaptedFilters to see when it changes
-watch(adaptedFilters, (newFilters) => {
-  if (props.moduleKey === 'people') {
-    console.log('[ModuleList] adaptedFilters changed:', {
-      count: newFilters.length,
-      filters: newFilters.map(f => ({ key: f.key, filterType: f.filterType, hasOptions: !!f.options, optionsCount: f.options?.length || 0 }))
-    });
-  }
-}, { immediate: true });
 
 // Get create label from primary actions
 const getCreateLabel = () => {
@@ -963,7 +802,7 @@ const fetchData = async () => {
     const params = {
       page: pagination.value.currentPage,
       limit: pagination.value.limit,
-      sortBy: sortField.value || 'createdAt',
+      sortBy: normalizePeopleListSortField(sortField.value) || 'createdAt',
       // Default to 'desc' (newest first) if no sort field is set
       // This ensures new records appear on page 1 by default
       sortOrder: sortField.value ? (sortOrder.value || 'desc') : 'desc'
@@ -1039,85 +878,17 @@ const fetchData = async () => {
         : `/${moduleConfig.apiEndpoint}`
       : `/${props.moduleKey}`;
     
-    // Debug: Log params being sent to API
-    if (props.moduleKey === 'people' || props.moduleKey === 'organizations') {
-      console.log('[ModuleList] API request params:', JSON.stringify(params, null, 2));
-      console.log('[ModuleList] Filters state:', JSON.stringify(filters.value, null, 2));
-    }
-    
-    // Debug: Log params for events module
-    if (props.moduleKey === 'events') {
-      console.log('[ModuleList] Events API request params:', JSON.stringify(params, null, 2));
-      console.log('[ModuleList] Events filters state:', JSON.stringify(filters.value, null, 2));
-      console.log('[ModuleList] Events searchQuery state:', searchQuery.value);
-    }
-    
     const response = await apiClient.get(endpoint, { params });
-    
-    // Debug: Log API response
-    if (props.moduleKey === 'people' || props.moduleKey === 'organizations') {
-      // Log raw response first
-      console.log('[ModuleList] Raw API response:', response);
-      console.log('[ModuleList] Response keys:', Object.keys(response));
-      console.log('[ModuleList] Response.pagination:', response.pagination);
-      console.log('[ModuleList] Response.meta:', response.meta);
-      console.log('[ModuleList] typeof response.pagination:', typeof response.pagination);
-      
-      const logData = {
-        success: response.success,
-        hasData: !!response.data,
-        dataIsArray: Array.isArray(response.data),
-        dataLength: response.data?.length || 0,
-        pagination: response.pagination,
-        meta: response.meta,
-        responseKeys: Object.keys(response),
-        paginationType: typeof response.pagination,
-        paginationKeys: response.pagination ? Object.keys(response.pagination) : null,
-        paginationValue: response.pagination ? JSON.parse(JSON.stringify(response.pagination)) : null,
-        metaValue: response.meta ? JSON.parse(JSON.stringify(response.meta)) : null,
-        sampleData: response.data?.[0] ? {
-          _id: response.data[0]._id,
-          name: props.moduleKey === 'people' 
-            ? (response.data[0].first_name || '') + ' ' + (response.data[0].last_name || '')
-            : response.data[0].name,
-          assignedTo: response.data[0].assignedTo,
-          assignedToId: response.data[0].assignedTo?._id || response.data[0].assignedTo || null,
-          isActive: response.data[0].isActive
-        } : null,
-        allDataIds: response.data?.map(item => ({
-          _id: item._id,
-          name: props.moduleKey === 'people' 
-            ? (item.first_name || '') + ' ' + (item.last_name || '')
-            : item.name,
-          assignedTo: item.assignedTo?._id || item.assignedTo || null
-        })) || []
-      };
-      console.log('[ModuleList] API response (full):', logData);
-    }
 
-    // Debug: Log API response for events module (only when search is active)
-    if (props.moduleKey === 'events' && searchQuery.value) {
-      console.log('[ModuleList] Events API response with search:', {
-        success: response.success,
-        dataLength: response.data?.length || 0,
-        total: response.total || 0,
-        searchParam: params.search
-      });
-    }
-    
     if (response.success) {
       let fetchedData = response.data || [];
-      
-      // Debug: Log fetched data for organizations
-      if (props.moduleKey === 'organizations') {
-        console.log('[ModuleList] Fetched data:', {
-          isArray: Array.isArray(fetchedData),
-          length: fetchedData.length,
-          firstItem: fetchedData[0] || null,
-          responseKeys: Object.keys(response)
-        });
+
+      // Apply people context filter client-side (People module only)
+      if (props.moduleKey === 'people' && props.peopleContext && props.peopleContext !== 'ALL') {
+        const ctx = props.peopleContext;
+        fetchedData = fetchedData.filter(person => getParticipation(person, ctx) != null);
       }
-      
+
       // Apply participation filtering client-side (People module only)
       // Participation filter format: "SALES:Lead", "SALES:Contact", "HELPDESK:Contact", etc.
       // Or "SALES:*" for any participation in an app
@@ -1150,10 +921,10 @@ const fetchData = async () => {
                 return true;
               }
               
-              // For specific roles, check the type field
-              // For SALES: Lead/Contact maps to 'type' field
+              // For specific roles, use getParticipation abstraction
+              // For SALES: Lead/Contact maps to role from participation
               if (appKey === 'SALES' && (role === 'Lead' || role === 'Contact')) {
-                return person.type === role;
+                return getParticipation(person, appKey)?.role === role;
               }
               
               // For other apps/roles, default to matching participation
@@ -1166,36 +937,7 @@ const fetchData = async () => {
       // Force reactivity by creating a new array reference
       // This ensures Vue detects the change even if the array contents are similar
       data.value = [...fetchedData];
-      
-      // Debug: Log data assignment for events (only when search is active)
-      if (props.moduleKey === 'events' && searchQuery.value) {
-        const searchTerm = searchQuery.value?.toLowerCase() || '';
-        const matchingEvents = data.value.filter(e => {
-          if (!searchTerm) return true;
-          const eventName = String(e.eventName || '').toLowerCase();
-          // notes is an array of objects with 'text' field
-          const notesText = Array.isArray(e.notes) 
-            ? e.notes.map(n => String(n?.text || '')).join(' ').toLowerCase()
-            : String(e.notes || '').toLowerCase();
-          const location = String(e.location || '').toLowerCase();
-          return eventName.includes(searchTerm) || notesText.includes(searchTerm) || location.includes(searchTerm);
-        });
-        
-        console.log('[ModuleList] Events search results:', {
-          dataLength: data.value.length,
-          searchQuery: searchQuery.value,
-          matchingCount: matchingEvents.length,
-          sampleEventNames: data.value.slice(0, 5).map(e => e.eventName)
-        });
-        
-        if (searchTerm && matchingEvents.length !== data.value.length) {
-          console.warn('[ModuleList] WARNING: Some events in response do not match search term!', {
-            totalReturned: data.value.length,
-            matchingCount: matchingEvents.length
-          });
-        }
-      }
-      
+
       // Handle pagination from response (check both pagination and meta objects)
       if (response.pagination) {
         pagination.value = {
@@ -1217,42 +959,7 @@ const fetchData = async () => {
           limit: response.meta.limit || pagination.value.limit
         };
       }
-      
-      // Debug: Log data update
-      if (props.moduleKey === 'people' || props.moduleKey === 'organizations') {
-        const allItemIds = data.value.map(item => ({
-          _id: item._id,
-          name: props.moduleKey === 'people'
-            ? (item.first_name || '') + ' ' + (item.last_name || '')
-            : item.name,
-          assignedTo: props.moduleKey === 'organizations'
-            ? (item.assignedTo?._id || item.assignedTo || null)
-            : undefined
-        }));
-        
-        console.log('[ModuleList] Data updated:', {
-          dataLength: data.value.length,
-          pagination: pagination.value,
-          firstItem: data.value[0] ? {
-            _id: data.value[0]._id,
-            name: props.moduleKey === 'people'
-              ? (data.value[0].first_name || '') + ' ' + (data.value[0].last_name || '')
-              : data.value[0].name,
-            assignedTo: props.moduleKey === 'organizations' 
-              ? (data.value[0].assignedTo?._id || data.value[0].assignedTo || null)
-              : undefined
-          } : null
-        });
-        
-        // Log all item IDs separately for easier inspection
-        console.log('[ModuleList] All item IDs:', JSON.stringify(allItemIds, null, 2));
-        console.log('[ModuleList] Data array reference changed:', data.value !== fetchedData);
-        
-        // Log a summary for quick comparison
-        const idsSummary = allItemIds.map(item => item._id).join(', ');
-        console.log('[ModuleList] Organization IDs summary:', idsSummary);
-      }
-      
+
       // Compute statistics using registry function if available
       if (moduleConfig?.statistics?.computeFunction) {
         await nextTick();
@@ -1733,7 +1440,7 @@ const handleSetDefaultView = (viewId) => {
 };
 
 const handleSortUpdate = ({ sortField: key, sortOrder: order }) => {
-  sortField.value = key;
+  sortField.value = normalizePeopleListSortField(key);
   sortOrder.value = order;
   fetchData();
 };

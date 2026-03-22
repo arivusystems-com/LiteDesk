@@ -159,7 +159,7 @@ export const useNotificationStore = defineStore('notifications', () => {
       snoozeTimers.delete(key);
       // Remove entry
       const current = snoozesByApp.value || {};
-      const map = { ...(current[appKey] || {}) };
+      const map = { ...current[appKey] };
       const entry = map[id];
       delete map[id];
       snoozesByApp.value = { ...current, [appKey]: map };
@@ -199,7 +199,7 @@ export const useNotificationStore = defineStore('notifications', () => {
     }
 
     const root = snoozesByApp.value || {};
-    const map = { ...(root[appKey] || {}) };
+    const map = { ...root[appKey] };
     map[id] = { until, wasUnread, label: String(label || '') };
     snoozesByApp.value = { ...root, [appKey]: map };
     persistSnoozesToStorage();

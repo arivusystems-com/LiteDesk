@@ -2232,7 +2232,7 @@ const systemEvents = computed(() => {
           _id: `${String(log?._id || log?.id || log?.timestamp || Date.now())}-${index}`,
           action: 'field_changed',
           details: {
-            ...(log?.details || {}),
+            ...log?.details,
             field,
             fieldLabel: toReadableFieldLabel(field),
             from: log?.details?.fromByField?.[field] ?? 'Empty',

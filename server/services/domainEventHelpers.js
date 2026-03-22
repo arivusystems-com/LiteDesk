@@ -52,12 +52,15 @@ function emitPeopleEvents({ previous, current, appKey = 'SALES', triggeredBy = n
   const entityId = toId(current._id);
   const orgId = organizationId ? toId(organizationId) : null;
 
-  const prevType = previous?.type;
-  const currType = current?.type;
-  const prevLead = previous?.lead_status;
-  const currLead = current?.lead_status;
-  const prevContact = previous?.contact_status;
-  const currContact = current?.contact_status;
+  const { getSalesParticipationValues } = require('../utils/getSalesParticipationValues');
+  const prevSales = previous ? getSalesParticipationValues(previous) : {};
+  const currSales = getSalesParticipationValues(current);
+  const prevType = prevSales.role;
+  const currType = currSales.role;
+  const prevLead = prevSales.lead_status;
+  const currLead = currSales.lead_status;
+  const prevContact = prevSales.contact_status;
+  const currContact = currSales.contact_status;
 
   const ownerId = resolveOwner('people', current);
 
@@ -65,9 +68,11 @@ function emitPeopleEvents({ previous, current, appKey = 'SALES', triggeredBy = n
     emit({
       entityType: 'people',
       entityId,
-      eventType: 'people.type.changed',
-      previousState: previous ? { type: prevType, lead_status: prevLead, contact_status: prevContact } : null,
-      currentState: { type: currType, lead_status: currLead, contact_status: currContact },
+      eventType: 'people.sales_type.changed',
+      previousState: previous
+        ? { sales_type: prevType, lead_status: prevLead, contact_status: prevContact }
+        : null,
+      currentState: { sales_type: currType, lead_status: currLead, contact_status: currContact },
       appKey,
       triggeredBy,
       organizationId: orgId,
@@ -81,8 +86,10 @@ function emitPeopleEvents({ previous, current, appKey = 'SALES', triggeredBy = n
       entityType: 'people',
       entityId,
       eventType: 'people.lifecycle.changed',
-      previousState: previous ? { type: prevType, lead_status: prevLead, contact_status: prevContact } : null,
-      currentState: { type: currType, lead_status: currLead, contact_status: currContact },
+      previousState: previous
+        ? { sales_type: prevType, lead_status: prevLead, contact_status: prevContact }
+        : null,
+      currentState: { sales_type: currType, lead_status: currLead, contact_status: currContact },
       appKey,
       triggeredBy,
       organizationId: orgId,

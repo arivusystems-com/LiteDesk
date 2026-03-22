@@ -40,10 +40,11 @@ function hasLifecycleOrTypeChanged(entity, record, updateData = null) {
   }
   
   if (entity === 'people') {
-    // Check if type, lead_status, or contact_status changed
-    return updateData.type !== undefined ||
+    // sales_type or lifecycle fields, or direct participations patch
+    return updateData.sales_type !== undefined ||
            updateData.lead_status !== undefined ||
-           updateData.contact_status !== undefined;
+           updateData.contact_status !== undefined ||
+           updateData.participations !== undefined;
   } else if (entity === 'organization') {
     // Check if types changed
     return updateData.types !== undefined;
@@ -116,12 +117,14 @@ function observeStatusMismatch(entity, record) {
     let statusField = null;
     
     if (entity === 'people') {
-      // For People, check lead_status or contact_status
-      if (record.lead_status) {
-        statusValue = record.lead_status;
+      // For People, use participations.SALES only
+      const { getSalesParticipationValues } = require('../utils/getSalesParticipationValues');
+      const sales = getSalesParticipationValues(record);
+      if (sales.lead_status) {
+        statusValue = sales.lead_status;
         statusField = 'lead_status';
-      } else if (record.contact_status) {
-        statusValue = record.contact_status;
+      } else if (sales.contact_status) {
+        statusValue = sales.contact_status;
         statusField = 'contact_status';
       }
     } else if (entity === 'organization') {

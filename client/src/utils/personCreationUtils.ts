@@ -57,7 +57,7 @@ export function buildIntentContext(
   intentMapping: IntentMapping,
   coreFields: FieldKey[] = ['first_name', 'last_name', 'email', 'phone', 'mobile', 'source'],
   appFields: Record<AppKey, FieldKey[]> = {},
-  excludedFields: FieldKey[] = ['type'] // STEP 1: Default excluded fields (structural fields)
+  excludedFields: FieldKey[] = ['sales_type'] // Structural / app-resolved fields
 ): CreatePersonIntentContext {
   return {
     intentKey: intentMapping.id,

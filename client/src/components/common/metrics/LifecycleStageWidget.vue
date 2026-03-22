@@ -79,11 +79,16 @@ const props = defineProps({
 
 const emit = defineEmits(['update']);
 
+/** SALES role (Lead/Contact); API uses sales_type */
+function getPeopleSalesRole(record = props.record) {
+  if (!record) return null;
+  return record.sales_type ?? null;
+}
+
 // Get record type label (first letter capitalized)
 const recordTypeLabel = computed(() => {
   if (props.recordType === 'people') {
-    // For people, use the type field if available
-    return props.record.type || 'Person';
+    return getPeopleSalesRole() || 'Person';
   }
   // Capitalize first letter
   return props.recordType.charAt(0).toUpperCase() + props.recordType.slice(1);
@@ -108,7 +113,7 @@ const getFieldDefinition = (key) => {
 const stages = computed(() => {
   // First try to get from module definition
   if (props.recordType === 'people') {
-    const type = props.record.type;
+    const type = getPeopleSalesRole();
     if (type === 'Lead') {
       const fieldDef = getFieldDefinition('lead_status');
       if (fieldDef && fieldDef.options && fieldDef.options.length > 0) {
@@ -168,7 +173,7 @@ const stages = computed(() => {
   
   // Fallback to hardcoded stages if no module definition
   if (props.recordType === 'people') {
-    const type = props.record.type;
+    const type = getPeopleSalesRole();
     if (type === 'Lead') {
       return [
         { value: 'New', label: 'New' },
@@ -220,7 +225,7 @@ const stages = computed(() => {
 // Get current stage value
 const currentStage = computed(() => {
   if (props.recordType === 'people') {
-    const type = props.record.type;
+    const type = getPeopleSalesRole();
     if (type === 'Lead') {
       return props.record.lead_status;
     } else if (type === 'Contact') {
@@ -259,7 +264,7 @@ const changeStage = (newStage) => {
   let fieldKey = 'status';
   
   if (props.recordType === 'people') {
-    const type = props.record.type;
+    const type = getPeopleSalesRole();
     if (type === 'Lead') {
       fieldKey = 'lead_status';
     } else if (type === 'Contact') {

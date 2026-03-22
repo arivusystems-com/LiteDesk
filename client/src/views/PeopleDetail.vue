@@ -423,7 +423,7 @@
             <!-- Action Controls -->
             <div class="flex items-start gap-2">
               <!-- Convert Lead to Contact button (Sales only) - Shows even if read-only -->
-              <div v-if="appKey === 'SALES' && appSection.fields && (appSection.fields.type === 'Lead' || appSection.fields.type === 'lead') && !isEditingApp[appKey]" class="flex flex-col gap-2">
+              <div v-if="appKey === 'SALES' && appSection.fields && isPeopleSalesLeadFromFields(appSection.fields) && !isEditingApp[appKey]" class="flex flex-col gap-2">
                 <button
                   @click="showConvertModal = true"
                   class="px-4 py-2 text-sm font-semibold text-white bg-gray-800 dark:bg-gray-700 hover:bg-gray-900 dark:hover:bg-gray-600 border-2 border-gray-900 dark:border-gray-500 rounded-lg transition-colors flex items-center gap-2 shadow-sm"
@@ -471,7 +471,7 @@
                 </button>
               </template>
               <!-- Read-only indicator (only if no buttons shown) -->
-              <div v-if="!appSection.canEdit && appKey !== 'SALES' && (!appSection.fields || (appSection.fields.type !== 'Lead' && appSection.fields.type !== 'lead'))" class="text-xs text-gray-500 dark:text-gray-400 italic">
+              <div v-if="!appSection.canEdit && appKey !== 'SALES' && (!appSection.fields || !isPeopleSalesLeadFromFields(appSection.fields))" class="text-xs text-gray-500 dark:text-gray-400 italic">
                 Read-only
               </div>
             </div>
@@ -537,7 +537,7 @@
                 </label>
                 <!-- Select for Type -->
                 <select
-                  v-if="fieldKey === 'type'"
+                  v-if="isPeopleSalesRoleFieldKey(fieldKey)"
                   v-model="appEditForms[appKey][fieldKey]"
                   class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
@@ -977,6 +977,7 @@ import { ref, computed, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/utils/apiClient';
+import { toAttachRole } from '@/utils/getParticipation';
 import { openDatePicker } from '@/utils/dateUtils';
 import { formatRawValueForDisplay } from '@/utils/fieldDisplay';
 import { useRecordPageLifecycle } from '@/components/record-page/composables/useRecordPageLifecycle';
@@ -984,6 +985,10 @@ import ActivityTimeline from '@/components/ActivityTimeline.vue';
 import Notes from '@/components/Notes.vue';
 import Files from '@/components/Files.vue';
 import ParticipationOverviewPanel from '@/components/people/ParticipationOverviewPanel.vue';
+import {
+  isPeopleSalesRoleFieldKey,
+  isPeopleSalesLeadFromFields,
+} from '@/utils/peopleParticipationUi';
 
 const route = useRoute();
 const authStore = useAuthStore();
@@ -1088,6 +1093,7 @@ const getPersonDisplayName = () => {
 };
 
 const formatFieldLabel = (fieldKey) => {
+  if (isPeopleSalesRoleFieldKey(fieldKey)) return 'Type';
   // Convert snake_case to Title Case
   return fieldKey
     .split('_')
@@ -1200,7 +1206,7 @@ const enterAppEditMode = async (appKey, appSection) => {
     // Get all possible fields for this app from the SALES app definition
     // For SALES app, these are the fields defined in APP_FIELD_KEYS_BY_APP[SALES]
     const salesFields = [
-      'type', 'lead_status', 'lead_owner', 'lead_score', 'interest_products',
+      'sales_type', 'lead_status', 'lead_owner', 'lead_score', 'interest_products',
       'qualification_date', 'qualification_notes', 'estimated_value',
       'contact_status', 'role', 'birthday', 'preferred_contact_method'
     ];
@@ -1299,6 +1305,13 @@ const saveAppFields = async (appKey) => {
         formData[fieldKey] = value;
       }
     });
+
+    if (appKey === 'SALES') {
+      if (formData.type != null && formData.sales_type == null) {
+        formData.sales_type = formData.type;
+      }
+      delete formData.type;
+    }
     
     // Submit update for this app
     const response = await apiClient.put(`/people/${personId}/update-app-fields`, {
@@ -1425,8 +1438,8 @@ const shouldShowConvertButton = (appKey, appSection) => {
   if (!appSection || !appSection.fields) return false;
   
   // Must be Lead type (exactly 'Lead', case-sensitive check)
-  const type = appSection.fields.type;
-  if (type !== 'Lead' && type !== 'lead') return false;
+  const role = appSection.fields.sales_type;
+  if (role !== 'Lead' && role !== 'lead') return false;
   
   // Must not be in edit mode
   if (isEditingApp.value[appKey]) return false;
@@ -1576,9 +1589,15 @@ const handleAttachSubmit = async () => {
     });
 
     const personId = route.params.id;
+    const role = toAttachRole(selectedAttachIntent.value.participationType);
+    if (!role) {
+      attachError.value = 'Participation type (role) is required';
+      attachLoading.value = false;
+      return;
+    }
     const response = await apiClient.post(`/people/${personId}/attach`, {
       appKey: selectedAttachIntent.value.appKey,
-      participationType: selectedAttachIntent.value.participationType,
+      role,
       formData: cleanedFormData
     });
 

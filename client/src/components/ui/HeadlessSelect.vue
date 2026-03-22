@@ -3,25 +3,29 @@
     :model-value="modelValue"
     @update:model-value="$emit('update:modelValue', $event)"
     as="div"
-    class="relative"
+    :class="['relative', wrapperClass]"
   >
     <ListboxButton
       :id="id"
       :disabled="disabled"
       :class="[
-        'relative block w-full cursor-default rounded-lg border py-2 pl-3 pr-10 text-left text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 sm:text-sm',
-        'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white',
-        'placeholder:text-gray-500 dark:placeholder:text-gray-500',
-        disabled && 'cursor-not-allowed opacity-60'
+        'block w-full rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500',
+        'relative cursor-default text-left',
+        disabled && 'cursor-not-allowed opacity-60',
+        invalid && 'border-red-500 dark:border-red-500',
+        buttonClass
       ]"
     >
-      <span :class="['block truncate', !selectedLabel && 'text-gray-500 dark:text-gray-400']">
-        {{ selectedLabel || placeholder }}
+      <span
+        :class="[
+          'block truncate pr-8',
+          isMutedSelection && 'text-gray-500 dark:text-gray-500'
+        ]"
+      >
+        {{ buttonText }}
       </span>
       <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
-        <svg class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M10 3a.75.75 0 01.55.24l3.25 3.5a.75.75 0 11-1.1 1.02L10 4.852 7.3 7.76a.75.75 0 01-1.1-1.02l3.25-3.5A.75.75 0 0110 3zm-3.76 9.2a.75.75 0 011.06.04l2.7 2.908 2.7-2.908a.75.75 0 111.1 1.02l-3.25 3.5a.75.75 0 01-1.1 0l-3.25-3.5a.75.75 0 01.04-1.06z" clip-rule="evenodd" />
-        </svg>
+        <ChevronUpDownIcon class="h-5 w-5 text-gray-400 dark:text-gray-500" aria-hidden="true" />
       </span>
     </ListboxButton>
     <Transition
@@ -30,7 +34,10 @@
       leave-to-class="opacity-0"
     >
       <ListboxOptions
-        class="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm"
+        :class="[
+          'absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm',
+          optionsClass
+        ]"
       >
         <ListboxOption
           v-if="allowEmpty"
@@ -64,6 +71,7 @@
 <script setup>
 import { computed } from 'vue';
 import { Listbox, ListboxButton, ListboxOptions, ListboxOption } from '@headlessui/vue';
+import { ChevronUpDownIcon } from '@heroicons/vue/24/outline';
 
 const props = defineProps({
   modelValue: { type: [String, Number, null], default: null },
@@ -74,16 +82,37 @@ const props = defineProps({
   emptyLabel: { type: String, default: '—' },
   emptyValue: { type: [String, Number], default: '' },
   id: { type: String, default: undefined },
-  disabled: { type: Boolean, default: false }
+  disabled: { type: Boolean, default: false },
+  /** Visual error state (matches DynamicFormField) */
+  invalid: { type: Boolean, default: false },
+  /** Merged into ListboxButton after base styles */
+  buttonClass: { type: [String, Array, Object], default: undefined },
+  /** Merged into ListboxOptions (e.g. z-index above drawers/modals) */
+  optionsClass: { type: [String, Array, Object], default: undefined },
+  /** Root Listbox wrapper (use mt-2 below a label to match DynamicFormField) */
+  wrapperClass: { type: [String, Array, Object], default: '' }
 });
 
 defineEmits(['update:modelValue']);
 
+const isEmptyValue = computed(() => {
+  const v = props.modelValue;
+  return v === null || v === undefined || v === '';
+});
+
 const selectedLabel = computed(() => {
-  if (props.modelValue === null || props.modelValue === undefined || props.modelValue === '') {
-    return props.allowEmpty ? props.emptyLabel : '';
-  }
+  if (isEmptyValue.value) return '';
   const opt = props.options.find((o) => o.value === props.modelValue);
   return opt ? opt.label : '';
 });
+
+const buttonText = computed(() => {
+  if (isEmptyValue.value) {
+    return props.allowEmpty ? props.emptyLabel : props.placeholder;
+  }
+  return selectedLabel.value || props.placeholder;
+});
+
+/** Muted styling when no concrete option is selected */
+const isMutedSelection = computed(() => isEmptyValue.value || !selectedLabel.value);
 </script>

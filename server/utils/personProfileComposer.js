@@ -25,6 +25,7 @@
  */
 
 const { APP_KEYS } = require('../constants/appKeys');
+const { getSalesParticipationValues } = require('./getSalesParticipationValues');
 
 // ---------------------------------------------------------------------------
 // Field classifications
@@ -81,9 +82,7 @@ const CORE_FIELD_KEYS = [
  */
 const APP_FIELD_KEYS_BY_APP = {
   [APP_KEYS.SALES]: [
-    // Lead/Contact type
-    'type',
-
+    // Lead/Contact role (participations.SALES.role) - 'type' removed; use role only
     // Lead-specific (SALES-specific)
     'lead_status',
     'lead_owner',
@@ -144,7 +143,7 @@ function pickFields(source, keys) {
  * Check if a person has participation in a given app.
  * 
  * A person has participation in an app if any app-specific field is set.
- * For SALES app, specifically checks the 'type' field (Lead/Contact).
+ * For SALES app, checks participations.SALES.role (exposed as sales_type in profile fields).
  * 
  * @param {Object} person - Person data (Mongoose document or plain object)
  * @param {string} appKey - Normalized app key (e.g., 'SALES', 'HELPDESK')
@@ -161,6 +160,12 @@ function hasAppParticipation(person, appKey) {
     person && typeof person.toObject === 'function'
       ? person.toObject()
       : person || {};
+
+  // Helpdesk (and similar): participation is only participations.APPKEY.role — no top-level app fields yet
+  if (normalizedAppKey === 'HELPDESK') {
+    const p = rawPerson.participations?.HELPDESK;
+    return !!(p && String(p.role || '').trim());
+  }
   
   // Get app-specific fields for this app
   const appFieldKeys = APP_FIELD_KEYS_BY_APP[normalizedAppKey];
@@ -169,10 +174,10 @@ function hasAppParticipation(person, appKey) {
     return false;
   }
   
-  // For SALES app, 'type' field is the primary participation marker
-  // Check it first for SALES app
-  if (normalizedAppKey === APP_KEYS.SALES && rawPerson.type) {
-    return true;
+  // For SALES app, participations.SALES.role is the participation marker
+  if (normalizedAppKey === APP_KEYS.SALES) {
+    const { role } = getSalesParticipationValues(rawPerson);
+    if (role) return true;
   }
   
   // Check if any app-specific field is set (not null, undefined, empty string, or empty array)
@@ -189,11 +194,7 @@ function hasAppParticipation(person, appKey) {
       continue;
     }
     
-    // For SALES app, skip 'type' check here (already checked above)
-    // For other apps, any app-specific field being set indicates participation
-    if (normalizedAppKey === APP_KEYS.SALES && fieldKey === 'type') {
-      continue; // Already checked above
-    }
+    // For SALES, role (participations.SALES.role) was already checked above
     
     // Field has a meaningful value - participation exists
     return true;
@@ -320,7 +321,17 @@ function composePersonProfile({
       return;
     }
 
-    const fields = pickFields(rawPerson, fieldKeys);
+    // For SALES, prefer participations over legacy top-level fields
+    let fields;
+    if (appKey === APP_KEYS.SALES) {
+      const { role, lead_status, contact_status } = getSalesParticipationValues(rawPerson);
+      fields = pickFields(rawPerson, fieldKeys);
+      if (role != null) fields.sales_type = role;
+      if (lead_status != null) fields.lead_status = lead_status;
+      if (contact_status != null) fields.contact_status = contact_status;
+    } else {
+      fields = pickFields(rawPerson, fieldKeys);
+    }
 
     // Include app section even if no fields are present yet
     // This allows users to add app-specific fields to a person that doesn't have any

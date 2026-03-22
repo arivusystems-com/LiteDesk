@@ -745,7 +745,7 @@ const exportContacts = async (req, res) => {
       'last_name',
       'email',
       'phone',
-      'type',
+      'sales_type',
       'source',
       'contact_status',
       'lead_score',
@@ -753,18 +753,22 @@ const exportContacts = async (req, res) => {
       'created_at'
     ];
 
-    const data = contacts.map(contact => ({
-      first_name: contact.first_name || '',
-      last_name: contact.last_name || '',
-      email: contact.email || '',
-      phone: contact.phone || '',
-      type: contact.type || '',
-      source: contact.source || '',
-      contact_status: contact.contact_status || '',
-      lead_score: contact.lead_score || '',
-      assigned_to: contact.assignedTo ? `${contact.assignedTo.firstName} ${contact.assignedTo.lastName}` : '',
-      created_at: contact.createdAt ? new Date(contact.createdAt).toISOString() : ''
-    }));
+    const { getSalesParticipationValues } = require('../utils/getSalesParticipationValues');
+    const data = contacts.map(contact => {
+      const sales = getSalesParticipationValues(contact);
+      return {
+        first_name: contact.first_name || '',
+        last_name: contact.last_name || '',
+        email: contact.email || '',
+        phone: contact.phone || '',
+        sales_type: sales.role || '',
+        source: contact.source || '',
+        contact_status: sales.contact_status || '',
+        lead_score: contact.lead_score || '',
+        assigned_to: contact.assignedTo ? `${contact.assignedTo.firstName} ${contact.assignedTo.lastName}` : '',
+        created_at: contact.createdAt ? new Date(contact.createdAt).toISOString() : ''
+      };
+    });
 
     const csv = stringifyCSV(data, headers);
 

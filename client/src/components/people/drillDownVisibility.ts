@@ -23,6 +23,7 @@ export interface ProfileData {
   apps?: {
     [appKey: string]: {
       fields?: {
+        sales_type?: string;
         type?: string;
         [key: string]: any;
       };
@@ -43,8 +44,8 @@ export function canViewDeals(profileData: ProfileData | null): boolean {
   if (!salesApp?.fields) return false;
   
   // SALES participation (Lead or Contact) implies deals relationship
-  const type = salesApp.fields.type;
-  return type === 'Lead' || type === 'Contact';
+  const role = salesApp.fields.sales_type;
+  return role === 'Lead' || role === 'Contact';
 }
 
 /**

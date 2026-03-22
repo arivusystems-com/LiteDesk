@@ -247,7 +247,10 @@ function defaultMetricsForContext() {
   const type = props.recordType;
   const record = props.record || {};
   if (type === 'people') {
-    const isLead = (record.type || record.lead_status || '').toString().toLowerCase().includes('lead');
+    const salesRole = (record.sales_type ?? '').toString().toLowerCase();
+    const isLead =
+      salesRole === 'lead' ||
+      (!salesRole && String(record.lead_status || '').toLowerCase().includes('lead'));
     const ownerKey = userFieldKeyForRecord(record);
     if (isLead) {
       const base = [

@@ -1,79 +1,102 @@
 <template>
   <Teleport to="body">
-    <Transition
-      enter-active-class="transition ease-out duration-200"
-      enter-from-class="opacity-0"
-      enter-to-class="opacity-100"
-      leave-active-class="transition ease-in duration-150"
-      leave-from-class="opacity-100"
-      leave-to-class="opacity-0"
-    >
-      <div
-        v-if="isOpen"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 dark:bg-opacity-70"
-        @click.self="close"
-      >
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" @click.stop>
-          <!-- Header -->
-          <div class="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
-            <div>
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Attach to App</h2>
-              <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                Add this person to {{ formatAppName(appKey) }}
-              </p>
-            </div>
-            <button
-              @click="close"
-              class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors flex items-center justify-center min-w-[40px] min-h-[40px]"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+    <TransitionRoot as="template" :show="isOpen">
+      <Dialog class="relative z-[10000]" @close="close">
+        <TransitionChild
+          as="template"
+          enter="ease-out duration-200"
+          enter-from="opacity-0"
+          enter-to="opacity-100"
+          leave="ease-in duration-200"
+          leave-from="opacity-100"
+          leave-to="opacity-0"
+        >
+          <div class="fixed inset-0 bg-gray-500/75 dark:bg-black/75" aria-hidden="true" />
+        </TransitionChild>
 
-          <div class="p-6">
+        <div class="fixed inset-0 overflow-hidden">
+          <div class="absolute inset-0 overflow-hidden">
+            <div class="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10 sm:pl-16">
+              <TransitionChild
+                as="template"
+                enter="transform transition ease-in-out duration-300 sm:duration-300"
+                enter-from="translate-x-full"
+                enter-to="translate-x-0"
+                leave="transform transition ease-in-out duration-300 sm:duration-300"
+                leave-from="translate-x-0"
+                leave-to="translate-x-full"
+              >
+                <DialogPanel
+                  class="pointer-events-auto flex h-full w-full max-w-2xl flex-col bg-white shadow-xl dark:bg-gray-800"
+                >
+                  <form
+                    class="relative flex h-full min-h-0 flex-col divide-y divide-gray-200 dark:divide-gray-700"
+                    @submit.prevent="handleSubmit"
+                  >
+                    <!-- Header (same pattern as ParticipationEditModal / CreateRecordDrawer) -->
+                    <div class="flex shrink-0 items-center justify-between bg-indigo-700 px-4 py-6 sm:px-6 dark:bg-indigo-800">
+                      <div class="min-w-0 pr-2">
+                        <DialogTitle class="text-base font-semibold text-white">
+                          Attach to {{ formatAppName(appKey) }}
+                        </DialogTitle>
+                        <p class="mt-1 text-sm text-indigo-200">
+                          Add this person to the app and set participation fields
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        class="relative shrink-0 rounded-md text-indigo-200 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                        @click="close"
+                      >
+                        <span class="absolute -inset-2.5" />
+                        <span class="sr-only">Close panel</span>
+                        <XMarkIcon class="size-6" aria-hidden="true" />
+                      </button>
+                    </div>
+
+                    <div class="min-h-0 flex-1 overflow-y-auto">
+                      <div class="px-4 py-6 sm:px-6 space-y-6">
             <!-- Explanation Banner -->
-            <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <div class="rounded-md bg-blue-50 p-4 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
               <div class="flex items-start gap-2">
                 <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
                 </svg>
                 <div>
                   <p class="text-sm font-medium text-blue-900 dark:text-blue-200 mb-1">
-                    Adding Participation
+                    Adding participation
                   </p>
                   <p class="text-sm text-blue-700 dark:text-blue-300">
-                    You are adding this person to {{ formatAppName(appKey) }}{{ participationTypeDisplay ? ` as ${participationTypeDisplay}` : '' }}. This will only set participation fields for this app. Core identity fields (name, email, etc.) are not modified.
+                    You are adding this person to {{ formatAppName(appKey) }}{{ participationTypeDisplay ? ` as ${participationTypeDisplay}` : '' }}. Only participation fields for this app are set. Core identity fields (name, email, etc.) are not modified.
                   </p>
                 </div>
               </div>
             </div>
 
             <!-- Error State -->
-            <div v-if="error" class="mb-4 p-4 bg-danger-50 dark:bg-danger-900/20 border border-danger-200 dark:border-danger-800 rounded-lg">
+            <div v-if="error" class="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
               <div class="flex items-start gap-2">
-                <svg class="w-5 h-5 text-danger-600 dark:text-danger-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <svg class="h-5 w-5 flex-shrink-0 text-red-400" viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
                 </svg>
                 <div class="flex-1">
-                  <p class="text-sm text-danger-700 dark:text-danger-300">{{ error }}</p>
+                  <p class="text-sm text-red-800 dark:text-red-200">{{ error }}</p>
                 </div>
               </div>
             </div>
 
             <!-- Validation Errors Summary -->
-            <div v-if="Object.keys(validationErrors).length > 0" class="mb-4 p-4 bg-danger-50 dark:bg-danger-900/20 border border-danger-200 dark:border-danger-800 rounded-lg">
+            <div v-if="Object.keys(validationErrors).length > 0" class="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
               <div class="flex items-start gap-2">
-                <svg class="w-5 h-5 text-danger-600 dark:text-danger-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <svg class="h-5 w-5 flex-shrink-0 text-red-400" viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
                 </svg>
                 <div class="flex-1">
-                  <h3 class="text-sm font-semibold text-danger-800 dark:text-danger-200 mb-2">
-                    Validation Errors
+                  <h3 class="text-sm font-semibold text-red-800 dark:text-red-200 mb-2">
+                    Validation errors
                   </h3>
                   <ul class="list-disc list-inside space-y-2">
-                    <li v-for="(message, field) in validationErrors" :key="field" class="text-sm text-danger-700 dark:text-danger-300">
+                    <li v-for="(message, field) in validationErrors" :key="field" class="text-sm text-red-700 dark:text-red-300">
                       <span class="font-medium">{{ getFieldLabel(field) }}:</span> {{ message }}
                     </li>
                   </ul>
@@ -81,19 +104,41 @@
               </div>
             </div>
 
-            <!-- Form -->
-            <form @submit.prevent="handleSubmit" class="space-y-6">
+                      <div class="space-y-6">
+              <!-- Helpdesk (and similar): tenant-defined roles only — no participation field metadata yet -->
+              <div v-if="usesStandaloneRolePicker" class="space-y-1">
+                <label
+                  for="standalone-participation-role"
+                  class="block text-sm/6 font-medium text-gray-900 dark:text-white"
+                >
+                  Role <span class="text-red-500">*</span>
+                </label>
+                <HeadlessSelect
+                  id="standalone-participation-role"
+                  :model-value="attachRoleStandalone"
+                  :options="standaloneRoleListboxOptions"
+                  :placeholder="peopleTypesLoading ? 'Loading...' : 'Select role...'"
+                  allow-empty
+                  :empty-label="peopleTypesLoading ? 'Loading...' : 'Select role...'"
+                  empty-value=""
+                  :disabled="loading || peopleTypesLoading"
+                  wrapper-class="mt-2"
+                  :options-class="attachModalListboxOptionsClass"
+                  @update:model-value="onStandaloneRoleListboxUpdate"
+                />
+              </div>
+
               <!-- State Fields Section -->
-              <div v-if="visibleStateFields.length > 0">
-                <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-4 uppercase tracking-wide">
-                  State Fields
+              <div v-if="visibleStateFields.length > 0" class="space-y-4">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                  State fields
                 </h3>
-                <div class="space-y-4">
-                  <div v-for="fieldName in visibleStateFields" :key="fieldName">
+                <div class="space-y-6">
+                  <div v-for="fieldName in visibleStateFields" :key="fieldName" class="space-y-1">
                     <!-- Hide classifier field if prefilled from participationType -->
                     <template v-if="isClassifierField(fieldName) && isClassifierPrefilled(fieldName)">
                       <!-- Show as read-only summary instead of input -->
-                      <div class="p-3 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg">
+                      <div class="rounded-md border border-gray-200 bg-gray-100 p-3 dark:border-gray-600 dark:bg-gray-700/50">
                         <div class="flex items-center gap-2">
                           <svg class="w-4 h-4 text-success-600 dark:text-success-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                             <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
@@ -106,28 +151,24 @@
                       </div>
                     </template>
                     <template v-else>
-                      <label :for="fieldName" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      <label :for="fieldName" class="block text-sm/6 font-medium text-gray-900 dark:text-white">
                         {{ getFieldLabel(fieldName) }}
                         <span v-if="isFieldRequired(fieldName)" class="text-red-500">*</span>
                       </label>
-                    <!-- Select field -->
-                    <select
+                    <HeadlessSelect
                       v-if="getFieldComponent(fieldName) === 'select'"
                       :id="fieldName"
-                      :name="fieldName"
-                      v-model="formData[fieldName]"
-                      :required="isFieldRequired(fieldName)"
-                      :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
-                        validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
-                      ]"
-                    >
-                      <option value="">Select {{ getFieldLabel(fieldName) }}...</option>
-                      <option v-for="option in getFieldOptions(fieldName)" :key="option" :value="option">
-                        {{ option }}
-                      </option>
-                    </select>
-                    <!-- Date input -->
+                      :model-value="formData[fieldName] ?? ''"
+                      :options="toListboxOptions(getFieldOptions(fieldName))"
+                      :placeholder="`Select ${getFieldLabel(fieldName)}...`"
+                      allow-empty
+                      :empty-label="`Select ${getFieldLabel(fieldName)}...`"
+                      empty-value=""
+                      wrapper-class="mt-2"
+                      :invalid="!!validationErrors[fieldName]"
+                      :options-class="attachModalListboxOptionsClass"
+                      @update:model-value="(v) => { formData[fieldName] = v; }"
+                    />
                     <input
                       v-else-if="getInputType(fieldName) === 'date'"
                       :id="fieldName"
@@ -135,13 +176,9 @@
                       type="date"
                       v-model="formData[fieldName]"
                       :required="isFieldRequired(fieldName)"
-                      :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer',
-                        validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
-                      ]"
+                      :class="attachFieldInputClass(fieldName, true)"
                       @click="openDatePicker"
                     />
-                    <!-- Number input -->
                     <input
                       v-else-if="getInputType(fieldName) === 'number'"
                       :id="fieldName"
@@ -150,12 +187,8 @@
                       v-model.number="formData[fieldName]"
                       :required="isFieldRequired(fieldName)"
                       :min="fieldName === 'lead_score' ? 0 : undefined"
-                      :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
-                        validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
-                      ]"
+                      :class="attachFieldInputClass(fieldName, false)"
                     />
-                    <!-- Textarea -->
                     <textarea
                       v-else-if="getFieldComponent(fieldName) === 'textarea'"
                       :id="fieldName"
@@ -163,12 +196,8 @@
                       v-model="formData[fieldName]"
                       :required="isFieldRequired(fieldName)"
                       rows="3"
-                      :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
-                        validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
-                      ]"
+                      :class="[attachFieldInputClass(fieldName, false), 'resize-none']"
                     />
-                    <!-- Text input -->
                     <input
                       v-else
                       :id="fieldName"
@@ -176,12 +205,9 @@
                       type="text"
                       v-model="formData[fieldName]"
                       :required="isFieldRequired(fieldName)"
-                      :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
-                        validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
-                      ]"
+                      :class="attachFieldInputClass(fieldName, false)"
                     />
-                    <p v-if="validationErrors[fieldName]" class="mt-2 text-sm text-danger-600 dark:text-danger-400">
+                    <p v-if="validationErrors[fieldName]" class="mt-1 text-sm text-red-600 dark:text-red-400">
                       {{ validationErrors[fieldName] }}
                     </p>
                     </template>
@@ -190,35 +216,30 @@
               </div>
 
               <!-- Detail Fields Section -->
-              <div v-if="detailFields.length > 0">
-                <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-4 uppercase tracking-wide">
-                  Detail Fields
+              <div v-if="detailFields.length > 0" class="space-y-4 border-t border-gray-200 pt-6 dark:border-gray-700">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                  Detail fields
                 </h3>
-                <div class="space-y-4">
-                  <div v-for="fieldName in detailFields" :key="fieldName">
-                    <label :for="fieldName" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <div class="space-y-6">
+                  <div v-for="fieldName in detailFields" :key="fieldName" class="space-y-1">
+                    <label :for="fieldName" class="block text-sm/6 font-medium text-gray-900 dark:text-white">
                       {{ getFieldLabel(fieldName) }}
                       <span v-if="isFieldRequired(fieldName)" class="text-red-500">*</span>
                     </label>
-                    <!-- Select field -->
-                    <select
+                    <HeadlessSelect
                       v-if="getFieldComponent(fieldName) === 'select'"
                       :id="fieldName"
-                      :name="fieldName"
-                      v-model="formData[fieldName]"
-                      @change="clearDefaultTracking(fieldName)"
-                      :required="isFieldRequired(fieldName)"
-                      :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
-                        validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
-                      ]"
-                    >
-                      <option value="">Select {{ getFieldLabel(fieldName) }}...</option>
-                      <option v-for="option in getFieldOptions(fieldName)" :key="option" :value="option">
-                        {{ option }}
-                      </option>
-                    </select>
-                    <!-- Date input -->
+                      :model-value="formData[fieldName] ?? ''"
+                      :options="toListboxOptions(getFieldOptions(fieldName))"
+                      :placeholder="`Select ${getFieldLabel(fieldName)}...`"
+                      allow-empty
+                      :empty-label="`Select ${getFieldLabel(fieldName)}...`"
+                      empty-value=""
+                      wrapper-class="mt-2"
+                      :invalid="!!validationErrors[fieldName]"
+                      :options-class="attachModalListboxOptionsClass"
+                      @update:model-value="(v) => { formData[fieldName] = v; clearDefaultTracking(fieldName); }"
+                    />
                     <input
                       v-else-if="getInputType(fieldName) === 'date'"
                       :id="fieldName"
@@ -228,12 +249,8 @@
                       @input="clearDefaultTracking(fieldName)"
                       @click="openDatePicker"
                       :required="isFieldRequired(fieldName)"
-                      :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer',
-                        validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
-                      ]"
+                      :class="attachFieldInputClass(fieldName, true)"
                     />
-                    <!-- Number input -->
                     <input
                       v-else-if="getInputType(fieldName) === 'number'"
                       :id="fieldName"
@@ -243,12 +260,8 @@
                       @input="clearDefaultTracking(fieldName)"
                       :required="isFieldRequired(fieldName)"
                       :min="fieldName === 'lead_score' || fieldName === 'estimated_value' ? 0 : undefined"
-                      :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
-                        validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
-                      ]"
+                      :class="attachFieldInputClass(fieldName, false)"
                     />
-                    <!-- Textarea -->
                     <textarea
                       v-else-if="getFieldComponent(fieldName) === 'textarea'"
                       :id="fieldName"
@@ -257,12 +270,8 @@
                       @input="clearDefaultTracking(fieldName)"
                       :required="isFieldRequired(fieldName)"
                       rows="3"
-                      :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
-                        validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
-                      ]"
+                      :class="[attachFieldInputClass(fieldName, false), 'resize-none']"
                     />
-                    <!-- Text input -->
                     <input
                       v-else
                       :id="fieldName"
@@ -271,12 +280,9 @@
                       v-model="formData[fieldName]"
                       @input="clearDefaultTracking(fieldName)"
                       :required="isFieldRequired(fieldName)"
-                      :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
-                        validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
-                      ]"
+                      :class="attachFieldInputClass(fieldName, false)"
                     />
-                    <p v-if="validationErrors[fieldName]" class="mt-2 text-sm text-danger-600 dark:text-danger-400">
+                    <p v-if="validationErrors[fieldName]" class="mt-1 text-sm text-red-600 dark:text-red-400">
                       {{ validationErrors[fieldName] }}
                     </p>
                     <!-- Helper text for prefilled default values -->
@@ -288,101 +294,121 @@
               </div>
 
               <!-- Empty State -->
-              <div v-if="visibleStateFields.length === 0 && detailFields.length === 0" class="text-center py-8">
+              <div
+                v-if="visibleStateFields.length === 0 && detailFields.length === 0 && !usesStandaloneRolePicker"
+                class="text-center py-8"
+              >
                 <p class="text-sm text-gray-500 dark:text-gray-400">
                   No participation fields available for {{ formatAppName(appKey) }}{{ controllingStateValue ? ` (${controllingStateValue})` : '' }}.
                 </p>
               </div>
 
-              <!-- Actions -->
-              <div class="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
-                <button
-                  type="button"
-                  @click="close"
-                  class="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  :disabled="loading"
-                  class="px-6 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  <svg v-if="loading" class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  <span>{{ loading ? 'Attaching...' : 'Attach' }}</span>
-                </button>
-              </div>
-            </form>
+                      </div>
+                      </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="flex shrink-0 justify-end gap-3 border-t border-gray-200 bg-white px-4 py-4 sm:px-6 dark:border-gray-700 dark:bg-gray-800">
+                      <button
+                        type="button"
+                        class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-xs ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700 cursor-pointer"
+                        @click="close"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        :disabled="loading"
+                        class="inline-flex items-center justify-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-600 cursor-pointer"
+                      >
+                        <svg v-if="loading" class="h-4 w-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>{{ loading ? 'Attaching...' : 'Attach' }}</span>
+                      </button>
+                    </div>
+                  </form>
+                </DialogPanel>
+              </TransitionChild>
+            </div>
           </div>
         </div>
-      </div>
-    </Transition>
+      </Dialog>
+    </TransitionRoot>
   </Teleport>
 </template>
 
-<script setup>
-import { ref, computed, watch, onMounted } from 'vue';
-import { 
-  PEOPLE_FIELD_METADATA, 
-  getStateFields, 
+<script setup lang="ts">
+declare const process: { env: Record<string, string | undefined> };
+
+import { ref, computed, watch, onMounted, toRef } from 'vue';
+import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
+import { XMarkIcon } from '@heroicons/vue/24/outline';
+import {
+  PEOPLE_FIELD_METADATA,
+  getStateFields,
   getDetailFields,
-  getFieldMetadata 
+  getFieldMetadata,
+  getAppFields
 } from '@/platform/fields/peopleFieldModel';
 import apiClient from '@/utils/apiClient';
+import { toAttachRole } from '@/utils/getParticipation';
+import { usePeopleTypes } from '@/composables/usePeopleTypes';
 import { openDatePicker } from '@/utils/dateUtils';
 import { assertAttachPermission } from '@/platform/permissions/peopleGuards';
+import { isPeopleSalesRoleFieldKey } from '@/utils/peopleParticipationUi';
+import HeadlessSelect from '@/components/ui/HeadlessSelect.vue';
 
-const props = defineProps({
-  isOpen: {
-    type: Boolean,
-    default: false
-  },
-  personId: {
-    type: String,
-    required: true
-  },
-  appKey: {
-    type: String,
-    required: true
-  },
-  participationType: {
-    type: String,
-    default: null // e.g., 'LEAD', 'CONTACT'
+const props = withDefaults(
+  defineProps<{
+    isOpen?: boolean;
+    personId: string;
+    appKey: string;
+    participationType?: string | null;
+  }>(),
+  {
+    isOpen: false,
+    participationType: null
   }
-});
+);
 
-const emit = defineEmits(['close', 'attached']);
+const emit = defineEmits<{
+  close: [];
+  attached: [data: unknown];
+}>();
 
 const loading = ref(false);
-const error = ref(null);
-const validationErrors = ref({});
-const formData = ref({});
+const error = ref<string | null>(null);
+const validationErrors = ref<Record<string, string>>({});
+/** Dynamic participation form: v-model requires non-unknown values */
+const formData = ref<Record<string, any>>({});
+/** HELPDESK: role-only attach (tenant types from API / usePeopleTypes) */
+const attachRoleStandalone = ref('');
+
+function onStandaloneRoleListboxUpdate(v: string | number | null) {
+  attachRoleStandalone.value = v == null ? '' : String(v);
+}
+
 // Track which fields have been prefilled with defaults (for UX helper text)
-const defaultPrefilledFields = ref(new Set());
+const defaultPrefilledFields = ref(new Set<string>());
+
+// People types from tenant config (SALES: Lead/Contact; HELPDESK: Customer/Agent)
+const { types: peopleTypes, typeDefs: peopleTypeDefs, defaultRole: peopleDefaultRole, loading: peopleTypesLoading } =
+  usePeopleTypes(toRef(props, 'appKey'));
+
+const usesStandaloneRolePicker = computed(() => props.appKey === 'HELPDESK');
 
 // Get participation fields for the app
 const participationFields = computed(() => {
   return Object.entries(PEOPLE_FIELD_METADATA)
-    .filter(([fieldName, metadata]) => 
-      metadata.owner === 'participation' && 
-      metadata.fieldScope === props.appKey
-    )
-    .map(([fieldName]) => fieldName);
+    .filter(([, metadata]) => metadata.owner === 'participation' && metadata.fieldScope === props.appKey)
+    .map(([name]) => name);
 });
 
 // Get state fields for the app
 const stateFields = computed(() => {
   return getStateFields(props.appKey);
-});
-
-/**
- * Get visible state fields based on controlling state
- */
-const visibleStateFields = computed(() => {
-  return stateFields.value.filter(fieldName => isStateFieldVisible(fieldName));
 });
 
 // Get detail fields for the app
@@ -397,7 +423,7 @@ const allDetailFields = computed(() => {
 const controllingStateField = computed(() => {
   const stateFieldsList = stateFields.value;
   // Find the state field that acts as classifier (typically the first one or the one that represents participation type)
-  // For SALES, this is 'type' (Lead/Contact)
+  // For SALES, canonical classifier is `sales_type` (Lead/Contact)
   // We identify it by checking if it's the classifier field
   const classifierFieldName = getClassifierField(props.appKey);
   if (classifierFieldName && stateFieldsList.includes(classifierFieldName)) {
@@ -410,17 +436,67 @@ const controllingStateField = computed(() => {
 /**
  * Get the current value of the controlling state field
  */
-const controllingStateValue = computed(() => {
+const controllingStateValue = computed((): string | null => {
   if (!controllingStateField.value) return null;
-  return formData.value[controllingStateField.value] || null;
+  const raw = formData.value[controllingStateField.value];
+  if (raw === null || raw === undefined || raw === '') return null;
+  return String(raw);
 });
+
+/** Role used for tenant-configured / default participation field set (SALES: sales_type; HELPDESK: standalone picker). */
+const effectiveRoleForFieldSet = computed((): string | null => {
+  if (usesStandaloneRolePicker.value) {
+    const r = attachRoleStandalone.value;
+    return r && String(r).trim() ? String(r).trim() : null;
+  }
+  const v = controllingStateValue.value;
+  return v && String(v).trim() ? String(v).trim() : null;
+});
+
+/** Field keys to show for the selected type — aligned with Quick Create / AppSection (Settings → Types). */
+const appFieldKeysForRole = computed((): Set<string> | null => {
+  const role = effectiveRoleForFieldSet.value;
+  if (!role) return null;
+  const keys = getAppFields(props.appKey, role, peopleTypeDefs.value);
+  return keys.length > 0 ? new Set(keys) : null;
+});
+
+function isHelpdeskStandaloneRoleField(fieldName: string): boolean {
+  return props.appKey === 'HELPDESK' && fieldName === 'helpdesk_role';
+}
+
+/**
+ * Get visible state fields based on controlling state
+ */
+const visibleStateFields = computed(() => {
+  return stateFields.value.filter((fieldName) => {
+    if (usesStandaloneRolePicker.value && isHelpdeskStandaloneRoleField(fieldName)) {
+      return false;
+    }
+    if (isClassifierField(fieldName)) return true;
+    const set = appFieldKeysForRole.value;
+    if (set && set.size > 0) {
+      return set.has(fieldName);
+    }
+    return isStateFieldVisible(fieldName);
+  });
+});
+
+type FieldPattern = (fieldName: string) => boolean;
+
+interface VisibilityRule {
+  showPatterns?: FieldPattern[];
+  hidePatterns?: FieldPattern[];
+  stateFieldShowPatterns?: FieldPattern[];
+  stateFieldHidePatterns?: FieldPattern[];
+}
 
 /**
  * Visibility rules mapping per app
  * Uses pattern-based detection to avoid hardcoding field names
  * This is declarative and extensible for future apps
  */
-const getVisibilityRules = (appKey) => {
+const getVisibilityRules = (appKey: string): Record<string, VisibilityRule> => {
   // For SALES app: Lead vs Contact
   if (appKey === 'SALES') {
     return {
@@ -478,7 +554,7 @@ const getVisibilityRules = (appKey) => {
 /**
  * Check if a state field should be visible based on controlling state
  */
-const isStateFieldVisible = (fieldName) => {
+const isStateFieldVisible = (fieldName: string): boolean => {
   // Classifier field is always visible
   if (isClassifierField(fieldName)) {
     return true;
@@ -492,14 +568,13 @@ const isStateFieldVisible = (fieldName) => {
   // Get visibility rules for current app
   const rules = getVisibilityRules(props.appKey);
   const stateValue = controllingStateValue.value;
-  
+  const rule = stateValue ? rules[stateValue] : undefined;
+
   // If no rules for this state value, show the field (default behavior)
-  if (!rules[stateValue]) {
+  if (!rule) {
     return true;
   }
-  
-  const rule = rules[stateValue];
-  
+
   // Check if field matches any hide pattern for state fields
   if (rule.stateFieldHidePatterns && rule.stateFieldHidePatterns.some(pattern => pattern(fieldName))) {
     return false;
@@ -523,7 +598,7 @@ const isStateFieldVisible = (fieldName) => {
 /**
  * Check if a detail field should be visible based on controlling state
  */
-const isDetailFieldVisible = (fieldName) => {
+const isDetailFieldVisible = (fieldName: string): boolean => {
   // If no controlling state field, show all detail fields
   if (!controllingStateField.value || !controllingStateValue.value) {
     return true;
@@ -532,14 +607,13 @@ const isDetailFieldVisible = (fieldName) => {
   // Get visibility rules for current app
   const rules = getVisibilityRules(props.appKey);
   const stateValue = controllingStateValue.value;
-  
+  const rule = stateValue ? rules[stateValue] : undefined;
+
   // If no rules for this state value, show the field (default behavior)
-  if (!rules[stateValue]) {
+  if (!rule) {
     return true;
   }
-  
-  const rule = rules[stateValue];
-  
+
   // Check if field matches any hide pattern
   if (rule.hidePatterns && rule.hidePatterns.some(pattern => pattern(fieldName))) {
     return false;
@@ -564,7 +638,16 @@ const isDetailFieldVisible = (fieldName) => {
  * Get visible detail fields based on controlling state
  */
 const detailFields = computed(() => {
-  return allDetailFields.value.filter(fieldName => isDetailFieldVisible(fieldName));
+  const set = appFieldKeysForRole.value;
+  if (set && set.size > 0) {
+    return allDetailFields.value.filter((fieldName) => {
+      if (usesStandaloneRolePicker.value && isHelpdeskStandaloneRoleField(fieldName)) {
+        return false;
+      }
+      return set.has(fieldName);
+    });
+  }
+  return allDetailFields.value.filter((fieldName) => isDetailFieldVisible(fieldName));
 });
 
 /**
@@ -579,19 +662,19 @@ const visibleParticipationFields = computed(() => {
 });
 
 // Format app name
-const formatAppName = (appKey) => {
-  const appNames = {
-    'SALES': 'Sales',
-    'HELPDESK': 'Helpdesk',
-    'AUDIT': 'Audit',
-    'PORTAL': 'Portal',
-    'PROJECTS': 'Projects'
+const formatAppName = (appKey: string): string => {
+  const appNames: Record<string, string> = {
+    SALES: 'Sales',
+    HELPDESK: 'Helpdesk',
+    AUDIT: 'Audit',
+    PORTAL: 'Portal',
+    PROJECTS: 'Projects'
   };
   return appNames[appKey] || appKey;
 };
 
 // Get field label
-const getFieldLabel = (fieldName) => {
+const getFieldLabel = (fieldName: string): string => {
   // Convert snake_case to Title Case
   return fieldName
     .split('_')
@@ -600,36 +683,34 @@ const getFieldLabel = (fieldName) => {
 };
 
 // Check if field is required
-const isFieldRequired = (fieldName) => {
+const isFieldRequired = (fieldName: string): boolean => {
   const metadata = getFieldMetadata(fieldName);
   return metadata.requiredFor?.includes(props.appKey) || false;
 };
 
 // Identify the classifier state field (primary participation type field)
 // This is the field that represents the participation intent selected earlier
-const getClassifierField = (appKey) => {
+const getClassifierField = (appKey: string): string | null => {
   // Map app keys to their classifier field names
-  const classifierFields = {
-    'SALES': 'type', // Lead/Contact
+  const classifierFields: Record<string, string> = {
+    SALES: 'sales_type', // Lead/Contact (virtual)
     // Future apps can add their classifier fields here
-    // 'HELPDESK': 'contact_type',
-    // 'AUDIT': 'member_type',
   };
-  return classifierFields[appKey] || null;
+  return classifierFields[appKey] ?? null;
 };
 
 // Check if a field is the classifier field
-const isClassifierField = (fieldName) => {
+const isClassifierField = (fieldName: string): boolean => {
   const classifierField = getClassifierField(props.appKey);
   return classifierField === fieldName;
 };
 
 // Check if classifier field is prefilled from participationType
-const isClassifierPrefilled = (fieldName) => {
+const isClassifierPrefilled = (fieldName: string): boolean => {
   if (!isClassifierField(fieldName)) return false;
   if (!props.participationType) return false;
   // Check if formData has the field set from participationType
-  return formData.value[fieldName] && formData.value[fieldName] !== '';
+  return Boolean(formData.value[fieldName] && formData.value[fieldName] !== '');
 };
 
 // Get display text for participation type
@@ -640,13 +721,13 @@ const participationTypeDisplay = computed(() => {
 });
 
 // Get field component type
-const getFieldComponent = (fieldName) => {
+const getFieldComponent = (fieldName: string): 'select' | 'textarea' | 'input' => {
   // Determine component type based on field name and metadata
   // Most participation fields are enums (selects) or simple types
   
   // Enum fields (selects)
-  const enumFields = ['type', 'lead_status', 'contact_status', 'role', 'preferred_contact_method'];
-  if (enumFields.includes(fieldName)) {
+  const enumFields = ['lead_status', 'contact_status', 'role', 'preferred_contact_method'];
+  if (isPeopleSalesRoleFieldKey(fieldName) || enumFields.includes(fieldName)) {
     return 'select';
   }
   
@@ -663,23 +744,49 @@ const getFieldComponent = (fieldName) => {
   return 'input';
 };
 
+const standaloneRoleOptions = computed(() =>
+  peopleTypes.value?.length ? peopleTypes.value : ['Customer', 'Agent']
+);
+
+const standaloneRoleListboxOptions = computed(() =>
+  standaloneRoleOptions.value.map((t) => ({ value: t, label: t }))
+);
+
+/** Above drawer overlay (Dialog z-[10000]) */
+const attachModalListboxOptionsClass = 'z-[10020]';
+
+function toListboxOptions(values: string[]) {
+  return (Array.isArray(values) ? values : []).map((v) => ({ value: v, label: v }));
+}
+
+/** Match DynamicFormField / CreateRecordDrawer inputs */
+function attachFieldInputClass(fieldName: string, isDate: boolean) {
+  const base =
+    'block w-full mt-2 rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500';
+  const err = validationErrors.value[fieldName]
+    ? 'border-red-500 dark:border-red-500 focus:ring-red-500 dark:focus:ring-red-500'
+    : '';
+  return [base, err, isDate ? 'cursor-pointer' : ''].filter(Boolean);
+}
+
 // Get field options for select fields
-const getFieldOptions = (fieldName) => {
-  // Return enum options based on field name
-  // These match the schema definitions in People.js
-  const optionsMap = {
-    'type': ['Lead', 'Contact'],
-    'lead_status': ['New', 'Contacted', 'Qualified', 'Disqualified', 'Nurturing', 'Re-Engage'],
-    'contact_status': ['Active', 'Inactive', 'DoNotContact'],
-    'role': ['Decision Maker', 'Influencer', 'Support', 'Other'],
-    'preferred_contact_method': ['Email', 'Phone', 'WhatsApp', 'SMS', 'None']
+const getFieldOptions = (fieldName: string): string[] => {
+  // Type field: fetch dynamically from tenant config
+  if (isPeopleSalesRoleFieldKey(fieldName)) {
+    return peopleTypes.value?.length ? peopleTypes.value : ['Lead', 'Contact'];
+  }
+  // Static enum options for other fields
+  const optionsMap: Record<string, string[]> = {
+    lead_status: ['New', 'Contacted', 'Qualified', 'Disqualified', 'Nurturing', 'Re-Engage'],
+    contact_status: ['Active', 'Inactive', 'DoNotContact'],
+    role: ['Decision Maker', 'Influencer', 'Support', 'Other'],
+    preferred_contact_method: ['Email', 'Phone', 'WhatsApp', 'SMS', 'None']
   };
-  
   return optionsMap[fieldName] || [];
 };
 
 // Get input type for input fields
-const getInputType = (fieldName) => {
+const getInputType = (fieldName: string): 'date' | 'number' | 'text' => {
   const dateFields = ['qualification_date', 'birthday'];
   if (dateFields.includes(fieldName)) {
     return 'date';
@@ -702,7 +809,11 @@ const getInputType = (fieldName) => {
  * @param {string} classifierValue - The current classifier value (e.g., 'Lead', 'Contact')
  * @returns {string|null} - The default value or null
  */
-const getDefaultStateValue = (fieldName, appKey, classifierValue) => {
+const getDefaultStateValue = (
+  fieldName: string,
+  appKey: string,
+  classifierValue: string
+): string | null => {
   // Only provide defaults for participation state fields
   const metadata = getFieldMetadata(fieldName);
   if (metadata.owner !== 'participation' || metadata.intent !== 'state') {
@@ -740,7 +851,7 @@ const getDefaultStateValue = (fieldName, appKey, classifierValue) => {
 /**
  * Check if a field was prefilled with a default value
  */
-const isFieldPrefilledWithDefault = (fieldName) => {
+const isFieldPrefilledWithDefault = (fieldName: string): boolean => {
   return defaultPrefilledFields.value.has(fieldName);
 };
 
@@ -751,7 +862,7 @@ const isFieldPrefilledWithDefault = (fieldName) => {
  * - Field has no existing value
  * - Default exists for the field
  */
-const applySmartDefaults = () => {
+const applySmartDefaults = (): void => {
   const classifierValue = controllingStateValue.value;
   if (!classifierValue) {
     // No classifier value yet, can't apply defaults
@@ -786,15 +897,16 @@ const applySmartDefaults = () => {
 /**
  * Clear default tracking when user manually changes a prefilled field
  */
-const clearDefaultTracking = (fieldName) => {
+const clearDefaultTracking = (fieldName: string): void => {
   if (defaultPrefilledFields.value.has(fieldName)) {
     defaultPrefilledFields.value.delete(fieldName);
   }
 };
 
 // Initialize form data
-const initializeFormData = () => {
+const initializeFormData = (): void => {
   formData.value = {};
+  attachRoleStandalone.value = '';
   // Clear default tracking when initializing
   defaultPrefilledFields.value.clear();
   
@@ -828,8 +940,51 @@ const initializeFormData = () => {
   // Use setTimeout to ensure computed properties are updated
   setTimeout(() => {
     applySmartDefaults();
+    if (usesStandaloneRolePicker.value) {
+      const opts = standaloneRoleOptions.value;
+      const dr = peopleDefaultRole.value;
+      if (opts.length && !attachRoleStandalone.value) {
+        const pick =
+          dr && opts.some((t) => t.toLowerCase() === String(dr).toLowerCase())
+            ? opts.find((t) => t.toLowerCase() === String(dr).toLowerCase()) || opts[0]
+            : opts[0];
+        if (pick != null && pick !== '') attachRoleStandalone.value = pick;
+      }
+    }
   }, 0);
 };
+
+// When tenant types load after open, apply default classifier / Helpdesk role (not overriding participationType)
+watch(
+  [peopleTypes, peopleDefaultRole, () => props.isOpen, () => props.participationType],
+  () => {
+    if (!props.isOpen || props.participationType) return;
+    if (usesStandaloneRolePicker.value) {
+      const opts = standaloneRoleOptions.value;
+      const dr = peopleDefaultRole.value;
+      if (opts.length && !attachRoleStandalone.value && dr) {
+        const pick =
+          opts.find((t) => t.toLowerCase() === String(dr).toLowerCase()) || opts[0];
+        if (pick != null && pick !== '') attachRoleStandalone.value = pick;
+      }
+      return;
+    }
+    const cf = getClassifierField(props.appKey);
+    if (!cf || !peopleTypes.value?.length) return;
+    const current = formData.value[cf];
+    if (current !== undefined && current !== null && String(current).trim() !== '') return;
+    const dr = peopleDefaultRole.value;
+    const pick =
+      dr && peopleTypes.value.some((t) => t.toLowerCase() === String(dr).toLowerCase())
+        ? peopleTypes.value.find((t) => t.toLowerCase() === String(dr).toLowerCase()) || peopleTypes.value[0]
+        : peopleTypes.value[0];
+    if (pick) {
+      formData.value = { ...formData.value, [cf]: pick };
+      setTimeout(() => applySmartDefaults(), 0);
+    }
+  },
+  { immediate: true }
+);
 
 // Watch for modal open/close
 watch(() => props.isOpen, (newVal) => {
@@ -901,27 +1056,32 @@ const handleSubmit = async () => {
   error.value = null;
   validationErrors.value = {};
   
-  // Validate required fields - only check visible fields
-  const visibleFields = [
-    ...visibleStateFields.value, // Only visible state fields
-    ...detailFields.value // Only visible detail fields
-  ];
-  
-  const requiredFields = visibleFields.filter(fieldName => 
-    isFieldRequired(fieldName)
-  );
-  
-  const errors = {};
-  requiredFields.forEach(fieldName => {
-    const value = formData.value[fieldName];
-    if (!value || (typeof value === 'string' && value.trim() === '')) {
-      errors[fieldName] = `${getFieldLabel(fieldName)} is required`;
+  if (usesStandaloneRolePicker.value) {
+    if (!attachRoleStandalone.value || !String(attachRoleStandalone.value).trim()) {
+      error.value = 'Role is required';
+      return;
     }
-  });
-  
-  if (Object.keys(errors).length > 0) {
-    validationErrors.value = errors;
-    return;
+  } else {
+    // Validate required fields - only check visible fields
+    const visibleFields = [
+      ...visibleStateFields.value,
+      ...detailFields.value
+    ];
+
+    const requiredFields = visibleFields.filter((fieldName) => isFieldRequired(fieldName));
+
+    const errors: Record<string, string> = {};
+    requiredFields.forEach((fieldName) => {
+      const value = formData.value[fieldName];
+      if (!value || (typeof value === 'string' && value.trim() === '')) {
+        errors[fieldName] = `${getFieldLabel(fieldName)} is required`;
+      }
+    });
+
+    if (Object.keys(errors).length > 0) {
+      validationErrors.value = errors;
+      return;
+    }
   }
   
   // Clean form data: convert empty strings to null for enum fields
@@ -935,7 +1095,7 @@ const handleSubmit = async () => {
   
   // Sanitize payload: Only include VISIBLE participation fields
   // Hidden fields may exist in formData but must NOT be submitted
-  const participationData = {};
+  const participationData: Record<string, unknown> = {};
   const classifierField = getClassifierField(props.appKey);
   
   // Only iterate over visible fields
@@ -971,16 +1131,38 @@ const handleSubmit = async () => {
   loading.value = true;
   
   try {
-    const participationType = props.participationType || 
-      (participationData.type === 'Lead' ? 'LEAD' : 
-       participationData.type === 'Contact' ? 'CONTACT' : null);
-    
-    const response = await apiClient.post(`/people/${props.personId}/attach`, {
+    const salesRolePick = participationData.sales_type;
+    const roleFromForm =
+      salesRolePick === 'Lead'
+        ? 'Lead'
+        : salesRolePick === 'Contact'
+          ? 'Contact'
+          : salesRolePick != null && salesRolePick !== ''
+            ? String(salesRolePick)
+            : '';
+    const role = usesStandaloneRolePicker.value
+      ? toAttachRole(String(attachRoleStandalone.value))
+      : toAttachRole(props.participationType || roleFromForm);
+    if (!role) {
+      error.value = 'Participation type (role) is required';
+      return;
+    }
+
+    const payload: { appKey: string; role: string; formData?: Record<string, unknown> } = {
       appKey: props.appKey,
-      participationType: participationType,
-      formData: participationData
-    });
-    
+      role
+    };
+    if (!usesStandaloneRolePicker.value) {
+      payload.formData = participationData;
+    }
+
+    const response = (await apiClient.post(`/people/${props.personId}/attach`, payload)) as {
+      success?: boolean;
+      data?: unknown;
+      errors?: Record<string, string>;
+      message?: string;
+    };
+
     if (response.success) {
       emit('attached', response.data);
       close();
@@ -992,22 +1174,26 @@ const handleSubmit = async () => {
         error.value = response.message || 'Failed to attach app participation';
       }
     }
-  } catch (err) {
+  } catch (err: unknown) {
     console.error('Error attaching app participation:', err);
-    
-    if (err.response?.data?.errors) {
-      validationErrors.value = err.response.data.errors;
-      error.value = err.response.data.message || 'Validation failed. Please check the fields below.';
-    } else if (err.response?.data?.message) {
-      const errorMessage = err.response.data.message;
+    const ax = err as {
+      response?: { data?: { errors?: Record<string, string>; message?: string; code?: string } };
+      message?: string;
+    };
+
+    if (ax.response?.data?.errors) {
+      validationErrors.value = ax.response.data.errors;
+      error.value = ax.response.data.message || 'Validation failed. Please check the fields below.';
+    } else if (ax.response?.data?.message) {
+      const errorMessage = ax.response.data.message;
       // Preserve backend message for participation exists errors (includes conversion guidance)
-      if (err.response.data.code === 'PARTICIPATION_EXISTS' || errorMessage.includes('already participates')) {
+      if (ax.response.data.code === 'PARTICIPATION_EXISTS' || errorMessage.includes('already participates')) {
         error.value = errorMessage; // Use backend message which includes conversion guidance
       } else {
         error.value = errorMessage;
       }
     } else {
-      error.value = err.message || 'Error attaching app participation';
+      error.value = ax.message || 'Error attaching app participation';
     }
   } finally {
     loading.value = false;

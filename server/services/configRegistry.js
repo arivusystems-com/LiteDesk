@@ -23,6 +23,7 @@
 const EntityType = require('../models/EntityType');
 const Lifecycle = require('../models/Lifecycle');
 const LifecycleStatusMap = require('../models/LifecycleStatusMap');
+const { getSalesParticipationValues } = require('../utils/getSalesParticipationValues');
 
 /**
  * Get entity types for a given entity and app
@@ -336,13 +337,17 @@ async function computeDerivedStatus(entity, recordData, appKey = null) {
     
     // Determine which entity type this record belongs to
     let entityTypeKey = null;
-    
+    let dataForMapping = recordData;
+
     if (entity === 'people') {
-      if (recordData.type) {
-        entityTypeKey = recordData.type.toLowerCase();
+      const { role, lead_status, contact_status } = getSalesParticipationValues(recordData);
+      dataForMapping = { ...recordData, type: role, lead_status, contact_status };
+
+      if (role) {
+        entityTypeKey = role.toLowerCase();
       } else {
-        if (recordData.lead_status) entityTypeKey = 'lead';
-        else if (recordData.contact_status) entityTypeKey = 'contact';
+        if (lead_status) entityTypeKey = 'lead';
+        else if (contact_status) entityTypeKey = 'contact';
       }
     } else if (entity === 'organization') {
       if (recordData.types && Array.isArray(recordData.types) && recordData.types.length > 0) {
@@ -363,7 +368,7 @@ async function computeDerivedStatus(entity, recordData, appKey = null) {
     if (mappings.length === 0) return null;
     
     for (const mapping of mappings) {
-      const sourceValue = recordData[mapping.sourceStatusField];
+      const sourceValue = dataForMapping[mapping.sourceStatusField];
       if (sourceValue && sourceValue.toString() === mapping.sourceStatusValue) {
         return mapping.derivedStatus;
       }

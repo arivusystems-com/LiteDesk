@@ -31,7 +31,7 @@ const {
  * Different models use different field names for the type concept
  */
 const MODULE_TYPE_FIELD_MAP = {
-  people: 'type',
+  people: 'sales_type',
   organizations: 'type', // May not exist in model, will be handled gracefully
   events: 'eventType',
   forms: 'formType',

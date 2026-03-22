@@ -1,40 +1,63 @@
 <template>
   <Teleport to="body">
-    <Transition
-      enter-active-class="transition ease-out duration-200"
-      enter-from-class="opacity-0"
-      enter-to-class="opacity-100"
-      leave-active-class="transition ease-in duration-150"
-      leave-from-class="opacity-100"
-      leave-to-class="opacity-0"
-    >
-      <div
-        v-if="isOpen"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 dark:bg-opacity-70"
-        @click.self="close"
-      >
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" @click.stop>
-          <!-- Header -->
-          <div class="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex items-center justify-between">
-            <div>
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Edit {{ formatAppName(appKey) }} Details</h2>
-              <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                Update participation details for this person
-              </p>
-            </div>
-            <button
-              @click="close"
-              class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors flex items-center justify-center min-w-[40px] min-h-[40px]"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+    <TransitionRoot as="template" :show="isOpen">
+      <Dialog class="relative z-[10000]" @close="close">
+        <TransitionChild
+          as="template"
+          enter="ease-out duration-200"
+          enter-from="opacity-0"
+          enter-to="opacity-100"
+          leave="ease-in duration-200"
+          leave-from="opacity-100"
+          leave-to="opacity-0"
+        >
+          <div class="fixed inset-0 bg-gray-500/75 dark:bg-black/75" aria-hidden="true" />
+        </TransitionChild>
 
-          <div class="p-6">
+        <div class="fixed inset-0 overflow-hidden">
+          <div class="absolute inset-0 overflow-hidden">
+            <div class="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10 sm:pl-16">
+              <TransitionChild
+                as="template"
+                enter="transform transition ease-in-out duration-300 sm:duration-300"
+                enter-from="translate-x-full"
+                enter-to="translate-x-0"
+                leave="transform transition ease-in-out duration-300 sm:duration-300"
+                leave-from="translate-x-0"
+                leave-to="translate-x-full"
+              >
+                <DialogPanel
+                  class="pointer-events-auto flex h-full w-full max-w-2xl flex-col bg-white shadow-xl dark:bg-gray-800"
+                >
+                  <form
+                    class="relative flex h-full min-h-0 flex-col divide-y divide-gray-200 dark:divide-gray-700"
+                    @submit.prevent="handleSubmit"
+                  >
+                    <!-- Header (aligned with CreateRecordDrawer) -->
+                    <div class="flex shrink-0 items-center justify-between bg-indigo-700 px-4 py-6 sm:px-6 dark:bg-indigo-800">
+                      <div class="min-w-0 pr-2">
+                        <DialogTitle class="text-base font-semibold text-white">
+                          Edit {{ formatAppName(appKey) }} Details
+                        </DialogTitle>
+                        <p class="mt-1 text-sm text-indigo-200">
+                          Update participation details for this person
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        class="relative shrink-0 rounded-md text-indigo-200 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                        @click="close"
+                      >
+                        <span class="absolute -inset-2.5" />
+                        <span class="sr-only">Close panel</span>
+                        <XMarkIcon class="size-6" aria-hidden="true" />
+                      </button>
+                    </div>
+
+                    <div class="min-h-0 flex-1 overflow-y-auto">
+                      <div class="px-4 py-6 sm:px-6 space-y-6">
             <!-- Explanation Banner (non-dismissible) -->
-            <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <div class="rounded-md bg-blue-50 p-4 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
               <div class="flex items-start gap-2">
                 <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
@@ -51,29 +74,29 @@
             </div>
 
             <!-- Error State -->
-            <div v-if="error" class="mb-4 p-4 bg-danger-50 dark:bg-danger-900/20 border border-danger-200 dark:border-danger-800 rounded-lg">
+            <div v-if="error" class="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
               <div class="flex items-start gap-2">
-                <svg class="w-5 h-5 text-danger-600 dark:text-danger-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <svg class="h-5 w-5 flex-shrink-0 text-red-400" viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
                 </svg>
                 <div class="flex-1">
-                  <p class="text-sm text-danger-700 dark:text-danger-300">{{ error }}</p>
+                  <p class="text-sm text-red-800 dark:text-red-200">{{ error }}</p>
                 </div>
               </div>
             </div>
 
             <!-- Validation Errors Summary -->
-            <div v-if="Object.keys(validationErrors).length > 0" class="mb-4 p-4 bg-danger-50 dark:bg-danger-900/20 border border-danger-200 dark:border-danger-800 rounded-lg">
+            <div v-if="Object.keys(validationErrors).length > 0" class="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
               <div class="flex items-start gap-2">
-                <svg class="w-5 h-5 text-danger-600 dark:text-danger-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <svg class="h-5 w-5 flex-shrink-0 text-red-400" viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
                 </svg>
                 <div class="flex-1">
-                  <h3 class="text-sm font-semibold text-danger-800 dark:text-danger-200 mb-2">
+                  <h3 class="text-sm font-semibold text-red-800 dark:text-red-200 mb-2">
                     Validation Errors
                   </h3>
                   <ul class="list-disc list-inside space-y-2">
-                    <li v-for="(message, field) in validationErrors" :key="field" class="text-sm text-danger-700 dark:text-danger-300">
+                    <li v-for="(message, field) in validationErrors" :key="field" class="text-sm text-red-700 dark:text-red-300">
                       <span class="font-medium">{{ getFieldLabel(field) }}:</span> {{ message }}
                     </li>
                   </ul>
@@ -81,57 +104,83 @@
               </div>
             </div>
 
-            <!-- Form -->
-            <form @submit.prevent="handleSubmit" class="space-y-6">
+                      <div class="space-y-6">
               <!-- Lifecycle Control (Type): Primary Control for SALES -->
-              <div v-if="appKey === 'SALES'" class="mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
-                <label class="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                  Type <span class="text-red-600">*</span>
-                  <span class="ml-2 text-xs text-gray-500 dark:text-gray-400 font-normal">(Primary control)</span>
+              <div v-if="appKey === 'SALES'" class="space-y-1">
+                <label class="block text-sm/6 font-medium text-gray-900 dark:text-white" :for="'participation-sales-type'">
+                  Type <span class="text-red-500">*</span>
+                  <span class="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">(Primary control)</span>
                 </label>
-                <select
-                  v-model="formData.type"
-                  required
-                  class="w-full px-4 py-3 border-2 border-indigo-500 dark:border-indigo-400 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all cursor-pointer font-medium"
-                >
-                  <option value="">Select type...</option>
-                  <option value="Lead">Lead</option>
-                  <option value="Contact">Contact</option>
-                </select>
-                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                <HeadlessSelect
+                  id="participation-sales-type"
+                  :model-value="formData.sales_type ?? ''"
+                  :options="salesTypeListboxOptions"
+                  placeholder="Select type..."
+                  allow-empty
+                  empty-label="Select type..."
+                  empty-value=""
+                  wrapper-class="mt-2"
+                  :invalid="!!validationErrors.sales_type"
+                  :options-class="participationListboxOptionsClass"
+                  @update:model-value="(v) => { formData.sales_type = v; }"
+                />
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   Changing type updates status automatically
                 </p>
+                <p v-if="validationErrors.sales_type" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                  {{ validationErrors.sales_type }}
+                </p>
               </div>
-              
+
+              <!-- Helpdesk: participation role only (tenant peopleTypes) -->
+              <div v-else-if="appKey === 'HELPDESK'" class="space-y-1">
+                <label class="block text-sm/6 font-medium text-gray-900 dark:text-white" :for="'participation-helpdesk-role'">
+                  Role <span class="text-red-500">*</span>
+                </label>
+                <HeadlessSelect
+                  id="participation-helpdesk-role"
+                  :model-value="formData.helpdesk_role ?? ''"
+                  :options="helpdeskRoleListboxOptions"
+                  :placeholder="peopleTypesLoading ? 'Loading...' : 'Select role...'"
+                  allow-empty
+                  :empty-label="peopleTypesLoading ? 'Loading...' : 'Select role...'"
+                  empty-value=""
+                  :disabled="peopleTypesLoading"
+                  wrapper-class="mt-2"
+                  :invalid="!!validationErrors.helpdesk_role"
+                  :options-class="participationListboxOptionsClass"
+                  @update:model-value="(v) => { formData.helpdesk_role = v; }"
+                />
+                <p v-if="validationErrors.helpdesk_role" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                  {{ validationErrors.helpdesk_role }}
+                </p>
+              </div>
+
               <!-- Detail Fields Section -->
-              <div v-if="visibleDetailFields.length > 0">
-                <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-4 uppercase tracking-wide">
-                  Detail Fields
+              <div v-if="visibleDetailFields.length > 0" class="space-y-4 border-t border-gray-200 pt-6 dark:border-gray-700">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                  Detail fields
                 </h3>
-                <div class="space-y-4">
-                  <div v-for="fieldName in visibleDetailFields" :key="fieldName">
-                    <label :for="fieldName" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <div class="space-y-6">
+                  <div v-for="fieldName in visibleDetailFields" :key="fieldName" class="space-y-1">
+                    <label :for="fieldName" class="block text-sm/6 font-medium text-gray-900 dark:text-white">
                       {{ getFieldLabel(fieldName) }}
                       <span v-if="isFieldRequired(fieldName)" class="text-red-500">*</span>
                     </label>
-                    <!-- Select field -->
-                    <select
+                    <HeadlessSelect
                       v-if="getFieldComponent(fieldName) === 'select'"
                       :id="fieldName"
-                      :name="fieldName"
-                      v-model="formData[fieldName]"
-                      :required="isFieldRequired(fieldName)"
-                      :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
-                        validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
-                      ]"
-                    >
-                      <option value="">Select {{ getFieldLabel(fieldName) }}...</option>
-                      <option v-for="option in getFieldOptions(fieldName)" :key="option" :value="option">
-                        {{ option }}
-                      </option>
-                    </select>
-                    <!-- Date input -->
+                      :model-value="formData[fieldName] ?? ''"
+                      :options="toListboxOptions(getFieldOptions(fieldName))"
+                      :placeholder="`Select ${getFieldLabel(fieldName)}...`"
+                      allow-empty
+                      :empty-label="`Select ${getFieldLabel(fieldName)}...`"
+                      empty-value=""
+                      wrapper-class="mt-2"
+                      :invalid="!!validationErrors[fieldName]"
+                      :options-class="participationListboxOptionsClass"
+                      @update:model-value="(v) => { formData[fieldName] = v; }"
+                    />
                     <input
                       v-else-if="getInputType(fieldName) === 'date'"
                       :id="fieldName"
@@ -139,13 +188,9 @@
                       type="date"
                       v-model="formData[fieldName]"
                       :required="isFieldRequired(fieldName)"
-                      :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer',
-                        validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
-                      ]"
+                      :class="fieldInputClass(fieldName, true)"
                       @click="openDatePicker"
                     />
-                    <!-- Number input -->
                     <input
                       v-else-if="getInputType(fieldName) === 'number'"
                       :id="fieldName"
@@ -154,12 +199,8 @@
                       v-model.number="formData[fieldName]"
                       :required="isFieldRequired(fieldName)"
                       :min="fieldName === 'lead_score' || fieldName === 'estimated_value' ? 0 : undefined"
-                      :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
-                        validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
-                      ]"
+                      :class="fieldInputClass(fieldName, false)"
                     />
-                    <!-- Textarea -->
                     <textarea
                       v-else-if="getFieldComponent(fieldName) === 'textarea'"
                       :id="fieldName"
@@ -167,12 +208,8 @@
                       v-model="formData[fieldName]"
                       :required="isFieldRequired(fieldName)"
                       rows="3"
-                      :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
-                        validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
-                      ]"
+                      :class="[fieldInputClass(fieldName, false), 'resize-none']"
                     />
-                    <!-- Text input -->
                     <input
                       v-else
                       :id="fieldName"
@@ -180,64 +217,75 @@
                       type="text"
                       v-model="formData[fieldName]"
                       :required="isFieldRequired(fieldName)"
-                      :class="[
-                        'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
-                        validationErrors[fieldName] ? 'border-red-500 dark:border-red-500' : ''
-                      ]"
+                      :class="fieldInputClass(fieldName, false)"
                     />
-                    <p v-if="validationErrors[fieldName]" class="mt-2 text-sm text-danger-600 dark:text-danger-400">
+                    <p v-if="validationErrors[fieldName]" class="mt-1 text-sm text-red-600 dark:text-red-400">
                       {{ validationErrors[fieldName] }}
                     </p>
                   </div>
                 </div>
               </div>
 
-              <!-- Empty State -->
-              <div v-if="visibleDetailFields.length === 0" class="text-center py-8">
+              <!-- Empty State (Helpdesk uses role-only block above) -->
+              <div
+                v-if="visibleDetailFields.length === 0 && appKey !== 'HELPDESK'"
+                class="text-center py-8"
+              >
                 <p class="text-sm text-gray-500 dark:text-gray-400">
                   No detail fields available for {{ formatAppName(appKey) }}{{ controllingStateValue ? ` (${controllingStateValue})` : '' }}.
                 </p>
               </div>
 
-              <!-- Actions -->
-              <div class="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
-                <button
-                  type="button"
-                  @click="close"
-                  class="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  :disabled="loading || visibleDetailFields.length === 0"
-                  class="px-6 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  <svg v-if="loading" class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  <span>{{ loading ? 'Saving...' : 'Save Changes' }}</span>
-                </button>
-              </div>
-            </form>
+                      </div>
+                      </div>
+                    </div>
+
+                    <!-- Actions (CreateRecordDrawer pattern) -->
+                    <div class="flex shrink-0 justify-end gap-3 border-t border-gray-200 bg-white px-4 py-4 sm:px-6 dark:border-gray-700 dark:bg-gray-800">
+                      <button
+                        type="button"
+                        class="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-xs ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700 cursor-pointer"
+                        @click="close"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        :disabled="loading || submitDisabled"
+                        class="inline-flex items-center justify-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-600 dark:focus-visible:outline-indigo-600 cursor-pointer"
+                      >
+                        <svg v-if="loading" class="h-4 w-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>{{ loading ? 'Saving...' : 'Save Changes' }}</span>
+                      </button>
+                    </div>
+                  </form>
+                </DialogPanel>
+              </TransitionChild>
+            </div>
           </div>
         </div>
-      </div>
-    </Transition>
+      </Dialog>
+    </TransitionRoot>
   </Teleport>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, toRef } from 'vue';
+import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import { 
   PEOPLE_FIELD_METADATA, 
   getDetailFields,
   getFieldMetadata 
 } from '@/platform/fields/peopleFieldModel';
 import apiClient from '@/utils/apiClient';
+import { usePeopleTypes } from '@/composables/usePeopleTypes';
 import { openDatePicker } from '@/utils/dateUtils';
 import { assertEditParticipationPermission } from '@/platform/permissions/peopleGuards';
+import HeadlessSelect from '@/components/ui/HeadlessSelect.vue';
+import { XMarkIcon } from '@heroicons/vue/24/outline';
 
 const props = defineProps({
   isOpen: {
@@ -261,6 +309,40 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'updated']);
 
+const { types: peopleTypes, loading: peopleTypesLoading } = usePeopleTypes(toRef(props, 'appKey'));
+
+const helpdeskRoleOptions = computed(() =>
+  peopleTypes.value?.length ? peopleTypes.value : ['Customer', 'Agent']
+);
+
+const salesTypeListboxOptions = computed(() =>
+  (peopleTypes.value?.length ? peopleTypes.value : ['Lead', 'Contact']).map((t) => ({
+    value: t,
+    label: t
+  }))
+);
+
+const helpdeskRoleListboxOptions = computed(() =>
+  helpdeskRoleOptions.value.map((t) => ({ value: t, label: t }))
+);
+
+/** Above dialog/drawer overlay (z-[10000]) so options are not hidden */
+const participationListboxOptionsClass = 'z-[10020]';
+
+/** Match DynamicFormField text/date/number inputs */
+function fieldInputClass(fieldName, isDate) {
+  const base =
+    'block w-full mt-2 rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500';
+  const err = validationErrors.value[fieldName]
+    ? 'border-red-500 dark:border-red-500 focus:ring-red-500 dark:focus:ring-red-500'
+    : '';
+  return [base, err, isDate ? 'cursor-pointer' : ''].filter(Boolean);
+}
+
+function toListboxOptions(values) {
+  return (Array.isArray(values) ? values : []).map((v) => ({ value: v, label: v }));
+}
+
 const loading = ref(false);
 const error = ref(null);
 const validationErrors = ref({});
@@ -277,11 +359,12 @@ const allDetailFields = computed(() => {
  */
 const controllingStateValue = computed(() => {
   const fields = props.participationData?.fields || {};
-  // For SALES, the controlling state is the 'type' field (Lead/Contact)
   if (props.appKey === 'SALES') {
-    return fields.type || null;
+    return fields.sales_type ?? null;
   }
-  // For other apps, check for a type/status field
+  if (props.appKey === 'HELPDESK') {
+    return fields.helpdesk_role ?? null;
+  }
   return fields.type || fields.status || null;
 });
 
@@ -380,6 +463,12 @@ const visibleDetailFields = computed(() => {
   });
 });
 
+/** Helpdesk can save role-only; other apps need at least one visible detail field (existing behavior). */
+const submitDisabled = computed(() => {
+  if (props.appKey === 'HELPDESK') return false;
+  return visibleDetailFields.value.length === 0;
+});
+
 // Format app name
 const formatAppName = (appKey) => {
   const appNames = {
@@ -452,38 +541,66 @@ const getFieldOptions = (fieldName) => {
   return optionsMap[fieldName] || [];
 };
 
+/** Normalize API / ISO dates for <input type="date"> */
+const toDateInputValue = (value) => {
+  if (value == null || value === '') return '';
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return value.trim();
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0, 10);
+};
+
 // Initialize form data from existing participation
 const initializeFormData = () => {
   formData.value = {};
   const existingFields = props.participationData?.fields || {};
-  
-  // Always include type field for SALES (primary control)
-  if (appKey === 'SALES' && existingFields.type) {
-    formData.value.type = existingFields.type;
+
+  if (props.appKey === 'SALES') {
+    formData.value.sales_type = existingFields.sales_type ?? '';
+  } else if (props.appKey === 'HELPDESK') {
+    formData.value.helpdesk_role = existingFields.helpdesk_role ?? '';
   }
-  
-  // Pre-fill only visible detail fields
-  visibleDetailFields.value.forEach(fieldName => {
-    if (existingFields.hasOwnProperty(fieldName)) {
-      formData.value[fieldName] = existingFields[fieldName];
-    }
+
+  visibleDetailFields.value.forEach((fieldName) => {
+    if (!Object.prototype.hasOwnProperty.call(existingFields, fieldName)) return;
+    const raw = existingFields[fieldName];
+    formData.value[fieldName] =
+      getInputType(fieldName) === 'date' ? toDateInputValue(raw) : (raw ?? '');
   });
 };
 
-// Watch for modal open/participation data changes
+// Watch for modal open/participation data changes.
+// immediate: true — parent often mounts this with isOpen already true (v-if + ref), so a non-immediate watch never ran and the form stayed blank.
 watch([() => props.isOpen, () => props.participationData], () => {
   if (props.isOpen) {
     initializeFormData();
     error.value = null;
     validationErrors.value = {};
   }
-}, { immediate: false, deep: true });
+}, { immediate: true, deep: true });
 
 // Validate form
 const validateForm = () => {
   validationErrors.value = {};
   let isValid = true;
-  
+
+  if (props.appKey === 'HELPDESK') {
+    const t = formData.value.helpdesk_role;
+    if (!t || (typeof t === 'string' && !t.trim())) {
+      validationErrors.value.helpdesk_role = 'Role is required';
+      return false;
+    }
+    return true;
+  }
+
+  if (props.appKey === 'SALES') {
+    const t = formData.value.sales_type;
+    if (!t || (typeof t === 'string' && !t.trim())) {
+      validationErrors.value.sales_type = 'Type is required';
+      return false;
+    }
+  }
+
   // Validate only visible detail fields
   visibleDetailFields.value.forEach(fieldName => {
     const value = formData.value[fieldName];
@@ -564,10 +681,11 @@ const handleSubmit = async () => {
   validationErrors.value = {};
   
   try {
-    // Sanitize payload (only visible detail fields)
-    const sanitizedPayload = sanitizePayload();
-    
-    // Call update-app-fields endpoint
+    const sanitizedPayload =
+      props.appKey === 'HELPDESK'
+        ? { helpdesk_role: formData.value.helpdesk_role }
+        : { ...sanitizePayload(), sales_type: formData.value.sales_type };
+
     const response = await apiClient.put(`/people/${props.personId}/update-app-fields`, {
       appKey: props.appKey,
       formData: sanitizedPayload

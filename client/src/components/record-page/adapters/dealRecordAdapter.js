@@ -399,18 +399,14 @@ export const createDealRecordAdapter = ({
           title: 'Details',
           component: DetailsSection,
           className: 'pt-2 pb-2',
-          actions: [
-            ...(!isExpandedMode ? [{ key: 'expand-details', type: 'expand', label: 'Expand', handler: () => openLeftSection?.('details') }] : [])
-          ]
+          actions: (!isExpandedMode ? [{ key: 'expand-details', type: 'expand', label: 'Expand', handler: () => openLeftSection?.('details') }] : [])
         },
         'stage-history': {
           key: 'stage-history',
           title: 'Stage History',
           component: StageHistorySection,
           className: 'pt-2 pb-2',
-          actions: [
-            ...(!isExpandedMode ? [{ key: 'expand-stage-history', type: 'expand', label: 'Expand', handler: () => openLeftSection?.('stage-history') }] : [])
-          ]
+          actions: (!isExpandedMode ? [{ key: 'expand-stage-history', type: 'expand', label: 'Expand', handler: () => openLeftSection?.('stage-history') }] : [])
         },
         related: {
           key: 'related',

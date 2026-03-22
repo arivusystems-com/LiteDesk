@@ -141,10 +141,13 @@
 import { computed, ref } from 'vue';
 import { getParticipationFields, getStateFields, getFieldMetadata } from '@/platform/fields/peopleFieldModel';
 import { getParticipationActions, normalizeParticipationType } from './participationActions';
+import { getParticipation } from '@/utils/getParticipation';
+import { getAppLabel } from '@/utils/getRoleDisplay';
 import { isDetachAllowed } from './detachPolicy';
 import { useAuthStore } from '@/stores/auth';
 import { PEOPLE_PERMISSIONS } from '@/platform/permissions/peoplePermissions';
 import { hasPeoplePermission } from '@/platform/permissions/peoplePermissionHelper';
+import { isPeopleSalesRoleFieldKey } from '@/utils/peopleParticipationUi';
 
 const props = defineProps({
   person: {
@@ -160,15 +163,8 @@ const authStore = useAuthStore();
 // Actions menu state
 const openActionsMenu = ref(null);
 
-// App name mapping
-const appNames = {
-  'SALES': 'Sales',
-  'HELPDESK': 'Helpdesk',
-  'MARKETING': 'Marketing',
-  'AUDIT': 'Audit',
-  'PORTAL': 'Portal',
-  'PROJECTS': 'Projects'
-};
+// App label helper - use getAppLabel for dynamic labels (no hardcoded "Sales")
+const getAppDisplayName = (appKey) => getAppLabel(appKey) || appKey;
 
 // App icon mapping
 const appIcons = {
@@ -216,10 +212,9 @@ function participatesInApp(person, appKey) {
     }
   }
   
-  // Also check participation type field (for SALES: 'type' field)
-  // This is a special case - 'type' is a state field that indicates participation
-  if (appKey === 'SALES' && person.type) {
-    return true;
+  // SALES: use getParticipation abstraction instead of person.type
+  if (appKey === 'SALES') {
+    return getParticipation(person, 'SALES') != null;
   }
   
   return false;
@@ -246,14 +241,20 @@ function getParticipationData(person) {
   const participations = {};
   for (const appKey of knownAppKeys) {
     if (participatesInApp(person, appKey)) {
-      // Build app section structure
+      // Build app section structure - use getParticipation for SALES, never person.type
       const fields = {};
       const participationFields = getParticipationFields(appKey);
-      
-      // Extract field values from person
+      const part = appKey === 'SALES' ? getParticipation(person, 'SALES') : null;
+
       participationFields.forEach(fieldKey => {
-        if (person[fieldKey] !== null && person[fieldKey] !== undefined && person[fieldKey] !== '') {
-          fields[fieldKey] = person[fieldKey];
+        let value;
+        if (appKey === 'SALES' && isPeopleSalesRoleFieldKey(fieldKey)) {
+          value = part?.role ?? null;
+        } else {
+          value = person[fieldKey];
+        }
+        if (value !== null && value !== undefined && value !== '') {
+          fields[fieldKey] = value;
         }
       });
       
@@ -303,7 +304,7 @@ const participatingApps = computed(() => {
     }
     
     // Get participation type (e.g., 'Lead', 'Contact')
-    const participationType = normalizeParticipationType(fields.type);
+    const participationType = normalizeParticipationType(fields.sales_type);
     
     // Get participation actions
     const participationActions = getParticipationActions(appKey, participationType);
@@ -335,7 +336,7 @@ const participatingApps = computed(() => {
       const lifecyclePermissionKey = PEOPLE_PERMISSIONS.LIFECYCLE[appKey] || PEOPLE_PERMISSIONS.LIFECYCLE.BASE;
       if (hasPeoplePermission(lifecyclePermissionKey, authStore)) {
         actions.push({
-          label: `Detach from ${appNames[appKey] || appKey}`,
+          label: `Detach from ${getAppDisplayName(appKey)}`,
           actionType: 'detach',
           disabled: false
         });
@@ -344,7 +345,7 @@ const participatingApps = computed(() => {
     
       apps.push({
       appKey,
-      appName: appNames[appKey] || appKey,
+      appName: getAppDisplayName(appKey),
       appIcon: appIcons[appKey] || '📄',
       participationType: participationType || null,
       primaryState,
@@ -367,7 +368,7 @@ const nonParticipatingApps = computed(() => {
     if (!participationData[appKey]) {
       apps.push({
         appKey,
-        appName: appNames[appKey] || appKey,
+        appName: getAppDisplayName(appKey),
         appIcon: appIcons[appKey] || '📄'
       });
     }
@@ -378,8 +379,8 @@ const nonParticipatingApps = computed(() => {
 
 // Format state label for display
 function formatStateLabel(fieldKey, value) {
-  // For SALES app, format type + status
-  if (fieldKey === 'type') {
+  // For SALES app, format role + status
+  if (isPeopleSalesRoleFieldKey(fieldKey)) {
     return value; // 'Lead' or 'Contact'
   }
   if (fieldKey === 'lead_status') {
@@ -397,7 +398,7 @@ function formatStateLabel(fieldKey, value) {
 function getStateType(appKey, fieldKey, value) {
   // SALES app specific
   if (appKey === 'SALES') {
-    if (fieldKey === 'type') {
+    if (isPeopleSalesRoleFieldKey(fieldKey)) {
       return value === 'Contact' ? 'success' : 'info';
     }
     if (fieldKey === 'contact_status') {

@@ -155,6 +155,8 @@
                                   class="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                                 >
                                   <option value="">Select field...</option>
+                                  <option value="currentState.sales_type">Current SALES role</option>
+                                  <option value="previousState.sales_type">Previous SALES role</option>
                                   <option value="currentState.stage">Current Stage</option>
                                   <option value="currentState.pipeline">Current Pipeline</option>
                                   <option value="previousState.stage">Previous Stage</option>

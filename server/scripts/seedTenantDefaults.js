@@ -8,7 +8,7 @@
  * This script seeds default tenant app and module configurations for existing tenants.
  * 
  * For each existing tenant (Organization):
- * 1. Enable all platform apps (CRM, AUDIT, PORTAL, LMS)
+ * 1. Enable tenant apps that match platform definitions (SALES, AUDIT, PORTAL, LMS)
  * 2. Enable all modules for each app
  * 3. Set sane defaults
  * 
@@ -32,23 +32,14 @@ const ModuleDefinition = require('../models/ModuleDefinition');
 const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || process.env.MONGO_URI_LOCAL;
 
 /**
- * App keys used in the system (uppercase)
- */
-const APP_KEYS = {
-  CRM: 'CRM',
-  AUDIT: 'AUDIT',
-  PORTAL: 'PORTAL',
-  LMS: 'LMS'
-};
-
-/**
- * Map system app keys to platform metadata app keys (lowercase)
+ * Map tenant appKey (must match TenantAppConfiguration / TenantModuleConfiguration enum)
+ * to platform AppDefinition / ModuleDefinition appKey (lowercase).
  */
 const APP_KEY_MAP = {
-  'CRM': 'sales',      // CRM app maps to 'sales' in platform metadata
-  'AUDIT': 'audit',
-  'PORTAL': 'portal',  // May not exist in platform metadata yet
-  'LMS': 'lms'         // May not exist in platform metadata yet
+  SALES: 'sales',
+  AUDIT: 'audit',
+  PORTAL: 'portal', // May not exist in platform metadata yet
+  LMS: 'lms' // May not exist in platform metadata yet
 };
 
 async function seedTenantDefaults() {
@@ -166,9 +157,31 @@ async function seedTenantDefaults() {
               await existingModuleConfig.save();
               modulesUpdated++;
             }
+            // People (sales app): ensure peopleTypes includes SALES + HELPDESK defaults when missing
+            if (platformModule.moduleKey === 'people' && platformAppKey === 'sales') {
+              let ptChanged = false;
+              if (!existingModuleConfig.settings) existingModuleConfig.settings = {};
+              if (!existingModuleConfig.settings.peopleTypes) {
+                existingModuleConfig.settings.peopleTypes = {};
+              }
+              const pt = existingModuleConfig.settings.peopleTypes;
+              if (!Array.isArray(pt.SALES) || pt.SALES.length === 0) {
+                pt.SALES = ['Lead', 'Contact'];
+                ptChanged = true;
+              }
+              if (!Array.isArray(pt.HELPDESK) || pt.HELPDESK.length === 0) {
+                pt.HELPDESK = ['Customer', 'Agent'];
+                ptChanged = true;
+              }
+              if (ptChanged) {
+                existingModuleConfig.markModified('settings');
+                await existingModuleConfig.save();
+                modulesUpdated++;
+              }
+            }
           } else {
             // Create new configuration
-            await TenantModuleConfiguration.create({
+            const baseConfig = {
               organizationId: org._id,
               appKey: systemAppKey,
               moduleKey: platformModule.moduleKey,
@@ -180,7 +193,17 @@ async function seedTenantDefaults() {
                 showInSidebar: true,
                 order: null // Use platform default order
               }
-            });
+            };
+            // People module (platform sales app): default peopleTypes per app key
+            if (platformModule.moduleKey === 'people' && platformAppKey === 'sales') {
+              baseConfig.settings = {
+                peopleTypes: {
+                  SALES: ['Lead', 'Contact'],
+                  HELPDESK: ['Customer', 'Agent']
+                }
+              };
+            }
+            await TenantModuleConfiguration.create(baseConfig);
             modulesCreated++;
           }
         }

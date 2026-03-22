@@ -20,7 +20,6 @@ import type {
   ListAction,
   ListFilter,
   AppRegistryModuleEntry,
-  ListLayout,
   ColumnDataType,
   ActionType,
 } from '@/types/module-list.types';
@@ -31,7 +30,7 @@ import type { AppRegistry } from '@/types/sidebar.types';
 import type { PermissionSnapshot } from '@/types/permission-snapshot.types';
 import { hasPermission as checkPermission } from '@/types/permission-snapshot.types';
 import { memoizeBuilder } from '@/utils/builderCache';
-import { getFieldMetadata, PEOPLE_FIELD_METADATA } from '@/platform/fields/peopleFieldModel';
+import { PEOPLE_FIELD_METADATA } from '@/platform/fields/peopleFieldModel';
 
 /**
  * Get fallback columns for common modules when list config is missing
@@ -52,7 +51,7 @@ function getFallbackColumns(moduleKey: string): Array<{
       { key: 'email', label: 'Email', dataType: 'text', sortable: true, order: 2 },
       { key: 'phone', label: 'Phone', dataType: 'text', sortable: false, order: 3 },
       { key: 'organization', label: 'Organization', dataType: 'text', sortable: true, order: 4 },
-      { key: 'type', label: 'Type', dataType: 'status', sortable: true, order: 5 }, // Use 'type' instead of 'lifecycle_stage'
+      { key: 'sales_type', label: 'Type', dataType: 'status', sortable: true, order: 5 },
       { key: 'assignedTo', label: 'Owner', dataType: 'user', sortable: true, order: 6 }, // Use 'assignedTo' instead of 'owner_id'
     ],
     deals: [
@@ -87,7 +86,7 @@ function getFallbackActions(moduleKey: string): Array<{
   variant?: 'primary' | 'secondary' | 'danger' | 'outline';
   order?: number;
 }> {
-  const createLabel = moduleKey === 'people' ? 'New Contact' : 
+  const createLabel = moduleKey === 'people' ? 'New Person' : 
                      moduleKey === 'deals' ? 'New Deal' :
                      moduleKey === 'tasks' ? 'New Task' :
                      `New ${moduleKey.charAt(0).toUpperCase() + moduleKey.slice(1)}`;
@@ -198,6 +197,18 @@ function isFieldTableEligible(
   return true;
 }
 
+function dedupeListColumnsByKey<T extends { key: string }>(cols: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const c of cols) {
+    const k = String(c.key || '').trim();
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(c);
+  }
+  return out;
+}
+
 /**
  * Build list columns from registry
  */
@@ -207,10 +218,16 @@ function buildColumns(
   moduleKey?: string
 ): ListColumn[] {
   if (!columns) return [];
-  
-  return columns
-    .map((col) => ({
-      key: col.key,
+
+  let mapped = columns.map((col) => {
+    const isLegacyPeopleType = moduleKey === 'people' && String(col.key || '').trim() === 'type';
+    const key = isLegacyPeopleType ? 'sales_type' : col.key;
+    const fieldPath =
+      isLegacyPeopleType && (!col.fieldPath || String(col.fieldPath).trim() === 'type')
+        ? undefined
+        : col.fieldPath;
+    return {
+      key,
       label: col.label,
       dataType: col.dataType,
       sortable: col.sortable ?? false,
@@ -218,8 +235,15 @@ function buildColumns(
       permission: col.permission,
       visibility: getPermissionOutcome(col.permission, snapshot),
       order: col.order ?? 999,
-      fieldPath: col.fieldPath,
-    }))
+      fieldPath,
+    };
+  });
+
+  if (moduleKey === 'people') {
+    mapped = dedupeListColumnsByKey(mapped);
+  }
+
+  return mapped
     .filter((col) => {
       // Filter by permission visibility
       if (col.visibility === PermissionOutcome.HIDDEN) {

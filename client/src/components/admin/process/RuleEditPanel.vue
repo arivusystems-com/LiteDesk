@@ -336,7 +336,7 @@ watch(() => props.rule, (newRule) => {
     } else if (newRule.nodeType === 'action') {
       ruleData.value = {
         actionType: config.actionType || '',
-        params: { ...(config.params || {}) }
+        params: { ...config.params }
       };
     }
   }

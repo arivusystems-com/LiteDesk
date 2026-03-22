@@ -112,12 +112,10 @@
       </div>
     </div>
 
-    <!-- Create Person Drawer (opens immediately in Quick Create mode) -->
-    <!-- ARCHITECTURAL INTENT: All entry points open drawer in Quick Create mode -->
-    <!-- Intent selection happens within Full Form mode, not before opening drawer -->
+    <!-- Create Person Drawer (context-aware: ALL | SALES | HELPDESK) -->
     <PeopleQuickCreateDrawer
       :isOpen="showCreateDrawer"
-      :intentContext="intentContext"
+      :context-app-key="resolvedAppKey || intentContext?.participatingApps?.[0] || null"
       @close="handleDrawerClose"
       @saved="handleDrawerSaved"
     />
@@ -129,6 +127,7 @@
 import { ref, computed, onMounted, onActivated, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
+import { toAttachRole } from '@/utils/getParticipation';
 import PeopleQuickCreateDrawer from '@/components/people/PeopleQuickCreateDrawer.vue';
 import { buildIntentContext, type IntentMapping } from '@/utils/personCreationUtils';
 import type { CreatePersonIntentContext } from '@/types/personCreation.types';
@@ -167,7 +166,7 @@ type PeopleCreateFormData = {
   phone: string;
   mobile: string;
   source: string;
-  type: string;
+  sales_type: string;
   lead_status: string;
   lead_score: number | null;
   contact_status: string;
@@ -199,8 +198,8 @@ const formData = ref<PeopleCreateFormData>({
   phone: '',
   mobile: '',
   source: '',
-  // Sales app fields
-  type: '',
+  // Sales app fields (canonical key; role still sent separately as `role` on create)
+  sales_type: '',
   lead_status: '',
   lead_score: null,
   contact_status: '',
@@ -405,7 +404,7 @@ const handleSubmit = async () => {
   // Explicit intent validation - type is required for app participation
   if (availableTypes.value.length > 0 && !selectedType.value) {
     error.value = `Participation type is required. Please select a type for ${formatAppName(finalAppKey.value)}.`;
-    validationErrors.value = { type: 'Participation type is required' };
+    validationErrors.value = { sales_type: 'Participation type is required' };
     return;
   }
 
@@ -421,16 +420,18 @@ const handleSubmit = async () => {
 
     // Clean form data: convert empty strings to null for enum fields
     const cleanedFormData: Record<string, string | number | null> = { ...formData.value };
-    const enumFields = ['lead_status', 'contact_status', 'role', 'source'];
+    const enumFields = ['lead_status', 'contact_status', 'role', 'source', 'sales_type'];
     enumFields.forEach(field => {
       if (cleanedFormData[field] === '') {
         cleanedFormData[field] = null;
       }
     });
 
+    // Standardized create payload: appKey + role (backend maps role → type)
+    const role = toAttachRole(selectedType.value) ?? selectedType.value;
     const response = await apiClient.post('/people/create', {
       appKey: finalAppKey.value,
-      selectedType: selectedType.value,
+      role,
       formData: cleanedFormData
     });
 
@@ -485,7 +486,7 @@ const resetState = () => {
     phone: '',
     mobile: '',
     source: '',
-    type: '',
+    sales_type: '',
     lead_status: '',
     lead_score: null,
     contact_status: '',
