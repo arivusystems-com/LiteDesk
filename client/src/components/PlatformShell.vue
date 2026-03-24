@@ -9,7 +9,7 @@
     <main 
       :class="[
         'flex-1 flex flex-col transition-all duration-300 min-h-screen overflow-x-hidden',
-        sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
+        sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'
       ]"
     >
       <!-- Tab Bar - Hidden on mobile, visible on tablet and up -->

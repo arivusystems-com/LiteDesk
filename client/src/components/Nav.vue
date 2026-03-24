@@ -184,34 +184,45 @@ const onCoreModulesUpdated = async () => {
   }
 };
 
-// Build sidebar on mount
+const handleNotificationClick = () => {
+  const width = window.innerWidth || 0;
+  if (width >= 1024) {
+    // lg+: in-app drawer (tablet top bar shares this path only when viewport ≥1024)
+    showDrawer.value = true;
+  } else {
+    // Below lg breakpoint: bottom sheet (App.vue)
+    window.dispatchEvent(new CustomEvent('sales-open-notifications'));
+  }
+};
+
 onMounted(() => {
   if (authStore.user && authStore.isAuthenticated) {
     buildSidebar();
   }
   window.addEventListener('litedesk:core-modules-updated', onCoreModulesUpdated);
+  window.addEventListener('litedesk:open-notifications-panel', handleNotificationClick);
 });
 
 onUnmounted(() => {
   window.removeEventListener('litedesk:core-modules-updated', onCoreModulesUpdated);
+  window.removeEventListener('litedesk:open-notifications-panel', handleNotificationClick);
 });
 
-const handleNotificationClick = () => {
-  const width = window.innerWidth || 0;
-  if (width >= 1024) {
-    // Desktop/tablet: open in-app drawer
-    showDrawer.value = true;
-  } else {
-    // Mobile/tablet: open global CRM sheet via app-level listener
-    window.dispatchEvent(new CustomEvent('sales-open-notifications'));
-  }
-};
-
-// User info and handlers
+// User info and handlers (avatar + menu parity with TabBar)
 const userName = computed(() => authStore.user?.username || 'User');
 const userVertical = computed(() => authStore.user?.vertical || 'N/A');
 const workspaceName = computed(() => authStore.organization?.name || `${userName.value}'s Space`);
-const workspaceAvatar = computed(() => authStore.user?.avatar || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=128&h=128&q=80');
+
+const DEFAULT_AVATAR =
+  'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=128&h=128&q=80';
+
+const workspaceAvatar = computed(() => authStore.user?.avatar || DEFAULT_AVATAR);
+
+const isAdmin = computed(() => authStore.isAdminLike || authStore.isPlatformAdmin);
+
+/** Same compact bell treatment as TabBar (mobile / tablet top bar). */
+const shellTopBarBellClass =
+  '!min-h-9 !min-w-9 !p-1.5 rounded-md !border-0 !bg-transparent shadow-none hover:!bg-gray-100 dark:hover:!bg-gray-700 [&_svg]:!w-6 [&_svg]:!h-6';
 
 const handleLogout = () => {
   authStore.logout();
@@ -219,31 +230,34 @@ const handleLogout = () => {
   authStore.error = null;
 };
 
-// Required function for the Mode Toggle menu item
 const toggleColorModeFromMenu = () => {
-    const newMode = colorMode.value === 'light' ? 'dark' : 'light';
-    console.log('Toggling color mode from', colorMode.value, 'to', newMode);
-    toggleColorMode(newMode);
-    console.log('Color mode after toggle:', colorMode.value);
-    
-    // Debug: Check if mode was actually changed
-    setTimeout(() => {
-        console.log('Color mode after timeout:', colorMode.value);
-        console.log('Stored mode:', localStorage.getItem('color-mode'));
-    }, 100);
+  toggleColorMode(colorMode.value === 'light' ? 'dark' : 'light');
 };
 
-// Menu items for the user dropdown
-const userMenuItems = computed(() => [
-    { name: 'Your Profile', action: () => router.push('/profile') },
-    { name: 'Settings', action: () => openTab('/settings', { title: 'Settings' }) },
-    { 
-        name: colorMode.value === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode', 
-        action: toggleColorModeFromMenu, 
-        isModeToggle: true 
+// Menu items for the user dropdown (match TabBar account menu)
+const userMenuItems = computed(() => {
+  const items = [{ name: 'Your Profile', action: () => router.push('/profile') }];
+
+  if (isAdmin.value) {
+    items.push({ name: 'Control Panel', action: () => router.push('/control') });
+  }
+
+  items.push({ name: 'Settings', action: () => openTab('/settings', { title: 'Settings' }) });
+
+  if (authStore.can('settings', 'view')) {
+    items.push({ name: 'Trash', action: () => router.push('/trash') });
+  }
+
+  items.push(
+    {
+      name: colorMode.value === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode',
+      action: toggleColorModeFromMenu,
     },
-    { name: 'Sign out', action: handleLogout, divider: true, isLogout: true },
-]);
+    { name: 'Sign out', action: handleLogout, divider: true, isLogout: true }
+  );
+
+  return items;
+});
 
 const logoSrc = computed(() => {
     // If colorMode is 'dark' or 'system' (and system is dark), use the light-colored logo
@@ -291,7 +305,6 @@ const logoSrc = computed(() => {
                     v-if="sidebarStructure"
                     :sidebar-structure="sidebarStructure"
                     :collapsed="false"
-                    :on-notifications-click="handleNotificationClick"
                     :on-toggle-collapse="toggleSidebar"
                     embedded
                   />
@@ -324,8 +337,8 @@ const logoSrc = computed(() => {
         // Desktop
         'hidden lg:flex',
         // Width based on expanded state (click or hover)
-        // Responsive: 15.833rem (190px) expanded, 5rem (60px) collapsed (px ÷ 12 for rem, scaled via CSS)
-        shouldShowExpanded ? 'lg:w-[15.833rem]' : 'lg:w-[5rem]',
+        // Responsive: 15.833rem (190px) expanded, 4rem collapsed (matches AppSidebar w-[4rem])
+        shouldShowExpanded ? 'lg:w-[15.833rem]' : 'lg:w-[4rem]',
         // Z-index only (shadow handled by AppSidebar)
         'z-50'
       ]"
@@ -336,7 +349,6 @@ const logoSrc = computed(() => {
           v-if="sidebarStructure"
           :sidebar-structure="sidebarStructure"
           :collapsed="!shouldShowExpanded"
-          :on-notifications-click="handleNotificationClick"
           :on-toggle-collapse="toggleSidebar"
           embedded
         />
@@ -361,23 +373,24 @@ const logoSrc = computed(() => {
         <Bars3Icon class="size-6 text-gray-900 dark:text-gray-400" aria-hidden="true" />
       </button>
       <div class="flex-1 text-sm/6 font-semibold text-gray-900 dark:text-white">Dashboard</div>
-      <div class="flex items-center space-x-2">
-        <!-- Mobile header notification bell -->
+      <div
+        v-if="authStore.user"
+        class="flex items-center gap-3 pl-2 sm:pl-3"
+      >
         <NotificationBell
-          :show-count-on-desktop="false"
+          :connect-stream="false"
+          :show-count-on-desktop="true"
+          :class="shellTopBarBellClass"
           @toggle="handleNotificationClick"
         />
-        
-        <!-- User Profile Dropdown -->
+
         <Menu as="div" class="relative">
-          <MenuButton class="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
-            <img 
-              class="size-8 rounded-full bg-gray-200 dark:bg-gray-800 outline -outline-offset-1 outline-gray-300 dark:outline-white/10" 
-              :src="authStore.user?.avatar || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80'" 
-              alt="" 
-            />
+          <MenuButton
+            class="rounded-full overflow-hidden w-8 h-8 flex-shrink-0 ring-1 ring-gray-200 dark:ring-gray-600 hover:ring-gray-300 dark:hover:ring-gray-500 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            <img :src="workspaceAvatar" alt="" class="w-full h-full object-cover" />
           </MenuButton>
-          
+
           <transition
             enter-active-class="transition ease-out duration-100"
             enter-from-class="transform opacity-0 scale-95"
@@ -387,7 +400,7 @@ const logoSrc = computed(() => {
             leave-to-class="transform opacity-0 scale-95"
           >
             <MenuItems
-              class="absolute right-0 top-full mt-2 w-48 rounded-lg shadow-xl py-1 bg-white dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/10 z-50"
+              class="absolute right-0 top-full mt-1 w-48 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 py-1 z-50"
             >
               <template v-for="(item, index) in userMenuItems" :key="index">
                 <hr v-if="item.divider" class="my-1 border-gray-200 dark:border-gray-700" />

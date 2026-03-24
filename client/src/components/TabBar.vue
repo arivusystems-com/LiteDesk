@@ -1,9 +1,104 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
+import { useAuthStore } from '@/stores/auth';
+import { useColorMode } from '@/composables/useColorMode';
+import NotificationBell from '@/components/notifications/NotificationBell.vue';
 import { XMarkIcon } from '@heroicons/vue/20/solid';
 
-const { tabs, activeTabId, switchToTab, closeTab, closeOtherTabs, closeAllTabs } = useTabs();
+const router = useRouter();
+const route = useRoute();
+const authStore = useAuthStore();
+const { colorMode, toggleColorMode } = useColorMode();
+const { tabs, activeTabId, switchToTab, closeTab, closeOtherTabs, closeAllTabs, openTab } = useTabs();
+
+const DEFAULT_AVATAR =
+  'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=128&h=128&q=80';
+
+const workspaceAvatarUrl = computed(
+  () => authStore.user?.avatar || DEFAULT_AVATAR
+);
+
+const isAdmin = computed(
+  () => authStore.isAdminLike || authStore.isPlatformAdmin
+);
+
+const showProfileDropdown = ref(false);
+const profileDropdownRef = ref(null);
+
+const handleLogout = () => {
+  authStore.logout();
+  router.push('/');
+  authStore.error = null;
+};
+
+const profileMenuItems = computed(() => {
+  const items = [{ name: 'Your Profile', action: () => router.push('/profile') }];
+
+  if (isAdmin.value) {
+    items.push({ name: 'Control Panel', action: () => router.push('/control') });
+  }
+
+  items.push({
+    name: 'Settings',
+    action: () => openTab('/settings', { title: 'Settings' }),
+  });
+
+  if (authStore.can('settings', 'view')) {
+    items.push({ name: 'Trash', action: () => router.push('/trash') });
+  }
+
+  items.push(
+    {
+      name: colorMode.value === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode',
+      action: () => {
+        const newMode = colorMode.value === 'light' ? 'dark' : 'light';
+        toggleColorMode(newMode);
+      },
+    },
+    { name: 'Sign out', action: handleLogout, divider: true, isLogout: true }
+  );
+
+  return items;
+});
+
+const toggleProfileDropdown = () => {
+  showProfileDropdown.value = !showProfileDropdown.value;
+};
+
+const closeProfileDropdown = () => {
+  showProfileDropdown.value = false;
+};
+
+const runProfileMenuAction = (action) => {
+  action();
+  closeProfileDropdown();
+};
+
+/** Audit layout has no Nav “keeper” bell — TabBar owns SSE there. Platform shell uses Nav’s hidden bell. */
+const tabBarNotificationConnectStream = computed(() => {
+  const p = route.path || '';
+  return p.startsWith('/audit/');
+});
+
+function openNotificationsPanel() {
+  window.dispatchEvent(new CustomEvent('litedesk:open-notifications-panel'));
+}
+
+const vClickOutside = {
+  mounted(el, binding) {
+    el.clickOutsideEvent = (event) => {
+      if (!(el === event.target || el.contains(event.target))) {
+        binding.value();
+      }
+    };
+    document.addEventListener('click', el.clickOutsideEvent);
+  },
+  unmounted(el) {
+    document.removeEventListener('click', el.clickOutsideEvent);
+  },
+};
 
 // Create a computed to ensure reactivity in template
 // Force reactivity by watching the ref directly
@@ -20,7 +115,7 @@ const tabBarRef = ref(null);
 const DEFAULT_TOP_OFFSET = 64;
 
 // Calculate the actual available width for TabBar
-// Account for sidebar width (either 256px expanded or 80px collapsed)
+// Account for sidebar width (either 256px expanded or 64px collapsed)
 const tabBarWidth = computed(() => {
   // On mobile, full width
   if (viewportWidth.value < 1024) {
@@ -30,7 +125,7 @@ const tabBarWidth = computed(() => {
   // On desktop, we need to check sidebar state
   // Read from localStorage since sidebar state is stored there
   const sidebarCollapsed = localStorage.getItem('litedesk-sidebar-collapsed') === 'true';
-  const sidebarWidth = sidebarCollapsed ? 80 : 256;
+  const sidebarWidth = sidebarCollapsed ? 64 : 256;
   const calculatedWidth = viewportWidth.value - sidebarWidth;
   
   console.log('📊 TabBar Width:', {
@@ -53,7 +148,7 @@ const tabBarLeft = computed(() => {
   
   // On desktop, position based on sidebar state
   const sidebarCollapsed = localStorage.getItem('litedesk-sidebar-collapsed') === 'true';
-  return sidebarCollapsed ? '80px' : '256px';
+  return sidebarCollapsed ? '64px' : '256px';
 });
 
 const updateTabBarOffset = () => {
@@ -181,7 +276,7 @@ const closeTabsToRight = (tabId) => {
   tabsToClose.forEach(tab => closeTab(tab.id));
 };
 
-// Close context menu on click outside
+// Close context menu on click outside (profile menu uses v-click-outside)
 const handleClickOutside = () => {
   if (showContextMenu.value) {
     handleCloseContextMenu();
@@ -244,7 +339,7 @@ onUnmounted(() => {
 <template>
   <div 
     ref="tabBarRef"
-    class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 fixed top-16 left-0 right-0 lg:top-0 lg:left-auto lg:right-auto z-30 overflow-x-hidden transition-all duration-300 ease-in-out"
+    class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 fixed top-16 left-0 right-0 lg:top-0 lg:left-auto lg:right-auto z-30 transition-all duration-300 ease-in-out"
     :style="{ 
       width: tabBarWidth + 'px',
       maxWidth: tabBarWidth + 'px',
@@ -252,7 +347,8 @@ onUnmounted(() => {
       left: tabBarLeft
     }"
   >
-    <div class="flex items-center h-12 overflow-x-hidden" :style="{ width: '100%', maxWidth: '100%' }">
+    <div class="flex items-stretch h-12 min-w-0 w-full gap-6" :style="{ width: '100%', maxWidth: '100%' }">
+      <div class="flex flex-1 min-w-0 items-center h-full overflow-x-hidden">
       <!-- Tabs - Chrome style shrinking with aggressive overflow prevention -->
       <template v-if="tabsArray.length > 0">
         <div
@@ -286,7 +382,7 @@ onUnmounted(() => {
         <!-- Icon -->
         <component 
           :is="tab.icon" 
-          class="w-4 h-4 flex-shrink-0 mr-2"
+          class="w-5 h-5 flex-shrink-0 mr-2"
           :class="[
             activeTabId === tab.id
               ? 'text-gray-900 dark:text-white'
@@ -321,6 +417,66 @@ onUnmounted(() => {
         </button>
       </div>
       </template>
+      </div>
+
+      <!-- Tablet (md–lg): profile + bell live in Nav top bar (lg:hidden). Desktop (lg+): show here. -->
+      <div
+        v-if="authStore.user"
+        class="hidden lg:flex relative flex-shrink-0 items-center gap-3 pr-3"
+      >
+        <NotificationBell
+          :connect-stream="tabBarNotificationConnectStream"
+          :show-count-on-desktop="true"
+          class="!min-h-9 !min-w-9 !p-1.5 rounded-md !border-0 !bg-transparent shadow-none hover:!bg-gray-100 dark:hover:!bg-gray-700 [&_svg]:!w-6 [&_svg]:!h-6"
+          @toggle="openNotificationsPanel"
+        />
+        <div
+          ref="profileDropdownRef"
+          v-click-outside="closeProfileDropdown"
+          class="relative flex items-center"
+        >
+        <button
+          type="button"
+          class="rounded-full overflow-hidden w-8 h-8 flex-shrink-0 ring-1 ring-gray-200 dark:ring-gray-600 hover:ring-gray-300 dark:hover:ring-gray-500 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          title="Account"
+          aria-haspopup="true"
+          :aria-expanded="showProfileDropdown"
+          @click.stop="toggleProfileDropdown"
+        >
+          <img :src="workspaceAvatarUrl" alt="" class="w-full h-full object-cover" />
+        </button>
+        <transition
+          enter-active-class="transition ease-out duration-100"
+          enter-from-class="opacity-0 scale-95"
+          enter-to-class="opacity-100 scale-100"
+          leave-active-class="transition ease-in duration-75"
+          leave-from-class="opacity-100 scale-100"
+          leave-to-class="opacity-0 scale-95"
+        >
+          <div
+            v-if="showProfileDropdown"
+            class="absolute right-0 top-full mt-1 w-48 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 py-1 z-[100]"
+            @click.stop
+          >
+            <button
+              v-for="(item, index) in profileMenuItems"
+              :key="index"
+              type="button"
+              @click="runProfileMenuAction(item.action)"
+              :class="[
+                'w-full text-left px-4 py-2 text-sm transition-colors',
+                item.isLogout
+                  ? 'text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700',
+                item.divider ? 'border-t border-gray-200 dark:border-gray-700 mt-1 pt-1' : '',
+              ]"
+            >
+              {{ item.name }}
+            </button>
+          </div>
+        </transition>
+        </div>
+      </div>
     </div>
     
     <!-- Context Menu -->

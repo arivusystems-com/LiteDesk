@@ -26,20 +26,20 @@ See `docs/architecture/notifications-hardening.md`.
       >
         <!-- Backdrop: absolute full coverage so no white gap shows while drawer slides -->
         <div
-          class="absolute inset-0 bg-black/40 backdrop-blur-sm"
+          class="absolute inset-0 z-[1] bg-black/60"
           @click="$emit('close')"
           aria-hidden="true"
         ></div>
 
-        <!-- Drawer panel -->
+        <!-- Drawer panel: solid bg + z-index so backdrop never shows through the panel -->
         <aside
-          class="w-full sm:w-[360px] md:w-[380px] lg:w-[400px] bg-white/95 dark:bg-neutral-900/95 backdrop-blur-xl border-l border-neutral-200/60 dark:border-neutral-700/60 shadow-2xl shadow-neutral-900/5 dark:shadow-black/20 flex flex-col max-h-screen rounded-l-xl"
+          class="relative z-[2] flex h-full min-h-0 w-full shrink-0 flex-col rounded-none bg-white dark:bg-neutral-900 sm:w-[360px] md:w-[380px] lg:w-[400px] max-h-screen border-l border-neutral-200/60 dark:border-neutral-700/60 shadow-2xl shadow-neutral-900/5 dark:shadow-black/20"
           role="dialog"
           aria-modal="true"
           aria-label="Notifications"
         >
           <!-- Header -->
-          <header class="flex items-center justify-between px-4 py-3 border-b border-neutral-200/60 dark:border-neutral-700/60">
+          <header class="flex shrink-0 items-center justify-between border-b border-neutral-200/60 bg-white px-4 py-3 dark:border-neutral-700/60 dark:bg-neutral-900">
             <h2 class="text-base font-semibold text-neutral-900 dark:text-white">
               Notifications
             </h2>
@@ -74,7 +74,7 @@ See `docs/architecture/notifications-hardening.md`.
           </div>
 
           <!-- Body -->
-          <section class="flex-1 overflow-y-auto overflow-x-hidden px-2 py-2 space-y-4" :aria-busy="loading">
+          <section class="min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden bg-white px-2 py-2 dark:bg-neutral-900" :aria-busy="loading">
             <!-- Loading skeleton -->
             <template v-if="loading && !items.length">
               <div class="space-y-4">
@@ -239,7 +239,7 @@ See `docs/architecture/notifications-hardening.md`.
           </section>
 
           <!-- Footer -->
-          <footer class="px-4 py-3 border-t border-neutral-200/60 dark:border-neutral-700/60">
+          <footer class="shrink-0 border-t border-neutral-200/60 bg-white px-4 py-3 dark:border-neutral-700/60 dark:bg-neutral-900">
             <router-link
               to="/settings?tab=notifications&notificationPage=overview"
               class="block text-center text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 transition-colors duration-150"
