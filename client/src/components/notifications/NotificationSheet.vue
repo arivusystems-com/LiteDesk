@@ -7,24 +7,24 @@
         @keydown.esc.prevent="$emit('close')"
       >
         <div
-          class="flex-1 bg-black/40 backdrop-blur-sm transition-opacity duration-200"
+          class="z-[1] min-h-0 flex-1 bg-black/60 transition-opacity duration-200"
           @click="$emit('close')"
           aria-hidden="true"
         ></div>
 
         <section
-          class="bg-white/95 dark:bg-neutral-900/95 backdrop-blur-xl rounded-t-2xl shadow-2xl shadow-neutral-900/10 dark:shadow-black/20 max-h-[90vh] min-h-[80vh] flex flex-col pb-[env(safe-area-inset-bottom)]"
+          class="relative z-[2] flex max-h-[90vh] min-h-[80vh] flex-col overflow-hidden rounded-t-2xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl shadow-neutral-900/10 lg:rounded-t-none dark:bg-neutral-900 dark:shadow-black/20"
           role="dialog"
           aria-modal="true"
           aria-label="Notifications"
         >
           <!-- Handle bar -->
-          <div class="py-3 flex justify-center">
+          <div class="flex shrink-0 justify-center bg-white py-3 dark:bg-neutral-900">
             <div class="w-12 h-1.5 rounded-full bg-neutral-300 dark:bg-neutral-600"></div>
           </div>
 
           <!-- Header -->
-          <header class="flex items-center justify-between px-4 pb-2 border-b border-neutral-200/60 dark:border-neutral-700/60">
+          <header class="flex shrink-0 items-center justify-between border-b border-neutral-200/60 bg-white px-4 pb-2 dark:border-neutral-700/60 dark:bg-neutral-900">
             <h2 class="text-base font-semibold text-neutral-900 dark:text-white">
               Notifications
             </h2>
@@ -47,7 +47,7 @@
           </div>
 
           <!-- Body -->
-          <section class="flex-1 overflow-y-auto overflow-x-hidden px-2 py-2 space-y-4" :aria-busy="loading">
+          <section class="min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden bg-white px-2 py-2 dark:bg-neutral-900" :aria-busy="loading">
             <!-- Loading skeleton -->
             <template v-if="loading && !items.length">
               <div class="space-y-4">

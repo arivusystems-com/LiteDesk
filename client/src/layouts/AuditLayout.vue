@@ -4,11 +4,11 @@
     <header class="sticky top-0 z-50 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 lg:hidden">
       <div class="flex items-center justify-between px-4 h-14">
         <h1 class="text-lg font-semibold text-gray-900 dark:text-white">Audit</h1>
-        <div class="flex items-center gap-2">
-          <!-- Notification bell (mobile) -->
+        <div class="flex items-center gap-3 pl-2">
+          <!-- Mobile only: tablet uses TabBar bell (matches main shell TabBar styling) -->
           <NotificationBell
-            class="md:hidden"
-            :show-count-on-desktop="false"
+            class="md:hidden !min-h-9 !min-w-9 !p-1.5 rounded-md !border-0 !bg-transparent shadow-none hover:!bg-gray-100 dark:hover:!bg-gray-700 [&_svg]:!w-6 [&_svg]:!h-6"
+            :show-count-on-desktop="true"
             @toggle="notificationSheetOpen = true"
           />
           
@@ -24,13 +24,14 @@
             <span class="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full text-xs text-white flex items-center justify-center">{{ pendingCount }}</span>
           </button>
           
-          <!-- Profile Dropdown (Mobile) -->
           <Menu as="div" class="relative">
-            <MenuButton class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <MenuButton
+              class="rounded-full overflow-hidden w-8 h-8 flex-shrink-0 ring-1 ring-gray-200 dark:ring-gray-600 hover:ring-gray-300 dark:hover:ring-gray-500 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
               <img
-                class="w-8 h-8 rounded-full ring-2 ring-gray-200 dark:ring-gray-700"
-                :src="authStore.user?.avatar || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80'"
+                :src="auditHeaderAvatarUrl"
                 :alt="authStore.user?.username || 'User'"
+                class="w-full h-full object-cover"
               />
             </MenuButton>
             <transition
@@ -42,7 +43,7 @@
               leave-to-class="transform opacity-0 scale-95"
             >
               <MenuItems
-                class="absolute right-0 mt-2 w-48 rounded-lg shadow-xl py-1 bg-white dark:bg-gray-800 ring-1 ring-black/5 dark:ring-white/10 z-50"
+                class="absolute right-0 top-full mt-1 w-48 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 py-1 z-50"
               >
                 <div class="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
                   <p class="text-sm font-medium text-gray-900 dark:text-white">{{ authStore.user?.username || 'User' }}</p>
@@ -119,7 +120,6 @@
         :sidebar-structure="sidebarStructure"
         :collapsed="!shouldShowExpanded"
         :on-toggle-collapse="toggleSidebar"
-        :on-notifications-click="handleNotificationsClick"
       />
     </aside>
 
@@ -149,7 +149,6 @@
             :sidebar-structure="sidebarStructure"
             :collapsed="false"
             embedded
-            :on-notifications-click="handleNotificationsClick"
           />
         </div>
       </div>
@@ -159,7 +158,7 @@
     <main 
       :class="[
         'flex-1 transition-all duration-300',
-        shouldShowExpanded ? 'lg:pl-[15.833rem]' : 'lg:pl-[5rem]'
+        shouldShowExpanded ? 'lg:pl-[15.833rem]' : 'lg:pl-[4rem]'
       ]"
     >
       <!-- Tab Bar - Hidden on mobile, visible on tablet and up -->
@@ -226,6 +225,13 @@ import { configureTabsStorage, useTabs } from '@/composables/useTabs';
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+
+const DEFAULT_AVATAR =
+  'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=128&h=128&q=80';
+
+const auditHeaderAvatarUrl = computed(
+  () => authStore.user?.avatar || DEFAULT_AVATAR
+);
 const appShellStore = useAppShellStore();
 const { colorMode, toggleColorMode } = useColorMode();
 const { collapsed } = useSidebarState();
@@ -293,6 +299,15 @@ const onCoreModulesUpdated = () => {
   }
 };
 
+// Desktop: notification drawer; mobile: sheet (TabBar dispatches this event)
+const handleNotificationsClick = () => {
+  if (window.innerWidth >= 1024) {
+    notificationDrawerOpen.value = true;
+  } else {
+    notificationSheetOpen.value = true;
+  }
+};
+
 onMounted(async () => {
   // Phase 2D: Load UI metadata if not already loaded (App.vue also does this, but safe to check)
   if (!appShellStore.isLoaded && authStore.isAuthenticated) {
@@ -320,6 +335,7 @@ onMounted(async () => {
   
   await buildSidebar();
   window.addEventListener('litedesk:core-modules-updated', onCoreModulesUpdated);
+  window.addEventListener('litedesk:open-notifications-panel', handleNotificationsClick);
   
   // Load pending count
   updatePendingCount();
@@ -328,6 +344,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('litedesk:core-modules-updated', onCoreModulesUpdated);
+  window.removeEventListener('litedesk:open-notifications-panel', handleNotificationsClick);
   if (pendingCountIntervalId.value != null) {
     clearInterval(pendingCountIntervalId.value);
     pendingCountIntervalId.value = null;
@@ -348,16 +365,6 @@ const toggleColorModeFromMenu = () => {
 const colorModeLabel = computed(() => {
   return colorMode.value === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode';
 });
-
-// Handle notifications click - desktop uses drawer, mobile uses sheet
-const handleNotificationsClick = () => {
-  // Check if we're on desktop (lg breakpoint and up)
-  if (window.innerWidth >= 1024) {
-    notificationDrawerOpen.value = true;
-  } else {
-    notificationSheetOpen.value = true;
-  }
-};
 
 // Check if user has Sales access (for Settings link)
 const hasSalesAccess = computed(() => {

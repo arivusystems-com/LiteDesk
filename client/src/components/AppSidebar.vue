@@ -2,67 +2,33 @@
   <nav
     class="sidebar-nav flex grow flex-col h-full bg-white dark:bg-gray-900 border-r border-[#EAEEF4] dark:border-gray-700"
     :class="[
-      // Responsive width: calculated as px ÷ 12 (Figma base), then scaled via CSS
-      // 190px ÷ 12 = 15.833rem, 60px ÷ 12 = 5rem
-      collapsed ? 'w-[5rem]' : 'w-[15.833rem]',
+      // Responsive width: expanded matches Figma (px ÷ 12); collapsed rail is 4rem
+      // 190px ÷ 12 = 15.833rem expanded; 48px ÷ 12 = 4rem collapsed (design scale)
+      collapsed ? 'w-[4rem]' : 'w-[15.833rem]',
       'transition-all duration-300 ease-in-out',
     ]"
   >
-    <!-- Header (38px ÷ 12 = 3.167rem) - Fixed -->
-    <div class="relative h-[3.167rem] border-b border-[#EAEEF4] dark:border-gray-700 flex-shrink-0">
-      <div 
-        ref="profileDropdownRef"
-        v-click-outside="closeProfileDropdown"
-        class="absolute top-[0.667rem] flex items-center cursor-pointer rounded-[0.333rem] transition-colors hover:bg-[#F8F9FB] dark:hover:bg-gray-800"
-        :class="collapsed ? 'left-1/2 -translate-x-1/2 gap-0 p-[0.25rem]' : 'left-[1rem] gap-[0.5rem] p-[0.25rem] max-w-[calc(100%-3rem)]'"
-        @click="toggleProfileDropdown"
+    <!-- Header (38px ÷ 12 = 3.167rem): logo + collapse when expanded; icon logo centered when collapsed -->
+    <div
+      class="relative h-[3.167rem] border-b border-[#EAEEF4] dark:border-gray-700 flex-shrink-0 flex items-center"
+      :class="collapsed ? 'justify-center px-0' : 'justify-between pl-[1rem] pr-[0.667rem] gap-[0.5rem]'"
+    >
+      <div
+        class="h-[2.167rem] flex items-center min-w-0"
+        :class="collapsed ? 'w-[1.5rem] justify-center' : 'flex-1'"
       >
-        <div class="w-[1.833rem] h-[1.833rem] rounded-[0.333rem] overflow-hidden bg-[#F8F9FB] dark:bg-gray-800 flex-shrink-0">
-          <img :src="workspaceAvatarUrl" alt="" class="w-full h-full object-cover" />
-        </div>
-        <div v-if="!collapsed" class="flex items-center gap-[0.333rem] min-w-0 flex-1 overflow-hidden max-w-[calc(15.833rem-4rem)]">
-          <span class="text-[1rem] font-semibold text-[#070922] dark:text-gray-100 whitespace-nowrap truncate block min-w-0 max-w-full">{{ userName }}</span>
-          <span class="w-[0.833rem] h-[0.833rem] flex-shrink-0 flex items-center justify-center transition-transform" :class="{ 'rotate-180': showProfileDropdown }">
-            <FigmaChevronDown class="w-full h-full" :fill="iconColors.secondary" />
-          </span>
-        </div>
+        <img
+          :src="sidebarLogoUrl"
+          alt=""
+          class="h-full w-full object-contain"
+          :class="collapsed ? '' : 'object-left max-w-full'"
+        />
       </div>
-
-      <!-- Profile Dropdown Menu -->
-      <Transition
-        enter-active-class="transition ease-out duration-100"
-        enter-from-class="opacity-0 scale-95"
-        enter-to-class="opacity-100 scale-100"
-        leave-active-class="transition ease-in duration-75"
-        leave-from-class="opacity-100 scale-100"
-        leave-to-class="opacity-0 scale-95"
-      >
-        <div
-          v-if="showProfileDropdown && !collapsed"
-          class="absolute left-[1rem] top-[3.5rem] w-[12rem] bg-white dark:bg-gray-800 rounded-[0.5rem] shadow-[0_4px_12px_rgba(0,0,0,0.15)] dark:shadow-[0_4px_12px_rgba(0,0,0,0.3)] border border-[#EAEEF4] dark:border-gray-700 py-[0.5rem] z-50"
-        >
-          <button
-            v-for="(item, index) in profileMenuItems"
-            :key="index"
-            @click="item.action"
-            :class="[
-              'w-full text-left px-[0.75rem] py-[0.5rem] text-[0.875rem] transition-colors flex items-center gap-[0.5rem]',
-              item.isLogout 
-                ? 'text-[#F32F47] dark:text-red-400 hover:bg-[#FEF2F2] dark:hover:bg-red-900/20' 
-                : 'text-[#070922] dark:text-gray-100 hover:bg-[#F8F9FB] dark:hover:bg-gray-700',
-              item.divider ? 'border-t border-[#EAEEF4] dark:border-gray-700 mt-[0.5rem] pt-[0.5rem]' : ''
-            ]"
-          >
-            <span>{{ item.name }}</span>
-          </button>
-        </div>
-      </Transition>
-
       <button
         v-if="!collapsed"
         type="button"
         @click.stop.prevent="onToggleCollapse?.()"
-        class="absolute right-[0.667rem] top-[1rem] w-[1.167rem] h-[1.167rem] rounded-[0.5rem] flex items-center justify-center hover:bg-[#F8F9FB] dark:hover:bg-gray-800 transition-colors"
+        class="flex-shrink-0 w-[1.167rem] h-[1.167rem] rounded-[0.5rem] flex items-center justify-center hover:bg-[#F8F9FB] dark:hover:bg-gray-800 transition-colors"
         title="Collapse sidebar"
       >
         <span class="w-full h-full flex items-center justify-center">
@@ -74,12 +40,12 @@
     <!-- Scrollable Content Area -->
     <div class="flex-1 overflow-y-auto min-h-0">
       <!-- Search (28px ÷ 12 = 2.333rem height) -->
-      <div v-if="searchSurface" class="pt-[0.667rem] pb-[0.667rem]" :class="collapsed ? 'px-5' : 'px-[0.667rem]'">
+      <div v-if="searchSurface" class="px-[0.667rem] pt-[0.667rem] pb-[0.667rem]">
       <button
         type="button"
         @click="handleNavClick(searchSurface.route, searchSurface.label, $event)"
-        class="w-full h-[2.333rem] border border-[#EAEEF4] dark:border-gray-700 rounded-[0.5rem] flex items-center transition-colors hover:bg-[#F8F9FB] dark:hover:bg-gray-800 bg-white dark:bg-gray-900"
-        :class="collapsed ? 'justify-center px-0 py-[0.5rem]' : 'px-[0.583rem] py-[0.5rem] gap-[0.583rem]'"
+        class="w-full h-[2.333rem] border border-[#EAEEF4] dark:border-gray-700 rounded-[0.5rem] flex items-center justify-start transition-colors hover:bg-[#F8F9FB] dark:hover:bg-gray-800 bg-white dark:bg-gray-900 px-[0.583rem] py-[0.5rem]"
+        :class="collapsed ? '' : 'gap-[0.583rem]'"
         :title="collapsed ? 'Search' : ''"
       >
         <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
@@ -90,17 +56,16 @@
     </div>
 
     <!-- Shell list (rows are 24px ÷ 12 = 2rem, gap 2px ÷ 12 = 0.167rem) -->
-    <div :class="collapsed ? 'px-0' : 'px-[0.667rem]'">
-      <div class="flex flex-col gap-[0.333rem]" :class="collapsed ? 'px-5' : 'px-0'">
+    <div class="px-[0.667rem]">
+      <div class="flex flex-col gap-[0.333rem]">
         <a
           v-for="item in shellNavItems"
           :key="item.id"
           :href="item.route"
           @click.prevent="handleNavClick(item.route, item.label, $event)"
           @auxclick.prevent="handleNavClick(item.route, item.label, $event)"
-          class="w-full h-[2.333rem] rounded-[0.5rem] py-[0.333rem] flex items-center transition-colors"
+          class="w-full h-[2.333rem] rounded-[0.5rem] px-[0.583rem] gap-[0.667rem] py-[0.333rem] flex items-center justify-start transition-colors"
           :class="[
-            collapsed ? 'justify-center px-0' : 'px-[0.5rem] gap-[0.667rem]',
             isActiveRoute(item.route) 
               ? 'bg-[rgba(84,71,255,0.1)] dark:bg-[rgba(84,71,255,0.2)]' 
               : 'hover:bg-[#F8F9FB] dark:hover:bg-gray-800'
@@ -127,27 +92,6 @@
           </span>
         </a>
 
-        <!-- Notifications -->
-        <button
-          v-if="typeof onNotificationsClick === 'function'"
-          type="button"
-          @click="onNotificationsClick()"
-          class="w-full h-[2.333rem] rounded-[0.5rem] py-[0.333rem] flex items-center transition-colors hover:bg-[#F8F9FB] dark:hover:bg-gray-800"
-          :class="collapsed ? 'justify-center px-0' : 'px-[0.5rem] gap-[0.667rem]'"
-          :title="collapsed ? 'Notifications' : ''"
-        >
-          <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
-            <FigmaBellIcon class="w-full h-full" :fill="iconColors.primary" />
-          </span>
-          <span v-if="!collapsed" class="flex-1 text-[1rem] text-[#070922] dark:text-gray-100 text-left">Notifications</span>
-          <span
-            v-if="!collapsed && hasUnreadNotifications"
-            class="bg-[#F32F47] dark:bg-red-500 rounded-[100px] px-[0.417rem] py-px flex items-center justify-center"
-          >
-            <span class="text-[0.75rem] text-[#FAFAFC] dark:text-white leading-none">{{ unreadBadgeText }}</span>
-          </span>
-        </button>
-
         <!-- Divider above Core Modules -->
         <div
           v-if="sidebarStructure.coreModules.length > 0"
@@ -159,12 +103,11 @@
           v-if="sidebarStructure.coreModules.length > 0"
           class="w-full"
         >
-          <!-- Core Modules Section Header (Collapsible) - Only shown when sidebar is expanded -->
+          <!-- Core header: single button for both sidebar widths so the chevron doesn’t remount (avoids toggle jitter) -->
           <button
-            v-if="!collapsed"
             type="button"
             @click="toggleCoreModules"
-            class="w-full h-[2.333rem] rounded-[0.5rem] py-[0.333rem] flex items-center transition-colors hover:bg-[#F8F9FB] dark:hover:bg-gray-800 px-[0.5rem] gap-[0.667rem] flex-shrink-0"
+            class="w-full h-[2.333rem] rounded-[0.5rem] py-[0.333rem] px-[0.5rem] gap-[0.667rem] flex items-center justify-start flex-shrink-0 transition-colors hover:bg-[#F8F9FB] dark:hover:bg-gray-800"
             title="Core Modules"
           >
             <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
@@ -175,7 +118,8 @@
               />
             </span>
             <span
-              class="text-[1rem] font-semibold text-[#070922] dark:text-gray-100 flex-1 text-left"
+              v-if="!collapsed"
+              class="text-[1rem] font-semibold text-[#070922] dark:text-gray-100 flex-1 min-w-0 text-left"
             >
               Core
             </span>
@@ -231,27 +175,10 @@
             </div>
           </div>
 
-          <!-- Core Section Icon (shown when sidebar is collapsed) -->
-          <button
-            v-if="collapsed"
-            type="button"
-            @click="toggleCoreModules"
-            class="w-full h-[2.333rem] rounded-[0.5rem] py-[0.333rem] flex items-center justify-center transition-colors hover:bg-[#F8F9FB] dark:hover:bg-gray-800 px-5"
-            title="Core Modules"
-          >
-            <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
-              <FigmaChevronDown
-                class="w-full h-full transition-transform"
-                :class="{ 'rotate-180': !coreModulesCollapsed }"
-                :fill="iconColors.secondary"
-              />
-            </span>
-          </button>
-
-          <!-- Core Modules Icons Only (shown ONLY when entire sidebar is collapsed AND Core section is NOT collapsed) -->
+          <!-- Core Modules Icons Only (sidebar collapsed AND Core subsection open); mt matches expanded list wrapper -->
           <div
             v-if="collapsed && !coreModulesCollapsed"
-            class="flex flex-col gap-[0.333rem] px-5"
+            class="mt-[0.333rem] flex flex-col gap-[0.333rem]"
           >
             <a
               v-for="item in sidebarStructure.coreModules"
@@ -259,7 +186,7 @@
               :href="item.route"
               @click.prevent="handleNavClick(item.route, item.label, $event)"
               @auxclick.prevent="handleNavClick(item.route, item.label, $event)"
-              class="w-full h-[2.333rem] rounded-[0.5rem] py-[0.333rem] flex items-center justify-center transition-colors"
+              class="w-full h-[2.333rem] rounded-[0.5rem] px-[0.5rem] py-[0.333rem] flex items-center justify-start transition-colors"
               :class="[
                 isActiveRoute(item.route) 
                   ? 'bg-[rgba(84,71,255,0.1)] dark:bg-[rgba(84,71,255,0.2)]' 
@@ -284,7 +211,7 @@
     </div>
 
     <!-- App switcher + app navigation (switcher 28px ÷ 12 = 2.333rem, app rows 24px ÷ 12 = 2rem, gap 4px ÷ 12 = 0.333rem) -->
-    <div class="pt-[1rem] flex flex-col gap-[0.333rem]" :class="collapsed ? 'px-5' : 'px-[0.667rem]'">
+    <div class="px-[0.667rem] pt-[1rem] flex flex-col gap-[0.333rem]">
       <!-- App switcher -->
       <div
         v-if="sidebarStructure.appSwitcher.apps.length > 0"
@@ -294,8 +221,8 @@
       >
         <div
           @click="toggleAppSwitcherDropdown"
-          class="w-full h-[2.333rem] bg-[#F8F9FB] dark:bg-gray-800 border border-[#EAEEF4] dark:border-gray-700 rounded-[0.333rem] flex items-center justify-center cursor-pointer transition-colors hover:bg-[#F0F1F3] dark:hover:bg-gray-700"
-          :class="collapsed ? 'px-0 py-0' : 'px-[0.583rem] py-[0.5rem] gap-[0.667rem]'"
+          class="w-full h-[2.333rem] bg-[#F8F9FB] dark:bg-gray-800 border border-[#EAEEF4] dark:border-gray-700 rounded-[0.333rem] flex items-center justify-start cursor-pointer transition-colors hover:bg-[#F0F1F3] dark:hover:bg-gray-700 px-[0.583rem] py-[0.5rem]"
+          :class="collapsed ? '' : 'gap-[0.667rem]'"
         >
           <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
             <FigmaSackDollarIcon class="w-full h-full" :fill="iconColors.primary" />
@@ -354,9 +281,8 @@
           :href="sidebarStructure.appNav.dashboard.route"
           @click.prevent="handleNavClick(sidebarStructure.appNav.dashboard.route, sidebarStructure.appNav.dashboard.label, $event, { isAppContext: true })"
           @auxclick.prevent="handleNavClick(sidebarStructure.appNav.dashboard.route, sidebarStructure.appNav.dashboard.label, $event, { isAppContext: true })"
-          class="w-full h-[2.333rem] rounded-[0.5rem] py-[0.333rem] flex items-center transition-colors"
+          class="w-full h-[2.333rem] rounded-[0.5rem] px-[0.5rem] gap-[0.667rem] py-[0.333rem] flex items-center justify-start transition-colors"
           :class="[
-            collapsed ? 'justify-center px-0' : 'px-[0.5rem] gap-[0.667rem]',
             isActiveRoute(sidebarStructure.appNav.dashboard.route) 
               ? 'bg-[rgba(84,71,255,0.1)] dark:bg-[rgba(84,71,255,0.2)]' 
               : 'hover:bg-[#F8F9FB] dark:hover:bg-gray-800'
@@ -385,9 +311,8 @@
           :href="module.route"
           @click.prevent="handleNavClick(module.route, module.label, $event, { isAppContext: true })"
           @auxclick.prevent="handleNavClick(module.route, module.label, $event, { isAppContext: true })"
-          class="w-full h-[2.333rem] rounded-[0.5rem] py-[0.333rem] flex items-center transition-colors"
+          class="w-full h-[2.333rem] rounded-[0.5rem] px-[0.5rem] gap-[0.667rem] py-[0.333rem] flex items-center justify-start transition-colors"
           :class="[
-            collapsed ? 'justify-center px-0' : 'px-[0.5rem] gap-[0.667rem]',
             isActiveRoute(module.route) 
               ? 'bg-[rgba(84,71,255,0.1)] dark:bg-[rgba(84,71,255,0.2)]' 
               : 'hover:bg-[#F8F9FB] dark:hover:bg-gray-800'
@@ -413,34 +338,18 @@
     </div>
     </div>
 
-    <!-- Footer (38px ÷ 12 = 3.167rem) - Fixed -->
-    <div class="flex-shrink-0">
-      <!-- Footer divider -->
-      <div class="h-px bg-[#EAEEF4] dark:bg-gray-700" />
-
-      <!-- Footer content -->
-      <div class="relative h-[3.167rem]">
-      <div 
-        class="absolute top-[0.583rem] h-[2.167rem] flex items-center justify-center transition-all duration-300"
-        :class="collapsed ? 'left-1/2 -translate-x-1/2 w-[1.5rem]' : 'left-[1.167rem] w-[4.167rem]'"
-      >
-        <img 
-          :src="footerLogoUrl" 
-          alt="" 
-          class="h-full w-full object-contain"
-        />
-      </div>
-      <div v-if="!collapsed" class="absolute left-[7.917rem] top-[0.917rem] w-px h-[1.417rem] bg-[#EAEEF4] dark:bg-gray-700" />
-      <button 
-        v-if="!collapsed"
-        type="button" 
-        class="absolute left-[9.417rem] top-[0.583rem] h-[2rem] rounded-[0.5rem] p-[0.333rem] flex items-center gap-[0.333rem] hover:bg-[#F8F9FB] dark:hover:bg-gray-800 transition-colors"
-      >
-        <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
-          <FigmaInfoIcon class="w-full h-full" :fill="iconColors.primary" />
-        </span>
-        <span class="text-[1rem] text-[#070922] dark:text-gray-100">Help</span>
-      </button>
+    <!-- Footer: Help only (logo moved to header) -->
+    <div v-if="!collapsed" class="flex-shrink-0 border-t border-[#EAEEF4] dark:border-gray-700">
+      <div class="relative h-[3.167rem] flex items-center px-[1.167rem]">
+        <button
+          type="button"
+          class="h-[2rem] rounded-[0.5rem] p-[0.333rem] flex items-center gap-[0.333rem] hover:bg-[#F8F9FB] dark:hover:bg-gray-800 transition-colors"
+        >
+          <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
+            <FigmaInfoIcon class="w-full h-full" :fill="iconColors.primary" />
+          </span>
+          <span class="text-[1rem] text-[#070922] dark:text-gray-100">Help</span>
+        </button>
       </div>
     </div>
   </nav>
@@ -470,8 +379,6 @@ import { useRoute, useRouter } from 'vue-router';
 import { useSidebarState } from '@/composables/useSidebarState';
 import type { SidebarStructure, AppSummary } from '@/types/sidebar.types';
 import { useTabs } from '@/composables/useTabs';
-import { useNotificationStore } from '@/stores/notifications';
-import { useAuthStore } from '@/stores/auth';
 import { useColorMode } from '@/composables/useColorMode';
 import logoWordmarkDarkUrl from '/assets/logo/Logo_word_dark.svg';
 import logoDarkUrl from '/assets/logo/Logo_dark.svg';
@@ -501,7 +408,6 @@ const props = defineProps<{
   sidebarStructure: SidebarStructure;
   collapsed?: boolean;
   embedded?: boolean;
-  onNotificationsClick?: () => void;
   onToggleCollapse?: () => void;
 }>();
 
@@ -513,27 +419,14 @@ const { openTab } = useTabs();
 // Sidebar state management
 const { lastActiveAppId, coreModulesCollapsed } = useSidebarState();
 
-// Workspace identity (Figma header)
-const authStore = useAuthStore();
-const workspaceName = computed(() => authStore.organization?.name || "Darshan’s Space");
-const userName = computed(() => authStore.user?.username || authStore.user?.name || 'User');
-const workspaceAvatarUrl = computed<string>(() => 
-  authStore.user?.avatar || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=128&h=128&q=80'
-);
-
-// Logo URLs based on collapsed state and color mode
-const footerLogoUrl = computed(() => {
+// Logo in sidebar header: mark when expanded, glyph when collapsed (color mode aware)
+const sidebarLogoUrl = computed(() => {
   const isDark = colorMode.value === 'dark';
   if (props.collapsed) {
     return isDark ? logoLightUrl : logoDarkUrl;
-  } else {
-    return isDark ? logoWordmarkLightUrl : logoWordmarkDarkUrl;
   }
+  return isDark ? logoWordmarkLightUrl : logoWordmarkDarkUrl;
 });
-
-// Profile dropdown state
-const showProfileDropdown = ref(false);
-const profileDropdownRef = ref<HTMLElement | null>(null);
 
 // App switcher dropdown state
 const showAppSwitcherDropdown = ref(false);
@@ -558,68 +451,6 @@ const iconColors = computed(() => {
     chevron: isDark ? '#9ca3af' : '#6C6C74', // gray-400 in dark, gray-500 in light
   };
 });
-
-// Logout handler
-const handleLogout = () => {
-  authStore.logout();
-  router.push('/');
-  authStore.error = null;
-  showProfileDropdown.value = false;
-};
-
-// Check if user is admin (uses store's isAdminLike which includes owners and admins)
-const isAdmin = computed(() => {
-  return authStore.isAdminLike || authStore.isPlatformAdmin;
-});
-
-// Profile menu item type
-interface ProfileMenuItem {
-  name: string;
-  action: () => void;
-  divider?: boolean;
-  isLogout?: boolean;
-}
-
-// Menu items for profile dropdown
-const profileMenuItems = computed<ProfileMenuItem[]>(() => {
-  const items: ProfileMenuItem[] = [
-    { name: 'Your Profile', action: () => { router.push('/profile'); } },
-  ];
-  
-  // Add Control Panel for admins (above Settings)
-  if (isAdmin.value) {
-    items.push({ name: 'Control Panel', action: () => { router.push('/control'); } });
-  }
-  
-  items.push({ name: 'Settings', action: () => { openTab('/settings', { title: 'Settings' }); } });
-
-  if (authStore.can('settings', 'view')) {
-    items.push({ name: 'Trash', action: () => { router.push('/trash'); } });
-  }
-
-  items.push(
-    { 
-      name: colorMode.value === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode', 
-      action: () => {
-        const newMode = colorMode.value === 'light' ? 'dark' : 'light';
-        toggleColorMode(newMode);
-      }
-    },
-    { name: 'Sign out', action: handleLogout, divider: true, isLogout: true }
-  );
-  
-  return items;
-});
-
-// Toggle dropdown
-const toggleProfileDropdown = () => {
-  showProfileDropdown.value = !showProfileDropdown.value;
-};
-
-// Close dropdown
-const closeProfileDropdown = () => {
-  showProfileDropdown.value = false;
-};
 
 // Toggle app switcher dropdown
 const toggleAppSwitcherDropdown = () => {
@@ -708,11 +539,6 @@ const FigmaHomeIcon = defineFigmaIcon(
 const FigmaInboxIcon = defineFigmaIcon(
   '0 0 12.8 11.2',
   'M0.8 9.6V7.3975C0.8 7.3325 0.8075 7.2675 0.825 7.2025V7.2H3.3525L3.9325 8.3575C4.0675 8.6275 4.345 8.8 4.6475 8.8H8.1525C8.455 8.8 8.7325 8.63 8.8675 8.3575L9.4475 7.2H11.975V7.2025C11.99 7.265 12 7.33 12 7.3975V9.6C12 10.0425 11.6425 10.4 11.2 10.4H1.6C1.1575 10.4 0.8 10.0425 0.8 9.6ZM11.775 6.4H9.4475C9.145 6.4 8.8675 6.57 8.7325 6.8425L8.1525 8H4.6475L4.0675 6.8425C3.9325 6.5725 3.655 6.4 3.3525 6.4H1.025L2.2725 1.405C2.3625 1.05 2.6825 0.8 3.05 0.8H9.75C10.1175 0.8 10.4375 1.05 10.525 1.405L11.775 6.4ZM0 7.3975V9.6C0 10.4825 0.7175 11.2 1.6 11.2H11.2C12.0825 11.2 12.8 10.4825 12.8 9.6V7.3975C12.8 7.2675 12.785 7.1375 12.7525 7.01L11.3025 1.2125C11.125 0.5 10.485 0 9.75 0H3.05C2.315 0 1.675 0.5 1.4975 1.2125L0.0475 7.01C0.015 7.135 0 7.265 0 7.3975Z'
-);
-
-const FigmaBellIcon = defineFigmaIcon(
-  '0 0 11.2025 12.8',
-  'M5.2 0.4C5.2 0.18 5.38 0 5.6 0C5.82 0 6 0.18 6 0.4V0.82C8.0225 1.02 9.6 2.725 9.6 4.8V5.5275C9.6 6.62 10.035 7.6675 10.8075 8.4425L10.8775 8.5125C11.085 8.72 11.2025 9.0025 11.2025 9.295C11.2025 9.9075 10.7075 10.4025 10.095 10.4025H1.1075C0.495 10.4 0 9.905 0 9.2925C0 9 0.1175 8.7175 0.325 8.51L0.395 8.44C1.165 7.6675 1.6 6.62 1.6 5.5275V4.8C1.6 2.725 3.1775 1.02 5.2 0.82V0.4ZM5.6 1.6C3.8325 1.6 2.4 3.0325 2.4 4.8V5.5275C2.4 6.8325 1.8825 8.085 0.9575 9.0075L0.89 9.075C0.8325 9.1325 0.8 9.21 0.8 9.2925C0.8 9.4625 0.9375 9.6 1.1075 9.6H10.0925C10.2625 9.6 10.4 9.4625 10.4 9.2925C10.4 9.21 10.3675 9.1325 10.31 9.075L10.24 9.005C9.3175 8.0825 8.7975 6.83 8.7975 5.525V4.8C8.7975 3.0325 7.365 1.6 5.5975 1.6H5.6ZM4.845 11.4675C4.955 11.7775 5.2525 12 5.6 12C5.9475 12 6.245 11.7775 6.355 11.4675C6.4275 11.26 6.6575 11.15 6.865 11.2225C7.0725 11.295 7.1825 11.525 7.11 11.7325C6.89 12.355 6.2975 12.8 5.6 12.8C4.9025 12.8 4.31 12.355 4.09 11.7325C4.0175 11.525 4.125 11.295 4.335 11.2225C4.545 11.15 4.7725 11.2575 4.845 11.4675Z'
 );
 
 const FigmaPeopleIcon = defineFigmaIcon(
@@ -871,20 +697,6 @@ const searchSurface = computed(() => {
 
 const shellNavItems = computed(() => {
   return props.sidebarStructure.shell.filter((i) => !(i.kind === 'surface' && i.id === 'search'));
-});
-
-const notificationStore = useNotificationStore();
-
-const hasUnreadNotifications = computed(() => {
-  const n = Number((notificationStore as any).unreadCount || 0);
-  return n > 0;
-});
-
-const unreadBadgeText = computed(() => {
-  const n = Number((notificationStore as any).unreadCount || 0);
-  if (n <= 0) return '';
-  if (n > 9) return '9+';
-  return String(n);
 });
 
 function switchAppLens(nextAppId: string): void {

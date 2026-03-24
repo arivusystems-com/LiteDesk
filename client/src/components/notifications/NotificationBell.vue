@@ -21,17 +21,17 @@
       />
     </svg>
 
-    <!-- Dot badge (mobile / fallback) -->
+    <!-- Dot badge (mobile / fallback) — nudged onto the bell -->
     <span
       v-if="hasUnread"
-      class="absolute top-1 right-1 block w-2 h-2 rounded-full bg-danger-500 notification-bell-badge md:hidden"
+      class="absolute top-0.5 right-0.5 block w-2 h-2 rounded-full bg-danger-500 ring-2 ring-white dark:ring-gray-900 notification-bell-badge md:hidden z-10"
       aria-hidden="true"
     ></span>
 
-    <!-- Numeric badge (desktop) -->
+    <!-- Numeric badge (desktop) — overlaps upper-right of the bell -->
     <span
       v-if="hasUnread && showCountOnDesktop"
-      class="hidden md:flex items-center justify-center absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-danger-500 text-[10px] font-semibold text-white px-1 notification-bell-badge"
+      class="hidden md:flex items-center justify-center absolute top-0 right-0 min-w-[18px] h-[18px] rounded-full bg-danger-500 text-[10px] font-semibold text-white px-1 notification-bell-badge ring-2 ring-white dark:ring-gray-900 z-10 translate-x-px -translate-y-px"
       aria-hidden="true"
     >
       {{ displayCount }}
@@ -47,6 +47,11 @@ import { useOffline } from '@/composables/useOffline';
 
 const props = defineProps({
   showCountOnDesktop: {
+    type: Boolean,
+    default: true
+  },
+  /** When false, only reads the store (another instance should own the SSE connection). */
+  connectStream: {
     type: Boolean,
     default: true
   }
@@ -88,7 +93,7 @@ let streamDisconnect = null;
 onMounted(() => {
   store.fetchUnreadPreview();
 
-  if (isOnline.value) {
+  if (props.connectStream && isOnline.value) {
     const appKey = currentAppKey();
     const stream = useNotificationStream(appKey, (notification) => {
       store.handleIncomingNotification(notification);

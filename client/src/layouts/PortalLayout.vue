@@ -8,21 +8,19 @@
             {{ organizationName }}
           </h1>
         </div>
-        <div class="flex items-center gap-2">
-          <!-- Notification bell (Mobile) -->
+        <div class="flex items-center gap-3 pl-2">
           <NotificationBell
-            :show-count-on-desktop="false"
+            :show-count-on-desktop="true"
+            class="!min-h-9 !min-w-9 !p-1.5 rounded-md !border-0 !bg-transparent shadow-none hover:!bg-gray-100 dark:hover:!bg-gray-700 [&_svg]:!w-6 [&_svg]:!h-6"
             @toggle="notificationSheetOpen = true"
           />
-          <!-- User Menu Button (Mobile) -->
           <button
+            type="button"
             @click="showUserMenu = !showUserMenu"
-            class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            class="rounded-full overflow-hidden w-8 h-8 flex-shrink-0 ring-1 ring-gray-200 dark:ring-gray-600 hover:ring-gray-300 dark:hover:ring-gray-500 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             aria-label="User menu"
           >
-            <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-medium">
-              {{ userInitials }}
-            </div>
+            <img :src="portalAvatarUrl" alt="" class="w-full h-full object-cover" />
           </button>
         </div>
       </div>
@@ -62,22 +60,20 @@
           {{ organizationName }}
         </h1>
       </div>
-      <div class="flex items-center gap-4">
-        <!-- Notification bell (Desktop) -->
-        <NotificationBell @toggle="notificationDrawerOpen = true" />
-        <!-- User Menu (Desktop) -->
+      <div class="flex items-center gap-3 pl-3">
+        <NotificationBell
+          class="!min-h-9 !min-w-9 !p-1.5 rounded-md !border-0 !bg-transparent shadow-none hover:!bg-gray-100 dark:hover:!bg-gray-700 [&_svg]:!w-6 [&_svg]:!h-6"
+          :show-count-on-desktop="true"
+          @toggle="notificationDrawerOpen = true"
+        />
         <div class="relative">
           <button
+            type="button"
             @click="showUserMenu = !showUserMenu"
-            class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            class="rounded-full overflow-hidden w-8 h-8 flex-shrink-0 ring-1 ring-gray-200 dark:ring-gray-600 hover:ring-gray-300 dark:hover:ring-gray-500 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             aria-label="User menu"
           >
-            <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-medium">
-              {{ userInitials }}
-            </div>
-            <span class="text-sm font-medium text-gray-700 dark:text-gray-300 hidden xl:block">
-              {{ userDisplayName }}
-            </span>
+            <img :src="portalAvatarUrl" alt="" class="w-full h-full object-cover" />
           </button>
           
           <!-- User Menu Dropdown (Desktop) -->
@@ -125,7 +121,7 @@
         'hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:pt-16 lg:z-30',
         'bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700',
         'transition-all duration-300 ease-in-out',
-        shouldShowExpanded ? 'lg:w-64' : 'lg:w-20'
+        shouldShowExpanded ? 'lg:w-64' : 'lg:w-16'
       ]"
     >
       <!-- Logo Section (above top bar) -->
@@ -174,7 +170,7 @@
     <main 
       :class="[
         'flex-1 transition-all duration-300 lg:pt-16 pb-20 lg:pb-0',
-        shouldShowExpanded ? 'lg:pl-64' : 'lg:pl-20'
+        shouldShowExpanded ? 'lg:pl-64' : 'lg:pl-16'
       ]"
     >
       <div class="min-h-screen">
@@ -365,27 +361,10 @@ const organizationName = computed(() => {
   return authStore.organization?.name || 'Portal';
 });
 
-const userDisplayName = computed(() => {
-  const user = authStore.user;
-  if (user?.firstName || user?.lastName) {
-    return `${user.firstName || ''} ${user.lastName || ''}`.trim();
-  }
-  return user?.email?.split('@')[0] || 'User';
-});
+const DEFAULT_AVATAR =
+  'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=128&h=128&q=80';
 
-const userInitials = computed(() => {
-  const user = authStore.user;
-  if (user?.firstName && user?.lastName) {
-    return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
-  }
-  if (user?.firstName) {
-    return user.firstName[0].toUpperCase();
-  }
-  if (user?.email) {
-    return user.email[0].toUpperCase();
-  }
-  return 'U';
-});
+const portalAvatarUrl = computed(() => authStore.user?.avatar || DEFAULT_AVATAR);
 
 const handleLogout = () => {
   showUserMenu.value = false;
