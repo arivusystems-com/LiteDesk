@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 const { v4: uuidv4 } = require('uuid');
+const { RECORD_SOURCE_VALUES, DEFAULT_RECORD_SOURCE } = require('../constants/recordSource');
 
 // Audit history entry schema
 const auditHistoryEntrySchema = new Schema({
@@ -391,6 +392,13 @@ const eventSchema = new Schema({
     default: {}
   },
   
+  /** System-managed creation channel (set server-side only) */
+  source: {
+    type: String,
+    enum: RECORD_SOURCE_VALUES,
+    default: DEFAULT_RECORD_SOURCE
+  },
+
   // Multi-tenancy
   organizationId: { 
     type: Schema.Types.ObjectId, 

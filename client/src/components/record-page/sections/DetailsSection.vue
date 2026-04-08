@@ -1,31 +1,77 @@
 <template>
-  <section v-if="fields.length" class="details-section space-y-2">
-    <h3 v-if="!hideHeader" class="text-base font-semibold text-gray-900 dark:text-white">Details</h3>
-    <div class="border-y border-x-0 border-gray-200/70 dark:border-gray-700/70 divide-y divide-gray-200/70 dark:divide-gray-700/70">
+  <section
+    v-if="fields.length"
+    :class="[
+      'details-section',
+      isCompact ? 'space-y-3' : 'space-y-2'
+    ]"
+  >
+    <h3 v-if="!hideHeader" class="text-sm font-normal text-gray-900 dark:text-white">Details</h3>
+    <div
+      :class="[
+        isCompact
+          ? 'overflow-hidden rounded-xl  border-gray-200/90  divide-gray-200/80 dark:divide-gray-700/80 dark:border-gray-700 dark:bg-gray-950/30'
+          : 'border-y border-x-0 border-gray-200/70 dark:border-gray-700/70 divide-y divide-gray-200/70 dark:divide-gray-700/70'
+      ]"
+    >
       <template
-        v-for="field in visibleFields"
+        v-for="(field, fieldIdx) in visibleFields"
         :key="field.key"
       >
+        <h4
+          v-if="isCompact && groupFields && isNewGroupHeader(fieldIdx, field)"
+          :class="[
+            'details-section__group-header border-gray-200/80 px-3 py-2.5 text-sm font-normal text-gray-900 dark:text-gray-100 dark:border-gray-700/80',
+            fieldIdx > 0 ? 'mt-2  border-gray-200/80 pt-3 dark:border-gray-700/90' : ''
+          ]"
+        >
+          <!-- Tint lives on inner wrapper so it matches field row content width (same px-3 as values). -->
+          <div
+            :class="[
+              'flex min-w-0 w-full items-center gap-1.5  px-2.5 py-2',
+              groupHeaderClass(field)
+            ]"
+          >
+            <span
+              class="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-current"
+              aria-hidden="true"
+            >
+              <span class="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+            </span>
+            <span class="min-w-0 truncate">{{ field.groupLabel || 'Fields' }}</span>
+          </div>
+        </h4>
         <!-- Related record link + optional inline listbox: hover → primary; click value → open record. Inline edit via dropdown, never edit drawer. -->
         <div
           v-if="field.recordPath && typeof context.openTab === 'function'"
-          class="flex items-center gap-3 py-2 px-4 min-h-[2rem]"
+          :class="isCompact ? 'space-y-1.5 px-3 py-2.5' : 'flex min-h-[2rem] items-center gap-3 px-4 py-2'"
         >
-          <span class="flex-shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true">
-            <component :is="getFieldIcon(field)" class="w-4 h-4" />
-          </span>
-          <span class="text-sm text-gray-700 dark:text-gray-300 flex-shrink-0 min-w-[12rem]">{{ field.label }}</span>
+          <template v-if="!isCompact">
+            <span class="flex-shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true">
+              <component :is="getFieldIcon(field)" class="h-4 w-4" />
+            </span>
+            <span class="min-w-[12rem] flex-shrink-0 text-sm text-gray-700 dark:text-gray-300">{{ field.label }}</span>
+          </template>
+          <div v-else class="flex min-w-0 items-center gap-1.5">
+            <component :is="getFieldIcon(field)" class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+            <span class="truncate text-sm font-normal text-gray-600 dark:text-gray-400">{{ field.label }}</span>
+          </div>
 
           <Listbox
             v-if="field.options?.length && field.canEdit && typeof field.onSave === 'function'"
             as="div"
             :model-value="getRecordPathFieldSelectedId(field)"
             @update:model-value="(v) => field.onSave(v)"
-            class="flex-1 min-w-0"
+            :class="isCompact ? 'min-w-0 w-full' : 'min-w-0 flex-1'"
           >
             <div class="relative w-full">
               <ListboxButton
-                class="flex items-center gap-2 w-full min-h-8 text-left cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 py-1 transition-colors focus:outline-none focus:ring-0"
+                :class="[
+                  'flex w-full cursor-pointer items-center gap-2 text-left transition-colors focus:outline-none focus:ring-0',
+                  isCompact
+                    ? 'min-h-[2.25rem] rounded-md border border-gray-200/90 bg-white px-2.5 py-1.5  hover:border-indigo-300/60 dark:border-gray-600 dark:bg-gray-900/50 dark:hover:border-indigo-500/40'
+                    : 'min-h-8 rounded px-2 py-1 hover:bg-gray-50 dark:hover:bg-gray-800'
+                ]"
               >
                 <span
                   v-if="field.displayValue"
@@ -82,7 +128,12 @@
           <button
             v-else-if="field.canOpenEditor && typeof field.onEdit === 'function'"
             type="button"
-            class="flex-1 min-w-0 text-left text-sm text-gray-900 dark:text-white rounded px-2 py-1 -mx-2 -my-1 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
+            :class="[
+              'cursor-pointer text-left text-sm text-gray-900 transition-colors dark:text-white',
+              isCompact
+                ? 'min-h-[2.25rem] w-full rounded-md border border-gray-200/90 bg-white px-2.5 py-1.5 hover:border-indigo-300/60 hover:bg-indigo-50/40 dark:border-gray-600 dark:bg-gray-900/50 dark:hover:border-indigo-500/40 dark:hover:bg-indigo-950/30'
+                : '-mx-2 -my-1 flex-1 min-w-0 rounded px-2 py-1 hover:bg-gray-50 dark:hover:bg-gray-800'
+            ]"
             @click="handleFieldEdit(field, $event)"
           >
             <span
@@ -103,7 +154,12 @@
 
           <div
             v-else
-            class="flex-1 min-w-0 text-left text-sm text-gray-900 dark:text-white rounded px-2 py-1 -mx-2 -my-1 transition-colors"
+            :class="[
+              'min-w-0 text-left text-sm text-gray-900 dark:text-white',
+              isCompact
+                ? 'w-full rounded-md border border-gray-100 bg-gray-50/80 px-2.5 py-1.5 dark:border-gray-700 dark:bg-gray-800/40'
+                : '-mx-2 -my-1 flex-1 rounded px-2 py-1'
+            ]"
           >
             <span
               v-if="field.displayValue"
@@ -124,15 +180,26 @@
 
         <div
           v-else-if="field.canOpenEditor && typeof field.onEdit === 'function'"
-          class="flex items-center gap-3 py-2 px-4 min-h-[2rem]"
+          :class="isCompact ? 'space-y-1.5 px-3 py-2.5' : 'flex min-h-[2rem] items-center gap-3 px-4 py-2'"
         >
-          <span class="flex-shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true">
-            <component :is="getFieldIcon(field)" class="w-4 h-4" />
-          </span>
-          <span class="text-sm text-gray-700 dark:text-gray-300 flex-shrink-0 min-w-[12rem]">{{ field.label }}</span>
+          <template v-if="!isCompact">
+            <span class="flex-shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true">
+              <component :is="getFieldIcon(field)" class="h-4 w-4" />
+            </span>
+            <span class="min-w-[12rem] flex-shrink-0 text-sm text-gray-700 dark:text-gray-300">{{ field.label }}</span>
+          </template>
+          <div v-else class="flex min-w-0 items-center gap-1.5">
+            <component :is="getFieldIcon(field)" class="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+            <span class="truncate text-sm font-normal text-gray-600 dark:text-gray-400">{{ field.label }}</span>
+          </div>
           <button
             type="button"
-            class="flex-1 min-w-0 text-left text-sm text-gray-900 dark:text-white rounded px-2 py-1 -mx-2 -my-1 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+            :class="[
+              'cursor-pointer text-left text-sm text-gray-900 transition-colors dark:text-white',
+              isCompact
+                ? 'min-h-[2.25rem] w-full rounded-md border border-gray-200/90 bg-white px-2.5 py-1.5  hover:border-indigo-300/60 hover:bg-indigo-50/40 dark:border-gray-600 dark:bg-gray-900/50 dark:hover:border-indigo-500/40 dark:hover:bg-indigo-950/30'
+                : '-mx-2 -my-1 flex-1 min-w-0 rounded px-2 py-1 hover:bg-gray-50 dark:hover:bg-gray-800'
+            ]"
             @click="handleFieldEdit(field, $event)"
           >
             <template v-if="field.key === 'tags' && Array.isArray(field.value) && field.value.length > 0">
@@ -156,23 +223,26 @@
           </button>
         </div>
 
-        <EditableLabeledValue
-          v-else
-          :label="field.label"
-          :value="field.value"
-          :type="field.type || 'text'"
-          :prefix-icon="field.prefixIcon || null"
-          :can-edit="field.canEdit === true"
-          :options="Array.isArray(field.options) ? field.options : []"
-          :min="field.min"
-          :step="field.step"
-          :multiline="field.multiline === true"
-          :rows="field.rows"
-          :format-value="() => field.displayValue"
-          :get-tag-chip-class="field.getTagChipClass"
-          layout="row"
-          @save="handleFieldSave(field, $event)"
-        />
+        <div v-else :class="isCompact ? 'px-3 py-2.5' : ''">
+          <EditableLabeledValue
+            :label="field.label"
+            :value="field.value"
+            :type="field.type || 'text'"
+            :prefix-icon="isCompact ? null : (field.prefixIcon || null)"
+            :can-edit="field.canEdit === true"
+            :options="Array.isArray(field.options) ? field.options : []"
+            :min="field.min"
+            :step="field.step"
+            :multiline="field.multiline === true"
+            :rows="field.rows"
+            :format-value="() => field.displayValue"
+            :get-tag-chip-class="field.getTagChipClass"
+            :layout="isCompact ? 'stack' : 'row'"
+            :compact="isCompact"
+            row-padding-class="py-2 px-4 min-h-[2rem]"
+            @save="handleFieldSave(field, $event)"
+          />
+        </div>
       </template>
     </div>
     <div v-if="showExpandCollapse" class="pt-1">
@@ -200,7 +270,7 @@ import {
   CheckIcon
 } from '@heroicons/vue/24/outline';
 import EditableLabeledValue from '@/components/record-page/EditableLabeledValue.vue';
-import { shouldHideDetailField } from '@/components/record-page/fieldVisibilityGuards';
+import { shouldHideDetailField, shouldHideRecordPaneDetailField } from '@/components/record-page/fieldVisibilityGuards';
 
 function getRecordPathFieldSelectedId(field) {
   const v = field?.value;
@@ -221,13 +291,77 @@ const props = defineProps({
   context: {
     type: Object,
     default: () => ({ module: '' })
+  },
+  /** When set, use these rows instead of adapter.getDetailFields (e.g. right-pane Details tab with search). */
+  fieldRowsOverride: {
+    type: Array,
+    default: null
+  },
+  /** Show every field row (skip "View all" truncation). */
+  showAllFields: {
+    type: Boolean,
+    default: false
+  },
+  /**
+   * default: horizontal icon + label + value (main column).
+   * compact: stacked label + value, card list — best for narrow right pane.
+   */
+  variant: {
+    type: String,
+    default: 'default',
+    validator: (v) => ['default', 'compact'].includes(v)
+  },
+  /** Compact pane: show section headers from field groupId / groupLabel (from adapter). */
+  groupFields: {
+    type: Boolean,
+    default: true
   }
 });
 
+const isCompact = computed(() => props.variant === 'compact');
+
+function isNewGroupHeader(fieldIdx, field) {
+  if (!isCompact.value || !props.groupFields) return false;
+  const list = visibleFields.value;
+  if (fieldIdx === 0) return true;
+  const prev = list[fieldIdx - 1];
+  return (field.groupId || '') !== (prev.groupId || '');
+}
+
+/** Visual accent per adapter group (Core, app scopes, System, etc.) — inner strip + left border. */
+function groupHeaderClass(field) {
+  const id = String(field?.groupId || '').toLowerCase();
+  if (id === 'core') {
+    return 'border-l-[3px] border-l-indigo-500 bg-indigo-50 text-indigo-900 dark:bg-indigo-950/45 dark:text-indigo-100 dark:border-l-indigo-400';
+  }
+  if (id === 'system') {
+    return 'border-l-[3px] border-l-slate-500 bg-slate-100 text-slate-900 dark:bg-slate-900/55 dark:text-slate-100 dark:border-l-slate-400';
+  }
+  if (id.startsWith('app-')) {
+    return 'border-l-[3px] border-l-emerald-600 bg-emerald-50 text-emerald-950 dark:bg-emerald-950/40 dark:text-emerald-50 dark:border-l-emerald-400';
+  }
+  if (id === 'meta') {
+    return 'border-l-[3px] border-l-amber-500 bg-amber-50 text-amber-950 dark:bg-amber-950/35 dark:text-amber-50 dark:border-l-amber-400';
+  }
+  if (id.startsWith('explicit-')) {
+    return 'border-l-[3px] border-l-violet-500 bg-violet-50 text-violet-950 dark:bg-violet-950/40 dark:text-violet-50 dark:border-l-violet-400';
+  }
+  return 'border-l-[3px] border-l-gray-400 bg-gray-100 text-gray-900 dark:bg-gray-800/80 dark:text-gray-100 dark:border-l-gray-500';
+}
+
 const fields = computed(() => {
-  const value = props.adapter?.getDetailFields?.(props.record, props.context);
-  const list = Array.isArray(value) ? value : [];
+  let list;
+  if (props.fieldRowsOverride != null) {
+    list = Array.isArray(props.fieldRowsOverride) ? props.fieldRowsOverride : [];
+  } else {
+    const value = props.adapter?.getDetailFields?.(props.record, props.context);
+    list = Array.isArray(value) ? value : [];
+  }
   const moduleKey = (props.context?.moduleKey || props.context?.module || '').toString().toLowerCase().trim();
+  // Right-pane Details tab (override): show audit/system fields read-only; main column still uses stricter hides.
+  if (props.fieldRowsOverride != null) {
+    return list.filter((field) => !shouldHideRecordPaneDetailField(field, moduleKey));
+  }
   return list.filter((field) => !shouldHideDetailField(field, moduleKey, { enforceRegistryKnown: false }));
 });
 
@@ -244,11 +378,11 @@ watch(isSectionExpanded, (expandedMode) => {
 
 const visibleFields = computed(() => {
   const list = fields.value;
-  if (expanded.value || list.length <= DEFAULT_VISIBLE_FIELDS) return list;
+  if (props.showAllFields || expanded.value || list.length <= DEFAULT_VISIBLE_FIELDS) return list;
   return list.slice(0, DEFAULT_VISIBLE_FIELDS);
 });
 
-const showExpandCollapse = computed(() => fields.value.length > DEFAULT_VISIBLE_FIELDS);
+const showExpandCollapse = computed(() => !props.showAllFields && fields.value.length > DEFAULT_VISIBLE_FIELDS);
 
 function expand() {
   expanded.value = true;

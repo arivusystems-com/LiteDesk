@@ -3,6 +3,7 @@ const FormResponse = require('../models/FormResponse');
 const FormKPIs = require('../models/FormKPIs');
 const Task = require('../models/Task');
 const formScoringService = require('./formScoringService');
+const { assignResolvedSource } = require('./sourceResolver');
 
 /**
  * Process form submission
@@ -288,6 +289,7 @@ exports.processSubmission = async (params) => {
                     ipAddress,
                     userAgent
                 };
+                assignResolvedSource(responseData, 'web_form');
                 
                 formResponse = await FormResponse.create(responseData);
                 console.log('[processSubmission] ✅ Created new response:', formResponse._id.toString());
@@ -536,6 +538,7 @@ async function createCorrectiveTask(form, formResponse, organizationId) {
             priority: 'high',
             dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
         };
+        assignResolvedSource(taskData, 'automation');
         
         // Create task (even if not linked to a supported module type)
         await Task.create(taskData);

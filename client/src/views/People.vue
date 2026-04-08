@@ -1,48 +1,37 @@
 <template>
   <div class="mx-auto w-full">
-    <!-- Context switcher -->
-    <div class="mb-4 flex items-center gap-3">
-      <Listbox v-model="peopleContext" as="div" class="relative min-w-[160px]">
-        <ListboxButton
-          class="inline-flex items-center gap-2 w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-left text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+    <!-- App participation (tabs) -->
+    <div class="mb-4">
+      <nav
+        class="flex flex-wrap gap-1 border-b border-gray-200 dark:border-gray-700"
+        role="tablist"
+        aria-label="App participation"
+      >
+        <button
+          v-for="opt in contextOptions"
+          :key="opt.value"
+          type="button"
+          role="tab"
+          :aria-selected="peopleContext === opt.value"
+          class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 rounded-t-md"
+          :class="
+            peopleContext === opt.value
+              ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-300'
+              : 'border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100'
+          "
+          @click="peopleContext = opt.value"
         >
-          <span>{{ peopleContextLabel }}</span>
-          <ChevronDownIcon class="h-5 w-5 text-gray-400" aria-hidden="true" />
-        </ListboxButton>
-        <Transition
-          leave-active-class="transition ease-in duration-100"
-          leave-from-class="opacity-100"
-          leave-to-class="opacity-0"
-        >
-          <ListboxOptions
-            class="absolute left-0 z-50 mt-2 w-full origin-top-left rounded-lg bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none"
-          >
-            <ListboxOption
-              v-for="opt in contextOptions"
-              :key="opt.value"
-              :value="opt.value"
-              v-slot="{ active }"
-            >
-              <li
-                :class="[
-                  active ? 'bg-indigo-50 dark:bg-indigo-900/30' : '',
-                  'relative cursor-default select-none px-4 py-2 text-sm'
-                ]"
-              >
-                <span class="block truncate">{{ opt.label }}</span>
-              </li>
-            </ListboxOption>
-          </ListboxOptions>
-        </Transition>
-      </Listbox>
+          {{ opt.label }}
+        </button>
+      </nav>
     </div>
 
     <!-- Entity Description -->
-    <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+    <!-- <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
       <p class="text-sm text-gray-700 dark:text-gray-300">
         <strong>People</strong> are shared across Sales, Helpdesk, and Automations. They represent contacts, leads, and customers that can be linked to deals, tickets, and other records throughout the platform.
       </p>
-    </div>
+    </div> -->
 
     <!-- Registry-Driven ModuleList -->
     <ModuleList
@@ -266,6 +255,7 @@
     <PeopleQuickCreateDrawer
       :isOpen="showQuickCreate"
       :context-app-key="peopleContext === 'ALL' ? null : peopleContext"
+      :optional-app-participation="peopleContext === 'ALL'"
       @close="handlePeopleDrawerClose"
       @saved="handlePersonCreated"
     />
@@ -285,8 +275,6 @@ import { ref, computed, watch, onMounted, onUnmounted, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';
-import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from '@headlessui/vue';
-import { ChevronDownIcon } from '@heroicons/vue/24/outline';
 import apiClient from '@/utils/apiClient';
 import ModuleList from '@/components/module-list/ModuleList.vue';
 import BadgeCell from '@/components/common/table/BadgeCell.vue';
@@ -313,14 +301,10 @@ const { openTab } = useTabs();
 const peopleContext = ref('ALL');
 
 const contextOptions = [
-  { label: 'All People', value: 'ALL' },
+  { label: 'All Apps', value: 'ALL' },
   { label: getAppLabel('SALES'), value: 'SALES' },
   { label: getAppLabel('HELPDESK'), value: 'HELPDESK' }
 ];
-
-const peopleContextLabel = computed(() =>
-  contextOptions.find(o => o.value === peopleContext.value)?.label ?? 'All People'
-);
 
 const { typeDefs: salesPeopleTypeDefs } = usePeopleTypes('SALES');
 const { typeDefs: helpdeskPeopleTypeDefs } = usePeopleTypes('HELPDESK');

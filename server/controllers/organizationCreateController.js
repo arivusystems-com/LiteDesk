@@ -103,6 +103,8 @@ exports.create = async (req, res) => {
       });
     }
     
+    const { assignResolvedSource } = require('../services/sourceResolver');
+
     // Build organization body with enforced business organization settings
     const body = {
       ...payload,
@@ -122,6 +124,8 @@ exports.create = async (req, res) => {
         timestamp: new Date()
       }]
     };
+
+    assignResolvedSource(body, 'ui');
     
     // Create organization
     const org = await Organization.create(body);

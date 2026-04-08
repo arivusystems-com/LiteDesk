@@ -182,17 +182,7 @@
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="flex flex-col">
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Source</label>
-              <input 
-                v-model="form.source" 
-                type="text" 
-                placeholder="e.g., Website, Referral, Cold Call"
-                class="px-4 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-              />
-            </div>
-
-            <div class="flex flex-col">
+            <div class="flex flex-col md:col-span-2">
               <label class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Tags (comma separated)</label>
               <input 
                 v-model="tagsString" 
@@ -329,7 +319,6 @@ const form = ref({
   probability: 0,
   type: '',
   priority: 'Medium',
-  source: '',
   contactId: '',
   ownerId: authStore.user?._id || '',
   description: '',
@@ -448,7 +437,7 @@ const handleSubmit = async () => {
     const payload = { ...form.value };
     if (!payload.contactId) delete payload.contactId;
     if (!payload.type) delete payload.type;
-    if (!payload.source) delete payload.source;
+    delete payload.source;
     if (!payload.description) delete payload.description;
     if (!payload.nextFollowUpDate) delete payload.nextFollowUpDate;
     

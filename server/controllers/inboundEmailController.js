@@ -110,15 +110,16 @@ exports.handleInbound = async (req, res) => {
           const nameParts = displayName ? displayName.split(/\s+/) : [];
           const firstName = nameParts[0] || fromEmail.split('@')[0] || 'Inbound';
           const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
-          await People.create({
+          const { assignResolvedSource } = require('../services/sourceResolver');
+          const personPayload = {
             organizationId: orgId,
             createdBy: orgUser._id,
             first_name: firstName,
             last_name: lastName || firstName,
-            email: fromEmail,
-            type: 'Lead',
-            source: 'email_inbound'
-          });
+            email: fromEmail
+          };
+          assignResolvedSource(personPayload, 'email');
+          await People.create(personPayload);
         }
       }
     }

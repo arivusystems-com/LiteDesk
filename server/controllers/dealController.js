@@ -166,6 +166,8 @@ const buildDealFieldChangeLogEntry = ({ actorName, actorId, field, oldValue, new
 // @access  Private
 exports.createDeal = async (req, res) => {
     try {
+        const { stripClientSource, assignResolvedSource } = require('../services/sourceResolver');
+        stripClientSource(req.body);
         const appKey = req.appKey || req.query.appKey || 'SALES';
         const payload = {
             ...req.body,
@@ -219,6 +221,7 @@ exports.createDeal = async (req, res) => {
 
         if (!payload.status) payload.status = 'Open';
 
+        assignResolvedSource(payload, 'ui');
         const newDeal = await Deal.create(payload);
 
         await syncLegacyToRoleBased(newDeal, req.user._id);
@@ -477,6 +480,7 @@ exports.updateDeal = async (req, res) => {
     try {
         // Prevent changing organizationId
         delete req.body.organizationId;
+        delete req.body.source;
         req.body.modifiedBy = req.user._id;
         
         // Validate field-level write access

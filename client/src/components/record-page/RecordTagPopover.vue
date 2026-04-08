@@ -3,7 +3,7 @@
     <div class="flex items-center justify-between gap-2">
       <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Tags</h3>
       <button
-        v-if="hasInstanceTags && canEdit"
+        v-if="canEdit"
         type="button"
         class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
         @click="openCreateTagEditor()"
@@ -282,7 +282,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, nextTick } from 'vue';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue';
 import { CheckIcon, PencilSquareIcon, EllipsisVerticalIcon } from '@heroicons/vue/24/outline';
 import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
@@ -354,7 +354,8 @@ const {
   removeTagFromRecord,
   undoPendingTagRemoval,
   handleTagSearchBlur,
-  resetOnClose
+  resetOnClose,
+  fetchInstanceTagDefinitions
 } = tagState;
 
 const isTagAssigned = (tagName) => Array.isArray(props.record?.tags) && props.record.tags.includes(tagName);
@@ -388,9 +389,15 @@ const menuItemsClass = (menuKey) => {
   ];
 };
 
-watch(() => props.open, (isOpen) => {
+watch(() => props.open, async (isOpen) => {
   if (isOpen) {
-    tagListOpen.value = false;
+    // Match header-open UX: show list + refresh suggestions immediately (colors/definitions stay in sync).
+    tagListOpen.value = true;
+    await fetchInstanceTagDefinitions();
+    await nextTick();
+    try {
+      tagSearchInputRef.value?.focus?.();
+    } catch (_) { /* noop */ }
   } else {
     resetOnClose();
   }

@@ -19,8 +19,10 @@ import {
 import { getKeyFields, getFieldDisplayLabel } from '@/utils/fieldDisplay';
 import { getGlobalSystemFieldKeys } from '@/platform/fields/fieldCapabilityEngine';
 import { getDefaultTagChipClass } from '@/components/record-page/composables/useRecordTags';
-import { shouldHideDetailField } from '@/components/record-page/fieldVisibilityGuards';
+import { shouldHideDetailField, shouldHideRecordPaneDetailField } from '@/components/record-page/fieldVisibilityGuards';
+import { canEditField } from '@/platform/fields/fieldCapabilityEngine';
 import { isFieldVisibleInContext } from '@/utils/fieldContextFilter';
+import { normalizeModuleKeyForRegistry, classifyFieldForModule } from '@/platform/fields/FieldRegistry';
 
 const KEY_SECTION_EXCLUDED = new Set(['name', 'title', 'description']);
 const DETAIL_EXCLUDED = new Set([
@@ -63,6 +65,11 @@ function toReadableLabel(key) {
 function fieldTypeFromDef(field, fieldKey) {
   const key = String(fieldKey || field?.key || '').trim().toLowerCase();
   if (key === 'tags') return 'tags';
+  if (!field) {
+    if (/(created|updated|modified|deleted|closed|start|end).*(at|date)/i.test(key) || ['duedate', 'birthday'].includes(key)) return 'date';
+    if (/(createdby|modifiedby|updatedby|assignedto)$/i.test(key) || /owner|userid$/i.test(key)) return 'user';
+    if (key === '_id' || key === 'id' || key === '__v') return 'text';
+  }
   const dt = String(field?.dataType || '').toLowerCase();
   if (dt.includes('date') || dt.includes('datetime')) return 'date';
   if (dt.includes('number') || dt.includes('currency') || dt.includes('decimal')) return 'number';
@@ -158,6 +165,81 @@ function getDetailFieldKeys(moduleDefinition, moduleKey = '', fieldContext = 'pl
     .map(({ f }) => f.key);
 }
 
+function scopeToGroupLabel(scope) {
+  const s = String(scope || '').toUpperCase();
+  if (s === 'SALES') return 'Sales';
+  if (s === 'HELPDESK') return 'Helpdesk';
+  if (s === 'PLATFORM') return 'Platform';
+  return toReadableLabel(scope);
+}
+
+function participationSortOrder(scope) {
+  const s = String(scope || '').toUpperCase();
+  const map = { SALES: 51, HELPDESK: 52, PLATFORM: 53 };
+  return map[s] ?? 58;
+}
+
+/**
+ * Group headers for the right-pane Details tab (explicit uiGroup/group/section, else field registry).
+ */
+function getFieldGroupMeta(fieldDef, moduleKeyRaw) {
+  const explicit = fieldDef?.uiGroup ?? fieldDef?.group ?? fieldDef?.section;
+  if (typeof explicit === 'string' && explicit.trim()) {
+    const s = explicit.trim();
+    return { id: `explicit-${normKey(s)}`, label: s, sortOrder: 40 };
+  }
+  const mk = normalizeModuleKeyForRegistry(moduleKeyRaw || '');
+  const fieldKey = String(fieldDef?.key || '').trim();
+  if (fieldKey && /^(createdat|updatedat|createdby|modifiedby|updatedby|_id|__v)$/i.test(fieldKey)) {
+    return { id: 'system', label: 'System', sortOrder: 95 };
+  }
+  if (mk && fieldKey) {
+    try {
+      const c = classifyFieldForModule(mk, fieldKey);
+      if (c === 'core') return { id: 'core', label: 'Core', sortOrder: 0 };
+      if (c === 'system') return { id: 'system', label: 'System', sortOrder: 95 };
+      if (c && c !== 'core' && c !== 'system') {
+        return {
+          id: `app-${c}`,
+          label: scopeToGroupLabel(c),
+          sortOrder: participationSortOrder(c)
+        };
+      }
+    } catch (e) {
+      /* ignore */
+    }
+  }
+  return { id: '__fields__', label: 'Other', sortOrder: 80 };
+}
+
+/**
+ * All module fields for the record right-pane Details tab: includes key fields, name/title/description,
+ * system + audit fields (read-only in UI via canEditField); still hides trash/infra blobs.
+ */
+function getRecordPaneAllModuleFieldKeys(moduleDefinition, moduleKey = '', fieldContext = 'platform') {
+  const def = resolveValue(moduleDefinition);
+  const normalizedModuleKey = String(moduleKey || '').toLowerCase().trim();
+  const fields = filterFieldsForRecordSurface(Array.isArray(def?.fields) ? def.fields : [], fieldContext);
+  return fields
+    .map((f, index) => ({ f, index }))
+    .filter(({ f }) => {
+      const key = String(f?.key || '').trim();
+      if (!key) return false;
+      if (shouldHideRecordPaneDetailField(f, normalizedModuleKey)) return false;
+      const vis = f?.visibility;
+      return vis?.detail !== false;
+    })
+    .sort((a, b) => {
+      const aOrder = Number.isFinite(Number(a?.f?.order)) ? Number(a.f.order) : null;
+      const bOrder = Number.isFinite(Number(b?.f?.order)) ? Number(b.f.order) : null;
+      if (aOrder != null && bOrder != null) return aOrder - bOrder;
+      if (aOrder != null) return -1;
+      if (bOrder != null) return 1;
+      return a.index - b.index;
+    })
+    .map(({ f }) => f.key);
+}
+
 /**
  * Create generic record adapter for a module.
  * @param {Object} opts - formatDate, moduleDefinition, canEditDetails, saveDetailField, getRelatedGroups, openRelatedItem, canUnlinkRelated, onUnlinkRelated, canLinkRecords, openLinkRecordDrawer, openAddRecordDrawer, handleDescriptionSave, canEditDescription, expandedLeftSection, openLeftSection, canViewDescriptionHistory, openDescriptionHistory, getEntityOptions
@@ -195,6 +277,133 @@ export function createGenericRecordAdapter(opts = {}) {
       const label = item.name ?? item.title ?? item.label ?? (id != null ? String(id) : '—');
       return { value: id, label };
     });
+  }
+
+  function buildDetailRowsForKeys(record, context, detailKeys) {
+    const def = resolveValue(moduleDefinition);
+    const fieldsByKey = new Map((def?.fields || []).map((f) => [String(f.key).trim(), f]));
+    const moduleKeyStr = String(context?.moduleKey || context?.module || '').toLowerCase().trim();
+    const rows = detailKeys.map((fieldKey, rowIndex) => {
+      const field = fieldsByKey.get(fieldKey);
+      const groupMeta = getFieldGroupMeta(field || { key: fieldKey }, moduleKeyStr);
+      const fieldType = fieldTypeFromDef(field, fieldKey);
+      const rawValue = record[fieldKey];
+      const normalizedFieldKey = String(fieldKey || '').toLowerCase().trim();
+      const isArrayBackedSelect = fieldType === 'select' && (
+        Array.isArray(rawValue) ||
+        String(field?.dataType || '').toLowerCase().includes('multi') ||
+        field?.allowMultiple === true ||
+        field?.multiple === true ||
+        field?.isArray === true ||
+        normalizedFieldKey === 'types'
+      );
+      const entityOpts = fieldType === 'entity' ? entityOptionsFor(fieldKey) : [];
+      const options = fieldType === 'select'
+        ? normalizeSelectOptions(field?.options)
+        : ((fieldType === 'entity' || fieldType === 'user') ? entityOpts : []);
+      let displayValue = rawValue;
+      if (fieldKey === 'tags' && Array.isArray(rawValue)) {
+        displayValue = rawValue.length ? rawValue.join(', ') : '';
+      } else if (isArrayBackedSelect && Array.isArray(rawValue)) {
+        const labels = rawValue.map((item) => {
+          const itemId = item != null && typeof item === 'object' ? (item.value ?? item._id ?? item.id) : item;
+          if (itemId == null) return '';
+          const matchedOption = (options || []).find((opt) => {
+            const optId = opt?.value ?? opt?._id ?? opt?.id;
+            return optId != null && String(optId) === String(itemId);
+          });
+          return matchedOption?.label ?? String(itemId);
+        }).filter(Boolean);
+        displayValue = labels.join(', ');
+      } else if (rawValue instanceof Date && !Number.isNaN(rawValue.getTime())) {
+        displayValue = formatDate ? formatDate(rawValue) : rawValue.toISOString().slice(0, 10);
+      } else if (rawValue != null && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
+        const asStr = typeof rawValue.toString === 'function' ? String(rawValue) : '';
+        if (/^[a-f\d]{24}$/i.test(asStr) && !(rawValue.name || rawValue.title || rawValue.email || rawValue.firstName)) {
+          displayValue = asStr;
+        } else {
+          displayValue = rawValue.name ?? rawValue.title ?? rawValue.label ?? (`${(rawValue.firstName || '')} ${(rawValue.lastName || '')}`.trim() || rawValue.email || '');
+        }
+      } else if ((fieldType === 'select' || fieldType === 'entity' || fieldType === 'user') && rawValue != null && !Array.isArray(rawValue)) {
+        const rawId = String(rawValue);
+        const matchedOption = (options || []).find((opt) => {
+          const optId = opt?.value ?? opt?._id ?? opt?.id;
+          return optId != null && String(optId) === rawId;
+        });
+        displayValue = matchedOption?.label ?? matchedOption?.name ?? rawValue;
+      } else if (rawValue != null && typeof rawValue === 'string' && /^\d{4}-\d{2}/.test(rawValue)) {
+        displayValue = formatDate ? formatDate(rawValue) : rawValue.slice(0, 10);
+      }
+      const isTags = fieldType === 'tags';
+      const registryMk = normalizeModuleKeyForRegistry(moduleKeyStr);
+      let engineAllowsEdit = true;
+      if (registryMk) {
+        try {
+          engineAllowsEdit = canEditField(registryMk, { key: fieldKey });
+        } catch (e) {
+          engineAllowsEdit = true;
+        }
+      }
+      const canEdit = engineAllowsEdit && !isTags && canEditDetails?.(record, fieldKey) === true && ['text', 'number', 'date', 'select', 'entity', 'user'].includes(fieldType);
+      const canOpenTagsEditor = isTags && typeof context?.openTagsEditor === 'function';
+      const orgId = rawValue != null && typeof rawValue === 'object' ? (rawValue._id ?? rawValue.id) : (typeof rawValue === 'string' && rawValue.trim() ? rawValue.trim() : null);
+      const recordPathForEntity = fieldType === 'entity' && orgId != null && /^(organization|account|company)$/.test(String(fieldKey).toLowerCase())
+        ? `/organizations/${orgId}`
+        : undefined;
+      return {
+        key: fieldKey,
+        label: field ? getFieldDisplayLabel(field) : toReadableLabel(fieldKey),
+        prefixIcon: iconForKey(fieldKey, field),
+        value: fieldKey === 'tags' ? (Array.isArray(rawValue) ? rawValue : (rawValue != null && rawValue !== '' ? [].concat(rawValue) : [])) : rawValue,
+        displayValue: displayValue == null || String(displayValue).trim() === '' ? '' : String(displayValue),
+        type: fieldType,
+        options,
+        recordPath: recordPathForEntity,
+        canEdit,
+        onSave: canEdit
+          ? (value) => {
+            if (isArrayBackedSelect) {
+              const nextValue = value == null || value === '' ? [] : [value];
+              saveDetailField?.(fieldKey, nextValue, record);
+              return;
+            }
+            saveDetailField?.(fieldKey, value, record);
+          }
+          : null,
+        canOpenEditor: canOpenTagsEditor,
+        onEdit: canOpenTagsEditor ? (e) => context.openTagsEditor(e, fieldKey, record) : null,
+        getTagChipClass: isTags ? (typeof context?.getTagChipClass === 'function' ? context.getTagChipClass : getDefaultTagChipClass) : undefined,
+        groupId: groupMeta.id,
+        groupLabel: groupMeta.label,
+        groupSortOrder: groupMeta.sortOrder,
+        _rowIndex: rowIndex
+      };
+    });
+    if (record.source != null && String(record.source).trim() !== '') {
+      const already = rows.some((r) => r.key === 'source');
+      if (!already) {
+        const dv = String(record.source).trim();
+        rows.push({
+          key: 'source',
+          label: 'Created via',
+          prefixIcon: TagIcon,
+          value: record.source,
+          displayValue: dv,
+          type: 'text',
+          options: [],
+          recordPath: undefined,
+          canEdit: false,
+          onSave: null,
+          canOpenEditor: false,
+          onEdit: null,
+          groupId: 'meta',
+          groupLabel: 'Record',
+          groupSortOrder: 250,
+          _rowIndex: rows.length
+        });
+      }
+    }
+    return rows;
   }
 
   return {
@@ -320,88 +529,50 @@ export function createGenericRecordAdapter(opts = {}) {
     getDetailFields(record, context) {
       if (!record) return [];
       const def = resolveValue(moduleDefinition);
-      const fieldsByKey = new Map((def?.fields || []).map((f) => [String(f.key).trim(), f]));
       const moduleKey = String(context?.moduleKey || context?.module || '').toLowerCase().trim();
       const fieldCtx =
         context?.fieldContext != null && String(context.fieldContext).trim() !== ''
           ? String(context.fieldContext).toLowerCase()
           : 'platform';
       const detailKeys = getDetailFieldKeys(def, moduleKey, fieldCtx);
-      return detailKeys.map((fieldKey) => {
-        const field = fieldsByKey.get(fieldKey);
-        const fieldType = fieldTypeFromDef(field, fieldKey);
-        const rawValue = record[fieldKey];
-        const normalizedFieldKey = String(fieldKey || '').toLowerCase().trim();
-        const isArrayBackedSelect = fieldType === 'select' && (
-          Array.isArray(rawValue) ||
-          String(field?.dataType || '').toLowerCase().includes('multi') ||
-          field?.allowMultiple === true ||
-          field?.multiple === true ||
-          field?.isArray === true ||
-          normalizedFieldKey === 'types'
-        );
-        const entityOpts = fieldType === 'entity' ? entityOptionsFor(fieldKey) : [];
-        const options = fieldType === 'select'
-          ? normalizeSelectOptions(field?.options)
-          : ((fieldType === 'entity' || fieldType === 'user') ? entityOpts : []);
-        let displayValue = rawValue;
-        if (fieldKey === 'tags' && Array.isArray(rawValue)) {
-          displayValue = rawValue.length ? rawValue.join(', ') : '';
-        } else if (isArrayBackedSelect && Array.isArray(rawValue)) {
-          const labels = rawValue.map((item) => {
-            const itemId = item != null && typeof item === 'object' ? (item.value ?? item._id ?? item.id) : item;
-            if (itemId == null) return '';
-            const matchedOption = (options || []).find((opt) => {
-              const optId = opt?.value ?? opt?._id ?? opt?.id;
-              return optId != null && String(optId) === String(itemId);
-            });
-            return matchedOption?.label ?? String(itemId);
-          }).filter(Boolean);
-          displayValue = labels.join(', ');
-        } else if (rawValue != null && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
-          displayValue = rawValue.name ?? rawValue.title ?? rawValue.label ?? (`${(rawValue.firstName || '')} ${(rawValue.lastName || '')}`.trim() || rawValue.email || '');
-        } else if ((fieldType === 'select' || fieldType === 'entity' || fieldType === 'user') && rawValue != null && !Array.isArray(rawValue)) {
-          const rawId = String(rawValue);
-          const matchedOption = (options || []).find((opt) => {
-            const optId = opt?.value ?? opt?._id ?? opt?.id;
-            return optId != null && String(optId) === rawId;
-          });
-          displayValue = matchedOption?.label ?? matchedOption?.name ?? rawValue;
-        } else if (rawValue != null && typeof rawValue === 'string' && /^\d{4}-\d{2}/.test(rawValue)) {
-          displayValue = formatDate ? formatDate(rawValue) : rawValue.slice(0, 10);
-        }
-        const isTags = fieldType === 'tags';
-        const canEdit = !isTags && canEditDetails?.(record, fieldKey) === true && ['text', 'number', 'date', 'select', 'entity', 'user'].includes(fieldType);
-        const canOpenTagsEditor = isTags && typeof context?.openTagsEditor === 'function';
-        const orgId = rawValue != null && typeof rawValue === 'object' ? (rawValue._id ?? rawValue.id) : (typeof rawValue === 'string' && rawValue.trim() ? rawValue.trim() : null);
-        const recordPathForEntity = fieldType === 'entity' && orgId != null && /^(organization|account|company)$/.test(String(fieldKey).toLowerCase())
-          ? `/organizations/${orgId}`
-          : undefined;
-        return {
-          key: fieldKey,
-          label: field ? getFieldDisplayLabel(field) : toReadableLabel(fieldKey),
-          prefixIcon: iconForKey(fieldKey, field),
-          value: fieldKey === 'tags' ? (Array.isArray(rawValue) ? rawValue : (rawValue != null && rawValue !== '' ? [].concat(rawValue) : [])) : rawValue,
-          displayValue: displayValue == null || String(displayValue).trim() === '' ? '' : String(displayValue),
-          type: fieldType,
-          options,
-          recordPath: recordPathForEntity,
-          canEdit,
-          onSave: canEdit
-            ? (value) => {
-              if (isArrayBackedSelect) {
-                const nextValue = value == null || value === '' ? [] : [value];
-                saveDetailField?.(fieldKey, nextValue, record);
-                return;
-              }
-              saveDetailField?.(fieldKey, value, record);
-            }
-            : null,
-          canOpenEditor: canOpenTagsEditor,
-          onEdit: canOpenTagsEditor ? (e) => context.openTagsEditor(e, fieldKey, record) : null,
-          getTagChipClass: isTags ? (typeof context?.getTagChipClass === 'function' ? context.getTagChipClass : getDefaultTagChipClass) : undefined
-        };
+      const rows = buildDetailRowsForKeys(record, context, detailKeys);
+      rows.forEach((r) => {
+        delete r._rowIndex;
+        delete r.groupSortOrder;
       });
+      return rows;
+    },
+
+    getAllModuleFields(record, context) {
+      if (!record) return [];
+      const def = resolveValue(moduleDefinition);
+      const moduleKey = String(context?.moduleKey || context?.module || '').toLowerCase().trim();
+      const fieldCtx =
+        context?.fieldContext != null && String(context.fieldContext).trim() !== ''
+          ? String(context.fieldContext).toLowerCase()
+          : 'platform';
+      let keys = getRecordPaneAllModuleFieldKeys(def, moduleKey, fieldCtx);
+      const seen = new Set(keys.map((k) => normKey(k)));
+      const extraKeys = ['createdAt', 'updatedAt', 'createdBy', 'modifiedBy', 'updatedBy', '_id'];
+      for (const ek of extraKeys) {
+        if (seen.has(normKey(ek))) continue;
+        if (record[ek] === undefined && ek !== '_id') continue;
+        if (ek === '_id' && record._id == null) continue;
+        keys.push(ek);
+        seen.add(normKey(ek));
+      }
+      const rows = buildDetailRowsForKeys(record, context, keys);
+      rows.sort((a, b) => {
+        const oa = a.groupSortOrder ?? 999;
+        const ob = b.groupSortOrder ?? 999;
+        if (oa !== ob) return oa - ob;
+        return (a._rowIndex ?? 0) - (b._rowIndex ?? 0);
+      });
+      rows.forEach((row) => {
+        delete row._rowIndex;
+        delete row.groupSortOrder;
+      });
+      return rows;
     },
 
     getRelatedGroups(record) {

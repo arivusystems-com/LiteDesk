@@ -6,6 +6,8 @@ const mongoose = require('mongoose');
 // @access  Private
 exports.createItem = async (req, res) => {
     try {
+        const { stripClientSource, assignResolvedSource } = require('../services/sourceResolver');
+        stripClientSource(req.body);
         const { extractCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
         const { standardPayload, customFieldsSet } = extractCustomFields(req.body, Item);
 
@@ -16,6 +18,7 @@ exports.createItem = async (req, res) => {
             modifiedBy: req.user._id,
             ...(Object.keys(customFieldsSet).length > 0 && { customFields: customFieldsSet })
         };
+        assignResolvedSource(payload, 'ui');
 
         // Validate required fields
         if (!payload.item_name) {
@@ -205,6 +208,7 @@ exports.updateItem = async (req, res) => {
     try {
         // Prevent changing organizationId
         delete req.body.organizationId;
+        delete req.body.source;
         req.body.modifiedBy = req.user._id;
         
         const previous = await Item.findOne({

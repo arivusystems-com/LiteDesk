@@ -24,6 +24,7 @@ const {
   PEOPLE_SALES_LEAD_STATUS_PATH,
   PEOPLE_SALES_CONTACT_STATUS_PATH,
 } = require('../utils/peopleFieldRegistry');
+const { RECORD_SOURCE_VALUES, DEFAULT_RECORD_SOURCE } = require('../constants/recordSource');
 
 const PeopleSchema = new Schema({
   // Multi-tenancy
@@ -34,8 +35,12 @@ const PeopleSchema = new Schema({
   assignedTo: { type: Schema.Types.ObjectId, ref: 'User', required: false, index: true }, // Default: optional (can be configured by admin)
   legacyContactId: { type: Schema.Types.ObjectId, index: true },
 
-  // Core
-  source: { type: String, trim: true },
+  // Core — system-managed creation channel (set server-side only)
+  source: {
+    type: String,
+    enum: RECORD_SOURCE_VALUES,
+    default: DEFAULT_RECORD_SOURCE
+  },
 
   first_name: { type: String, trim: true, required: true }, // Default: required (can be configured by admin)
   last_name: {

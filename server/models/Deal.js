@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
+const { RECORD_SOURCE_VALUES, DEFAULT_RECORD_SOURCE } = require('../constants/recordSource');
 
 // Deal Schema Definition
 const DealSchema = new Schema({
@@ -173,7 +174,8 @@ const DealSchema = new Schema({
     },
     source: {
         type: String,
-        trim: true // e.g., 'Website', 'Referral', 'Cold Call'
+        enum: RECORD_SOURCE_VALUES,
+        default: DEFAULT_RECORD_SOURCE
     },
     nextStep: {
         type: String,

@@ -104,12 +104,11 @@ async function testDemoFlow() {
             organization: organizationV2._id,
             createdBy: masterAdmin._id,
             assignedTo: masterAdmin._id,
-            type: 'Lead',
             first_name: 'John',
             last_name: 'Doe',
             email: uniqueEmail,
             phone: '+1-555-0123',
-            source: 'Website - Demo Request',
+            source: 'Web Form',
             lead_score: 50,
             tags: ['demo-request', 'Technology']
         });

@@ -34,11 +34,10 @@ async function run() {
     organizationId: org._id,
     createdBy: admin._id,
     assignedTo: admin._id,
-    type: 'Lead',
     first_name: 'Sample',
     last_name: 'Person',
     email: 'sample.person@example.com',
-    source: 'seed'
+    source: 'Direct'
   });
 
   // Link as primary contact

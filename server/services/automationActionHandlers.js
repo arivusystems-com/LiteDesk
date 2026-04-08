@@ -99,7 +99,8 @@ async function createTask(ctx, params) {
   }
 
   try {
-    const task = await Task.create({
+    const { assignResolvedSource } = require('./sourceResolver');
+    const taskPayload = {
       organizationId: new mongoose.Types.ObjectId(orgId),
       title: title.trim(),
       description: params?.description && typeof params.description === 'string' ? params.description.trim() : undefined,
@@ -110,7 +111,9 @@ async function createTask(ctx, params) {
       status: 'todo',
       priority: 'medium',
       createdBy: ctx.triggeredBy ? new mongoose.Types.ObjectId(ctx.triggeredBy) : undefined
-    });
+    };
+    assignResolvedSource(taskPayload, 'automation');
+    const task = await Task.create(taskPayload);
     return { ok: true, taskId: task._id.toString() };
   } catch (err) {
     return { ok: false, error: err.message || String(err) };

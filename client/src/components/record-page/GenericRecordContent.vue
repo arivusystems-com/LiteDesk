@@ -315,53 +315,91 @@
           v-if="isPeopleModule && record && (!expandedLeftSection || expandedLeftSection === 'key-fields')"
           :class="['group/left-section', expandedLeftSection ? 'mt-8' : 'mt-4']"
         >
-          <section class="record-state-section mb-8 mt-4" aria-labelledby="app-participation-heading">
-            <h2 id="app-participation-heading" class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-              App participation
-            </h2>
-            <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <section
+            class="record-state-section mb-8 mt-4 group/app-participation"
+            aria-labelledby="app-participation-heading"
+          >
+            <div class="pb-2 flex items-center justify-between gap-3 flex-wrap">
+              <h3
+                id="app-participation-heading"
+                :class="[
+                  'font-semibold text-gray-900 dark:text-white',
+                  expandedLeftSection ? 'text-2xl' : 'text-base'
+                ]"
+              >
+                App participation
+              </h3>
+              <div
+                v-if="attachableAppsForRecordContext.length"
+                :class="[
+                  'inline-flex flex-wrap items-center justify-end gap-1.5 transition-opacity',
+                  expandedLeftSection
+                    ? 'opacity-100 lg:opacity-100'
+                    : 'opacity-100 lg:opacity-0 lg:group-hover/app-participation:opacity-100'
+                ]"
+              >
+                <button
+                  v-for="app in attachableAppsForRecordContext"
+                  :key="`attach-header-${app}`"
+                  type="button"
+                  class="inline-flex items-center justify-center gap-1.5 min-h-8 px-2.5 rounded-md border border-gray-200 bg-white text-gray-600 hover:text-gray-800 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:text-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  :title="`Add to ${getAppLabel(app)}`"
+                  :aria-label="`Add to ${getAppLabel(app)}`"
+                  @click="openAttachToAppModal(app)"
+                >
+                  <PlusIcon class="h-4 w-4 shrink-0" />
+                  <span class="text-xs font-semibold">Add to {{ getAppLabel(app) }}</span>
+                </button>
+              </div>
+            </div>
+            <div class="space-y-2">
               <template v-if="peopleParticipationEntriesVisible.length">
                 <div
                   v-for="(entry, i) in peopleParticipationEntriesVisible"
                   :key="`${entry.appKey}-${i}`"
-                  class="inline-flex items-center gap-1.5"
+                  class="flex flex-wrap items-center gap-x-3 gap-y-2 justify-between rounded-lg border border-gray-200/80 dark:border-gray-700/80 bg-gray-50/60 dark:bg-gray-800/40 px-3 py-2.5"
                 >
-                  <template v-if="peopleContextIsAppView">
-                    <span class="text-sm text-gray-900 dark:text-white">{{ entry.role }}</span>
-                  </template>
-                  <template v-else>
-                    <span
-                      class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
-                      :class="participationAppBadgeClass(entry.appLabel)"
+                  <div class="flex flex-wrap items-center gap-2 min-w-0">
+                    <template v-if="peopleContextIsAppView">
+                      <span class="text-sm font-medium text-gray-900 dark:text-white">{{ entry.role }}</span>
+                    </template>
+                    <template v-else>
+                      <span
+                        class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                        :class="participationAppBadgeClass(entry.appLabel)"
+                      >
+                        {{ entry.appLabel }}
+                      </span>
+                      <BadgeCell
+                        :value="entry.role"
+                        :options="badgeOptionsForParticipationApp(entry.appKey)"
+                        :variant-map="participationRoleBadgeVariantMap"
+                      />
+                    </template>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2 shrink-0">
+                    <button
+                      v-if="entry.appKey === 'SALES' && showPeopleConvertLeadPrimary"
+                      type="button"
+                      class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 rounded-md shadow-sm transition-colors"
+                      @click="showConvertLeadModal = true"
                     >
-                      {{ entry.appLabel }}
-                    </span>
-                    <BadgeCell
-                      :value="entry.role"
-                      :options="badgeOptionsForParticipationApp(entry.appKey)"
-                      :variant-map="participationRoleBadgeVariantMap"
-                    />
-                  </template>
-                  <button
-                    v-if="canEditParticipationFor(entry.appKey)"
-                    type="button"
-                    class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
-                    title="Edit participation"
-                    @click="openParticipationEdit(entry.appKey)"
-                  >
-                    Edit
-                  </button>
+                      <ArrowRightCircleIcon class="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                      Convert to Contact
+                    </button>
+                    <button
+                      v-if="canEditParticipationFor(entry.appKey)"
+                      type="button"
+                      class="inline-flex items-center justify-center gap-1.5 min-h-8 px-2.5 rounded-md border border-gray-200 bg-white text-gray-600 hover:text-gray-800 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:text-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      title="Edit participation"
+                      aria-label="Edit participation"
+                      @click="openParticipationEdit(entry.appKey)"
+                    >
+                      <PencilSquareIcon class="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span class="text-xs font-semibold">Edit</span>
+                    </button>
+                  </div>
                 </div>
-                <button
-                  v-for="app in attachableAppsForRecordContext"
-                  :key="`attach-${app}`"
-                  type="button"
-                  class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
-                  @click="openAttachToAppModal(app)"
-                >
-                  <PlusIcon class="w-3.5 h-3.5" />
-                  Add to {{ getAppLabel(app) }}
-                </button>
               </template>
               <template v-else>
                 <span class="text-sm text-gray-500 dark:text-gray-400 italic">
@@ -372,16 +410,6 @@
                     This person is not part of any app yet
                   </template>
                 </span>
-                <button
-                  v-for="app in attachableAppsForRecordContext"
-                  :key="`attach-empty-${app}`"
-                  type="button"
-                  class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
-                  @click="openAttachToAppModal(app)"
-                >
-                  <PlusIcon class="w-3.5 h-3.5" />
-                  Add to {{ getAppLabel(app) }}
-                </button>
               </template>
             </div>
           </section>
@@ -616,6 +644,68 @@
               </div>
             </div>
           </template>
+          <template #tab-details>
+            <div class="flex flex-col h-full min-h-0">
+              <div class="record-context-panel__header flex flex-shrink-0 flex-col gap-2 border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-900">
+                <div class="flex items-baseline justify-between gap-2">
+                  <h2 class="text-sm font-normal text-gray-900 dark:text-white">Details</h2>
+                  <span
+                    v-if="detailsTabFieldCountLabel"
+                    class="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium tabular-nums text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                  >
+                    {{ detailsTabFieldCountLabel }}
+                  </span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <div class="relative min-w-0 flex-1">
+                    <MagnifyingGlassIcon class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+                    <input
+                      v-model="detailsTabSearchQuery"
+                      type="search"
+                      placeholder="Filter fields…"
+                      autocomplete="off"
+                      class="w-full rounded-lg border border-gray-200 bg-gray-50 py-1.5 pl-9 pr-3 text-sm text-gray-900 placeholder-gray-500 focus:border-indigo-500/50 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 dark:border-gray-600 dark:bg-gray-800/80 dark:text-white dark:placeholder-gray-400"
+                    />
+                  </div>
+                  <label class="flex shrink-0 cursor-pointer items-center gap-2 select-none text-xs text-gray-600 dark:text-gray-400">
+                    <input
+                      v-model="detailsShowEmptyFields"
+                      type="checkbox"
+                      class="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800"
+                    />
+                    Show empty fields
+                  </label>
+                </div>
+              </div>
+              <div class="min-h-0 flex-1 overflow-y-auto px-3 pb-4 pt-3">
+                <template v-if="record?._id && genericAdapter">
+                  <p
+                    v-if="rightPaneAllModuleFields.length && !rightPaneDetailsFilteredFields.length && (detailsTabSearchQuery || '').trim()"
+                    class="px-1 py-10 text-center text-sm text-gray-500 dark:text-gray-400"
+                  >
+                    No fields match your filter.
+                  </p>
+                  <p
+                    v-else-if="rightPaneAllModuleFields.length && !rightPaneDetailsFilteredFields.length"
+                    class="px-1 py-10 text-center text-sm text-gray-500 dark:text-gray-400"
+                  >
+                    No fields with values. Turn on “Show empty fields” to see the rest.
+                  </p>
+                  <DetailsSection
+                    v-else-if="rightPaneDetailsFilteredFields.length"
+                    :record="record"
+                    :adapter="genericAdapter"
+                    :context="recordDetailsTabContext"
+                    :field-rows-override="rightPaneDetailsFilteredFields"
+                    :show-all-fields="true"
+                    variant="compact"
+                  />
+                  <p v-else class="px-1 py-10 text-center text-sm text-gray-500 dark:text-gray-400">No fields to show.</p>
+                </template>
+                <p v-else class="text-sm text-gray-500 dark:text-gray-400">No record loaded.</p>
+              </div>
+            </div>
+          </template>
           <template #tab-integrations>
             <div class="flex flex-col h-full">
               <div class="record-context-panel__header flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 bg-white dark:bg-gray-900">
@@ -681,6 +771,14 @@
       @updated="handleParticipationEditUpdated"
     />
 
+    <SalesConvertLeadModal
+      v-if="record && isPeopleModule"
+      :is-open="showConvertLeadModal"
+      :person-id="String(record._id)"
+      @close="showConvertLeadModal = false"
+      @converted="handleConvertLeadCompleted"
+    />
+
     <EmailComposeDrawer
       v-if="record && supportsEmail"
       :is-open="showEmailModal"
@@ -741,6 +839,7 @@ import RecordPageTitleRow from '@/components/record-page/RecordPageTitleRow.vue'
 import { useStickyTitleRow } from '@/components/record-page/composables/useStickyTitleRow';
 import SectionStack from '@/components/record-page/sections/SectionStack.vue';
 import RelatedSection from '@/components/record-page/sections/RelatedSection.vue';
+import DetailsSection from '@/components/record-page/sections/DetailsSection.vue';
 import RecordRightPane from '@/components/record-page/RecordRightPane.vue';
 import EditableTitle from '@/components/record-page/EditableTitle.vue';
 import RecordTagPopover from '@/components/record-page/RecordTagPopover.vue';
@@ -777,11 +876,13 @@ import {
   ArrowDownTrayIcon,
   EnvelopeIcon,
   LinkIcon,
+  MagnifyingGlassIcon,
   PlusIcon,
   ArrowLeftIcon,
   ArrowRightIcon,
   ArrowsPointingInIcon,
-  ArrowTopRightOnSquareIcon
+  ArrowTopRightOnSquareIcon,
+  ArrowRightCircleIcon
 } from '@heroicons/vue/24/outline';
 import Avatar from '@/components/common/Avatar.vue';
 import BadgeCell from '@/components/common/table/BadgeCell.vue';
@@ -793,12 +894,14 @@ import {
   getPeopleParticipationEntries,
   filterParticipationEntriesByContext,
   isPeopleListAppContext,
+  isPeopleSalesLeadFromFields,
   PEOPLE_PARTICIPATION_APP_KEYS
 } from '@/utils/peopleParticipationUi';
 import { usePeopleTypes } from '@/composables/usePeopleTypes';
 import { typeDefsToBadgeOptions } from '@/utils/peopleTypeColors';
 import AttachToAppModal from '@/components/people/AttachToAppModal.vue';
 import ParticipationEditModal from '@/components/people/ParticipationEditModal.vue';
+import SalesConvertLeadModal from '@/components/people/SalesConvertLeadModal.vue';
 import { getParticipationFields } from '@/platform/fields/peopleFieldModel';
 import { hasPeoplePermission } from '@/platform/permissions/peoplePermissionHelper';
 import { PEOPLE_PERMISSIONS } from '@/platform/permissions/peoplePermissions';
@@ -838,6 +941,8 @@ const activityRaw = ref([]);
   const activityFilterComments = ref(true);
   const activityFilterUpdates = ref(true);
   const activityFilterEmail = ref(true);
+  const detailsTabSearchQuery = ref('');
+  const detailsShowEmptyFields = ref(true);
   const expandedTaskEmailThreads = ref(new Set());
   const showDeleteModal = ref(false);
 const showEditModal = ref(false);
@@ -848,6 +953,7 @@ const showAddRelatedRecordDrawer = ref(false);
 const addRelatedRecordModuleKey = ref('');
 const pendingAddRelatedLinkPayload = ref(null);
 const showAttachModal = ref(false);
+const showConvertLeadModal = ref(false);
 const attachModalTargetApp = ref('SALES');
 /** Preset SALES classifier (Lead/Contact); null for HELPDESK (picker uses tenant types). */
 const attachModalParticipationType = ref('LEAD');
@@ -1007,6 +1113,19 @@ const peopleHeaderBadges = computed(() => {
   }
   return badges;
 });
+
+/** Sales Lead: show “Convert to Contact” on the Sales app row (same lifecycle permission as ParticipationCard). */
+const showPeopleConvertLeadPrimary = computed(() => {
+  if (!isPeopleModule.value || !record.value) return false;
+  const r = record.value;
+  const salesType = r.sales_type ?? getParticipation(r, 'SALES')?.role;
+  if (!isPeopleSalesLeadFromFields({ sales_type: salesType })) return false;
+  return hasPeoplePermission(PEOPLE_PERMISSIONS.LIFECYCLE.SALES, authStore);
+});
+
+async function handleConvertLeadCompleted() {
+  await fetchRecord();
+}
 
 /** Apps from PEOPLE_PARTICIPATION_APP_KEYS where the person has no participation and user may attach */
 const attachableAppsMissingParticipation = computed(() => {
@@ -1241,6 +1360,7 @@ async function handleUnlinkGenericRelated(item, group, rec) {
 const rightPaneTabs = computed(() => [
   { id: 'activity', name: 'Activity' },
   { id: 'related', name: 'Related' },
+  { id: 'details', name: 'Details' },
   { id: 'integrations', name: 'Integrations' }
 ]);
 
@@ -1400,12 +1520,24 @@ async function restoreDescriptionVersion() {
   }
 }
 
+async function refreshRecordActivity() {
+  if (!props.recordId || !props.moduleKey) return;
+  try {
+    const activityRes = await apiClient.get(`/modules/${props.moduleKey}/records/${props.recordId}/activity`);
+    if (activityRes?.success && Array.isArray(activityRes.data)) {
+      activityRaw.value = activityRes.data;
+    }
+  } catch (e) {
+    console.warn('Refresh activity failed:', e);
+  }
+}
+
 const genericAdapter = computed(() => {
   if (!record.value || !moduleDefinition.value) return null;
   return createGenericRecordAdapter({
     formatDate: (d) => (d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'),
     moduleDefinition: moduleDefinition.value,
-    canEditDetails: (_, fieldKey) => canEditRecord.value,
+    canEditDetails: () => canEditRecord.value,
     saveDetailField: async (fieldKey, value) => {
       try {
         const moduleKeyLower = (props.moduleKey || '').toLowerCase();
@@ -1429,11 +1561,12 @@ const genericAdapter = computed(() => {
           const updatedRecord = response?.data?.data ?? response?.data ?? null;
           if (record.value && updatedRecord && typeof updatedRecord === 'object') {
             Object.assign(record.value, updatedRecord);
-          } else if (record.value) {
+          } else           if (record.value) {
             record.value.first_name = next.first_name;
             record.value.last_name = next.last_name;
             if (fullName) record.value.name = fullName;
           }
+          await refreshRecordActivity();
           return;
         }
 
@@ -1447,6 +1580,7 @@ const genericAdapter = computed(() => {
             Object.assign(record.value, updatedRecord);
           }
         }
+        await refreshRecordActivity();
       } catch (e) {
         console.error('Save field error:', e);
       }
@@ -1506,6 +1640,65 @@ const sectionContext = computed(() => {
     base.getTagChipClass = typeof getPeopleTagChipClass.value === 'function' ? getPeopleTagChipClass.value : getDefaultTagChipClass;
   }
   return base;
+});
+
+const recordDetailsTabContext = computed(() => ({
+  ...sectionContext.value,
+  hideHeader: true
+}));
+
+const rightPaneAllModuleFields = computed(() => {
+  if (!genericAdapter.value || !record.value) return [];
+  const rows = genericAdapter.value.getAllModuleFields?.(record.value, sectionContext.value);
+  return Array.isArray(rows) ? rows : [];
+});
+
+function isGenericDetailRowEmpty(row) {
+  if (!row || row.key === 'source') return false;
+  if (row.type === 'tags') {
+    const v = row.value;
+    return !Array.isArray(v) || v.length === 0;
+  }
+  const v = row.value;
+  if (v != null && typeof v === 'object' && !Array.isArray(v)) {
+    const dv = row.displayValue;
+    return dv == null || String(dv).trim() === '';
+  }
+  if (v === false || v === 0) return false;
+  if (v == null || v === '') return true;
+  if (typeof v === 'string' && !String(v).trim()) return true;
+  if (Array.isArray(v) && v.length === 0) return true;
+  const dv = row.displayValue;
+  if (dv == null || String(dv).trim() === '') return true;
+  return false;
+}
+
+const rightPaneDetailsFilteredFields = computed(() => {
+  const q = (detailsTabSearchQuery.value || '').trim().toLowerCase();
+  let rows = rightPaneAllModuleFields.value;
+  if (q) {
+    rows = rows.filter((f) => {
+      const label = String(f.label || '').toLowerCase();
+      const key = String(f.key || '').toLowerCase();
+      const dv = String(f.displayValue || '').toLowerCase();
+      return label.includes(q) || key.includes(q) || dv.includes(q);
+    });
+  }
+  if (!detailsShowEmptyFields.value) {
+    rows = rows.filter((r) => !isGenericDetailRowEmpty(r));
+  }
+  return rows;
+});
+
+const detailsTabFieldCountLabel = computed(() => {
+  const total = rightPaneAllModuleFields.value.length;
+  const shown = rightPaneDetailsFilteredFields.value.length;
+  const q = (detailsTabSearchQuery.value || '').trim();
+  const hidingEmpty = !detailsShowEmptyFields.value;
+  if (!total) return '';
+  if (q && shown !== total) return `${shown} of ${total}`;
+  if (hidingEmpty && shown !== total) return `${shown} shown · ${total} total`;
+  return `${total} field${total === 1 ? '' : 's'}`;
 });
 
 const genericStateFields = computed(() => (genericAdapter.value ? genericAdapter.value.getStateFields(record.value, sectionContext.value) : []));
