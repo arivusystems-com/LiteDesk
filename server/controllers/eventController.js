@@ -14,6 +14,7 @@ const { resolveCreateType, getTypeFieldName } = require('../utils/appProjectionC
 const { isAuditEventType, AUDIT_EVENT_TYPES } = require('../utils/eventUtils');
 const { APP_KEYS } = require('../constants/appKeys');
 const { deriveEventActionPermission } = require('../domain/events/eventPermissions');
+const { assignResolvedSource } = require('../services/sourceResolver');
 
 async function validateAuditUserRoleScopes({
     eventType,
@@ -688,6 +689,7 @@ exports.createEvent = async (req, res) => {
         if (Object.keys(customFieldsSet).length > 0) {
             eventDataFinal.customFields = customFieldsSet;
         }
+        assignResolvedSource(eventDataFinal, 'ui');
         
         // Validate field dependencies (configurable, not hardcoded)
         // NOTE: legacy plural corrective owners removed; corrective accountability is enforced via `correctiveOwnerId`.
@@ -746,6 +748,7 @@ exports.updateEvent = async (req, res) => {
         delete req.body._id;
         delete req.body.__v;
         delete req.body.eventId;
+        delete req.body.source;
         
         // Build query (support both _id and eventId)
         const query = { organizationId: req.user.organizationId, deletedAt: null };
@@ -1764,7 +1767,7 @@ exports.checkIn = async (req, res) => {
                             organizationId: event.organizationId
                         });
                         
-                        formResponse = new FormResponse({
+                        const frPayload = {
                             formId: event.linkedFormId,
                             organizationId: event.organizationId,
                             submittedBy: req.user._id,
@@ -1777,7 +1780,9 @@ exports.checkIn = async (req, res) => {
                             reviewStatus: null, // Review status only applies after submission
                             ipAddress: req.ip || req.connection.remoteAddress,
                             userAgent: req.get('user-agent')
-                        });
+                        };
+                        assignResolvedSource(frPayload, 'ui');
+                        formResponse = new FormResponse(frPayload);
                         
                         await formResponse.save();
                         console.log('[checkIn] ✅ Created form response:', {

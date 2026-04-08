@@ -432,10 +432,12 @@ function getFieldDataType(key, fieldName, path) {
         return itemFieldMappings[fieldName];
     }
     // Tasks: status/priority are Picklists (options from module config); relatedTo is Lookup
+    // tags: string[] must be Multi-Picklist — otherwise inferDataType treats Array as Text and create/edit uses wrong control
     const taskFieldMappings = {
         'status': 'Picklist',
         'priority': 'Picklist',
-        'relatedTo': 'Lookup (Relationship)'
+        'relatedTo': 'Lookup (Relationship)',
+        'tags': 'Multi-Picklist'
     };
     if (key === 'tasks' && taskFieldMappings[fieldName]) {
         return taskFieldMappings[fieldName];
@@ -516,7 +518,6 @@ function getBaseFieldsForKey(key) {
             'mobile',
             'organization',
             'assignedTo',
-            'source',
             'do_not_contact',
             'tags'
         ];
@@ -540,6 +541,7 @@ function getBaseFieldsForKey(key) {
             '__v', 
             'createdAt', 
             'updatedAt',
+            'source', // System-managed creation channel; never user-editable in forms
             'customFields',   // Storage bucket for user-defined custom field values; not a configurable field
             'eventId',        // Auto-generated UUID
             'organizationId', // Auto-filled from user context (but keep for forms module)

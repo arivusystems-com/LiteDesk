@@ -556,7 +556,8 @@ exports.createTaskFromEmail = async (req, res) => {
       relatedTo = { type: 'organization', id: comm.relatedTo.recordId };
     }
 
-    const task = await Task.create({
+    const { assignResolvedSource } = require('../services/sourceResolver');
+    const taskPayload = {
       organizationId: orgId,
       title: title ? `Email: ${title}` : 'Task from email',
       description,
@@ -573,7 +574,9 @@ exports.createTaskFromEmail = async (req, res) => {
         details: { sourceCommunicationId: comm._id },
         timestamp: new Date()
       }]
-    });
+    };
+    assignResolvedSource(taskPayload, 'email');
+    const task = await Task.create(taskPayload);
 
     return res.status(201).json({
       success: true,

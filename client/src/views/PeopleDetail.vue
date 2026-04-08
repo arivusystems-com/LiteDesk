@@ -261,9 +261,11 @@
               </dd>
             </div>
             <div v-if="profileData.core.fields.source">
-              <dt class="text-sm text-gray-500 dark:text-gray-400">Source</dt>
+              <dt class="text-sm text-gray-500 dark:text-gray-400">Created via</dt>
               <dd class="mt-2 text-sm text-gray-900 dark:text-white">
-                {{ profileData.core.fields.source }}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                  {{ profileData.core.fields.source }}
+                </span>
               </dd>
             </div>
             <div v-if="profileData.core.fields.organization">
@@ -369,17 +371,6 @@
                 <input
                   v-model="editForm.mobile"
                   type="tel"
-                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                />
-              </div>
-              <!-- Source -->
-              <div>
-                <label class="block text-sm text-gray-700 dark:text-gray-300 mb-2">
-                  Source
-                </label>
-                <input
-                  v-model="editForm.source"
-                  type="text"
                   class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>
@@ -1129,7 +1120,6 @@ const enterEditMode = () => {
     email: profileData.value.core.fields.email || '',
     phone: profileData.value.core.fields.phone || '',
     mobile: profileData.value.core.fields.mobile || '',
-    source: profileData.value.core.fields.source || '',
     do_not_contact: profileData.value.core.fields.do_not_contact || false
   };
   
@@ -1581,7 +1571,7 @@ const handleAttachSubmit = async () => {
 
     // Clean form data: convert empty strings to null for enum fields
     const cleanedFormData = { ...attachFormData.value };
-    const enumFields = ['lead_status', 'contact_status', 'role', 'source'];
+    const enumFields = ['lead_status', 'contact_status', 'role'];
     enumFields.forEach(field => {
       if (cleanedFormData[field] === '') {
         cleanedFormData[field] = null;

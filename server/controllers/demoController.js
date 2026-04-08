@@ -155,7 +155,7 @@ exports.submitDemoRequest = async (req, res) => {
             last_name: contactName.split(' ').slice(1).join(' ') || '',
             email: email.toLowerCase(),
             phone: phone || '',
-            source: 'Website - Demo Request',
+            source: 'Web Form',
             // No lead_score - participation field, not set on creation
             tags: ['demo-request', industry, companySize]
         });

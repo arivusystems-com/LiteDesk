@@ -233,6 +233,8 @@ const buildFieldChangeLogEntry = ({ actorName, actorId, field, oldValue, newValu
 // @access  Private
 const createTask = async (req, res) => {
   try {
+    const { stripClientSource, assignResolvedSource } = require('../services/sourceResolver');
+    stripClientSource(req.body);
     // Phase 2A.3: Projection-aware create type resolution
     // SAFETY: Projection-aware create logic — non-blocking fallback
     // Note: Tasks don't currently have a type field, but we handle it gracefully
@@ -297,7 +299,7 @@ const createTask = async (req, res) => {
     const { extractCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
     const { customFieldsSet } = extractCustomFields(req.body, Task);
 
-    const task = await Task.create({
+    const taskPayload = {
       organizationId: req.user.organizationId,
       title,
       description,
@@ -322,7 +324,9 @@ const createTask = async (req, res) => {
         details: {},
         timestamp: new Date()
       }]
-    });
+    };
+    assignResolvedSource(taskPayload, 'ui');
+    const task = await Task.create(taskPayload);
 
     const populatedTask = await Task.findById(task._id)
       .populate('assignedTo', 'firstName lastName email avatar')
@@ -672,6 +676,7 @@ const getTaskById = async (req, res) => {
 // @access  Private
 const updateTask = async (req, res) => {
   try {
+    delete req.body.source;
     let task = await Task.findOne({
       _id: req.params.id,
       organizationId: req.user.organizationId,

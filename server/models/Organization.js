@@ -30,6 +30,7 @@
  */
 
 const mongoose = require('mongoose');
+const { RECORD_SOURCE_VALUES, DEFAULT_RECORD_SOURCE } = require('../constants/recordSource');
 
 const OrganizationSchema = new mongoose.Schema({
     // ===== TENANT/SUBSCRIPTION FIELDS (PLATFORM CORE) =====
@@ -272,6 +273,13 @@ const OrganizationSchema = new mongoose.Schema({
     phone: { type: String, trim: true },
     address: { type: String, trim: true },
     tags: [{ type: String, trim: true }],
+
+    /** System-managed creation channel (set server-side only) */
+    source: {
+        type: String,
+        enum: RECORD_SOURCE_VALUES,
+        default: DEFAULT_RECORD_SOURCE
+    },
     
     // Ownership/links (SALES)
     createdBy: { 

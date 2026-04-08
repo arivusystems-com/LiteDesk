@@ -9,6 +9,9 @@
   
   ALL CONTEXTS: Quick create fields always visible (identity creation)
   
+  ALL APPS TAB (optionalAppParticipation + contextAppKey null):
+  - "App participation" picker: None | SALES | HELPDESK → AppSection when an app is selected
+  
   APP CONTEXT (when context !== 'ALL'):
   - Divider: "{AppName} Information"
   - Type (required): usePeopleTypes(context), auto-select first
@@ -77,15 +80,23 @@
                         <p v-if="appContextHint" class="text-xs text-indigo-200 dark:text-indigo-300 mt-2">
                           {{ appContextHint }}
                         </p>
-                        <p v-else-if="!appKey" class="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                        <p v-else-if="optionalAppParticipation && !effectiveAppKey" class="text-xs text-indigo-200 dark:text-indigo-300 mt-2">
+                          Optional: choose an app below to add participation, or save for identity only.
+                        </p>
+                        <p v-else-if="!effectiveAppKey" class="text-xs text-gray-400 dark:text-gray-500 mt-2">
                           Creates identity only. No app participation.
                         </p>
                       </div>
                   </div>
 
-                  <!-- Scrollable Content Area -->
+                  <!-- Scrollable Content Area (user interaction only — not programmatic DynamicForm sync) -->
                   <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
-                    <div class="px-4 sm:px-6 py-6 pb-48">
+                    <div
+                      class="px-4 sm:px-6 py-6 pb-48"
+                      @input.capture="markUserInteraction"
+                      @change.capture="markUserInteraction"
+                      @pointerdown.capture="markUserInteraction"
+                    >
                       <div class="space-y-6">
                         <!-- General Error Message -->
                         <div v-if="errors._general" class="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
@@ -114,16 +125,89 @@
                             :quickCreateMode="true"
                             :showAllFields="false"
                             :fieldsOverride="quickCreateFieldsOverride"
+                            :excludeFields="quickCreateExcludeFields"
                             :moduleOverride="peopleModuleOverride"
                             context="platform"
                             @update:formData="updateFormData"
                             @ready="onFormReady"
                           />
 
+                          <!-- All Apps tab: optional app picker → AppSection -->
+                          <div
+                            v-if="optionalAppParticipation && contextAppKeyPropIsNull"
+                            class="border-t border-gray-200 dark:border-gray-700 pt-6 mt-6"
+                          >
+                            <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-4">
+                              App participation
+                            </h3>
+                            <Listbox
+                              :model-value="selectedOptionalAppKey"
+                              as="div"
+                              class="block"
+                              @update:model-value="onOptionalAppChange"
+                            >
+                              <ListboxLabel class="block text-sm/6 font-medium text-gray-900 dark:text-white mb-1">
+                                Add to app
+                              </ListboxLabel>
+                              <div class="relative mt-2">
+                                <ListboxButton
+                                  type="button"
+                                  :class="[
+                                    'block w-full rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-left text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:focus:outline-indigo-500 cursor-default relative pr-10'
+                                  ]"
+                                >
+                                  <span class="block truncate">
+                                    {{ optionalAppListboxLabel }}
+                                  </span>
+                                  <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+                                    <ChevronUpDownIcon class="h-5 w-5 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+                                  </span>
+                                </ListboxButton>
+                                <Transition
+                                  enter-active-class="transition duration-100 ease-out"
+                                  enter-from-class="opacity-0"
+                                  enter-to-class="opacity-100"
+                                  leave-active-class="transition duration-100 ease-in"
+                                  leave-from-class="opacity-100"
+                                  leave-to-class="opacity-0"
+                                >
+                                  <ListboxOptions
+                                    as="ul"
+                                    class="absolute z-[100] mt-1 max-h-60 w-full overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm"
+                                  >
+                                    <ListboxOption
+                                      v-for="opt in optionalAppParticipationOptions"
+                                      :key="String(opt.value ?? 'none')"
+                                      :value="opt.value"
+                                      v-slot="{ active, selected }"
+                                    >
+                                      <div
+                                        :class="[
+                                          'relative cursor-default select-none py-2 pl-4 pr-10',
+                                          active
+                                            ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100'
+                                            : 'text-gray-900 dark:text-gray-100'
+                                        ]"
+                                      >
+                                        <span :class="[selected ? 'font-medium' : 'font-normal', 'block truncate']">{{ opt.label }}</span>
+                                        <span
+                                          v-if="selected"
+                                          class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-indigo-600 dark:text-indigo-400"
+                                        >
+                                          <CheckIcon class="h-5 w-5" aria-hidden="true" />
+                                        </span>
+                                      </div>
+                                    </ListboxOption>
+                                  </ListboxOptions>
+                                </Transition>
+                              </div>
+                            </Listbox>
+                          </div>
+
                           <!-- App section (generic, no hardcoded apps) -->
                           <AppSection
-                            v-if="appKey"
-                            :app-key="appKey"
+                            v-if="effectiveAppKey"
+                            :app-key="effectiveAppKey"
                             v-model="appForm"
                             :module-override="peopleModuleOverride"
                             :errors="errors"
@@ -174,14 +258,26 @@ declare const process: {
 };
 
 import { ref, computed, watch, toRef, type PropType } from 'vue';
-import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
-import { XMarkIcon } from '@heroicons/vue/24/outline';
+import {
+  Dialog,
+  DialogPanel,
+  DialogTitle,
+  TransitionChild,
+  TransitionRoot,
+  Listbox,
+  ListboxLabel,
+  ListboxButton,
+  ListboxOptions,
+  ListboxOption
+} from '@headlessui/vue';
+import { XMarkIcon, ChevronUpDownIcon, CheckIcon } from '@heroicons/vue/24/outline';
 import DynamicForm from '@/components/common/DynamicForm.vue';
 import AppSection from '@/components/people/AppSection.vue';
 import apiClient from '@/utils/apiClient';
 import { useTabs } from '@/composables/useTabs';
 import { useCreationContext } from '@/utils/creationContext';
 import { getPeopleQuickCreateFields, getAppFields } from '@/platform/fields/peopleFieldModel';
+import { getGlobalSystemFieldKeys } from '@/platform/fields/fieldCapabilityEngine';
 import { getAppLabel } from '@/utils/getRoleDisplay';
 import { usePeopleTypes } from '@/composables/usePeopleTypes';
 
@@ -204,6 +300,13 @@ const props = defineProps({
     type: String as PropType<string | null | undefined>,
     required: false,
     default: undefined
+  },
+  /**
+   * When true with contextAppKey null (All Apps tab), show optional app picker + AppSection.
+   */
+  optionalAppParticipation: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -214,7 +317,41 @@ const { openTab } = useTabs();
 // Creation context: appKey is null for global, 'SALES'|'HELPDESK' for app-specific
 const { appKey } = useCreationContext(toRef(props, 'contextAppKey'));
 
-const { typeDefs: peopleTypeDefs } = usePeopleTypes(appKey);
+/** When optional participation mode (All Apps), user-selected app; null = identity only */
+const selectedOptionalAppKey = ref<'SALES' | 'HELPDESK' | null>(null);
+
+const contextAppKeyPropIsNull = computed(() => props.contextAppKey === null);
+
+const effectiveAppKey = computed((): 'SALES' | 'HELPDESK' | null => {
+  if (props.optionalAppParticipation && props.contextAppKey === null) {
+    return selectedOptionalAppKey.value;
+  }
+  return appKey.value;
+});
+
+const OPTIONAL_APP_KEYS = ['SALES', 'HELPDESK'] as const;
+
+const optionalAppParticipationOptions = computed(() => [
+  { value: null as null, label: 'None (identity only)' },
+  ...OPTIONAL_APP_KEYS.map((k) => ({ value: k, label: getAppLabel(k) }))
+]);
+
+const optionalAppListboxLabel = computed(() => {
+  const k = selectedOptionalAppKey.value;
+  if (!k) return 'None (identity only)';
+  return getAppLabel(k);
+});
+
+function onOptionalAppChange(value: 'SALES' | 'HELPDESK' | null) {
+  markUserInteraction();
+  selectedOptionalAppKey.value = value;
+  appForm.value = { participationType: null };
+}
+
+const { typeDefs: peopleTypeDefs } = usePeopleTypes(effectiveAppKey);
+
+/** Hide platform-managed keys (e.g. source) — People quick create does not use CreateRecordDrawer’s exclude list */
+const quickCreateExcludeFields = computed(() => getGlobalSystemFieldKeys());
 
 // App form state (participation type + dependent fields) — used by AppSection
 const appForm = ref<Record<string, any>>({ participationType: null });
@@ -229,6 +366,7 @@ watch(() => props.isOpen, async (open) => {
     peopleModuleOverride.value = null;
     peopleModuleLoading.value = false;
     appForm.value = { participationType: null };
+    selectedOptionalAppKey.value = null;
     return;
   }
   peopleModuleLoading.value = true;
@@ -254,6 +392,12 @@ const errors = ref<Record<string, string>>({});
 const saving = ref(false);
 const moduleDefinition = ref<any>(null);
 
+/** True after real user interaction (backdrop/Escape blocked); not set by programmatic DynamicForm sync */
+const userHasEdited = ref(false);
+function markUserInteraction() {
+  userHasEdited.value = true;
+}
+
 // Quick create fields from config (Settings → People → Quick Create)
 const quickCreateFieldsOverride = computed(() =>
   getPeopleQuickCreateFields(peopleModuleOverride.value)
@@ -261,27 +405,29 @@ const quickCreateFieldsOverride = computed(() =>
 
 // App-dependent fields for validation/payload (when in app context)
 const appDependentFields = computed(() => {
-  if (!appKey.value || !appForm.value?.participationType) return [];
-  return getAppFields(appKey.value, appForm.value.participationType, peopleTypeDefs.value);
+  if (!effectiveAppKey.value || !appForm.value?.participationType) return [];
+  return getAppFields(effectiveAppKey.value, appForm.value.participationType, peopleTypeDefs.value);
 });
 
 // UX hint: "This person will be added to {AppName} as {Role}"
 const appContextHint = computed(() => {
-  if (appKey.value && appForm.value?.participationType) {
-    return `This person will be added to ${getAppLabel(appKey.value)} as ${appForm.value.participationType}`;
+  if (effectiveAppKey.value && appForm.value?.participationType) {
+    return `This person will be added to ${getAppLabel(effectiveAppKey.value)} as ${appForm.value.participationType}`;
   }
   return null;
 });
 
 // Prevent submit when app context but no role selected
 const submitDisabled = computed(() =>
-  !!appKey.value && !appForm.value?.participationType
+  !!effectiveAppKey.value && !appForm.value?.participationType
 );
 
 // Helper text
 const helperText = computed(() => {
-  if (!appKey.value) {
-    return 'Create a new person with identity information.';
+  if (!effectiveAppKey.value) {
+    return props.optionalAppParticipation && props.contextAppKey === null
+      ? 'Create a new person with identity information. App participation is optional.'
+      : 'Create a new person with identity information.';
   }
   return 'Create a new person with identity and app participation.';
 });
@@ -315,7 +461,7 @@ function validateForm() {
       }
     }
   }
-  if (appKey.value && !appForm.value?.participationType) {
+  if (effectiveAppKey.value && !appForm.value?.participationType) {
     (errors.value as Record<string, string>).participationType = 'Type is required';
   }
 }
@@ -327,12 +473,15 @@ const closeDrawer = () => {
     setTimeout(() => {
       formData.value = {};
       appForm.value = { participationType: null };
+      selectedOptionalAppKey.value = null;
       errors.value = {};
+      userHasEdited.value = false;
     }, 300);
   }
 };
 
 const handleDialogClose = () => {
+  if (userHasEdited.value) return;
   closeDrawer();
 };
 
@@ -444,11 +593,11 @@ const handleSubmit = async () => {
     const payload = buildCreatePersonPayload();
 
     let response;
-    if (!appKey.value) {
+    if (!effectiveAppKey.value) {
       response = await apiClient.post('/people', payload);
     } else {
       const requestBody = {
-        appKey: appKey.value,
+        appKey: effectiveAppKey.value,
         role: appForm.value.participationType,
         formData: payload
       };
@@ -533,9 +682,11 @@ const handleSubmit = async () => {
 // Reset form when drawer opens
 watch(() => props.isOpen, (isOpen) => {
   if (isOpen) {
+    userHasEdited.value = false;
     formData.value = {};
     errors.value = {};
     appForm.value = { participationType: null };
+    selectedOptionalAppKey.value = null;
   }
 });
 </script>

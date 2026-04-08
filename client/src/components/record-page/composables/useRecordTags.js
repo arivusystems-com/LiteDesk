@@ -1,4 +1,4 @@
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, unref } from 'vue';
 import apiClient from '@/utils/apiClient';
 const TAG_REMOVE_UNDO_MS = 5000;
 
@@ -50,7 +50,7 @@ export function getDefaultTagDotClass(tagNameOrObject) {
 
 /**
  * @param {import('vue').Ref<{ _id: string, tags?: string[] }|null>} recordRef
- * @param {{ tagStorageKey: import('vue').ComputedRef<string>|string, canEdit: import('vue').ComputedRef<boolean>|boolean, persistTags: (nextTagNames: string[]) => Promise<void>, instanceTagSource: 'tasks'|'deals'|'people'|'organizations', fetchRecord?: () => Promise<void> }} options
+ * @param {{ tagStorageKey: import('vue').ComputedRef<string>|string, canEdit: import('vue').ComputedRef<boolean>|boolean, persistTags: (nextTagNames: string[]) => Promise<void>, instanceTagSource: import('vue').ComputedRef<string>|string, fetchRecord?: () => Promise<void> }} options
  */
 export function useRecordTags(recordRef, options) {
   const tagStorageKey = typeof options.tagStorageKey === 'function' || (options.tagStorageKey && typeof options.tagStorageKey === 'object' && 'value' in options.tagStorageKey)
@@ -60,7 +60,8 @@ export function useRecordTags(recordRef, options) {
     ? computed(() => options.canEdit?.value ?? options.canEdit)
     : computed(() => !!options.canEdit);
   const persistTags = options.persistTags;
-  const instanceTagSource = options.instanceTagSource;
+  /** FormTagsField passes a computed ref; RecordTagPopover passes a string — unwrap so list/delete paths resolve. */
+  const getInstanceTagSource = () => String(unref(options.instanceTagSource) || 'people').toLowerCase();
   const fetchRecord = options.fetchRecord || (() => Promise.resolve());
 
   const tagSearchInputRef = ref(null);
@@ -209,9 +210,12 @@ export function useRecordTags(recordRef, options) {
       deals: '/deals',
       people: '/people',
       organizations: '/v2/organization',
-      tasks: '/tasks'
+      tasks: '/tasks',
+      events: '/events',
+      items: '/items'
     };
-    const path = pathBySource[instanceTagSource];
+    const source = getInstanceTagSource();
+    const path = pathBySource[source];
     if (!path) return;
     try {
       while (page <= totalPages && page <= 5) {
@@ -224,12 +228,19 @@ export function useRecordTags(recordRef, options) {
             if (normalizedName) collectedTags.add(normalizedName);
           });
         });
-        totalPages = Number(response.pagination?.totalPages || 1);
+        totalPages = Number(
+          response.pagination?.totalPages ?? response.totalPages ?? 1
+        );
         page += 1;
       }
     } catch (err) {
       console.error('Failed to fetch instance tags:', err);
     }
+    // Keep names we already had (localStorage / prior session) so an empty list response never wipes the picker
+    instanceTagDefinitions.value.forEach((def) => {
+      const n = normalizeTagName(def?.name);
+      if (n) collectedTags.add(n);
+    });
     syncTagDefinitions(Array.from(collectedTags));
   };
 
@@ -364,7 +375,7 @@ export function useRecordTags(recordRef, options) {
     const deletingName = normalizeTagName(tagName);
     tagSaveError.value = '';
     try {
-      await apiClient.post(`/modules/${instanceTagSource}/tags/delete`, { tagName: deletingName });
+      await apiClient.post(`/modules/${getInstanceTagSource()}/tags/delete`, { tagName: deletingName });
       if (pendingTagRemoval.value) {
         clearPendingTagRemovalTimer();
         pendingTagRemoval.value = null;
@@ -513,6 +524,8 @@ export function useRecordTags(recordRef, options) {
     removeTagFromRecord,
     undoPendingTagRemoval,
     handleTagSearchBlur,
-    resetOnClose
+    resetOnClose,
+    /** Refresh distinct tag names from the module list API (call when tag UI opens). */
+    fetchInstanceTagDefinitions
   };
 }

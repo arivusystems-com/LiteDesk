@@ -110,6 +110,7 @@ exports.create = async (req, res) => {
       : 'System';
     
     const { extractCustomFields } = require('../utils/customFieldsExtractor');
+    const { assignResolvedSource } = require('../services/sourceResolver');
     const { standardPayload, customFieldsSet } = extractCustomFields(strippedBody, People);
 
     const body = {
@@ -127,6 +128,7 @@ exports.create = async (req, res) => {
         timestamp: new Date()
       }]
     };
+    assignResolvedSource(body, 'ui');
     const record = await People.create(body);
     
     // Compute derived status (non-blocking)
@@ -367,8 +369,14 @@ exports.list = async (req, res) => {
     // If no explicit sortOrder provided, default to descending (newest first)
     // Only use 'asc' if explicitly requested
     const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
-    const sortOptions = {};
-    sortOptions[sortBy] = sortOrder;
+    // List UI column "name" is computed (first_name + last_name); there is no DB field "name".
+    // Sort by given name then family name to match "First Last" display order.
+    let sortOptions;
+    if (sortBy === 'name') {
+      sortOptions = { first_name: sortOrder, last_name: sortOrder };
+    } else {
+      sortOptions = { [sortBy]: sortOrder };
+    }
 
     const User = require('../models/User');
     
@@ -589,8 +597,8 @@ exports.getById = async (req, res) => {
 // Update
 exports.update = async (req, res) => {
   try {
-    // Remove createdBy from body to prevent it from being changed
-    const { createdBy, ...updateData } = req.body;
+    // Remove createdBy and system-managed source from body
+    const { createdBy, source: _clientSource, ...updateData } = req.body;
 
     const appKeyForHelpdeskGuard = req.appKey || req.query.appKey || 'SALES';
     const helpdeskViol = helpdeskTypeAliasViolation(appKeyForHelpdeskGuard, updateData);

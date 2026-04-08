@@ -48,6 +48,21 @@ const GLOBAL_SYSTEM_FIELD_KEYS = new Set([
   'deletedat',
   'deletedby',
   'deletionreason',
+  'source',
+]);
+
+/**
+ * Document identity + audit keys (normalized like GLOBAL_SYSTEM_FIELD_KEYS).
+ * Always non-editable even when registry has no metadata — getIsEditableBase(undefined) is true.
+ * Includes `id` from `_id` (normalize strips underscores).
+ */
+const IMMUTABLE_NON_EDITABLE_KEYS = new Set([
+  'id',
+  'createdat',
+  'updatedat',
+  'createdby',
+  'modifiedby',
+  'updatedby',
 ]);
 
 /**
@@ -141,13 +156,18 @@ export function isComputedField(moduleKey: string, field: Field): boolean {
  *   - metadata.isComputed === true
  *   - BaseFieldModel resolves non-editable
  *   - field is in GLOBAL_SYSTEM_FIELD_KEYS (trash, etc.)
+ *   - field is document id / audit (IMMUTABLE_NON_EDITABLE_KEYS), including `_id` → `id`
+ *   - raw key `__v` (Mongoose version; normalize alone would match `v`)
  * Otherwise returns true.
  *
  * Engine does NOT use field.editable — metadata + base helpers only.
  */
 export function canEditField(moduleKey: string, field: Field): boolean {
+  const raw = String(field.key || '');
+  if (raw === '__v') return false;
   const keyLower = normalizeFieldKeyForMetadataLookup(field.key);
   if (GLOBAL_SYSTEM_FIELD_KEYS.has(keyLower)) return false;
+  if (IMMUTABLE_NON_EDITABLE_KEYS.has(keyLower)) return false;
   const metadata = getFieldMetadataFromRegistry(moduleKey, field.key);
   if (metadata?.isEditable === false) return false;
   if (metadata?.isSystem === true) return false;

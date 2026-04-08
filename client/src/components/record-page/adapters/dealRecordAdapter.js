@@ -237,6 +237,7 @@ const isLookupField = (configuredField) => {
 };
 
 const canInlineEditDetailField = (record, fieldKey, fieldType, configuredField, canEditDetails) => {
+  if (String(fieldKey).toLowerCase() === 'source') return false;
   if (canEditDetails?.(record, fieldKey) !== true) return false;
   if (!KEY_SECTION_EDITABLE_TYPES.has(fieldType)) return false;
   return true;
@@ -537,9 +538,12 @@ export const createDealRecordAdapter = ({
         const hasEntityOptions = entityOptions.length > 0;
         const canOpenLookupEditor = isLookup && fieldKey !== 'ownerId' && canEditDetails?.(record, fieldKey) === true && !hasEntityOptions;
 
-        const label = moduleField
+        let label = moduleField
           ? getFieldDisplayLabel(moduleField)
           : getStateFieldLabel(fieldKey, toReadableFieldLabel(fieldKey));
+        if (String(fieldKey).toLowerCase() === 'source') {
+          label = 'Created via';
+        }
 
         const rawValue = resolveDetailRawValue(record, fieldKey, fieldType);
         let displayValue = resolveDetailDisplayValue(record, fieldKey, fieldType, formatDate);

@@ -4,6 +4,7 @@ const Task = require('../models/Task');
 const Organization = require('../models/Organization');
 const ImportHistory = require('../models/ImportHistory');
 const { getSalesParticipationFields } = require('./peopleController');
+const { stripClientSource, assignResolvedSource } = require('../services/sourceResolver');
 
 // NOTE: Install these packages: npm install csv-parse csv-stringify multer
 // For now, using basic CSV parsing
@@ -483,6 +484,8 @@ const importContacts = async (req, res) => {
           }
         });
 
+        stripClientSource(contactData);
+
         // Check duplicates only if enabled
         if (shouldCheckDuplicates && contactData.email) {
           const existing = await People.findOne({
@@ -503,12 +506,16 @@ const importContacts = async (req, res) => {
               });
             }
           } else {
+            assignResolvedSource(contactData, 'import');
+            if (!contactData.createdBy) contactData.createdBy = req.user._id;
             const newContact = await People.create(contactData);
             results.created++;
             results.createdIds.push(newContact._id);
           }
         } else {
           // No duplicate check or no email - always create
+          assignResolvedSource(contactData, 'import');
+          if (!contactData.createdBy) contactData.createdBy = req.user._id;
           const newContact = await People.create(contactData);
           results.created++;
           results.createdIds.push(newContact._id);
@@ -636,6 +643,8 @@ const importDeals = async (req, res) => {
           }
         });
 
+        stripClientSource(dealData);
+
         // Validate deal name is required
         if (!dealData.name) {
           results.failed++;
@@ -666,12 +675,14 @@ const importDeals = async (req, res) => {
               });
             }
           } else {
+            assignResolvedSource(dealData, 'import');
             const newDeal = await Deal.create(dealData);
             results.created++;
             results.createdIds.push(newDeal._id);
           }
         } else {
           // No duplicate check - always create
+          assignResolvedSource(dealData, 'import');
           const newDeal = await Deal.create(dealData);
           results.created++;
           results.createdIds.push(newDeal._id);
@@ -962,6 +973,8 @@ const importTasks = async (req, res) => {
         if (!taskData.status) taskData.status = 'todo';
         if (!taskData.priority) taskData.priority = 'medium';
 
+        stripClientSource(taskData);
+
         // Check duplicates only if enabled
         if (shouldCheckDuplicates) {
           const existing = await Task.findOne({
@@ -974,6 +987,7 @@ const importTasks = async (req, res) => {
             results.updated++;
             results.updatedIds.push(existing._id);
           } else if (!existing) {
+            assignResolvedSource(taskData, 'import');
             const newTask = await Task.create(taskData);
             results.created++;
             results.createdIds.push(newTask._id);
@@ -982,6 +996,7 @@ const importTasks = async (req, res) => {
           }
         } else {
           // No duplicate check - always create
+          assignResolvedSource(taskData, 'import');
           const newTask = await Task.create(taskData);
           results.created++;
           results.createdIds.push(newTask._id);

@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
+const { RECORD_SOURCE_VALUES, DEFAULT_RECORD_SOURCE } = require('../constants/recordSource');
 
 const TaskSchema = new Schema({
   organizationId: {
@@ -109,6 +110,13 @@ const TaskSchema = new Schema({
     type: String,
     trim: true
   }],
+
+  /** System-managed creation channel (set server-side only) */
+  source: {
+    type: String,
+    enum: RECORD_SOURCE_VALUES,
+    default: DEFAULT_RECORD_SOURCE
+  },
 
   // Notifications
   reminderDate: Date,

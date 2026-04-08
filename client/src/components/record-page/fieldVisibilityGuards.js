@@ -71,3 +71,46 @@ export function shouldHideDetailField(field, moduleKey, options = {}) {
 
   return false;
 }
+
+/** Keys never surfaced in the record right-pane Details tab (trash, infra, heavy blobs). */
+const RECORD_PANE_NEVER_SHOW_KEYS = new Set([
+  'deletedat',
+  'deletedby',
+  'deletionreason',
+  'organizationid',
+  'activitylogs',
+  'subtasks',
+  'stagehistory'
+]);
+
+/**
+ * Right-pane Details tab: show system + audit fields read-only; still hide trash/infra blobs.
+ */
+export function shouldHideRecordPaneDetailField(field, moduleKey) {
+  const key = String(field?.key || '').trim();
+  if (!key) return true;
+  const nk = normalizeFieldGuardKey(key);
+  if (RECORD_PANE_NEVER_SHOW_KEYS.has(nk)) return true;
+  if (isInfrastructureSystemFieldKey(key)) {
+    const allow = new Set(['createdat', 'updatedat', 'createdby', 'modifiedby', 'updatedby', '_id', '__v', 'id']);
+    if (allow.has(nk)) return false;
+    return true;
+  }
+  if (field?.isSystem === true || field?.system === true) return false;
+  if (typeof isGlobalSystemFieldKey === 'function' && isGlobalSystemFieldKey(key)) {
+    return RECORD_PANE_NEVER_SHOW_KEYS.has(nk);
+  }
+  const normalizedModuleKey = String(moduleKey || '').toLowerCase().trim();
+  if (normalizedModuleKey && typeof isSystemField === 'function' && isSystemField(normalizedModuleKey, { key })) {
+    return false;
+  }
+  const registryModuleKey = normalizeModuleKeyForRegistry(normalizedModuleKey);
+  if (registryModuleKey) {
+    const metadata = typeof getFieldMetadataFromRegistry === 'function'
+      ? getFieldMetadataFromRegistry(registryModuleKey, key)
+      : undefined;
+    if (!metadata && !isExplicitCustomField(field)) return true;
+  }
+  const vis = field?.visibility;
+  return vis?.detail === false;
+}

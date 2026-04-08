@@ -586,7 +586,7 @@ const primaryAction = computed(() => {
   
   return {
     label: action.label,
-    variant: action.actionType === 'convert' ? 'secondary' : 'primary',
+    variant: 'primary',
     icon: action.actionType === 'convert' ? 'convert' : action.actionType === 'edit' ? 'edit' : null,
     handler: handlerMap[action.actionType] || (() => {})
   };

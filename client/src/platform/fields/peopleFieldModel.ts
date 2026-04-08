@@ -48,6 +48,7 @@ import type {
   BaseFilterType,
 } from './BaseFieldModel';
 import { validateBaseFieldMetadata } from './BaseFieldModel';
+import { isGlobalSystemFieldKey } from './fieldCapabilityEngine';
 
 export { mergePeopleVirtualFieldDefinitions } from './peopleFieldRegistry';
 
@@ -259,10 +260,11 @@ export const PEOPLE_FIELD_METADATA: Record<string, FieldMetadata> = {
     filterPriority: 3,
   },
   source: {
-    owner: 'core',
-    intent: 'identity',
+    owner: 'system',
+    intent: 'system',
     fieldScope: 'CORE',
-    editable: true,
+    editable: false,
+    isSystem: true,
   },
   organization: {
     owner: 'core',
@@ -469,7 +471,6 @@ export const PEOPLE_QUICK_CREATE_DEFAULT = [
   'mobile',
   'organization',
   'assignedTo',
-  'source',
   'do_not_contact',
   'tags',
 ];
@@ -483,10 +484,12 @@ export const PEOPLE_QUICK_CREATE_DEFAULT = [
  */
 export function getPeopleQuickCreateFields(module: { quickCreate?: string[] } | null | undefined): string[] {
   const qc = module?.quickCreate;
-  if (Array.isArray(qc) && qc.length > 0) {
-    return qc.map((f) => (typeof f === 'string' ? f : (f as any)?.key ?? f)).filter(Boolean);
-  }
-  return [...PEOPLE_QUICK_CREATE_DEFAULT];
+  const keys =
+    Array.isArray(qc) && qc.length > 0
+      ? qc.map((f) => (typeof f === 'string' ? f : (f as any)?.key ?? f)).filter(Boolean)
+      : [...PEOPLE_QUICK_CREATE_DEFAULT];
+  // Never show platform-managed fields (e.g. source) even if still saved in Settings quickCreate
+  return keys.filter((k) => k && !isGlobalSystemFieldKey(String(k)));
 }
 
 /**

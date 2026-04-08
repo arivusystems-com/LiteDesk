@@ -24,9 +24,21 @@
       {{ helperText }}
     </p>
     
+    <!-- Tags: key must win before Text — Tasks module historically inferred tags[] as Text in /modules -->
+    <div v-if="isTagsField" class="mt-2">
+      <FormTagsField
+        :model-value="Array.isArray(value) ? value : []"
+        :module-key="moduleKey"
+        :disabled="isReadOnly"
+        :placeholder="field.placeholder || `Select ${displayLabel}...`"
+        @update:model-value="updateValue($event)"
+        @blur="$emit('blur')"
+      />
+    </div>
+    
     <!-- Text -->
     <input 
-      v-if="field.dataType === 'Text'"
+      v-else-if="field.dataType === 'Text'"
       :id="field.key"
       :name="field.key"
       :type="getInputType(field)"
@@ -306,7 +318,7 @@
             : 'bg-gray-100 dark:bg-gray-700 cursor-pointer focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-indigo-500 dark:focus:bg-gray-800 dark:outline-white/10',
           showMultiOptions ? 'outline-2 -outline-offset-2 outline-indigo-500 dark:outline-indigo-500' : ''
         ]"
-        @click.stop="!isReadOnly && (showMultiOptions = !showMultiOptions)"
+        @click.stop="!isReadOnly && onMultiPicklistTriggerClick()"
       >
         <!-- Selected tags and placeholder -->
         <div class="flex flex-wrap items-center gap-2 px-3 py-2">
@@ -349,11 +361,11 @@
       >
         <div
           v-if="showMultiOptions && !isReadOnly"
-          v-click-outside="() => { showMultiOptions = false; emit('blur'); }"
+          v-click-outside="closeMultiPicklistDropdown"
           @click.stop
-          class="absolute z-20 mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 max-h-60 overflow-auto"
+          class="absolute z-20 mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 max-h-72 flex flex-col"
         >
-          <div class="py-1">
+          <div class="py-1 max-h-60 overflow-y-auto">
             <button
               v-for="(option, optIdx) in filteredPicklistOptions"
               :key="optIdx"
@@ -735,6 +747,7 @@ import { Teleport, Transition } from 'vue';
 import DataTable from '@/components/common/DataTable.vue';
 import Avatar from '@/components/common/Avatar.vue';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
+import FormTagsField from '@/components/common/FormTagsField.vue';
 import apiClient from '@/utils/apiClient';
 import { validateField } from '@/utils/fieldValidation';
 import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
@@ -900,6 +913,9 @@ const isRequired = computed(() => {
   // Use dependency state required if available, otherwise use field.required
   return props.dependencyState?.required ?? props.field.required ?? false;
 });
+
+/** Field key `tags` (string[]); dataType should be Multi-Picklist — Tasks used to infer Text from schema */
+const isTagsField = computed(() => String(props.field?.key || '').toLowerCase() === 'tags');
 
 // Get filtered picklist options based on dependency
 const filteredPicklistOptions = computed(() => {
@@ -1318,6 +1334,15 @@ const selectedMultiValues = computed(() => {
   return [props.value].filter(Boolean);
 });
 
+function onMultiPicklistTriggerClick() {
+  showMultiOptions.value = !showMultiOptions.value;
+}
+
+function closeMultiPicklistDropdown() {
+  showMultiOptions.value = false;
+  emit('blur');
+}
+
 const handleMultiSelectUpdate = (newValues) => {
   // Ensure we always emit an array
   const values = Array.isArray(newValues) ? newValues : (newValues ? [newValues] : []);
@@ -1414,8 +1439,8 @@ const getSelectedPicklistOptionColor = () => {
 
 // Helper to get color for a selected multi-value
 const getSelectedOptionColor = (value) => {
-  const optionsToSearch = props.field.dataType === 'Multi-Picklist' 
-    ? filteredPicklistOptions.value 
+  const optionsToSearch = props.field.dataType === 'Multi-Picklist'
+    ? filteredPicklistOptions.value
     : (props.field.options || []);
   const option = optionsToSearch.find(opt => {
     const optValue = getPicklistOptionValue(opt);
@@ -1426,8 +1451,8 @@ const getSelectedOptionColor = (value) => {
 
 // Helper to normalize multi-value display
 const normalizeMultiValue = (value) => {
-  const optionsToSearch = props.field.dataType === 'Multi-Picklist' 
-    ? filteredPicklistOptions.value 
+  const optionsToSearch = props.field.dataType === 'Multi-Picklist'
+    ? filteredPicklistOptions.value
     : (props.field.options || []);
   const option = optionsToSearch.find(opt => {
     const optValue = getPicklistOptionValue(opt);

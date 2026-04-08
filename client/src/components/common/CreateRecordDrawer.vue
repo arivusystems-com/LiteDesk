@@ -51,9 +51,14 @@
                     <p class="mt-1 text-sm text-indigo-300">{{ computedDescription }}</p>
                   </div>
 
-                  <!-- Body: scrollable -->
+                  <!-- Body: scrollable (user interaction only — not programmatic DynamicForm sync) -->
                   <div class="h-0 flex-1 overflow-y-auto">
-                    <div class="px-4 sm:px-6 py-6 space-y-6">
+                    <div
+                      class="px-4 sm:px-6 py-6 space-y-6"
+                      @input.capture="markUserInteraction"
+                      @change.capture="markUserInteraction"
+                      @pointerdown.capture="markUserInteraction"
+                    >
                           <!-- General Error Message -->
                           <div v-if="errors._general" class="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
                             <div class="flex">
@@ -89,7 +94,10 @@
                             @ready="onFormReady"
                           />
                           <!-- Deal relationship editor (People + Organizations) -->
-                          <div v-if="moduleKey === 'deals'" class="pt-6 border-t border-gray-200 dark:border-gray-700">
+                          <div
+                            v-if="moduleKey === 'deals'"
+                            class="pt-6 border-t border-gray-200 dark:border-gray-700"
+                          >
                             <DealRelationshipEditor
                               ref="relationshipEditorRef"
                               v-model="dealRelationships"
@@ -228,6 +236,7 @@ const fullMode = ref(false);
 const showFullModeToggle = computed(() => effectiveQuickCreateMode.value && !isEditing.value);
 
 function toggleFullMode() {
+  markUserInteraction();
   fullMode.value = !fullMode.value;
 }
 
@@ -310,7 +319,11 @@ const formData = ref({ ...props.initialData });
 const errors = ref({});
 const saving = ref(false);
 const moduleDefinition = ref(null);
-const initialSnapshot = ref({});
+/** True when the user has interacted with the form (backdrop/Escape blocked); not set by programmatic sync */
+const userHasEdited = ref(false);
+function markUserInteraction() {
+  userHasEdited.value = true;
+}
 // Module definition fetched when drawer opens so Quick Create fields come from Settings
 const moduleOverrideFromSettings = ref(null);
 const moduleOverrideLoading = ref(false);
@@ -353,44 +366,6 @@ const dealRelationships = ref({ dealPeople: [], dealOrganizations: [] });
 const dealPeopleList = ref([]);
 const dealOrgList = ref([]);
 
-// Keys that may be auto-populated by components (not user edits)
-const ignoredDirtyKeys = new Set(['assignedTo']);
-
-// Deep equality check with ability to ignore specific keys
-const deepEqual = (a, b, path = []) => {
-  if (a === b) return true;
-  // Handle Date objects
-  if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
-  // Handle arrays
-  if (Array.isArray(a) && Array.isArray(b)) {
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) {
-      if (!deepEqual(a[i], b[i], path.concat(String(i)))) return false;
-    }
-    return true;
-  }
-  // Handle objects
-  if (a && b && typeof a === 'object' && typeof b === 'object') {
-    const aKeys = Object.keys(a);
-    const bKeys = Object.keys(b);
-    if (aKeys.length !== bKeys.length) return false;
-    for (const key of aKeys) {
-      if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
-      // Ignore known auto-populated keys
-      if (ignoredDirtyKeys.has(key)) continue;
-      if (!deepEqual(a[key], b[key], path.concat(key))) return false;
-    }
-    return true;
-  }
-  // Fallback for primitives/mismatch types
-  return false;
-};
-
-// Determine if any field value actually changed from initial snapshot
-const isDirty = computed(() => {
-  return !deepEqual(formData.value || {}, initialSnapshot.value || {});
-});
-
 const closeDrawer = () => {
   if (!saving.value) {
     fullMode.value = false;
@@ -399,6 +374,7 @@ const closeDrawer = () => {
     setTimeout(() => {
       formData.value = {};
       errors.value = {};
+      userHasEdited.value = false;
       if (props.moduleKey === 'deals') {
         dealRelationships.value = { dealPeople: [], dealOrganizations: [] };
       }
@@ -406,12 +382,9 @@ const closeDrawer = () => {
   }
 };
 
-// Handle dialog close (triggered by Esc or backdrop click)
+// Handle dialog close (triggered by Esc or backdrop click) — X/Cancel still call closeDrawer() directly
 const handleDialogClose = () => {
-  // Allow closing if module not initialized yet (opening state) or form is clean
-  if (moduleDefinition.value && isDirty.value) {
-    return; // Prevent closing if form has changes
-  }
+  if (userHasEdited.value) return;
   closeDrawer();
 };
 
@@ -548,7 +521,6 @@ const onFormReady = (module) => {
   if (isFirstLoad) {
     initializeForm(module);
     applySearchPrefill(module);
-    initialSnapshot.value = JSON.parse(JSON.stringify(formData.value || {}));
   }
 };
 
@@ -1286,6 +1258,7 @@ const handleSubmit = async () => {
 // Reset form when drawer opens/closes
 watch(() => props.isOpen, (isOpen) => {
   if (isOpen) {
+    userHasEdited.value = false;
     fullMode.value = false;
     errors.value = {};
     // Re-initialize on every open so initialData/prefill are not stale across reopens.
@@ -1293,8 +1266,6 @@ watch(() => props.isOpen, (isOpen) => {
       initializeForm(moduleDefinition.value);
       applySearchPrefill(moduleDefinition.value);
     }
-    // Capture an initial snapshot immediately on open to avoid race with module load
-    initialSnapshot.value = JSON.parse(JSON.stringify(formData.value || {}));
     // Form will be initialized by onFormReady when module loads
   } else {
     // Reset when closed

@@ -145,9 +145,17 @@
     </div>
   </div>
   <!-- Stack layout: label above value -->
-  <div v-else>
-    <dt class="text-sm text-gray-500 dark:text-gray-400">{{ label }}</dt>
-    <dd class="mt-2 text-sm text-gray-900 dark:text-white">
+  <div v-else class="min-w-0">
+    <dt
+      :class="[
+        compact
+          ? 'text-sm font-normal text-gray-600 dark:text-gray-400'
+          : 'text-sm text-gray-500 dark:text-gray-400'
+      ]"
+    >
+      {{ label }}
+    </dt>
+    <dd :class="compact ? 'mt-1 text-sm leading-snug text-gray-900 dark:text-gray-100' : 'mt-2 text-sm text-gray-900 dark:text-white'">
       <!-- Select/User: Dropdown style - value stays visible, click opens dropdown -->
       <Listbox
         v-if="canEdit && (type === 'select' || type === 'user' || type === 'entity')"
@@ -157,9 +165,10 @@
         <div class="relative w-full">
           <ListboxButton
             :class="[
-              'editable-labeled-value__display w-full text-left rounded px-2 py-1 -mx-2 -my-1 transition-colors cursor-pointer',
-              'hover:bg-gray-50 dark:hover:bg-gray-800',
-              'focus:outline-none focus:ring-0'
+              'editable-labeled-value__display w-full text-left transition-colors cursor-pointer',
+              compact
+                ? 'rounded-md border border-gray-200/90 dark:border-gray-600 bg-white dark:bg-gray-900/60 px-2.5 py-1.5 min-h-[2.25rem] flex items-center hover:border-indigo-300/60 dark:hover:border-indigo-500/40 focus:outline-none focus:ring-2 focus:ring-indigo-500/30'
+                : 'rounded px-2 py-1 -mx-2 -my-1 hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none focus:ring-0'
             ]"
           >
             <slot>
@@ -201,7 +210,10 @@
       <!-- Select/User read-only display -->
       <div
         v-else-if="!canEdit && (type === 'select' || type === 'user' || type === 'entity')"
-        class="editable-labeled-value__display"
+        :class="[
+          'editable-labeled-value__display',
+          compact ? 'rounded-md border border-gray-100 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-800/40 px-2.5 py-1.5 min-h-[2.25rem] flex items-center' : ''
+        ]"
       >
         <slot>
           <span v-if="displayValue !== null && displayValue !== undefined && displayValue !== ''" class="editable-labeled-value__text block truncate">{{ displayValue }}</span>
@@ -265,11 +277,8 @@
       <!-- Display mode for text/number/date/tags -->
       <div
         v-else
-        @click="handleClick"
-        :class="[
-          'editable-labeled-value__display',
-          canEdit ? 'cursor-text hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 py-1 -mx-2 -my-1 transition-colors' : ''
-        ]"
+        @click="handleClick($event)"
+        :class="stackDisplayModeClass"
       >
         <div v-if="type === 'tags'" class="flex flex-wrap gap-1.5">
           <span
@@ -282,8 +291,15 @@
           <span v-if="tagList.length === 0" class="text-record-empty">—</span>
         </div>
         <slot v-else>
-          <span v-if="displayValue !== null && displayValue !== undefined && displayValue !== ''" class="editable-labeled-value__text block truncate">{{ displayValue }}</span>
-          <span v-else class="editable-labeled-value__text block truncate w-full text-record-empty">—</span>
+          <span
+            v-if="displayValue !== null && displayValue !== undefined && displayValue !== ''"
+            :class="
+              compact && multiline
+                ? 'block max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-gray-900 dark:text-gray-100'
+                : 'editable-labeled-value__text block truncate'
+            "
+          >{{ displayValue }}</span>
+          <span v-else class="editable-labeled-value__text block w-full truncate text-record-empty">—</span>
         </slot>
       </div>
     </dd>
@@ -371,11 +387,21 @@ const props = defineProps({
     type: Function,
     default: null
   },
+  /** When set (e.g. record tag popover), click opens full tag UI instead of inline edit */
+  onTagsOpen: {
+    type: Function,
+    default: null
+  },
   /** 'stack' = label above value; 'row' = icon + label left, value right (Core Fields style) */
   layout: {
     type: String,
     default: 'stack',
     validator: (v) => ['stack', 'row'].includes(v)
+  },
+  /** Dense label + value (stack layout): for narrow panes / sidebars */
+  compact: {
+    type: Boolean,
+    default: false
   },
   rowPaddingClass: {
     type: String,
@@ -399,6 +425,31 @@ const fieldIcon = computed(() => {
     user: UserIcon
   };
   return map[props.type] || DocumentTextIcon;
+});
+
+/** Stack layout, display mode (not editing): compact pane vs default hover row */
+const stackDisplayModeClass = computed(() => {
+  const classes = ['editable-labeled-value__display'];
+  if (props.compact && !isEditing.value) {
+    if (props.canEdit) {
+      classes.push(
+        'rounded-md border border-gray-200/90 dark:border-gray-600 bg-white dark:bg-gray-900/50 px-2.5 py-1.5 min-h-[2.25rem] transition-colors hover:border-indigo-300/70 dark:hover:border-indigo-500/35 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/20',
+        props.type === 'tags' && props.onTagsOpen ? 'cursor-pointer' : 'cursor-text'
+      );
+      return classes;
+    }
+    classes.push(
+      'rounded-md border border-gray-100 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-800/35 px-2.5 py-1.5 min-h-[2.25rem] text-gray-800 dark:text-gray-200'
+    );
+    return classes;
+  }
+  if (props.canEdit) {
+    classes.push(
+      (props.type === 'tags' && props.onTagsOpen ? 'cursor-pointer' : 'cursor-text') +
+        ' hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2 py-1 -mx-2 -my-1 transition-colors'
+    );
+  }
+  return classes;
 });
 
 const isEditing = ref(false);
@@ -482,12 +533,13 @@ const hasDisplayValue = computed(() => {
 
 /** When true, the whole value cell is clickable to enter edit (row layout, text/number/date/tags, not editing). */
 const isValueCellClickable = computed(() => {
-  return props.layout === 'row' && props.canEdit && !isEditing.value &&
-    ['text', 'number', 'date', 'tags'].includes(props.type);
+  if (props.layout !== 'row' || !props.canEdit || isEditing.value) return false;
+  if (props.type === 'tags' && typeof props.onTagsOpen === 'function') return true;
+  return ['text', 'number', 'date', 'tags'].includes(props.type);
 });
 
-const onValueCellClick = () => {
-  if (isValueCellClickable.value) handleClick();
+const onValueCellClick = (event) => {
+  if (isValueCellClickable.value) handleClick(event);
 };
 
 const tagList = computed(() => {
@@ -547,22 +599,25 @@ const getUserDisplayName = (user) => {
   return name || user.username || user.email || user._id || 'Unknown';
 };
 
-const handleClick = () => {
-  if (props.canEdit) {
-    isEditing.value = true;
-    nextTick(() => {
-      if (inputRef.value) {
-        inputRef.value.focus();
-        if (props.type === 'text' || props.type === 'number') {
-          inputRef.value.select();
-        } else if (props.type === 'date' && typeof inputRef.value.showPicker === 'function') {
-          try {
-            inputRef.value.showPicker();
-          } catch (_) {}
-        }
-      }
-    });
+const handleClick = (event) => {
+  if (!props.canEdit) return;
+  if (props.type === 'tags' && typeof props.onTagsOpen === 'function') {
+    props.onTagsOpen(event);
+    return;
   }
+  isEditing.value = true;
+  nextTick(() => {
+    if (inputRef.value) {
+      inputRef.value.focus();
+      if (props.type === 'text' || props.type === 'number') {
+        inputRef.value.select();
+      } else if (props.type === 'date' && typeof inputRef.value.showPicker === 'function') {
+        try {
+          inputRef.value.showPicker();
+        } catch (_) {}
+      }
+    }
+  });
 };
 
 const handleBlur = async () => {

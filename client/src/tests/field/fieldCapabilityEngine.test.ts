@@ -77,6 +77,12 @@ describe('FieldCapabilityEngine', () => {
       expect(canEditField('unknownModule', field('custom_xyz'))).toBe(true);
     });
 
+    it('immutable id/audit: canEditField returns false even without registry metadata', () => {
+      expect(canEditField('unknownModule', field('_id'))).toBe(false);
+      expect(canEditField('unknownModule', field('createdAt'))).toBe(false);
+      expect(canEditField('unknownModule', field('__v'))).toBe(false);
+    });
+
     it('safe fallback: isFieldVisibleInConfig returns true when no metadata', () => {
       expect(isFieldVisibleInConfig('unknownModule', field('someField'))).toBe(true);
     });

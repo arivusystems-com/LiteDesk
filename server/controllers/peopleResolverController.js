@@ -501,6 +501,7 @@ exports.createOrAttach = async (req, res) => {
 
     // Extract core fields
     CORE_FIELD_KEYS.forEach(key => {
+      if (key === 'source') return;
       if (formData.hasOwnProperty(key)) {
         const value = formData[key];
         // Filter out empty strings for ObjectId fields to prevent BSON casting errors
@@ -625,6 +626,7 @@ exports.createOrAttach = async (req, res) => {
 
       // Update core fields if provided (but don't overwrite existing non-empty values)
       Object.entries(coreFields).forEach(([key, value]) => {
+        if (key === 'source') return;
         if (['organizationId', 'createdBy', 'assignedTo'].includes(key)) return;
         if (objectIdFields.includes(key) && (value === '' || value === null || value === undefined)) return;
         if (!existingPerson[key] || existingPerson[key] === '') {
@@ -680,6 +682,9 @@ exports.createOrAttach = async (req, res) => {
         }
       });
       
+      delete sanitizedCoreFields.source;
+
+      const { assignResolvedSource } = require('../services/sourceResolver');
       const newPersonData = {
         ...sanitizedCoreFields,
         // Do NOT include appFields here - identity-only creation
@@ -702,6 +707,7 @@ exports.createOrAttach = async (req, res) => {
         }]
       };
 
+      assignResolvedSource(newPersonData, 'ui');
       result = await People.create(newPersonData);
       
       // Debug: Log what was created
@@ -1000,7 +1006,7 @@ exports.attachAppParticipation = async (req, res) => {
     const normalizedType = validatedRole ?? typeInput;
 
     // Clean enum fields: convert empty strings to null
-    const enumFields = ['lead_status', 'contact_status', 'role', 'source'];
+    const enumFields = ['lead_status', 'contact_status', 'role'];
     enumFields.forEach(field => {
       if (appFields[field] === '') {
         appFields[field] = null;
@@ -1157,7 +1163,7 @@ exports.updateCore = async (req, res) => {
 
     // Filter to only core fields (exclude system/audit fields that shouldn't be updated)
     const updatableCoreFields = CORE_FIELD_KEYS.filter(key => 
-      !['organizationId', 'createdBy', 'assignedTo', 'legacyContactId', 'activityLogs', 'createdAt', 'updatedAt'].includes(key)
+      !['organizationId', 'createdBy', 'assignedTo', 'legacyContactId', 'activityLogs', 'createdAt', 'updatedAt', 'source'].includes(key)
     );
 
     // Build update object with only allowed core fields

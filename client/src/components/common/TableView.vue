@@ -592,7 +592,7 @@ const columnHeaderStyle = (column: ColumnDef) => {
   }
   const maxW = getColumnMaxWidth(column)
   if (maxW !== undefined) style.maxWidth = `${maxW}px`
-  if (isFirstCol) style.overflow = 'hidden'
+  // Intentionally no overflow:hidden on sticky header — it clips the sort dropdown (HeadlessUI Menu).
 
   // Make first data column sticky horizontally
   // Header needs higher z-index (25) than cells (20) to stay on top when scrolling
@@ -1253,23 +1253,24 @@ watch(() => props.clearSelectionTrigger, (newVal) => {
   box-shadow: 4px 0 6px -2px rgba(0, 0, 0, 0.25), 2px 0 4px -1px rgba(0, 0, 0, 0.2) !important;
 }
 
-/* Title (first) column: enforce width and truncate long content */
-.table-scroll-container .title-column-cell > div {
+/* Title (first) column body cells only — thead uses the same .title-column-cell class for the
+   sticky name column; applying overflow:hidden to th > div clipped the sort menu (HeadlessUI Menu). */
+.table-scroll-container tbody td.title-column-cell > div {
   min-width: 0;
   overflow: hidden;
 }
-.table-scroll-container .title-column-cell .flex {
+.table-scroll-container tbody td.title-column-cell .flex {
   min-width: 0;
 }
 /* Truncate the text part of title cell (e.g. flex with checkbox + span) */
-.table-scroll-container .title-column-cell .flex > *:last-child {
+.table-scroll-container tbody td.title-column-cell .flex > *:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
 }
 /* When title cell has no .flex (plain slot), truncate direct content */
-.table-scroll-container .title-column-cell > div:not(.flex) {
+.table-scroll-container tbody td.title-column-cell > div:not(.flex) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
