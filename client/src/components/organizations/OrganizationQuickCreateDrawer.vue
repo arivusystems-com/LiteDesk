@@ -88,10 +88,6 @@
                       <p class="text-sm text-indigo-300">
                         {{ helperText }}
                       </p>
-                      <!-- UX microcopy: Clarify what will be saved in Quick Create mode -->
-                      <p v-if="mode === 'quick'" class="text-xs text-gray-400 dark:text-gray-500 mt-2">
-                        Only the organization name will be saved. Use Full Form to add business details.
-                      </p>
                     </div>
                   </div>
 
@@ -130,137 +126,66 @@
                               :exclude-fields="excludeFields"
                               :show-all-fields="false"
                               :quick-create-mode="true"
+                              :fields-override="quickCreateFieldsOverrideProp"
                               @update:form-data="updateFormData"
                               @ready="onFormReady"
                             />
                           </template>
 
-                          <!-- FULL FORM MODE: Locked fields (NOT settings-driven) -->
+                          <!-- FULL FORM MODE: Config-driven with explicit section ordering -->
                           <template v-else>
-                            <!-- 
-                              ARCHITECTURAL INTENT: Full Form Mode
-                              - Fields are LOCKED, NOT settings-driven
-                              - Section 1: Core Identity (name, types)
-                              - Section 2: Business Details (industry, website, phone, address)
-                              - Explicit exclusions: status fields, app participation, ownership, tenant, system fields
-                            -->
-                            
-                            <!-- Section 1: Core Identity -->
-                            <div class="space-y-4">
-                              <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Core Identity</h3>
-                              
-                              <!-- Name (required) -->
-                              <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                  Name <span class="text-red-500">*</span>
-                                </label>
-                                <input
-                                  v-model="formData.name"
-                                  type="text"
-                                  required
-                                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                  placeholder="Organization name"
+                            <div v-if="moduleDefinition && !moduleLoading" class="space-y-6">
+                              <div v-if="fullQuickCreateFields.length">
+                                <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Quick create fields</h3>
+                                <DynamicForm
+                                  module-key="organizations"
+                                  context="platform"
+                                  :form-data="formData"
+                                  :errors="errors"
+                                  :show-all-fields="true"
+                                  :quick-create-mode="false"
+                                  :fields-override="fullQuickCreateFields"
+                                  :exclude-fields="fullModeExcludeFields"
+                                  :module-override="moduleDefinition"
+                                  @update:form-data="updateFormData"
                                 />
-                                <p v-if="errors.name" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                                  {{ errors.name }}
-                                </p>
                               </div>
 
-                              <!-- Types (multi-select) -->
-                              <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                  Types
-                                </label>
-                                <div class="space-y-2">
-                                  <label
-                                    v-for="type in organizationTypes"
-                                    :key="type"
-                                    class="flex items-center gap-2 cursor-pointer"
-                                  >
-                                    <HeadlessCheckbox
-                                      :checked="(formData.types || []).includes(type)"
-                                      checkbox-class="w-4 h-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
-                                      @change="toggleOrganizationType(type, $event.target.checked)"
-                                    />
-                                    <span class="text-sm text-gray-700 dark:text-gray-300">{{ type }}</span>
-                                  </label>
-                                </div>
-                                <p v-if="errors.types" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                                  {{ errors.types }}
-                                </p>
+                              <div v-if="fullOtherFields.length" class="border-t border-gray-200 dark:border-gray-700 pt-6">
+                                <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Other fields</h3>
+                                <DynamicForm
+                                  module-key="organizations"
+                                  context="platform"
+                                  :form-data="formData"
+                                  :errors="errors"
+                                  :show-all-fields="true"
+                                  :quick-create-mode="false"
+                                  :fields-override="fullOtherFields"
+                                  :exclude-fields="fullModeExcludeFields"
+                                  :module-override="moduleDefinition"
+                                  @update:form-data="updateFormData"
+                                />
+                              </div>
+
+                              <div v-if="fullParticipationFields.length" class="border-t border-gray-200 dark:border-gray-700 pt-6">
+                                <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">App participation</h3>
+                                <DynamicForm
+                                  module-key="organizations"
+                                  context="platform"
+                                  :form-data="formData"
+                                  :errors="errors"
+                                  :show-all-fields="true"
+                                  :quick-create-mode="false"
+                                  :fields-override="fullParticipationFields"
+                                  :exclude-fields="fullModeExcludeFields"
+                                  :module-override="moduleDefinition"
+                                  @update:form-data="updateFormData"
+                                />
                               </div>
                             </div>
 
-                            <!-- Subtle divider -->
-                            <div class="border-t border-gray-200 dark:border-gray-700 my-6"></div>
-
-                            <!-- Section 2: Business Details -->
-                            <div class="space-y-4">
-                              <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Business Details</h3>
-                              
-                              <!-- Industry -->
-                              <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                  Industry
-                                </label>
-                                <input
-                                  v-model="formData.industry"
-                                  type="text"
-                                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                  placeholder="e.g., Technology, Healthcare, Manufacturing"
-                                />
-                                <p v-if="errors.industry" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                                  {{ errors.industry }}
-                                </p>
-                              </div>
-
-                              <!-- Website -->
-                              <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                  Website
-                                </label>
-                                <input
-                                  v-model="formData.website"
-                                  type="url"
-                                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                  placeholder="https://example.com"
-                                />
-                                <p v-if="errors.website" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                                  {{ errors.website }}
-                                </p>
-                              </div>
-
-                              <!-- Phone -->
-                              <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                  Phone
-                                </label>
-                                <input
-                                  v-model="formData.phone"
-                                  type="tel"
-                                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                  placeholder="+1 (555) 123-4567"
-                                />
-                                <p v-if="errors.phone" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                                  {{ errors.phone }}
-                                </p>
-                              </div>
-
-                              <!-- Address -->
-                              <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                  Address
-                                </label>
-                                <textarea
-                                  v-model="formData.address"
-                                  rows="3"
-                                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                                  placeholder="Street address, city, state, zip"
-                                ></textarea>
-                                <p v-if="errors.address" class="mt-1 text-sm text-red-600 dark:text-red-400">
-                                  {{ errors.address }}
-                                </p>
-                              </div>
+                            <div v-else class="flex justify-center py-12">
+                              <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
                             </div>
                           </template>
                       </div>
@@ -323,9 +248,11 @@ import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } fro
 import { XMarkIcon } from '@heroicons/vue/24/outline';
 import DynamicForm from '@/components/common/DynamicForm.vue';
 import apiClient from '@/utils/apiClient';
-import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';
-import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
+import { getOrganizationParticipationFields } from '@/platform/fields/organizationFieldModel';
+import { getGlobalSystemFieldKeys, isSystemField } from '@/platform/fields/fieldCapabilityEngine';
+import { normalizeFieldKeyForMetadataLookup } from '@/platform/fields/BaseFieldModel';
+import { getWebsiteValidationMessage, isValidWebsiteInput } from '@/utils/urlInputValidation';
 
 const props = defineProps({
   isOpen: {
@@ -351,7 +278,6 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'saved']);
 
-const authStore = useAuthStore();
 const { openTab } = useTabs();
 
 // ============================================================================
@@ -380,18 +306,6 @@ const errors = ref({});
 const saving = ref(false);
 const moduleDefinition = ref(null);
 
-// Organization types (locked order for Full Form mode)
-const organizationTypes = ['Customer', 'Partner', 'Vendor', 'Distributor', 'Dealer'];
-
-const toggleOrganizationType = (type, checked) => {
-  const currentTypes = Array.isArray(formData.value.types) ? formData.value.types : [];
-  if (checked) {
-    formData.value.types = currentTypes.includes(type) ? currentTypes : [...currentTypes, type];
-    return;
-  }
-  formData.value.types = currentTypes.filter((existingType) => existingType !== type);
-};
-
 // ============================================================================
 // AUTHORITATIVE FIELD LISTS (DO NOT INFER FROM FILLED VALUES)
 // ============================================================================
@@ -399,9 +313,8 @@ const toggleOrganizationType = (type, checked) => {
 // QUICK_CREATE_FIELDS: Must exactly match Settings → Organizations → Quick Create
 // Loaded from module definition (moduleDefinition.value.quickCreate)
 //
-// FULL_CREATE_FIELDS: Locked list of business organization fields
-// May be expanded later, but this list is authoritative
-//
+// FULL_CREATE_FIELDS: authoritative field list for full-form submission.
+// Built from rendered sections: quick-create fields, then other fields, then participation fields.
 const QUICK_CREATE_FIELDS = computed(() => {
   if (!moduleDefinition.value || !moduleDefinition.value.quickCreate) {
     // Fallback to default if module definition not loaded yet
@@ -415,14 +328,178 @@ const QUICK_CREATE_FIELDS = computed(() => {
   });
 });
 
-const FULL_CREATE_FIELDS = [
-  'name',
-  'types',
-  'industry',
-  'website',
-  'phone',
-  'address'
+/**
+ * Tenant / workspace / platform infrastructure fields on Organization (isTenant workflows).
+ * CRM business org creation must never surface these. Aligned with mapOrganizationToSurface exclusions.
+ */
+const TENANT_PLATFORM_ORG_FIELD_KEYS = [
+  'isTenant',
+  'slug',
+  'subscription',
+  'limits',
+  'enabledApps',
+  'enabledModules',
+  'moduleOverrides',
+  'crmInitialized',
+  'settings',
+  'dataRegion',
+  'security',
+  'integrations',
+  'database',
+  'billing',
+  'activityLogs',
+  'legacyOrganizationId',
+  'descriptionVersions'
 ];
+
+/** Normalized top-level roots (same helper as registry) for prefix matching nested module paths, e.g. subscription.stripeCustomerId */
+const TENANT_PLATFORM_ROOTS_NORM = TENANT_PLATFORM_ORG_FIELD_KEYS.map((k) =>
+  normalizeFieldKeyForMetadataLookup(k)
+);
+
+/**
+ * Tenant/workspace fields and ANY nested path under them (module definitions often flatten mongoose paths).
+ * DynamicForm exclude list uses exact key match only, so we must filter field lists in the drawer.
+ */
+function isTenantPlatformOrgFieldKey(fieldKey) {
+  const n = normalizeFieldKeyForMetadataLookup(String(fieldKey || ''));
+  for (const root of TENANT_PLATFORM_ROOTS_NORM) {
+    if (n === root) return true;
+    if (n.startsWith(`${root}.`)) return true;
+    if (n.startsWith(`${root}[`)) return true;
+  }
+  return false;
+}
+
+const FULL_MODE_STATIC_EXCLUDE_FIELDS = [
+  'organizationId',
+  ...TENANT_PLATFORM_ORG_FIELD_KEYS,
+  'createdBy',
+  'createdAt',
+  'updatedAt',
+  '_id',
+  '__v'
+];
+
+const PARTICIPATION_FIELD_KEYS = new Set(
+  getOrganizationParticipationFields('SALES').map((fieldKey) => String(fieldKey).toLowerCase())
+);
+
+const moduleSystemFieldKeys = computed(() => {
+  const moduleFields = Array.isArray(moduleDefinition.value?.fields) ? moduleDefinition.value.fields : [];
+  return moduleFields
+    .map((field) => field?.key)
+    .filter((key) => !!key && isSystemField('organizations', { key: String(key) }));
+});
+
+const moduleSystemFieldKeySet = computed(() =>
+  new Set(moduleSystemFieldKeys.value.map((fieldKey) => String(fieldKey).toLowerCase()))
+);
+
+const fullModeExcludeFields = computed(() => {
+  const deduped = new Set([
+    ...FULL_MODE_STATIC_EXCLUDE_FIELDS.map((fieldKey) => String(fieldKey)),
+    ...getGlobalSystemFieldKeys(),
+    ...moduleSystemFieldKeys.value
+  ]);
+  return Array.from(deduped);
+});
+
+const fullQuickCreateFields = computed(() =>
+  QUICK_CREATE_FIELDS.value.filter((fieldKey) => {
+    const keyLower = String(fieldKey).toLowerCase();
+    return !PARTICIPATION_FIELD_KEYS.has(keyLower)
+      && !isTenantPlatformOrgFieldKey(fieldKey)
+      && !fullModeExcludeFields.value.some((excluded) => excluded.toLowerCase() === keyLower)
+      && !moduleSystemFieldKeySet.value.has(keyLower);
+  })
+);
+
+const fullOtherFields = computed(() => {
+  const moduleFields = Array.isArray(moduleDefinition.value?.fields) ? moduleDefinition.value.fields : [];
+  const quickSet = new Set(fullQuickCreateFields.value.map((fieldKey) => String(fieldKey).toLowerCase()));
+  const excludedSet = new Set(fullModeExcludeFields.value.map((fieldKey) => String(fieldKey).toLowerCase()));
+
+  return moduleFields
+    .map((field) => field?.key)
+    .filter((key) => {
+      if (!key) return false;
+      const keyLower = String(key).toLowerCase();
+      if (excludedSet.has(keyLower)) return false;
+      if (quickSet.has(keyLower)) return false;
+      if (PARTICIPATION_FIELD_KEYS.has(keyLower)) return false;
+      if (isTenantPlatformOrgFieldKey(key)) return false;
+      if (moduleSystemFieldKeySet.value.has(keyLower)) return false;
+      return true;
+    });
+});
+
+const fullParticipationFields = computed(() => {
+  const moduleFields = Array.isArray(moduleDefinition.value?.fields) ? moduleDefinition.value.fields : [];
+  return moduleFields
+    .map((field) => field?.key)
+    .filter((key) => {
+      if (!key) return false;
+      const keyLower = String(key).toLowerCase();
+      return PARTICIPATION_FIELD_KEYS.has(keyLower)
+        && !isTenantPlatformOrgFieldKey(key)
+        && !moduleSystemFieldKeySet.value.has(keyLower);
+    });
+});
+
+const FULL_CREATE_FIELDS = computed(() => [
+  ...fullQuickCreateFields.value,
+  ...fullOtherFields.value,
+  ...fullParticipationFields.value
+]);
+
+/** Quick create keys with tenant/nested tenant paths removed (module API can expose subscription.* etc.) */
+const sanitizedQuickCreateFieldKeys = computed(() =>
+  QUICK_CREATE_FIELDS.value.filter((fieldKey) => !isTenantPlatformOrgFieldKey(fieldKey))
+);
+
+/**
+ * When the organizations module includes flattened tenant paths in quickCreate, override with the filtered list.
+ * If nothing was stripped, omit override so DynamicForm uses its default quick-create path.
+ */
+const quickCreateFieldsOverrideProp = computed(() => {
+  const full = QUICK_CREATE_FIELDS.value;
+  const sanitized = sanitizedQuickCreateFieldKeys.value;
+  if (!full.length || full.length === sanitized.length) return null;
+  return sanitized.length ? sanitized : null;
+});
+
+const moduleLoading = ref(false);
+
+const fetchOrganizationModuleDefinition = async () => {
+  if (moduleLoading.value) return;
+  moduleLoading.value = true;
+
+  try {
+    try {
+      const response = await apiClient.get('/modules/organizations/quick-create');
+      if (response?.success && response?.data) {
+        moduleDefinition.value = response.data;
+        return;
+      }
+    } catch (error) {
+      console.warn('[OrganizationQuickCreate] Failed quick-create module fetch, falling back to modules endpoint:', error);
+    }
+
+    try {
+      const fallbackResponse = await apiClient.get('/modules?context=platform');
+      const moduleList = Array.isArray(fallbackResponse?.data) ? fallbackResponse.data : [];
+      const organizationsModule = moduleList.find((moduleItem) => String(moduleItem?.key || '').toLowerCase() === 'organizations');
+      if (organizationsModule) {
+        moduleDefinition.value = organizationsModule;
+      }
+    } catch (error) {
+      console.error('[OrganizationQuickCreate] Failed to fetch organizations module definition:', error);
+    }
+  } finally {
+    moduleLoading.value = false;
+  }
+};
 
 // Computed: Helper text based on mode
 const helperText = computed(() => {
@@ -444,15 +521,11 @@ const drawerPanelClass = computed(() => {
 // Fields to exclude from Quick Create
 // ARCHITECTURAL INTENT: Only core business fields are eligible for Quick Create
 // Exclude: app participation fields, system fields, tenant fields, ownership/assignment fields
-const excludeFields = ref([
+const QUICK_MODE_STATIC_EXCLUDE_FIELDS = [
   'createdBy',
   'assignedTo',
   'accountManager',
-  'isTenant',
-  'subscription',
-  'enabledApps',
-  'limits',
-  'security',
+  ...TENANT_PLATFORM_ORG_FIELD_KEYS,
   'customerStatus',
   'partnerStatus',
   'vendorStatus',
@@ -461,7 +534,16 @@ const excludeFields = ref([
   'updatedAt',
   '_id',
   '__v'
-]);
+];
+
+const excludeFields = computed(() => {
+  const deduped = new Set([
+    ...QUICK_MODE_STATIC_EXCLUDE_FIELDS.map((fieldKey) => String(fieldKey)),
+    ...getGlobalSystemFieldKeys(),
+    ...moduleSystemFieldKeys.value
+  ]);
+  return Array.from(deduped);
+});
 
 /**
  * Handle form ready event from DynamicForm (Quick Create mode only)
@@ -547,7 +629,7 @@ const handleDialogClose = () => {
 function buildCreateOrganizationPayload(formState) {
   const allowedFields = createMode.value === 'quick'
     ? QUICK_CREATE_FIELDS.value
-    : FULL_CREATE_FIELDS;
+    : FULL_CREATE_FIELDS.value;
 
   const payload = {};
   
@@ -591,6 +673,13 @@ const handleSubmit = async () => {
     // Validate required fields
     if (!formData.value.name || formData.value.name.trim() === '') {
       errors.value.name = 'Name is required';
+      saving.value = false;
+      return;
+    }
+
+    const website = formData.value.website?.trim();
+    if (website && !isValidWebsiteInput(formData.value.website)) {
+      errors.value.website = getWebsiteValidationMessage(formData.value.website) || 'Enter a valid website URL (e.g., example.com or https://example.org)';
       saving.value = false;
       return;
     }
@@ -749,6 +838,7 @@ const fetchOrganizationData = async () => {
 // Reset form and mode when drawer opens/closes
 watch(() => props.isOpen, (isOpen) => {
   if (isOpen) {
+    fetchOrganizationModuleDefinition();
     if (isEditMode.value) {
       // Edit mode: fetch organization data
       fetchOrganizationData();

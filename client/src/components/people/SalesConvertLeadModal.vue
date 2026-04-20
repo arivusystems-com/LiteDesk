@@ -539,8 +539,8 @@ const handleDialogClose = () => {
   }
 };
 
-const close = () => {
-  if (!loading.value) {
+const close = (force = false) => {
+  if (force || !loading.value) {
     emit('close');
   }
 };
@@ -602,7 +602,7 @@ const handleSubmit = async () => {
 
     if (response.success) {
       emit('converted', response.data);
-      close();
+      close(true);
     } else {
       if (response.errors) {
         validationErrors.value = response.errors;

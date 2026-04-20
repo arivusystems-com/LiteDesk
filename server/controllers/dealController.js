@@ -15,6 +15,7 @@ const {
   syncLegacyToRoleBased,
   syncRoleBasedToLegacy
 } = require('../services/dealRelationshipService');
+const { syncDealRelationshipInstances } = require('../services/dealRelationshipInstanceSync');
 const { getDefaultPipelineSettings } = require('./moduleController');
 
 const DESCRIPTION_VERSION_RETENTION_DAYS = 365;
@@ -47,6 +48,8 @@ const DEAL_FIELD_LABELS = {
     priority: 'priority',
     nextFollowUpDate: 'next follow-up date'
 };
+
+const DEAL_SYSTEM_FIELDS = ['id', '_id', '__v', 'organizationId', 'createdAt', 'updatedAt', 'modifiedBy'];
 
 const normalizeDealComparableValue = (value) => {
     if (value === undefined || value === null) return null;
@@ -261,6 +264,14 @@ exports.createDeal = async (req, res) => {
         ) {
             await newDeal.save();
         }
+
+        await syncDealRelationshipInstances({
+            organizationId: req.user.organizationId,
+            dealDoc: newDeal,
+            createdBy: req.user._id,
+            peopleMode: 'replace',
+            organizationsMode: 'replace'
+        });
 
         const deal = await Deal.findById(newDeal._id)
             .populate('contactId', 'first_name last_name email')
@@ -479,6 +490,7 @@ exports.getDealById = async (req, res) => {
 exports.updateDeal = async (req, res) => {
     try {
         // Prevent changing organizationId
+        delete req.body.id;
         delete req.body.organizationId;
         delete req.body.source;
         req.body.modifiedBy = req.user._id;
@@ -499,7 +511,7 @@ exports.updateDeal = async (req, res) => {
             // Validate each field being updated
             for (const [fieldKey, fieldValue] of Object.entries(fieldsToUpdate)) {
                 // Skip system fields and metadata
-                if (['_id', '__v', 'organizationId', 'createdAt', 'updatedAt', 'modifiedBy'].includes(fieldKey)) {
+                if (DEAL_SYSTEM_FIELDS.includes(fieldKey)) {
                     continue;
                 }
                 // Tags are a shared record-page capability and must remain editable
@@ -530,7 +542,7 @@ exports.updateDeal = async (req, res) => {
 
         // Fast path: tags-only update should not be blocked by unrelated
         // lifecycle/stage validators. This keeps tag add/remove reliable.
-        const nonSystemKeys = Object.keys(req.body || {}).filter((fieldKey) => !['_id', '__v', 'organizationId', 'createdAt', 'updatedAt', 'modifiedBy'].includes(fieldKey));
+        const nonSystemKeys = Object.keys(req.body || {}).filter((fieldKey) => !DEAL_SYSTEM_FIELDS.includes(fieldKey));
         if (nonSystemKeys.length === 1 && nonSystemKeys[0] === 'tags') {
             const nextTags = Array.isArray(req.body.tags)
                 ? req.body.tags.map((tag) => String(tag || '').trim()).filter(Boolean)
@@ -609,12 +621,19 @@ exports.updateDeal = async (req, res) => {
             }
         }
 
-        const SYSTEM_FIELDS = ['_id', '__v', 'organizationId', 'createdAt', 'updatedAt', 'modifiedBy'];
-        const requestedFields = Object.keys(req.body || {}).filter((fieldKey) => !SYSTEM_FIELDS.includes(fieldKey));
+        const requestedFields = Object.keys(req.body || {}).filter((fieldKey) => !DEAL_SYSTEM_FIELDS.includes(fieldKey));
+        const touchedDealPeople = Object.prototype.hasOwnProperty.call(req.body || {}, 'dealPeople');
+        const touchedDealOrganizations = Object.prototype.hasOwnProperty.call(req.body || {}, 'dealOrganizations');
+        const touchedLegacyContact = Object.prototype.hasOwnProperty.call(req.body || {}, 'contactId');
+        const touchedLegacyAccount = Object.prototype.hasOwnProperty.call(req.body || {}, 'accountId');
 
         const existingDealForChanges = await Deal.findOne(
             { _id: req.params.id, organizationId: req.user.organizationId, deletedAt: null }
-        ).lean();
+        )
+            .populate('contactId', 'first_name last_name email')
+            .populate('ownerId', 'firstName lastName username email')
+            .populate('accountId', 'name')
+            .lean();
         if (!existingDealForChanges) {
             return res.status(404).json({
                 success: false,
@@ -636,7 +655,8 @@ exports.updateDeal = async (req, res) => {
             { new: true, runValidators: true }
         )
             .populate('contactId', 'first_name last_name email')
-            .populate('ownerId', 'firstName lastName email');
+            .populate('ownerId', 'firstName lastName email')
+            .populate('accountId', 'name');
 
         if (!updatedDeal) {
             return res.status(404).json({
@@ -745,6 +765,16 @@ exports.updateDeal = async (req, res) => {
 
         await syncRoleBasedToLegacy(updatedDeal);
         await updatedDeal.save();
+
+        if (touchedDealPeople || touchedDealOrganizations || touchedLegacyContact || touchedLegacyAccount) {
+            await syncDealRelationshipInstances({
+                organizationId: req.user.organizationId,
+                dealDoc: updatedDeal,
+                createdBy: req.user._id,
+                peopleMode: touchedDealPeople ? 'replace' : 'merge',
+                organizationsMode: touchedDealOrganizations ? 'replace' : 'merge'
+            });
+        }
 
         if (shouldComputeDerivedStatus) {
             const { emitDealEvents } = require('../services/domainEventHelpers');

@@ -32,6 +32,7 @@ const { getEffectiveRelationships } = require('../utils/tenantMetadata');
 const { getRelatedRecords } = require('./relationshipResolver');
 const { isRequiredRelationshipSatisfied } = require('./relationshipResolver');
 const ModuleDefinition = require('../models/ModuleDefinition');
+const mongoose = require('mongoose');
 const FormResponse = require('../models/FormResponse');
 const People = require('../models/People');
 const Event = require('../models/Event');
@@ -52,6 +53,198 @@ const {
   getBasePrimitive,
   isPlatformOwnedPrimitive
 } = require('../utils/moduleProjectionResolver');
+
+function normalizeIdString(value) {
+  if (value == null) return '';
+  if (typeof value === 'string') return value.trim();
+  // Native BSON ObjectId shape
+  if (typeof value?.toHexString === 'function') {
+    return String(value.toHexString());
+  }
+  // Some BSON values expose Buffer id; convert to stable hex
+  if (typeof Buffer !== 'undefined' && Buffer.isBuffer(value?.id)) {
+    return value.id.toString('hex');
+  }
+  if (typeof value === 'object') {
+    const id = value._id ?? value.id ?? value.recordId;
+    if (id != null) return String(id);
+  }
+  return String(value);
+}
+
+function toObjectIdOrNull(value) {
+  const normalized = normalizeIdString(value);
+  if (!normalized) return null;
+  if (!mongoose.Types.ObjectId.isValid(normalized)) return null;
+  return new mongoose.Types.ObjectId(normalized);
+}
+
+function getLookupFieldKeysForTarget(moduleDef, targetModuleKey) {
+  const targetLower = String(targetModuleKey || '').toLowerCase();
+  const singularTarget = targetLower.endsWith('s') ? targetLower.slice(0, -1) : targetLower;
+  const targetAliases = new Set([
+    targetLower,
+    singularTarget,
+    `${targetLower}id`,
+    `${singularTarget}id`
+  ]);
+  const fields = Array.isArray(moduleDef?.fields) ? moduleDef.fields : [];
+  return fields
+    .filter((field) => {
+      const dataType = String(field?.dataType || '').toLowerCase();
+      if (!dataType.includes('lookup')) return false;
+      const target = String(field?.lookupSettings?.targetModule || '').toLowerCase();
+      if (target && target === targetLower) return true;
+
+      // Fallback for legacy/partial module metadata where lookupSettings.targetModule is missing.
+      // Example: People.organization should still resolve as a lookup to Organizations.
+      const key = String(field?.key || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      return key && targetAliases.has(key);
+    })
+    .map((field) => String(field?.key || '').trim())
+    .filter(Boolean);
+}
+
+function extractLinkedIds(value) {
+  if (value == null) return [];
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => extractLinkedIds(entry));
+  }
+  if (typeof value?.toHexString === 'function') {
+    return [String(value.toHexString())];
+  }
+  if (typeof Buffer !== 'undefined' && Buffer.isBuffer(value?.id)) {
+    return [value.id.toString('hex')];
+  }
+  if (typeof value === 'object') {
+    const id = value._id ?? value.id ?? value.recordId ?? null;
+    return id == null ? [] : [String(id)];
+  }
+  return [String(value)];
+}
+
+function mergeRecordRefs(existing = [], additions = []) {
+  const out = [];
+  const seen = new Set();
+  for (const rec of [...existing, ...additions]) {
+    const recId = normalizeIdString(rec?.recordId ?? rec?.id ?? rec?._id);
+    const recApp = String(rec?.appKey || '').toLowerCase();
+    const recMod = String(rec?.moduleKey || '').toLowerCase();
+    if (!recId || !recMod) continue;
+    const dedupeKey = `${recApp}:${recMod}:${recId}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    out.push({
+      ...rec,
+      appKey: String(rec?.appKey || '').toLowerCase(),
+      moduleKey: recMod,
+      recordId: recId
+    });
+  }
+  return out;
+}
+
+async function getModuleDefinitionForContext(organizationId, appKey, moduleKey) {
+  const appLower = String(appKey || '').toLowerCase();
+  const moduleLower = String(moduleKey || '').toLowerCase();
+  if (!moduleLower) return null;
+
+  if (organizationId) {
+    const tenant = await ModuleDefinition.findOne({
+      organizationId,
+      $or: [
+        { key: moduleLower },
+        { moduleKey: moduleLower }
+      ]
+    }).select('fields').lean();
+    if (tenant) return tenant;
+  }
+
+  const platform = await ModuleDefinition.findOne({
+    appKey: appLower,
+    moduleKey: moduleLower,
+    $or: [
+      { organizationId: null },
+      { organizationId: { $exists: false } }
+    ]
+  }).select('fields').lean();
+  if (platform) return platform;
+
+  return ModuleDefinition.findOne({
+    appKey: appLower,
+    moduleKey: moduleLower
+  }).select('fields').lean();
+}
+
+async function getRecordLookupLinks(
+  organizationId,
+  queryAppKey,
+  queryModuleKey,
+  recordId,
+  lookupFieldKeys = [],
+  linkedAppKey = queryAppKey,
+  linkedModuleKey = queryModuleKey
+) {
+  if (!Array.isArray(lookupFieldKeys) || lookupFieldKeys.length === 0) return [];
+  const collection = mongoose.connection?.db?.collection(String(queryModuleKey || '').toLowerCase());
+  if (!collection) return [];
+
+  const objectId = toObjectIdOrNull(recordId);
+  const idString = normalizeIdString(recordId);
+  const query = objectId
+    ? { _id: objectId }
+    : { _id: idString };
+
+  const projection = lookupFieldKeys.reduce((acc, key) => {
+    acc[key] = 1;
+    return acc;
+  }, { _id: 1 });
+
+  const record = await collection.findOne(query, { projection });
+  if (!record) return [];
+
+  const refs = [];
+  for (const key of lookupFieldKeys) {
+    const ids = extractLinkedIds(record[key]).map((id) => normalizeIdString(id)).filter(Boolean);
+    for (const id of ids) {
+      refs.push({
+        appKey: String(linkedAppKey || '').toLowerCase(),
+        moduleKey: String(linkedModuleKey || '').toLowerCase(),
+        recordId: id
+      });
+    }
+  }
+  return refs;
+}
+
+async function getReverseLookupLinks(organizationId, sourceAppKey, sourceModuleKey, sourceLookupFieldKeys = [], targetRecordId) {
+  if (!Array.isArray(sourceLookupFieldKeys) || sourceLookupFieldKeys.length === 0) return [];
+  const collection = mongoose.connection?.db?.collection(String(sourceModuleKey || '').toLowerCase());
+  if (!collection) return [];
+
+  const objectId = toObjectIdOrNull(targetRecordId);
+  const idString = normalizeIdString(targetRecordId);
+  const fieldOrClauses = sourceLookupFieldKeys.flatMap((fieldKey) => {
+    const clauses = [];
+    if (objectId) clauses.push({ [fieldKey]: objectId });
+    if (idString) clauses.push({ [fieldKey]: idString });
+    if (objectId) clauses.push({ [`${fieldKey}._id`]: objectId });
+    if (idString) clauses.push({ [`${fieldKey}._id`]: idString });
+    return clauses;
+  });
+  if (fieldOrClauses.length === 0) return [];
+
+  const cursor = collection.find({ $or: fieldOrClauses }, { projection: { _id: 1 } });
+  const docs = await cursor.toArray();
+  return docs
+    .map((doc) => normalizeIdString(doc?._id))
+    .filter(Boolean)
+    .map((id) => ({
+      appKey: String(sourceAppKey || '').toLowerCase(),
+      moduleKey: String(sourceModuleKey || '').toLowerCase(),
+      recordId: id
+    }));
+}
 
 /**
  * Get record context for a specific record
@@ -133,13 +326,6 @@ async function getRecordContext(organizationId, appKey, moduleKey, recordId, opt
         if (match) isLookup = !!match.isLookup;
       }
 
-      // Check if required relationship is satisfied
-      let requiredSatisfied = true;
-      if (rel.required) {
-        // This will be checked asynchronously below
-        requiredSatisfied = related && related.records.length > 0;
-      }
-
       // Determine target based on direction
       const target = isSource
         ? {
@@ -158,7 +344,7 @@ async function getRecordContext(organizationId, appKey, moduleKey, recordId, opt
         cardinality: rel.cardinality,
         relationshipType: rel.relationshipType || rel.cardinality,
         required: rel.required,
-        requiredSatisfied,
+        requiredSatisfied: true,
         ownership: rel.ownership,
         userLinkable: rel.userLinkable !== undefined ? rel.userLinkable : true,
         display: rel.display || null,
@@ -180,6 +366,59 @@ async function getRecordContext(organizationId, appKey, moduleKey, recordId, opt
         }
       };
     });
+
+    // Metadata-driven lookup reconciliation:
+    // include lookup-backed links in relationship groups (both source and reverse target directions)
+    for (const relOut of relationships) {
+      const relDef = effectiveRelationships.find((e) => e.relationshipKey === relOut.relationshipKey);
+      if (!relDef) continue;
+
+      if (relOut.direction === 'SOURCE') {
+        const sourceDef = await getModuleDefinitionForContext(
+          organizationId,
+          relDef.source.appKey,
+          relDef.source.moduleKey
+        );
+        const sourceLookupKeys = getLookupFieldKeysForTarget(sourceDef, relDef.target.moduleKey);
+        const effectiveLookupKeys =
+          sourceLookupKeys.length === 0 &&
+          String(relDef.source?.moduleKey || '').toLowerCase() === 'people' &&
+          String(relDef.target?.moduleKey || '').toLowerCase() === 'organizations'
+            ? ['organization', 'organizationId']
+            : sourceLookupKeys;
+        const lookupRefs = await getRecordLookupLinks(
+          organizationId,
+          relDef.source.appKey,
+          relDef.source.moduleKey,
+          recordId,
+          effectiveLookupKeys,
+          relDef.target.appKey,
+          relDef.target.moduleKey
+        );
+        relOut.records = mergeRecordRefs(relOut.records, lookupRefs);
+      } else {
+        const sourceDef = await getModuleDefinitionForContext(
+          organizationId,
+          relDef.source.appKey,
+          relDef.source.moduleKey
+        );
+        const sourceLookupKeys = getLookupFieldKeysForTarget(sourceDef, moduleKey);
+        const effectiveSourceLookupKeys =
+          sourceLookupKeys.length === 0 &&
+          String(relDef.source?.moduleKey || '').toLowerCase() === 'people' &&
+          String(moduleKey || '').toLowerCase() === 'organizations'
+            ? ['organization', 'organizationId']
+            : sourceLookupKeys;
+        const reverseRefs = await getReverseLookupLinks(
+          organizationId,
+          relDef.source.appKey,
+          relDef.source.moduleKey,
+          effectiveSourceLookupKeys,
+          recordId
+        );
+        relOut.records = mergeRecordRefs(relOut.records, reverseRefs);
+      }
+    }
 
     // Enrich TARGET-direction relationships with isLookup from source module's relationship config (UI-only; no schema change)
     for (let i = 0; i < relationships.length; i++) {
@@ -230,6 +469,9 @@ async function getRecordContext(organizationId, appKey, moduleKey, recordId, opt
           recordId,
           rel.relationshipKey
         );
+        if (Array.isArray(rel.records) && rel.records.length > 0) {
+          rel.requiredSatisfied = true;
+        }
       }
     }
 

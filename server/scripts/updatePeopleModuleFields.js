@@ -4,6 +4,7 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env'
 const ModuleDefinition = require('../models/ModuleDefinition');
 const People = require('../models/People');
 const Organization = require('../models/Organization');
+const { getDefaultPhoneValidations, getDefaultEmailValidations } = require('../utils/defaultFieldValidations');
 
 // Field-specific data type mappings for People module
 const peopleFieldMappings = {
@@ -41,6 +42,17 @@ const enumMappings = {
   'role': ['Decision Maker', 'Influencer', 'Support', 'Other'],
   'preferred_contact_method': ['Email', 'Phone', 'WhatsApp', 'SMS', 'None']
 };
+
+const defaultPeopleRelationships = Object.freeze([
+  { name: 'Related Organization', type: 'many_to_one', isLookup: true, targetModuleKey: 'organizations', relationshipKey: 'people_organizations' },
+  { name: 'Related Deals', type: 'many_to_many', isLookup: false, targetModuleKey: 'deals', relationshipKey: 'people_deals' },
+  { name: 'Related Tasks', type: 'many_to_many', isLookup: false, targetModuleKey: 'tasks', relationshipKey: 'people_tasks' },
+  { name: 'Related Events', type: 'many_to_many', isLookup: false, targetModuleKey: 'events', relationshipKey: 'people_events' }
+]);
+
+function cloneDefaultPeopleRelationships() {
+  return JSON.parse(JSON.stringify(defaultPeopleRelationships));
+}
 
 function inferDataType(path, fieldName) {
   const instance = path.instance || (path.options && path.options.type && path.options.type.name);
@@ -282,7 +294,12 @@ async function updatePeopleModuleFields(organizationId = null) {
           detail: true 
         },
         order: order++,
-        validations: [],
+        validations:
+          dataType === 'Phone'
+            ? getDefaultPhoneValidations()
+            : dataType === 'Email'
+              ? getDefaultEmailValidations()
+              : [],
         dependencies: dependencies,
         // Filter metadata (schema-driven filters)
         // Default to not filterable, will be set from metadata if available
@@ -555,6 +572,9 @@ async function updatePeopleModuleFields(organizationId = null) {
         existing.name = existing.name || 'People'; // Legacy field
         existing.type = 'system';
         existing.enabled = existing.enabled !== false;
+        existing.relationships = Array.isArray(existing.relationships) && existing.relationships.length > 0
+          ? existing.relationships
+          : cloneDefaultPeopleRelationships();
         // Ensure appKey is set for Sales app
         if (!existing.appKey) {
           existing.appKey = 'sales';
@@ -575,7 +595,7 @@ async function updatePeopleModuleFields(organizationId = null) {
           type: 'system',
           enabled: true,
           fields: fields,
-          relationships: [],
+          relationships: cloneDefaultPeopleRelationships(),
           quickCreate: [],
           quickCreateLayout: { version: 1, rows: [] }
         });

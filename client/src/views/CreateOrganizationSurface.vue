@@ -353,7 +353,11 @@ Post-creation behavior is driven by invocation context via query params:
             </label>
             <input
               v-model="formData.website"
-              type="url"
+              type="text"
+              inputmode="url"
+              autocomplete="url"
+              @input="handleWebsiteInput"
+              @blur="handleWebsiteBlur"
               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               placeholder="https://example.com"
             />
@@ -368,10 +372,16 @@ Post-creation behavior is driven by invocation context via query params:
               Phone
             </label>
             <input
-              v-model="formData.phone"
-              type="tel"
+              :value="formData.phone"
+              type="text"
+              inputmode="numeric"
+              autocomplete="tel"
+              maxlength="10"
               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              placeholder="+1 (555) 123-4567"
+              placeholder="10-digit phone number"
+              @input="formData.phone = sanitizePhoneDigits($event.target.value)"
+              @keydown="preventNonDigitPhoneKeys"
+              @blur="validatePhoneField"
             />
             <p v-if="validationErrors.phone" class="mt-1 text-sm text-red-600 dark:text-red-400">
               {{ validationErrors.phone }}
@@ -423,6 +433,9 @@ import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
+import { sanitizePhoneDigits, preventNonDigitPhoneKeys } from '@/utils/phoneInput';
+import { DEFAULT_PHONE_VALIDATION_MESSAGE } from '@/utils/defaultFieldValidations';
+import { getWebsiteValidationMessage } from '@/utils/urlInputValidation';
 import { getAllowedStatusesForTypes, getDefaultStatusForTypes, getOrganizationIntentsForTypes } from '@/platform/organizations/organizationIntents';
 
 // Props
@@ -467,6 +480,49 @@ const error = ref(null);
 const showOptionalFields = ref(false);
 const loading = ref(false);
 const typesReadOnly = ref(false);
+const websiteTouched = ref(false);
+
+const validatePhoneField = () => {
+  const p = sanitizePhoneDigits(formData.value.phone || '');
+  formData.value.phone = p;
+  if (p.length > 0 && p.length !== 10) {
+    validationErrors.value = { ...validationErrors.value, phone: DEFAULT_PHONE_VALIDATION_MESSAGE };
+    return false;
+  }
+  if (validationErrors.value.phone) {
+    const next = { ...validationErrors.value };
+    delete next.phone;
+    validationErrors.value = next;
+  }
+  return true;
+};
+
+const validateWebsiteField = (rawValue = formData.value.website, { markTouched = false } = {}) => {
+  if (markTouched) {
+    websiteTouched.value = true;
+  }
+
+  const website = typeof rawValue === 'string' ? rawValue.trim() : '';
+  const websiteErrorMessage = getWebsiteValidationMessage(website);
+  if (websiteErrorMessage) {
+    validationErrors.value.website = websiteErrorMessage;
+    return false;
+  }
+
+  if (validationErrors.value.website) {
+    delete validationErrors.value.website;
+  }
+  return true;
+};
+
+const handleWebsiteInput = () => {
+  if (!websiteTouched.value) return;
+  validateWebsiteField();
+};
+
+const handleWebsiteBlur = () => {
+  validateWebsiteField(formData.value.website, { markTouched: true });
+};
 
 // Organization types (locked order as per requirements)
 const organizationTypes = ['Customer', 'Partner', 'Vendor', 'Distributor', 'Dealer'];
@@ -678,6 +734,14 @@ const handleSubmit = async () => {
 
   if (!formData.value.name || formData.value.name.trim() === '') {
     validationErrors.value.name = 'Name is required';
+    return;
+  }
+
+  if (!validateWebsiteField(formData.value.website, { markTouched: true })) {
+    return;
+  }
+
+  if (!validatePhoneField()) {
     return;
   }
 
@@ -905,7 +969,7 @@ const fetchOrganizationData = async () => {
         types: Array.isArray(data.types) ? [...data.types] : [],
         industry: data.industry || '',
         website: data.website || '',
-        phone: data.phone || '',
+        phone: sanitizePhoneDigits(data.phone || ''),
         address: data.address || '',
         // Status fields (preserve existing values in edit mode)
         customerStatus: data.customerStatus || null,

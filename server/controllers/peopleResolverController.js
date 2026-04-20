@@ -24,6 +24,7 @@ const {
   helpdeskTypeAliasViolation,
   peopleLegacyTopLevelTypeViolation,
 } = require('../utils/warnDeprecatedPeopleTypeAlias');
+const { isOptionalEmailWellFormed } = require('../utils/defaultFieldValidations');
 
 /**
  * Resolve app context for People flows
@@ -516,6 +517,14 @@ exports.createOrAttach = async (req, res) => {
         }
       }
     });
+
+    if (coreFields.email !== undefined && !isOptionalEmailWellFormed(coreFields.email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid email format.',
+        code: 'INVALID_EMAIL'
+      });
+    }
 
     // Extract app-specific fields for the selected app
     // ⚠️ IMPORTANT: These will only be used when ATTACHING to existing person
@@ -1195,6 +1204,22 @@ exports.updateCore = async (req, res) => {
         success: false,
         message: 'At least one of First Name, Last Name, or Email is required.'
       });
+    }
+
+    if (updateData.email !== undefined && !isOptionalEmailWellFormed(updateData.email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid email format.'
+      });
+    }
+
+    // findOneAndUpdate validators resolve first_name via Query#get; merge stored first_name
+    // when only last_name is sent so cross-field validation matches the DB state.
+    if (
+      Object.prototype.hasOwnProperty.call(updateData, 'last_name') &&
+      !Object.prototype.hasOwnProperty.call(updateData, 'first_name')
+    ) {
+      updateData.first_name = person.first_name;
     }
 
     // Update the person record

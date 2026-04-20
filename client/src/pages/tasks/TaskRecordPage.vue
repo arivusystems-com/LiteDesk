@@ -1590,6 +1590,7 @@ import {
 import Avatar from '@/components/common/Avatar.vue';
 import DateCell from '@/components/common/table/DateCell.vue';
 import { getKeyFields } from '@/utils/fieldDisplay';
+import { DEFAULT_CURRENCY_CODE, formatCurrencyValue } from '@/utils/currencyOptions';
 import apiClient from '@/utils/apiClient';
 import { openDatePicker } from '@/utils/dateUtils';
 import { useAuthStore } from '@/stores/auth';
@@ -2752,18 +2753,15 @@ const formatCompactDate = (dateValue) => {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
-const formatCompactCurrency = (value) => {
+const formatCompactCurrency = (value, currencyCode = DEFAULT_CURRENCY_CODE) => {
   const num = Number(value);
   if (!Number.isFinite(num)) return '';
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
+  return (
+    formatCurrencyValue(num, {
+      currencyCode: String(currencyCode || DEFAULT_CURRENCY_CODE).toUpperCase(),
       maximumFractionDigits: num >= 1000 ? 0 : 2
-    }).format(num);
-  } catch {
-    return '';
-  }
+    }) || ''
+  );
 };
 
 const getRelatedTypeLabel = (type) => ({
@@ -2815,10 +2813,11 @@ const getRelatedRecordMeta = (type, record) => {
   }
 
   if (type === 'deal') {
+    const resolvedCurrencyCode = record?.currencyCode || record?.currency || DEFAULT_CURRENCY_CODE;
     const amount =
-      formatCompactCurrency(record.amount) ||
-      formatCompactCurrency(record.value) ||
-      formatCompactCurrency(record.totalValue);
+      formatCompactCurrency(record.amount, resolvedCurrencyCode) ||
+      formatCompactCurrency(record.value, resolvedCurrencyCode) ||
+      formatCompactCurrency(record.totalValue, resolvedCurrencyCode);
     const parts = [record.stage || record.status, amount].filter(Boolean);
     return parts.join(' • ');
   }

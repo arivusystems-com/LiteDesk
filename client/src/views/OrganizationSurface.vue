@@ -519,6 +519,7 @@ import EmailComposeDrawer from '@/components/communications/EmailComposeDrawer.v
 import ActivityTimeline from '@/components/ActivityTimeline.vue';
 import AutomationContext from '@/components/automation/AutomationContext.vue';
 import apiClient from '@/utils/apiClient';
+import { DEFAULT_CURRENCY_CODE, formatCurrencyValue } from '@/utils/currencyOptions';
 // CONTRACT-LOCKED:
 // See docs/architecture/platform-permission-contract.md
 // Platform Permissions MUST remain explanatory-only.
@@ -692,12 +693,16 @@ const fetchOrganization = async () => {
 
 const formatCurrency = (amount) => {
   if (typeof amount !== 'number') return '-';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  }).format(amount);
+  const currencyCode = String(
+    organization.value?.settings?.currency || organization.value?.currency || DEFAULT_CURRENCY_CODE
+  ).toUpperCase();
+  return (
+    formatCurrencyValue(amount, {
+      currencyCode,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }) || '-'
+  );
 };
 
 const getAppLabel = (appKey) => {

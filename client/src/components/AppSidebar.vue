@@ -380,6 +380,7 @@ import { useSidebarState } from '@/composables/useSidebarState';
 import type { SidebarStructure, AppSummary } from '@/types/sidebar.types';
 import { useTabs } from '@/composables/useTabs';
 import { useColorMode } from '@/composables/useColorMode';
+import clickOutside from '@/directives/clickOutside';
 import logoWordmarkDarkUrl from '/assets/logo/Logo_word_dark.svg';
 import logoDarkUrl from '/assets/logo/Logo_dark.svg';
 import logoWordmarkLightUrl from '/assets/logo/Logo_word_light.svg';
@@ -473,20 +474,7 @@ const handleAppSelect = (appId: string) => {
   closeAppSwitcherDropdown();
 };
 
-// Click outside directive
-const vClickOutside = {
-  mounted(el: HTMLElement, binding: any) {
-    (el as any).clickOutsideEvent = (event: MouseEvent) => {
-      if (!(el === event.target || el.contains(event.target as Node))) {
-        binding.value();
-      }
-    };
-    document.addEventListener('click', (el as any).clickOutsideEvent);
-  },
-  unmounted(el: HTMLElement) {
-    document.removeEventListener('click', (el as any).clickOutsideEvent);
-  }
-};
+const vClickOutside = clickOutside;
 
 /**
  * Figma icon helpers (node 5342:2703 subtree).

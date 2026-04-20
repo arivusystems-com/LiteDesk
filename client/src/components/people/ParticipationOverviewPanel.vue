@@ -145,6 +145,7 @@ import { getParticipation } from '@/utils/getParticipation';
 import { getAppLabel } from '@/utils/getRoleDisplay';
 import { isDetachAllowed } from './detachPolicy';
 import { useAuthStore } from '@/stores/auth';
+import clickOutside from '@/directives/clickOutside';
 import { PEOPLE_PERMISSIONS } from '@/platform/permissions/peoplePermissions';
 import { hasPeoplePermission } from '@/platform/permissions/peoplePermissionHelper';
 import { isPeopleSalesRoleFieldKey } from '@/utils/peopleParticipationUi';
@@ -454,20 +455,5 @@ function closeActionsMenu() {
   openActionsMenu.value = null;
 }
 
-// Click outside directive (simple implementation)
-const vClickOutside = {
-  mounted(el, binding) {
-    el.clickOutsideEvent = (event) => {
-      if (!(el === event.target || el.contains(event.target))) {
-        binding.value();
-      }
-    };
-    document.addEventListener('click', el.clickOutsideEvent);
-  },
-  unmounted(el) {
-    if (el.clickOutsideEvent) {
-      document.removeEventListener('click', el.clickOutsideEvent);
-    }
-  }
-};
+const vClickOutside = clickOutside;
 </script>

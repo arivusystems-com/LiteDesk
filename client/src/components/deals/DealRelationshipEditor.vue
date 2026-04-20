@@ -85,11 +85,17 @@
                 <option v-for="r in personRoles" :key="r.value" :value="r.value">{{ r.label }}</option>
               </select>
             </div>
-            <label class="flex items-center gap-2">
-              <HeadlessCheckbox v-model="addPersonForm.isPrimary" />
+            <label class="flex items-center gap-2" :class="{ 'opacity-50': !canMarkAddPersonPrimary }">
+              <HeadlessCheckbox v-model="addPersonForm.isPrimary" :disabled="!canMarkAddPersonPrimary" />
               <span class="text-sm text-gray-700 dark:text-gray-300">Primary</span>
             </label>
             <span v-if="addPersonForm.isPrimary" class="text-xs text-gray-500 self-center">(Primary contact)</span>
+            <span
+              v-else-if="!canMarkAddPersonPrimary"
+              class="text-xs text-gray-500 self-center"
+            >
+              (Primary already set. Use star to switch.)
+            </span>
             <button
               type="button"
               @click="addPerson"
@@ -186,11 +192,17 @@
                 <option v-for="r in orgRoles" :key="r.value" :value="r.value">{{ r.label }}</option>
               </select>
             </div>
-            <label class="flex items-center gap-2" :class="{ 'opacity-50': addOrgForm.role !== 'customer' }">
-              <HeadlessCheckbox v-model="addOrgForm.isPrimary" :disabled="addOrgForm.role !== 'customer'" />
+            <label class="flex items-center gap-2" :class="{ 'opacity-50': !canMarkAddOrgPrimary }">
+              <HeadlessCheckbox v-model="addOrgForm.isPrimary" :disabled="!canMarkAddOrgPrimary" />
               <span class="text-sm text-gray-700 dark:text-gray-300">Primary</span>
             </label>
             <span v-if="addOrgForm.role !== 'customer'" class="text-xs text-gray-500 self-center">(Customer only)</span>
+            <span
+              v-else-if="!canMarkAddOrgPrimary"
+              class="text-xs text-gray-500 self-center"
+            >
+              (Primary already set. Use star to switch.)
+            </span>
             <button
               type="button"
               @click="addOrganization"
@@ -253,10 +265,55 @@ const addPersonForm = ref({ personId: '', role: 'primary_contact', isPrimary: fa
 const addOrgForm = ref({ organizationId: '', role: 'customer', isPrimary: false });
 const validationErrors = ref({ primaryContact: '', activeCustomer: '' });
 
+const activePrimaryPersonId = computed(() => {
+  const primary = dealPeople.value.find((p) => p.isActive !== false && p.isPrimary);
+  return normalizeId(primary?.personId);
+});
+
+const activePrimaryCustomerOrgId = computed(() => {
+  const primary = dealOrganizations.value.find(
+    (o) => o.isActive !== false && o.isPrimary && String(o.role || '') === 'customer'
+  );
+  return normalizeId(primary?.organizationId);
+});
+
+const canMarkAddPersonPrimary = computed(() => {
+  const selected = normalizeId(addPersonForm.value.personId);
+  const currentPrimary = activePrimaryPersonId.value;
+  if (!selected || !currentPrimary) return true;
+  return selected === currentPrimary;
+});
+
+const canMarkAddOrgPrimary = computed(() => {
+  if (addOrgForm.value.role !== 'customer') return false;
+  const selected = normalizeId(addOrgForm.value.organizationId);
+  const currentPrimary = activePrimaryCustomerOrgId.value;
+  if (!selected || !currentPrimary) return true;
+  return selected === currentPrimary;
+});
+
 watch(
   () => addOrgForm.value.role,
   (role) => {
     if (role !== 'customer') {
+      addOrgForm.value = { ...addOrgForm.value, isPrimary: false };
+    }
+  }
+);
+
+watch(
+  () => [addPersonForm.value.personId, activePrimaryPersonId.value],
+  () => {
+    if (addPersonForm.value.isPrimary && !canMarkAddPersonPrimary.value) {
+      addPersonForm.value = { ...addPersonForm.value, isPrimary: false };
+    }
+  }
+);
+
+watch(
+  () => [addOrgForm.value.organizationId, addOrgForm.value.role, activePrimaryCustomerOrgId.value],
+  () => {
+    if (addOrgForm.value.isPrimary && !canMarkAddOrgPrimary.value) {
       addOrgForm.value = { ...addOrgForm.value, isPrimary: false };
     }
   }
@@ -273,6 +330,14 @@ const sortedOrgs = computed(() => {
 
 const peopleOptions = computed(() => props.people || []);
 const organizationOptions = computed(() => props.organizations || []);
+
+function normalizeId(value) {
+  if (!value) return '';
+  if (typeof value === 'object') {
+    return String(value._id || value.id || value.recordId || '');
+  }
+  return String(value);
+}
 
 function personName(pid) {
   if (!pid) return '—';
@@ -308,20 +373,30 @@ function unsetPrimaryOrgs() {
 }
 
 function addPerson() {
-  const id = addPersonForm.value.personId;
+  const id = normalizeId(addPersonForm.value.personId);
   if (!id) return;
   const isPrimary = !!addPersonForm.value.isPrimary;
   const role = isPrimary ? 'primary_contact' : (addPersonForm.value.role || 'primary_contact');
 
-  if (isPrimary) unsetPrimaryPeople();
+  if (isPrimary && !canMarkAddPersonPrimary.value) {
+    validationErrors.value.primaryContact = 'A primary contact already exists. Use the star icon to change primary.';
+    return;
+  }
+  if (validationErrors.value.primaryContact) {
+    validationErrors.value.primaryContact = '';
+  }
 
   const existing = dealPeople.value.find(
-    (p) => (p.personId?._id || p.personId) === id && p.role === role
+    (p) => normalizeId(p.personId) === id && p.role === role
   );
-  let list = [...dealPeople.value];
+  let list = [...dealPeople.value].map((p) => ({ ...p }));
+  if (isPrimary) {
+    // Atomic primary switch: clear current primary flags before applying new primary
+    list = list.map((p) => ({ ...p, isPrimary: false }));
+  }
   if (existing) {
     list = list.map((p) =>
-      (p.personId?._id || p.personId) === id && p.role === role
+      normalizeId(p.personId) === id && p.role === role
         ? { ...p, isPrimary, isActive: true }
         : p
     );
@@ -340,38 +415,58 @@ function addPerson() {
 
 function setPrimaryPerson(entry) {
   if (entry.isPrimary) return;
-  unsetPrimaryPeople();
-  const id = entry.personId?._id || entry.personId;
+  if (validationErrors.value.primaryContact) {
+    validationErrors.value.primaryContact = '';
+  }
+  const id = normalizeId(entry.personId);
+  const targetRole = String(entry.role || '');
   const list = dealPeople.value.map((p) => {
-    if ((p.personId?._id || p.personId) !== id || p.role !== entry.role) return p;
-    return { ...p, isPrimary: true, role: 'primary_contact' };
+    const sameRow = normalizeId(p.personId) === id && String(p.role || '') === targetRole;
+    if (sameRow) {
+      return { ...p, isPrimary: true, role: 'primary_contact', isActive: true };
+    }
+    return { ...p, isPrimary: false };
   });
   dealPeople.value = list;
 }
 
 function softRemovePerson(entry) {
-  const id = entry.personId?._id || entry.personId;
+  const id = normalizeId(entry.personId);
   const list = dealPeople.value.map((p) =>
-    (p.personId?._id || p.personId) === id && p.role === entry.role ? { ...p, isActive: false } : p
+    normalizeId(p.personId) === id && p.role === entry.role ? { ...p, isActive: false } : p
   );
   dealPeople.value = list;
 }
 
 function addOrganization() {
-  const id = addOrgForm.value.organizationId;
+  const id = normalizeId(addOrgForm.value.organizationId);
   if (!id) return;
   const role = addOrgForm.value.role || 'customer';
   const isPrimary = role === 'customer' && !!addOrgForm.value.isPrimary;
 
-  if (isPrimary) unsetPrimaryOrgs();
+  if (isPrimary && !canMarkAddOrgPrimary.value) {
+    validationErrors.value.activeCustomer = 'A primary customer already exists. Use the star icon to change primary.';
+    return;
+  }
+  if (validationErrors.value.activeCustomer) {
+    validationErrors.value.activeCustomer = '';
+  }
 
   const existing = dealOrganizations.value.find(
-    (o) => (o.organizationId?._id || o.organizationId) === id && o.role === role
+    (o) => normalizeId(o.organizationId) === id && o.role === role
   );
-  let list = [...dealOrganizations.value];
+  let list = [...dealOrganizations.value].map((o) => ({ ...o }));
+  if (isPrimary && role === 'customer') {
+    // Atomic primary switch among customer organizations
+    list = list.map((o) => (
+      String(o.role || '') === 'customer'
+        ? { ...o, isPrimary: false }
+        : { ...o }
+    ));
+  }
   if (existing) {
     list = list.map((o) =>
-      (o.organizationId?._id || o.organizationId) === id && o.role === role
+      normalizeId(o.organizationId) === id && o.role === role
         ? { ...o, isPrimary, isActive: true }
         : o
     );
@@ -390,20 +485,74 @@ function addOrganization() {
 
 function setPrimaryOrg(entry) {
   if (entry.isPrimary) return;
-  unsetPrimaryOrgs();
-  const id = entry.organizationId?._id || entry.organizationId;
-  const list = dealOrganizations.value.map((o) =>
-    (o.organizationId?._id || o.organizationId) === id && o.role === entry.role ? { ...o, isPrimary: true } : o
-  );
+  if (validationErrors.value.activeCustomer) {
+    validationErrors.value.activeCustomer = '';
+  }
+  const id = normalizeId(entry.organizationId);
+  const targetRole = String(entry.role || '');
+  const list = dealOrganizations.value.map((o) => {
+    if (String(o.role || '') !== 'customer') return { ...o, isPrimary: false };
+    const sameRow = normalizeId(o.organizationId) === id && String(o.role || '') === targetRole;
+    return { ...o, isPrimary: sameRow };
+  });
   dealOrganizations.value = list;
 }
 
 function softRemoveOrg(entry) {
-  const id = entry.organizationId?._id || entry.organizationId;
+  const id = normalizeId(entry.organizationId);
   const list = dealOrganizations.value.map((o) =>
-    (o.organizationId?._id || o.organizationId) === id && o.role === entry.role ? { ...o, isActive: false } : o
+    normalizeId(o.organizationId) === id && o.role === entry.role ? { ...o, isActive: false } : o
   );
   dealOrganizations.value = list;
+}
+
+function enforceSinglePrimaryState() {
+  let changed = false;
+  let nextPeople = dealPeople.value.map((p) => ({ ...p }));
+  let nextOrganizations = dealOrganizations.value.map((o) => ({ ...o }));
+
+  const peoplePrimaryIndexes = [];
+  for (let i = 0; i < nextPeople.length; i += 1) {
+    const row = nextPeople[i];
+    if (row?.isActive === false) continue;
+    if (!row?.isPrimary) continue;
+    if (String(row?.role || '') !== 'primary_contact') continue;
+    peoplePrimaryIndexes.push(i);
+  }
+  if (peoplePrimaryIndexes.length > 1) {
+    const keep = peoplePrimaryIndexes[0];
+    for (const idx of peoplePrimaryIndexes) {
+      const keepPrimary = idx === keep;
+      if (nextPeople[idx].isPrimary !== keepPrimary) {
+        nextPeople[idx].isPrimary = keepPrimary;
+        changed = true;
+      }
+    }
+  }
+
+  const orgPrimaryIndexes = [];
+  for (let i = 0; i < nextOrganizations.length; i += 1) {
+    const row = nextOrganizations[i];
+    if (row?.isActive === false) continue;
+    if (!row?.isPrimary) continue;
+    if (String(row?.role || '') !== 'customer') continue;
+    orgPrimaryIndexes.push(i);
+  }
+  if (orgPrimaryIndexes.length > 1) {
+    const keep = orgPrimaryIndexes[0];
+    for (const idx of orgPrimaryIndexes) {
+      const keepPrimary = idx === keep;
+      if (nextOrganizations[idx].isPrimary !== keepPrimary) {
+        nextOrganizations[idx].isPrimary = keepPrimary;
+        changed = true;
+      }
+    }
+  }
+
+  if (changed) {
+    dealPeople.value = nextPeople;
+    dealOrganizations.value = nextOrganizations;
+  }
 }
 
 function validate() {
@@ -439,9 +588,10 @@ function validate() {
 watch(
   () => props.modelValue,
   (v) => {
+    enforceSinglePrimaryState();
     validationErrors.value = { primaryContact: '', activeCustomer: '' };
   },
-  { deep: true }
+  { deep: true, immediate: true }
 );
 
 defineExpose({ validate });

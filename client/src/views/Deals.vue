@@ -153,8 +153,8 @@
       </template>
 
       <!-- Custom Amount Cell -->
-      <template #cell-amount="{ value }">
-        <strong class="text-gray-900 dark:text-white">{{ formatCurrency(value) }}</strong>
+      <template #cell-amount="{ value, row }">
+        <strong class="text-gray-900 dark:text-white">{{ formatCurrency(value, row?.currencyCode || row?.currency) }}</strong>
       </template>
 
       <!-- Custom Stage Cell -->
@@ -306,7 +306,7 @@
               <template v-if="kanbanShowEmptyFields || !isDealFieldEmpty(deal, key)">
                 <div v-if="key === 'amount'" class="flex items-center gap-1">
                   <BanknotesIcon class="w-3.5 h-3.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
-                  <span class="font-semibold text-emerald-600 dark:text-emerald-400">{{ formatCurrency(deal.amount) }}</span>
+                  <span class="font-semibold text-emerald-600 dark:text-emerald-400">{{ formatCurrency(deal.amount, deal.currencyCode || deal.currency) }}</span>
                 </div>
                 <div
                   v-else-if="key === 'expectedCloseDate'"
@@ -417,6 +417,7 @@ import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import CSVImportModal from '@/components/import/CSVImportModal.vue';
 import KanbanBoard from '@/components/common/KanbanBoard.vue';
 import { getModuleListConfig } from '@/platform/modules/moduleListRegistry';
+import { DEFAULT_CURRENCY_CODE, formatCurrencyValue } from '@/utils/currencyOptions';
 import { ViewColumnsIcon, ListBulletIcon, UserIcon, CalendarDaysIcon, InboxIcon, RectangleStackIcon, PlusIcon, BuildingOfficeIcon, ChartBarIcon, BanknotesIcon, HashtagIcon } from '@heroicons/vue/24/outline';
 import { FlagIcon as FlagIconSolid } from '@heroicons/vue/24/solid';
 
@@ -984,8 +985,14 @@ const handleKanbanUpdate = async ({ item, newStage, newIndex, previousStage }) =
 };
 
 // Helpers
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount || 0);
+const formatCurrency = (amount, currencyCode = DEFAULT_CURRENCY_CODE) => {
+  return (
+    formatCurrencyValue(amount || 0, {
+      currencyCode: String(currencyCode || DEFAULT_CURRENCY_CODE).toUpperCase(),
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }) || '—'
+  );
 };
 
 const formatDate = (date) => {

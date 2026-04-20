@@ -240,7 +240,7 @@
             :layout="isCompact ? 'stack' : 'row'"
             :compact="isCompact"
             row-padding-class="py-2 px-4 min-h-[2rem]"
-            @save="handleFieldSave(field, $event)"
+            :commit-save="(v) => commitFieldSave(field, v)"
           />
         </div>
       </template>
@@ -412,11 +412,11 @@ const getFieldIcon = (field) => {
   return map[type] || DocumentTextIcon;
 };
 
-const handleFieldSave = (field, value) => {
-  if (typeof field?.onSave === 'function') {
-    field.onSave(value);
-  }
-};
+/** Await adapter save so API validation errors surface inline (EditableLabeledValue commitSave). */
+async function commitFieldSave(field, value) {
+  if (typeof field?.onSave !== 'function') return;
+  await field.onSave(value);
+}
 
 const handleFieldEdit = (field, event) => {
   if (typeof field?.onEdit === 'function') {

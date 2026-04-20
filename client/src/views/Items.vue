@@ -104,9 +104,9 @@
       </template>
 
       <!-- Custom Selling Price Cell -->
-      <template #cell-selling_price="{ value }">
+      <template #cell-selling_price="{ value, row }">
         <span v-if="value" class="text-sm font-medium text-gray-900 dark:text-white">
-          {{ formatCurrency(value) }}
+          {{ formatCurrency(value, row?.currencyCode || row?.currency) }}
         </span>
         <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
       </template>
@@ -173,6 +173,7 @@ import BadgeCell from '@/components/common/table/BadgeCell.vue';
 import DateCell from '@/components/common/table/DateCell.vue';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import CSVImportModal from '@/components/import/CSVImportModal.vue';
+import { DEFAULT_CURRENCY_CODE, formatCurrencyValue } from '@/utils/currencyOptions';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -295,13 +296,14 @@ const closeFormModal = () => {
 };
 
 // Utility functions
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(amount);
+const formatCurrency = (amount, currencyCode = DEFAULT_CURRENCY_CODE) => {
+  return (
+    formatCurrencyValue(amount, {
+      currencyCode: String(currencyCode || DEFAULT_CURRENCY_CODE).toUpperCase(),
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }) || '—'
+  );
 };
 
 const getInitials = (name) => {

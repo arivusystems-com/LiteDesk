@@ -414,10 +414,12 @@ export const DEAL_FIELD_METADATA: Record<string, DealFieldMetadata> = {
     filterPriority: 17,
   },
   stageHistory: {
-    owner: 'core',
-    intent: 'tracking',
+    owner: 'system',
+    intent: 'system',
     fieldScope: 'CORE',
     editable: false,
+    isSystem: true,
+    isVisibleInConfig: true,
   },
 
   // Notes and line items

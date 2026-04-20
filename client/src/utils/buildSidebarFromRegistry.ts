@@ -221,8 +221,16 @@ async function buildCoreModules(snapshot: PermissionSnapshot): Promise<SidebarIt
           order: module.order,
         } satisfies SidebarItem;
       });
+    
+    // Defensive dedupe by module key so the sidebar never renders repeated core modules.
+    const uniqueCoreModules = new Map<string, SidebarItem>();
+    for (const item of coreModules) {
+      const key = String(item.moduleKey || item.id || '').toLowerCase();
+      if (!key || uniqueCoreModules.has(key)) continue;
+      uniqueCoreModules.set(key, item);
+    }
 
-    return coreModules;
+    return Array.from(uniqueCoreModules.values());
   } catch (error) {
     console.error('[buildSidebarFromRegistry] Failed to fetch core modules:', error);
     // Return empty array on error (graceful degradation)

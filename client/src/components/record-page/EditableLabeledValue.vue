@@ -10,25 +10,31 @@
     <span class="editable-labeled-value__label text-sm text-gray-700 dark:text-gray-300 flex-shrink-0 min-w-[12rem]">{{ label }}</span>
     <div
       :class="[
-        'editable-labeled-value__value flex-1 min-w-0 flex items-center min-h-8 text-sm rounded px-2 -mx-2 -my-1 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800',
+        'editable-labeled-value__value flex-1 min-w-0 flex min-h-8 text-sm rounded px-2 -mx-2 -my-1 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800',
+        /* Single-line edit: keep items-center so the row does not jump vs display mode; multiline needs top alignment */
+        isEditing && multiline ? 'items-start pt-0.5' : 'items-center',
         hasDisplayValue ? 'text-gray-900 dark:text-white' : 'text-record-empty',
         isValueCellClickable ? 'cursor-text' : ''
       ]"
       @click="onValueCellClick"
     >
-      <!-- Select/User/Entity: dropdown or tag display -->
-      <Listbox
+      <!-- Select/User/Entity: dropdown — Listbox must have a single element child (Headless UI); error sits outside -->
+      <div
         v-if="layout === 'row' && canEdit && (type === 'select' || type === 'user' || type === 'entity')"
-        :model-value="selectModelValue"
-        @update:model-value="handleSelectChange"
-        class="w-full min-w-0 flex-1"
+        class="w-full min-w-0 flex-1 flex flex-col"
       >
-        <div class="relative w-full min-w-0 flex-1 flex">
-          <ListboxButton
+        <Listbox
+          :model-value="selectModelValue"
+          @update:model-value="handleSelectChange"
+          class="w-full min-w-0 flex-1"
+        >
+          <div class="relative w-full min-w-0 flex-1 flex">
+            <ListboxButton
             :class="[
               'editable-labeled-value__display flex-1 min-w-0 w-full min-h-8 text-left rounded transition-colors cursor-pointer',
               'flex items-center hover:bg-gray-50 dark:hover:bg-gray-800',
-              'px-2 -mx-2 -my-1'
+              'px-2 -mx-2 -my-1',
+              saveHttpError ? 'ring-2 ring-red-500/80 ring-offset-1 dark:ring-offset-gray-900' : ''
             ]"
           >
             <slot v-if="type === 'user'">
@@ -59,8 +65,10 @@
               </ListboxOption>
             </ListboxOptions>
           </Transition>
-        </div>
-      </Listbox>
+          </div>
+        </Listbox>
+        <p v-if="saveHttpError" class="text-xs text-red-600 dark:text-red-400 leading-snug w-full min-w-0 break-words pl-0.5">{{ saveHttpError }}</p>
+      </div>
       <!-- Select/User/Entity read-only: tag or dash -->
       <div
         v-else-if="layout === 'row' && !canEdit && (type === 'select' || type === 'user' || type === 'entity')"
@@ -75,19 +83,47 @@
           <span v-else class="text-record-empty">—</span>
         </template>
       </div>
-      <!-- Row: text/number/date display or edit -->
+      <!-- Row: text/url/number/date display or edit — stack field + error vertically so message doesn't sit beside the input -->
       <div
         v-else-if="layout === 'row' && isEditing && canEdit"
-        :class="['editable-labeled-value__edit min-w-[120px] w-full flex', multiline ? 'items-start min-h-[80px]' : 'items-center min-h-8']"
+        :class="[
+          'editable-labeled-value__edit min-w-0 w-full flex flex-col items-stretch gap-1',
+          multiline ? 'min-h-[80px]' : ''
+        ]"
       >
+        <div v-if="type === 'phone'" class="flex flex-col w-full min-w-0">
+          <input
+            ref="inputRef"
+            :value="localValue"
+            type="text"
+            inputmode="numeric"
+            maxlength="10"
+            autocomplete="tel"
+            placeholder="10-digit phone number"
+            @input="onPhoneInput"
+            @keydown="preventNonDigitPhoneKeys"
+            @blur="handleBlur"
+            @keydown.enter="handleBlur"
+            @keydown.esc="handleCancel"
+            :class="[
+              'w-full h-8 px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
+              phoneError || saveHttpError ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+            ]"
+          />
+          <p v-if="phoneError" class="mt-1 text-xs text-red-600 dark:text-red-400 leading-snug">{{ phoneError }}</p>
+          <p v-else-if="saveHttpError" class="mt-1 text-xs text-red-600 dark:text-red-400 leading-snug">{{ saveHttpError }}</p>
+        </div>
         <input
-          v-if="type === 'text' && !multiline"
+          v-else-if="(type === 'text' || type === 'url') && !multiline"
           ref="inputRef"
           v-model="localValue"
           @blur="handleBlur"
           @keydown.enter="handleBlur"
           @keydown.esc="handleCancel"
-          class="w-full h-8 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          :class="[
+            'w-full h-8 px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
+            saveHttpError ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+          ]"
           type="text"
         />
         <textarea
@@ -96,7 +132,10 @@
           v-model="localValue"
           @blur="handleBlur"
           @keydown.esc="handleCancel"
-          class="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-y min-h-[80px]"
+          :class="[
+            'w-full px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-y min-h-[80px]',
+            saveHttpError ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+          ]"
           :rows="rows || 3"
         />
         <input
@@ -106,7 +145,10 @@
           @blur="handleBlur"
           @keydown.enter="handleBlur"
           @keydown.esc="handleCancel"
-          class="w-full h-8 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          :class="[
+            'w-full h-8 px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
+            saveHttpError ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+          ]"
           type="number"
           :min="min"
           :max="max"
@@ -119,9 +161,18 @@
           @click="openDatePicker"
           @blur="handleBlur"
           @keydown.esc="handleCancel"
-          class="w-full h-8 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer"
+          :class="[
+            'w-full h-8 px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer',
+            saveHttpError ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+          ]"
           type="date"
         />
+        <p
+          v-if="saveHttpError && type !== 'phone'"
+          class="text-xs text-red-600 dark:text-red-400 leading-snug w-full min-w-0 break-words"
+        >
+          {{ saveHttpError }}
+        </p>
       </div>
       <div
         v-else-if="layout === 'row'"
@@ -138,7 +189,17 @@
           <span v-if="tagList.length === 0" class="text-record-empty">—</span>
         </div>
         <slot v-else>
-          <span v-if="displayValue !== null && displayValue !== undefined && displayValue !== ''" class="editable-labeled-value__text block truncate">{{ displayValue }}</span>
+          <a
+            v-if="type === 'url' && normalizedUrlHref && displayValue !== null && displayValue !== undefined && displayValue !== ''"
+            :href="normalizedUrlHref"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="editable-labeled-value__text block truncate text-indigo-600 dark:text-indigo-400 hover:underline"
+            @click.stop
+          >
+            {{ displayValue }}
+          </a>
+          <span v-else-if="displayValue !== null && displayValue !== undefined && displayValue !== ''" class="editable-labeled-value__text block truncate">{{ displayValue }}</span>
           <span v-else class="editable-labeled-value__text block truncate text-record-empty">—</span>
         </slot>
       </div>
@@ -156,19 +217,21 @@
       {{ label }}
     </dt>
     <dd :class="compact ? 'mt-1 text-sm leading-snug text-gray-900 dark:text-gray-100' : 'mt-2 text-sm text-gray-900 dark:text-white'">
-      <!-- Select/User: Dropdown style - value stays visible, click opens dropdown -->
-      <Listbox
-        v-if="canEdit && (type === 'select' || type === 'user' || type === 'entity')"
-        :model-value="selectModelValue"
-        @update:model-value="handleSelectChange"
-      >
-        <div class="relative w-full">
-          <ListboxButton
+      <!-- Select/User: Dropdown — single root inside Listbox; error below wrapper -->
+      <div v-if="canEdit && (type === 'select' || type === 'user' || type === 'entity')" class="w-full">
+        <Listbox
+          :model-value="selectModelValue"
+          @update:model-value="handleSelectChange"
+          class="w-full"
+        >
+          <div class="relative w-full">
+            <ListboxButton
             :class="[
               'editable-labeled-value__display w-full text-left transition-colors cursor-pointer',
               compact
                 ? 'rounded-md border border-gray-200/90 dark:border-gray-600 bg-white dark:bg-gray-900/60 px-2.5 py-1.5 min-h-[2.25rem] flex items-center hover:border-indigo-300/60 dark:hover:border-indigo-500/40 focus:outline-none focus:ring-2 focus:ring-indigo-500/30'
-                : 'rounded px-2 py-1 -mx-2 -my-1 hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none focus:ring-0'
+                : 'rounded px-2 py-1 -mx-2 -my-1 hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none focus:ring-0',
+              saveHttpError ? 'ring-2 ring-red-500/80 ring-offset-1 dark:ring-offset-gray-900' : ''
             ]"
           >
             <slot>
@@ -204,8 +267,10 @@
               </ListboxOption>
             </ListboxOptions>
           </Transition>
-        </div>
-      </Listbox>
+          </div>
+        </Listbox>
+        <p v-if="saveHttpError" class="mt-1 text-xs text-red-600 dark:text-red-400 leading-snug w-full min-w-0 break-words">{{ saveHttpError }}</p>
+      </div>
 
       <!-- Select/User read-only display -->
       <div
@@ -221,17 +286,36 @@
         </slot>
       </div>
 
-      <!-- Editable mode for text/number/date -->
+      <!-- Editable mode for text/url/phone/number/date -->
       <div v-else-if="isEditing && canEdit" class="editable-labeled-value__edit">
+        <div v-if="type === 'phone'" class="flex flex-col w-full">
+          <input
+            ref="inputRef"
+            :value="localValue"
+            type="text"
+            inputmode="numeric"
+            maxlength="10"
+            autocomplete="tel"
+            placeholder="10-digit phone number"
+            @input="onPhoneInput"
+            @keydown="preventNonDigitPhoneKeys"
+            @blur="handleBlur"
+            @keydown.enter="handleBlur"
+            @keydown.esc="handleCancel"
+            :class="stackSingleLineEditInputClass"
+          />
+          <p v-if="phoneError" class="mt-1 text-xs text-red-600 dark:text-red-400 leading-snug">{{ phoneError }}</p>
+          <p v-else-if="saveHttpError" class="mt-1 text-xs text-red-600 dark:text-red-400 leading-snug">{{ saveHttpError }}</p>
+        </div>
         <!-- Text input -->
         <input
-          v-if="type === 'text' && !multiline"
+          v-else-if="(type === 'text' || type === 'url') && !multiline"
           ref="inputRef"
           v-model="localValue"
           @blur="handleBlur"
           @keydown.enter="handleBlur"
           @keydown.esc="handleCancel"
-          class="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          :class="stackSingleLineEditInputClass"
           type="text"
         />
         
@@ -242,7 +326,7 @@
           v-model="localValue"
           @blur="handleBlur"
           @keydown.esc="handleCancel"
-          class="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-y min-h-[80px]"
+          :class="stackMultilineEditInputClass"
           :rows="rows"
         ></textarea>
         
@@ -254,7 +338,7 @@
           @blur="handleBlur"
           @keydown.enter="handleBlur"
           @keydown.esc="handleCancel"
-          class="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          :class="stackSingleLineEditInputClass"
           type="number"
           :min="min"
           :max="max"
@@ -269,9 +353,15 @@
           @click="openDatePicker"
           @blur="handleBlur"
           @keydown.esc="handleCancel"
-          class="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer"
+          :class="[stackSingleLineEditInputClass, 'cursor-pointer']"
           type="date"
         />
+        <p
+          v-if="saveHttpError && type !== 'phone'"
+          class="mt-1 text-xs text-red-600 dark:text-red-400 leading-snug"
+        >
+          {{ saveHttpError }}
+        </p>
       </div>
       
       <!-- Display mode for text/number/date/tags -->
@@ -291,8 +381,20 @@
           <span v-if="tagList.length === 0" class="text-record-empty">—</span>
         </div>
         <slot v-else>
+          <a
+            v-if="type === 'url' && normalizedUrlHref && displayValue !== null && displayValue !== undefined && displayValue !== ''"
+            :href="normalizedUrlHref"
+            target="_blank"
+            rel="noopener noreferrer"
+            :class="
+              compact && multiline
+                ? 'block max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-indigo-600 dark:text-indigo-400 hover:underline'
+                : 'editable-labeled-value__text block truncate text-indigo-600 dark:text-indigo-400 hover:underline'
+            "
+            @click.stop
+          >{{ displayValue }}</a>
           <span
-            v-if="displayValue !== null && displayValue !== undefined && displayValue !== ''"
+            v-else-if="displayValue !== null && displayValue !== undefined && displayValue !== ''"
             :class="
               compact && multiline
                 ? 'block max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-gray-900 dark:text-gray-100'
@@ -314,11 +416,15 @@ import {
   CurrencyDollarIcon,
   CalendarDaysIcon,
   DocumentTextIcon,
+  DevicePhoneMobileIcon,
   TagIcon,
   UserIcon
 } from '@heroicons/vue/24/outline';
 import apiClient from '@/utils/apiClient';
 import { openDatePicker } from '@/utils/dateUtils';
+import { sanitizePhoneDigits, preventNonDigitPhoneKeys } from '@/utils/phoneInput';
+import { DEFAULT_PHONE_VALIDATION_MESSAGE } from '@/utils/defaultFieldValidations';
+import { getApiErrorMessage } from '@/utils/httpErrors';
 
 const props = defineProps({
   label: {
@@ -332,7 +438,7 @@ const props = defineProps({
   type: {
     type: String,
     default: 'text', // 'text', 'number', 'date', 'select', 'user', 'entity', 'tags'
-    validator: (value) => ['text', 'number', 'date', 'select', 'user', 'entity', 'tags'].includes(value)
+    validator: (value) => ['text', 'url', 'phone', 'number', 'date', 'select', 'user', 'entity', 'tags'].includes(value)
   },
   multiline: {
     type: Boolean,
@@ -410,6 +516,14 @@ const props = defineProps({
   prefixIcon: {
     type: [Object, Function],
     default: null
+  },
+  /**
+   * When set, called instead of relying on a fire-and-forget @save handler.
+   * Must return a Promise; on failure the field stays in edit mode and shows the error.
+   */
+  commitSave: {
+    type: Function,
+    default: null
   }
 });
 
@@ -421,6 +535,7 @@ const fieldIcon = computed(() => {
     number: CurrencyDollarIcon,
     date: CalendarDaysIcon,
     text: DocumentTextIcon,
+    phone: DevicePhoneMobileIcon,
     select: TagIcon,
     user: UserIcon
   };
@@ -456,6 +571,43 @@ const isEditing = ref(false);
 const localValue = ref(null);
 const inputRef = ref(null);
 const users = ref(props.users || []);
+/** Inline error for phone (incomplete digits on blur) */
+const phoneError = ref(null);
+/** Server / validation error after commitSave fails */
+const saveHttpError = ref(null);
+
+/**
+ * Stack layout inline edit: match compact right-pane chip (min-height, padding, border) so display → edit does not jump.
+ * Non-compact stack keeps previous looser padding.
+ */
+const stackSingleLineEditInputClass = computed(() => {
+  const baseFocus =
+    'bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent';
+  const hasErr = saveHttpError.value || (props.type === 'phone' && phoneError.value);
+  const borderClass = hasErr
+    ? 'border-red-500 dark:border-red-500'
+    : props.compact
+      ? 'border-gray-200/90 dark:border-gray-600'
+      : 'border-gray-300 dark:border-gray-600';
+  if (props.compact) {
+    return `w-full box-border min-h-[2.25rem] px-2.5 py-1.5 text-sm rounded-md border ${borderClass} ${baseFocus}`;
+  }
+  return `w-full px-2 py-1 text-sm border rounded ${borderClass} ${baseFocus}`;
+});
+
+const stackMultilineEditInputClass = computed(() => {
+  const baseFocus =
+    'bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-y min-h-[80px]';
+  const borderClass = saveHttpError.value
+    ? 'border-red-500 dark:border-red-500'
+    : props.compact
+      ? 'border-gray-200/90 dark:border-gray-600'
+      : 'border-gray-300 dark:border-gray-600';
+  if (props.compact) {
+    return `w-full box-border px-2.5 py-1.5 text-sm rounded-md border ${borderClass} ${baseFocus}`;
+  }
+  return `w-full px-2 py-1 text-sm border rounded ${borderClass} ${baseFocus}`;
+});
 
 // Fetch users if type is 'user' and users not provided
 onMounted(async () => {
@@ -492,6 +644,8 @@ const initializeLocalValue = () => {
     } else {
       localValue.value = null;
     }
+  } else if (props.type === 'phone') {
+    localValue.value = sanitizePhoneDigits(props.value == null ? '' : String(props.value));
   } else {
     localValue.value = props.value;
   }
@@ -500,8 +654,10 @@ const initializeLocalValue = () => {
 // Initialize on mount
 initializeLocalValue();
 
-watch(() => props.value, (newValue) => {
+watch(() => props.value, () => {
   if (!isEditing.value) {
+    phoneError.value = null;
+    saveHttpError.value = null;
     initializeLocalValue();
   }
 });
@@ -531,11 +687,25 @@ const hasDisplayValue = computed(() => {
   return v !== null && v !== undefined && v !== '';
 });
 
+const normalizedUrlHref = computed(() => {
+  if (props.type !== 'url') return null;
+  const raw = displayValue.value == null ? '' : String(displayValue.value).trim();
+  if (!raw) return null;
+  const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const parsed = new URL(candidate);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+    return parsed.href;
+  } catch {
+    return null;
+  }
+});
+
 /** When true, the whole value cell is clickable to enter edit (row layout, text/number/date/tags, not editing). */
 const isValueCellClickable = computed(() => {
   if (props.layout !== 'row' || !props.canEdit || isEditing.value) return false;
   if (props.type === 'tags' && typeof props.onTagsOpen === 'function') return true;
-  return ['text', 'number', 'date', 'tags'].includes(props.type);
+  return ['text', 'url', 'phone', 'number', 'date', 'tags'].includes(props.type);
 });
 
 const onValueCellClick = (event) => {
@@ -583,11 +753,23 @@ const selectOptions = computed(() => {
   return [];
 });
 
-const handleSelectChange = (value) => {
-  if (value !== props.value && (props.type !== 'user' || value !== (props.value?._id ?? props.value))) {
-    emit('update:value', value);
-    emit('save', value);
+const handleSelectChange = async (value) => {
+  if (value === props.value || (props.type === 'user' && value === (props.value?._id ?? props.value))) {
+    return;
   }
+  saveHttpError.value = null;
+  if (typeof props.commitSave === 'function') {
+    try {
+      await props.commitSave(value);
+      emit('update:value', value);
+      emit('save', value);
+    } catch (e) {
+      saveHttpError.value = getApiErrorMessage(e);
+    }
+    return;
+  }
+  emit('update:value', value);
+  emit('save', value);
 };
 
 const getUserDisplayName = (user) => {
@@ -606,10 +788,12 @@ const handleClick = (event) => {
     return;
   }
   isEditing.value = true;
+  phoneError.value = null;
+  saveHttpError.value = null;
   nextTick(() => {
     if (inputRef.value) {
-      inputRef.value.focus();
-      if (props.type === 'text' || props.type === 'number') {
+      inputRef.value.focus({ preventScroll: true });
+      if (props.type === 'text' || props.type === 'url' || props.type === 'number' || props.type === 'phone') {
         inputRef.value.select();
       } else if (props.type === 'date' && typeof inputRef.value.showPicker === 'function') {
         try {
@@ -620,31 +804,62 @@ const handleClick = (event) => {
   });
 };
 
+function onPhoneInput(e) {
+  phoneError.value = null;
+  saveHttpError.value = null;
+  localValue.value = sanitizePhoneDigits(e?.target?.value ?? '');
+}
+
 const handleBlur = async () => {
   if (!isEditing.value) return;
-  
-  isEditing.value = false;
-  
-  // Convert date back to ISO string if needed
+
   let valueToSave = localValue.value;
+  if (props.type === 'phone') {
+    valueToSave = sanitizePhoneDigits(valueToSave == null ? '' : String(valueToSave));
+    localValue.value = valueToSave;
+    const digits = String(valueToSave || '');
+    if (digits.length > 0 && digits.length < 10) {
+      phoneError.value = DEFAULT_PHONE_VALIDATION_MESSAGE;
+      return;
+    }
+    phoneError.value = null;
+  }
+
+  // Convert date back to ISO string if needed
   if (props.type === 'date' && valueToSave) {
-    // Date input returns YYYY-MM-DD, convert to ISO string
     const date = new Date(valueToSave + 'T00:00:00');
     valueToSave = date.toISOString();
   }
-  
-  // Only save if value changed
+
   if (valueToSave !== props.value) {
+    if (typeof props.commitSave === 'function') {
+      saveHttpError.value = null;
+      try {
+        await props.commitSave(valueToSave);
+        emit('update:value', valueToSave);
+        emit('save', valueToSave);
+        isEditing.value = false;
+      } catch (e) {
+        saveHttpError.value = getApiErrorMessage(e);
+        // Keep localValue as typed — do not reset from props or the invalid input disappears
+        await nextTick();
+        if (inputRef.value) inputRef.value.focus?.({ preventScroll: true });
+      }
+      return;
+    }
     emit('update:value', valueToSave);
     emit('save', valueToSave);
   } else {
-    // Reset to original if unchanged
     initializeLocalValue();
   }
+
+  isEditing.value = false;
 };
 
 const handleCancel = () => {
   isEditing.value = false;
+  phoneError.value = null;
+  saveHttpError.value = null;
   initializeLocalValue();
 };
 </script>

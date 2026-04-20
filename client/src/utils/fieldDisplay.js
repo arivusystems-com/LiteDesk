@@ -2,6 +2,13 @@
  * Utility functions for displaying field values based on field definitions
  */
 
+import {
+  CURRENCY_OPTIONS,
+  DEFAULT_CURRENCY_CODE,
+  formatCurrencyValue,
+  getCurrencySymbolFromCode,
+} from './currencyOptions';
+
 /**
  * Format a field key (camelCase or snake_case) to a human-readable label (Title Case with spaces).
  * @param {string} key - Field key, e.g. "assignedTo", "start_date"
@@ -182,9 +189,24 @@ export const getFieldValue = (fieldDef, record) => {
     case 'DateTime':
       return formatDateForDisplay(value, 'Date-Time');
     case 'Currency':
-      const currencySymbol = fieldDef.numberSettings?.currencySymbol || '$';
       const decimalPlaces = fieldDef.numberSettings?.decimalPlaces || 2;
-      return value !== undefined ? `${currencySymbol}${parseFloat(value).toFixed(decimalPlaces)}` : null;
+      if (value === undefined) return null;
+      const explicitCode = String(
+        fieldDef.numberSettings?.currencyCode || fieldDef.numberSettings?.currency || ''
+      ).toUpperCase();
+      const savedSymbol = String(fieldDef.numberSettings?.currencySymbol || '').trim();
+      const symbolMatchedCode = savedSymbol
+        ? CURRENCY_OPTIONS.find((currency) => getCurrencySymbolFromCode(currency.code) === savedSymbol)?.code
+        : null;
+      const currencyCode = explicitCode || symbolMatchedCode || DEFAULT_CURRENCY_CODE;
+      return (
+        formatCurrencyValue(value, {
+          currencyCode,
+          minimumFractionDigits: decimalPlaces,
+          maximumFractionDigits: decimalPlaces,
+        }) ||
+        `${fieldDef.numberSettings?.currencySymbol || getCurrencySymbolFromCode(currencyCode)}${parseFloat(value).toFixed(decimalPlaces)}`
+      );
     case 'Decimal':
       const decimalPlaces2 = fieldDef.numberSettings?.decimalPlaces || 2;
       return value !== undefined ? parseFloat(value).toFixed(decimalPlaces2) : null;

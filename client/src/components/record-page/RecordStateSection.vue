@@ -27,7 +27,7 @@
             :step="field.step"
             :format-value="() => getFieldValue(field)"
             layout="row"
-            @save="(value) => handleFieldSave(field, value)"
+            :commit-save="(v) => commitFieldSave(field, v)"
           />
           <div
             v-else-if="shouldRenderActionField(field)"
@@ -62,7 +62,17 @@
                   <span class="text-record-empty">—</span>
                 </template>
                 <template v-else>
-                  <span v-if="getFieldValue(field)" class="truncate">{{ getFieldValue(field) }}</span>
+                  <a
+                    v-if="shouldRenderLinkValue(field)"
+                    :href="getFieldHref(field)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="truncate text-indigo-600 dark:text-indigo-400 hover:underline"
+                    @click.stop
+                  >
+                    {{ getFieldValue(field) }}
+                  </a>
+                  <span v-else-if="getFieldValue(field)" class="truncate">{{ getFieldValue(field) }}</span>
                   <span v-else class="text-record-empty">—</span>
                 </template>
               </button>
@@ -82,8 +92,18 @@
             </div>
             <div class="flex-1 min-w-0 min-h-8 flex items-center rounded px-2 -mx-2 -my-1 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800">
               <slot :name="field.slotKey || field.key">
+                <a
+                  v-if="shouldRenderLinkValue(field)"
+                  :href="getFieldHref(field)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="block w-full min-w-0 text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+                  @click.stop
+                >
+                  {{ getFieldValue(field) }}
+                </a>
                 <span
-                  v-if="getFieldValue(field) != null && getFieldValue(field) !== ''"
+                  v-else-if="getFieldValue(field) != null && getFieldValue(field) !== ''"
                   class="block w-full min-w-0 text-sm text-gray-900 dark:text-white"
                 >
                   {{ getFieldValue(field) }}
@@ -198,17 +218,40 @@ const shouldRenderActionField = (field) => {
   return field.canOpenEditor === true && typeof field.onEdit === 'function';
 };
 
-const handleFieldSave = (field, value) => {
-  if (typeof field?.onSave === 'function') {
-    field.onSave(value);
-  }
-};
+async function commitFieldSave(field, value) {
+  if (typeof field?.onSave !== 'function') return;
+  await field.onSave(value);
+}
 
 const handleFieldEdit = (field, event) => {
   if (typeof field?.onEdit === 'function') {
     field.onEdit(event);
   }
 };
+
+const normalizeExternalUrl = (value) => {
+  const raw = value == null ? '' : String(value).trim();
+  if (!raw) return null;
+  const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const parsed = new URL(candidate);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+    return parsed.href;
+  } catch {
+    return null;
+  }
+};
+
+const shouldRenderLinkValue = (field) => {
+  if (!field) return false;
+  const fieldType = String(field.type || '').toLowerCase();
+  const key = String(field.key || field.valueKey || '').toLowerCase();
+  const isUrlField = fieldType === 'url' || key.includes('website') || key.includes('url') || key.includes('link');
+  if (!isUrlField) return false;
+  return Boolean(getFieldHref(field));
+};
+
+const getFieldHref = (field) => normalizeExternalUrl(getFieldValue(field));
 </script>
 
 <style scoped>

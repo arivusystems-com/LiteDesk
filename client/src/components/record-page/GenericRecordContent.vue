@@ -21,7 +21,7 @@
         >
           <template #breadcrumbs>
             <span class="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
-              {{ moduleLabel }} <span class="w-1 h-1 rounded-full bg-gray-400 dark:bg-gray-500"></span> {{ (record?._id || '').slice(-8) || 'N/A' }}
+              {{ moduleLabel }} <span class="w-1 h-1 rounded-full bg-gray-400 dark:bg-gray-500"></span> {{ recordTitle || (record?._id || '').slice(-8) || 'N/A' }}
             </span>
           </template>
           <template #pageActions>
@@ -1149,10 +1149,11 @@ const attachableAppsForRecordContext = computed(() => {
 });
 const supportsEmail = computed(() => MODULES_WITH_EMAIL.has(moduleKeyLower.value));
 
-/** App key for record context / link drawer: people and organizations use PLATFORM. */
+/** App key for record context / link drawer (must match relationship definitions). */
 const recordContextAppKey = computed(() => {
   const key = moduleKeyLower.value;
-  return (key === 'people' || key === 'organizations') ? 'PLATFORM' : 'PLATFORM';
+  if (key === 'people' || key === 'organizations' || key === 'deals') return 'SALES';
+  return 'PLATFORM';
 });
 
 const linkRecordDrawerContext = computed(() => {
@@ -1200,10 +1201,35 @@ watch(() => props.recordId, () => {
 });
 
 const genericRelatedGroupsFromContext = computed(() => {
-  const rels = genericRecordContext.value?.relationships;
-  if (!Array.isArray(rels) || rels.length === 0) return [];
-  return rels
-    .filter((rel) => rel.records && rel.records.length > 0)
+  const isOrganizationModule = moduleKeyLower.value === 'organizations';
+  const contextRelationships = Array.isArray(genericRecordContext.value?.relationships)
+    ? genericRecordContext.value.relationships
+    : [];
+
+  // Organizations should always show default related groups (Contacts/Deals),
+  // even when there are currently zero linked records.
+  const fallbackRelationships = isOrganizationModule && contextRelationships.length === 0
+    ? (Array.isArray(moduleDefinition.value?.relationships) ? moduleDefinition.value.relationships : []).map((rel) => ({
+      relationshipKey: rel.relationshipKey || rel.key || rel.name || 'related',
+      label: rel.label || rel.name || rel.relationshipKey || 'Related',
+      ui: {
+        label: rel.label || rel.name || rel.relationshipKey || 'Related'
+      },
+      direction: 'TARGET',
+      records: []
+    }))
+    : [];
+
+  const relationshipsForGroups = contextRelationships.length > 0
+    ? contextRelationships
+    : fallbackRelationships;
+
+  const groups = Array.isArray(relationshipsForGroups)
+    ? relationshipsForGroups
+    .filter((rel) => {
+      if (isOrganizationModule) return true;
+      return rel.records && rel.records.length > 0;
+    })
     .map((rel) => {
       const key = rel.relationshipKey || rel.label || 'related';
       const label = rel.ui?.label || rel.label || key;
@@ -1213,9 +1239,13 @@ const genericRelatedGroupsFromContext = computed(() => {
         const moduleKey = (r.moduleKey || '').toLowerCase();
         const appKey = (r.appKey || 'SALES').toUpperCase();
         const path = moduleKey ? `/${moduleKey}/${id}` : null;
+        const personName = [r.first_name || r.firstName || '', r.last_name || r.lastName || '']
+          .filter(Boolean)
+          .join(' ')
+          .trim();
         return {
           id: id?.toString?.() ?? String(id),
-          title: r.label || r.name || r.title || (id ? String(id).slice(0, 8) : 'Untitled'),
+          title: r.label || r.name || r.title || personName || (id ? String(id).slice(0, 8) : 'Untitled'),
           meta: r.secondaryText || r.status || '',
           onOpen: path ? () => openTab(path, { background: false, insertAdjacent: true }) : undefined,
           relationshipKey: key,
@@ -1225,7 +1255,10 @@ const genericRelatedGroupsFromContext = computed(() => {
         };
       });
       return { key, label, items };
-    });
+    })
+    : [];
+
+  return groups;
 });
 
 const {
@@ -1279,7 +1312,9 @@ const moduleLabelSingular = computed(() => {
 const recordTitle = computed(() => {
   const r = record.value;
   if (!r) return '';
-  const namePart = (r.first_name && r.last_name ? `${r.first_name} ${r.last_name}`.trim() : '') || null;
+  const first = (r.first_name ?? r.firstName ?? '').trim();
+  const last = (r.last_name ?? r.lastName ?? '').trim();
+  const namePart = [first, last].filter(Boolean).join(' ').trim() || null;
   return (r.name ?? r.title ?? namePart ?? r.email ?? (r._id || '').slice(-8)) || 'Record';
 });
 
@@ -1539,51 +1574,45 @@ const genericAdapter = computed(() => {
     moduleDefinition: moduleDefinition.value,
     canEditDetails: () => canEditRecord.value,
     saveDetailField: async (fieldKey, value) => {
-      try {
-        const moduleKeyLower = (props.moduleKey || '').toLowerCase();
+      const moduleKeyLower = (props.moduleKey || '').toLowerCase();
 
-        // For people records, keep title, first_name, and last_name in sync.
-        if (moduleKeyLower === 'people' && (fieldKey === 'first_name' || fieldKey === 'last_name')) {
-          const current = record.value || {};
-          const next = {
-            first_name: fieldKey === 'first_name' ? value : current.first_name,
-            last_name: fieldKey === 'last_name' ? value : current.last_name
-          };
-          const fullName = [next.first_name, next.last_name].filter(Boolean).join(' ').trim() || undefined;
+      // For people records, keep title, first_name, and last_name in sync.
+      if (moduleKeyLower === 'people' && (fieldKey === 'first_name' || fieldKey === 'last_name')) {
+        const current = record.value || {};
+        const next = {
+          first_name: fieldKey === 'first_name' ? value : current.first_name,
+          last_name: fieldKey === 'last_name' ? value : current.last_name
+        };
+        const fullName = [next.first_name, next.last_name].filter(Boolean).join(' ').trim() || undefined;
 
-          const payload = {
-            first_name: next.first_name,
-            last_name: next.last_name
-          };
-          if (fullName) payload.name = fullName;
+        const payload = {
+          first_name: next.first_name,
+          last_name: next.last_name
+        };
+        if (fullName) payload.name = fullName;
 
-          const response = await apiClient.put(`/${props.moduleKey}/${props.recordId}`, payload);
-          const updatedRecord = response?.data?.data ?? response?.data ?? null;
-          if (record.value && updatedRecord && typeof updatedRecord === 'object') {
-            Object.assign(record.value, updatedRecord);
-          } else           if (record.value) {
-            record.value.first_name = next.first_name;
-            record.value.last_name = next.last_name;
-            if (fullName) record.value.name = fullName;
-          }
-          await refreshRecordActivity();
-          return;
-        }
-
-        const response = await apiClient.put(`/${props.moduleKey}/${props.recordId}`, { [fieldKey]: value });
+        const response = await apiClient.put(`/${props.moduleKey}/${props.recordId}`, payload);
         const updatedRecord = response?.data?.data ?? response?.data ?? null;
-        if (record.value) {
-          // Match task page behavior: reflect the edited field immediately.
-          // Some endpoints (e.g. organizations) return minimal payloads and may omit the edited field.
-          record.value[fieldKey] = value;
-          if (updatedRecord && typeof updatedRecord === 'object') {
-            Object.assign(record.value, updatedRecord);
-          }
+        if (record.value && updatedRecord && typeof updatedRecord === 'object') {
+          Object.assign(record.value, updatedRecord);
+        } else if (record.value) {
+          record.value.first_name = next.first_name;
+          record.value.last_name = next.last_name;
+          if (fullName) record.value.name = fullName;
         }
         await refreshRecordActivity();
-      } catch (e) {
-        console.error('Save field error:', e);
+        return;
       }
+
+      const response = await apiClient.put(`/${props.moduleKey}/${props.recordId}`, { [fieldKey]: value });
+      const updatedRecord = response?.data?.data ?? response?.data ?? null;
+      if (record.value) {
+        record.value[fieldKey] = value;
+        if (updatedRecord && typeof updatedRecord === 'object') {
+          Object.assign(record.value, updatedRecord);
+        }
+      }
+      await refreshRecordActivity();
     },
     getRelatedGroups: () => genericRelatedGroupsFromContext.value,
     openRelatedItem: (item) => {
@@ -2262,25 +2291,33 @@ const TARGET_APP_BY_MODULE_KEY = {
   items: 'PLATFORM'
 };
 
-async function handleLinkRecordDrawerLinked({ moduleKey: targetModuleKey, ids, context, relationshipKey: payloadRelationshipKey, targetAppKey: payloadTargetAppKey }) {
+async function handleLinkRecordDrawerLinked({ moduleKey: targetModuleKey, ids, context, relationshipKey: payloadRelationshipKey, targetAppKey: payloadTargetAppKey, sourceIsCurrent: payloadSourceIsCurrent }) {
   const currentId = record.value?._id;
   const contextId = context?.personId ?? context?.sourceRecordId;
-  if (!currentId || !contextId || currentId !== contextId || !ids?.length) return;
+  if (!currentId || !contextId || !ids?.length) return;
+  if (String(currentId) !== String(contextId)) return;
 
   const normalizedTarget = (targetModuleKey || '').toLowerCase().trim();
   const relationshipKey = (payloadRelationshipKey || normalizedTarget).toLowerCase();
   const sourceAppKey = (recordContextAppKey.value || 'PLATFORM').toUpperCase();
   const sourceModuleKey = (props.moduleKey || '').toLowerCase();
   const targetAppKey = (payloadTargetAppKey || TARGET_APP_BY_MODULE_KEY[normalizedTarget] || 'PLATFORM').toUpperCase();
+  const sourceIsCurrent = payloadSourceIsCurrent !== false;
 
-  // Relationship direction: when linking from a person, the other record (e.g. deal) is typically the source and person is target (e.g. deal_contacts).
   for (const recordId of ids) {
+    const linkPayload = sourceIsCurrent
+      ? {
+          relationshipKey,
+          source: { appKey: sourceAppKey, moduleKey: sourceModuleKey, recordId: currentId },
+          target: { appKey: targetAppKey, moduleKey: normalizedTarget, recordId }
+        }
+      : {
+          relationshipKey,
+          source: { appKey: targetAppKey, moduleKey: normalizedTarget, recordId },
+          target: { appKey: sourceAppKey, moduleKey: sourceModuleKey, recordId: currentId }
+        };
     try {
-      await apiClient.post('/relationships/link', {
-        relationshipKey,
-        source: { appKey: targetAppKey, moduleKey: normalizedTarget, recordId },
-        target: { appKey: sourceAppKey, moduleKey: sourceModuleKey, recordId: currentId }
-      });
+      await apiClient.post('/relationships/link', linkPayload);
     } catch (err) {
       console.error('Error linking record:', err);
       alert(err?.response?.data?.message || 'Failed to link record.');
@@ -2315,7 +2352,8 @@ async function handleAddRelatedRecordSaved(savedRecord) {
     ids: [createdId],
     context: payload.context || linkRecordDrawerContext.value,
     relationshipKey: payload.relationshipKey || undefined,
-    targetAppKey: payload.targetAppKey || undefined
+    targetAppKey: payload.targetAppKey || undefined,
+    sourceIsCurrent: payload.sourceIsCurrent ?? true
   });
 }
 

@@ -185,11 +185,18 @@ const normalizedRelationships = computed(() => {
 });
 
 // Get all relationships (flatten from groups).
-// Hide reverse (TARGET) list only for lookup-style N:1 (many_to_one + isLookup true).
+// Hide reverse (TARGET) list only for empty lookup-style N:1 groups.
+// If there are linked records, keep it visible so users can see existing links.
 const allRelationships = computed(() => {
   return normalizedRelationships.value.filter((rel) => {
+    const records = Array.isArray(rel.records)
+      ? rel.records
+      : (Array.isArray(rel.linkedRecords) ? rel.linkedRecords : []);
     const hideReverse =
-      rel.direction === 'TARGET' && rel.type === 'many_to_one' && rel.isLookup === true;
+      rel.direction === 'TARGET' &&
+      rel.type === 'many_to_one' &&
+      rel.isLookup === true &&
+      records.length === 0;
     return !hideReverse;
   });
 });
