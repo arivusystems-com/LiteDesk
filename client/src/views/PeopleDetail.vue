@@ -358,9 +358,15 @@
                   Phone
                 </label>
                 <input
-                  v-model="editForm.phone"
-                  type="tel"
+                  :value="editForm.phone"
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="tel"
+                  maxlength="10"
                   class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="10-digit phone number"
+                  @input="editForm.phone = sanitizePhoneDigits($event.target.value)"
+                  @keydown="preventNonDigitPhoneKeys"
                 />
               </div>
               <!-- Mobile -->
@@ -369,9 +375,15 @@
                   Mobile
                 </label>
                 <input
-                  v-model="editForm.mobile"
-                  type="tel"
+                  :value="editForm.mobile"
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="tel"
+                  maxlength="10"
                   class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="10-digit mobile number"
+                  @input="editForm.mobile = sanitizePhoneDigits($event.target.value)"
+                  @keydown="preventNonDigitPhoneKeys"
                 />
               </div>
               <!-- Do Not Contact -->
@@ -968,6 +980,9 @@ import { ref, computed, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/utils/apiClient';
+import { sanitizePhoneDigits, preventNonDigitPhoneKeys } from '@/utils/phoneInput';
+import { DEFAULT_PHONE_VALIDATION_MESSAGE, getDefaultEmailValidations } from '@/utils/defaultFieldValidations';
+import { validateField } from '@/utils/fieldValidation';
 import { toAttachRole } from '@/utils/getParticipation';
 import { openDatePicker } from '@/utils/dateUtils';
 import { formatRawValueForDisplay } from '@/utils/fieldDisplay';
@@ -1118,8 +1133,8 @@ const enterEditMode = () => {
     first_name: profileData.value.core.fields.first_name || '',
     last_name: profileData.value.core.fields.last_name || '',
     email: profileData.value.core.fields.email || '',
-    phone: profileData.value.core.fields.phone || '',
-    mobile: profileData.value.core.fields.mobile || '',
+    phone: sanitizePhoneDigits(profileData.value.core.fields.phone || ''),
+    mobile: sanitizePhoneDigits(profileData.value.core.fields.mobile || ''),
     do_not_contact: profileData.value.core.fields.do_not_contact || false
   };
   
@@ -1150,6 +1165,26 @@ const saveCoreFields = async () => {
       editError.value = 'At least one of First Name, Last Name, or Email is required.';
       saving.value = false;
       return;
+    }
+
+    const phoneDigits = sanitizePhoneDigits(editForm.value.phone || '');
+    const mobileDigits = sanitizePhoneDigits(editForm.value.mobile || '');
+    editForm.value.phone = phoneDigits;
+    editForm.value.mobile = mobileDigits;
+    if ((phoneDigits.length > 0 && phoneDigits.length !== 10) || (mobileDigits.length > 0 && mobileDigits.length !== 10)) {
+      editError.value = DEFAULT_PHONE_VALIDATION_MESSAGE;
+      saving.value = false;
+      return;
+    }
+
+    const emailTrimmed = (editForm.value.email || '').trim();
+    if (emailTrimmed) {
+      const emailCheck = validateField(emailTrimmed, getDefaultEmailValidations());
+      if (!emailCheck.isValid) {
+        editError.value = emailCheck.error || 'Invalid email format';
+        saving.value = false;
+        return;
+      }
     }
     
     // Submit update

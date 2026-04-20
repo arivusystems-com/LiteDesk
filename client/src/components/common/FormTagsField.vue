@@ -280,11 +280,11 @@ const vClickOutside = {
         }
       }, 10);
     };
-    document.addEventListener('click', el.clickOutsideEvent);
+    document.addEventListener('pointerdown', el.clickOutsideEvent, true);
   },
   unmounted(el) {
     if (el.clickOutsideEvent) {
-      document.removeEventListener('click', el.clickOutsideEvent);
+      document.removeEventListener('pointerdown', el.clickOutsideEvent, true);
     }
   }
 };

@@ -1388,6 +1388,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
 import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
+import { DEFAULT_CURRENCY_CODE, formatCurrencyValue } from '@/utils/currencyOptions';
 import { getFieldMetadata, PEOPLE_FIELD_METADATA } from '@/platform/fields/peopleFieldModel';
 import { isSystemField as isSystemFieldFromEngine } from '@/platform/fields/fieldCapabilityEngine';
 import { useDefaultListFilters } from '@/composables/useDefaultListFilters';
@@ -2497,7 +2498,8 @@ const computedStats = computed(() => {
     // Format the stat value
     let formattedStat = currentValue;
     if (config.formatter === 'currency') {
-      formattedStat = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(currentValue);
+      const currencyCode = String(config.currencyCode || config.currency || DEFAULT_CURRENCY_CODE).toUpperCase();
+      formattedStat = formatCurrencyValue(currentValue, { currencyCode }) || '—';
     } else if (config.formatter === 'number') {
       formattedStat = currentValue.toLocaleString();
     } else if (typeof config.formatter === 'function') {
@@ -2509,7 +2511,8 @@ const computedStats = computed(() => {
     // Format previous stat
     let formattedPrevious = previousValue;
     if (config.formatter === 'currency') {
-      formattedPrevious = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(previousValue);
+      const currencyCode = String(config.currencyCode || config.currency || DEFAULT_CURRENCY_CODE).toUpperCase();
+      formattedPrevious = formatCurrencyValue(previousValue, { currencyCode }) || '—';
     } else if (config.formatter === 'number') {
       formattedPrevious = previousValue.toLocaleString();
     } else if (typeof config.formatter === 'function') {

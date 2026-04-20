@@ -39,6 +39,9 @@
             :field="getFieldByKey(col.fieldKey)"
             :value="localFormData[col.fieldKey]"
             @update:value="updateField(col.fieldKey, $event)"
+            :currency-code="getCurrencyCodeForField(getFieldByKey(col.fieldKey))"
+            :currency-code-editable="Boolean(resolveCurrencyCompanionFieldKey(getFieldByKey(col.fieldKey)))"
+            @update:currency-code="updateCurrencyCodeForField(getFieldByKey(col.fieldKey), $event)"
             :errors="errors"
             :dependency-state="getFieldState(getFieldByKey(col.fieldKey))"
             :locked="props.lockedFields.includes(col.fieldKey)"
@@ -52,11 +55,15 @@
     <template v-else>
       <!-- Quick create first layout: quick fields at top, divider, remaining in 2-col (like edit drawer) -->
       <template v-if="useQuickCreateFirstLayout">
-        <div class="space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
           <div
             v-for="field in quickCreateFields"
             :key="field.key"
-            :class="['space-y-1', field.key === 'description' ? 'w-full' : '']"
+            :class="[
+              'space-y-1',
+              field.key === 'description' ? 'w-full' : '',
+              (field.dataType === 'Text-Area' || field.dataType === 'Rich Text' || field.dataType === 'Image' || (props.moduleKey === 'tasks' && (field.key === 'description' || field.key === 'subtasks'))) ? 'md:col-span-2' : ''
+            ]"
           >
             <template v-if="props.moduleKey === 'tasks' && field.key === 'description'">
               <label :for="`field-${field.key}`" class="block text-sm font-medium text-gray-900 dark:text-white mb-1">
@@ -93,6 +100,9 @@
               :field="field"
               :value="localFormData[field.key]"
               @update:value="updateField(field.key, $event)"
+              :currency-code="getCurrencyCodeForField(field)"
+              :currency-code-editable="Boolean(resolveCurrencyCompanionFieldKey(field))"
+              @update:currency-code="updateCurrencyCodeForField(field, $event)"
               :errors="errors"
               :dependency-state="getFieldState(field)"
               :locked="props.lockedFields.includes(field.key)"
@@ -148,6 +158,9 @@
               :field="field"
               :value="localFormData[field.key]"
               @update:value="updateField(field.key, $event)"
+              :currency-code="getCurrencyCodeForField(field)"
+              :currency-code-editable="Boolean(resolveCurrencyCompanionFieldKey(field))"
+              @update:currency-code="updateCurrencyCodeForField(field, $event)"
               :errors="errors"
               :dependency-state="getFieldState(field)"
               :locked="props.lockedFields.includes(field.key)"
@@ -202,6 +215,9 @@
             :field="field"
             :value="localFormData[field.key]"
             @update:value="updateField(field.key, $event)"
+            :currency-code="getCurrencyCodeForField(field)"
+            :currency-code-editable="Boolean(resolveCurrencyCompanionFieldKey(field))"
+            @update:currency-code="updateCurrencyCodeForField(field, $event)"
             :errors="errors"
             :dependency-state="getFieldState(field)"
             :locked="props.lockedFields.includes(field.key)"
@@ -230,6 +246,7 @@ import {
 } from '@/utils/getFieldValue';
 import { mergePeopleVirtualFieldDefinitions } from '@/platform/fields/peopleFieldModel';
 import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
+import { DEFAULT_CURRENCY_CODE } from '@/utils/currencyOptions';
 import { useAuthStore } from '@/stores/auth';
 import { useRoute } from 'vue-router';
 import { resolveFieldContext, filterFieldsByContext } from '@/utils/fieldContextFilter';
@@ -356,7 +373,25 @@ const orderedFields = computed(() => {
       fields: props.fieldsOverride
     });
     // Map override field keys to actual field objects from module definition
-    const allFields = moduleDefinition.value?.fields || [];
+    // (respect current context and dependency visibility, same as default path)
+    let allFields = filterFieldsByContext(moduleDefinition.value?.fields || [], currentContext.value);
+    if (props.moduleKey?.toLowerCase() === 'tasks') {
+      const hasRelatedTo = allFields.some((f) => String(f?.key).toLowerCase() === 'relatedto');
+      if (!hasRelatedTo) {
+        allFields = [...allFields, { key: 'relatedTo', label: 'Related To', required: false }];
+      }
+      const hasSubtasks = allFields.some((f) => String(f?.key).toLowerCase() === 'subtasks');
+      if (!hasSubtasks) {
+        allFields = [...allFields, { key: 'subtasks', label: 'Subtasks', required: false, order: 999 }];
+      }
+    }
+    const systemFieldKeys = [
+      'organizationid', 'createdat', 'updatedat', '_id', '__v', 'createdby',
+      'eventid', 'createdtime', 'modifiedby', 'modifiedtime', 'audithistory',
+      ...getGlobalSystemFieldKeys(),
+      ...(props.moduleKey?.toLowerCase() === 'events' ? ['status'] : [])
+    ];
+    const currentFormData = localFormData.value || {};
     const fieldMapByKey = new Map();
     for (const field of allFields) {
       if (field.key) {
@@ -376,6 +411,20 @@ const orderedFields = computed(() => {
       
       const field = fieldMapByKey.get(keyLower);
       if (field) {
+        const fieldKeyNorm = normalizeFieldKeyForSystemMatch(field.key);
+        const isSystem = systemFieldKeys.includes(fieldKeyNorm);
+        const isExcluded = props.excludeFields.some(
+          excluded => normalizeFieldKeyForSystemMatch(excluded) === fieldKeyNorm
+        );
+        let isVisible = true;
+        if (field.dependencies && Array.isArray(field.dependencies) && field.dependencies.length > 0) {
+          const depState = getFieldDependencyState(field, currentFormData, allFields, {
+            currentUser: authStore.user,
+            moduleKey: props.moduleKey,
+          });
+          isVisible = depState.visible !== false;
+        }
+        if (isSystem || isExcluded || !isVisible) continue;
         ordered.push(field);
         seen.add(keyLower);
       } else {
@@ -916,6 +965,61 @@ const updateField = (key, value) => {
   }
   emit('update:formData', { ...localFormData.value });
 };
+
+function findMatchingKeyInObject(obj, candidateKey) {
+  if (!obj || !candidateKey) return null;
+  const candidateNorm = String(candidateKey).toLowerCase();
+  return Object.keys(obj).find((k) => String(k).toLowerCase() === candidateNorm) || null;
+}
+
+function findMatchingFieldKeyInModule(candidateKey) {
+  const fields = moduleDefinition.value?.fields || [];
+  const candidateNorm = String(candidateKey || '').toLowerCase();
+  const matched = fields.find((f) => String(f?.key || '').toLowerCase() === candidateNorm);
+  return matched?.key || null;
+}
+
+function resolveCurrencyCompanionFieldKey(field) {
+  if (!field || field.dataType !== 'Currency') return null;
+  const baseKey = String(field.key || '').trim();
+  const candidates = [
+    `${baseKey}CurrencyCode`,
+    `${baseKey}Currency`,
+    `${baseKey}_currency_code`,
+    `${baseKey}_currency`,
+    'currencyCode',
+    'currency',
+  ];
+
+  for (const candidate of candidates) {
+    const keyInFormData = findMatchingKeyInObject(localFormData.value, candidate);
+    if (keyInFormData) return keyInFormData;
+  }
+
+  for (const candidate of candidates) {
+    const keyInModule = findMatchingFieldKeyInModule(candidate);
+    if (keyInModule) return keyInModule;
+  }
+
+  return null;
+}
+
+function getCurrencyCodeForField(field) {
+  if (!field || field.dataType !== 'Currency') return '';
+  const companionKey = resolveCurrencyCompanionFieldKey(field);
+  if (companionKey) {
+    const value = localFormData.value?.[companionKey];
+    if (value) return String(value).toUpperCase();
+  }
+  return String(field?.numberSettings?.currencyCode || field?.numberSettings?.currency || DEFAULT_CURRENCY_CODE).toUpperCase();
+}
+
+function updateCurrencyCodeForField(field, currencyCode) {
+  if (!field || field.dataType !== 'Currency') return;
+  const companionKey = resolveCurrencyCompanionFieldKey(field);
+  if (!companionKey) return;
+  updateField(companionKey, String(currencyCode || DEFAULT_CURRENCY_CODE).toUpperCase());
+}
 
 // Generic dependency-driven value enforcement:
 // If a field becomes readonly + required, ensure its value is set to a safe default.

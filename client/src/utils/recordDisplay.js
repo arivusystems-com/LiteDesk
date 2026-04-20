@@ -98,14 +98,22 @@ export async function fetchRecord(appKey, moduleKey, recordId, forceRefresh = fa
 export function getRecordLabel(record) {
   if (!record) return 'Unnamed Record';
   
+  // Preserve explicit labels from upstream formatters.
+  if (record.label) return record.label;
+  if (record.displayName) return record.displayName;
+  if (record.fullName) return record.fullName;
+  if (record.full_name) return record.full_name;
+
   // Try common fields
   if (record.name) return record.name;
   if (record.title) return record.title;
   if (record.eventName) return record.eventName;
   if (record.primaryField) return record.primaryField;
   if (record.email) return record.email;
-  if (record.firstName || record.lastName) {
-    return `${record.firstName || ''} ${record.lastName || ''}`.trim() || 'Unnamed Record';
+  const firstName = record.firstName || record.first_name || '';
+  const lastName = record.lastName || record.last_name || '';
+  if (firstName || lastName) {
+    return `${firstName} ${lastName}`.trim() || 'Unnamed Record';
   }
   if (record._id) return record._id.toString().substring(0, 8);
   if (record.id) return record.id.toString().substring(0, 8);

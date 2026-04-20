@@ -17,6 +17,7 @@
  */
 
 const People = require('../models/People');
+const RelationshipInstance = require('../models/RelationshipInstance');
 const { applyProjectionFilter } = require('../utils/appProjectionQuery');
 const { getProjection } = require('../utils/moduleProjectionResolver');
 const { getSalesParticipationValues } = require('../utils/getSalesParticipationValues');
@@ -30,6 +31,7 @@ const {
   helpdeskTypeAliasViolation,
   peopleLegacyTopLevelTypeViolation,
 } = require('../utils/warnDeprecatedPeopleTypeAlias');
+const { isOptionalEmailWellFormed } = require('../utils/defaultFieldValidations');
 
 /**
  * Flatten People record for API response: expose participations as top-level aliases.
@@ -73,6 +75,74 @@ function getSalesParticipationFields() {
     'sales_type',
     'helpdesk_role'
   ];
+}
+
+function normalizeObjectIdLike(value) {
+  if (!value) return null;
+  if (typeof value === 'object') {
+    return value._id ? String(value._id) : String(value);
+  }
+  return String(value);
+}
+
+async function syncPeopleOrganizationRelationship({
+  tenantOrganizationId,
+  personId,
+  organizationValue,
+  userId
+}) {
+  const normalizedPersonId = normalizeObjectIdLike(personId);
+  const normalizedOrgId = normalizeObjectIdLike(organizationValue);
+  if (!normalizedPersonId) return;
+
+  // Keep people_organizations as a single effective link for this person.
+  await RelationshipInstance.deleteMany({
+    organizationId: tenantOrganizationId,
+    relationshipKey: 'people_organizations',
+    $or: [
+      {
+        'source.appKey': 'sales',
+        'source.moduleKey': 'people',
+        'source.recordId': normalizedPersonId
+      },
+      {
+        'target.appKey': 'sales',
+        'target.moduleKey': 'people',
+        'target.recordId': normalizedPersonId
+      }
+    ]
+  });
+
+  if (!normalizedOrgId) return;
+
+  await RelationshipInstance.updateOne(
+    {
+      organizationId: tenantOrganizationId,
+      relationshipKey: 'people_organizations',
+      'source.appKey': 'sales',
+      'source.moduleKey': 'people',
+      'source.recordId': normalizedPersonId,
+      'target.appKey': 'sales',
+      'target.moduleKey': 'organizations',
+      'target.recordId': normalizedOrgId
+    },
+    {
+      $setOnInsert: {
+        createdBy: userId,
+        source: {
+          appKey: 'sales',
+          moduleKey: 'people',
+          recordId: normalizedPersonId
+        },
+        target: {
+          appKey: 'sales',
+          moduleKey: 'organizations',
+          recordId: normalizedOrgId
+        }
+      }
+    },
+    { upsert: true }
+  );
 }
 
 // Export for use in other controllers
@@ -129,6 +199,9 @@ exports.create = async (req, res) => {
       }]
     };
     assignResolvedSource(body, 'ui');
+    if (body.email !== undefined && body.email !== null && !isOptionalEmailWellFormed(body.email)) {
+      return res.status(400).json({ success: false, message: 'Invalid email format.' });
+    }
     const record = await People.create(body);
     
     // Compute derived status (non-blocking)
@@ -609,6 +682,10 @@ exports.update = async (req, res) => {
     if (legacyTypeViol) {
       return res.status(legacyTypeViol.status).json(legacyTypeViol.body);
     }
+
+    if (Object.prototype.hasOwnProperty.call(updateData, 'email') && !isOptionalEmailWellFormed(updateData.email)) {
+      return res.status(400).json({ success: false, message: 'Invalid email format.' });
+    }
     
     // If someone tried to change createdBy, log a warning (but don't fail the request)
     if (createdBy !== undefined) {
@@ -790,6 +867,16 @@ exports.update = async (req, res) => {
     const { buildUpdateWithCustomFields } = require('../utils/customFieldsExtractor');
     let $set = buildUpdateWithCustomFields(updateDataWithoutSales, People);
 
+    // Cross-field last_name validation reads first_name via Query#get during findOneAndUpdate.
+    // If the client omits first_name, merge the stored value so validators see both name parts.
+    if (
+      previous &&
+      Object.prototype.hasOwnProperty.call($set, 'last_name') &&
+      !Object.prototype.hasOwnProperty.call($set, 'first_name')
+    ) {
+      $set.first_name = previous.first_name;
+    }
+
     // Write SALES / HELPDESK to participations only (do not set type/lead_status/contact_status on document root)
     if (hasSalesWrite || helpdeskTouched) {
       let nextParticipations = { ...(previous?.participations || {}) };
@@ -814,6 +901,20 @@ exports.update = async (req, res) => {
       { new: true, runValidators: true }
     );
     if (!updated) return res.status(404).json({ success: false, message: 'Not found' });
+
+    // Keep relationship instances aligned when People.organization is edited directly.
+    if (Object.prototype.hasOwnProperty.call(updateData, 'organization')) {
+      try {
+        await syncPeopleOrganizationRelationship({
+          tenantOrganizationId: req.user.organizationId,
+          personId: req.params.id,
+          organizationValue: updated.organization,
+          userId: req.user._id
+        });
+      } catch (syncErr) {
+        console.warn('[PeopleController] Failed to sync people_organizations relationship:', syncErr?.message || syncErr);
+      }
+    }
     
     // Emit domain events for automation (lifecycle/type changes only)
     if (shouldComputeDerivedStatus) {

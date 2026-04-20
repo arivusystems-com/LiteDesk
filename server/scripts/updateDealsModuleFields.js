@@ -239,6 +239,19 @@ const baseFields = [
 
 const quickCreateDefault = ['name', 'type', 'pipeline', 'stage', 'ownerId', 'accountId', 'amount', 'expectedCloseDate', 'probability'];
 
+const defaultDealRelationships = Object.freeze([
+  { name: 'Related Projects', type: 'one_to_many', isLookup: false, targetModuleKey: 'projects', relationshipKey: 'deal_projects' },
+  { name: 'Related Organizations', type: 'many_to_one', isLookup: true, targetModuleKey: 'organizations', relationshipKey: 'deal_organizations' },
+  { name: 'Related Contacts', type: 'many_to_many', isLookup: false, targetModuleKey: 'people', relationshipKey: 'deal_contacts' },
+  { name: 'Related Tasks', type: 'one_to_many', isLookup: false, targetModuleKey: 'tasks', relationshipKey: 'deal_tasks' },
+  { name: 'Related Events', type: 'one_to_many', isLookup: false, targetModuleKey: 'events', relationshipKey: 'deal_events' },
+  { name: 'Related Forms', type: 'one_to_many', isLookup: false, targetModuleKey: 'forms', relationshipKey: 'deal_forms' }
+]);
+
+function cloneDefaultDealRelationships() {
+  return JSON.parse(JSON.stringify(defaultDealRelationships));
+}
+
 function slugify(value = '') {
   return String(value)
     .toLowerCase()
@@ -788,7 +801,9 @@ async function updateDealsModuleFields(organizationId = null) {
         existing.enabled = existing.enabled !== false;
         existing.quickCreate = [...quickCreateDefault];
         existing.quickCreateLayout = { version: 1, rows: [] };
-        existing.relationships = Array.isArray(existing.relationships) ? existing.relationships : [];
+        existing.relationships = Array.isArray(existing.relationships) && existing.relationships.length > 0
+          ? existing.relationships
+          : cloneDefaultDealRelationships();
         existing.pipelineSettings = clonePipelineSettings();
         existing.markModified('pipelineSettings');
         // Ensure appKey is set for Sales app
@@ -812,7 +827,7 @@ async function updateDealsModuleFields(organizationId = null) {
           fields: cloneFields(),
           quickCreate: quickCreateDefault,
           quickCreateLayout: { version: 1, rows: [] },
-          relationships: [],
+          relationships: cloneDefaultDealRelationships(),
           pipelineSettings: clonePipelineSettings()
         });
         console.log(`✓ Created deals module for organization: ${org.name || org._id}`);

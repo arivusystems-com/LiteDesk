@@ -68,12 +68,16 @@ function fieldTypeFromDef(field, fieldKey) {
   if (!field) {
     if (/(created|updated|modified|deleted|closed|start|end).*(at|date)/i.test(key) || ['duedate', 'birthday'].includes(key)) return 'date';
     if (/(createdby|modifiedby|updatedby|assignedto)$/i.test(key) || /owner|userid$/i.test(key)) return 'user';
+    if (/(website|url|link)$/i.test(key)) return 'url';
+    if (key === 'phone' || key === 'mobile') return 'phone';
     if (key === '_id' || key === 'id' || key === '__v') return 'text';
   }
   const dt = String(field?.dataType || '').toLowerCase();
   if (dt.includes('date') || dt.includes('datetime')) return 'date';
   if (dt.includes('number') || dt.includes('currency') || dt.includes('decimal')) return 'number';
   if (dt.includes('select') || dt.includes('picklist') || dt.includes('status')) return 'select';
+  if (dt.includes('url') || dt.includes('website') || dt.includes('link')) return 'url';
+  if (dt.includes('phone')) return 'phone';
   if (dt.includes('user')) return 'user';
   if (dt.includes('lookup') || dt.includes('entity')) return 'entity';
   return 'text';
@@ -344,7 +348,7 @@ export function createGenericRecordAdapter(opts = {}) {
           engineAllowsEdit = true;
         }
       }
-      const canEdit = engineAllowsEdit && !isTags && canEditDetails?.(record, fieldKey) === true && ['text', 'number', 'date', 'select', 'entity', 'user'].includes(fieldType);
+      const canEdit = engineAllowsEdit && !isTags && canEditDetails?.(record, fieldKey) === true && ['text', 'url', 'phone', 'number', 'date', 'select', 'entity', 'user'].includes(fieldType);
       const canOpenTagsEditor = isTags && typeof context?.openTagsEditor === 'function';
       const orgId = rawValue != null && typeof rawValue === 'object' ? (rawValue._id ?? rawValue.id) : (typeof rawValue === 'string' && rawValue.trim() ? rawValue.trim() : null);
       const recordPathForEntity = fieldType === 'entity' && orgId != null && /^(organization|account|company)$/.test(String(fieldKey).toLowerCase())
@@ -364,10 +368,9 @@ export function createGenericRecordAdapter(opts = {}) {
           ? (value) => {
             if (isArrayBackedSelect) {
               const nextValue = value == null || value === '' ? [] : [value];
-              saveDetailField?.(fieldKey, nextValue, record);
-              return;
+              return saveDetailField?.(fieldKey, nextValue, record);
             }
-            saveDetailField?.(fieldKey, value, record);
+            return saveDetailField?.(fieldKey, value, record);
           }
           : null,
         canOpenEditor: canOpenTagsEditor,
@@ -476,7 +479,7 @@ export function createGenericRecordAdapter(opts = {}) {
         const field = fieldsByKey.get(fieldKey);
         const fieldType = fieldTypeFromDef(field, fieldKey);
         const isTags = fieldType === 'tags';
-        const canEdit = !isTags && canEditDetails?.(null, fieldKey) === true && ['text', 'number', 'date', 'select', 'entity', 'user'].includes(fieldType);
+        const canEdit = !isTags && canEditDetails?.(null, fieldKey) === true && ['text', 'url', 'phone', 'number', 'date', 'select', 'entity', 'user'].includes(fieldType);
         const canOpenTagsEditor = isTags && typeof context?.openTagsEditor === 'function';
         return {
           key: fieldKey,
@@ -487,7 +490,7 @@ export function createGenericRecordAdapter(opts = {}) {
             ? normalizeSelectOptions(field?.options)
             : ((fieldType === 'entity' || fieldType === 'user') ? entityOptionsFor(fieldKey) : []),
           canEdit,
-          onSave: canEdit ? (value) => saveDetailField?.(fieldKey, value) : null,
+          onSave: canEdit ? (value) => saveDetailField?.(fieldKey, value, record) : null,
           canOpenEditor: canOpenTagsEditor,
           onEdit: canOpenTagsEditor ? (e) => context.openTagsEditor(e, fieldKey, record) : null,
           getTagChipClass: isTags ? (typeof context?.getTagChipClass === 'function' ? context.getTagChipClass : getDefaultTagChipClass) : undefined

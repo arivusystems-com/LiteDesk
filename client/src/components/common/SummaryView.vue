@@ -519,7 +519,7 @@
                   :value="fieldData.value"
                   @update:value="updateField(fieldData.key, $event)"
                   @blur="saveFieldOnBlur(fieldData.key)"
-                  :errors="{}"
+                  :errors="fieldErrors"
                   :dependency-state="fieldData.dependencyState"
                 />
               </div>
@@ -696,7 +696,7 @@
                   :value="fieldData.value"
                   @update:value="updateField(fieldData.key, $event)"
                   @blur="saveFieldOnBlur(fieldData.key)"
-                  :errors="{}"
+                  :errors="fieldErrors"
                   :dependency-state="fieldData.dependencyState"
                 />
               </div>
@@ -1652,6 +1652,8 @@ import FormPreview from '@/components/forms/FormPreview.vue';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import LinkRecordsDrawer from '@/components/common/LinkRecordsDrawer.vue';
 import apiClient from '@/utils/apiClient';
+import { sanitizePhoneDigits } from '@/utils/phoneInput';
+import { DEFAULT_PHONE_VALIDATION_MESSAGE } from '@/utils/defaultFieldValidations';
 import { PEOPLE_SALES_ROLE_MODULE_DEFINITION_KEYS } from '@/utils/peopleParticipationUi';
 import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';
@@ -1739,6 +1741,8 @@ const layoutChangeTrigger = ref(0); // Trigger to detect layout changes for rese
 // Track pending field changes (field -> { originalValue, currentValue })
 // Only save and log when field loses focus (blur)
 const pendingFieldChanges = ref({});
+/** Per-field messages for inline edit (e.g. phone validation on blur) — keyed by field key */
+const fieldErrors = ref({});
 
 // Viewport width for responsive calculations
 const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1920);
@@ -4605,13 +4609,34 @@ const formatValueForActivityLog = (value, fieldKey = null) => {
   return String(value);
 };
 
+/** Treat as phone when module says Phone or common CRM keys (covers mis-typed module definitions). */
+function shouldCoercePhoneField(fieldKey) {
+  const k = String(fieldKey || '').toLowerCase();
+  const fd = moduleDefinition.value?.fields?.find(
+    (f) => f?.key && f.key.toLowerCase() === k
+  );
+  return fd?.dataType === 'Phone' || k === 'phone' || k === 'mobile';
+}
+
+function coerceSummaryPhoneValue(fieldKey, raw) {
+  if (!shouldCoercePhoneField(fieldKey)) return raw;
+  return sanitizePhoneDigits(raw == null ? '' : String(raw));
+}
+
 // Update field value (for immediate UI updates during typing - no save, no log)
 const updateField = (field, value) => {
+  const nextValue = coerceSummaryPhoneValue(field, value);
+  if (shouldCoercePhoneField(field) && fieldErrors.value[field]) {
+    const next = { ...fieldErrors.value };
+    delete next[field];
+    fieldErrors.value = next;
+  }
+
   const oldValue = props.record ? props.record[field] : null;
   
   // Normalize values for comparison
   const normalizedOldValue = normalizeValue(oldValue);
-  const normalizedNewValue = normalizeValue(value);
+  const normalizedNewValue = normalizeValue(nextValue);
   
   // Only proceed if value actually changed
   if (normalizedOldValue === normalizedNewValue) {
@@ -4624,18 +4649,18 @@ const updateField = (field, value) => {
   
   // Update local state immediately for UI responsiveness
   if (props.record) {
-    props.record[field] = value;
+    props.record[field] = nextValue;
   }
   
   // Track pending change (store original value if this is the first change)
   if (!pendingFieldChanges.value[field]) {
     pendingFieldChanges.value[field] = {
       originalValue: oldValue,
-      currentValue: value
+      currentValue: nextValue
     };
   } else {
     // Update current value
-    pendingFieldChanges.value[field].currentValue = value;
+    pendingFieldChanges.value[field].currentValue = nextValue;
   }
   
   // Mark that we're no longer in initial load - field values are being changed
@@ -5025,7 +5050,22 @@ const saveFieldOnBlur = async (field) => {
   }
   
   const fieldName = formatFieldName(field);
-  const { originalValue, currentValue } = pendingChange;
+  let { originalValue, currentValue } = pendingChange;
+
+  if (shouldCoercePhoneField(field)) {
+    currentValue = coerceSummaryPhoneValue(field, currentValue);
+    if (props.record) props.record[field] = currentValue;
+    pendingFieldChanges.value[field] = { originalValue, currentValue };
+
+    const digits = String(currentValue || '');
+    if (digits.length > 0 && digits.length < 10) {
+      fieldErrors.value = { ...fieldErrors.value, [field]: DEFAULT_PHONE_VALIDATION_MESSAGE };
+      return;
+    }
+    const nextErr = { ...fieldErrors.value };
+    delete nextErr[field];
+    fieldErrors.value = nextErr;
+  }
   
   // Normalize values for final comparison
   const normalizedOldValue = normalizeValue(originalValue);
@@ -5306,7 +5346,7 @@ const getInputType = (key, value) => {
       case 'Email':
         return 'email';
       case 'Phone':
-        return 'tel';
+        return 'text';
       case 'URL':
       case 'Website':
         return 'url';
@@ -5324,7 +5364,7 @@ const getInputType = (key, value) => {
   if (typeof value === 'boolean') return 'checkbox';
   if (key.includes('email')) return 'email';
   if (key.includes('date')) return 'date';
-  if (key.includes('phone')) return 'tel';
+  if (key.includes('phone')) return 'text';
   if (key.includes('url')) return 'url';
   return 'text';
 };

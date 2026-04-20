@@ -20,6 +20,7 @@
 
 const updatePeopleModuleFields = require('../scripts/updatePeopleModuleFields');
 const updateDealsModuleFields = require('../scripts/updateDealsModuleFields');
+const updateOrganizationsModuleFields = require('../scripts/updateOrganizationsModuleFields');
 
 /**
  * Initialize Sales application for an organization
@@ -69,6 +70,24 @@ async function initializeSales(organizationId) {
                 stack: moduleError.stack
             });
             console.error(`[SalesInitializer] ❌ Failed to initialize Pipeline Entity module for organization: ${organizationId}`);
+            console.error(`[SalesInitializer] Error message:`, moduleError.message);
+            console.error(`[SalesInitializer] Error stack:`, moduleError.stack);
+            // Continue with other initializations even if one fails
+        }
+
+        // Initialize Organizations Module Definition defaults and relationships
+        try {
+            console.log(`[SalesInitializer] Starting Organizations module initialization for organization: ${organizationId}`);
+            await updateOrganizationsModuleFields(organizationId);
+            results.initialized.push('Organizations module');
+            console.log(`[SalesInitializer] ✅ Organizations module initialized for organization: ${organizationId}`);
+        } catch (moduleError) {
+            results.errors.push({
+                module: 'Organizations',
+                error: moduleError.message,
+                stack: moduleError.stack
+            });
+            console.error(`[SalesInitializer] ❌ Failed to initialize Organizations module for organization: ${organizationId}`);
             console.error(`[SalesInitializer] Error message:`, moduleError.message);
             console.error(`[SalesInitializer] Error stack:`, moduleError.stack);
             // Continue with other initializations even if one fails

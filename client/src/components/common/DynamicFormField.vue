@@ -90,25 +90,110 @@
       class="block w-full mt-2 rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
     />
     
-    <!-- Phone -->
+    <!-- Phone (digits only; non-numeric input is stripped) -->
     <input 
       v-else-if="field.dataType === 'Phone'"
       :id="field.key"
       :name="field.key"
-      type="tel"
+      type="text"
+      inputmode="numeric"
+      autocomplete="tel"
+      maxlength="10"
       :value="value"
       @input="updateValue($event.target.value)"
-      @blur="$emit('blur')"
+      @keydown="preventNonDigitPhoneKeys"
+      @blur="onPhoneFieldBlur"
       @keydown.enter="$event.target.blur()"
-      :placeholder="field.placeholder || `+1 (555) 123-4567`"
+      :placeholder="field.placeholder || '10-digit phone number'"
       :required="isRequired"
       :disabled="isReadOnly"
-      class="block w-full mt-2 rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+      :class="[
+        'block w-full mt-2 rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500',
+        localValidationError || errors[field.key]
+          ? 'border border-red-500 dark:border-red-500 focus:ring-red-500 dark:focus:ring-red-500'
+          : ''
+      ]"
     />
     
-    <!-- Integer, Decimal, Currency -->
+    <!-- Currency: amount input + inline currency selector -->
+    <div v-else-if="field.dataType === 'Currency'" class="mt-2 flex">
+      <input
+        :id="field.key"
+        :name="field.key"
+        type="number"
+        :value="value"
+        @input="updateValue($event.target.value)"
+        @blur="$emit('blur')"
+        @keydown.enter="$event.target.blur()"
+        :placeholder="field.placeholder || `Enter ${displayLabel}`"
+        :required="isRequired"
+        :disabled="isReadOnly"
+        :min="field.numberSettings?.min"
+        :max="field.numberSettings?.max"
+        :step="field.numberSettings?.decimalPlaces ? Math.pow(0.1, field.numberSettings.decimalPlaces) : 0.01"
+        :class="[
+          'block w-full rounded-l-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500',
+          localValidationError || errors[field.key] ? 'border border-red-500 dark:border-red-500' : ''
+        ]"
+      />
+      <Listbox
+        :model-value="effectiveCurrencyCode"
+        @update:model-value="handleCurrencyCodeChange"
+        :disabled="isReadOnly || !currencyCodeEditable"
+      >
+        <div class="relative w-24">
+          <ListboxButton
+            :class="[
+              'h-full w-full rounded-r-md border-l-0 bg-gray-100 dark:bg-gray-700 px-2 py-2 text-left text-gray-900 dark:text-white text-sm outline-1 -outline-offset-1 outline-gray-300/20 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 dark:focus:bg-gray-800 dark:outline-white/10',
+              localValidationError || errors[field.key] ? 'border border-red-500 dark:border-red-500' : 'border border-gray-300 dark:border-white/10',
+              isReadOnly || !currencyCodeEditable ? 'opacity-60 cursor-not-allowed' : ''
+            ]"
+          >
+            <span class="block truncate pr-4">{{ effectiveCurrencyCode }}</span>
+            <span class="pointer-events-none absolute inset-y-0 right-1 flex items-center">
+              <ChevronUpDownIcon class="h-4 w-4 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+            </span>
+          </ListboxButton>
+          <Transition
+            leave-active-class="transition duration-100 ease-in"
+            leave-from-class="opacity-100"
+            leave-to-class="opacity-0"
+          >
+            <ListboxOptions
+              class="absolute right-0 z-20 mt-1 max-h-60 w-28 overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm"
+            >
+              <ListboxOption
+                v-for="currency in currencyOptions"
+                :key="currency.code"
+                :value="currency.code"
+                v-slot="{ active, selected }"
+              >
+                <li
+                  :class="[
+                    'relative cursor-default select-none py-2 pl-3 pr-8',
+                    active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100'
+                  ]"
+                >
+                  <span :class="[selected ? 'font-medium' : 'font-normal', 'block truncate']">
+                    {{ currency.code }}
+                  </span>
+                  <span
+                    v-if="selected"
+                    class="absolute inset-y-0 right-0 flex items-center pr-2 text-indigo-600 dark:text-indigo-400"
+                  >
+                    <CheckIcon class="h-4 w-4" aria-hidden="true" />
+                  </span>
+                </li>
+              </ListboxOption>
+            </ListboxOptions>
+          </Transition>
+        </div>
+      </Listbox>
+    </div>
+
+    <!-- Integer, Decimal -->
     <input 
-      v-else-if="['Integer', 'Decimal', 'Currency'].includes(field.dataType)"
+      v-else-if="['Integer', 'Decimal'].includes(field.dataType)"
       :id="field.key"
       :name="field.key"
       type="number"
@@ -654,12 +739,14 @@
       />
     </div>
     
-    <!-- URL -->
+    <!-- URL: type="text" so the browser does not show native "Please enter a URL" tooltips; we validate inline. -->
     <input 
       v-else-if="field.dataType === 'URL'"
       :id="field.key"
       :name="field.key"
-      type="url"
+      type="text"
+      inputmode="url"
+      autocomplete="url"
       :value="value"
       @input="updateValue($event.target.value)"
       @blur="$emit('blur')"
@@ -750,8 +837,11 @@ import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import FormTagsField from '@/components/common/FormTagsField.vue';
 import apiClient from '@/utils/apiClient';
 import { validateField } from '@/utils/fieldValidation';
+import { sanitizePhoneDigits, preventNonDigitPhoneKeys } from '@/utils/phoneInput';
+import { getWebsiteValidationMessage } from '@/utils/urlInputValidation';
 import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
 import { openDatePicker } from '@/utils/dateUtils';
+import { CURRENCY_OPTIONS, DEFAULT_CURRENCY_CODE } from '@/utils/currencyOptions';
 import { useAuthStore } from '@/stores/auth';
 import { canEditField } from '@/platform/fields/fieldCapabilityEngine';
 import { isModuleRegistered } from '@/platform/fields/FieldRegistry';
@@ -780,12 +870,12 @@ const vClickOutside = {
         }
       }, 10);
     };
-    // Use normal bubbling phase but with a delay to allow state updates
-    document.addEventListener('click', el.clickOutsideEvent);
+    // Use capture phase so nested @click.stop handlers don't block outside-close behavior
+    document.addEventListener('pointerdown', el.clickOutsideEvent, true);
   },
   unmounted(el) {
     if (el.clickOutsideEvent) {
-      document.removeEventListener('click', el.clickOutsideEvent);
+      document.removeEventListener('pointerdown', el.clickOutsideEvent, true);
     }
   }
 };
@@ -818,10 +908,18 @@ const props = defineProps({
   moduleKey: {
     type: String,
     default: ''
+  },
+  currencyCode: {
+    type: String,
+    default: ''
+  },
+  currencyCodeEditable: {
+    type: Boolean,
+    default: false
   }
 });
 
-const emit = defineEmits(['update:value', 'validation-error', 'blur']);
+const emit = defineEmits(['update:value', 'validation-error', 'blur', 'update:currency-code']);
 
 const displayLabel = computed(() => getFieldDisplayLabel(props.field));
 const effectiveLabel = computed(() => {
@@ -910,12 +1008,28 @@ const isReadOnly = computed(() => {
 });
 
 const isRequired = computed(() => {
-  // Use dependency state required if available, otherwise use field.required
-  return props.dependencyState?.required ?? props.field.required ?? false;
+  const hasDeps = Array.isArray(props.field.dependencies) && props.field.dependencies.length > 0;
+  // Default dependencyState is { required: false }; `??` would wrongly mask field.required for fields without rules
+  if (!hasDeps) {
+    return props.field.required ?? false;
+  }
+  if (props.dependencyState && typeof props.dependencyState.required === 'boolean') {
+    return props.dependencyState.required;
+  }
+  return props.field.required ?? false;
 });
 
 /** Field key `tags` (string[]); dataType should be Multi-Picklist — Tasks used to infer Text from schema */
 const isTagsField = computed(() => String(props.field?.key || '').toLowerCase() === 'tags');
+const currencyOptions = CURRENCY_OPTIONS;
+const effectiveCurrencyCode = computed(() =>
+  String(
+    props.currencyCode ||
+    props.field?.numberSettings?.currencyCode ||
+    props.field?.numberSettings?.currency ||
+    DEFAULT_CURRENCY_CODE
+  ).toUpperCase()
+);
 
 // Get filtered picklist options based on dependency
 const filteredPicklistOptions = computed(() => {
@@ -1019,31 +1133,96 @@ const lookupCreatePrefillFieldKey = computed(() => {
 
 // Real-time validation
 const localValidationError = ref(null);
+const hasInteracted = ref(false);
+
+function isEmptyForValidation(val) {
+  if (val === null || val === undefined) return true;
+  if (typeof val === 'string') return val.trim() === '';
+  if (Array.isArray(val)) return val.length === 0;
+  if (typeof val === 'object') {
+    const id = val._id != null ? val._id : val.id;
+    if (id !== null && id !== undefined && id !== '') return false;
+    return true;
+  }
+  return false;
+}
 
 // Validate field value
-const validateValue = (val) => {
+const validateValue = (val, opts = {}) => {
+  const phoneBlur = opts.phoneBlur === true;
+  const silent = opts.silent === true;
+  const strVal = val === null || val === undefined ? '' : String(val);
+  const trimmed = strVal.trim();
+  const empty = isEmptyForValidation(val);
+
+  // Dependency-driven required (and static required) must run even when no field.validations are configured
+  if (empty && isRequired.value) {
+    if (silent) {
+      localValidationError.value = null;
+      emit('validation-error', props.field.key, null);
+      return;
+    }
+    const msg = `${effectiveLabel.value || displayLabel.value || props.field.key} is required`;
+    localValidationError.value = msg;
+    emit('validation-error', props.field.key, msg);
+    return;
+  }
+
+  if (empty && !isRequired.value) {
+    localValidationError.value = null;
+    emit('validation-error', props.field.key, null);
+    return;
+  }
+
+  // Intrinsic URL format (module-independent; avoids <input type="url"> native tooltips)
+  if (props.field.dataType === 'URL' && trimmed !== '') {
+    const urlMsg = getWebsiteValidationMessage(strVal);
+    if (urlMsg) {
+      if (silent) {
+        localValidationError.value = null;
+        emit('validation-error', props.field.key, null);
+        return;
+      }
+      localValidationError.value = urlMsg;
+      emit('validation-error', props.field.key, urlMsg);
+      return;
+    }
+  }
+
   if (!props.field.validations || !Array.isArray(props.field.validations) || props.field.validations.length === 0) {
     localValidationError.value = null;
     emit('validation-error', props.field.key, null);
     return;
   }
 
-  // Skip validation for empty values unless required
-  if ((val === null || val === undefined || val === '') && !props.field.required) {
+  // Phone: while typing 1–9 digits, do not show "must be 10 digits" yet; validate fully on blur
+  if (props.field.dataType === 'Phone' && !phoneBlur) {
+    const digits = strVal.replace(/\D/g, '');
+    if (digits.length > 0 && digits.length < 10) {
+      localValidationError.value = null;
+      emit('validation-error', props.field.key, null);
+      return;
+    }
+  }
+
+  const result = validateField(val, props.field.validations);
+  if (silent && result.error) {
     localValidationError.value = null;
     emit('validation-error', props.field.key, null);
     return;
   }
-
-  const result = validateField(val, props.field.validations);
   localValidationError.value = result.error;
   emit('validation-error', props.field.key, result.error);
 };
 
-// Watch value changes for validation
-watch(() => props.value, (newValue) => {
-  validateValue(newValue);
-}, { immediate: true });
+// Re-run when value, dependency required state, or label/required metadata changes
+watch(
+  () => [props.value, isRequired.value, props.dependencyState, props.field?.required],
+  ([v]) => {
+    validateValue(v, { silent: !hasInteracted.value });
+  },
+  { deep: true, immediate: true }
+);
 
 // Check if this is an "owner/assignee" style user lookup field.
 // These fields may be auto-defaulted to current user (convenience), unlike audit role fields.
@@ -1054,6 +1233,8 @@ const isAssignedToField = computed(() => {
   // Check by key
   if (key === 'assignedto' || 
       key === 'assigned_to' || 
+      key === 'ownerid' ||
+      key === 'owner_id' ||
       key === 'accountmanager' ||
       key === 'account_manager') {
     return true;
@@ -1062,7 +1243,9 @@ const isAssignedToField = computed(() => {
   // Check by label
   if (label.includes('assigned to') || 
       label.includes('assigned to (owner)') ||
+      label.includes('deal owner') ||
       label.includes('account manager') ||
+      (label === 'owner' && props.field.lookupSettings?.targetModule === 'users') ||
       (label.includes('manager') && props.field.lookupSettings?.targetModule === 'users')) {
     return true;
   }
@@ -1071,13 +1254,26 @@ const isAssignedToField = computed(() => {
 });
 
 const updateValue = (newValue) => {
-  emit('update:value', newValue);
+  hasInteracted.value = true;
+  let v = newValue;
+  if (props.field.dataType === 'Phone') {
+    v = sanitizePhoneDigits(
+      typeof newValue === 'string' ? newValue : newValue == null ? '' : String(newValue)
+    );
+  }
+  emit('update:value', v);
   // Validate immediately on input
-  validateValue(newValue);
+  validateValue(v);
   // Clear search queries when value is selected
   picklistSearchQuery.value = '';
   lookupSearchQuery.value = '';
 };
+
+function onPhoneFieldBlur() {
+  hasInteracted.value = true;
+  emit('blur');
+  validateValue(props.value, { phoneBlur: true });
+}
 
 // Handler for picklist changes (emits blur immediately since selection is complete)
 const handlePicklistChange = (newValue) => {
@@ -1097,6 +1293,12 @@ const handleRadioChange = (newValue) => {
 const handleLookupChange = (newValue) => {
   updateValue(newValue);
   // Emit blur immediately after selection for lookup fields
+  emit('blur');
+};
+
+const handleCurrencyCodeChange = (newValue) => {
+  const selected = String(newValue || DEFAULT_CURRENCY_CODE).toUpperCase();
+  emit('update:currency-code', selected);
   emit('blur');
 };
 
@@ -1556,7 +1758,14 @@ const fetchUsers = async ({ autoDefault = false } = {}) => {
       const canAutoDefault =
         autoDefault &&
         !isAuditRoleLookupField.value &&
-        (keyLower === 'assignedto' || keyLower === 'eventownerid' || keyLower === 'accountmanager' || keyLower === 'account_manager');
+        (
+          keyLower === 'assignedto' ||
+          keyLower === 'ownerid' ||
+          keyLower === 'owner_id' ||
+          keyLower === 'eventownerid' ||
+          keyLower === 'accountmanager' ||
+          keyLower === 'account_manager'
+        );
 
       if (canAutoDefault && !props.value && authStore.user?._id) {
         const currentUser = response.data.find(u =>

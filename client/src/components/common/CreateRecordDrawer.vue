@@ -95,7 +95,7 @@
                           />
                           <!-- Deal relationship editor (People + Organizations) -->
                           <div
-                            v-if="moduleKey === 'deals'"
+                            v-if="moduleKey === 'deals' && (!effectiveQuickCreateMode || fullMode || isEditing)"
                             class="pt-6 border-t border-gray-200 dark:border-gray-700"
                           >
                             <DealRelationshipEditor
@@ -276,17 +276,32 @@ const computedDescription = computed(() => {
 
 const effectiveExcludeFields = computed(() => {
   const base = props.excludeFields || [];
+  const excluded = new Set([...(base || []), ...getGlobalSystemFieldKeys()]);
   // RULE: Global system fields (trash: deletedAt, deletedBy, deletionReason) never show in create/edit
-  const globalSystem = getGlobalSystemFieldKeys();
   if (props.moduleKey === 'deals' && props.useDealRelationshipEditor) {
-    return [...base, ...globalSystem, 'contactId', 'accountId'];
+    // Deal create/edit uses DealRelationshipEditor for links and should hide model-level
+    // relationship/system tracking arrays from DynamicForm in both quick and full modes.
+    [
+      'contactId',
+      'accountId',
+      'dealPeople',
+      'dealOrganizations',
+      'descriptionVersions',
+      'derivedStatus',
+      'stageHistory',
+      'activityLogs',
+      'stageOrder',
+      'lineItems',
+    ].forEach((k) => excluded.add(k));
+    return Array.from(excluded);
   }
   if (props.moduleKey === 'tasks') {
     const taskSystemFields = (getTaskSystemFields() || []).map((k) => String(k).toLowerCase());
     // Exclude only system fields; relatedTo and subtasks stay in DynamicForm so they appear in config order (like edit drawer)
-    return [...base, ...globalSystem, 'relatedToType', 'relatedToId', ...taskSystemFields];
+    ['relatedToType', 'relatedToId', ...taskSystemFields].forEach((k) => excluded.add(k));
+    return Array.from(excluded);
   }
-  return [...base, ...globalSystem];
+  return Array.from(excluded);
 });
 
 
@@ -331,15 +346,21 @@ const moduleOverrideLoading = ref(false);
 // For deals: stage options must come from the selected pipeline only (not default pipeline).
 // Return a stable reference when pipeline and module are unchanged to avoid recursive updates
 // (DynamicForm re-applies on override change -> ready -> initializeForm -> formData -> computed -> loop).
-const dealOverrideCache = { mod: null, pipelineKey: undefined, result: null };
+const dealOverrideCache = { mod: null, pipelineKey: undefined, quickMode: undefined, result: null };
 const effectiveModuleOverrideForDrawer = computed(() => {
   const mod = moduleOverrideFromSettings.value;
   if (!mod || props.moduleKey?.toLowerCase() !== 'deals') return mod;
   const pipelineSettings = mod.pipelineSettings;
   const pipelineKey = formData.value?.pipeline;
+  const quickMode = effectiveQuickCreateMode.value && !fullMode.value;
   if (!Array.isArray(pipelineSettings) || pipelineSettings.length === 0) return mod;
   // Return cached override when module and pipeline key are unchanged
-  if (dealOverrideCache.mod === mod && dealOverrideCache.pipelineKey === pipelineKey && dealOverrideCache.result)
+  if (
+    dealOverrideCache.mod === mod &&
+    dealOverrideCache.pipelineKey === pipelineKey &&
+    dealOverrideCache.quickMode === quickMode &&
+    dealOverrideCache.result
+  )
     return dealOverrideCache.result;
   const pipeline = pipelineKey
     ? pipelineSettings.find((p) => String(p?.key ?? '').trim() === String(pipelineKey).trim())
@@ -354,8 +375,15 @@ const effectiveModuleOverrideForDrawer = computed(() => {
     return { ...f, options: stageOptions };
   });
   const result = { ...mod, fields };
+  // Deal quick create should strictly follow the quickCreate list only.
+  // If advanced layout rows are present, they can include non-quick-create fields.
+  // Clear layout in quick mode so DynamicForm renders from quickCreate keys.
+  if (quickMode) {
+    result.quickCreateLayout = { version: 1, rows: [] };
+  }
   dealOverrideCache.mod = mod;
   dealOverrideCache.pipelineKey = pipelineKey;
+  dealOverrideCache.quickMode = quickMode;
   dealOverrideCache.result = result;
   return result;
 });
@@ -365,6 +393,123 @@ const relationshipEditorRef = ref(null);
 const dealRelationships = ref({ dealPeople: [], dealOrganizations: [] });
 const dealPeopleList = ref([]);
 const dealOrgList = ref([]);
+
+const normalizeRelationshipId = (value) => {
+  if (!value) return '';
+  if (typeof value === 'object') {
+    return String(value._id || value.id || value.recordId || '');
+  }
+  return String(value);
+};
+
+const dedupeDealPeople = (rows = []) => {
+  const merged = new Map();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const personId = normalizeRelationshipId(row?.personId);
+    const role = String(row?.role || '').trim();
+    if (!personId || !role) continue;
+    const key = `${personId}|${role}`;
+    const prev = merged.get(key);
+    if (!prev) {
+      merged.set(key, { ...row, personId });
+      continue;
+    }
+    merged.set(key, {
+      ...prev,
+      ...row,
+      personId,
+      isActive: prev.isActive !== false || row.isActive !== false,
+      isPrimary: !!prev.isPrimary || !!row.isPrimary,
+      addedAt: prev.addedAt || row.addedAt,
+      addedBy: prev.addedBy || row.addedBy || null
+    });
+  }
+  return Array.from(merged.values());
+};
+
+const dedupeDealOrganizations = (rows = []) => {
+  const merged = new Map();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const organizationId = normalizeRelationshipId(row?.organizationId);
+    const role = String(row?.role || '').trim();
+    if (!organizationId || !role) continue;
+    const key = `${organizationId}|${role}`;
+    const prev = merged.get(key);
+    if (!prev) {
+      merged.set(key, { ...row, organizationId });
+      continue;
+    }
+    merged.set(key, {
+      ...prev,
+      ...row,
+      organizationId,
+      isActive: prev.isActive !== false || row.isActive !== false,
+      isPrimary: !!prev.isPrimary || !!row.isPrimary,
+      addedAt: prev.addedAt || row.addedAt,
+      addedBy: prev.addedBy || row.addedBy || null
+    });
+  }
+  return Array.from(merged.values());
+};
+
+const enforceSinglePrimaryContact = (rows = [], preferredPersonId = '') => {
+  const next = Array.isArray(rows) ? rows.map((row) => ({ ...row })) : [];
+  const preferred = normalizeRelationshipId(preferredPersonId);
+  const candidateIndexes = [];
+  for (let i = 0; i < next.length; i += 1) {
+    const row = next[i];
+    if (row?.isActive === false) continue;
+    if (String(row?.role || '') !== 'primary_contact') continue;
+    if (!row?.isPrimary) continue;
+    candidateIndexes.push(i);
+  }
+  if (candidateIndexes.length <= 1) return next;
+
+  let keepIndex = candidateIndexes[0];
+  if (preferred) {
+    const preferredIndex = candidateIndexes.find((idx) => normalizeRelationshipId(next[idx]?.personId) === preferred);
+    if (preferredIndex !== undefined) keepIndex = preferredIndex;
+  }
+
+  for (const idx of candidateIndexes) {
+    next[idx].isPrimary = idx === keepIndex;
+  }
+  return next;
+};
+
+const enforceSinglePrimaryCustomer = (rows = [], preferredOrganizationId = '') => {
+  const next = Array.isArray(rows) ? rows.map((row) => ({ ...row })) : [];
+  const preferred = normalizeRelationshipId(preferredOrganizationId);
+  const candidateIndexes = [];
+  for (let i = 0; i < next.length; i += 1) {
+    const row = next[i];
+    if (row?.isActive === false) continue;
+    if (String(row?.role || '') !== 'customer') continue;
+    if (!row?.isPrimary) continue;
+    candidateIndexes.push(i);
+  }
+  if (candidateIndexes.length <= 1) return next;
+
+  let keepIndex = candidateIndexes[0];
+  if (preferred) {
+    const preferredIndex = candidateIndexes.find((idx) => normalizeRelationshipId(next[idx]?.organizationId) === preferred);
+    if (preferredIndex !== undefined) keepIndex = preferredIndex;
+  }
+
+  for (const idx of candidateIndexes) {
+    next[idx].isPrimary = idx === keepIndex;
+  }
+  return next;
+};
+
+const normalizeDealRelationships = (value = {}, options = {}) => {
+  const dealPeople = dedupeDealPeople(value?.dealPeople || []);
+  const dealOrganizations = dedupeDealOrganizations(value?.dealOrganizations || []);
+  return {
+    dealPeople: enforceSinglePrimaryContact(dealPeople, options?.preferredPersonId),
+    dealOrganizations: enforceSinglePrimaryCustomer(dealOrganizations, options?.preferredOrganizationId)
+  };
+};
 
 const closeDrawer = () => {
   if (!saving.value) {
@@ -531,10 +676,13 @@ watch(() => props.record, () => {
   }
   if (props.moduleKey === 'deals' && props.record) {
     const r = props.record;
-    dealRelationships.value = {
+    dealRelationships.value = normalizeDealRelationships({
       dealPeople: Array.isArray(r.dealPeople) ? r.dealPeople.map((p) => ({ ...p })) : [],
       dealOrganizations: Array.isArray(r.dealOrganizations) ? r.dealOrganizations.map((o) => ({ ...o })) : []
-    };
+    }, {
+      preferredPersonId: normalizeRelationshipId(r.contactId),
+      preferredOrganizationId: normalizeRelationshipId(r.accountId)
+    });
   }
 }, { deep: true });
 
@@ -546,6 +694,7 @@ watch(() => [props.isOpen, props.moduleKey], ([open, key]) => {
     moduleOverrideFromSettings.value = null;
     dealOverrideCache.mod = null;
     dealOverrideCache.pipelineKey = undefined;
+    dealOverrideCache.quickMode = undefined;
     dealOverrideCache.result = null;
   }
 }, { immediate: true });
@@ -556,10 +705,13 @@ watch(() => [props.isOpen, props.moduleKey], async ([open, key]) => {
   dealRelationships.value = { dealPeople: [], dealOrganizations: [] };
   if (props.record) {
     const r = props.record;
-    dealRelationships.value = {
+    dealRelationships.value = normalizeDealRelationships({
       dealPeople: Array.isArray(r.dealPeople) ? r.dealPeople.map((p) => ({ ...p })) : [],
       dealOrganizations: Array.isArray(r.dealOrganizations) ? r.dealOrganizations.map((o) => ({ ...o })) : []
-    };
+    }, {
+      preferredPersonId: normalizeRelationshipId(r.contactId),
+      preferredOrganizationId: normalizeRelationshipId(r.accountId)
+    });
   }
   try {
     const [peopleRes, orgRes] = await Promise.all([
@@ -913,7 +1065,11 @@ const handleSubmit = async () => {
       delete submitData.contactId;
       delete submitData.accountId;
       const norm = (id) => (id && typeof id === 'object' && id._id) ? id._id : id;
-      const people = (dealRelationships.value?.dealPeople || []).map((p) => ({
+      const normalizedRelationships = normalizeDealRelationships(dealRelationships.value || {}, {
+        preferredPersonId: normalizeRelationshipId(formData.value?.contactId || props.record?.contactId),
+        preferredOrganizationId: normalizeRelationshipId(formData.value?.accountId || props.record?.accountId)
+      });
+      const people = (normalizedRelationships.dealPeople || []).map((p) => ({
         personId: norm(p.personId),
         role: p.role,
         isPrimary: !!p.isPrimary,
@@ -921,7 +1077,7 @@ const handleSubmit = async () => {
         addedAt: p.addedAt || new Date(),
         addedBy: p.addedBy || null
       }));
-      const orgs = (dealRelationships.value?.dealOrganizations || []).map((o) => ({
+      const orgs = (normalizedRelationships.dealOrganizations || []).map((o) => ({
         organizationId: norm(o.organizationId),
         role: o.role,
         isPrimary: !!o.isPrimary,

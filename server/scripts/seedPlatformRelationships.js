@@ -150,6 +150,74 @@ const RELATIONSHIP_DEFINITIONS = [
     automation: { allowed: true },
     enabled: true
   },
+  // People → Organizations (stable key: people_organizations)
+  {
+    relationshipKey: 'people_organizations',
+    source: { appKey: 'sales', moduleKey: 'people' },
+    target: { appKey: 'sales', moduleKey: 'organizations' },
+    cardinality: 'MANY_TO_ONE',
+    ownership: 'TARGET',
+    required: false,
+    cascade: { onDelete: 'DETACH' },
+    ui: {
+      source: { showAs: 'TAB', label: 'Related Organization' },
+      target: { showAs: 'TAB', label: 'Related Contacts' },
+      picker: { enabled: true, searchable: true }
+    },
+    automation: { allowed: true },
+    enabled: true
+  },
+  // People → Deals (stable key: people_deals)
+  {
+    relationshipKey: 'people_deals',
+    source: { appKey: 'sales', moduleKey: 'people' },
+    target: { appKey: 'sales', moduleKey: 'deals' },
+    cardinality: 'MANY_TO_MANY',
+    ownership: 'SOURCE',
+    required: false,
+    cascade: { onDelete: 'DETACH' },
+    ui: {
+      source: { showAs: 'TAB', label: 'Related Deals' },
+      target: { showAs: 'TAB', label: 'Related Contacts' },
+      picker: { enabled: true, searchable: true }
+    },
+    automation: { allowed: true },
+    enabled: true
+  },
+  // People → Tasks (stable key: people_tasks)
+  {
+    relationshipKey: 'people_tasks',
+    source: { appKey: 'sales', moduleKey: 'people' },
+    target: { appKey: 'platform', moduleKey: 'tasks' },
+    cardinality: 'MANY_TO_MANY',
+    ownership: 'SOURCE',
+    required: false,
+    cascade: { onDelete: 'DETACH' },
+    ui: {
+      source: { showAs: 'TAB', label: 'Related Tasks' },
+      target: { showAs: 'TAB', label: 'Related Contacts' },
+      picker: { enabled: true, searchable: true }
+    },
+    automation: { allowed: true },
+    enabled: true
+  },
+  // People → Events (stable key: people_events)
+  {
+    relationshipKey: 'people_events',
+    source: { appKey: 'sales', moduleKey: 'people' },
+    target: { appKey: 'platform', moduleKey: 'events' },
+    cardinality: 'MANY_TO_MANY',
+    ownership: 'SOURCE',
+    required: false,
+    cascade: { onDelete: 'DETACH' },
+    ui: {
+      source: { showAs: 'TAB', label: 'Related Events' },
+      target: { showAs: 'TAB', label: 'Related Contacts' },
+      picker: { enabled: true, searchable: true }
+    },
+    automation: { allowed: true },
+    enabled: true
+  },
   
   // Audit → Audits ↔ Helpdesk → Cases
   {

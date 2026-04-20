@@ -963,13 +963,13 @@
                   v-for="tab in subTabs"
                   :key="tab.id"
                   @click="activeSubTab = tab.id"
-                  :disabled="isSystemField(currentField) && (tab.id !== 'general' && tab.id !== 'filters')"
+                  :disabled="isSubTabDisabled(tab.id)"
                   :class="[
                     activeSubTab === tab.id
                       ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
                       : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600',
                     'whitespace-nowrap py-3 px-1 border-b-2 text-sm font-medium',
-                    isSystemField(currentField) && (tab.id !== 'general' && tab.id !== 'filters') ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                    isSubTabDisabled(tab.id) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
                   ]"
                 >
                   {{ tab.name }}
@@ -1546,8 +1546,15 @@
                     <input type="number" min="0" max="10" v-model.number="numberSettings.decimalPlaces" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10" />
                   </div>
                   <div v-if="currentField.dataType === 'Currency'">
-                    <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Currency Symbol</label>
-                    <input v-model="numberSettings.currencySymbol" placeholder="$" maxlength="3" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10" />
+                    <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Currency Format</label>
+                    <select v-model="numberSettings.currencyCode" class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10">
+                      <option v-for="currency in currencySelectOptions" :key="currency.value" :value="currency.value">
+                        {{ currency.label }}
+                      </option>
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      Preview: {{ getCurrencyFormatPreview() }}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -5469,11 +5476,18 @@
 // See docs/architecture/form-settings-doctrine.md
 // Form Settings are configuration-only and must respect domain boundaries
 
-import { ref, onMounted, computed, watch, reactive, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch, reactive, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { Switch, Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import apiClient from '@/utils/apiClient';
+import { getDefaultPhoneValidations, getDefaultEmailValidations } from '@/utils/defaultFieldValidations';
+import {
+  CURRENCY_OPTIONS,
+  DEFAULT_CURRENCY_CODE,
+  getCurrencySymbolFromCode,
+  formatCurrencyValue,
+} from '@/utils/currencyOptions';
 import { parsePeopleTypesApiPayload, peopleTypeColorToHex } from '@/utils/peopleTypeColors';
 import { peopleTypesCacheVersion } from '@/utils/peopleTypesInvalidate';
 import {
@@ -5711,6 +5725,57 @@ function getModuleCardIcon(moduleKey) {
   return moduleCardIconMap[key] || CubeIcon;
 }
 
+const DEAL_RELATIONSHIP_DEFAULTS = Object.freeze([
+  { name: 'Related Projects', type: 'one_to_many', isLookup: false, targetModuleKey: 'projects', relationshipKey: 'deal_projects' },
+  { name: 'Related Organizations', type: 'many_to_one', isLookup: true, targetModuleKey: 'organizations', relationshipKey: 'deal_organizations' },
+  { name: 'Related Contacts', type: 'many_to_many', isLookup: false, targetModuleKey: 'people', relationshipKey: 'deal_contacts' },
+  { name: 'Related Tasks', type: 'one_to_many', isLookup: false, targetModuleKey: 'tasks', relationshipKey: 'deal_tasks' },
+  { name: 'Related Events', type: 'one_to_many', isLookup: false, targetModuleKey: 'events', relationshipKey: 'deal_events' },
+  { name: 'Related Forms', type: 'one_to_many', isLookup: false, targetModuleKey: 'forms', relationshipKey: 'deal_forms' }
+]);
+
+const PEOPLE_RELATIONSHIP_DEFAULTS = Object.freeze([
+  { name: 'Related Organization', type: 'many_to_one', isLookup: true, targetModuleKey: 'organizations', relationshipKey: 'people_organizations' },
+  { name: 'Related Deals', type: 'many_to_many', isLookup: false, targetModuleKey: 'deals', relationshipKey: 'people_deals' },
+  { name: 'Related Tasks', type: 'many_to_many', isLookup: false, targetModuleKey: 'tasks', relationshipKey: 'people_tasks' },
+  { name: 'Related Events', type: 'many_to_many', isLookup: false, targetModuleKey: 'events', relationshipKey: 'people_events' }
+]);
+
+const ORGANIZATIONS_RELATIONSHIP_DEFAULTS = Object.freeze([
+  { name: 'Related Contacts', type: 'one_to_many', isLookup: false, targetModuleKey: 'people', relationshipKey: 'people_organizations' },
+  { name: 'Related Deals', type: 'one_to_many', isLookup: false, targetModuleKey: 'deals', relationshipKey: 'deal_organizations' }
+]);
+
+function createRelationshipDefaultsForModule(moduleKey) {
+  const normalized = String(moduleKey || '').toLowerCase();
+  if (normalized === 'deals') return DEAL_RELATIONSHIP_DEFAULTS.map(rel => ({ ...rel }));
+  if (normalized === 'people') return PEOPLE_RELATIONSHIP_DEFAULTS.map(rel => ({ ...rel }));
+  if (normalized === 'organizations') return ORGANIZATIONS_RELATIONSHIP_DEFAULTS.map(rel => ({ ...rel }));
+  return [];
+}
+
+function ensureModuleDefaultRelationships(moduleDef) {
+  if (!moduleDef || typeof moduleDef !== 'object') return moduleDef;
+  const moduleKey = String(moduleDef.key || moduleDef.moduleKey || '').toLowerCase();
+  const hasRelationships = Array.isArray(moduleDef.relationships) && moduleDef.relationships.length > 0;
+  if ((moduleKey === 'deals' || moduleKey === 'people' || moduleKey === 'organizations') && !hasRelationships) {
+    moduleDef.relationships = createRelationshipDefaultsForModule(moduleKey);
+  }
+  return moduleDef;
+}
+
+function normalizeModulesForSettingsDefaults(moduleList) {
+  if (!Array.isArray(moduleList)) return [];
+  return moduleList.map(mod => ensureModuleDefaultRelationships({ ...mod }));
+}
+
+function ensureDefaultRelationshipsInState(moduleDef) {
+  const moduleKey = String(moduleDef?.key || moduleDef?.moduleKey || '').toLowerCase();
+  if (moduleKey !== 'deals' && moduleKey !== 'people' && moduleKey !== 'organizations') return;
+  if (Array.isArray(relationships.value) && relationships.value.length > 0) return;
+  relationships.value = createRelationshipDefaultsForModule(moduleKey);
+}
+
 function getModuleCardCounts(mod) {
   const fields = typeof mod.fieldCount === 'number' ? mod.fieldCount : (Array.isArray(mod.fields) ? mod.fields.length : 0);
   const relationships = Array.isArray(mod.relationships) ? mod.relationships.length : 0;
@@ -5908,6 +5973,9 @@ function setActiveTopTab(id) {
   if (!allowed.includes(id)) return;
   const prev = activeTopTab.value;
   if (prev === id) return;
+  if (id === 'relationships') {
+    ensureDefaultRelationshipsInState(mod);
+  }
   activeTopTab.value = id;
   // Update URL and localStorage immediately from click handler so the watcher doesn't trigger
   // a route change (which can cause re-renders and the "two clicks / random tab" bug)
@@ -6886,6 +6954,15 @@ const subTabs = [
   { id: 'filters', name: 'Filter Settings' },
   { id: 'dependencies', name: 'Dependencies' }
 ];
+
+function isSubTabDisabled(tabId) {
+  if (!currentField.value) return false;
+  // Allow dependency configuration on protected/system fields while keeping
+  // structural edits (rename/type/validation rules) restricted.
+  if (!isSystemField(currentField.value)) return false;
+  return tabId !== 'general' && tabId !== 'filters' && tabId !== 'dependencies';
+}
+
 const activeSubTab = ref('general');
 const fieldSearch = ref('');
 const showTenantFields = ref(false); // Hide tenant fields by default
@@ -7232,6 +7309,17 @@ const quickCreateAvailableFields = computed(() => {
   // For Events: all fields except system
   if (isEventsModule.value) {
     return editFields.value.filter(f => f.key && !isSystemField(f));
+  }
+
+  // For Deals: include all core/usable fields, exclude only system fields
+  if (isDealsModule.value) {
+    return editFields.value.filter((field) => {
+      if (!field?.key) return false;
+      if (isSystemField(field)) return false;
+      // Only include fields classified as core by Deal field model.
+      // Unknown/infra fields fall into non-core buckets and are excluded.
+      return classifyDealField(field.key) === 'core';
+    });
   }
 
   // For other modules (Deals, Items, etc.): only non-system fields
@@ -7936,7 +8024,44 @@ function isParticipationStateField(field) {
 const showAddOption = ref(false);
 const newOptionValue = ref('');
 const newOptionColor = ref('#3B82F6'); // Default blue color
-const numberSettings = ref({ min: null, max: null, decimalPlaces: 2, currencySymbol: '$' });
+const currencySelectOptions = computed(() =>
+  CURRENCY_OPTIONS.map((currency) => ({
+    value: currency.code,
+    label: `${currency.code} - ${currency.name}`,
+  }))
+);
+
+const numberSettings = ref({
+  min: null,
+  max: null,
+  decimalPlaces: 2,
+  currencyCode: DEFAULT_CURRENCY_CODE,
+  currencySymbol: getCurrencySymbolFromCode(DEFAULT_CURRENCY_CODE),
+});
+
+function getCurrencyFormatPreview() {
+  const decimalPlaces =
+    typeof numberSettings.value.decimalPlaces === 'number' ? numberSettings.value.decimalPlaces : 2;
+  return (
+    formatCurrencyValue(1234.56, {
+      currencyCode: numberSettings.value.currencyCode || DEFAULT_CURRENCY_CODE,
+      minimumFractionDigits: decimalPlaces,
+      maximumFractionDigits: decimalPlaces,
+    }) || `${numberSettings.value.currencySymbol || '$'}1,234.56`
+  );
+}
+
+function resolveCurrencyCodeFromNumberSettings(settings) {
+  const explicitCode = String(settings?.currencyCode || settings?.currency || '').trim().toUpperCase();
+  if (explicitCode) return explicitCode;
+  const symbol = String(settings?.currencySymbol || '').trim();
+  if (!symbol) return DEFAULT_CURRENCY_CODE;
+
+  const matched = CURRENCY_OPTIONS.find(
+    (currency) => getCurrencySymbolFromCode(currency.code) === symbol
+  );
+  return matched?.code || DEFAULT_CURRENCY_CODE;
+}
 const textSettings = ref({ maxLength: null, rows: 4 });
 const dateSettings = ref({ format: 'YYYY-MM-DD', timeFormat: '24h' });
 const formulaSettings = ref({ expression: '', returnType: 'Text' });
@@ -8167,11 +8292,13 @@ function loadFieldSettings() {
   
   // Load number settings
   if (['Integer', 'Decimal', 'Currency'].includes(field.dataType)) {
+    const currencyCode = resolveCurrencyCodeFromNumberSettings(field.numberSettings);
     numberSettings.value = {
       min: field.numberSettings?.min ?? null,
       max: field.numberSettings?.max ?? null,
       decimalPlaces: field.numberSettings?.decimalPlaces ?? (field.dataType === 'Currency' ? 2 : 0),
-      currencySymbol: field.numberSettings?.currencySymbol ?? '$'
+      currencyCode,
+      currencySymbol: field.numberSettings?.currencySymbol ?? getCurrencySymbolFromCode(currencyCode),
     };
   }
   
@@ -8457,7 +8584,7 @@ const fetchModules = async () => {
     // Use context=all so Settings receives both global and app-specific custom fields
     const data = await apiClient.get('/modules', { params: { context: 'all' } });
     if (data.success) {
-      modules.value = data.data;
+      modules.value = normalizeModulesForSettingsDefaults(data.data);
       // Initialize from URL first (unless startWithModuleList: show cards first)
       const moduleKey = !props.startWithModuleList && typeof route.query.module === 'string' ? route.query.module : null;
       const fieldKey = typeof route.query.field === 'string' ? route.query.field : null;
@@ -9495,6 +9622,12 @@ const handleAddFieldFromDrawer = async (field) => {
     owner: 'org',
     context: rawCtx === 'global' ? 'global' : rawCtx
   };
+  if (newField.dataType === 'Phone' && (!newField.validations || !newField.validations.length)) {
+    newField.validations = getDefaultPhoneValidations();
+  }
+  if (newField.dataType === 'Email' && (!newField.validations || !newField.validations.length)) {
+    newField.validations = getDefaultEmailValidations();
+  }
   const newFieldKey = newField.key?.trim() || field.key?.trim();
   editFields.value.push(newField);
   selectedFieldIdx.value = editFields.value.length - 1;
@@ -10118,9 +10251,43 @@ watch(() => currentField.value?.dataType, (newType) => {
       currentField.value.options = [];
     }
   }
+  if (newType === 'Phone') {
+    const v = currentField.value.validations;
+    if (!v || !Array.isArray(v) || v.length === 0) {
+      currentField.value.validations = getDefaultPhoneValidations();
+    }
+  }
+  if (newType === 'Email') {
+    const v = currentField.value.validations;
+    if (!v || !Array.isArray(v) || v.length === 0) {
+      currentField.value.validations = getDefaultEmailValidations();
+    }
+  }
+  if (newType === 'Currency') {
+    numberSettings.value.currencyCode = String(
+      numberSettings.value.currencyCode || DEFAULT_CURRENCY_CODE
+    ).toUpperCase();
+    numberSettings.value.currencySymbol = getCurrencySymbolFromCode(numberSettings.value.currencyCode);
+    if (typeof numberSettings.value.decimalPlaces !== 'number') {
+      numberSettings.value.decimalPlaces = 2;
+    }
+  }
   // Load settings from currentField
   loadFieldSettings();
 }, { immediate: true });
+
+watch(
+  () => numberSettings.value.currencyCode,
+  (code) => {
+    if (currentField.value?.dataType !== 'Currency') return;
+    const normalizedCode = String(code || DEFAULT_CURRENCY_CODE).toUpperCase();
+    if (numberSettings.value.currencyCode !== normalizedCode) {
+      numberSettings.value.currencyCode = normalizedCode;
+      return;
+    }
+    numberSettings.value.currencySymbol = getCurrencySymbolFromCode(normalizedCode);
+  }
+);
 
 // Sync selected field from URL when route.query.field changes (e.g. link click, back/forward).
 // Keeps UI in sync with URL so clicking a field or opening a link with field=relatedTo shows the right field.
@@ -10206,7 +10373,16 @@ watch([numberSettings, textSettings, dateSettings, formulaSettings, lookupSettin
   const field = currentField.value;
   
   if (['Integer', 'Decimal', 'Currency'].includes(field.dataType)) {
-    field.numberSettings = { ...numberSettings.value };
+    const nextNumberSettings = { ...numberSettings.value };
+    if (field.dataType === 'Currency') {
+      const currencyCode = String(nextNumberSettings.currencyCode || DEFAULT_CURRENCY_CODE).toUpperCase();
+      nextNumberSettings.currencyCode = currencyCode;
+      nextNumberSettings.currencySymbol = getCurrencySymbolFromCode(currencyCode);
+    } else {
+      delete nextNumberSettings.currencyCode;
+      delete nextNumberSettings.currencySymbol;
+    }
+    field.numberSettings = nextNumberSettings;
   }
   if (['Text', 'Text-Area'].includes(field.dataType)) {
     field.textSettings = { ...textSettings.value };
@@ -10230,6 +10406,23 @@ const dependencyOptionsBuffer = ref({});
 const picklistOptionsBuffers = ref({});
 const advancedValueBuffers = ref({});
 const advancedOptionsBuffers = ref({});
+
+function closeAllDependencyDropdowns() {
+  Object.keys(dependencyDropdownOpen.value).forEach((key) => {
+    delete dependencyDropdownOpen.value[key];
+  });
+}
+
+function handleDependencyDropdownOutsidePointerDown(e) {
+  const target = e?.target;
+  if (!(target instanceof Element)) {
+    closeAllDependencyDropdowns();
+    return;
+  }
+  if (!target.closest('.dependency-dropdown-container')) {
+    closeAllDependencyDropdowns();
+  }
+}
 
 function syncOptionsBuffer() {
   const f = currentField.value;
@@ -10852,11 +11045,11 @@ function applyAllowedValues(idx) {
 function addPreset(kind) {
   const presets = {
     email: { pattern: '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$', message: 'Invalid email' },
-    phone10: { pattern: '^\\d{10}$', message: 'Must be 10 digits' },
+    phone10: { pattern: '^\\d{10}$', message: 'Enter exactly 10 digits (numbers only).' },
     url: { pattern: '^(https?:\\/\\/)?([\\w.-]+)\\.([a-z.]{2,6})([\\/\\w .-]*)*\\/?$', message: 'Invalid URL' },
     integer: { pattern: '^-?\\d+$', message: 'Must be an integer' },
     positive: { pattern: '^[+]?([1-9]\\d*)$', message: 'Must be a positive number' },
-    currency: { pattern: '^(\\$)?(?=.)\\d{1,3}(,?\\d{3})*(\\.\\d{2})?$', message: 'Invalid currency format' },
+    currency: { pattern: '^(?:[A-Za-z]{3}\\s*)?(?:[$€£¥₹])?(?=.)\\d{1,3}(,?\\d{3})*(\\.\\d{2})?$', message: 'Invalid currency format' },
     alnum: { pattern: '^[A-Za-z0-9]+$', message: 'Only letters and numbers allowed' },
     slug: { pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$', message: 'Invalid slug' },
     uuid: { pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$', message: 'Invalid UUID' },
@@ -12920,18 +13113,13 @@ onMounted(async () => {
     initializeEventStatusSnapshot();
   }
   
-  // Close dependency dropdowns when clicking outside
-  document.addEventListener('click', (e) => {
-    // Check if click is outside any dependency dropdown
-    const target = e.target;
-    const isInsideDropdown = target.closest('.dependency-dropdown-container');
-    if (!isInsideDropdown) {
-      // Close all open dropdowns
-      Object.keys(dependencyDropdownOpen.value).forEach(key => {
-        delete dependencyDropdownOpen.value[key];
-      });
-    }
-  });
+  // Close dependency dropdowns when clicking outside.
+  // Use capture phase so nested @click.stop handlers don't block this.
+  document.addEventListener('pointerdown', handleDependencyDropdownOutsidePointerDown, true);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('pointerdown', handleDependencyDropdownOutsidePointerDown, true);
 });
 
 // Keep activeTopTab in sync with URL (route is source of truth). Fixes mismatch when

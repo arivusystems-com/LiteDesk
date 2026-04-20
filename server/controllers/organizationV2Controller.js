@@ -4,6 +4,25 @@ const { applyProjectionFilter } = require('../utils/appProjectionQuery');
 const { getProjection } = require('../utils/moduleProjectionResolver');
 const { mapOrganizationToSurface } = require('../utils/mappers/mapOrganizationToSurface');
 
+const websiteHostnamePattern = /^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/;
+
+function isValidWebsite(rawValue) {
+  if (!rawValue || typeof rawValue !== 'string') return true;
+
+  const value = rawValue.trim();
+  if (!value) return true;
+
+  const candidate = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+
+  try {
+    const parsed = new URL(candidate);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+    return websiteHostnamePattern.test(parsed.hostname);
+  } catch (error) {
+    return false;
+  }
+}
+
 // Create (Sales organization)
 exports.create = async (req, res) => {
   try {
@@ -705,6 +724,25 @@ exports.update = async (req, res) => {
       if (blockedFields.has(key)) continue;
       updatePayload[key] = value;
     }
+
+    if (updatePayload.website !== undefined) {
+      if (typeof updatePayload.website !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: 'Website must be a string',
+          errors: { website: 'Website must be a string' }
+        });
+      }
+
+      updatePayload.website = updatePayload.website.trim();
+      if (updatePayload.website && !isValidWebsite(updatePayload.website)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Website must be a valid URL',
+          errors: { website: 'Enter a valid website URL (e.g., example.com or https://example.org)' }
+        });
+      }
+    }
     
     // REJECT tenant-only fields if provided
     const tenantOnlyFields = [
@@ -1013,6 +1051,7 @@ exports.getSurface = async (req, res) => {
   try {
     const User = require('../models/User');
     const People = require('../models/People');
+    const RelationshipInstance = require('../models/RelationshipInstance');
     const tenantOrganizationId = req.user?.organizationId;
     
     if (!tenantOrganizationId) {
@@ -1054,22 +1093,64 @@ exports.getSurface = async (req, res) => {
     
     // Fetch related data for surface
     
-    // 1. People count and preview
-    const peopleCount = await People.countDocuments({ 
-      organization: org._id 
-    });
-    
-    const peoplePreview = await People.find({ 
-      organization: org._id 
-    })
-      .select('_id first_name last_name email role')
-      .limit(5) // Small preview list
-      .lean()
-      .then(people => people.map(p => ({
-        id: p._id.toString(),
-        name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email || 'Unknown',
-        role: p.role || undefined
-      })));
+    // 1. People count and preview from relationship instances (source of truth).
+    const peopleRelationshipFilter = {
+      organizationId: tenantOrganizationId,
+      relationshipKey: 'people_organizations',
+      'source.appKey': 'sales',
+      'source.moduleKey': 'people',
+      'target.appKey': 'sales',
+      'target.moduleKey': 'organizations',
+      'target.recordId': org._id
+    };
+
+    const linkedPeopleIds = await RelationshipInstance.distinct('source.recordId', peopleRelationshipFilter);
+
+    const peopleCount = linkedPeopleIds.length > 0
+      ? await People.countDocuments({
+          _id: { $in: linkedPeopleIds },
+          organizationId: tenantOrganizationId
+        })
+      : 0;
+
+    const recentPeopleLinks = await RelationshipInstance.find(peopleRelationshipFilter)
+      .select('source.recordId createdAt')
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    const previewCandidateIds = [];
+    const seenIds = new Set();
+    for (const link of recentPeopleLinks) {
+      const personId = String(link?.source?.recordId || '');
+      if (!personId || seenIds.has(personId)) continue;
+      seenIds.add(personId);
+      previewCandidateIds.push(personId);
+      if (previewCandidateIds.length >= 10) break;
+    }
+
+    const previewPeopleDocs = previewCandidateIds.length > 0
+      ? await People.find({
+          _id: { $in: previewCandidateIds },
+          organizationId: tenantOrganizationId
+        })
+          .select('_id first_name last_name email role')
+          .lean()
+      : [];
+
+    const previewPeopleById = new Map(
+      previewPeopleDocs.map((person) => [String(person._id), person])
+    );
+
+    const peoplePreview = previewCandidateIds
+      .map((personId) => previewPeopleById.get(String(personId)))
+      .filter(Boolean)
+      .slice(0, 5)
+      .map((person) => ({
+        id: person._id.toString(),
+        name: `${person.first_name || ''} ${person.last_name || ''}`.trim() || person.email || 'Unknown',
+        role: person.role || undefined
+      }));
     
     // 2. App participation summary
     const apps = [];

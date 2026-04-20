@@ -80,6 +80,17 @@
                             :options="fieldTypeOptions"
                           />
                         </div>
+                        <div v-if="draft.dataType === 'Currency'" class="space-y-1">
+                          <label for="add-field-currency" class="block text-sm/6 font-medium text-gray-900 dark:text-white">Currency Format</label>
+                          <HeadlessSelect
+                            id="add-field-currency"
+                            v-model="draft.currencyCode"
+                            :options="currencySelectOptions"
+                          />
+                          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            Values will be displayed using {{ draft.currencyCode || 'USD' }} formatting.
+                          </p>
+                        </div>
                         <div class="flex items-center gap-6 pt-2">
                           <label class="inline-flex items-center gap-2 cursor-pointer">
                             <HeadlessCheckbox
@@ -186,6 +197,11 @@ import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } fro
 import { XMarkIcon } from '@heroicons/vue/24/outline';
 import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import HeadlessSelect from '@/components/ui/HeadlessSelect.vue';
+import {
+  CURRENCY_OPTIONS,
+  DEFAULT_CURRENCY_CODE,
+  getCurrencySymbolFromCode,
+} from '@/utils/currencyOptions';
 
 const FIELD_TYPES = [
   'Text',
@@ -224,6 +240,12 @@ const emit = defineEmits(['close', 'save']);
 
 const fieldTypes = FIELD_TYPES;
 const fieldTypeOptions = computed(() => fieldTypes.map((t) => ({ value: t, label: t })));
+const currencySelectOptions = computed(() =>
+  CURRENCY_OPTIONS.map((currency) => ({
+    value: currency.code,
+    label: `${currency.code} - ${currency.name}`,
+  }))
+);
 
 const appScopeSelectOptions = computed(() =>
   (props.appScopeOptions || []).map((o) => ({ value: o.value, label: o.label || o.value }))
@@ -244,7 +266,8 @@ const createEmptyDraft = () => {
     order: props.nextOrder,
     owner: 'org',
     participationScope: 'core',
-    appContextToken: firstApp
+    appContextToken: firstApp,
+    currencyCode: DEFAULT_CURRENCY_CODE,
   };
 };
 
@@ -298,8 +321,8 @@ const handleSave = () => {
       : null;
   if (showScope && participationScope === 'app' && !appToken) return;
 
-  const { participationScope: _ps, appContextToken: _at, ...rest } = draft.value;
-  emit('save', {
+  const { participationScope: _ps, appContextToken: _at, currencyCode, ...rest } = draft.value;
+  const nextField = {
     ...rest,
     key,
     label: draft.value.label.trim(),
@@ -308,6 +331,18 @@ const handleSave = () => {
       showScope && participationScope === 'app' && appToken
         ? appToken
         : 'global'
+  };
+  if (draft.value.dataType === 'Currency') {
+    const nextCurrencyCode = String(currencyCode || DEFAULT_CURRENCY_CODE).toUpperCase();
+    nextField.numberSettings = {
+      ...(nextField.numberSettings || {}),
+      decimalPlaces: 2,
+      currencyCode: nextCurrencyCode,
+      currencySymbol: getCurrencySymbolFromCode(nextCurrencyCode),
+    };
+  }
+  emit('save', {
+    ...nextField
   });
 };
 </script>

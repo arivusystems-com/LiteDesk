@@ -499,21 +499,9 @@ import { CheckIcon } from '@heroicons/vue/24/solid';
 import { ChevronUpDownIcon } from '@heroicons/vue/24/outline';
 import { Transition } from 'vue';
 import apiClient from '@/utils/apiClient';
+import clickOutside from '@/directives/clickOutside';
 
-// Click outside directive for dropdown
-const vClickOutside = {
-  mounted(el, binding) {
-    el.clickOutsideEvent = (event) => {
-      if (!(el === event.target || el.contains(event.target))) {
-        binding.value();
-      }
-    };
-    document.addEventListener('click', el.clickOutsideEvent);
-  },
-  unmounted(el) {
-    document.removeEventListener('click', el.clickOutsideEvent);
-  }
-};
+const vClickOutside = clickOutside;
 
 const props = defineProps({
   group: {

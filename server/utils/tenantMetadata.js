@@ -249,7 +249,10 @@ async function getEffectiveRelationships(organizationId, appKey, moduleKey) {
         cardinality: platformRel.cardinality,
         relationshipType: platformRel.relationshipType || platformRel.cardinality,
         ownership: platformRel.ownership,
-        required: tenantConfig?.requiredOverride !== null ? tenantConfig.requiredOverride : platformRel.required,
+        required:
+          tenantConfig && tenantConfig.requiredOverride !== null && tenantConfig.requiredOverride !== undefined
+            ? tenantConfig.requiredOverride
+            : platformRel.required,
         localField: platformRel.localField || null,
         foreignField: platformRel.foreignField || null,
         userLinkable: platformRel.userLinkable !== undefined ? platformRel.userLinkable : true,

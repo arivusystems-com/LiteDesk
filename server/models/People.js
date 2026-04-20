@@ -48,7 +48,14 @@ const PeopleSchema = new Schema({
     trim: true,
     validate: {
       validator: function (v) {
-        return !!(this.first_name || v);
+        // Document.save(): `this` is the doc — use .get or property.
+        // findOneAndUpdate + runValidators: `this` is the Query; use .get('first_name')
+        // for the value participating in this update (see Mongoose "Update Validators and this").
+        const first =
+          typeof this.get === 'function'
+            ? this.get('first_name')
+            : this.first_name;
+        return !!(first || v);
       },
       message: 'Last Name is required if First Name is missing'
     }

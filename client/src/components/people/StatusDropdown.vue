@@ -271,17 +271,17 @@ const handleEscape = (event) => {
 // Watch dropdown state and attach/detach listeners
 watch(showDropdown, (isOpen) => {
   if (isOpen) {
-    document.addEventListener('click', handleClickOutside);
+    document.addEventListener('pointerdown', handleClickOutside, true);
     document.addEventListener('keydown', handleEscape);
   } else {
-    document.removeEventListener('click', handleClickOutside);
+    document.removeEventListener('pointerdown', handleClickOutside, true);
     document.removeEventListener('keydown', handleEscape);
   }
 });
 
 // Cleanup on unmount
 onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside);
+  document.removeEventListener('pointerdown', handleClickOutside, true);
   document.removeEventListener('keydown', handleEscape);
 });
 </script>

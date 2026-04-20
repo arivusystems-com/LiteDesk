@@ -8,6 +8,8 @@
     "migrate:people-automation": "node scripts/migratePeopleAutomationTriggers.js",
     "migrate:people-legacy": "node scripts/runPeopleLegacyMigrations.js",
     "migrate:people-legacy:apply": "node scripts/runPeopleLegacyMigrations.js --apply",
+    "backfill:people-org-links": "node scripts/backfillPeopleOrganizationLinks.js",
+    "backfill:people-org-links:apply": "node scripts/backfillPeopleOrganizationLinks.js --apply",
     "start": "node server.js",
     "security:audit": "npm audit",
     "security:fix": "npm audit fix",

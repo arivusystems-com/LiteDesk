@@ -280,6 +280,8 @@ import { getPeopleQuickCreateFields, getAppFields } from '@/platform/fields/peop
 import { getGlobalSystemFieldKeys } from '@/platform/fields/fieldCapabilityEngine';
 import { getAppLabel } from '@/utils/getRoleDisplay';
 import { usePeopleTypes } from '@/composables/usePeopleTypes';
+import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
+import { getFormFieldValue } from '@/utils/getFieldValue';
 
 const props = defineProps({
   isOpen: {
@@ -452,13 +454,20 @@ function validateForm() {
     const isAppField = appFields.includes(field.key);
     if (!isQcField && !isAppField) continue;
 
+    // Apply dependency-driven effective state (required/visibility), not static `field.required` only.
+    const depState = getFieldDependencyState(field, formData.value, moduleFields, {
+      moduleKey: 'people'
+    });
+    if (depState.visible === false) continue;
+    if (depState.required !== true) continue;
+
     const source = isQcField ? formData.value : appForm.value;
-    if (field.required === true && field.key in source) {
-      const value = source[field.key];
-      const isEmpty = value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
-      if (isEmpty) {
-        (errors.value as Record<string, string>)[field.key] = `${field.label || field.key} is required`;
-      }
+    const value = field.key in source
+      ? source[field.key]
+      : getFormFieldValue(formData.value, field.key, field, { moduleKey: 'people' });
+    const isEmpty = value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
+    if (isEmpty) {
+      (errors.value as Record<string, string>)[field.key] = `${field.label || field.key} is required`;
     }
   }
   if (effectiveAppKey.value && !appForm.value?.participationType) {

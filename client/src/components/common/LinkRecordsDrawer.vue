@@ -47,10 +47,23 @@
                           v-for="opt in recordTypeOptions"
                           :key="opt.key"
                           type="button"
-                          class="flex items-center gap-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700/50 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                          :disabled="isRecordTypeOptionDisabled(opt)"
+                          :title="isRecordTypeOptionDisabled(opt) ? recordTypeOptionDisableReason(opt) : ''"
+                          :class="[
+                            'flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors',
+                            isRecordTypeOptionDisabled(opt)
+                              ? 'cursor-not-allowed border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/30 opacity-60'
+                              : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700'
+                          ]"
                           @click="selectRecordType(opt)"
                         >
                           <span class="text-base font-medium text-gray-900 dark:text-white">{{ opt.label }}</span>
+                          <span
+                            v-if="isRecordTypeOptionDisabled(opt)"
+                            class="ml-auto shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-600 dark:bg-gray-600 dark:text-gray-200"
+                          >
+                            Linked
+                          </span>
                         </button>
                       </div>
                     </div>
@@ -74,7 +87,7 @@
                             :key="item._id" 
                             :class="[
                               'flex items-center gap-3 py-3 px-2 rounded-md',
-                              isPrelinked(item._id) ? 'bg-gray-50 dark:bg-gray-900/40 opacity-80' : ''
+                              (isPrelinked(item._id) || isSelectionBlocked(item)) ? 'bg-gray-50 dark:bg-gray-900/40 opacity-80' : ''
                             ]"
                           >
                             <!-- Checkbox on the left for easy selection -->
@@ -83,7 +96,7 @@
                                 v-if="multiple"
                                 checkbox-class="w-4 h-4"
                                 :checked="isSelected(item._id) || isPrelinked(item._id)"
-                                :disabled="isPrelinked(item._id)"
+                                :disabled="isPrelinked(item._id) || isSelectionBlocked(item)"
                                 @change="toggleSelect(item)"
                               />
                             </div>
@@ -92,7 +105,13 @@
                               <p v-if="getSecondaryText(item)" class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ getSecondaryText(item) }}</p>
                             </div>
                             <div class="shrink-0" v-if="!multiple">
-                              <button type="button" class="rounded-md bg-white dark:bg-gray-800 px-3 py-1.5 text-xs font-semibold text-gray-900 dark:text-white shadow-xs ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700" @click="selectSingle(item)">
+                              <button
+                                type="button"
+                                :disabled="isPrelinked(item._id) || isSelectionBlocked(item)"
+                                :title="isSelectionBlocked(item) ? selectionBlockedReason(item) : ''"
+                                class="rounded-md bg-white dark:bg-gray-800 px-3 py-1.5 text-xs font-semibold text-gray-900 dark:text-white shadow-xs ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                @click="selectSingle(item)"
+                              >
                                 Select
                               </button>
                             </div>
@@ -240,6 +259,29 @@ const typeSelectorPrompt = computed(() => (
 ));
 
 const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
+const normalizeId = (value) => {
+  if (!value) return '';
+  if (typeof value === 'object') {
+    const objectId = value._id ?? value.id ?? value.value;
+    return objectId ? String(objectId) : '';
+  }
+  return String(value);
+};
+
+const getContextPersonId = () => normalizeId(props.context?.personId ?? props.context?.contactId);
+const getContextSourceRecordId = () => normalizeId(props.context?.sourceRecordId ?? props.context?.organizationId);
+
+const isRecordTypeOptionDisabled = (opt) => {
+  const sourceModuleKey = normalizeModuleKey(props.sourceModuleKey);
+  const targetModuleKey = normalizeModuleKey(opt?.key);
+  if (sourceModuleKey !== 'people' || targetModuleKey !== 'organizations') return false;
+  return Boolean(getContextPersonId()) && prelinkedIds.value.size > 0;
+};
+
+const recordTypeOptionDisableReason = (opt) => {
+  if (!isRecordTypeOptionDisabled(opt)) return '';
+  return 'This person already has a linked organization. Unlink it first.';
+};
 
 // Client-side filtered view to ensure search works even if backend doesn't support it
 const visibleItems = computed(() => {
@@ -262,6 +304,7 @@ const closeDrawer = () => {
 };
 
 const selectRecordType = (opt) => {
+  if (isRecordTypeOptionDisabled(opt)) return;
   if (props.createAndLink && props.allowCreate) {
     handleCreate(opt);
     closeDrawer();
@@ -298,11 +341,13 @@ const handleCreate = (optOverride = null) => {
   const moduleKey = normalizeModuleKey(optOverride?.key || effectiveModuleKey.value);
   const relationshipKey = optOverride?.relationshipKey ?? selectedRecordTypeOption.value?.relationshipKey ?? null;
   const targetAppKey = optOverride?.targetAppKey ?? selectedRecordTypeOption.value?.targetAppKey ?? null;
+  const sourceIsCurrent = optOverride?.sourceIsCurrent ?? selectedRecordTypeOption.value?.sourceIsCurrent ?? true;
   emit('create', {
     moduleKey,
     context: props.context,
     relationshipKey,
-    targetAppKey
+    targetAppKey,
+    sourceIsCurrent
   });
 };
 
@@ -353,13 +398,14 @@ const fetchPrelinked = async () => {
   try {
     const modKey = effectiveModuleKey.value;
     if (!modKey) return;
+    const peopleContextId = props.context?.personId ?? props.context?.contactId;
     // When context has taskId (Task page passes preselectedIds from parent), skip prelinked fetch here
     if (props.context?.taskId && props.sourceModuleKey === 'tasks') {
       return;
     }
     // When linking from a source record (Deal, Task, Person, etc.), fetch already-linked target IDs via relationships/links
     const sourceRecordId = props.context?.dealId ?? props.context?.taskId ?? props.context?.personId ?? props.context?.sourceRecordId;
-    if (sourceRecordId && props.sourceAppKey && props.sourceModuleKey && selectedRecordTypeOption.value?.relationshipKey) {
+    if (sourceRecordId && props.sourceAppKey && props.sourceModuleKey) {
       try {
         const res = await apiClient.get('/relationships/links', {
           params: {
@@ -369,29 +415,42 @@ const fetchPrelinked = async () => {
           }
         });
         if (res?.success && Array.isArray(res.data)) {
-          const relKey = (selectedRecordTypeOption.value.relationshipKey || '').toLowerCase();
+          const relKey = (selectedRecordTypeOption.value?.relationshipKey || '').toLowerCase();
+          const modKeyLower = normalizeModuleKey(modKey);
           const ids = res.data
-            .filter((link) => (link?.relationshipKey || '').toLowerCase() === relKey && link?.relatedRecord?.recordId)
+            .filter((link) => {
+              if (!link?.relatedRecord?.recordId) return false;
+              if (relKey) return (link.relationshipKey || '').toLowerCase() === relKey;
+              // Fallback when relationshipKey isn't available yet (e.g. before type option metadata resolves)
+              const relatedModuleKey = normalizeModuleKey(link?.relatedRecord?.moduleKey || '');
+              return relatedModuleKey === modKeyLower;
+            })
             .map((link) => link.relatedRecord.recordId);
-          prelinkedIds.value = new Set(ids);
-          selectedIds.value = new Set([...prelinkedIds.value, ...selectedIds.value]);
+          const normalizedIds = ids.map((id) => String(id));
+          const mergedPrelinked = new Set([...prelinkedIds.value, ...normalizedIds]);
+          prelinkedIds.value = mergedPrelinked;
+          selectedIds.value = new Set([...mergedPrelinked, ...selectedIds.value]);
         }
       } catch (e) {
         // ignore
       }
+      // For source-record linking, prelinked state must come from relationships only.
+      // Falling through to module list queries marks unrelated rows as prelinked.
       return;
     }
     // Special case: when linking organizations to a contact, fetch the contact to get its current organization
-    if (modKey === 'organizations' && props.context?.contactId) {
+    if (modKey === 'organizations' && peopleContextId) {
       try {
-        const contactRes = await apiClient.get(`/people/${props.context.contactId}`);
+        const contactRes = await apiClient.get(`/people/${peopleContextId}`);
         if (contactRes?.success && contactRes.data?.organization) {
           const orgId = typeof contactRes.data.organization === 'object'
             ? contactRes.data.organization._id
             : contactRes.data.organization;
           if (orgId) {
-            prelinkedIds.value = new Set([orgId]);
-            selectedIds.value = new Set([orgId, ...selectedIds.value]);
+            const orgIdStr = String(orgId);
+            const mergedPrelinked = new Set([...prelinkedIds.value, orgIdStr]);
+            prelinkedIds.value = mergedPrelinked;
+            selectedIds.value = new Set([orgIdStr, ...selectedIds.value]);
           }
         }
       } catch (e) {
@@ -484,13 +543,50 @@ const getSecondaryText = (item) => item.email || item.status || (item.startDateT
 
 const isSelected = (id) => selectedIds.value.has(id);
 const isPrelinked = (id) => prelinkedIds.value.has(id);
+const isOrganizationSelectionLockedForPerson = (item) => {
+  const targetModuleKey = normalizeModuleKey(effectiveModuleKey.value);
+  if (targetModuleKey !== 'organizations') return false;
+  if (!getContextPersonId() || prelinkedIds.value.size === 0) return false;
+  const itemId = normalizeId(item?._id);
+  if (!itemId) return false;
+  return !prelinkedIds.value.has(itemId);
+};
+
+const isPersonAlreadyLinkedToAnotherOrganization = (item) => {
+  const sourceModuleKey = normalizeModuleKey(props.sourceModuleKey);
+  const targetModuleKey = normalizeModuleKey(effectiveModuleKey.value);
+  if (sourceModuleKey !== 'organizations' || targetModuleKey !== 'people') return false;
+  const sourceOrganizationId = getContextSourceRecordId();
+  if (!sourceOrganizationId) return false;
+  const personOrganizationId = normalizeId(item?.organization);
+  if (!personOrganizationId) return false;
+  return personOrganizationId !== sourceOrganizationId;
+};
+
+const isSelectionBlocked = (item) =>
+  isOrganizationSelectionLockedForPerson(item) || isPersonAlreadyLinkedToAnotherOrganization(item);
+
+const selectionBlockedReason = (item) => {
+  if (isOrganizationSelectionLockedForPerson(item)) {
+    return 'This person already has a linked organization. Unlink it first.';
+  }
+  if (isPersonAlreadyLinkedToAnotherOrganization(item)) {
+    return 'This contact is already linked to another organization. Unlink it first.';
+  }
+  return '';
+};
+
 const toggleSelect = (item) => {
   const id = item._id;
-  if (isPrelinked(id)) return; // do nothing for prelinked/disabled
+  if (isPrelinked(id) || isSelectionBlocked(item)) return; // do nothing for disabled rows
   if (selectedIds.value.has(id)) selectedIds.value.delete(id); else selectedIds.value.add(id);
   selectedIds.value = new Set(selectedIds.value);
 };
-const selectSingle = (item) => { if (isPrelinked(item._id)) return; selectedIds.value = new Set([item._id]); confirmLink(); };
+const selectSingle = (item) => {
+  if (isPrelinked(item._id) || isSelectionBlocked(item)) return;
+  selectedIds.value = new Set([item._id]);
+  confirmLink();
+};
 
 const confirmLink = () => {
   const idsToLink = Array.from(deltaSelectedIds.value);
@@ -503,6 +599,7 @@ const confirmLink = () => {
   if (selectedRecordTypeOption.value?.relationshipKey) {
     payload.relationshipKey = selectedRecordTypeOption.value.relationshipKey;
     payload.targetAppKey = selectedRecordTypeOption.value.targetAppKey;
+    payload.sourceIsCurrent = selectedRecordTypeOption.value.sourceIsCurrent ?? true;
   }
   emit('linked', payload);
   closeDrawer();

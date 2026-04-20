@@ -296,10 +296,11 @@ async function validateDelete(recordContext) {
  */
 async function validateCardinality(organizationId, relationshipKey, source, target) {
   const errors = [];
+  const normalizedRelationshipKey = relationshipKey.toLowerCase();
   
   try {
     const relDef = await RelationshipDefinition.findOne({
-      relationshipKey: relationshipKey.toLowerCase(),
+      relationshipKey: normalizedRelationshipKey,
       enabled: true
     });
 
@@ -333,7 +334,7 @@ async function validateCardinality(organizationId, relationshipKey, source, targ
     if (cardinality === 'MANY_TO_ONE' && relDef.ownership === 'TARGET') {
       const existing = await RelationshipInstance.findOne({
         organizationId,
-        relationshipKey: relationshipKey.toLowerCase(),
+        relationshipKey: normalizedRelationshipKey,
         'target.appKey': target.appKey.toLowerCase(),
         'target.moduleKey': target.moduleKey.toLowerCase(),
         'target.recordId': target.recordId
@@ -342,6 +343,31 @@ async function validateCardinality(organizationId, relationshipKey, source, targ
       if (existing) {
         errors.push(
           `MANY_TO_ONE relationship '${relationshipKey}' already exists for target record`
+        );
+      }
+    }
+
+    // Special case: a person can only be linked to one organization at a time.
+    // Require explicit unlink before linking that person to another organization.
+    if (
+      normalizedRelationshipKey === 'people_organizations' &&
+      source?.appKey?.toLowerCase() === 'sales' &&
+      source?.moduleKey?.toLowerCase() === 'people'
+    ) {
+      const existingPeopleOrgLink = await RelationshipInstance.findOne({
+        organizationId,
+        relationshipKey: normalizedRelationshipKey,
+        'source.appKey': source.appKey.toLowerCase(),
+        'source.moduleKey': source.moduleKey.toLowerCase(),
+        'source.recordId': source.recordId
+      }).lean();
+
+      if (
+        existingPeopleOrgLink &&
+        String(existingPeopleOrgLink?.target?.recordId) !== String(target?.recordId)
+      ) {
+        errors.push(
+          "Person is already linked to an organization. Unlink the existing organization before linking a new one."
         );
       }
     }

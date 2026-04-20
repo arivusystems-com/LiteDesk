@@ -7,6 +7,11 @@ const {
     migratePeopleQuickCreateKeys,
     migratePeopleQuickCreateLayoutKeys,
 } = require('../utils/normalizePeopleModuleConfig');
+const {
+    getDefaultPhoneValidations,
+    getDefaultEmailValidations,
+    ensurePhoneFieldDefaultValidations,
+} = require('../utils/defaultFieldValidations');
 
 /** Canonical key for field dedup: lowercase, trim, strip spaces and hyphens (so "deleted-by", "deletedBy", "Deleted By" all match) */
 function fieldKeyCanonical(k) {
@@ -93,6 +98,13 @@ function validateFieldMutations(oldFields, newFields, user) {
     // Check for rename (key changed but same position/identity - this is tricky, so we'll check if key changed)
     // Actually, if key changed, it's a delete + add, which we handle above
     // So here we check for type changes and other mutations
+
+    // Immutable structural properties for platform/app-managed fields:
+    // Preserve canonical type server-side so dependency-only edits are not blocked by
+    // incidental client normalization drift (e.g. hidden tenant infra fields).
+    if ((owner === 'platform' || owner === 'app') && oldField.dataType && newField.dataType && oldField.dataType !== newField.dataType) {
+      newField.dataType = oldField.dataType;
+    }
 
     // Check for type change
     if (oldField.dataType && newField.dataType && oldField.dataType !== newField.dataType) {
@@ -641,6 +653,11 @@ function getBaseFieldsForKey(key) {
                         ? [{ value: 'todo', label: 'To Do', enabled: true, color: '#6B7280' }, { value: 'in_progress', label: 'In Progress', enabled: true, color: '#2563EB' }, { value: 'waiting', label: 'Waiting', enabled: true, color: '#D97706' }, { value: 'completed', label: 'Completed', enabled: true, color: '#16A34A' }, { value: 'cancelled', label: 'Cancelled', enabled: true, color: '#DC2626' }]
                         : [{ value: 'low', label: 'Low', enabled: true, color: '#6B7280' }, { value: 'medium', label: 'Medium', enabled: true, color: '#2563EB' }, { value: 'high', label: 'High', enabled: true, color: '#D97706' }, { value: 'urgent', label: 'Urgent', enabled: true, color: '#DC2626' }];
                 }
+
+                // Organizations industry: provide standard options when schema has no enum.
+                if (key === 'organizations' && name === 'industry' && options.length === 0) {
+                    options = ['Technology', 'Healthcare', 'Finance', 'Retail', 'Manufacturing'];
+                }
                 
                 // Special handling for array fields (like tags, interest_products)
                 if (path.schema && path.schema.paths) {
@@ -1044,7 +1061,12 @@ function getBaseFieldsForKey(key) {
                     index: !!path._index,
                     visibility: { list: true, detail: true },
                     order: 0,
-                    validations: [],
+                    validations:
+                        dataType === 'Phone'
+                            ? getDefaultPhoneValidations()
+                            : dataType === 'Email'
+                              ? getDefaultEmailValidations()
+                              : [],
                     dependencies: dependencies,
                     lookupSettings: lookupSettings,
                     // Field ownership and context classification
@@ -1681,6 +1703,39 @@ function filterFieldsByContext(fields, currentContext) {
   });
 }
 
+const DEAL_DEFAULT_RELATIONSHIPS = Object.freeze([
+    { name: 'Related Projects', type: 'one_to_many', isLookup: false, targetModuleKey: 'projects', relationshipKey: 'deal_projects' },
+    { name: 'Related Organizations', type: 'many_to_one', isLookup: true, targetModuleKey: 'organizations', relationshipKey: 'deal_organizations' },
+    { name: 'Related Contacts', type: 'many_to_many', isLookup: false, targetModuleKey: 'people', relationshipKey: 'deal_contacts' },
+    { name: 'Related Tasks', type: 'one_to_many', isLookup: false, targetModuleKey: 'tasks', relationshipKey: 'deal_tasks' },
+    { name: 'Related Events', type: 'one_to_many', isLookup: false, targetModuleKey: 'events', relationshipKey: 'deal_events' },
+    { name: 'Related Forms', type: 'one_to_many', isLookup: false, targetModuleKey: 'forms', relationshipKey: 'deal_forms' }
+]);
+
+const PEOPLE_DEFAULT_RELATIONSHIPS = Object.freeze([
+    { name: 'Related Organization', type: 'many_to_one', isLookup: true, targetModuleKey: 'organizations', relationshipKey: 'people_organizations' },
+    { name: 'Related Deals', type: 'many_to_many', isLookup: false, targetModuleKey: 'deals', relationshipKey: 'people_deals' },
+    { name: 'Related Tasks', type: 'many_to_many', isLookup: false, targetModuleKey: 'tasks', relationshipKey: 'people_tasks' },
+    { name: 'Related Events', type: 'many_to_many', isLookup: false, targetModuleKey: 'events', relationshipKey: 'people_events' }
+]);
+
+const ORGANIZATIONS_DEFAULT_RELATIONSHIPS = Object.freeze([
+    { name: 'Related Contacts', type: 'one_to_many', isLookup: false, targetModuleKey: 'people', relationshipKey: 'people_organizations' },
+    { name: 'Related Deals', type: 'one_to_many', isLookup: false, targetModuleKey: 'deals', relationshipKey: 'deal_organizations' }
+]);
+
+function cloneDealDefaultRelationships() {
+    return JSON.parse(JSON.stringify(DEAL_DEFAULT_RELATIONSHIPS));
+}
+
+function clonePeopleDefaultRelationships() {
+    return JSON.parse(JSON.stringify(PEOPLE_DEFAULT_RELATIONSHIPS));
+}
+
+function cloneOrganizationsDefaultRelationships() {
+    return JSON.parse(JSON.stringify(ORGANIZATIONS_DEFAULT_RELATIONSHIPS));
+}
+
 exports.listModules = async (req, res) => {
     try {
         // Get context from query parameter (default to 'platform')
@@ -1727,7 +1782,7 @@ exports.listModules = async (req, res) => {
                     label: 'Linked Form',
                     description: 'Link audit forms to events for audit event types'
                 }
-            ] : (m.key === 'tasks' || m.key === 'deals') ? [] : m.key === 'items' ? [
+            ] : m.key === 'deals' ? cloneDealDefaultRelationships() : m.key === 'people' ? clonePeopleDefaultRelationships() : m.key === 'organizations' ? cloneOrganizationsDefaultRelationships() : m.key === 'tasks' ? [] : m.key === 'items' ? [
                 {
                     name: 'Vendor',
                     type: 'lookup',
@@ -2538,14 +2593,15 @@ exports.listModules = async (req, res) => {
                 let finalQuickCreate = (override.quickCreate !== undefined && override.quickCreate !== null) 
                     ? override.quickCreate 
                     : (sys.quickCreate || []);
+                let finalQuickCreateLayout = override.quickCreateLayout || { version: 1, rows: [] };
                 
                 // Apply canonical defaults for system modules when quickCreate is empty
                 // This handles cases where platform modules have empty quickCreate arrays
                 
-                // ARCHITECTURE NOTE: Organizations Quick Create default: name
+                // ARCHITECTURE NOTE: Organizations Quick Create default: name, industry, website
                 // See: module-settings-doctrine.md, organization-settings.md
                 if (sys.key === 'organizations' && (!finalQuickCreate || finalQuickCreate.length === 0)) {
-                    finalQuickCreate = ['name'];
+                    finalQuickCreate = ['name', 'industry', 'website'];
                     console.log('📋 Organizations: Applying canonical default Quick Create:', finalQuickCreate);
                 }
                 
@@ -2570,13 +2626,28 @@ exports.listModules = async (req, res) => {
                     finalQuickCreate = ['name', 'amount', 'stage', 'expectedCloseDate', 'ownerId'];
                     console.log('📋 Deals: Applying canonical default Quick Create:', finalQuickCreate);
                 }
+
+                // Organizations: ensure standard quick-create fields are present in simple quick-create mode.
+                // This preserves existing customizations while adding the platform defaults for all instances.
+                if (sys.key === 'organizations') {
+                    const hasAdvancedLayout = !!(finalQuickCreateLayout && Array.isArray(finalQuickCreateLayout.rows) && finalQuickCreateLayout.rows.length > 0);
+                    if (!hasAdvancedLayout) {
+                        const qc = Array.isArray(finalQuickCreate) ? [...finalQuickCreate] : [];
+                        const hasName = qc.some(k => String(k).toLowerCase() === 'name');
+                        const hasIndustry = qc.some(k => String(k).toLowerCase() === 'industry');
+                        const hasWebsite = qc.some(k => String(k).toLowerCase() === 'website');
+                        if (!hasName) qc.unshift('name');
+                        if (!hasIndustry) qc.push('industry');
+                        if (!hasWebsite) qc.push('website');
+                        finalQuickCreate = qc;
+                    }
+                }
                 
                 console.log('✅ Final quickCreate:', {
                     value: finalQuickCreate,
                     length: finalQuickCreate?.length || 0,
                     isArray: Array.isArray(finalQuickCreate)
                 });
-                let finalQuickCreateLayout = override.quickCreateLayout || { version: 1, rows: [] };
 
                 if (sys.key === 'people') {
                     finalQuickCreate = migratePeopleQuickCreateKeys(finalQuickCreate);
@@ -2855,12 +2926,11 @@ exports.listModules = async (req, res) => {
                 }
                 
                 // PLATFORM-LEVEL CANONICAL DEFAULT: Organizations Quick Create
-                // This is intentionally minimal - Organizations are contextual business entities, not primary workflow objects.
-                // Only "name" is required by default. Other eligible fields (industry, types, website, phone, address)
-                // can be added via Settings but are optional. This mirrors People Quick Create philosophy.
+                // Keep the default lightweight but practical for new records.
+                // Industry and Website are included by default in addition to Name.
                 // Changes require updating: module-settings-doctrine.md, organization-settings.md
                 if (sys.key === 'organizations') {
-                    defaultQuickCreate = ['name'];
+                    defaultQuickCreate = ['name', 'industry', 'website'];
                 }
                 // ARCHITECTURE NOTE: Tasks Settings configure structure only, never work.
                 // Tasks Quick Create default: title (required, locked), dueDate, priority, assignedTo, relatedTo
@@ -2999,6 +3069,11 @@ exports.listModules = async (req, res) => {
         filteredMerged = filteredMerged.map(module => ({
             ...module,
             fields: filterFieldsByReadAccess(module.fields || [], req.user, module.key)
+        }));
+
+        filteredMerged = filteredMerged.map(module => ({
+            ...module,
+            fields: ensurePhoneFieldDefaultValidations(module.fields || [])
         }));
 
         // Filter by key if provided in query parameter
@@ -3446,11 +3521,12 @@ exports.getPeopleQuickCreate = async (req, res) => {
         const { getPeopleTypesConfig } = require('../utils/tenantMetadata');
         const peopleCfg = await getPeopleTypesConfig(orgId, 'SALES');
         const enrichedFields = enrichPeopleFieldsWithPeopleTypes(normalizedFields, peopleCfg.typeDefs);
+        const enrichedFieldsWithPhoneDefaults = ensurePhoneFieldDefaultValidations(enrichedFields);
 
         const out = {
             key: 'people',
             name: 'People',
-            fields: enrichedFields,
+            fields: enrichedFieldsWithPhoneDefaults,
             quickCreate,
             quickCreateLayout
         };

@@ -65,12 +65,18 @@
                           <p class="text-sm text-red-800 dark:text-red-200">{{ errors._general }}</p>
                         </div>
 
-                        <!-- Quick Edit: single column -->
-                        <div class="space-y-4">
+                        <!-- Quick fields: single column in narrow drawer; 2-col grid in full mode -->
+                        <div
+                          :class="fullMode ? 'grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4' : 'space-y-4'"
+                        >
                           <div
                             v-for="field in quickFields"
                             :key="field.key"
-                            :class="['space-y-1', field.key === 'description' ? 'w-full' : '']"
+                            :class="[
+                              'space-y-1',
+                              field.key === 'description' ? 'w-full' : '',
+                              fullMode && (field.key === 'description' || field.key === 'subtasks' || isLongInput(field)) ? 'md:col-span-2' : ''
+                            ]"
                           >
                             <!-- Description: full width, TipTap editor -->
                             <template v-if="field.key === 'description'">
@@ -107,16 +113,16 @@
                               :locked="false"
                             />
                           </div>
-                        </div>
 
-                        <!-- Subtasks: only in quick section when it is a quick create field -->
-                        <div v-if="showSubtasksInForm" class="w-full">
-                          <TaskSubtasksField
-                            :model-value="formData.subtasks || []"
-                            label="Subtasks"
-                            :error="errors.subtasks"
-                            @update:model-value="(v) => updateField('subtasks', v)"
-                          />
+                          <!-- Subtasks: only in quick section when it is a quick create field -->
+                          <div v-if="showSubtasksInForm" :class="['w-full', fullMode ? 'md:col-span-2' : '']">
+                            <TaskSubtasksField
+                              :model-value="formData.subtasks || []"
+                              label="Subtasks"
+                              :error="errors.subtasks"
+                              @update:model-value="(v) => updateField('subtasks', v)"
+                            />
+                          </div>
                         </div>
 
                         <!-- Full mode: divider + remaining in 2-col grid (config order, subtasks included) -->

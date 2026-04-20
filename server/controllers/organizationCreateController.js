@@ -28,6 +28,25 @@
 
 const Organization = require('../models/Organization');
 
+const websiteHostnamePattern = /^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/;
+
+function isValidWebsite(rawValue) {
+  if (!rawValue || typeof rawValue !== 'string') return true;
+
+  const value = rawValue.trim();
+  if (!value) return true;
+
+  const candidate = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+
+  try {
+    const parsed = new URL(candidate);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+    return websiteHostnamePattern.test(parsed.hostname);
+  } catch (error) {
+    return false;
+  }
+}
+
 /**
  * Create Business Organization
  * POST /api/organizations
@@ -86,6 +105,25 @@ exports.create = async (req, res) => {
         message: 'Types must be an array',
         errors: { types: 'Types must be an array' }
       });
+    }
+
+    if (payload.website !== undefined) {
+      if (typeof payload.website !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: 'Website must be a string',
+          errors: { website: 'Website must be a string' }
+        });
+      }
+
+      payload.website = payload.website.trim();
+      if (payload.website && !isValidWebsite(payload.website)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Website must be a valid URL',
+          errors: { website: 'Enter a valid website URL (e.g., example.com or https://example.org)' }
+        });
+      }
     }
     
     // REJECT tenant-only fields if provided

@@ -3,6 +3,16 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const ModuleDefinition = require('../models/ModuleDefinition');
 const Organization = require('../models/Organization');
+const { getDefaultPhoneValidations } = require('../utils/defaultFieldValidations');
+
+const defaultOrganizationRelationships = Object.freeze([
+  { name: 'Related Contacts', type: 'one_to_many', isLookup: false, targetModuleKey: 'people', relationshipKey: 'people_organizations' },
+  { name: 'Related Deals', type: 'one_to_many', isLookup: false, targetModuleKey: 'deals', relationshipKey: 'deal_organizations' }
+]);
+
+function cloneDefaultOrganizationRelationships() {
+  return JSON.parse(JSON.stringify(defaultOrganizationRelationships));
+}
 
 // Field mappings from JSON - map to actual schema field keys
 const organizationFieldMappings = {
@@ -12,7 +22,11 @@ const organizationFieldMappings = {
   'website': { type: 'URL', label: 'Website' },
   'phone': { type: 'Phone', label: 'Phone' },
   'address': { type: 'Text-Area', label: 'Address' },
-  'industry': { type: 'Picklist', label: 'Industry' },
+  'industry': {
+    type: 'Picklist',
+    label: 'Industry',
+    enum: ['Technology', 'Healthcare', 'Finance', 'Retail', 'Manufacturing']
+  },
   'assignedTo': { type: 'Lookup (Relationship)', label: 'Assigned To' },
   'primaryContact': { type: 'Lookup (Relationship)', label: 'Primary Contact' },
   'customerStatus': { type: 'Picklist', label: 'Customer Status', enum: ['Active', 'Prospect', 'Churned', 'Lead Customer'] },
@@ -261,6 +275,10 @@ function generateOrganizationFields() {
       field.filterPriority = filterMeta.filterPriority;
     }
 
+    if (mapping.type === 'Phone') {
+      field.validations = getDefaultPhoneValidations();
+    }
+
     fields.push(field);
   }
 
@@ -423,7 +441,10 @@ async function updateOrganizationsModuleFields(organizationId = null) {
               key: existing.key || 'organizations',
               label: existing.label || 'Organization',
               pluralLabel: existing.pluralLabel || 'Organizations',
-              entityType: existing.entityType || 'CORE'
+              entityType: existing.entityType || 'CORE',
+              relationships: Array.isArray(existing.relationships) && existing.relationships.length > 0
+                ? existing.relationships
+                : cloneDefaultOrganizationRelationships()
             }
           }
         );
@@ -444,7 +465,7 @@ async function updateOrganizationsModuleFields(organizationId = null) {
             type: 'system',
             enabled: true,
             fields: fieldsToSave,
-            relationships: [],
+            relationships: cloneDefaultOrganizationRelationships(),
             quickCreate: [],
             quickCreateLayout: { version: 1, rows: [] }
           });

@@ -60,6 +60,27 @@ exports.getCoreModules = async (req, res) => {
             moduleKey: { $in: coreModuleKeys }
         }).lean();
 
+        // Defensive dedupe: data migrations/legacy docs can leave duplicate moduleKey rows.
+        // Keep one document per moduleKey so Settings and Sidebar don't render duplicates.
+        const platformModulesByKey = new Map();
+        for (const module of platformModulesRaw) {
+            const key = String(module?.moduleKey || '').toLowerCase();
+            if (!key) continue;
+
+            const existing = platformModulesByKey.get(key);
+            if (!existing) {
+                platformModulesByKey.set(key, module);
+                continue;
+            }
+
+            // Prefer the richer definition when duplicates exist.
+            const existingScore = Number(!!existing.label) + Number(!!existing.description);
+            const nextScore = Number(!!module.label) + Number(!!module.description);
+            if (nextScore > existingScore) {
+                platformModulesByKey.set(key, module);
+            }
+        }
+
         // Get org-specific display name overrides (saved via Settings → Module details)
         // Query by both key and moduleKey (tenant overrides use key; some docs may have moduleKey)
         const orgOverrides = await ModuleDefinition.find({
@@ -82,7 +103,7 @@ exports.getCoreModules = async (req, res) => {
         }
         
         // Sort modules according to the defined order (modules not in coreModuleOrder go to the end)
-        const platformModules = platformModulesRaw.sort((a, b) => {
+        const platformModules = Array.from(platformModulesByKey.values()).sort((a, b) => {
             const orderA = coreModuleOrder.indexOf(a.moduleKey);
             const orderB = coreModuleOrder.indexOf(b.moduleKey);
             // If not in coreModuleOrder, place at end (use a high number)

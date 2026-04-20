@@ -1540,7 +1540,6 @@
  */
 
 import { ref, computed, watch, onMounted } from 'vue';
-import type { DirectiveBinding } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { AuditScheduleStep } from '@/types/auditSchedule.types';
 import type { AuditScheduleDraft, AuditScheduleValidationResult } from '@/types/auditSchedule.types';
@@ -1548,6 +1547,7 @@ import { getAuditEventTypes, getEventTypeByLabel } from '@/metadata/eventTypes';
 import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/utils/apiClient';
 import { openDatePicker } from '@/utils/dateUtils';
+import clickOutside from '@/directives/clickOutside';
 
 type OrganizationLite = {
   _id: string;
@@ -2200,23 +2200,7 @@ const clearRole = (role: string) => {
   }
 };
 
-// Click outside directive for dropdowns
-const vClickOutside = {
-  mounted(el: HTMLElement & { clickOutsideEvent?: (event: Event) => void }, binding: DirectiveBinding<() => void>) {
-    el.clickOutsideEvent = (event: Event) => {
-      const target = event.target as Node | null;
-      if (!(target && (el === target || el.contains(target)))) {
-        binding.value();
-      }
-    };
-    document.addEventListener('click', el.clickOutsideEvent);
-  },
-  unmounted(el: HTMLElement & { clickOutsideEvent?: (event: Event) => void }) {
-    if (el.clickOutsideEvent) {
-      document.removeEventListener('click', el.clickOutsideEvent);
-    }
-  }
-};
+const vClickOutside = clickOutside;
 
 // Watch for step changes to fetch users and organizations
 watch(() => currentStep.value, (step) => {

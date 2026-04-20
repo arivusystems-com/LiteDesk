@@ -169,6 +169,7 @@ import Avatar from '@/components/common/Avatar.vue';
 import DynamicFormField from '@/components/common/DynamicFormField.vue';
 import apiClient from '@/utils/apiClient';
 import { useAuthStore } from '@/stores/auth';
+import { DEFAULT_CURRENCY_CODE, formatCurrencyValue } from '@/utils/currencyOptions';
 
 const props = defineProps({
   record: { type: Object, default: null },
@@ -452,7 +453,14 @@ function formatDate(val) {
 
 function formatCurrency(val) {
   const n = Number(val) || 0;
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+  const currencyCode = String(props.record?.currencyCode || props.record?.currency || DEFAULT_CURRENCY_CODE).toUpperCase();
+  return (
+    formatCurrencyValue(n, {
+      currencyCode,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }) || '—'
+  );
 }
 
 function cryptoRandomId() {

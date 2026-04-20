@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
 import { useAuthStore } from '@/stores/auth';
 import { useColorMode } from '@/composables/useColorMode';
+import clickOutside from '@/directives/clickOutside';
 import NotificationBell from '@/components/notifications/NotificationBell.vue';
 import { XMarkIcon } from '@heroicons/vue/20/solid';
 
@@ -86,19 +87,7 @@ function openNotificationsPanel() {
   window.dispatchEvent(new CustomEvent('litedesk:open-notifications-panel'));
 }
 
-const vClickOutside = {
-  mounted(el, binding) {
-    el.clickOutsideEvent = (event) => {
-      if (!(el === event.target || el.contains(event.target))) {
-        binding.value();
-      }
-    };
-    document.addEventListener('click', el.clickOutsideEvent);
-  },
-  unmounted(el) {
-    document.removeEventListener('click', el.clickOutsideEvent);
-  },
-};
+const vClickOutside = clickOutside;
 
 // Create a computed to ensure reactivity in template
 // Force reactivity by watching the ref directly
