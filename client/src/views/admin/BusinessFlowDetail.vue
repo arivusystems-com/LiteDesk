@@ -380,7 +380,7 @@ const showEventDrawer = (event) => {
 };
 
 onMounted(() => {
-  document.title = 'Business Flow | LiteDesk';
+  document.title = 'Business Flow | Arivu';
   loadFlow();
 });
 </script>

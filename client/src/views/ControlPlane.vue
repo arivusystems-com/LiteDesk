@@ -176,7 +176,7 @@ const authStore = useAuthStore();
 
 onMounted(() => {
   // Set page title
-  document.title = 'Control Plane | LiteDesk';
+  document.title = 'Control Plane | Arivu';
   
   // Verify platform admin access
   if (!authStore.isPlatformAdmin) {

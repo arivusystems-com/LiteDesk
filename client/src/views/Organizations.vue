@@ -1,12 +1,5 @@
 <template>
   <div class="mx-auto w-full">
-    <!-- Entity Description -->
-    <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-      <p class="text-sm text-gray-700 dark:text-gray-300">
-        <strong>Organizations</strong> are shared across all apps. They represent companies, accounts, and customers that can be linked to people, deals, tickets, and other records.
-      </p>
-    </div>
-
     <!-- Registry-Driven ModuleList -->
     <ModuleList
       ref="moduleListRef"
@@ -16,6 +9,7 @@
       @import="showImportModal = true"
       @export="exportOrganizations"
       @row-click="handleRowClick"
+      @delete="handleInlineDelete"
       @bulk-action="handleBulkAction"
     >
       <!-- Custom Organization Cell -->
@@ -290,11 +284,14 @@ const loadUsers = async () => {
 // Event handlers
 const handleRowClick = (row, event = null) => {
   // Navigate to OrganizationSurface only (no edit/delete from list)
-  viewOrganization(row._id, event);
+  viewOrganization(row, event);
 };
 
-const viewOrganization = (orgId, event = null) => {
-  const title = 'Organization Detail';
+const viewOrganization = (organization, event = null) => {
+  const orgId = organization?._id;
+  if (!orgId) return;
+
+  const title = organization?.name?.trim() || 'Organization Detail';
   
   const openInBackground = event && (
     event.button === 1 ||
@@ -346,6 +343,11 @@ const handleBulkAction = async (actionId, selectedRows) => {
   } else if (actionId === 'export' || actionId === 'bulk-export') {
     await bulkExportOrganizations(selectedRows);
   }
+};
+
+const handleInlineDelete = async (row) => {
+  if (!row) return;
+  await bulkDeleteOrganizations([row]);
 };
 
 // Bulk delete

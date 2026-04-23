@@ -4,9 +4,7 @@
     <div v-if="isOfflineMode" class="p-4 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800">
       <div class="flex items-center justify-between">
         <div class="flex items-center flex-1">
-          <svg class="w-5 h-5 text-red-600 dark:text-red-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 10m9.9 2.9a3 3 0 11-5.196-5.196" />
-          </svg>
+          <ExclamationTriangleIcon class="w-5 h-5 text-red-600 dark:text-red-400 mr-2 flex-shrink-0" />
           <div class="flex-1 min-w-0">
             <p class="text-sm font-medium text-red-800 dark:text-red-200">You're offline — changes will sync later</p>
             <p v-if="lastSyncTime" class="text-xs text-red-700 dark:text-red-300 mt-0.5">Last synced: {{ lastSyncTime }}</p>
@@ -22,9 +20,7 @@
     <transition name="slide-down">
       <div v-if="!isOfflineMode && wasOffline" class="p-4 bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800">
         <div class="flex items-center">
-          <svg class="w-5 h-5 text-green-600 dark:text-green-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-          </svg>
+          <CheckCircleIcon class="w-5 h-5 text-green-600 dark:text-green-400 mr-2" />
           <p class="text-sm font-medium text-green-800 dark:text-green-200">Back online — ready to sync</p>
         </div>
       </div>
@@ -33,9 +29,7 @@
     <!-- Execution State Banner -->
     <div v-if="executionStateBanner && !loading" :class="executionStateBanner.class" class="p-4 border-b">
       <div class="flex items-center">
-        <svg class="w-5 h-5 mr-2" :class="executionStateBanner.iconClass" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
+        <InformationCircleIcon class="w-5 h-5 mr-2" :class="executionStateBanner.iconClass" />
         <p class="text-sm font-medium" :class="executionStateBanner.textClass">{{ executionStateBanner.message }}</p>
       </div>
     </div>
@@ -43,9 +37,7 @@
     <!-- Error Banner -->
     <div v-if="error" class="p-4 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800">
       <div class="flex items-center">
-        <svg class="w-5 h-5 text-red-600 dark:text-red-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
+        <ExclamationCircleIcon class="w-5 h-5 text-red-600 dark:text-red-400 mr-2" />
         <p class="text-sm text-red-800 dark:text-red-200">{{ error }}</p>
       </div>
     </div>
@@ -82,7 +74,7 @@
         <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div class="flex-1">
             <div class="flex items-center gap-2 mb-2">
-              <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ assignment.auditType || 'Audit' }}</h1>
+              <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ event?.eventName || assignment.auditName || assignment.auditType || 'Audit' }}</h1>
               <span v-if="hasQueuedActions" class="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded-full">
                 Saved locally
               </span>
@@ -92,18 +84,134 @@
                 {{ assignment.auditState || 'Unknown' }}
               </span>
               <span class="flex items-center">
-                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
+                <CalendarDaysIcon class="w-4 h-4 mr-1" />
                 Due: {{ formatDate(assignment.dueAt) }}
               </span>
               <span v-if="event.relatedOrganization" class="flex items-center">
-                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
+                <BuildingOfficeIcon class="w-4 h-4 mr-1" />
                 {{ event.relatedOrganization.name }}
               </span>
+              <span v-if="dueStatus" :class="dueStatus.class" class="px-2.5 py-1 rounded-full text-xs font-medium">
+                {{ dueStatus.label }}
+              </span>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Next Step Card -->
+      <div
+        v-if="executionStatus"
+        class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 lg:p-6"
+      >
+        <div
+          v-if="hasRecentAutoSubmit"
+          class="mb-4 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 px-3 py-2"
+        >
+          <p class="text-sm font-medium text-green-800 dark:text-green-200">Submitted automatically</p>
+          <p class="text-xs text-green-700 dark:text-green-300 mt-0.5">Your audit form submission was applied and the audit was sent for review.</p>
+        </div>
+
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+          <div class="flex-1">
+            <p class="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400 mb-1">Next step</p>
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white">{{ nextStep.title }}</h2>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{{ nextStep.description }}</p>
+          </div>
+          <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium" :class="nextStep.phaseClass">
+            {{ nextStep.phaseLabel }}
+          </span>
+        </div>
+
+        <div class="grid gap-2 mt-4" :class="auditJourneyGridClass">
+          <div
+            v-for="(step, index) in auditJourney"
+            :key="step.label"
+            class="rounded-lg border p-3"
+            :class="step.state === 'done'
+              ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20'
+              : step.state === 'current'
+                ? 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20'
+                : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40'"
+          >
+            <p class="text-xs font-medium uppercase tracking-wide mb-1"
+              :class="step.state === 'done'
+                ? 'text-green-700 dark:text-green-300'
+                : step.state === 'current'
+                  ? 'text-blue-700 dark:text-blue-300'
+                  : 'text-gray-500 dark:text-gray-400'"
+            >
+              Step {{ index + 1 }}
+            </p>
+            <p class="text-sm font-medium"
+              :class="step.state === 'done'
+                ? 'text-green-900 dark:text-green-200'
+                : step.state === 'current'
+                  ? 'text-blue-900 dark:text-blue-200'
+                  : 'text-gray-700 dark:text-gray-300'"
+            >
+              {{ step.label }}
+            </p>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-3 mt-5" v-if="hasExecutableActions">
+          <button
+            v-if="executionStatus.canCheckIn"
+            @click="requestCheckIn"
+            :disabled="actionLoading"
+            :aria-label="isOfflineMode ? 'Check in (will be saved locally)' : 'Check in to start audit'"
+            class="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px]"
+          >
+            {{ actionLoading ? 'Checking in...' : 'Check In' }}
+          </button>
+          <button
+            v-if="effectiveCanSubmit"
+            @click="requestSubmit"
+            :disabled="actionLoading"
+            :aria-label="shouldOpenFormBeforeSubmit ? 'Open linked audit form' : (isOfflineMode ? 'Submit audit (will be saved locally)' : 'Submit audit for review')"
+            class="px-6 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 active:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px]"
+          >
+            {{ actionLoading ? submitActionBusyLabel : submitActionLabel }}
+          </button>
+          <button
+            v-if="executionStatus.canApprove"
+            @click="requestApprove"
+            :disabled="actionLoading || isOfflineMode"
+            :aria-label="isOfflineMode ? 'Approve requires online connection' : 'Approve this audit'"
+            :title="isOfflineMode ? 'Approve/Reject requires online connection' : 'Approve this audit. This action cannot be undone.'"
+            class="px-6 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 active:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px]"
+          >
+            {{ actionLoading ? 'Approving...' : 'Approve' }}
+          </button>
+          <button
+            v-if="executionStatus.canReject"
+            @click="requestReject"
+            :disabled="actionLoading || isOfflineMode"
+            :aria-label="isOfflineMode ? 'Reject requires online connection' : 'Reject this audit'"
+            :title="isOfflineMode ? 'Approve/Reject requires online connection' : 'Reject this audit. This action cannot be undone.'"
+            class="px-6 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 active:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px]"
+          >
+            {{ actionLoading ? 'Rejecting...' : 'Reject' }}
+          </button>
+        </div>
+        <div v-else :class="noActionPanelClass">
+          <p :class="noActionTitleClass">{{ noActionTitle }}</p>
+          <p :class="noActionMessageClass">{{ noActionMessage }}</p>
+          <div v-if="hasExecutionAccessBlock" class="mt-3 flex flex-wrap gap-2">
+            <button
+              @click="handleCopySeatRequest"
+              class="px-3 py-1.5 text-xs rounded-md bg-red-600 text-white hover:bg-red-700 active:bg-red-800 transition-colors"
+            >
+              Request Seat
+            </button>
+            <button
+              @click="fetchAuditDetail"
+              :disabled="loading"
+              class="px-3 py-1.5 text-xs rounded-md border border-red-300 dark:border-red-700 text-red-800 dark:text-red-200 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              Refresh Access
+            </button>
           </div>
         </div>
       </div>
@@ -113,24 +221,17 @@
         <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Execution Context</h2>
         <div class="space-y-3">
           <div v-if="executionContext.checkedInAt" class="flex items-center text-sm">
-            <svg class="w-5 h-5 text-green-600 dark:text-green-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            <CheckCircleIcon class="w-5 h-5 text-green-600 dark:text-green-400 mr-2" />
             <span class="text-gray-600 dark:text-gray-400">Checked in: </span>
             <span class="text-gray-900 dark:text-white font-medium ml-1">{{ formatDateTime(executionContext.checkedInAt) }}</span>
           </div>
           <div v-if="executionContext.checkedOutAt" class="flex items-center text-sm">
-            <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <XCircleIcon class="w-5 h-5 text-blue-600 dark:text-blue-400 mr-2" />
             <span class="text-gray-600 dark:text-gray-400">Checked out: </span>
             <span class="text-gray-900 dark:text-white font-medium ml-1">{{ formatDateTime(executionContext.checkedOutAt) }}</span>
           </div>
           <div v-if="executionContext.geo" class="flex items-start text-sm">
-            <svg class="w-5 h-5 text-purple-600 dark:text-purple-400 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
+            <MapPinIcon class="w-5 h-5 text-purple-600 dark:text-purple-400 mr-2 mt-0.5" />
             <div>
               <span class="text-gray-600 dark:text-gray-400">Location: </span>
               <span class="text-gray-900 dark:text-white font-medium">{{ executionContext.geo.address || 'Recorded' }}</span>
@@ -151,11 +252,9 @@
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 lg:p-6">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Timeline</h2>
         <div v-if="timeline.length === 0" class="text-center py-12">
-          <svg class="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
+          <ClockIcon class="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
           <p class="text-gray-500 dark:text-gray-400 font-medium">No timeline events yet</p>
-          <p class="text-sm text-gray-400 dark:text-gray-500 mt-1">Timeline will appear as actions are taken</p>
+          <p class="text-sm text-gray-400 dark:text-gray-500 mt-1">{{ timelineEmptyHint }}</p>
         </div>
         <div v-else class="space-y-6">
           <template v-for="(group, groupIndex) in groupedTimeline" :key="groupIndex">
@@ -175,36 +274,7 @@
               >
                 <div class="flex flex-col items-center">
                   <div :class="getTimelineIconClass(item.action)" class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" :aria-label="getTimelineActionLabel(item.action)">
-                    <!-- CHECK_IN icon (location pin) -->
-                    <svg v-if="item.action === 'CHECK_IN'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <!-- SUBMIT icon (document) -->
-                    <svg v-else-if="item.action === 'SUBMIT'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <!-- APPROVE icon (check-circle) -->
-                    <svg v-else-if="item.action === 'APPROVE'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <!-- REJECT icon (x-circle) -->
-                    <svg v-else-if="item.action === 'REJECT'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <!-- CORRECTIVE_ACTION icon (wrench) -->
-                    <svg v-else-if="item.action === 'CORRECTIVE_ACTION_CREATED' || item.action === 'CORRECTIVE_ACTION_COMPLETED'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <!-- CREATED icon -->
-                    <svg v-else-if="item.action === 'CREATED'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    <!-- Default icon (clock) -->
-                    <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+                    <component :is="getTimelineIcon(item.action)" class="w-5 h-5" />
                   </div>
                   <div v-if="index < group.items.length - 1" class="w-0.5 h-full bg-gray-200 dark:bg-gray-700 mt-2 min-h-[2rem]"></div>
                 </div>
@@ -238,113 +308,87 @@
 
     <!-- Sticky Bottom Action Bar (Mobile) -->
     <div
-      v-if="executionStatus && !loading"
+      v-if="executionStatus && hasExecutableActions && !loading"
       class="fixed bottom-0 left-0 right-0 lg:hidden bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 z-50 shadow-lg"
     >
       <div class="max-w-4xl mx-auto space-y-2">
+        <p class="text-xs text-gray-600 dark:text-gray-400 mb-1">{{ nextStep.mobileHint }}</p>
         <button
           v-if="executionStatus.canCheckIn"
-          @click="handleCheckIn"
+          @click="requestCheckIn"
           :disabled="actionLoading"
           :aria-label="isOfflineMode ? 'Check in (will be saved locally)' : 'Check in to start audit'"
           class="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center min-h-[44px]"
         >
-          <svg v-if="actionLoading" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
+          <ArrowPathIcon v-if="actionLoading" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" />
           <span>{{ actionLoading ? 'Checking in...' : 'Check In' }}</span>
         </button>
         <button
-          v-if="executionStatus.canSubmit"
-          @click="handleSubmit"
+          v-if="effectiveCanSubmit"
+          @click="requestSubmit"
           :disabled="actionLoading"
-          :aria-label="isOfflineMode ? 'Submit audit (will be saved locally)' : 'Submit audit for review'"
+          :aria-label="shouldOpenFormBeforeSubmit ? 'Open linked audit form' : (isOfflineMode ? 'Submit audit (will be saved locally)' : 'Submit audit for review')"
           class="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 active:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center min-h-[44px]"
         >
-          <svg v-if="actionLoading" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          <span>{{ actionLoading ? 'Submitting...' : 'Submit Audit' }}</span>
+          <ArrowPathIcon v-if="actionLoading" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" />
+          <span>{{ actionLoading ? submitActionBusyLabel : submitActionLabel }}</span>
         </button>
         <div v-if="executionStatus.canApprove || executionStatus.canReject" class="grid grid-cols-2 gap-2">
           <button
             v-if="executionStatus.canApprove"
-            @click="handleApprove"
+            @click="requestApprove"
             :disabled="actionLoading || isOfflineMode"
             :aria-label="isOfflineMode ? 'Approve requires online connection' : 'Approve this audit'"
             :title="isOfflineMode ? 'Approve/Reject requires online connection' : 'Approve this audit. This action cannot be undone.'"
             class="px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 active:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center min-h-[44px]"
           >
-            <svg v-if="actionLoading" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
+            <ArrowPathIcon v-if="actionLoading" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" />
             <span>{{ actionLoading ? 'Approving...' : 'Approve' }}</span>
           </button>
           <button
             v-if="executionStatus.canReject"
-            @click="handleReject"
+            @click="requestReject"
             :disabled="actionLoading || isOfflineMode"
             :aria-label="isOfflineMode ? 'Reject requires online connection' : 'Reject this audit'"
             :title="isOfflineMode ? 'Approve/Reject requires online connection' : 'Reject this audit. This action cannot be undone.'"
             class="px-4 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 active:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center min-h-[44px]"
           >
-            <svg v-if="actionLoading" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
+            <ArrowPathIcon v-if="actionLoading" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" />
             <span>{{ actionLoading ? 'Rejecting...' : 'Reject' }}</span>
           </button>
         </div>
       </div>
     </div>
 
-    <!-- Desktop Action Buttons -->
+    <!-- Action Confirmation Dialog -->
     <div
-      v-if="executionStatus && !loading"
-      class="hidden lg:block max-w-4xl mx-auto px-6 pb-6"
+      v-if="actionConfirmDialog.isOpen"
+      class="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 p-4"
+      @click.self="closeActionConfirmDialog"
     >
-      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-        <div class="flex gap-3 justify-end">
+      <div class="w-full max-w-md bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 p-5">
+        <div class="flex items-start gap-3">
+          <div class="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
+            <ExclamationTriangleIcon class="w-5 h-5" />
+          </div>
+          <div class="flex-1">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ actionConfirmDialog.title }}</h3>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{{ actionConfirmDialog.message }}</p>
+          </div>
+        </div>
+        <div class="mt-5 flex justify-end gap-2">
           <button
-            v-if="executionStatus.canCheckIn"
-            @click="handleCheckIn"
-            :disabled="actionLoading"
-            :aria-label="isOfflineMode ? 'Check in (will be saved locally)' : 'Check in to start audit'"
-            class="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px]"
+            @click="closeActionConfirmDialog"
+            class="px-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
-            {{ actionLoading ? 'Checking in...' : 'Check In' }}
+            Cancel
           </button>
           <button
-            v-if="executionStatus.canSubmit"
-            @click="handleSubmit"
-            :disabled="actionLoading"
-            :aria-label="isOfflineMode ? 'Submit audit (will be saved locally)' : 'Submit audit for review'"
-            class="px-6 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 active:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px]"
+            @click="executeConfirmedAction"
+            :class="confirmToneClass"
+            class="px-4 py-2 text-sm rounded-lg text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {{ actionLoading ? 'Submitting...' : 'Submit Audit' }}
-          </button>
-          <button
-            v-if="executionStatus.canApprove"
-            @click="handleApprove"
-            :disabled="actionLoading || isOfflineMode"
-            :aria-label="isOfflineMode ? 'Approve requires online connection' : 'Approve this audit'"
-            :title="isOfflineMode ? 'Approve/Reject requires online connection' : 'Approve this audit. This action cannot be undone.'"
-            class="px-6 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 active:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px]"
-          >
-            {{ actionLoading ? 'Approving...' : 'Approve' }}
-          </button>
-          <button
-            v-if="executionStatus.canReject"
-            @click="handleReject"
-            :disabled="actionLoading || isOfflineMode"
-            :aria-label="isOfflineMode ? 'Reject requires online connection' : 'Reject this audit'"
-            :title="isOfflineMode ? 'Approve/Reject requires online connection' : 'Reject this audit. This action cannot be undone.'"
-            class="px-6 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 active:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px]"
-          >
-            {{ actionLoading ? 'Rejecting...' : 'Reject' }}
+            {{ actionConfirmDialog.confirmLabel }}
           </button>
         </div>
       </div>
@@ -355,14 +399,31 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import {
+  ArrowPathIcon,
+  BuildingOfficeIcon,
+  CalendarDaysIcon,
+  CheckCircleIcon,
+  ClockIcon,
+  Cog6ToothIcon,
+  DocumentTextIcon,
+  ExclamationCircleIcon,
+  ExclamationTriangleIcon,
+  InformationCircleIcon,
+  MapPinIcon,
+  PlusIcon,
+  XCircleIcon
+} from '@heroicons/vue/24/outline';
 import apiClient from '@/utils/apiClient';
 import { useOffline } from '@/composables/useOffline';
+import { useNotifications } from '@/composables/useNotifications';
 import { initDB, getAuditDetail, saveAuditDetail, getTimeline, saveTimeline } from '@/services/offlineDb.js';
 import { enqueueAction, listPendingActions } from '@/services/offlineQueue.js';
 
 const route = useRoute();
 const router = useRouter();
 const { isOnline, onOnlineChange } = useOffline();
+const { success: notifySuccess, error: notifyError, warning: notifyWarning, info: notifyInfo } = useNotifications();
 
 // Track online/offline transitions
 onOnlineChange((online) => {
@@ -385,11 +446,398 @@ const executionContext = ref(null);
 const executionStatus = ref(null);
 const timeline = ref([]);
 const queuedActions = ref([]);
+const pendingFormResponseId = ref(null);
 const wasOffline = ref(false);
 const lastSyncTime = ref(null);
+const actionConfirmDialog = ref({
+  isOpen: false,
+  title: '',
+  message: '',
+  confirmLabel: 'Confirm',
+  tone: 'blue',
+  action: null
+});
 
 const isOfflineMode = computed(() => !isOnline.value);
 const hasQueuedActions = computed(() => queuedActions.value.length > 0);
+const executionAccess = computed(() => executionStatus.value?.executionAccess || null);
+const hasExecutionAccessBlock = computed(() => executionAccess.value && executionAccess.value.allowed === false);
+const AUTO_SUBMIT_MARKER_TTL_MS = 2 * 60 * 1000;
+const autoSubmitMarkerTs = ref(0);
+
+const getAuditEventIdForMarker = () => {
+  const value = route.params.eventId;
+  return value ? String(value) : null;
+};
+
+const readAutoSubmitMarker = () => {
+  const eventId = getAuditEventIdForMarker();
+  if (!eventId) return 0;
+  try {
+    const raw = sessionStorage.getItem(`audit-auto-submit:${eventId}`);
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+    return parsed;
+  } catch (_) {
+    return 0;
+  }
+};
+
+const clearAutoSubmitMarker = () => {
+  const eventId = getAuditEventIdForMarker();
+  autoSubmitMarkerTs.value = 0;
+  if (!eventId) return;
+  try {
+    sessionStorage.removeItem(`audit-auto-submit:${eventId}`);
+  } catch (_) {}
+};
+
+const hasRecentAutoSubmit = computed(() => (
+  autoSubmitMarkerTs.value > 0 &&
+  (Date.now() - autoSubmitMarkerTs.value) < AUTO_SUBMIT_MARKER_TTL_MS
+));
+const linkedFormIdValue = computed(() => getFormIdValue(event.value?.linkedFormId));
+const latestFormResponseId = computed(() => getLatestFormResponseId());
+const effectiveCanSubmit = computed(() => Boolean(
+  executionStatus.value?.canSubmit &&
+  !hasRecentAutoSubmit.value
+));
+const shouldOpenFormBeforeSubmit = computed(() => Boolean(
+  effectiveCanSubmit.value &&
+  linkedFormIdValue.value &&
+  !latestFormResponseId.value
+));
+const submitActionLabel = computed(() => (
+  shouldOpenFormBeforeSubmit.value ? 'Open Audit Form' : 'Submit Audit'
+));
+const submitActionBusyLabel = computed(() => (
+  shouldOpenFormBeforeSubmit.value ? 'Opening form...' : 'Submitting...'
+));
+const hasExecutableActions = computed(() => {
+  if (!executionStatus.value) return false;
+  return Boolean(
+    executionStatus.value.canCheckIn ||
+    effectiveCanSubmit.value ||
+    executionStatus.value.canApprove ||
+    executionStatus.value.canReject
+  );
+});
+const noActionPanelClass = computed(() => {
+  if (hasExecutionAccessBlock.value) {
+    return 'mt-5 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3';
+  }
+  return 'mt-5 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-3';
+});
+const noActionTitleClass = computed(() => (
+  hasExecutionAccessBlock.value
+    ? 'text-sm text-red-800 dark:text-red-200 font-medium'
+    : 'text-sm text-green-800 dark:text-green-200 font-medium'
+));
+const noActionMessageClass = computed(() => (
+  hasExecutionAccessBlock.value
+    ? 'text-xs text-red-700 dark:text-red-300 mt-1'
+    : 'text-xs text-green-700 dark:text-green-300 mt-1'
+));
+const noActionTitle = computed(() => (
+  hasExecutionAccessBlock.value
+    ? (executionAccess.value?.feedback?.title || 'Execution blocked')
+    : 'No pending actions'
+));
+const noActionMessage = computed(() => (
+  hasExecutionAccessBlock.value
+    ? (executionAccess.value?.feedback?.message || 'You can view this audit, but you cannot execute workflow actions with your current access.')
+    : 'This audit is up to date. Use the timeline below if you need a full execution history.'
+));
+const seatRequestMessage = computed(() => {
+  const appName = 'Audit';
+  const assignmentName = event.value?.eventName || assignment.value?.auditName || assignment.value?.auditType || 'this audit';
+  return `Hi Admin, I need an active execution seat for the ${appName} app. I am currently blocked from checking in on "${assignmentName}". Please grant execution access for my user.`;
+});
+
+const dueStatus = computed(() => {
+  const dueAt = assignment.value?.dueAt;
+  if (!dueAt) return null;
+
+  const now = new Date();
+  const dueDate = new Date(dueAt);
+  const dayMs = 24 * 60 * 60 * 1000;
+  const diffDays = Math.floor((dueDate.setHours(0, 0, 0, 0) - now.setHours(0, 0, 0, 0)) / dayMs);
+
+  if (Number.isNaN(diffDays)) return null;
+  if (diffDays < 0) {
+    return {
+      label: `Overdue by ${Math.abs(diffDays)} day${Math.abs(diffDays) === 1 ? '' : 's'}`,
+      class: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200'
+    };
+  }
+  if (diffDays === 0) {
+    return {
+      label: 'Due today',
+      class: 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200'
+    };
+  }
+  if (diffDays <= 2) {
+    return {
+      label: `Due in ${diffDays} day${diffDays === 1 ? '' : 's'}`,
+      class: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200'
+    };
+  }
+
+  return {
+    label: `Due in ${diffDays} days`,
+    class: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'
+  };
+});
+
+const normalizeAuditState = () => (assignment.value?.auditState || '').toLowerCase();
+const auditJourneyGridClass = computed(() => (
+  auditJourney.value.length >= 4
+    ? 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4'
+    : 'grid-cols-1 sm:grid-cols-3'
+));
+
+const auditJourney = computed(() => {
+  const state = normalizeAuditState();
+  const isCompleted = state.includes('closed') || state.includes('approved');
+  const isInProgress = state.includes('checked_in') || state.includes('in_progress');
+  const isPendingCorrective = state.includes('pending_corrective') || state.includes('corrective');
+  const isSubmittedForReview = state.includes('submitted') || state.includes('needs_review');
+  const hasReachedReview = isSubmittedForReview || isPendingCorrective || isCompleted;
+
+  return [
+    {
+      label: 'Start audit',
+      state: isInProgress || hasReachedReview ? 'done' : 'current'
+    },
+    {
+      label: 'Submit for review',
+      state: hasReachedReview ? 'done' : isInProgress ? 'current' : 'upcoming'
+    },
+    {
+      label: 'Corrective actions',
+      state: isPendingCorrective ? 'current' : hasReachedReview ? 'done' : 'upcoming'
+    },
+    {
+      label: 'Final review decision',
+      state: isCompleted ? 'done' : (isSubmittedForReview && !isPendingCorrective) ? 'current' : 'upcoming'
+    }
+  ];
+});
+
+const nextStep = computed(() => {
+  if (!executionStatus.value) {
+    return {
+      title: 'Loading next step...',
+      description: 'Checking available actions for this audit.',
+      mobileHint: 'Preparing actions...',
+      phaseLabel: 'Preparing',
+      phaseClass: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200'
+    };
+  }
+
+  if (hasExecutionAccessBlock.value) {
+    return {
+      title: executionAccess.value?.feedback?.title || 'Execution access required',
+      description: executionAccess.value?.feedback?.message || 'You can view this audit, but cannot execute actions with your current seat entitlement.',
+      mobileHint: executionAccess.value?.feedback?.message || 'Execution access is blocked for your account.',
+      phaseLabel: 'Action blocked',
+      phaseClass: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200'
+    };
+  }
+
+  if (executionStatus.value.canCheckIn) {
+    return {
+      title: 'Check in to begin on-site execution',
+      description: isOfflineMode.value
+        ? 'You can start now. Check-in will be stored locally and synced when you reconnect.'
+        : 'Capture your location and start the audit timeline with a single check-in.',
+      mobileHint: 'Next action: Check in to start this audit.',
+      phaseLabel: 'Ready to start',
+      phaseClass: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200'
+    };
+  }
+
+  if (executionStatus.value.canSubmit && hasRecentAutoSubmit.value) {
+    return {
+      title: 'Finalizing submission...',
+      description: 'Your audit form was submitted and we are syncing the latest review state.',
+      mobileHint: 'Submission in progress. Refreshing state...',
+      phaseLabel: 'Syncing',
+      phaseClass: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200'
+    };
+  }
+
+  if (effectiveCanSubmit.value) {
+    return {
+      title: shouldOpenFormBeforeSubmit.value ? 'Open and complete the linked audit form' : 'Submit this audit for review',
+      description: isOfflineMode.value
+        ? (shouldOpenFormBeforeSubmit.value
+          ? 'You are offline. Reconnect to open the linked form before submitting.'
+          : 'You can submit now. The submission will be queued and synced automatically once online.')
+        : (shouldOpenFormBeforeSubmit.value
+          ? 'Complete the linked form before sending this audit for review.'
+          : 'Finish your work and send this audit to reviewers.'),
+      mobileHint: shouldOpenFormBeforeSubmit.value
+        ? 'Next action: Open the linked form.'
+        : 'Next action: Submit when your checks are complete.',
+      phaseLabel: 'In progress',
+      phaseClass: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200'
+    };
+  }
+
+  if (executionStatus.value.canApprove || executionStatus.value.canReject) {
+    return {
+      title: 'Review and close the audit',
+      description: 'Approve if everything is compliant, or reject to reopen corrective actions.',
+      mobileHint: 'Next action: Approve or reject this audit.',
+      phaseLabel: 'Needs review',
+      phaseClass: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200'
+    };
+  }
+
+  if (normalizeAuditState().includes('pending_corrective') || normalizeAuditState().includes('corrective')) {
+    return {
+      title: 'Complete corrective actions',
+      description: 'Findings are waiting for remediation. Complete corrective actions to resume final review.',
+      mobileHint: 'Next action: Resolve open findings.',
+      phaseLabel: 'Corrective actions',
+      phaseClass: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200'
+    };
+  }
+
+  return {
+    title: 'Audit is currently completed',
+    description: 'No further action is needed right now. Review the timeline for complete history.',
+    mobileHint: 'This audit is complete.',
+    phaseLabel: 'Completed',
+    phaseClass: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
+  };
+});
+
+const timelineEmptyHint = computed(() => {
+  if (!executionStatus.value) return 'Timeline will appear as actions are taken.';
+  if (hasExecutionAccessBlock.value) return 'Execution actions are currently blocked for your account.';
+  if (executionStatus.value.canCheckIn) return 'Check in to create the first timeline event and begin this audit.';
+  if (executionStatus.value.canSubmit && hasRecentAutoSubmit.value) {
+    return 'Submission is being finalized. Timeline updates will appear shortly.';
+  }
+  if (effectiveCanSubmit.value) {
+    return shouldOpenFormBeforeSubmit.value
+      ? 'Open and complete the linked audit form to continue the workflow.'
+      : 'Complete your on-site work, then submit to update the timeline.';
+  }
+  if (normalizeAuditState().includes('pending_corrective') || normalizeAuditState().includes('corrective')) {
+    return 'Corrective actions are in progress. Timeline updates will appear as findings are resolved.';
+  }
+  if (executionStatus.value.canApprove || executionStatus.value.canReject) return 'Review actions will appear here once a decision is made.';
+  return 'Timeline will appear as actions are taken.';
+});
+
+const getApiErrorMessage = (err, fallback) => {
+  const feedbackMessage = err?.response?.data?.feedback?.message;
+  return feedbackMessage || err?.message || fallback;
+};
+
+const handleCopySeatRequest = async () => {
+  try {
+    if (!navigator?.clipboard?.writeText) {
+      notifyWarning('Clipboard is not available on this browser.');
+      return;
+    }
+    await navigator.clipboard.writeText(seatRequestMessage.value);
+    notifySuccess('Seat request copied. Send it to your administrator.');
+  } catch (err) {
+    console.error('Failed to copy seat request:', err);
+    notifyError('Could not copy request message. Please try again.');
+  }
+};
+
+const confirmToneClass = computed(() => {
+  const tone = actionConfirmDialog.value.tone;
+  if (tone === 'red') return 'bg-red-600 hover:bg-red-700 active:bg-red-800';
+  if (tone === 'green') return 'bg-green-600 hover:bg-green-700 active:bg-green-800';
+  return 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800';
+});
+
+const openActionConfirmDialog = ({ title, message, confirmLabel, tone, action }) => {
+  actionConfirmDialog.value = {
+    isOpen: true,
+    title,
+    message,
+    confirmLabel,
+    tone,
+    action
+  };
+};
+
+const closeActionConfirmDialog = () => {
+  actionConfirmDialog.value.isOpen = false;
+};
+
+const executeConfirmedAction = async () => {
+  const action = actionConfirmDialog.value.action;
+  closeActionConfirmDialog();
+  if (typeof action === 'function') {
+    await action();
+  }
+};
+
+const requestCheckIn = () => {
+  openActionConfirmDialog({
+    title: 'Start this audit?',
+    message: isOfflineMode.value
+      ? 'You are offline. Check-in will be saved locally and synced once you reconnect.'
+      : 'We will capture your location and start the audit timeline.',
+    confirmLabel: 'Start audit',
+    tone: 'blue',
+    action: handleCheckIn
+  });
+};
+
+const requestSubmit = () => {
+  if (shouldOpenFormBeforeSubmit.value) {
+    openActionConfirmDialog({
+      title: 'Open linked audit form?',
+      message: isOfflineMode.value
+        ? 'You are offline. Reconnect to open and complete the linked form before submission.'
+        : 'Complete the linked form first, then submit the audit for review.',
+      confirmLabel: 'Open form',
+      tone: 'blue',
+      action: handleSubmit
+    });
+    return;
+  }
+
+  openActionConfirmDialog({
+    title: 'Submit audit for review?',
+    message: isOfflineMode.value
+      ? 'You are offline. Submission will be queued and synced automatically when back online.'
+      : 'This will finalize your execution and send it to reviewers.',
+    confirmLabel: 'Submit audit',
+    tone: 'green',
+    action: handleSubmit
+  });
+};
+
+const requestApprove = () => {
+  openActionConfirmDialog({
+    title: 'Approve this audit?',
+    message: 'Approve only if all required checks are complete. This action cannot be undone.',
+    confirmLabel: 'Approve',
+    tone: 'green',
+    action: handleApprove
+  });
+};
+
+const requestReject = () => {
+  openActionConfirmDialog({
+    title: 'Reject this audit?',
+    message: 'This will reopen corrective actions and mark the audit as rejected.',
+    confirmLabel: 'Reject',
+    tone: 'red',
+    action: handleReject
+  });
+};
 
 // Execution State Banner
 const executionStateBanner = computed(() => {
@@ -469,6 +917,86 @@ const updateQueuedActions = async () => {
   }
 };
 
+const getFormIdValue = (value) => {
+  if (!value) return null;
+  if (typeof value === 'object') {
+    return value._id || value.id || null;
+  }
+  return value;
+};
+
+const getLatestFormResponseId = () => {
+  if (pendingFormResponseId.value) {
+    return pendingFormResponseId.value;
+  }
+
+  const fromMetadata = event.value?.metadata?.formResponses;
+  if (Array.isArray(fromMetadata) && fromMetadata.length > 0) {
+    const latest = fromMetadata[fromMetadata.length - 1];
+    pendingFormResponseId.value = latest;
+    return latest;
+  }
+  const eventId = route.params.eventId;
+  try {
+    const stored = sessionStorage.getItem(`audit-form-response:${eventId}`) || null;
+    if (stored) {
+      pendingFormResponseId.value = stored;
+    }
+    return stored;
+  } catch (_) {
+    return null;
+  }
+};
+
+const resolveAuditEventId = () => {
+  const direct = route.params.eventId;
+  if (direct && String(direct) !== 'undefined') return String(direct);
+
+  const fromAssignment = assignment.value?.eventId || assignment.value?._id;
+  if (fromAssignment && String(fromAssignment) !== 'undefined') return String(fromAssignment);
+
+  const fromEvent = event.value?._id || event.value?.eventId;
+  if (fromEvent && String(fromEvent) !== 'undefined') return String(fromEvent);
+
+  const routeMatch = String(route.path || '').match(/\/audit\/audits\/([^/?#]+)/);
+  if (routeMatch?.[1]) return routeMatch[1];
+
+  return null;
+};
+
+const openAuditForm = ({ formId, responseId = null } = {}) => {
+  const resolvedFormId = formId || getFormIdValue(event.value?.linkedFormId);
+  const eventId = resolveAuditEventId();
+  if (!resolvedFormId) return;
+  const returnTo = eventId ? `/audit/audits/${eventId}` : '/audit/audits';
+
+  const query = {
+    appKey: 'AUDIT',
+    returnTo
+  };
+  if (eventId) {
+    query.eventId = String(eventId);
+  }
+  if (responseId) {
+    pendingFormResponseId.value = String(responseId);
+    query.responseId = String(responseId);
+    if (eventId) try {
+      sessionStorage.setItem(`audit-form-response:${eventId}`, String(responseId));
+    } catch (_) {}
+  }
+  try {
+    if (eventId) {
+      sessionStorage.setItem(`audit-form-return:${eventId}`, returnTo);
+    }
+    sessionStorage.setItem(`audit-form-return:form:${resolvedFormId}`, returnTo);
+  } catch (_) {}
+
+  router.push({
+    path: `/forms/${resolvedFormId}/fill`,
+    query
+  });
+};
+
 const fetchAuditDetail = async () => {
   loading.value = true;
   error.value = null;
@@ -505,6 +1033,7 @@ const fetchAuditDetail = async () => {
       assignment.value = detailResponse.data.assignment;
       event.value = detailResponse.data.event;
       executionContext.value = detailResponse.data.executionContext;
+      pendingFormResponseId.value = getLatestFormResponseId();
       
       // Save to IndexedDB
       await saveAuditDetail(eventId, detailResponse.data);
@@ -514,6 +1043,9 @@ const fetchAuditDetail = async () => {
     const statusResponse = await apiClient.get(`/audit/assignments/${eventId}/execution-status`);
     if (statusResponse.success) {
       executionStatus.value = statusResponse.data;
+      if (!statusResponse.data?.canSubmit) {
+        clearAutoSubmitMarker();
+      }
     }
     
     // Fetch timeline
@@ -567,10 +1099,6 @@ const fetchAuditDetail = async () => {
 };
 
 const handleCheckIn = async () => {
-  if (!confirm('Check in to this audit? This will start the audit execution.')) {
-    return;
-  }
-  
   actionLoading.value = true;
   let locationData = null;
   try {
@@ -589,12 +1117,12 @@ const handleCheckIn = async () => {
         };
       } catch (geoError) {
         console.warn('Geolocation error:', geoError);
-        alert('Location is required for check-in. Please allow location access and try again.');
+        notifyWarning('Location is required for check-in. Please allow location access and try again.');
         actionLoading.value = false;
         return;
       }
     } else {
-      alert('Location is required for check-in. This device does not support geolocation.');
+      notifyError('Location is required for check-in. This device does not support geolocation.');
       actionLoading.value = false;
       return;
     }
@@ -604,7 +1132,7 @@ const handleCheckIn = async () => {
     // If offline, queue the action (with location for sync)
     if (isOfflineMode.value) {
       await enqueueAction('CHECK_IN', eventId, payload);
-      alert('Check-in saved locally. It will sync when you\'re back online.');
+      notifyInfo('Check-in saved locally. It will sync when you are back online.');
       await updateQueuedActions();
       actionLoading.value = false;
       return;
@@ -614,7 +1142,17 @@ const handleCheckIn = async () => {
     const response = await apiClient.post(`/audit/execute/${eventId}/check-in`, payload);
     if (response.success) {
       await fetchAuditDetail();
-      alert('Successfully checked in!');
+      notifySuccess('Checked in successfully.');
+
+      const hasForm = Boolean(response.hasForm || response.data?.hasForm);
+      const formResponseId = response.formResponseId || response.data?.formResponseId || null;
+      if (formResponseId) {
+        pendingFormResponseId.value = String(formResponseId);
+      }
+      const linkedFormId = getFormIdValue(event.value?.linkedFormId);
+      if (hasForm && linkedFormId) {
+        openAuditForm({ formId: linkedFormId, responseId: formResponseId });
+      }
     }
   } catch (err) {
     console.error('Error checking in:', err);
@@ -624,7 +1162,7 @@ const handleCheckIn = async () => {
       try {
         const eventId = route.params.eventId;
         await enqueueAction('CHECK_IN', eventId, { location: locationData });
-        alert('Check-in saved locally. It will sync when you\'re back online.');
+        notifyInfo('Check-in saved locally. It will sync when you are back online.');
         await updateQueuedActions();
         actionLoading.value = false;
         return;
@@ -633,35 +1171,46 @@ const handleCheckIn = async () => {
       }
     }
     
-    alert(err.message || 'Failed to check in. Please try again.');
+    notifyError(getApiErrorMessage(err, 'Failed to check in. Please try again.'));
+    if (err?.status === 403) {
+      await fetchAuditDetail();
+    }
   } finally {
     actionLoading.value = false;
   }
 };
 
 const handleSubmit = async () => {
-  if (!confirm('Submit this audit? This will finalize the audit and check you out.')) {
-    return;
-  }
-  
   actionLoading.value = true;
   try {
     const eventId = route.params.eventId;
+    const linkedFormId = getFormIdValue(event.value?.linkedFormId);
+    const formResponseId = getLatestFormResponseId();
+
+    if (linkedFormId && !formResponseId) {
+      notifyInfo('Complete the linked audit form before submitting.');
+      openAuditForm({ formId: linkedFormId });
+      actionLoading.value = false;
+      return;
+    }
     
     // If offline, queue the action
     if (isOfflineMode.value) {
-      await enqueueAction('SUBMIT', eventId, {});
-      alert('Submission saved locally. It will sync when you\'re back online.');
+      await enqueueAction('SUBMIT', eventId, formResponseId ? { formResponseId } : {});
+      notifyInfo('Submission saved locally. It will sync when you are back online.');
       await updateQueuedActions();
       actionLoading.value = false;
       return;
     }
     
     // Online: Execute immediately
-    const response = await apiClient.post(`/audit/execute/${eventId}/submit`, {});
+    const response = await apiClient.post(
+      `/audit/execute/${eventId}/submit`,
+      formResponseId ? { formResponseId } : {}
+    );
     if (response.success) {
       await fetchAuditDetail();
-      alert('Audit submitted successfully!');
+      notifySuccess('Audit submitted successfully.');
     }
   } catch (err) {
     console.error('Error submitting audit:', err);
@@ -671,7 +1220,7 @@ const handleSubmit = async () => {
       try {
         const eventId = route.params.eventId;
         await enqueueAction('SUBMIT', eventId, {});
-        alert('Submission saved locally. It will sync when you\'re back online.');
+        notifyInfo('Submission saved locally. It will sync when you are back online.');
         await updateQueuedActions();
         actionLoading.value = false;
         return;
@@ -680,7 +1229,10 @@ const handleSubmit = async () => {
       }
     }
     
-    alert(err.message || 'Failed to submit audit. Please try again.');
+    notifyError(getApiErrorMessage(err, 'Failed to submit audit. Please try again.'));
+    if (err?.status === 403) {
+      await fetchAuditDetail();
+    }
   } finally {
     actionLoading.value = false;
   }
@@ -689,24 +1241,23 @@ const handleSubmit = async () => {
 const handleApprove = async () => {
   // Guard: Approve/Reject never works offline
   if (isOfflineMode.value) {
-    alert('Approve/Reject requires an online connection. Please check your connection and try again.');
+    notifyWarning('Approve/Reject requires an online connection. Please check your connection and try again.');
     return;
   }
-  
-  if (!confirm('Approve this audit? This action cannot be undone.')) {
-    return;
-  }
-  
+
   actionLoading.value = true;
   try {
     const response = await apiClient.post(`/audit/execute/${route.params.eventId}/approve`, {});
     if (response.success) {
       await fetchAuditDetail();
-      alert('Audit approved successfully!');
+      notifySuccess('Audit approved successfully.');
     }
   } catch (err) {
     console.error('Error approving audit:', err);
-    alert(err.message || 'Failed to approve audit. Please try again.');
+    notifyError(getApiErrorMessage(err, 'Failed to approve audit. Please try again.'));
+    if (err?.status === 403) {
+      await fetchAuditDetail();
+    }
   } finally {
     actionLoading.value = false;
   }
@@ -715,24 +1266,23 @@ const handleApprove = async () => {
 const handleReject = async () => {
   // Guard: Approve/Reject never works offline
   if (isOfflineMode.value) {
-    alert('Approve/Reject requires an online connection. Please check your connection and try again.');
+    notifyWarning('Approve/Reject requires an online connection. Please check your connection and try again.');
     return;
   }
-  
-  if (!confirm('Reject this audit? This action cannot be undone.')) {
-    return;
-  }
-  
+
   actionLoading.value = true;
   try {
     const response = await apiClient.post(`/audit/execute/${route.params.eventId}/reject`, {});
     if (response.success) {
       await fetchAuditDetail();
-      alert('Audit rejected.');
+      notifyInfo('Audit rejected.');
     }
   } catch (err) {
     console.error('Error rejecting audit:', err);
-    alert(err.message || 'Failed to reject audit. Please try again.');
+    notifyError(getApiErrorMessage(err, 'Failed to reject audit. Please try again.'));
+    if (err?.status === 403) {
+      await fetchAuditDetail();
+    }
   } finally {
     actionLoading.value = false;
   }
@@ -870,7 +1420,18 @@ const getTimelineIconClass = (action) => {
   return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
 };
 
+const getTimelineIcon = (action) => {
+  if (action === 'CHECK_IN') return MapPinIcon;
+  if (action === 'SUBMIT') return DocumentTextIcon;
+  if (action === 'APPROVE') return CheckCircleIcon;
+  if (action === 'REJECT') return XCircleIcon;
+  if (action === 'CORRECTIVE_ACTION_CREATED' || action === 'CORRECTIVE_ACTION_COMPLETED') return Cog6ToothIcon;
+  if (action === 'CREATED') return PlusIcon;
+  return ClockIcon;
+};
+
 onMounted(async () => {
+  autoSubmitMarkerTs.value = readAutoSubmitMarker();
   await initOfflineDb();
   await fetchAuditDetail();
   await updateQueuedActions();

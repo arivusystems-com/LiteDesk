@@ -16,13 +16,6 @@
 
 <template>
   <div class="mx-auto">
-    <!-- Entity Description -->
-    <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-      <p class="text-sm text-gray-700 dark:text-gray-300">
-        <strong>People</strong> are shared across Sales, Helpdesk, and Automations. They represent contacts, leads, and customers that can be linked to deals, tickets, and other records throughout the platform.
-      </p>
-    </div>
-
     <!-- Phase 1C: Generic ModuleList (registry-driven) -->
     <!-- Removed: Hardcoded columns, filters, actions, permission checks -->
     <!-- Replaced with: buildModuleListFromRegistry + ModuleList component -->

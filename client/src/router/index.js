@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { hasAnySettingsAccess } from '@/utils/settingsTabAccess'
 import LandingPage from '@/views/LandingPage.vue'
 import auditRoutes from './audit.routes'
 import portalRoutes from './portal.routes'
@@ -542,6 +543,21 @@ router.beforeEach((to, from, next) => {
     }
     next({ name: 'landing' })
     return
+  }
+
+  // Settings hub and nested /settings/* routes require at least one entitled settings section
+  if (authStore.isAuthenticated && to.path.startsWith('/settings')) {
+    const settingsCtx = {
+      isOwner: !!authStore.user?.isOwner,
+      role: authStore.user?.role,
+      permissions: authStore.user?.permissions,
+    }
+    if (!hasAnySettingsAccess(settingsCtx)) {
+      console.log('Blocked: No access to any Settings section', { path: to.path })
+      alert('You do not have access to Settings. Contact your administrator if you need configuration access.')
+      next(getDefaultRoute(authStore))
+      return
+    }
   }
 
   // Honoured when opening e.g. Settings in a new tab: open platform/home?redirect=/settings

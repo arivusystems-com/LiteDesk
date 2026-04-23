@@ -1,5 +1,5 @@
 <template>
-  <div class="mx-auto w-full">
+  <div class="mx-auto w-full px-4 sm:px-6 lg:px-8 py-4">
     <!-- Info Banner -->
     <div class="mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
       <div class="flex items-start gap-3">
@@ -11,15 +11,19 @@
             <strong>Note:</strong> Response execution must always start from an Event check-in.
           </p>
           <p class="text-xs text-blue-700 dark:text-blue-400 mt-1">
-            To start a new response, check in to an Event that has an assigned form. This module is for viewing and managing existing responses only.
+            {{ isAuditScoped
+              ? 'Audit Responses shows only responses linked to your assigned audits. Review details here; execution actions remain in audit workflow.'
+              : 'To start a new response, check in to an Event that has an assigned form. This module is for viewing and managing existing responses only.' }}
           </p>
         </div>
       </div>
     </div>
     
     <ListView
-      title="Responses"
-      description="View and manage all form responses across all forms"
+      :title="isAuditScoped ? 'Audit Responses' : 'Responses'"
+      :description="isAuditScoped
+        ? 'View responses linked to your audit assignments'
+        : 'View and manage all form responses across all forms'"
       module-key="forms"
       search-placeholder="Search responses..."
       :data="responses"
@@ -44,7 +48,7 @@
       empty-message="No form responses have been submitted yet. Responses are created automatically when you check in to an Event with an assigned form."
       :show-create="false"
       :show-import="false"
-      :show-export="true"
+      :show-export="!isAuditScoped"
       @update:searchQuery="handleSearchQueryUpdate"
       @update:filters="(newFilters) => { Object.assign(filters, newFilters); fetchResponses(); }"
       @update:sort="({ sortField: key, sortOrder: order }) => { handleSort({ key, order }); }"
@@ -54,7 +58,7 @@
       @edit="viewResponseDetail"
       @delete="handleDelete"
       @export="exportResponses"
-      :hide-delete="false"
+      :hide-delete="isAuditScoped"
     >
       <!-- Custom Form Name Cell - Name + Type Badge -->
       <template #cell-formName="{ row }">
@@ -218,7 +222,7 @@
             </svg>
           </button>
           <button
-            v-if="row.executionStatus === 'Submitted' && row.reviewStatus === 'Needs Auditor Review'"
+            v-if="!isAuditScoped && row.executionStatus === 'Submitted' && row.reviewStatus === 'Needs Auditor Review'"
             @click.stop="approveResponse(row)"
             class="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
             title="Approve"
@@ -228,7 +232,7 @@
             </svg>
           </button>
           <button
-            v-if="row.executionStatus === 'Submitted' && row.reviewStatus === 'Needs Auditor Review'"
+            v-if="!isAuditScoped && row.executionStatus === 'Submitted' && row.reviewStatus === 'Needs Auditor Review'"
             @click.stop="rejectResponse(row)"
             class="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
             title="Reject"
@@ -239,7 +243,7 @@
           </button>
           <!-- Archive/Invalidate for Audit responses -->
           <button
-            v-if="isAuditResponse(row) && !row.archived && !row.invalidated"
+            v-if="!isAuditScoped && isAuditResponse(row) && !row.archived && !row.invalidated"
             @click.stop="showArchiveInvalidateModalFn(row)"
             class="p-1.5 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded transition-colors"
             title="Archive / Invalidate"
@@ -250,7 +254,7 @@
           </button>
           <!-- Restore for archived/invalidated responses -->
           <button
-            v-if="(row.archived || row.invalidated) && canRestore(row)"
+            v-if="!isAuditScoped && (row.archived || row.invalidated) && canRestore(row)"
             @click.stop="restoreResponse(row)"
             class="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
             title="Restore"
@@ -261,7 +265,7 @@
           </button>
           <!-- Delete button for non-audit, non-submitted responses -->
           <button
-            v-if="!isAuditResponse(row) && row.executionStatus !== 'Submitted' && !row.archived && !row.invalidated"
+            v-if="!isAuditScoped && !isAuditResponse(row) && row.executionStatus !== 'Submitted' && !row.archived && !row.invalidated"
             @click.stop="handleDelete(row)"
             class="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
             title="Delete"
@@ -386,6 +390,10 @@ import DateCell from '@/components/common/table/DateCell.vue';
 const route = useRoute();
 const router = useRouter();
 const { openTab } = useTabs();
+const isAuditScoped = computed(() => (
+  String(route.meta?.appKey || '').toUpperCase() === 'AUDIT' ||
+  String(route.path || '').startsWith('/audit/')
+));
 
 // State
 const responses = ref([]);
@@ -504,7 +512,8 @@ const fetchResponses = async () => {
       }
     });
 
-    const response = await apiClient('/forms/responses/all', {
+    const endpoint = isAuditScoped.value ? '/audit/responses' : '/forms/responses/all';
+    const response = await apiClient(endpoint, {
       method: 'GET',
       params
     });
@@ -637,21 +646,25 @@ const getFormId = (response) => {
   return null;
 };
 
+const responseDetailPath = (formId, responseId) =>
+  (isAuditScoped.value ? `/audit/forms/${formId}/responses/${responseId}` : `/forms/${formId}/responses/${responseId}`);
+
 const viewResponseDetail = (response) => {
   const formId = getFormId(response);
   if (!formId) {
     console.error('Form ID not found in response:', response);
     return;
   }
-  
-  openTab(`/forms/${formId}/responses/${response._id}`, {
+
+  const path = responseDetailPath(formId, response._id);
+  openTab(path, {
     name: `form-response-${response._id}`,
     title: `Response - ${response.responseId || new Date(response.submittedAt).toLocaleDateString()}`,
     component: 'FormResponseDetail',
     params: { formId, responseId: response._id },
     insertAdjacent: true
   });
-  router.push(`/forms/${formId}/responses/${response._id}`);
+  router.push(path);
 };
 
 const approveResponse = async (response) => {

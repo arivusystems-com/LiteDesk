@@ -49,6 +49,16 @@ const TARGET_APP_BY_MODULE_KEY = {
   cases: 'helpdesk'
 };
 
+const EVENTS_LINKABLE_DEFAULT_RELATIONSHIPS = Object.freeze([
+  { name: 'Related Deal', type: 'many_to_one', isLookup: true, targetModuleKey: 'deals', relationshipKey: 'deal_events' },
+  { name: 'Related Contacts', type: 'many_to_many', isLookup: false, targetModuleKey: 'people', relationshipKey: 'people_events' },
+  { name: 'Related Tasks', type: 'many_to_many', isLookup: false, targetModuleKey: 'tasks', relationshipKey: 'task_events' }
+]);
+
+function cloneEventsLinkableDefaultRelationships() {
+  return JSON.parse(JSON.stringify(EVENTS_LINKABLE_DEFAULT_RELATIONSHIPS));
+}
+
 async function syncPeopleOrganizationLink({ organizationId, relationshipKey, source, target }) {
   if (relationshipKey !== 'people_organizations') return;
   if (!source?.recordId || !target?.recordId) return;
@@ -126,6 +136,9 @@ exports.getLinkableTargets = async (req, res) => {
     }
 
     let relationships = Array.isArray(mod?.relationships) ? [...mod.relationships] : [];
+    if (normalizedModuleKey === 'events' && relationships.length === 0) {
+      relationships = cloneEventsLinkableDefaultRelationships();
+    }
     // Resolve missing relationshipKey from platform (so Settings relationships show even if saved before relationshipKey was set)
     const outgoing = await getOutgoingRelationships(normalizedAppKey, normalizedModuleKey);
     const toTargetKey = (r) => {
@@ -193,7 +206,7 @@ exports.getLinkableTargets = async (req, res) => {
       usedTenantModule &&
       linkable.length === 0 &&
       (!Array.isArray(relationships) || relationships.length === 0) &&
-      (normalizedModuleKey === 'people' || normalizedModuleKey === 'deals');
+      (normalizedModuleKey === 'people' || normalizedModuleKey === 'deals' || normalizedModuleKey === 'events');
     const linkableFromFallback = linkable.length === 0 && (!usedTenantModule || allowSystemDefaultFallback);
     // Fallback to platform registry when no tenant module exists.
     // Also allow fallback for core Sales system modules when tenant module exists but has empty relationships,

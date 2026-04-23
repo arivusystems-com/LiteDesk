@@ -244,9 +244,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useAppShellStore } from '@/stores/appShell';
 import { useColorMode } from '@/composables/useColorMode';
 import { useSidebarState } from '@/composables/useSidebarState';
-import { buildSidebarFromRegistry } from '@/utils/buildSidebarFromRegistry';
-import { getAppRegistry } from '@/utils/getAppRegistry';
-import { createPermissionSnapshot } from '@/types/permission-snapshot.types';
+import { buildSidebarStructureForSession } from '@/utils/buildSidebarForSession';
 import { 
   HomeIcon, 
   DocumentTextIcon, 
@@ -314,10 +312,12 @@ const buildSidebar = async () => {
 
   loadingSidebar.value = true;
   try {
-    const registry = await getAppRegistry();
     if (!authStore.user || !authStore.isAuthenticated) return;
-    const snapshot = createPermissionSnapshot(authStore.user);
-    sidebarStructure.value = await buildSidebarFromRegistry(registry, snapshot);
+    const { structure } = await buildSidebarStructureForSession(
+      authStore.user,
+      authStore.hasAppAccess
+    );
+    sidebarStructure.value = structure;
   } catch (e) {
     console.error('[PortalLayout] Failed to build sidebar:', e);
     sidebarStructure.value = null;

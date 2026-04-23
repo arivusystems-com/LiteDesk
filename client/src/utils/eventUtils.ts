@@ -44,7 +44,7 @@ export const ALL_EVENT_TYPES = Object.values(EVENT_TYPES).map(t => t.label) as r
 /**
  * Check if an event type is an audit event type
  * 
- * Supports both keys (MEETING) and labels (Meeting / Appointment) for backward compatibility.
+ * Supports both keys (MEETING) and labels (Meeting) for backward compatibility.
  * 
  * @param eventType - The event type key or label to check
  * @returns True if the event type is an audit event type
@@ -52,7 +52,7 @@ export const ALL_EVENT_TYPES = Object.values(EVENT_TYPES).map(t => t.label) as r
  * @example
  * isAuditEventType('Internal Audit') // true (label)
  * isAuditEventType('INTERNAL_AUDIT') // true (key)
- * isAuditEventType('Meeting / Appointment') // false
+ * isAuditEventType('Meeting') // false
  * 
  * See: docs/architecture/event-settings.md
  */
@@ -78,8 +78,8 @@ export function isAuditEventType(eventType: string | null | undefined): boolean 
  * @returns Array of non-audit event types
  * 
  * @example
- * filterNonAuditEventTypes(['Meeting / Appointment', 'Internal Audit']) 
- * // ['Meeting / Appointment']
+ * filterNonAuditEventTypes(['Meeting', 'Internal Audit']) 
+ * // ['Meeting']
  * 
  * See: docs/architecture/event-settings.md
  */

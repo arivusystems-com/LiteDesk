@@ -152,6 +152,10 @@ const detectActiveAppFromRoute = (path) => {
   if (path.startsWith('/sales/')) return 'SALES';
   if (path.startsWith('/helpdesk/')) return 'HELPDESK';
   if (path.startsWith('/projects/')) return 'PROJECTS';
+  if (path.startsWith('/dashboard/')) {
+    const appKey = String(path.split('/')[2] || '').toUpperCase();
+    if (appKey) return appKey;
+  }
   if (path.startsWith('/dashboard') || path.startsWith('/people') || path.startsWith('/organizations') || path.startsWith('/deals') || path.startsWith('/tasks') || path.startsWith('/events') || path.startsWith('/items') || path.startsWith('/forms') || path.startsWith('/imports')) return 'SALES';
   return 'SALES'; // Default to Sales
 };

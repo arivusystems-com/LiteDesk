@@ -85,15 +85,27 @@ function resolveActiveAppId(
   fallbackLastActiveAppId: string | null
 ): string {
   const apps = listApps(appRegistry);
+  const normalizedPath = String(currentPath || '');
+
+  // 0) Explicit app-scoped dashboard route (e.g. /dashboard/helpdesk)
+  // This must take precedence over registry dashboardRoute matching because
+  // legacy/stale metadata may still carry old defaultRoute values.
+  if (normalizedPath.startsWith('/dashboard/')) {
+    const routeAppKey = String(normalizedPath.split('/')[2] || '').toUpperCase();
+    if (routeAppKey) {
+      const matched = apps.find((a) => String(a.appKey || '').toUpperCase() === routeAppKey);
+      if (matched) return matched.appKey;
+    }
+  }
 
   // 1) Resolve from current route (dashboard or module match)
   for (const app of apps) {
-    if (currentPath === app.dashboardRoute || currentPath.startsWith(app.dashboardRoute + '/')) {
+    if (normalizedPath === app.dashboardRoute || normalizedPath.startsWith(app.dashboardRoute + '/')) {
       return app.appKey;
     }
     for (const module of app.modules || []) {
       if (!module.route) continue;
-      if (currentPath === module.route || currentPath.startsWith(module.route + '/')) {
+      if (normalizedPath === module.route || normalizedPath.startsWith(module.route + '/')) {
         return app.appKey;
       }
     }
@@ -303,9 +315,9 @@ function buildAppNav(appRegistry: AppRegistry, activeAppId: string, snapshot: Pe
     // Displayed as "Dashboard" to avoid duplicating the app name in the nav list.
     label: 'Dashboard',
     route: app.dashboardRoute,
-    // Use a stable dashboard icon (not the app icon) to avoid duplication with the app switcher.
-    // Note: platform Home already uses 'home'.
-    icon: 'squares',
+    // Use route-context-aware dashboard icons so tab and sidebar stay visually aligned.
+    // Audit dashboard gets a distinct analytics icon; others keep the generic grid icon.
+    icon: String(activeAppId || '').toUpperCase() === 'AUDIT' ? 'presentation-chart' : 'squares',
   };
 
   return { appId: activeAppId, dashboard, modules };

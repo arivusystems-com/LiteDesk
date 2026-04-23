@@ -1,12 +1,5 @@
 <template>
   <div class="mx-auto w-full">
-    <!-- Entity Description -->
-    <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-      <p class="text-sm text-gray-700 dark:text-gray-300">
-        <strong>Items</strong> are shared across all apps. They represent products, services, and inventory that can be used in deals, quotes, and other records.
-      </p>
-    </div>
-
     <!-- Registry-Driven ModuleList -->
     <ModuleList
       ref="moduleListRef"
@@ -16,6 +9,7 @@
       @import="showImportModal = true"
       @export="exportItems"
       @row-click="handleRowClick"
+      @delete="handleInlineDelete"
       @bulk-action="handleBulkAction"
     >
       <!-- Custom Item Name Cell -->
@@ -226,6 +220,11 @@ const handleBulkAction = async (actionId, selectedRows) => {
     console.error('Error performing bulk action:', error);
     alert('Error performing bulk action. Please try again.');
   }
+};
+
+const handleInlineDelete = async (row) => {
+  if (!row) return;
+  await handleBulkAction('delete', [row]);
 };
 
 // Export items

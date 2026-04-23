@@ -63,14 +63,19 @@
               leave-from="translate-x-0" 
               leave-to="translate-x-full"
             >
-              <!-- Drawer width: compact for quick, slightly wider for full -->
-              <DialogPanel :class="drawerPanelClass">
-                <form @submit.prevent="handleSubmit" class="relative flex h-full flex-col bg-white dark:bg-gray-800 shadow-xl">
+              <!-- Drawer width behavior aligned with shared create drawers -->
+              <DialogPanel
+                :class="[
+                  'pointer-events-auto h-full flex flex-col bg-white dark:bg-gray-800 shadow-xl max-w-[95vw] transition-[width] duration-200 ease-out',
+                  drawerWidthClass
+                ]"
+              >
+                <form @submit.prevent="handleSubmit" class="relative flex h-full flex-col divide-y divide-gray-200 dark:divide-gray-700">
                   <!-- Fixed Header -->
-                  <div class="flex-shrink-0 bg-indigo-700 dark:bg-indigo-800 px-4 py-6 sm:px-6 border-b border-indigo-600 dark:border-indigo-700">
+                  <div class="flex-shrink-0 bg-indigo-700 dark:bg-indigo-800 px-4 py-6 sm:px-6">
                     <div class="flex items-center justify-between">
                       <DialogTitle class="text-base font-semibold text-white">
-                        {{ isEditMode ? 'Edit organization' : (mode === 'quick' ? 'Create organization' : 'Create organization — Full form') }}
+                        {{ isEditMode ? 'Edit Organization' : 'New Organization' }}
                       </DialogTitle>
                       <div class="ml-3 flex h-7 items-center">
                         <button 
@@ -126,6 +131,7 @@
                               :exclude-fields="excludeFields"
                               :show-all-fields="false"
                               :quick-create-mode="true"
+                              :single-column="true"
                               :fields-override="quickCreateFieldsOverrideProp"
                               @update:form-data="updateFormData"
                               @ready="onFormReady"
@@ -144,6 +150,7 @@
                                   :errors="errors"
                                   :show-all-fields="true"
                                   :quick-create-mode="false"
+                                  :single-column="false"
                                   :fields-override="fullQuickCreateFields"
                                   :exclude-fields="fullModeExcludeFields"
                                   :module-override="moduleDefinition"
@@ -160,6 +167,7 @@
                                   :errors="errors"
                                   :show-all-fields="true"
                                   :quick-create-mode="false"
+                                  :single-column="false"
                                   :fields-override="fullOtherFields"
                                   :exclude-fields="fullModeExcludeFields"
                                   :module-override="moduleDefinition"
@@ -176,6 +184,7 @@
                                   :errors="errors"
                                   :show-all-fields="true"
                                   :quick-create-mode="false"
+                                  :single-column="false"
                                   :fields-override="fullParticipationFields"
                                   :exclude-fields="fullModeExcludeFields"
                                   :module-override="moduleDefinition"
@@ -193,7 +202,7 @@
                   </div>
 
                   <!-- Fixed Footer -->
-                  <div class="flex-shrink-0 flex justify-end gap-3 px-4 py-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+                  <div class="flex shrink-0 items-center justify-between gap-3 px-4 py-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
                     <!-- Left: Mode switch button (create mode only) -->
                     <div v-if="!isEditMode" class="flex-1">
                       <button 
@@ -213,6 +222,7 @@
                         Back to quick
                       </button>
                     </div>
+                    <span v-else />
 
                     <!-- Right: Cancel and Save/Create buttons (always on the right) -->
                     <div class="flex gap-3">
@@ -243,7 +253,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import { XMarkIcon } from '@heroicons/vue/24/outline';
 import DynamicForm from '@/components/common/DynamicForm.vue';
@@ -503,19 +513,15 @@ const fetchOrganizationModuleDefinition = async () => {
 
 // Computed: Helper text based on mode
 const helperText = computed(() => {
-  if (isEditMode.value) {
-    return 'Update business organization details.';
-  }
-  return mode.value === 'quick'
-    ? 'Add only what\'s needed now. You can complete details in the full form.'
-    : 'Create a new organization with complete business information.';
+  return isEditMode.value
+    ? 'Update the organization information below.'
+    : 'Fill in the information below to create a new organization.';
 });
 
-// Computed: Drawer panel class based on mode
-const drawerPanelClass = computed(() => {
-  return mode.value === 'quick'
-    ? 'pointer-events-auto w-screen max-w-2xl h-full'
-    : 'pointer-events-auto w-screen max-w-3xl h-full';
+// Computed: Drawer width class based on mode (quick vs full)
+const drawerWidthClass = computed(() => {
+  const fullLike = isEditMode.value || mode.value === 'full';
+  return fullLike ? 'w-[60rem]' : 'w-[30rem]';
 });
 
 // Fields to exclude from Quick Create
@@ -561,6 +567,31 @@ const onFormReady = (module) => {
  */
 const updateFormData = (newData) => {
   formData.value = { ...newData };
+};
+
+const scrollToFirstErrorField = async () => {
+  const errorKeys = Object.keys(errors.value || {}).filter((key) => key && key !== '_general');
+  if (!errorKeys.length) return;
+
+  await nextTick();
+
+  for (const key of errorKeys) {
+    const escapedKey =
+      typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+        ? CSS.escape(key)
+        : key.replace(/"/g, '\\"');
+    const fieldContainer = document.querySelector(`[data-field-key="${escapedKey}"]`);
+    if (!fieldContainer) continue;
+
+    fieldContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const focusTarget = fieldContainer.querySelector(
+      'input, textarea, select, button, [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusTarget && typeof focusTarget.focus === 'function') {
+      focusTarget.focus({ preventScroll: true });
+    }
+    break;
+  }
 };
 
 /**
@@ -673,6 +704,7 @@ const handleSubmit = async () => {
     // Validate required fields
     if (!formData.value.name || formData.value.name.trim() === '') {
       errors.value.name = 'Name is required';
+      scrollToFirstErrorField();
       saving.value = false;
       return;
     }
@@ -680,6 +712,7 @@ const handleSubmit = async () => {
     const website = formData.value.website?.trim();
     if (website && !isValidWebsiteInput(formData.value.website)) {
       errors.value.website = getWebsiteValidationMessage(formData.value.website) || 'Enter a valid website URL (e.g., example.com or https://example.org)';
+      scrollToFirstErrorField();
       saving.value = false;
       return;
     }
@@ -769,6 +802,7 @@ const handleSubmit = async () => {
     console.error('[OrganizationQuickCreate] Error creating organization:', error);
     if (error.response?.data?.errors) {
       errors.value = { ...error.response.data.errors };
+      scrollToFirstErrorField();
     } else {
       errors.value._general = error.message || 'Failed to create organization';
     }

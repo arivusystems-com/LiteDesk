@@ -63,7 +63,7 @@
                 class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option v-if="allowedEventTypes.length === 0" value="">No event types available</option>
-                <!-- ARCHITECTURE NOTE: Store key (MEETING) as value, display label (Meeting / Appointment) to user -->
+                <!-- ARCHITECTURE NOTE: Store key (MEETING) as value, display label (Meeting) to user -->
                 <option v-else v-for="eventType in allowedEventTypes" :key="eventType.key" :value="eventType.key">
                   {{ eventType.label }}
                 </option>
@@ -181,7 +181,7 @@
  * ARCHITECTURE NOTE: This surface is intentionally limited and does not support audit events.
  * 
  * Allowed event types:
- * - Meeting / Appointment (always available)
+ * - Meeting (always available)
  * - Field Sales Beat (if Sales app enabled)
  * 
  * Fields shown:
@@ -447,7 +447,7 @@ const handleSubmit = async () => {
     // ARCHITECTURE NOTE: Send event type KEY (e.g., "MEETING") to backend.
     // Backend projection resolver will:
     // 1. Validate the key against allowed projection types
-    // 2. Map the key to model value (e.g., "MEETING" → "Meeting / Appointment")
+    // 2. Map the key to model value (e.g., "MEETING" -> "Meeting")
     // This ensures canonical validation and prevents label ↔ enum boundary violations.
     const selectedEventType = getEventTypeByKey(form.value.eventType);
     if (!selectedEventType) {
@@ -460,7 +460,7 @@ const handleSubmit = async () => {
     // Send KEY to backend - backend projection resolver will validate and map to label
     const payload: Record<string, any> = {
       eventName: form.value.eventName.trim(),
-      eventType: selectedEventType.key, // Send key (MEETING) - backend will map to label (Meeting / Appointment)
+      eventType: selectedEventType.key, // Send key (MEETING) - backend will map to label (Meeting)
       startDateTime: new Date(form.value.startDateTime).toISOString(),
       endDateTime: new Date(form.value.endDateTime).toISOString(),
       location: form.value.location?.trim() || null,

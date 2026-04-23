@@ -257,7 +257,7 @@ declare const process: {
   };
 };
 
-import { ref, computed, watch, toRef, type PropType } from 'vue';
+import { ref, computed, watch, toRef, nextTick, type PropType } from 'vue';
 import {
   Dialog,
   DialogPanel,
@@ -398,6 +398,31 @@ const moduleDefinition = ref<any>(null);
 const userHasEdited = ref(false);
 function markUserInteraction() {
   userHasEdited.value = true;
+}
+
+async function scrollToFirstErrorField() {
+  const errorKeys = Object.keys(errors.value || {}).filter((key) => key && key !== '_general');
+  if (!errorKeys.length) return;
+
+  await nextTick();
+
+  for (const key of errorKeys) {
+    const escapedKey =
+      typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+        ? CSS.escape(key)
+        : key.replace(/"/g, '\\"');
+    const fieldContainer = document.querySelector(`[data-field-key="${escapedKey}"]`);
+    if (!fieldContainer) continue;
+
+    fieldContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const focusTarget = fieldContainer.querySelector(
+      'input, textarea, select, button, [tabindex]:not([tabindex="-1"])'
+    ) as HTMLElement | null;
+    if (focusTarget && typeof focusTarget.focus === 'function') {
+      focusTarget.focus({ preventScroll: true });
+    }
+    break;
+  }
 }
 
 // Quick create fields from config (Settings → People → Quick Create)
@@ -595,6 +620,7 @@ const handleSubmit = async () => {
   try {
     validateForm();
     if (Object.keys(errors.value).length > 0) {
+      scrollToFirstErrorField();
       saving.value = false;
       return;
     }
@@ -648,6 +674,7 @@ const handleSubmit = async () => {
       } else {
         if (response.errors) {
           errors.value = { ...errors.value, ...response.errors };
+          scrollToFirstErrorField();
         } else {
           errors.value._general = response.message || 'Failed to create contact';
         }
@@ -675,6 +702,7 @@ const handleSubmit = async () => {
     // Handle validation errors from API
     if (err?.response?.data?.errors) {
       errors.value = { ...errors.value, ...err.response.data.errors };
+      scrollToFirstErrorField();
     } else if (err?.response?.data?.message) {
       (errors.value as Record<string, string>)._general = err.response.data.message;
     } else if (err?.response?.data?.error) {

@@ -324,6 +324,7 @@ import { CheckIcon, XMarkIcon } from '@heroicons/vue/24/solid';
 import apiClient from '@/utils/apiClient';
 import { useTabs } from '@/composables/useTabs';
 import { useNotifications, showGlobalNotification } from '@/composables/useNotifications';
+import { useAuthStore } from '@/stores/auth';
 import SectionsBuilder from '@/components/forms/SectionsBuilder.vue';
 import FormSettingsTab from '@/components/forms/FormSettingsTab.vue';
 import OutcomesAndRules from '@/components/forms/OutcomesAndRules.vue';
@@ -335,6 +336,8 @@ const router = useRouter();
 const route = useRoute();
 const { openTab, closeTab, findTabByPath, activeTabId, findTabById, activeTab } = useTabs();
 const { success } = useNotifications();
+const authStore = useAuthStore();
+const getDefaultAssignedTo = () => authStore.user?._id || null;
 
 const isEditing = computed(() => !!route.params.id || !!route.query?.editFrom);
 // Helper to get the current form ID from various sources
@@ -371,7 +374,7 @@ const formData = ref({
   formType: 'Audit',
   visibility: 'Internal',
   status: 'Draft',
-  assignedTo: null,
+  assignedTo: getDefaultAssignedTo(),
   expiryDate: null,
   tags: [],
   approvalRequired: false,
@@ -1235,7 +1238,7 @@ onMounted(async () => {
       formType: formData.value.formType || 'Audit', // Keep formType if set via query
       visibility: 'Internal',
       status: 'Draft',
-      assignedTo: null,
+      assignedTo: getDefaultAssignedTo(),
       expiryDate: null,
       tags: [],
       approvalRequired: false,
@@ -1715,6 +1718,16 @@ watch(() => route.query.formType, () => {
   applyFormTypeFromQuery();
 });
 
+watch(
+  () => authStore.user?._id,
+  (userId) => {
+    if (!isEditing.value && !formData.value.assignedTo && userId) {
+      formData.value.assignedTo = userId;
+    }
+  },
+  { immediate: true }
+);
+
 // Update tab close handler when unsaved changes state changes
 watch(hasUnsavedChanges, () => {
   setupTabCloseHandler();
@@ -1747,7 +1760,7 @@ watch(() => route.params.id, (newId, oldId) => {
       formType: formData.value.formType || 'Audit', // Keep formType if set
       visibility: 'Internal',
       status: 'Draft',
-      assignedTo: null,
+      assignedTo: getDefaultAssignedTo(),
       expiryDate: null,
       tags: [],
       approvalRequired: false,

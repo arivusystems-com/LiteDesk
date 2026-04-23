@@ -65,7 +65,7 @@ export interface EventTypeDefinition {
   key: EventTypeKey;
   
   /**
-   * Human-readable label (e.g., 'Internal Audit', 'Meeting / Appointment')
+   * Human-readable label (e.g., 'Internal Audit', 'Meeting')
    * This can be configured per tenant in Event Settings.
    */
   label: string;

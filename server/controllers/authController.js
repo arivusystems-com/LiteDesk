@@ -443,6 +443,7 @@ exports.loginUser = async (req, res) => {
                     delete: false
                 },
                 settings: {
+                    view: orgUser.roleId.permissions.settings?.view || false,
                     manageUsers: orgUser.roleId.permissions.settings?.manageUsers || false,
                     manageBilling: orgUser.roleId.permissions.settings?.manageBilling || false,
                     manageIntegrations: false,

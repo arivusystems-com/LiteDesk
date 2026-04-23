@@ -274,7 +274,7 @@ function previewRule(rule) {
 }
 
 onMounted(() => {
-  document.title = 'Automation Rules | LiteDesk';
+  document.title = 'Automation Rules | Arivu';
   loadRules();
 });
 </script>

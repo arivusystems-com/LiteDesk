@@ -19,6 +19,7 @@
           v-for="(col, ci) in row.cols" 
           :key="ci"
           :class="getSpanClass(col.span)"
+          :data-field-key="col.fieldKey || ''"
           v-if="col.fieldKey && getFieldByKey(col.fieldKey) && shouldShowField(getFieldByKey(col.fieldKey))"
         >
           <template v-if="props.moduleKey === 'tasks' && col.fieldKey === 'description'">
@@ -53,8 +54,142 @@
     
     <!-- Simple Mode (List-based) -->
     <template v-else>
+      <!-- Full mode: quick-create fields first, then grouped remaining fields -->
+      <template v-if="useSectionedFullForm">
+        <div v-if="quickCreateFields.length" class="space-y-3">
+          <div class="flex items-center gap-3">
+            <h3 class="text-sm font-semibold tracking-wide text-gray-900 dark:text-white uppercase">
+              Quick Create Fields
+            </h3>
+            <div class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+          </div>
+          <div :class="['grid gap-4', props.singleColumn ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2']">
+            <div
+              v-for="field in quickCreateFields"
+              :key="field.key"
+              :class="[
+                (field.dataType === 'Text-Area' || field.dataType === 'Rich Text' || field.dataType === 'Image' || (props.moduleKey === 'tasks' && field.key === 'description')) && !props.singleColumn ? 'md:col-span-2' : '',
+                props.moduleKey === 'tasks' && field.key === 'description' ? 'w-full' : ''
+              ]"
+              :data-field-key="field.key"
+            >
+              <template v-if="props.moduleKey === 'tasks' && field.key === 'description'">
+                <label :for="`field-${field.key}`" class="block text-sm font-medium text-gray-900 dark:text-white mb-1">
+                  {{ getFieldDisplayLabel(field) || 'Description' }}
+                  <span v-if="field.required" class="text-red-500">*</span>
+                </label>
+                <TaskDescriptionEditor
+                  :model-value="localFormData[field.key] || ''"
+                  placeholder="Write or type '/' for commands"
+                  class="w-full"
+                  @update:model-value="(v) => updateField(field.key, v)"
+                />
+                <p v-if="errors[field.key]" class="mt-1 text-sm text-red-600 dark:text-red-400">{{ errors[field.key] }}</p>
+              </template>
+              <template v-else-if="props.moduleKey === 'tasks' && field.key === 'relatedTo'">
+                <TaskRelatedToField
+                  :model-value="normalizedRelatedTo(localFormData[field.key])"
+                  :label="getFieldDisplayLabel(field) || 'Related To'"
+                  :required="!!field.required"
+                  :error="errors[field.key]"
+                  @update:model-value="(v) => updateField(field.key, v)"
+                />
+              </template>
+              <template v-else-if="props.moduleKey === 'tasks' && field.key === 'subtasks'">
+                <TaskSubtasksField
+                  :model-value="localFormData.subtasks || []"
+                  label="Subtasks"
+                  :error="errors.subtasks"
+                  @update:model-value="(v) => updateField('subtasks', v)"
+                />
+              </template>
+              <DynamicFormField
+                v-else
+                :field="field"
+                :value="localFormData[field.key]"
+                @update:value="updateField(field.key, $event)"
+                :currency-code="getCurrencyCodeForField(field)"
+                :currency-code-editable="Boolean(resolveCurrencyCompanionFieldKey(field))"
+                @update:currency-code="updateCurrencyCodeForField(field, $event)"
+                :errors="errors"
+                :dependency-state="getFieldState(field)"
+                :locked="props.lockedFields.includes(field.key)"
+                :module-key="props.moduleKey"
+              />
+            </div>
+          </div>
+        </div>
+        <hr v-if="groupedRemainingSections.length" class="border-gray-200 dark:border-gray-700" />
+        <section
+          v-for="section in groupedRemainingSections"
+          :key="section.key"
+          class="space-y-3"
+        >
+          <div class="flex items-center gap-3">
+            <h3 class="text-sm font-semibold tracking-wide text-gray-900 dark:text-white uppercase">
+              {{ section.label }}
+            </h3>
+            <div class="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+          </div>
+          <div :class="['grid gap-4', props.singleColumn ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2']">
+            <div
+              v-for="field in section.fields"
+              :key="field.key"
+              :class="[
+                (field.dataType === 'Text-Area' || field.dataType === 'Rich Text' || field.dataType === 'Image' || (props.moduleKey === 'tasks' && field.key === 'description')) && !props.singleColumn ? 'md:col-span-2' : '',
+                props.moduleKey === 'tasks' && field.key === 'description' ? 'w-full' : ''
+              ]"
+              :data-field-key="field.key"
+            >
+              <template v-if="props.moduleKey === 'tasks' && field.key === 'description'">
+                <label :for="`field-${field.key}`" class="block text-sm font-medium text-gray-900 dark:text-white mb-1">
+                  {{ getFieldDisplayLabel(field) || 'Description' }}
+                  <span v-if="field.required" class="text-red-500">*</span>
+                </label>
+                <TaskDescriptionEditor
+                  :model-value="localFormData[field.key] || ''"
+                  placeholder="Write or type '/' for commands"
+                  class="w-full"
+                  @update:model-value="(v) => updateField(field.key, v)"
+                />
+                <p v-if="errors[field.key]" class="mt-1 text-sm text-red-600 dark:text-red-400">{{ errors[field.key] }}</p>
+              </template>
+              <template v-else-if="props.moduleKey === 'tasks' && field.key === 'relatedTo'">
+                <TaskRelatedToField
+                  :model-value="normalizedRelatedTo(localFormData[field.key])"
+                  :label="getFieldDisplayLabel(field) || 'Related To'"
+                  :required="!!field.required"
+                  :error="errors[field.key]"
+                  @update:model-value="(v) => updateField(field.key, v)"
+                />
+              </template>
+              <template v-else-if="props.moduleKey === 'tasks' && field.key === 'subtasks'">
+                <TaskSubtasksField
+                  :model-value="localFormData.subtasks || []"
+                  label="Subtasks"
+                  :error="errors.subtasks"
+                  @update:model-value="(v) => updateField('subtasks', v)"
+                />
+              </template>
+              <DynamicFormField
+                v-else
+                :field="field"
+                :value="localFormData[field.key]"
+                @update:value="updateField(field.key, $event)"
+                :currency-code="getCurrencyCodeForField(field)"
+                :currency-code-editable="Boolean(resolveCurrencyCompanionFieldKey(field))"
+                @update:currency-code="updateCurrencyCodeForField(field, $event)"
+                :errors="errors"
+                :dependency-state="getFieldState(field)"
+                :locked="props.lockedFields.includes(field.key)"
+                :module-key="props.moduleKey"
+              />
+            </div>
+          </div>
+        </section>
+      </template>
       <!-- Quick create first layout: quick fields at top, divider, remaining in 2-col (like edit drawer) -->
-      <template v-if="useQuickCreateFirstLayout">
+      <template v-else-if="useQuickCreateFirstLayout">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
           <div
             v-for="field in quickCreateFields"
@@ -64,6 +199,7 @@
               field.key === 'description' ? 'w-full' : '',
               (field.dataType === 'Text-Area' || field.dataType === 'Rich Text' || field.dataType === 'Image' || (props.moduleKey === 'tasks' && (field.key === 'description' || field.key === 'subtasks'))) ? 'md:col-span-2' : ''
             ]"
+            :data-field-key="field.key"
           >
             <template v-if="props.moduleKey === 'tasks' && field.key === 'description'">
               <label :for="`field-${field.key}`" class="block text-sm font-medium text-gray-900 dark:text-white mb-1">
@@ -122,6 +258,7 @@
               'space-y-1',
               (field.dataType === 'Text-Area' || field.dataType === 'Rich Text' || field.dataType === 'Image' || (props.moduleKey === 'tasks' && (field.key === 'description' || field.key === 'subtasks'))) ? 'md:col-span-2' : ''
             ]"
+            :data-field-key="field.key"
           >
             <template v-if="props.moduleKey === 'tasks' && field.key === 'description'">
               <label :for="`field-${field.key}`" class="block text-sm font-medium text-gray-900 dark:text-white mb-1">
@@ -178,6 +315,7 @@
             (field.dataType === 'Text-Area' || field.dataType === 'Rich Text' || field.dataType === 'Image' || (props.moduleKey === 'tasks' && field.key === 'description')) && !props.singleColumn ? 'md:col-span-2' : '',
             props.moduleKey === 'tasks' && field.key === 'description' ? 'w-full' : ''
           ]"
+          :data-field-key="field.key"
         >
           <!-- Task description: full-width TipTap editor (same as edit drawer) -->
           <template v-if="props.moduleKey === 'tasks' && field.key === 'description'">
@@ -250,7 +388,13 @@ import { DEFAULT_CURRENCY_CODE } from '@/utils/currencyOptions';
 import { useAuthStore } from '@/stores/auth';
 import { useRoute } from 'vue-router';
 import { resolveFieldContext, filterFieldsByContext } from '@/utils/fieldContextFilter';
-import { getGlobalSystemFieldKeys, normalizeFieldKeyForSystemMatch } from '@/platform/fields/fieldCapabilityEngine';
+import {
+  getGlobalSystemFieldKeys,
+  normalizeFieldKeyForSystemMatch,
+  isSystemField,
+  canEditField,
+  isFieldVisibleInConfig
+} from '@/platform/fields/fieldCapabilityEngine';
 
 const props = defineProps({
   moduleKey: {
@@ -325,6 +469,51 @@ const currentContext = computed(() => {
   return resolveFieldContext(route.path, route.query);
 });
 
+const INTERNAL_FALLBACK_SYSTEM_KEYS = new Set([
+  'organizationid',
+  'createdat',
+  'updatedat',
+  '_id',
+  '__v',
+  'createdby',
+  'eventid',
+  'createdtime',
+  'modifiedby',
+  'modifiedtime',
+  'audithistory',
+  ...getGlobalSystemFieldKeys()
+]);
+
+const isFormSystemField = (field) => {
+  if (!field?.key) return true;
+  const moduleKey = props.moduleKey || '';
+  const key = String(field.key);
+  const fieldKeyNorm = normalizeFieldKeyForSystemMatch(field.key);
+
+  if (INTERNAL_FALLBACK_SYSTEM_KEYS.has(fieldKeyNorm)) return true;
+  if (moduleKey?.toLowerCase() === 'events' && key.includes('.')) {
+    const parentKey = key.split('.')[0];
+    const parentField = (moduleDefinition.value?.fields || []).find(
+      (f) => String(f?.key || '').toLowerCase() === String(parentKey).toLowerCase()
+    );
+    // Unknown nested paths are treated as system/internal.
+    if (!parentField) return true;
+    // Respect capability-engine decisions based on parent field metadata.
+    if (!isFieldVisibleInConfig(moduleKey, parentField)) return true;
+    if (isSystemField(moduleKey, parentField)) return true;
+    if (!canEditField(moduleKey, parentField)) return true;
+    // Keep nested paths only for participation/audit parent fields.
+    const parentOwner = String(parentField.owner || '').toLowerCase();
+    const parentScope = String(parentField.fieldScope || '').toUpperCase();
+    return !(parentOwner === 'participation' || parentScope === 'AUDIT');
+  }
+  if (moduleKey?.toLowerCase() === 'events' && fieldKeyNorm === 'status') return true;
+  if (!isFieldVisibleInConfig(moduleKey, field)) return true;
+  if (isSystemField(moduleKey, field)) return true;
+  if (!canEditField(moduleKey, field)) return true;
+  return false;
+};
+
 // Field rendering helpers - case-insensitive lookup
 const fieldMap = computed(() => {
   if (!moduleDefinition.value?.fields) return {};
@@ -385,12 +574,7 @@ const orderedFields = computed(() => {
         allFields = [...allFields, { key: 'subtasks', label: 'Subtasks', required: false, order: 999 }];
       }
     }
-    const systemFieldKeys = [
-      'organizationid', 'createdat', 'updatedat', '_id', '__v', 'createdby',
-      'eventid', 'createdtime', 'modifiedby', 'modifiedtime', 'audithistory',
-      ...getGlobalSystemFieldKeys(),
-      ...(props.moduleKey?.toLowerCase() === 'events' ? ['status'] : [])
-    ];
+    const systemFieldKeys = Array.from(INTERNAL_FALLBACK_SYSTEM_KEYS);
     const currentFormData = localFormData.value || {};
     const fieldMapByKey = new Map();
     for (const field of allFields) {
@@ -412,7 +596,7 @@ const orderedFields = computed(() => {
       const field = fieldMapByKey.get(keyLower);
       if (field) {
         const fieldKeyNorm = normalizeFieldKeyForSystemMatch(field.key);
-        const isSystem = systemFieldKeys.includes(fieldKeyNorm);
+        const isSystem = isFormSystemField(field);
         const isExcluded = props.excludeFields.some(
           excluded => normalizeFieldKeyForSystemMatch(excluded) === fieldKeyNorm
         );
@@ -420,6 +604,7 @@ const orderedFields = computed(() => {
         if (field.dependencies && Array.isArray(field.dependencies) && field.dependencies.length > 0) {
           const depState = getFieldDependencyState(field, currentFormData, allFields, {
             currentUser: authStore.user,
+            organization: authStore.organization,
             moduleKey: props.moduleKey,
           });
           isVisible = depState.visible !== false;
@@ -469,12 +654,7 @@ const orderedFields = computed(() => {
     // Note: createdby is excluded from Quick Create (set by backend automatically)
     // Note: status is system-controlled only for Events; for Tasks it is user-editable and can be in Quick Create
     // RULE: Global system fields (trash: deletedAt, deletedBy, deletionReason) never show in create/edit
-    const systemFieldKeys = [
-      'organizationid', 'createdat', 'updatedat', '_id', '__v', 'createdby',
-      'eventid', 'createdtime', 'modifiedby', 'modifiedtime', 'audithistory',
-      ...getGlobalSystemFieldKeys(),
-      ...(props.moduleKey?.toLowerCase() === 'events' ? ['status'] : [])
-    ];
+    const systemFieldKeys = Array.from(INTERNAL_FALLBACK_SYSTEM_KEYS);
   
   // Access localFormData.value to ensure Vue tracks this dependency for reactivity
   const currentFormData = localFormData.value || {};
@@ -540,7 +720,7 @@ const orderedFields = computed(() => {
         
         if (field) {
           const fieldKeyNorm = normalizeFieldKeyForSystemMatch(field.key);
-          const isSystem = systemFieldKeys.includes(fieldKeyNorm);
+          const isSystem = isFormSystemField(field);
           const isExcluded = props.excludeFields.some(excluded => normalizeFieldKeyForSystemMatch(excluded) === fieldKeyNorm);
           
           // Check dependency-based visibility
@@ -564,7 +744,7 @@ const orderedFields = computed(() => {
         const fieldKeyNorm = normalizeFieldKeyForSystemMatch(field.key);
         if (seen.has(fieldKeyNorm)) continue;
         
-        const isSystem = systemFieldKeys.includes(fieldKeyNorm);
+        const isSystem = isFormSystemField(field);
         const isExcluded = props.excludeFields.some(excluded => normalizeFieldKeyForSystemMatch(excluded) === fieldKeyNorm);
         
         // Check dependency-based visibility
@@ -602,7 +782,7 @@ const orderedFields = computed(() => {
     });
     for (const field of allFields) {
       const fieldKeyNorm = normalizeFieldKeyForSystemMatch(field.key);
-      const isSystem = systemFieldKeys.includes(fieldKeyNorm);
+      const isSystem = isFormSystemField(field);
       const isExcluded = props.excludeFields.some(excluded => normalizeFieldKeyForSystemMatch(excluded) === fieldKeyNorm);
       
       // Check dependency-based visibility
@@ -642,7 +822,7 @@ const orderedFields = computed(() => {
     quickCreateLength: quickCreate.length,
     quickCreateKeysSet: Array.from(quickCreateKeysSet),
     fieldMapByKeySize: fieldMapByKey.size,
-    systemFieldKeys: systemFieldKeys,
+    systemFieldKeys: Array.from(INTERNAL_FALLBACK_SYSTEM_KEYS),
     currentFormData: currentFormData,
     moduleKey: props.moduleKey,
     allFieldKeys: Array.from(fieldMapByKey.keys()).slice(0, 30),
@@ -711,7 +891,7 @@ const orderedFields = computed(() => {
     const fieldKeyNorm = normalizeFieldKeyForSystemMatch(field.key);
     
     // Exclude system fields (handles "Deleted By" -> "deletedby")
-    const isSystem = systemFieldKeys.includes(fieldKeyNorm);
+    const isSystem = isFormSystemField(field);
     
     // Check dependency-based visibility using current form data
     let isVisible = true;
@@ -761,7 +941,7 @@ const orderedFields = computed(() => {
     console.log('⚠️ quickCreate is empty and quickCreateMode is false - falling back to required fields');
     for (const field of allFields) {
       const fieldKeyNorm = normalizeFieldKeyForSystemMatch(field.key);
-      const isSystem = systemFieldKeys.includes(fieldKeyNorm);
+      const isSystem = isFormSystemField(field);
       
       // Check dependency visibility for required fields too
       let isVisible = true;
@@ -872,6 +1052,106 @@ const useQuickCreateFirstLayout = computed(() =>
   props.quickCreateFirstWhenExpanded && props.showAllFields && quickCreateKeysForLayout.value.size > 0
 );
 
+const useSectionedFullForm = computed(() =>
+  props.showAllFields && props.quickCreateFirstWhenExpanded
+);
+
+const appScopeLabelMap = {
+  SALES: 'Sales Fields',
+  AUDIT: 'Audit Fields',
+  HELPDESK: 'Helpdesk Fields',
+  PORTAL: 'Portal Fields',
+  LMS: 'LMS Fields',
+  CONTROL_PLANE: 'Control Plane Fields',
+  MARKETING: 'Marketing Fields',
+  PROJECTS: 'Projects Fields'
+};
+
+const formatParticipationSectionLabel = (scopeKey) => {
+  const normalized = String(scopeKey || '').trim().toUpperCase();
+  if (!normalized) return 'Participation Fields';
+  if (appScopeLabelMap[normalized]) return appScopeLabelMap[normalized];
+  const titleCase = normalized
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (ch) => ch.toUpperCase());
+  return `${titleCase} Fields`;
+};
+
+const resolveFieldSectionKey = (field) => {
+  let effectiveField = field;
+  if (props.moduleKey?.toLowerCase() === 'events' && String(field?.key || '').includes('.')) {
+    const parentKey = String(field.key).split('.')[0];
+    const parentField = (moduleDefinition.value?.fields || []).find(
+      (f) => String(f?.key || '').toLowerCase() === String(parentKey).toLowerCase()
+    );
+    if (parentField) effectiveField = { ...parentField, key: field.key };
+  }
+
+  const owner = String(effectiveField?.owner || '').trim().toLowerCase();
+  const context = String(effectiveField?.context || '').trim();
+  const fieldScope = String(effectiveField?.fieldScope || '').trim().toUpperCase();
+
+  if (owner === 'org') {
+    const normalizedContext = context.toUpperCase();
+    if (normalizedContext && normalizedContext !== 'GLOBAL' && normalizedContext !== 'CORE') {
+      return normalizedContext;
+    }
+    return 'CORE';
+  }
+
+  if (owner === 'participation') {
+    return fieldScope || context.toUpperCase() || 'PARTICIPATION';
+  }
+
+  if (fieldScope && fieldScope !== 'CORE' && fieldScope !== 'GLOBAL') {
+    return fieldScope;
+  }
+
+  return 'CORE';
+};
+
+const fullFormSections = computed(() => {
+  if (!useSectionedFullForm.value) return [];
+  const sourceFields = remainingFields.value;
+  const coreFields = [];
+  const participationMap = new Map();
+
+  for (const field of sourceFields) {
+    const sectionKey = resolveFieldSectionKey(field);
+    if (sectionKey === 'CORE') {
+      coreFields.push(field);
+      continue;
+    }
+    if (!participationMap.has(sectionKey)) {
+      participationMap.set(sectionKey, []);
+    }
+    participationMap.get(sectionKey).push(field);
+  }
+
+  const sections = [];
+  if (coreFields.length > 0) {
+    sections.push({
+      key: 'CORE',
+      label: 'Core Fields',
+      fields: coreFields
+    });
+  }
+
+  for (const [scopeKey, fields] of participationMap.entries()) {
+    if (!fields.length) continue;
+    sections.push({
+      key: scopeKey,
+      label: formatParticipationSectionLabel(scopeKey),
+      fields
+    });
+  }
+
+  return sections;
+});
+
+const groupedRemainingSections = computed(() => fullFormSections.value);
+
 const getSpanClass = (span) => {
   const spanMap = {
     1: 'col-span-1',
@@ -905,15 +1185,8 @@ const shouldShowField = (field) => {
     }
   }
   
-  // Exclude system fields (module-aware: status only for Events; Tasks status is user-editable and can be in Quick Create)
-  // RULE: Global system fields (trash: deletedAt, deletedBy, deletionReason) never show in create/edit
-  const systemFieldKeys = [
-    'organizationid', 'createdat', 'updatedat', '_id', '__v', 'createdby',
-    'eventid', 'createdtime', 'modifiedby', 'modifiedtime', 'audithistory',
-    ...getGlobalSystemFieldKeys(),
-    ...(props.moduleKey?.toLowerCase() === 'events' ? ['status'] : [])
-  ];
-  if (systemFieldKeys.includes(normalizeFieldKeyForSystemMatch(field.key))) return false;
+  // Exclude system/infrastructure and non-editable fields via capability engine
+  if (isFormSystemField(field)) return false;
   
   // Evaluate dependency-based visibility using getFieldState for consistency
   // Access localFormData.value to ensure Vue tracks this dependency
@@ -945,6 +1218,7 @@ const getFieldState = (field) => {
   const currentFormData = localFormData.value;
   return getFieldDependencyState(field, currentFormData, moduleDefinition.value?.fields || [], {
     currentUser: authStore.user,
+    organization: authStore.organization,
     moduleKey: props.moduleKey,
   });
 };
@@ -1025,7 +1299,7 @@ function updateCurrencyCodeForField(field, currencyCode) {
 // If a field becomes readonly + required, ensure its value is set to a safe default.
 // (Used to keep audit GEO UI accurate without event-type hardcoding.)
 watch(
-  () => [moduleDefinition.value?.fields, localFormData.value, authStore.user?.organizationId],
+  () => [moduleDefinition.value?.fields, localFormData.value, authStore.user?.organizationId, authStore.organization?._id, authStore.organization?.id],
   () => {
     const fields = moduleDefinition.value?.fields || [];
     if (!Array.isArray(fields) || fields.length === 0) return;
@@ -1035,6 +1309,7 @@ watch(
       if (!field?.key) continue;
       const depState = getFieldDependencyState(field, localFormData.value, fields, {
         currentUser: authStore.user,
+        organization: authStore.organization,
         moduleKey: props.moduleKey,
       });
 

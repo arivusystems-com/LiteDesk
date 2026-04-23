@@ -41,7 +41,7 @@ const AUDIT_EVENT_TYPES = [
  * 
  * @example
  * isAuditEventType('Internal Audit') // true
- * isAuditEventType('Meeting / Appointment') // false
+ * isAuditEventType('Meeting') // false
  * 
  * See: docs/architecture/event-settings.md
  */

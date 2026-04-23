@@ -1,6 +1,7 @@
 const Form = require('../models/Form');
 const FormResponse = require('../models/FormResponse');
 const Task = require('../models/Task');
+const Event = require('../models/Event');
 const mongoose = require('mongoose');
 const formProcessingService = require('../services/formProcessingService');
 
@@ -393,6 +394,27 @@ exports.submitForm = async (req, res) => {
                     }
                     
                     await event.save();
+
+                    // Keep Audit App timeline in sync when form submission transitions audit state.
+                    try {
+                        const auditSyncService = require('../services/auditSyncService');
+                        await auditSyncService.syncAuditAssignmentFromEvent(event);
+                        await auditSyncService.syncAuditTimelineFromEvent(event, {
+                            action: 'SUBMIT',
+                            fromState: 'checked_in',
+                            toState: event.auditState,
+                            actorId: req.user ? req.user._id : null,
+                            timestamp: new Date(),
+                            meta: {
+                                formResponseId: processedResponse._id.toString(),
+                                hasFailures: hasFailures,
+                                autoCheckedOut: true,
+                                source: 'form_submit'
+                            }
+                        });
+                    } catch (syncError) {
+                        console.error('[submitForm] Sync error (non-blocking):', syncError.message);
+                    }
                 }
             } catch (err) {
                 console.error('Error updating event metadata and audit state:', err);
@@ -584,6 +606,27 @@ exports.submitForm = async (req, res) => {
                             
                             event.modifiedBy = req.user ? req.user._id : null;
                             await event.save();
+
+                            // Keep Audit App timeline in sync when linked form submission transitions audit state.
+                            try {
+                                const auditSyncService = require('../services/auditSyncService');
+                                await auditSyncService.syncAuditAssignmentFromEvent(event);
+                                await auditSyncService.syncAuditTimelineFromEvent(event, {
+                                    action: 'SUBMIT',
+                                    fromState: 'checked_in',
+                                    toState: event.auditState,
+                                    actorId: req.user ? req.user._id : null,
+                                    timestamp: new Date(),
+                                    meta: {
+                                        formResponseId: processedResponse._id.toString(),
+                                        hasFailures: hasFailures,
+                                        autoCheckedOut: true,
+                                        source: 'form_submit_linked_to'
+                                    }
+                                });
+                            } catch (syncError) {
+                                console.error('[submitForm] Sync error via linkedTo (non-blocking):', syncError.message);
+                            }
                         }
                     }
                 }
@@ -613,9 +656,44 @@ exports.submitForm = async (req, res) => {
 // @access  Private
 exports.getAllResponses = async (req, res) => {
     try {
+        const isAuditScoped = req.auditScopedResponses === true || String(req.appKey || '').toUpperCase() === 'AUDIT';
         const query = {
             organizationId: req.user.organizationId
         };
+
+        if (isAuditScoped) {
+            const auditEventTypes = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
+            const ownedEvents = await Event.find({
+                organizationId: req.user.organizationId,
+                eventOwnerId: req.user._id,
+                eventType: { $in: auditEventTypes }
+            }).select('_id').lean();
+
+            const ownedEventIds = ownedEvents.map(event => event._id);
+            if (ownedEventIds.length === 0) {
+                return res.status(200).json({
+                    success: true,
+                    data: [],
+                    pagination: {
+                        currentPage: parseInt(req.query.page) || 1,
+                        limit: parseInt(req.query.limit) || 20,
+                        totalResponses: 0,
+                        totalPages: 0
+                    },
+                    statistics: {
+                        total: 0,
+                        pending: 0,
+                        needsReview: 0,
+                        approved: 0,
+                        rejected: 0,
+                        closed: 0
+                    }
+                });
+            }
+
+            query['linkedTo.type'] = 'Event';
+            query['linkedTo.id'] = { $in: ownedEventIds };
+        }
         
         // Get pagination params
         const page = parseInt(req.query.page) || 1;
@@ -661,10 +739,10 @@ exports.getAllResponses = async (req, res) => {
         if (req.query.formId) {
             query.formId = req.query.formId;
         }
-        if (req.query.linkedToType) {
+        if (!isAuditScoped && req.query.linkedToType) {
             query['linkedTo.type'] = req.query.linkedToType;
         }
-        if (req.query.linkedToId) {
+        if (!isAuditScoped && req.query.linkedToId) {
             query['linkedTo.id'] = req.query.linkedToId;
         }
         
@@ -709,6 +787,10 @@ exports.getAllResponses = async (req, res) => {
         
         // Get statistics (exclude archived/invalidated unless explicitly requested)
         const statsMatch = { organizationId: req.user.organizationId };
+        if (isAuditScoped) {
+            statsMatch['linkedTo.type'] = query['linkedTo.type'];
+            statsMatch['linkedTo.id'] = query['linkedTo.id'];
+        }
         const statsArchiveInvalidateConditions = [];
         if (req.query.includeArchived !== 'true') {
             statsArchiveInvalidateConditions.push({

@@ -1,10 +1,22 @@
 <template>
   <div class="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
     <!-- Mobile Top Bar -->
-    <header class="sticky top-0 z-50 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 lg:hidden">
-      <div class="flex items-center justify-between px-4 h-14">
-        <h1 class="text-lg font-semibold text-gray-900 dark:text-white">Audit</h1>
-        <div class="flex items-center gap-3 pl-2">
+    <header class="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 lg:hidden">
+      <div class="flex items-center gap-x-6 px-4 py-3 h-16 sm:px-6">
+        <button
+          @click="drawerOpen = !drawerOpen"
+          class="-m-2.5 p-2.5 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white lg:hidden"
+          aria-label="Toggle menu"
+        >
+          <svg class="w-6 h-6 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path v-if="!drawerOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        <h1 class="flex-1 text-base font-semibold text-gray-900 dark:text-white truncate">{{ mobileHeaderTitle }}</h1>
+
+        <div class="flex h-full items-center gap-3 pl-2 sm:pl-3">
           <!-- Mobile only: tablet uses TabBar bell (matches main shell TabBar styling) -->
           <NotificationBell
             class="md:hidden !min-h-9 !min-w-9 !p-1.5 rounded-md !border-0 !bg-transparent shadow-none hover:!bg-gray-100 dark:hover:!bg-gray-700 [&_svg]:!w-6 [&_svg]:!h-6"
@@ -26,7 +38,7 @@
           
           <Menu as="div" class="relative">
             <MenuButton
-              class="rounded-full overflow-hidden w-8 h-8 flex-shrink-0 ring-1 ring-gray-200 dark:ring-gray-600 hover:ring-gray-300 dark:hover:ring-gray-500 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              class="inline-flex items-center justify-center rounded-full overflow-hidden w-8 h-8 flex-shrink-0 ring-1 ring-gray-200 dark:ring-gray-600 hover:ring-gray-300 dark:hover:ring-gray-500 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <img
                 :src="auditHeaderAvatarUrl"
@@ -89,17 +101,6 @@
               </MenuItems>
             </transition>
           </Menu>
-          
-          <button
-            @click="drawerOpen = !drawerOpen"
-            class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            aria-label="Toggle menu"
-          >
-            <svg class="w-6 h-6 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path v-if="!drawerOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-              <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
         </div>
       </div>
     </header>
@@ -124,35 +125,73 @@
     </aside>
 
     <!-- Mobile Drawer -->
-    <div
-      v-if="drawerOpen"
-      class="fixed inset-0 z-50 lg:hidden"
-      @click="drawerOpen = false"
-    >
-      <div class="fixed inset-0 bg-black bg-opacity-50" />
-      <div class="fixed inset-y-0 left-0 w-64 bg-white dark:bg-gray-800 shadow-xl">
-        <div class="flex items-center justify-between h-14 px-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Menu</h2>
-          <button
-            @click="drawerOpen = false"
-            class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-            aria-label="Close menu"
+    <TransitionRoot as="template" :show="drawerOpen">
+      <Dialog class="relative z-50 lg:hidden" @close="drawerOpen = false">
+        <TransitionChild
+          as="template"
+          enter="transition-opacity ease-linear duration-300"
+          enter-from="opacity-0"
+          enter-to="opacity-100"
+          leave="transition-opacity ease-linear duration-300"
+          leave-from="opacity-100"
+          leave-to="opacity-0"
+        >
+          <div class="fixed inset-0 bg-gray-900/80 dark:bg-gray-900/80" />
+        </TransitionChild>
+
+        <div class="fixed inset-0 flex">
+          <TransitionChild
+            as="template"
+            enter="transition ease-in-out duration-300 transform"
+            enter-from="-translate-x-full"
+            enter-to="translate-x-0"
+            leave="transition ease-in-out duration-300 transform"
+            leave-from="translate-x-0"
+            leave-to="-translate-x-full"
           >
-            <svg class="w-6 h-6 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+            <DialogPanel class="relative mr-16 flex w-full max-w-xs flex-1">
+              <TransitionChild
+                as="template"
+                enter="ease-in-out duration-300"
+                enter-from="opacity-0"
+                enter-to="opacity-100"
+                leave="ease-in-out duration-300"
+                leave-from="opacity-100"
+                leave-to="opacity-0"
+              >
+                <div class="absolute top-0 left-full flex w-16 justify-center pt-5">
+                  <button type="button" class="-m-2.5 p-2.5" @click="drawerOpen = false">
+                    <span class="sr-only">Close sidebar</span>
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </TransitionChild>
+
+              <div class="relative flex grow flex-col overflow-y-auto bg-white dark:bg-gray-900 ring ring-gray-200 dark:ring-white/10 before:pointer-events-none before:absolute before:inset-0 before:bg-gray-50 dark:before:bg-black/10">
+                <div class="relative flex grow">
+                  <AppSidebar
+                    v-if="sidebarStructure"
+                    :sidebar-structure="sidebarStructure"
+                    :collapsed="false"
+                    embedded
+                  />
+
+                  <div v-if="loadingSidebar" class="px-2 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                    Loading...
+                  </div>
+
+                  <div v-if="!loadingSidebar && !sidebarStructure" class="px-2 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                    No navigation available
+                  </div>
+                </div>
+              </div>
+            </DialogPanel>
+          </TransitionChild>
         </div>
-        <div class="px-2 py-2">
-          <AppSidebar
-            v-if="sidebarStructure"
-            :sidebar-structure="sidebarStructure"
-            :collapsed="false"
-            embedded
-          />
-        </div>
-      </div>
-    </div>
+      </Dialog>
+    </TransitionRoot>
 
     <!-- Main Content - Phase 2D: Dynamic margin based on sidebar state -->
     <main 
@@ -164,7 +203,7 @@
       <!-- Tab Bar - Hidden on mobile, visible on tablet and up -->
       <TabBar class="hidden md:block" />
       
-      <div class="min-h-screen pt-12 md:pt-14">
+      <div class="min-h-screen pt-[var(--tabbar-offset,64px)]">
         <RouterView v-slot="{ Component }">
           <keep-alive :max="10">
             <component :is="Component" :key="$route.fullPath" />
@@ -205,14 +244,12 @@
 
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { RouterView, RouterLink, useRouter, useRoute } from 'vue-router';
-import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue';
+import { Dialog, DialogPanel, Menu, MenuButton, MenuItem, MenuItems, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import { useAuthStore } from '@/stores/auth';
 import { useAppShellStore } from '@/stores/appShell';
 import { useColorMode } from '@/composables/useColorMode';
 import { useSidebarState } from '@/composables/useSidebarState';
-import { buildSidebarFromRegistry } from '@/utils/buildSidebarFromRegistry';
-import { getAppRegistry } from '@/utils/getAppRegistry';
-import { createPermissionSnapshot } from '@/types/permission-snapshot.types';
+import { buildSidebarStructureForSession } from '@/utils/buildSidebarForSession';
 import SyncDrawer from '@/components/audit/SyncDrawer.vue';
 import { getPendingCount } from '@/services/offlineQueue.js';
 import NotificationBell from '@/components/notifications/NotificationBell.vue';
@@ -281,10 +318,12 @@ const buildSidebar = async () => {
 
   loadingSidebar.value = true;
   try {
-    const registry = await getAppRegistry();
     if (!authStore.user || !authStore.isAuthenticated) return;
-    const snapshot = createPermissionSnapshot(authStore.user);
-    sidebarStructure.value = await buildSidebarFromRegistry(registry, snapshot);
+    const { structure } = await buildSidebarStructureForSession(
+      authStore.user,
+      authStore.hasAppAccess
+    );
+    sidebarStructure.value = structure;
   } catch (e) {
     console.error('[AuditLayout] Failed to build sidebar:', e);
     sidebarStructure.value = null;
@@ -298,6 +337,29 @@ const onCoreModulesUpdated = () => {
     buildSidebar();
   }
 };
+
+watch(
+  () => authStore.user,
+  (newUser) => {
+    if (newUser && authStore.isAuthenticated) {
+      buildSidebar();
+    } else {
+      sidebarStructure.value = null;
+    }
+  }
+);
+
+watch(() => authStore.isAuthenticated, (isAuthenticated) => {
+  if (isAuthenticated && authStore.user) {
+    buildSidebar();
+  } else {
+    sidebarStructure.value = null;
+  }
+});
+
+watch(() => route.path, () => {
+  drawerOpen.value = false;
+});
 
 // Desktop: notification drawer; mobile: sheet (TabBar dispatches this event)
 const handleNotificationsClick = () => {
@@ -364,6 +426,18 @@ const toggleColorModeFromMenu = () => {
 
 const colorModeLabel = computed(() => {
   return colorMode.value === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode';
+});
+
+const mobileHeaderTitle = computed(() => {
+  const path = route.path || '';
+
+  if (path.startsWith('/audit/dashboard')) return 'Dashboard';
+  if (path.startsWith('/audit/audits')) return 'My Audits';
+  if (path.startsWith('/audit/schedule')) return 'Schedule';
+  if (path.startsWith('/audit/findings')) return 'Findings';
+  if (path.startsWith('/audit/responses')) return 'Responses';
+  if (path.startsWith('/audit/settings/notifications')) return 'Notifications';
+  return 'Dashboard';
 });
 
 // Check if user has Sales access (for Settings link)

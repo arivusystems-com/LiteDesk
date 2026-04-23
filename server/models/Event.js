@@ -47,14 +47,14 @@ const eventSchema = new Schema({
   eventType: { 
     type: String, 
     enum: [
-      'Meeting / Appointment', 
+      'Meeting',
       'Internal Audit', 
       'External Audit — Single Org', 
       'External Audit Beat', 
       'Field Sales Beat'
     ],
     required: true,
-    default: 'Meeting / Appointment'
+    default: 'Meeting'
   },
   
   // Execution Status - System-controlled only
@@ -522,6 +522,11 @@ eventSchema.pre('save', function(next) {
   if (this.endDateTime && this.startDateTime && this.endDateTime <= this.startDateTime) {
     return next(new Error('End date must be after start date'));
   }
+
+  // Backward-compat normalization: persist the renamed meeting type label.
+  if (this.eventType === 'Meeting / Appointment') {
+    this.eventType = 'Meeting';
+  }
   
   // ===== GEO REQUIRED ENFORCEMENT =====
   // Enforce GEO Required based on event type per spec
@@ -534,7 +539,7 @@ eventSchema.pre('save', function(next) {
       if (this.geoRequired === undefined || this.geoRequired === null) {
         this.geoRequired = true;
       }
-    } else if (this.eventType === 'Meeting / Appointment') {
+    } else if (this.eventType === 'Meeting / Appointment' || this.eventType === 'Meeting') {
       // OFF by default, but can be enabled
       if (this.geoRequired === undefined || this.geoRequired === null) {
         this.geoRequired = false;
@@ -602,6 +607,11 @@ eventSchema.pre('save', function(next) {
 // - If allowSelfReview = false, reviewerId MUST be different from auditor (eventOwnerId)
 eventSchema.pre('validate', function (next) {
   try {
+    // Canonicalize legacy eventType label before enum validation.
+    if (this.eventType === 'Meeting / Appointment') {
+      this.eventType = 'Meeting';
+    }
+
     const auditTypes = ['Internal Audit', 'External Audit — Single Org', 'External Audit Beat'];
     if (!auditTypes.includes(this.eventType)) return next();
 

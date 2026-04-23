@@ -38,8 +38,17 @@
 <script setup>
 import { computed, h } from 'vue';
 import { useRouter } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
+import { canAccessSettingsTab } from '@/utils/settingsTabAccess';
 
 const router = useRouter();
+const authStore = useAuthStore();
+
+const settingsAccessCtx = computed(() => ({
+  isOwner: !!authStore.user?.isOwner,
+  role: authStore.user?.role,
+  permissions: authStore.user?.permissions,
+}));
 
 // Icon components
 const OrganizationIcon = () => h('svg', {
@@ -112,6 +121,20 @@ const SubscriptionsIcon = () => h('svg', {
   })
 ]);
 
+const BellIcon = () => h('svg', {
+  fill: 'none',
+  stroke: 'currentColor',
+  viewBox: '0 0 24 24',
+  xmlns: 'http://www.w3.org/2000/svg',
+}, [
+  h('path', {
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    'stroke-width': '2',
+    d: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9',
+  }),
+]);
+
 const SecurityIcon = () => h('svg', {
   fill: 'none',
   stroke: 'currentColor',
@@ -140,58 +163,69 @@ const IntegrationsIcon = () => h('svg', {
   })
 ]);
 
-// Sections configuration
-const sections = computed(() => [
-  {
-    id: 'organization',
-    name: 'Organization',
-    description: 'Manage your company information, branding, and organization-wide preferences',
-    icon: OrganizationIcon,
-    route: '/settings?tab=organization'
-  },
-  {
-    id: 'users-access',
-    name: 'Users & Access',
-    description: 'Control who can use the platform and what they\'re allowed to do',
-    icon: UsersAccessIcon,
-    route: '/settings?tab=users-access'
-  },
-  {
-    id: 'core-modules',
-    name: 'Core Modules',
-    description: 'Manage shared platform capabilities used across all applications',
-    icon: CoreModulesIcon,
-    route: '/settings?tab=core-modules'
-  },
-  {
-    id: 'applications',
-    name: 'Applications',
-    description: 'Install and configure the business applications your organization uses',
-    icon: ApplicationsIcon,
-    route: '/settings?tab=applications'
-  },
-  {
-    id: 'subscriptions',
-    name: 'Subscriptions',
-    description: 'Manage your subscription plan, payment method, and usage limits',
-    icon: SubscriptionsIcon,
-    route: '/settings?tab=subscriptions'
-  },
-  {
-    id: 'security',
-    name: 'Security',
-    description: 'Configure authentication, password policies, and security settings',
-    icon: SecurityIcon,
-    route: '/settings?tab=security'
-  },
-  {
-    id: 'integrations',
-    name: 'Integrations',
-    description: 'Connect external services and tools to extend platform capabilities',
-    icon: IntegrationsIcon,
-    route: '/settings?tab=integrations'
-  }
-]);
+// Sections configuration (filtered by the same rules as the Settings sidebar)
+const sections = computed(() => {
+  const all = [
+    {
+      id: 'organization',
+      name: 'Organization',
+      description: 'Manage your company information, branding, and organization-wide preferences',
+      icon: OrganizationIcon,
+      route: '/settings?tab=organization',
+    },
+    {
+      id: 'users-access',
+      name: 'Users & Access',
+      description: "Control who can use the platform and what they're allowed to do",
+      icon: UsersAccessIcon,
+      route: '/settings?tab=users-access',
+    },
+    {
+      id: 'core-modules',
+      name: 'Core Modules',
+      description: 'Manage shared platform capabilities used across all applications',
+      icon: CoreModulesIcon,
+      route: '/settings?tab=core-modules',
+    },
+    {
+      id: 'applications',
+      name: 'Applications',
+      description: 'Install and configure the business applications your organization uses',
+      icon: ApplicationsIcon,
+      route: '/settings?tab=applications',
+    },
+    {
+      id: 'subscriptions',
+      name: 'Subscriptions',
+      description: 'Manage your subscription plan, payment method, and usage limits',
+      icon: SubscriptionsIcon,
+      route: '/settings?tab=subscriptions',
+    },
+    {
+      id: 'notifications',
+      name: 'Notifications',
+      description: 'Choose how you are notified about activity in your workspace',
+      icon: BellIcon,
+      route: '/settings?tab=notifications',
+    },
+    {
+      id: 'security',
+      name: 'Security',
+      description: 'Configure authentication, password policies, and security settings',
+      icon: SecurityIcon,
+      route: '/settings?tab=security',
+    },
+    {
+      id: 'integrations',
+      name: 'Integrations',
+      description: 'Connect external services and tools to extend platform capabilities',
+      icon: IntegrationsIcon,
+      route: '/settings?tab=integrations',
+    },
+  ];
+  const ctx = settingsAccessCtx.value;
+  return all.filter((s) => canAccessSettingsTab(s.id, ctx));
+});
 
 const navigateToSection = (sectionId) => {
   const section = sections.value.find(s => s.id === sectionId);

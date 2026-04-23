@@ -264,6 +264,7 @@ import { CheckIcon, XMarkIcon } from '@heroicons/vue/24/solid';
 import apiClient from '@/utils/apiClient';
 import { useRouter } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
+import { useAuthStore } from '@/stores/auth';
 import SectionsBuilder from '@/components/forms/SectionsBuilder.vue';
 import FormSettingsTab from '@/components/forms/FormSettingsTab.vue';
 import FormPreview from '@/components/forms/FormPreview.vue';
@@ -293,6 +294,8 @@ const emit = defineEmits(['close', 'created', 'updated']);
 
 const router = useRouter();
 const { openTab } = useTabs();
+const authStore = useAuthStore();
+const getDefaultAssignedTo = () => authStore.user?._id || null;
 
 const isEditing = computed(() => !!props.form?._id);
 const saving = ref(false);
@@ -304,7 +307,7 @@ const formData = ref({
   formType: 'Audit',
   visibility: 'Internal',
   status: 'Draft',
-  assignedTo: null,
+  assignedTo: getDefaultAssignedTo(),
   expiryDate: null,
   tags: [],
   approvalRequired: false,
@@ -480,7 +483,7 @@ watch(() => props.isOpen, (isOpen) => {
       formType: 'Audit',
       visibility: 'Internal',
       status: 'Draft',
-      assignedTo: null,
+      assignedTo: getDefaultAssignedTo(),
       expiryDate: null,
       tags: [],
       approvalRequired: false,
@@ -527,6 +530,16 @@ watch(() => props.isOpen, (isOpen) => {
     currentStepIndex.value = 0;
   }
 });
+
+watch(
+  () => authStore.user?._id,
+  (userId) => {
+    if (props.isOpen && !isEditing.value && !formData.value.assignedTo && userId) {
+      formData.value.assignedTo = userId;
+    }
+  },
+  { immediate: true }
+);
 
 const handleStepChange = (index) => {
   if (index >= 0 && index < steps.value.length) {

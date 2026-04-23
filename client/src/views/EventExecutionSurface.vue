@@ -1255,6 +1255,7 @@ const eventTypeKey = computed(() => {
   
   // Otherwise, try to map from label to key
   const labelToKeyMap: Record<string, string> = {
+    'Meeting': 'MEETING',
     'Meeting / Appointment': 'MEETING',
     'Internal Audit': 'INTERNAL_AUDIT',
     'External Audit — Single Org': 'EXTERNAL_AUDIT_SINGLE',

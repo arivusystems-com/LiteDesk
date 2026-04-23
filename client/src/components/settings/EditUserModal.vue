@@ -74,6 +74,84 @@
               </select>
             </div>
 
+            <!-- App Access -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                App Access *
+              </label>
+              <div v-if="loadingCapabilities" class="text-sm text-gray-500 dark:text-gray-400">
+                Loading available apps...
+              </div>
+              <div v-else-if="availableApps.length === 0" class="text-sm text-gray-500 dark:text-gray-400">
+                No apps available for this user's type.
+              </div>
+              <div v-else class="space-y-3">
+                <div
+                  v-for="app in availableApps"
+                  :key="app.appKey"
+                  class="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+                  :class="{
+                    'bg-gray-50 dark:bg-gray-900/50': isAppSelected(app.appKey),
+                    'opacity-50': !isAppEnabled(app)
+                  }"
+                >
+                  <div class="flex items-start gap-3">
+                    <HeadlessCheckbox
+                      :id="`edit-app-${app.appKey}`"
+                      :checked="isAppSelected(app.appKey)"
+                      :disabled="!isAppEnabled(app)"
+                      @change="toggleApp(app)"
+                      checkbox-class="mt-1 w-4 h-4 text-indigo-600 focus:ring-indigo-500 rounded"
+                    />
+                    <div class="flex-1">
+                      <label
+                        :for="`edit-app-${app.appKey}`"
+                        class="flex items-center justify-between cursor-pointer"
+                        :class="{ 'cursor-not-allowed': !isAppEnabled(app) }"
+                      >
+                        <div>
+                          <div class="font-medium text-gray-900 dark:text-white">
+                            {{ getAppDisplayName(app.appKey) }}
+                          </div>
+                          <div v-if="app.seatInfo && app.seatInfo.limit !== null" class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {{ app.seatInfo.used }}/{{ app.seatInfo.limit }} seats used
+                            <span v-if="app.seatInfo.available === 0" class="text-red-600 dark:text-red-400 font-medium">
+                              (No seats available)
+                            </span>
+                            <span v-else-if="app.seatInfo.available !== null" class="text-green-600 dark:text-green-400">
+                              ({{ app.seatInfo.available }} available)
+                            </span>
+                          </div>
+                        </div>
+                      </label>
+
+                      <div v-if="isAppSelected(app.appKey)" class="mt-3 ml-7">
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Role for {{ getAppDisplayName(app.appKey) }}:
+                        </label>
+                        <select
+                          v-model="selectedAppRoles[app.appKey]"
+                          @change="updateAppRole(app.appKey, $event.target.value)"
+                          class="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
+                        >
+                          <option v-for="roleKey in app.roles" :key="roleKey" :value="roleKey">
+                            {{ getRoleDisplayName(app.appKey, roleKey) }}
+                          </option>
+                        </select>
+                      </div>
+
+                      <div v-if="!isAppEnabled(app) && app.seatInfo && !app.seatInfo.canAdd" class="mt-2 ml-7 text-xs text-red-600 dark:text-red-400">
+                        {{ app.seatInfo.reason }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p v-if="validationErrors.appAccess" class="text-xs text-red-600 dark:text-red-400 mt-1">
+                {{ validationErrors.appAccess }}
+              </p>
+            </div>
+
             <!-- Status Change Warning -->
             <div v-if="form.status !== 'active'" class="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
               <div class="flex gap-3">
@@ -154,8 +232,8 @@
 </template>
 
 <script setup>
+import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, watch, computed } from 'vue';
-import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/utils/apiClient';
 
 const props = defineProps({
@@ -165,8 +243,6 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'user-updated']);
 
-const authStore = useAuthStore();
-
 const form = ref({
   roleId: '',
   status: 'active'
@@ -175,6 +251,40 @@ const form = ref({
 const saving = ref(false);
 const error = ref('');
 const availableRoles = ref([]);
+const capabilities = ref([]);
+const loadingCapabilities = ref(false);
+const selectedAppRoles = ref({});
+const validationErrors = ref({});
+
+const appDisplayNames = {
+  CRM: 'CRM',
+  AUDIT: 'Audit',
+  PORTAL: 'Portal'
+};
+
+const roleDisplayNames = {
+  CRM: {
+    ADMIN: 'Admin',
+    MANAGER: 'Manager',
+    USER: 'User'
+  },
+  AUDIT: {
+    AUDITOR: 'Auditor'
+  },
+  PORTAL: {
+    CUSTOMER: 'Customer',
+    VIEWER: 'Viewer'
+  }
+};
+
+const availableApps = computed(() => {
+  const userType = props.user?.userType || 'INTERNAL';
+  return capabilities.value.filter(app =>
+    app.userTypesAllowed?.includes(userType)
+  );
+});
+
+const selectedApps = computed(() => Object.keys(selectedAppRoles.value));
 
 const fetchRoles = async () => {
   try {
@@ -187,10 +297,39 @@ const fetchRoles = async () => {
   }
 };
 
+const fetchCapabilities = async () => {
+  loadingCapabilities.value = true;
+  try {
+    const response = await apiClient.get('/users/add-capabilities');
+    if (response.success) {
+      capabilities.value = response.data.apps || [];
+    }
+  } catch (err) {
+    console.error('Error fetching capabilities:', err);
+    error.value = 'Failed to load app access capabilities.';
+  } finally {
+    loadingCapabilities.value = false;
+  }
+};
+
+const initSelectedAppRoles = () => {
+  const next = {};
+  const entries = props.user?.appAccess || [];
+  entries.forEach((entry) => {
+    if (entry?.status === 'ACTIVE' && entry?.appKey && entry?.roleKey) {
+      next[entry.appKey] = entry.roleKey;
+    }
+  });
+  selectedAppRoles.value = next;
+};
+
 watch(() => props.isOpen, (newVal) => {
   if (newVal) {
     console.log('EditUserModal opened with user:', props.user);
+    error.value = '';
+    validationErrors.value = {};
     fetchRoles();
+    fetchCapabilities();
     // Initialize form when modal opens
     if (props.user) {
       const roleIdValue = props.user.roleId?._id || props.user.roleId || props.user.role || '';
@@ -199,6 +338,7 @@ watch(() => props.isOpen, (newVal) => {
         roleId: roleIdValue,
         status: props.user.status || 'active'
       };
+      initSelectedAppRoles();
     }
   }
 });
@@ -213,8 +353,53 @@ watch(() => props.user, (newUser) => {
       roleId: roleIdValue,
       status: newUser.status || 'active'
     };
+    initSelectedAppRoles();
   }
 });
+
+const isAppSelected = (appKey) => appKey in selectedAppRoles.value;
+
+const isAppEnabled = (app) => {
+  if (!app.seatInfo) return true;
+  if (isAppSelected(app.appKey)) return true;
+  return app.seatInfo.canAdd;
+};
+
+const toggleApp = (app) => {
+  const appKey = app.appKey;
+  if (isAppSelected(appKey)) {
+    delete selectedAppRoles.value[appKey];
+  } else {
+    const defaultRole = app.defaultRole || app.roles?.[0];
+    if (defaultRole) {
+      selectedAppRoles.value[appKey] = defaultRole;
+    }
+  }
+  validationErrors.value.appAccess = null;
+};
+
+const updateAppRole = (appKey, roleKey) => {
+  selectedAppRoles.value[appKey] = roleKey;
+};
+
+const getAppDisplayName = (appKey) => appDisplayNames[appKey] || appKey;
+const getRoleDisplayName = (appKey, roleKey) => roleDisplayNames[appKey]?.[roleKey] || roleKey;
+
+const validateForm = () => {
+  validationErrors.value = {};
+  if (selectedApps.value.length === 0) {
+    validationErrors.value.appAccess = 'At least one app must remain assigned.';
+    return false;
+  }
+  for (const appKey of selectedApps.value) {
+    const app = availableApps.value.find(a => a.appKey === appKey);
+    if (app && !isAppEnabled(app)) {
+      validationErrors.value.appAccess = app.seatInfo?.reason || `Cannot assign ${getAppDisplayName(appKey)}.`;
+      return false;
+    }
+  }
+  return true;
+};
 
 const close = () => {
   if (!saving.value) {
@@ -225,10 +410,23 @@ const close = () => {
 const handleSubmit = async () => {
   saving.value = true;
   error.value = '';
+  validationErrors.value = {};
+
+  if (!validateForm()) {
+    saving.value = false;
+    return;
+  }
 
   try {
     const originalRoleId = props.user.roleId?._id || props.user.roleId;
-    const response = await apiClient.put(`/users/${props.user._id}`, form.value);
+    const appAccessPayload = selectedApps.value.map((appKey) => ({
+      appKey,
+      roleKey: selectedAppRoles.value[appKey]
+    }));
+    const payload = props.user?.isOwner
+      ? { appAccess: appAccessPayload }
+      : { ...form.value, appAccess: appAccessPayload };
+    const response = await apiClient.put(`/users/${props.user._id}`, payload);
 
     if (response.success) {
       // Check if role was changed

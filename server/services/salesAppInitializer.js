@@ -21,6 +21,7 @@
 const updatePeopleModuleFields = require('../scripts/updatePeopleModuleFields');
 const updateDealsModuleFields = require('../scripts/updateDealsModuleFields');
 const updateOrganizationsModuleFields = require('../scripts/updateOrganizationsModuleFields');
+const { updateEventsModuleFields } = require('../scripts/updateEventsModuleFields');
 
 /**
  * Initialize Sales application for an organization
@@ -88,6 +89,24 @@ async function initializeSales(organizationId) {
                 stack: moduleError.stack
             });
             console.error(`[SalesInitializer] ❌ Failed to initialize Organizations module for organization: ${organizationId}`);
+            console.error(`[SalesInitializer] Error message:`, moduleError.message);
+            console.error(`[SalesInitializer] Error stack:`, moduleError.stack);
+            // Continue with other initializations even if one fails
+        }
+
+        // Initialize Events Module Definition defaults and relationships
+        try {
+            console.log(`[SalesInitializer] Starting Events module initialization for organization: ${organizationId}`);
+            await updateEventsModuleFields(organizationId);
+            results.initialized.push('Events module');
+            console.log(`[SalesInitializer] ✅ Events module initialized for organization: ${organizationId}`);
+        } catch (moduleError) {
+            results.errors.push({
+                module: 'Events',
+                error: moduleError.message,
+                stack: moduleError.stack
+            });
+            console.error(`[SalesInitializer] ❌ Failed to initialize Events module for organization: ${organizationId}`);
             console.error(`[SalesInitializer] Error message:`, moduleError.message);
             console.error(`[SalesInitializer] Error stack:`, moduleError.stack);
             // Continue with other initializations even if one fails

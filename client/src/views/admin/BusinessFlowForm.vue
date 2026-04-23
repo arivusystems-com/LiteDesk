@@ -263,7 +263,7 @@ watch(() => formData.value.appKey, (newAppKey) => {
 });
 
 onMounted(async () => {
-  document.title = isEdit.value ? 'Edit Business Flow | LiteDesk' : 'Create Business Flow | LiteDesk';
+  document.title = isEdit.value ? 'Edit Business Flow | Arivu' : 'Create Business Flow | Arivu';
   if (isEdit.value) {
     await loadFlow();
   } else {

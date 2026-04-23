@@ -19,6 +19,7 @@ function mapEventTypeLabelToKey(eventType) {
   }
   
   const labelToKeyMap = {
+    'Meeting': 'MEETING',
     'Meeting / Appointment': 'MEETING',
     'Internal Audit': 'INTERNAL_AUDIT',
     'External Audit — Single Org': 'EXTERNAL_AUDIT_SINGLE',
@@ -273,7 +274,7 @@ if (process.env.NODE_ENV === 'development') {
   
   // Assert: Execution mode matches event type
   const testGenericEvent = {
-    eventType: 'Meeting / Appointment',
+    eventType: 'Meeting',
     status: 'Planned'
   };
   const genericDef = getEventTypeDefinitionByKey(mapEventTypeLabelToKey(testGenericEvent.eventType));

@@ -90,7 +90,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue';
+import { ref, computed, watch, nextTick, useAttrs } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';
@@ -150,6 +150,7 @@ const emit = defineEmits(['create', 'import', 'export', 'row-click', 'edit', 'de
 
 const route = useRoute();
 const router = useRouter();
+const attrs = useAttrs();
 const authStore = useAuthStore();
 const { openTab } = useTabs();
 
@@ -176,6 +177,23 @@ const pagination = ref({
 });
 const filters = ref({});
 const searchQuery = ref('');
+
+const coerceFilterValuesToArray = (value) => {
+  if (Array.isArray(value)) return value.map((v) => String(v).trim()).filter(Boolean);
+  if (value == null || value === '') return [];
+  return [String(value).trim()].filter(Boolean);
+};
+
+const includesRoleMatch = (filterValues, roleValue) => {
+  if (!filterValues.length) return true;
+  const normalizedRole = String(roleValue || '').trim().toLowerCase();
+  return filterValues.some((candidate) => String(candidate).trim().toLowerCase() === normalizedRole);
+};
+
+const isPeopleRoleFilterKey = (key) => {
+  const normalized = String(key || '').trim();
+  return normalized === 'type' || normalized === 'sales_type' || normalized === 'helpdesk_role';
+};
 
 // Saved Views for People module
 const savedViews = ref([]);
@@ -604,7 +622,7 @@ const adaptedFilters = computed(() => {
       const schemaFilters = getFiltersForModule(props.moduleKey, moduleFieldDefinitions.value);
 
       // Enrich filters with options based on filterType
-      return schemaFilters.map(filter => {
+      const enrichedSchemaFilters = schemaFilters.map(filter => {
         const enrichedFilter = { ...filter };
         
         // Ensure options array exists (even if empty)
@@ -727,6 +745,40 @@ const adaptedFilters = computed(() => {
           }
         }
         
+        // People role filter labels/options should reflect the selected app tab context.
+        if (props.moduleKey === 'people' && isPeopleRoleFilterKey(enrichedFilter.key)) {
+          if (props.peopleContext === 'HELPDESK') {
+            // In HELPDESK tab, show role choices from helpdesk_role field when available.
+            const helpdeskFieldDef = moduleFieldDefinitions.value.find((f) => f.key === 'helpdesk_role');
+            const fallbackOptions = [{ value: 'Contact', label: 'Contact' }];
+            enrichedFilter.key = 'helpdesk_role';
+            enrichedFilter.label = 'Type';
+            enrichedFilter.options =
+              Array.isArray(helpdeskFieldDef?.options) && helpdeskFieldDef.options.length
+                ? helpdeskFieldDef.options
+                : fallbackOptions;
+          } else if (props.peopleContext === 'SALES') {
+            // In SALES tab, normalize to sales_type semantics.
+            const salesFieldDef = moduleFieldDefinitions.value.find((f) => f.key === 'sales_type' || f.key === 'type');
+            const fallbackOptions = [
+              { value: 'Lead', label: 'Lead' },
+              { value: 'Contact', label: 'Contact' }
+            ];
+            enrichedFilter.key = 'sales_type';
+            enrichedFilter.label = 'Type';
+            enrichedFilter.options =
+              Array.isArray(salesFieldDef?.options) && salesFieldDef.options.length
+                ? salesFieldDef.options
+                : fallbackOptions;
+          } else {
+            // All Apps: keep label as "Type" while preserving canonical keys.
+            if (enrichedFilter.key !== 'helpdesk_role') {
+              enrichedFilter.key = 'sales_type';
+            }
+            enrichedFilter.label = 'Type';
+          }
+        }
+
         // Ensure filter always has a label
         if (!enrichedFilter.label) {
           enrichedFilter.label = enrichedFilter.key || 'Unknown Filter';
@@ -734,6 +786,22 @@ const adaptedFilters = computed(() => {
         
         return enrichedFilter;
       });
+
+      // De-duplicate People role filters after key normalization (legacy `type` -> `sales_type`).
+      if (props.moduleKey === 'people') {
+        const deduped = [];
+        const seenKeys = new Set();
+        for (const filter of enrichedSchemaFilters) {
+          const canonicalKey = String(filter?.key || '').trim();
+          if (!canonicalKey) continue;
+          if (seenKeys.has(canonicalKey)) continue;
+          seenKeys.add(canonicalKey);
+          deduped.push(filter);
+        }
+        return deduped;
+      }
+
+      return enrichedSchemaFilters;
     } catch (error) {
       console.warn('[ModuleList] Error building schema filters:', error);
       console.error('[ModuleList] Filter building error details:', error);
@@ -828,6 +896,10 @@ const fetchData = async () => {
       if (key === 'participation' || key === 'participationApp' || key === 'participationRole') {
         return;
       }
+      // People role filters are applied client-side (PLATFORM appKey intentionally bypasses role filters server-side)
+      if (props.moduleKey === 'people' && (key === 'sales_type' || key === 'helpdesk_role' || key === 'type')) {
+        return;
+      }
       
       const value = normalizedFilters[key];
       // Only include defined, non-empty values (except null which is valid for unassigned)
@@ -872,21 +944,72 @@ const fetchData = async () => {
     }
     
     // Use API endpoint from registry, or default to /{moduleKey}
-    const endpoint = moduleConfig?.apiEndpoint 
-      ? moduleConfig.apiEndpoint.startsWith('/') 
-        ? moduleConfig.apiEndpoint 
-        : `/${moduleConfig.apiEndpoint}`
-      : `/${props.moduleKey}`;
+    // Audit "Finding" currently maps to moduleKey=cases, but backend list data
+    // is served by the tasks endpoint under AUDIT app context.
+    const isAuditFindingModule =
+      String(props.moduleKey || '').toLowerCase() === 'cases' &&
+      String(props.appKey || '').toUpperCase() === 'AUDIT';
+    const endpoint = isAuditFindingModule
+      ? '/audit/findings'
+      : moduleConfig?.apiEndpoint
+        ? moduleConfig.apiEndpoint.startsWith('/')
+          ? moduleConfig.apiEndpoint
+          : `/${moduleConfig.apiEndpoint}`
+        : `/${props.moduleKey}`;
     
     const response = await apiClient.get(endpoint, { params });
 
     if (response.success) {
       let fetchedData = response.data || [];
 
+      // Audit Findings currently source rows from task-shaped records.
+      // Provide compatibility aliases expected by the "cases" module schema.
+      if (isAuditFindingModule && Array.isArray(fetchedData)) {
+        fetchedData = fetchedData.map((row) => {
+          if (!row || typeof row !== 'object') return row;
+          return {
+            ...row,
+            subject: row.subject || row.title || '',
+          };
+        });
+      }
+
       // Apply people context filter client-side (People module only)
       if (props.moduleKey === 'people' && props.peopleContext && props.peopleContext !== 'ALL') {
         const ctx = props.peopleContext;
         fetchedData = fetchedData.filter(person => getParticipation(person, ctx) != null);
+      }
+
+      // Apply People role filters client-side to support PLATFORM appKey listing.
+      // Legacy `type` maps to the active app context (HELPDESK tab -> helpdesk_role, otherwise SALES role).
+      if (props.moduleKey === 'people') {
+        const salesTypeValues = coerceFilterValuesToArray(normalizedFilters.sales_type ?? normalizedFilters.type);
+        const helpdeskRoleValues = coerceFilterValuesToArray(normalizedFilters.helpdesk_role);
+
+        // If legacy "type" is used on HELPDESK tab, treat it as a HELPDESK role filter.
+        const legacyTypeOnHelpdesk = props.peopleContext === 'HELPDESK' && helpdeskRoleValues.length === 0
+          ? salesTypeValues
+          : [];
+
+        fetchedData = fetchedData.filter((person) => {
+          const salesRole = getParticipation(person, 'SALES')?.role ?? '';
+          const helpdeskRole = getParticipation(person, 'HELPDESK')?.role ?? '';
+
+          const matchesSales = includesRoleMatch(salesTypeValues, salesRole);
+          const matchesHelpdesk = includesRoleMatch(helpdeskRoleValues, helpdeskRole);
+          const matchesLegacyHelpdesk = includesRoleMatch(legacyTypeOnHelpdesk, helpdeskRole);
+
+          if (props.peopleContext === 'HELPDESK') {
+            // In HELPDESK tab, prioritize helpdesk_role semantics for type filtering.
+            return matchesHelpdesk && matchesLegacyHelpdesk;
+          }
+          if (props.peopleContext === 'SALES') {
+            return matchesSales;
+          }
+
+          // ALL apps: require both filters when both are present.
+          return matchesSales && matchesHelpdesk;
+        });
       }
 
       // Apply participation filtering client-side (People module only)
@@ -1492,8 +1615,23 @@ const handleEdit = (row) => {
   }
 };
 
-const handleDelete = (row) => {
-  emit('delete', row);
+const handleDelete = async (row) => {
+  if (attrs.onDelete) {
+    emit('delete', row);
+    return;
+  }
+
+  const rowId = row?._id || row?.id || row;
+  if (!rowId || !props.moduleKey) return;
+
+  try {
+    await apiClient.delete(`/${props.moduleKey}/${rowId}`);
+    await fetchData();
+  } catch (error) {
+    console.error(`[ModuleList] Failed to delete ${props.moduleKey} record:`, error);
+    const errorMessage = error?.response?.data?.message || error?.message || 'Delete failed';
+    alert(errorMessage);
+  }
 };
 
 const handleBulkAction = (action, rows) => {

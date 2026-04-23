@@ -622,11 +622,9 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
 import { openDatePicker } from '@/utils/dateUtils';
-import { useTabs } from '@/composables/useTabs';
 
 const route = useRoute();
 const router = useRouter();
-const { activeTabId, closeTab } = useTabs();
 
 const form = ref(null);
 const formData = ref({});
@@ -641,6 +639,41 @@ const autoSaveTimer = ref(null);
 // Get eventId and responseId from query params (make them reactive to route changes)
 const eventId = computed(() => route.query.eventId || null);
 const responseIdFromQuery = computed(() => route.query.responseId || null);
+const returnToFromQuery = computed(() => {
+  const value = route.query.returnTo;
+  if (typeof value !== 'string') return null;
+  if (!value.startsWith('/') || value.startsWith('//')) return null;
+  return value;
+});
+const isAuditFlow = computed(() => String(route.query.appKey || '').toUpperCase() === 'AUDIT');
+const isAuditReturnFlow = computed(() => {
+  if (isAuditFlow.value) return true;
+  return Boolean(returnToFromQuery.value && returnToFromQuery.value.startsWith('/audit/audits'));
+});
+
+/** Sales `/api/forms/*` requires Sales app context; audit-linked fills use `/api/audit/forms/*`. */
+const getFormsApiBase = () => (isAuditReturnFlow.value ? '/audit/forms' : '/forms');
+
+const getPreferredReturnRoute = () => {
+  if (returnToFromQuery.value) return returnToFromQuery.value;
+  try {
+    const formScopedReturn = sessionStorage.getItem(`audit-form-return:form:${route.params.id}`);
+    if (typeof formScopedReturn === 'string' && formScopedReturn.startsWith('/audit/audits')) {
+      return formScopedReturn;
+    }
+  } catch (_) {}
+  if (eventId.value && isAuditFlow.value) return `/audit/audits/${eventId.value}`;
+  if (eventId.value) {
+    try {
+      const sessionReturn = sessionStorage.getItem(`audit-form-return:${eventId.value}`);
+      if (typeof sessionReturn === 'string' && sessionReturn.startsWith('/audit/audits/')) {
+        return sessionReturn;
+      }
+    } catch (_) {}
+    return `/events/${eventId.value}`;
+  }
+  return '/forms';
+};
 
 // Computed properties
 const totalQuestions = computed(() => {
@@ -809,7 +842,7 @@ const fetchForm = async () => {
   error.value = null;
   
   try {
-    const response = await apiClient.get(`/forms/${route.params.id}`);
+    const response = await apiClient.get(`${getFormsApiBase()}/${route.params.id}`);
     if (response.success) {
       form.value = response.data;
       
@@ -891,7 +924,7 @@ const checkIfAlreadySubmitted = async () => {
     if (responseId) {
       console.log('[FormFill] Checking if response is already submitted:', responseId);
       try {
-        const response = await apiClient.get(`/forms/${route.params.id}/responses/${responseId}`);
+        const response = await apiClient.get(`${getFormsApiBase()}/${route.params.id}/responses/${responseId}`);
         if (response.success && response.data) {
           const formResponse = response.data;
           // Check if response is submitted
@@ -1070,7 +1103,7 @@ const submitForm = async () => {
       submissionDataKeys: Object.keys(submissionData)
     });
 
-    const response = await apiClient.post(`/forms/${route.params.id}/submit`, submissionData);
+    const response = await apiClient.post(`${getFormsApiBase()}/${route.params.id}/submit`, submissionData);
 
     if (response.success && response.data) {
       submitted.value = true;
@@ -1079,22 +1112,29 @@ const submitForm = async () => {
       if (eventId.value) {
         notifyEventExecution(eventId.value, formResponseId.value);
       }
+
+      if (currentEventId && isAuditReturnFlow.value) {
+        try {
+          await apiClient.post(
+            `/audit/execute/${currentEventId}/submit`,
+            formResponseId.value ? { formResponseId: String(formResponseId.value) } : {}
+          );
+          try {
+            sessionStorage.setItem(`audit-auto-submit:${currentEventId}`, String(Date.now()));
+          } catch (_) {}
+          console.log('[FormFill] ✅ Auto-submitted audit after form submission', {
+            eventId: currentEventId,
+            formResponseId: formResponseId.value
+          });
+        } catch (autoSubmitErr) {
+          console.warn('[FormFill] ⚠️ Auto-submit audit failed (non-blocking):', autoSubmitErr);
+        }
+      }
       
-      // Navigate away after a brief delay to show success message (1.5 seconds)
-      // Close the form fill tab and navigate to event record
+      // Navigate away after a brief delay to show success message (1.5 seconds).
+      // Do not close tab before redirect because that can trigger route fallbacks.
       setTimeout(() => {
-        // Close the current tab
-        const currentTabId = activeTabId.value;
-        if (currentTabId) {
-          closeTab(currentTabId);
-        }
-        
-        // Navigate to event record (or forms list if no eventId)
-        if (eventId.value) {
-          router.push(`/events/${eventId.value}`);
-        } else {
-          router.push('/forms');
-        }
+        router.push(getPreferredReturnRoute());
       }, 1500);
     } else {
       error.value = response.message || 'Failed to submit form';
@@ -1132,17 +1172,11 @@ const notifyEventExecution = (eventId, responseId) => {
 
 // Navigation
 const goBack = () => {
-  if (eventId.value) {
-    router.push(`/events/${eventId.value}`);
-  } else {
-    router.push('/forms');
-  }
+  router.push(getPreferredReturnRoute());
 };
 
 const goBackToEvent = () => {
-  if (eventId.value) {
-    router.push(`/events/${eventId.value}`);
-  }
+  router.push(getPreferredReturnRoute());
 };
 
 onMounted(() => {

@@ -61,7 +61,7 @@ const APP_DEFINITIONS = [
     appKey: 'audit',
     name: 'Audit',
     description: 'Audit management application for managing audit visits, findings, and corrective actions',
-    icon: 'audit',
+    icon: 'shield-check',
     category: 'BUSINESS',
     owner: 'PLATFORM',
     enabled: true,
@@ -417,6 +417,13 @@ async function seedPlatformDefinitions() {
         console.log(`  ✅ Created app: ${appData.appKey}`);
       }
     }
+
+    // Keep legacy tenant metadata aligned with canonical app icons.
+    // HELPDESK may exist in older environments even when not seeded by this script.
+    await AppDefinition.updateOne(
+      { appKey: 'helpdesk' },
+      { $set: { icon: 'lifebuoy', 'ui.icon': 'lifebuoy' } }
+    );
 
     console.log(`\n📊 Apps: ${appsCreated} created, ${appsUpdated} updated\n`);
 

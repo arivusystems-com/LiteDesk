@@ -86,10 +86,10 @@ function mapProjectionTypeToModelValue(moduleKey, projectionType) {
   }
 
   // Event: Projection uses 'MEETING', 'INTERNAL_AUDIT', 'EXTERNAL_AUDIT_SINGLE', 'EXTERNAL_AUDIT_BEAT', 'FIELD_SALES_BEAT'
-  // Model uses: 'Meeting / Appointment', 'Internal Audit', 'External Audit — Single Org', 'External Audit Beat', 'Field Sales Beat'
+  // Model uses: 'Meeting', 'Internal Audit', 'External Audit — Single Org', 'External Audit Beat', 'Field Sales Beat'
   if (normalizedModuleKey === 'events') {
     const typeMap = {
-      'MEETING': 'Meeting / Appointment',
+      'MEETING': 'Meeting',
       'INTERNAL_AUDIT': 'Internal Audit',
       'EXTERNAL_AUDIT_SINGLE': 'External Audit — Single Org',
       'EXTERNAL_AUDIT_BEAT': 'External Audit Beat',

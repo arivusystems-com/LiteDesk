@@ -1312,10 +1312,22 @@ const moduleLabelSingular = computed(() => {
 const recordTitle = computed(() => {
   const r = record.value;
   if (!r) return '';
+  const moduleKey = (props.moduleKey || '').toLowerCase();
   const first = (r.first_name ?? r.firstName ?? '').trim();
   const last = (r.last_name ?? r.lastName ?? '').trim();
   const namePart = [first, last].filter(Boolean).join(' ').trim() || null;
-  return (r.name ?? r.title ?? namePart ?? r.email ?? (r._id || '').slice(-8)) || 'Record';
+  const primaryByModule = {
+    events: r.eventName,
+    items: r.item_name
+  };
+  return (
+    primaryByModule[moduleKey] ??
+    r.name ??
+    r.title ??
+    namePart ??
+    r.email ??
+    (r._id || '').slice(-8)
+  ) || 'Record';
 });
 
 /** For People module: user-shaped object for Avatar (photo or initials). */
@@ -2385,24 +2397,17 @@ watch(record, (r) => {
   attachStickyTitleWhenReady();
 }, { immediate: true });
 
-// Keep tab title in sync with people record name when record loads or name changes.
+// Keep tab title in sync with the current record display title.
 watch(
-  () => {
-    if (!isPeopleModule.value || !record.value) return null;
-    const r = record.value;
-    const first = (r.first_name ?? r.firstName ?? '').trim();
-    const last = (r.last_name ?? r.lastName ?? '').trim();
-    const full = [first, last].filter(Boolean).join(' ').trim();
-    return full || r.name || r.email || 'Person';
-  },
+  () => recordTitle.value,
   (displayName) => {
-    if (!displayName || !isPeopleModule.value) return;
+    if (!displayName || !record.value) return;
     const tabId = activeTabId.value;
     if (!tabId || !props.recordId) return;
     const tab = findTabById(tabId);
     if (!tab?.path) return;
     const pathBase = tab.path.split('?')[0].replace(/\/$/, '');
-    if (!pathBase.includes(`/people/${props.recordId}`)) return;
+    if (!pathBase.toLowerCase().includes(`/${moduleKeyLower.value}/${props.recordId}`)) return;
     updateTabTitle(tabId, displayName);
   },
   { immediate: true }
