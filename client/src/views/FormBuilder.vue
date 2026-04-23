@@ -419,7 +419,7 @@ const saveForm = async (isAutoSave = false) => {
                   question.questionId = `Q-${Date.now()}-${qIdx}`;
                 }
                 if (!question.questionText || !question.questionText.trim()) {
-                  question.questionText = 'New Question';
+                  question.questionText = '';
                 }
                 // Ensure conditionalLogic structure is correct
                 if (!question.conditionalLogic || !question.conditionalLogic.showIf) {
