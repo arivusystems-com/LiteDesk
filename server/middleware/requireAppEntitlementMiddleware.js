@@ -30,6 +30,72 @@ const { resolveAccessFeedback } = require('../utils/executionFeedbackResolver');
 const ACCESS_DEBUG = process.env.ACCESS_DEBUG === 'true';
 
 /**
+ * Determine whether a request is an execution action that must enforce seat checks.
+ * Execution is reserved for runtime workflows (check-in, submit, run, trigger, etc.),
+ * while record creation/update remains a configuration action.
+ *
+ * @param {import('express').Request} req
+ * @returns {boolean}
+ */
+function isExecutionRequest(req) {
+    const normalizedPath = (req.path || '').toLowerCase();
+
+    // Explicit execution namespace (e.g., /audit/execute/:eventId/check-in)
+    if (normalizedPath.includes('/execute')) {
+        return true;
+    }
+
+    // Runtime action verbs that represent user execution, not configuration.
+    const executionActionPatterns = [
+        /\/start$/,
+        /\/check-in$/,
+        /\/check-out$/,
+        /\/submit$/,
+        /\/submit-audit$/,
+        /\/approve$/,
+        /\/approve-audit$/,
+        /\/reject$/,
+        /\/reject-audit$/,
+        /\/next-org$/,
+        /\/complete$/,
+        /\/cancel$/,
+        /\/run$/,
+        /\/trigger(\/|$)/
+    ];
+
+    return executionActionPatterns.some((pattern) => pattern.test(normalizedPath));
+}
+
+/**
+ * Detect audit event scheduling requests that should not be seat-gated as runtime execution.
+ * This allows proper audit-flow validation/guardrails (e.g., app-context restrictions) to run.
+ *
+ * @param {import('express').Request} req
+ * @returns {boolean}
+ */
+function isAuditEventSchedulingRequest(req) {
+    if (req.method !== 'POST') return false;
+
+    const normalizedPath = (req.path || '').toLowerCase();
+    const isEventCreatePath = normalizedPath === '/events' || normalizedPath === '/events/';
+    if (!isEventCreatePath) return false;
+
+    const eventTypeRaw = req.body?.eventType;
+    if (typeof eventTypeRaw !== 'string') return false;
+    const eventType = eventTypeRaw.trim().toUpperCase();
+
+    return [
+        'INTERNAL AUDIT',
+        'INTERNAL_AUDIT',
+        'EXTERNAL AUDIT — SINGLE ORG',
+        'EXTERNAL AUDIT - SINGLE ORG',
+        'EXTERNAL_AUDIT_SINGLE',
+        'EXTERNAL AUDIT BEAT',
+        'EXTERNAL_AUDIT_BEAT'
+    ].includes(eventType);
+}
+
+/**
  * Require App Entitlement Middleware
  * 
  * Enforces that users can only access applications they are entitled to.
@@ -188,13 +254,18 @@ const requireAppEntitlement = async (req, res, next) => {
 
         // Determine intent from request method and path
         // VIEW: GET requests (read-only)
-        // CONFIGURE: PUT/PATCH requests to settings/config endpoints
-        // EXECUTE: POST/PUT/PATCH/DELETE requests to data endpoints
+        // CONFIGURE: settings/config/admin endpoints + audit scheduling create requests
+        // EXECUTE: runtime workflow actions (check-in/submit/run/trigger/etc.)
         let intent = 'VIEW';
         if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH' || req.method === 'DELETE') {
             // Check if this is a configuration endpoint
             if (req.path.includes('/settings') || req.path.includes('/config') || req.path.includes('/admin')) {
                 intent = 'CONFIGURE';
+            } else if (isAuditEventSchedulingRequest(req)) {
+                // Audit scheduling is a setup action; do not apply execution-seat gate here.
+                intent = 'CONFIGURE';
+            } else if (isExecutionRequest(req)) {
+                intent = 'EXECUTE';
             } else {
                 intent = 'EXECUTE';
             }

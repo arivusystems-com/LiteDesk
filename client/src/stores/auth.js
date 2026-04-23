@@ -38,11 +38,25 @@ export const useAuthStore = defineStore('auth', {
         hasAppAccess: (state) => {
             return (appKey) => {
                 const appKeyUpper = appKey.toUpperCase();
+                const allowedApps = (state.user?.allowedApps || []).map(app =>
+                    typeof app === 'string' ? app.toUpperCase() : app
+                );
+                const hasExplicitUserAccess = allowedApps.includes(appKeyUpper);
                 
                 // For owners: check if app is enabled for the organization
                 // This aligns with unified access resolution where owners have access to all enabled apps
                 // (especially for internal instances where owners can access and execute all apps)
                 if (state.user?.isOwner) {
+                    // If explicit user app access exists, honor that first instead of broadening
+                    // access to all org-enabled apps.
+                    if (allowedApps.length > 0) {
+                        console.log(`[hasAppAccess] Owner explicit app access check for ${appKeyUpper}:`, {
+                            allowedApps,
+                            hasAccess: hasExplicitUserAccess
+                        });
+                        return hasExplicitUserAccess;
+                    }
+
                     if (state.organization?.enabledApps) {
                         const enabledApps = state.organization.enabledApps;
                         // Handle both array of strings and array of objects with appKey property
@@ -84,10 +98,7 @@ export const useAuthStore = defineStore('auth', {
                 }
                 
                 // For non-owners or if owner check didn't match: check explicit appAccess/allowedApps
-                const allowedApps = state.user?.allowedApps || [];
-                const hasAccess = allowedApps.map(app => 
-                    typeof app === 'string' ? app.toUpperCase() : app
-                ).includes(appKeyUpper);
+                const hasAccess = hasExplicitUserAccess;
                 
                 console.log(`[hasAppAccess] Final check for ${appKeyUpper}:`, {
                     isOwner: state.user?.isOwner,
@@ -100,20 +111,73 @@ export const useAuthStore = defineStore('auth', {
         },
     },
     actions: {
-        setUser(userData) {
-            // Derive allowedApps from appAccess if not provided
-            let allowedApps = userData.allowedApps;
-            if (!allowedApps || allowedApps.length === 0) {
-                if (userData.appAccess && userData.appAccess.length > 0) {
-                    // Derive from appAccess array
-                    allowedApps = userData.appAccess
-                        .filter(access => access.status === 'ACTIVE')
-                        .map(access => access.appKey);
-                } else {
-                    // Default to Sales for backward compatibility
-                    allowedApps = ['SALES'];
+        resolveAllowedApps(userData = {}, options = {}) {
+            const { fallbackAllowedApps = [], organization = null } = options;
+
+            const normalizeAppKeys = (apps) => {
+                if (!Array.isArray(apps)) return [];
+                const normalized = apps
+                    .map((app) => {
+                        if (typeof app === 'string') return app.toUpperCase();
+                        if (app && typeof app === 'object') {
+                            const key = app.appKey || app.key || app.name;
+                            return typeof key === 'string' ? key.toUpperCase() : null;
+                        }
+                        return null;
+                    })
+                    .filter(Boolean);
+                return Array.from(new Set(normalized));
+            };
+
+            const explicitAllowedApps = normalizeAppKeys(userData.allowedApps);
+            if (explicitAllowedApps.length > 0) {
+                return explicitAllowedApps;
+            }
+
+            if (Array.isArray(userData.appAccess) && userData.appAccess.length > 0) {
+                const fromAppAccess = userData.appAccess
+                    .filter((access) => {
+                        if (!access || typeof access !== 'object') return false;
+                        const status = String(access.status || 'ACTIVE').toUpperCase();
+                        return status === 'ACTIVE';
+                    })
+                    .map((access) => (typeof access.appKey === 'string' ? access.appKey.toUpperCase() : null))
+                    .filter(Boolean);
+                if (fromAppAccess.length > 0) {
+                    return Array.from(new Set(fromAppAccess));
                 }
             }
+
+            // IMPORTANT:
+            // For non-owners, org enabledApps is tenant-level capability and must NOT
+            // expand user-level app access. Only owners can inherit from enabledApps.
+            const sourceOrganization = organization || userData.organization || userData.organizationId;
+            const isOwnerUser = userData?.isOwner === true;
+            if (isOwnerUser && sourceOrganization && Array.isArray(sourceOrganization.enabledApps)) {
+                const fromEnabledApps = sourceOrganization.enabledApps
+                    .map((app) => {
+                        if (typeof app === 'string') return app.toUpperCase();
+                        if (app && typeof app === 'object') {
+                            const status = String(app.status || 'ACTIVE').toUpperCase();
+                            if (status !== 'ACTIVE') return null;
+                            return typeof app.appKey === 'string' ? app.appKey.toUpperCase() : null;
+                        }
+                        return null;
+                    })
+                    .filter(Boolean);
+                if (fromEnabledApps.length > 0) {
+                    return Array.from(new Set(fromEnabledApps));
+                }
+            }
+
+            return normalizeAppKeys(fallbackAllowedApps);
+        },
+
+        setUser(userData) {
+            // Derive allowedApps from explicit user access first; never default to SALES.
+            const allowedApps = this.resolveAllowedApps(userData, {
+                organization: userData.organization
+            });
             
             this.user = {
                 _id: userData._id,
@@ -342,6 +406,7 @@ export const useAuthStore = defineStore('auth', {
                                 delete: false,
                             };
                             const settings = {
+                                view: !!rolePerms.settings?.view,
                                 manageUsers: !!rolePerms.settings?.manageUsers,
                                 manageBilling: !!rolePerms.settings?.manageBilling,
                                 manageIntegrations: false,
@@ -386,7 +451,10 @@ export const useAuthStore = defineStore('auth', {
                             ...incoming,
                             permissions: ensuredPermissions,
                             token: token,
-                            allowedApps: incoming.allowedApps || existingAllowedApps || ['SALES'] // Preserve or default
+                            allowedApps: this.resolveAllowedApps(incoming, {
+                                fallbackAllowedApps: existingAllowedApps,
+                                organization: incoming.organizationId || this.organization
+                            })
                         };
                         localStorage.setItem('user', JSON.stringify(this.user));
                         

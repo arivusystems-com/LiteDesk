@@ -527,7 +527,7 @@ const clearFilters = () => {
 };
 
 onMounted(() => {
-  document.title = 'Demo Requests | LiteDesk';
+  document.title = 'Demo Requests | Arivu';
   fetchDemoRequests();
   fetchStats();
 });

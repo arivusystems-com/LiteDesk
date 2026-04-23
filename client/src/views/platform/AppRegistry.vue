@@ -9,6 +9,7 @@ import { XMarkIcon } from '@heroicons/vue/24/outline';
 import apiClient from '@/utils/apiClient';
 import {
   BuildingOfficeIcon,
+  LifebuoyIcon,
   ShieldCheckIcon,
   UserGroupIcon,
   FolderIcon,
@@ -40,8 +41,7 @@ const categoryLabels = {
 // App icon mapping (fallback)
 const appIcons = {
   SALES: BuildingOfficeIcon,
-  SALES: BuildingOfficeIcon,
-  HELPDESK: ShieldCheckIcon,
+  HELPDESK: LifebuoyIcon,
   PROJECTS: FolderIcon,
   AUDIT: ShieldCheckIcon,
   PORTAL: UserGroupIcon

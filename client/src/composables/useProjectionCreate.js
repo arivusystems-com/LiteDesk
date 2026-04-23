@@ -60,7 +60,7 @@ function mapProjectionTypeToModelValue(moduleKey, projectionType) {
 
   // Event: Projection uses 'MEETING', 'INTERNAL_AUDIT', etc. -> Model uses specific values
   if (normalizedModuleKey === 'events' || normalizedModuleKey === 'event') {
-    if (normalizedType === 'MEETING') return 'Meeting / Appointment';
+    if (normalizedType === 'MEETING') return 'Meeting';
     if (normalizedType === 'INTERNAL_AUDIT') return 'Internal Audit';
     if (normalizedType === 'EXTERNAL_AUDIT_SINGLE') return 'External Audit — Single Org';
     if (normalizedType === 'EXTERNAL_AUDIT_BEAT') return 'External Audit Beat';

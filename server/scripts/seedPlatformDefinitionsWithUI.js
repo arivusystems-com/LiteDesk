@@ -51,7 +51,7 @@ const APP_DEFINITIONS = [
     appKey: 'audit',
     name: 'Audit',
     description: 'Audit management application for managing audit visits, findings, and corrective actions',
-    icon: '📋',
+    icon: 'shield-check',
     category: 'BUSINESS',
     owner: 'PLATFORM',
     enabled: true,
@@ -66,7 +66,7 @@ const APP_DEFINITIONS = [
     // Phase 2D: UI Metadata - Updated defaultRoute
     ui: {
       sidebarOrder: 2,
-      icon: '📋',
+      icon: 'shield-check',
       defaultRoute: '/audit/dashboard',
       showInAppSwitcher: true
     }
@@ -554,6 +554,13 @@ async function seedPlatformDefinitionsWithUI(useExistingConnection = false) {
         }
       }
     }
+
+    // Keep legacy tenant metadata aligned with canonical app icons.
+    // HELPDESK may exist in older environments even when not seeded by this script.
+    await AppDefinition.updateOne(
+      { appKey: 'helpdesk' },
+      { $set: { icon: 'lifebuoy', 'ui.icon': 'lifebuoy' } }
+    );
 
     if (!useExistingConnection) {
       console.log(`\n📊 Apps: ${appsCreated} created, ${appsUpdated} updated\n`);

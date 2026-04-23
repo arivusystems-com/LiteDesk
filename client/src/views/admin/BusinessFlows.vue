@@ -420,7 +420,7 @@ const handleDelete = async () => {
 };
 
 onMounted(() => {
-  document.title = 'Business Flows | LiteDesk';
+  document.title = 'Business Flows | Arivu';
   loadFlows();
 });
 </script>

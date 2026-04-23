@@ -133,7 +133,7 @@
       >
         <div class="flex items-start justify-between mb-3">
           <div class="flex-1">
-            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-1">{{ assignment.auditType || 'Audit' }}</h3>
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-1">{{ assignment.auditName || 'Audit' }}</h3>
             <p class="text-sm text-gray-600 dark:text-gray-400">{{ formatDate(assignment.scheduledAt) }}</p>
           </div>
           <span :class="getStatusBadgeClass(assignment.auditState)" class="px-2 py-1 text-xs font-medium rounded-full">
@@ -167,7 +167,7 @@
           <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
             <tr v-for="assignment in assignments" :key="assignment.assignmentId" class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
               <td class="px-6 py-4 whitespace-nowrap">
-                <div class="text-sm font-medium text-gray-900 dark:text-white">{{ assignment.auditType || 'Audit' }}</div>
+                <div class="text-sm font-medium text-gray-900 dark:text-white">{{ assignment.auditName || 'Audit' }}</div>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="text-sm text-gray-600 dark:text-gray-400">{{ assignment.auditType || 'N/A' }}</div>

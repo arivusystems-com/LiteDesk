@@ -10,6 +10,7 @@ const {
     updateDealNote,
     getActivityLogs,
     addActivityLog,
+    getDashboardMetrics,
     getPipelineSummary,
     updateStage,
     getDescriptionVersions,
@@ -43,6 +44,7 @@ router.use(checkTrialStatus);
 router.use(checkFeatureAccess('deals'));
 
 // Pipeline summary (must come before /:id routes)
+router.get('/dashboard/metrics', checkPermission('deals', 'view'), getDashboardMetrics);
 router.get('/pipeline/summary', checkPermission('deals', 'view'), getPipelineSummary);
 
 // Routes that handle collections (GET all, POST new)

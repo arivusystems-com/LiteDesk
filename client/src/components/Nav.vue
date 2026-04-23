@@ -6,10 +6,11 @@ import { useAppShellStore } from '@/stores/appShell';
 import NotificationBell from '@/components/notifications/NotificationBell.vue';
 import NotificationDrawer from '@/components/notifications/NotificationDrawer.vue';
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
-import { buildSidebarFromRegistry } from '@/utils/buildSidebarFromRegistry';
-import { getAppRegistry } from '@/utils/getAppRegistry';
-import { createPermissionSnapshot } from '@/types/permission-snapshot.types';
+import { buildSidebarStructureForSession } from '@/utils/buildSidebarForSession';
+import { createPermissionSnapshot, hasPermission as hasSnapshotPermission } from '@/types/permission-snapshot.types';
+import { hasAnySettingsAccess } from '@/utils/settingsTabAccess';
 import { useColorMode } from '@/composables/useColorMode';
+import { useSidebarState } from '@/composables/useSidebarState';
 import AppSidebar from '@/components/AppSidebar.vue';
 import { initializeDynamicRoutes } from '@/router';
 import { Dialog, DialogPanel, TransitionChild, TransitionRoot, Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
@@ -38,6 +39,13 @@ const emit = defineEmits(['update:modelValue']);
 const router = useRouter();
 const route = useRoute();
 const { openTab } = useTabs();
+const { colorMode, toggleColorMode, clearStoredMode } = useColorMode();
+const authStore = useAuthStore();
+const { lastActiveAppId } = useSidebarState();
+const appRegistry = ref({});
+const sidebarStructure = ref(null);
+const loadingSidebar = ref(false);
+
 const showDrawer = ref(false);
 const isCollapsed = computed({
   get: () => props.modelValue,
@@ -75,10 +83,99 @@ const handleMouseLeave = () => {
   isHovering.value = false;
 };
 
-// Close mobile menu when route changes
-watch(() => route.path, () => {
-  sidebarOpen.value = false;
-});
+const FORBIDDEN_APP_NAV_MODULE_KEYS = new Set(['people', 'tasks', 'events', 'forms', 'items', 'organizations']);
+
+const detectAppFromRoute = (path) => {
+  const normalizedPath = String(path || '');
+  if (normalizedPath.startsWith('/dashboard/')) {
+    return String(normalizedPath.split('/')[2] || '').toUpperCase() || null;
+  }
+  if (normalizedPath.startsWith('/audit/')) return 'AUDIT';
+  if (normalizedPath.startsWith('/portal/')) return 'PORTAL';
+  if (normalizedPath.startsWith('/helpdesk/')) return 'HELPDESK';
+  if (normalizedPath.startsWith('/projects/')) return 'PROJECTS';
+  if (normalizedPath.startsWith('/sales/')) return 'SALES';
+  return null;
+};
+
+const canAccessSidebarModule = (permission) => {
+  if (!permission) return true;
+  try {
+    const snapshot = createPermissionSnapshot(authStore.user);
+    return hasSnapshotPermission(snapshot, permission);
+  } catch {
+    return false;
+  }
+};
+
+const applyAppLensToSidebarStructure = (targetAppKey) => {
+  const registry = appRegistry.value || {};
+  const app = registry[targetAppKey];
+  if (!app || !sidebarStructure.value) return false;
+
+  const modules = (app.modules || [])
+    .filter((m) => {
+      if (m.navigationCore === true) return false;
+      if (m.navigationEntity === true) return false;
+      if (m.excludeFromApps === true) return false;
+      if (m.appKey && String(m.appKey).toLowerCase() === 'platform') return false;
+      if (FORBIDDEN_APP_NAV_MODULE_KEYS.has(String(m.moduleKey || '').toLowerCase())) return false;
+      return canAccessSidebarModule(m.permission);
+    })
+    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
+    .map((m) => ({
+      kind: 'app',
+      id: `${targetAppKey}:${m.moduleKey}`,
+      label: m.label,
+      route: m.route,
+      icon: m.icon,
+      moduleKey: m.moduleKey
+    }));
+
+  sidebarStructure.value = {
+    ...sidebarStructure.value,
+    appSwitcher: {
+      ...sidebarStructure.value.appSwitcher,
+      activeAppId: targetAppKey
+    },
+    appNav: {
+      appId: targetAppKey,
+      dashboard: {
+        kind: 'app',
+        id: targetAppKey,
+        label: 'Dashboard',
+        route: app.dashboardRoute,
+        icon: targetAppKey === 'AUDIT' ? 'presentation-chart' : 'squares'
+      },
+      modules
+    }
+  };
+  lastActiveAppId.value = targetAppKey;
+  return true;
+};
+
+// Close mobile menu + keep sidebar lens in sync with route transitions.
+watch(
+  () => route.path,
+  async (newPath) => {
+    sidebarOpen.value = false;
+
+    if (!authStore.user || !authStore.isAuthenticated || !sidebarStructure.value) return;
+
+    const routeAppKey = detectAppFromRoute(newPath);
+    if (!routeAppKey) return;
+
+    const activeLens = String(sidebarStructure.value?.appSwitcher?.activeAppId || '').toUpperCase();
+    if (activeLens === routeAppKey) return;
+
+    // Fast path: switch the lens in-memory from loaded registry.
+    const switchedInMemory = applyAppLensToSidebarStructure(routeAppKey);
+    if (switchedInMemory) return;
+
+    // Fallback: full rebuild when registry state is unavailable.
+    await buildSidebar();
+  }
+);
 
 // ============================================================================
 // PLATFORM UI: Sidebar from Registry (Phase 1A - Full Cutover)
@@ -95,17 +192,8 @@ watch(() => route.path, () => {
 // - SidebarStructure rendering
 // ============================================================================
 
-// Initialize stores first (before any functions that use them)
-const { colorMode, toggleColorMode, clearStoredMode } = useColorMode();
-const authStore = useAuthStore();
-
 // ARCHITECTURE NOTE: GlobalSearch is now handled by GlobalSurfacesProvider in App.vue
 // This component can dispatch 'litedesk:open-global-search' event to open search if needed
-
-// App registry and sidebar structure
-const appRegistry = ref({});
-const sidebarStructure = ref(null);
-const loadingSidebar = ref(false);
 
 // Build sidebar from registry
 const buildSidebar = async () => {
@@ -116,22 +204,18 @@ const buildSidebar = async () => {
   
   loadingSidebar.value = true;
   try {
-    // Fetch app registry
-    const registry = await getAppRegistry();
-    
     // Check if component is still mounted and user is still authenticated
     if (!authStore.user || !authStore.isAuthenticated) {
       return;
     }
-    
-    appRegistry.value = registry;
-    
-    // Create permission snapshot
-    const snapshot = createPermissionSnapshot(authStore.user);
-    
-    // Build locked SidebarStructure (single source of truth)
-    const structure = await buildSidebarFromRegistry(registry, snapshot);
-    
+
+    const { structure, entitlementScopedRegistry } = await buildSidebarStructureForSession(
+      authStore.user,
+      authStore.hasAppAccess
+    );
+
+    appRegistry.value = entitlementScopedRegistry;
+
     // Double-check before setting (component might have unmounted)
     if (authStore.user && authStore.isAuthenticated) {
       sidebarStructure.value = structure;
@@ -220,6 +304,12 @@ const workspaceAvatar = computed(() => authStore.user?.avatar || DEFAULT_AVATAR)
 
 const isAdmin = computed(() => authStore.isAdminLike || authStore.isPlatformAdmin);
 
+const settingsAccessCtx = computed(() => ({
+  isOwner: !!authStore.user?.isOwner,
+  role: authStore.user?.role,
+  permissions: authStore.user?.permissions,
+}));
+
 /** Same compact bell treatment as TabBar (mobile / tablet top bar). */
 const shellTopBarBellClass =
   '!min-h-9 !min-w-9 !p-1.5 rounded-md !border-0 !bg-transparent shadow-none hover:!bg-gray-100 dark:hover:!bg-gray-700 [&_svg]:!w-6 [&_svg]:!h-6';
@@ -234,6 +324,51 @@ const toggleColorModeFromMenu = () => {
   toggleColorMode(colorMode.value === 'light' ? 'dark' : 'light');
 };
 
+const mobileHeaderTitle = computed(() => {
+  const path = route.path || '/';
+
+  if (
+    path === '/sales/dashboard' ||
+    path === '/dashboard' ||
+    path.startsWith('/dashboard/')
+  ) {
+    return 'Home';
+  }
+
+  const titleByPrefix = [
+    ['/inbox', 'Inbox'],
+    ['/approvals', 'Approvals'],
+    ['/settings', 'Settings'],
+    ['/people', 'People'],
+    ['/deals', 'Deals'],
+    ['/tasks', 'Tasks'],
+    ['/events', 'Events'],
+    ['/forms', 'Forms'],
+    ['/responses', 'Responses'],
+    ['/organizations', 'Organizations'],
+    ['/items', 'Items'],
+    ['/imports', 'Imports'],
+    ['/control', 'Control Panel'],
+    ['/platform/home', 'Home'],
+    ['/platform/apps', 'Apps'],
+    ['/profile', 'Profile'],
+    ['/trash', 'Trash'],
+  ];
+
+  const matchedTitle = titleByPrefix.find(([prefix]) => path.startsWith(prefix))?.[1];
+  if (matchedTitle) return matchedTitle;
+
+  const name = typeof route.name === 'string' ? route.name : '';
+  if (name) {
+    return name
+      .split('-')
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(' ');
+  }
+
+  return 'Home';
+});
+
 // Menu items for the user dropdown (match TabBar account menu)
 const userMenuItems = computed(() => {
   const items = [{ name: 'Your Profile', action: () => router.push('/profile') }];
@@ -242,7 +377,9 @@ const userMenuItems = computed(() => {
     items.push({ name: 'Control Panel', action: () => router.push('/control') });
   }
 
-  items.push({ name: 'Settings', action: () => openTab('/settings', { title: 'Settings' }) });
+  if (hasAnySettingsAccess(settingsAccessCtx.value)) {
+    items.push({ name: 'Settings', action: () => openTab('/settings', { title: 'Settings' }) });
+  }
 
   if (authStore.can('settings', 'view')) {
     items.push({ name: 'Trash', action: () => router.push('/trash') });
@@ -372,10 +509,10 @@ const logoSrc = computed(() => {
         <span class="sr-only">Open sidebar</span>
         <Bars3Icon class="size-6 text-gray-900 dark:text-gray-400" aria-hidden="true" />
       </button>
-      <div class="flex-1 text-sm/6 font-semibold text-gray-900 dark:text-white">Dashboard</div>
+      <div class="flex-1 text-base font-semibold text-gray-900 dark:text-white">{{ mobileHeaderTitle }}</div>
       <div
         v-if="authStore.user"
-        class="flex items-center gap-3 pl-2 sm:pl-3"
+        class="flex h-full items-center gap-3 pl-2 sm:pl-3"
       >
         <NotificationBell
           :connect-stream="false"
@@ -386,7 +523,7 @@ const logoSrc = computed(() => {
 
         <Menu as="div" class="relative">
           <MenuButton
-            class="rounded-full overflow-hidden w-8 h-8 flex-shrink-0 ring-1 ring-gray-200 dark:ring-gray-600 hover:ring-gray-300 dark:hover:ring-gray-500 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            class="inline-flex items-center justify-center rounded-full overflow-hidden w-8 h-8 flex-shrink-0 ring-1 ring-gray-200 dark:ring-gray-600 hover:ring-gray-300 dark:hover:ring-gray-500 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <img :src="workspaceAvatar" alt="" class="w-full h-full object-cover" />
           </MenuButton>

@@ -32,6 +32,36 @@ const auditRoutes = [
         meta: { requiresAuth: true, requiresAuditApp: true, hideShell: true }
       },
       {
+        path: 'findings',
+        name: 'audit-findings',
+        component: () => import('@/views/GenericModule.vue'),
+        meta: {
+          requiresAuth: true,
+          requiresAuditApp: true,
+          hideShell: true,
+          moduleKey: 'cases',
+          appKey: 'AUDIT',
+          routeType: 'list'
+        }
+      },
+      {
+        path: 'responses',
+        name: 'audit-responses',
+        component: () => import('@/views/Responses.vue'),
+        meta: {
+          requiresAuth: true,
+          requiresAuditApp: true,
+          hideShell: true,
+          appKey: 'AUDIT'
+        }
+      },
+      {
+        path: 'forms/:id/responses/:responseId',
+        name: 'audit-form-response-detail',
+        component: () => import('@/views/FormResponseDetail.vue'),
+        meta: { requiresAuth: true, requiresAuditApp: true, hideShell: true }
+      },
+      {
         path: 'settings/notifications',
         name: 'audit-notification-preferences',
         component: () => import('@/views/settings/NotificationPreferences.vue'),

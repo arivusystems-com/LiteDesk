@@ -112,10 +112,10 @@ function applyProjectionFilter({ appKey, moduleKey, baseQuery = {}, projectionMe
       }
       
       // Events: Projection uses 'MEETING', 'INTERNAL_AUDIT', 'EXTERNAL_AUDIT_SINGLE', 'EXTERNAL_AUDIT_BEAT', 'FIELD_SALES_BEAT'
-      // Model uses: 'Meeting / Appointment', 'Internal Audit', 'External Audit — Single Org', 'External Audit Beat', 'Field Sales Beat'
+      // Model uses: 'Meeting', 'Internal Audit', 'External Audit — Single Org', 'External Audit Beat', 'Field Sales Beat'
       if (normalizedModuleKey === 'events') {
         const typeMap = {
-          'MEETING': 'Meeting / Appointment',
+          'MEETING': ['Meeting', 'Meeting / Appointment'],
           'INTERNAL_AUDIT': 'Internal Audit',
           'EXTERNAL_AUDIT_SINGLE': 'External Audit — Single Org',
           'EXTERNAL_AUDIT_BEAT': 'External Audit Beat',
@@ -255,10 +255,11 @@ function applyProjectionFilter({ appKey, moduleKey, baseQuery = {}, projectionMe
           };
         } else if (moduleKey === 'events') {
           // For events: Include all valid event types for backward compatibility
-          // The model has specific enum values: 'Meeting / Appointment', 'Internal Audit', etc.
+          // The model has specific enum values: 'Meeting', 'Internal Audit', etc.
           // Projection types map to these values correctly via the mapping function
           // Include all valid event types if mapping returned types, otherwise include all for backward compat
           const allValidEventTypes = [
+            'Meeting',
             'Meeting / Appointment',
             'Internal Audit',
             'External Audit — Single Org',
@@ -358,7 +359,7 @@ function applyProjectionFilter({ appKey, moduleKey, baseQuery = {}, projectionMe
             const backwardCompatTypes = moduleKey === 'forms' 
               ? ['Custom', 'Inspection', 'Audit', 'Feedback']
               : moduleKey === 'events'
-              ? ['Meeting / Appointment', 'Internal Audit', 'External Audit — Single Org', 'External Audit Beat', 'Field Sales Beat']
+              ? ['Meeting', 'Meeting / Appointment', 'Internal Audit', 'External Audit — Single Org', 'External Audit Beat', 'Field Sales Beat']
               : [];
             
             if (backwardCompatTypes.includes(existingTypeFilter)) {

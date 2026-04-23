@@ -88,7 +88,7 @@
                             :showAllFields="isEditing || fullMode || !effectiveQuickCreateMode"
                             :quickCreateMode="effectiveQuickCreateMode"
                             :useQuickCreateOrder="(useQuickCreateOrder || effectiveQuickCreateMode) && !fullMode"
-                            :singleColumn="true"
+                            :singleColumn="!fullMode"
                             :quickCreateFirstWhenExpanded="effectiveQuickCreateMode"
                             @update:formData="updateFormData"
                             @ready="onFormReady"
@@ -149,7 +149,7 @@
 </template>
 
 <script setup>
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, nextTick } from 'vue';
 import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import { XMarkIcon } from '@heroicons/vue/24/outline';
 import DynamicForm from './DynamicForm.vue';
@@ -159,6 +159,7 @@ import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
 import { useAuthStore } from '@/stores/auth';
 import { isAuditEventType } from '@/utils/eventUtils';
+import { getEventTypeByKey, getEventTypeByLabel, EVENT_TYPE_DEFINITIONS } from '@/metadata/eventTypes';
 import { useTabs } from '@/composables/useTabs';
 import { getTaskSystemFields } from '@/platform/fields/taskFieldModel';
 import { getGlobalSystemFieldKeys, normalizeFieldKeyForSystemMatch } from '@/platform/fields/fieldCapabilityEngine';
@@ -537,7 +538,61 @@ const updateFormData = (data) => {
   formData.value = { ...data };
 };
 
+const scrollToFirstErrorField = async () => {
+  const errorKeys = Object.keys(errors.value || {}).filter((key) => key && key !== '_general');
+  if (!errorKeys.length) return;
+
+  await nextTick();
+
+  for (const key of errorKeys) {
+    const escapedKey =
+      typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+        ? CSS.escape(key)
+        : key.replace(/"/g, '\\"');
+    const fieldContainer = document.querySelector(`[data-field-key="${escapedKey}"]`);
+    if (!fieldContainer) continue;
+
+    fieldContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    const focusTarget = fieldContainer.querySelector(
+      'input, textarea, select, button,[tabindex]:not([tabindex="-1"])'
+    );
+    if (focusTarget && typeof focusTarget.focus === 'function') {
+      focusTarget.focus({ preventScroll: true });
+    }
+    break;
+  }
+};
+
 const normalizeKey = (value) => String(value || '').toLowerCase().replace(/[\s_-]/g, '');
+const normalizeEventTypeToken = (value) =>
+  String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+const normalizeEventTypeForSubmission = (rawEventType) => {
+  if (!rawEventType) return '';
+  const candidate = String(rawEventType).trim();
+  if (!candidate) return '';
+
+  const byKey = getEventTypeByKey(candidate);
+  if (byKey?.key) return byKey.key;
+
+  const byLabel = getEventTypeByLabel(candidate);
+  if (byLabel?.key) return byLabel.key;
+
+  const normalizedCandidate = normalizeEventTypeToken(candidate);
+  const fallbackMatch = EVENT_TYPE_DEFINITIONS.find((definition) => {
+    return (
+      normalizeEventTypeToken(definition.key) === normalizedCandidate ||
+      normalizeEventTypeToken(definition.label) === normalizedCandidate
+    );
+  });
+
+  return fallbackMatch?.key || candidate;
+};
 
 const getPreferredPrefillField = (module) => {
   const fields = Array.isArray(module?.fields) ? module.fields : [];
@@ -851,6 +906,7 @@ const handleSubmit = async () => {
       // If validation fails, stop here
       if (Object.keys(errors.value).length > 0) {
         console.log('[CreateRecordDrawer] ❌ Validation failed:', errors.value);
+        scrollToFirstErrorField();
         saving.value = false;
         return;
       }
@@ -972,6 +1028,14 @@ const handleSubmit = async () => {
         }
       }
       
+      // Normalize eventType to canonical key (e.g., "Meeting" -> "MEETING")
+      const normalizedEventType = normalizeEventTypeForSubmission(
+        submitData.eventType ?? formData.value?.eventType
+      );
+      if (normalizedEventType) {
+        submitData.eventType = normalizedEventType;
+      }
+
     }
     
     // Strip system-controlled fields
@@ -988,16 +1052,6 @@ const handleSubmit = async () => {
       if (submitData.status !== undefined) {
         console.log('[CreateRecordDrawer] ⚠️ Stripping status field from event payload:', submitData.status);
         delete submitData.status;
-      }
-      
-      // ARCHITECTURE NOTE: Prevent audit event creation through generic event creation interfaces.
-      // Audit events require complex configuration (roles, forms, geo) and must be created
-      // through Audit application flows, not generic event creation interfaces.
-      // See: docs/architecture/event-settings.md Section 7 (Quick Create Rules)
-      if (submitData.eventType && isAuditEventType(submitData.eventType)) {
-        errors.value._general = `Audit events (${submitData.eventType}) can only be created through the Audit application. Please use the Audit module to create audit events.`;
-        saving.value = false;
-        return;
       }
     }
     
@@ -1123,6 +1177,7 @@ const handleSubmit = async () => {
     };
     
     endpoint = moduleEndpointMap[props.moduleKey] || `/${props.moduleKey}`;
+    let createEndpoint = endpoint;
     
     // Remove legacyOrganizationId if it's null to avoid unique index conflicts
     if (props.moduleKey === 'organizations' && (submitData.legacyOrganizationId === null || submitData.legacyOrganizationId === undefined)) {
@@ -1140,6 +1195,23 @@ const handleSubmit = async () => {
       submitData.relatedTo = rt.type === 'none' ? { type: 'none', id: null } : { type: rt.type, id: rt.id || null };
       delete submitData.relatedToType;
       delete submitData.relatedToId;
+    }
+
+    // For event creation, route audit types through audit-scoped endpoint.
+    // Sales endpoint (/events) enforces appKey=SALES and rejects appKey=AUDIT.
+    if (props.moduleKey === 'events' && !isEditing.value) {
+      const normalizedAppContext =
+        typeof submitData.appContext === 'string' ? submitData.appContext.trim().toUpperCase() : '';
+      const eventTypeForContext = submitData.eventType || formData.value?.eventType;
+      const inferredAppContext = normalizedAppContext || (isAuditEventType(eventTypeForContext) ? 'AUDIT' : '');
+
+      if (inferredAppContext === 'AUDIT') {
+        submitData.appContext = inferredAppContext;
+        createEndpoint = '/audit/events';
+      } else if (inferredAppContext) {
+        submitData.appContext = inferredAppContext;
+        createEndpoint = `${endpoint}?appKey=${encodeURIComponent(inferredAppContext)}`;
+      }
     }
     
     // For events using Scheduling API, inject required fields
@@ -1180,7 +1252,7 @@ const handleSubmit = async () => {
 
     console.log('[CreateRecordDrawer] 📤 Making API call:', {
       method: isEditing.value ? 'PUT' : 'POST',
-      endpoint: usePeopleCreateFlow ? '/people/create' : (isEditing.value ? `${endpoint}/${props.record._id}` : endpoint),
+      endpoint: usePeopleCreateFlow ? '/people/create' : (isEditing.value ? `${endpoint}/${props.record._id}` : createEndpoint),
       payloadKeys: Object.keys(submitData)
     });
 
@@ -1197,7 +1269,7 @@ const handleSubmit = async () => {
       });
     } else {
       // Create new record (including people in Global context)
-      response = await apiClient.post(endpoint, submitData);
+      response = await apiClient.post(createEndpoint, submitData);
     }
     
     console.log('[CreateRecordDrawer] 📥 API response:', {
@@ -1300,6 +1372,7 @@ const handleSubmit = async () => {
     } else {
       console.log('[CreateRecordDrawer] ❌ Failed:', response);
       errors.value = response.errors || { _general: response.message || `Failed to ${isEditing.value ? 'update' : 'create'} record` };
+      scrollToFirstErrorField();
       saving.value = false;
     }
   } catch (error) {
@@ -1406,6 +1479,7 @@ const handleSubmit = async () => {
     if (Object.keys(errors.value).length === 0) {
       errors.value._general = 'Please fill in all required fields and try again.';
     }
+    scrollToFirstErrorField();
   } finally {
     saving.value = false;
   }

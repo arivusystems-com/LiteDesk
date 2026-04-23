@@ -538,8 +538,8 @@
           >
             <!-- Label / selected value (flex-1 so it truncates) -->
             <span class="flex-1 min-w-0 truncate text-left">
-              <!-- Show selected user with avatar/initial for assignedTo -->
-              <span v-if="isAssignedToField && value && getSelectedLookupOption()" class="flex items-center gap-2">
+              <!-- Show selected user with avatar/initial for any users lookup -->
+              <span v-if="isUserLookupField && value && getSelectedLookupOption()" class="flex items-center gap-2">
                 <Avatar :user="getSelectedLookupOption()" size="sm" />
                 <span class="block truncate">{{ getLookupSelectedLabel() }}</span>
               </span>
@@ -623,8 +623,8 @@
                       active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100'
                     ]"
                   >
-                    <!-- User avatar/initial for assignedTo fields -->
-                    <div v-if="isAssignedToField" class="flex items-center gap-3 pl-10">
+                    <!-- User avatar/initial for any users lookup -->
+                    <div v-if="isUserLookupField" class="flex items-center gap-3 pl-10">
                       <Avatar :user="item" size="md" />
                       <span :class="[selected ? 'font-medium' : 'font-normal', 'block truncate flex-1']">
                         {{ getLookupDisplay(item) }}
@@ -697,7 +697,7 @@
                   @sort="handleLookupSort"
                 >
                   <!-- Custom display field rendering -->
-                  <template v-if="isAssignedToField" #name="{ row }">
+                  <template v-if="isUserLookupField" #name="{ row }">
                     <div class="flex items-center gap-3">
                       <Avatar :user="row" size="md" />
                       <span class="font-medium text-gray-900 dark:text-white">{{ getUserDisplayName(row) }}</span>
@@ -1233,6 +1233,7 @@ const isAssignedToField = computed(() => {
   // Check by key
   if (key === 'assignedto' || 
       key === 'assigned_to' || 
+      key === 'eventownerid' ||
       key === 'ownerid' ||
       key === 'owner_id' ||
       key === 'accountmanager' ||
@@ -1243,6 +1244,7 @@ const isAssignedToField = computed(() => {
   // Check by label
   if (label.includes('assigned to') || 
       label.includes('assigned to (owner)') ||
+      label.includes('event owner') ||
       label.includes('deal owner') ||
       label.includes('account manager') ||
       (label === 'owner' && props.field.lookupSettings?.targetModule === 'users') ||
@@ -1251,6 +1253,15 @@ const isAssignedToField = computed(() => {
   }
 
   return false;
+});
+
+const isUserLookupField = computed(() => {
+  return String(props.field?.lookupSettings?.targetModule || '').toLowerCase() === 'users';
+});
+
+const isOrganizationLookupField = computed(() => {
+  const target = String(props.field?.lookupSettings?.targetModule || '').toLowerCase();
+  return target === 'organization' || target === 'organizations';
 });
 
 const updateValue = (newValue) => {
@@ -1678,12 +1689,13 @@ const isMultiValueSelected = (option) => {
 // Get user display name
 const getUserDisplayName = (user) => {
   const name = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
-  return name || user.username || user.email || user._id;
+  const altName = [user.first_name, user.last_name].filter(Boolean).join(' ').trim();
+  return name || altName || user.name || user.username || user.email || user._id;
 };
 
 const getLookupDisplay = (item) => {
-  // For users (assignedTo), show name only (no email)
-  if (isAssignedToField.value) {
+  // For all user lookups (assignedTo, auditorId, reviewerId, correctiveOwnerId, etc.), show human-friendly names.
+  if (isUserLookupField.value || isAssignedToField.value) {
     return getUserDisplayName(item);
   }
   
@@ -1716,9 +1728,27 @@ const getSelectedLookupOption = () => {
   }
   
   // Otherwise, find it in lookupOptions
-  if (!lookupOptions.value.length) return null;
   const valueId = normalizedLookupValue.value;
-  return lookupOptions.value.find(opt => opt._id === valueId || opt._id?.toString() === valueId?.toString());
+  if (lookupOptions.value.length) {
+    const matched = lookupOptions.value.find(opt => opt._id === valueId || opt._id?.toString() === valueId?.toString());
+    if (matched) return matched;
+  }
+
+  // Fallback: for user lookup fields, resolve current user by ID even when filtered option lists are empty.
+  if (isUserLookupField.value && authStore.user?._id && String(authStore.user._id) === String(valueId)) {
+    return authStore.user;
+  }
+
+  // Fallback: resolve current organization for organization lookups when option list isn't loaded.
+  if (
+    isOrganizationLookupField.value &&
+    authStore.organization?._id &&
+    String(authStore.organization._id) === String(valueId)
+  ) {
+    return authStore.organization;
+  }
+
+  return null;
 };
 
 const getLookupSelectedLabel = () => {
@@ -1733,6 +1763,10 @@ const getLookupSelectedLabel = () => {
       return getUserDisplayName(props.value);
     }
     return props.value.name || props.value.title || props.value._id;
+  }
+  // Avoid leaking raw ids for user lookups when we cannot resolve option labels yet.
+  if (isUserLookupField.value) {
+    return '';
   }
   return props.value;
 };

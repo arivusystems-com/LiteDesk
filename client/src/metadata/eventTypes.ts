@@ -7,14 +7,14 @@
  * 
  * This metadata defines:
  * - Event type keys (used in API/projection: MEETING, INTERNAL_AUDIT, etc.)
- * - Human-readable labels (shown in UI: "Meeting / Appointment", "Internal Audit", etc.)
+ * - Human-readable labels (shown in UI: "Meeting", "Internal Audit", etc.)
  * - App associations (which apps can use each type)
  * - Audit classification (whether the type is an audit event)
  * 
  * ARCHITECTURE NOTE:
  * - UI components MUST use { key, label } pairs, never raw strings
  * - Backend receives the key (e.g., "MEETING")
- * - UI displays the label (e.g., "Meeting / Appointment")
+ * - UI displays the label (e.g., "Meeting")
  * - Filtering by app uses metadata.apps array, not string matching
  * 
  * ARCHITECTURAL INVARIANTS:
@@ -38,7 +38,7 @@ import type { EventTypeDefinition, EventSettingsConfig, AppKey } from '@/types/e
 export const EVENT_TYPE_DEFINITIONS: EventTypeDefinition[] = [
   {
     key: 'MEETING',
-    label: 'Meeting / Appointment',
+    label: 'Meeting',
     owningApp: 'PLATFORM',
     creatableFromApps: ['SALES', 'PLATFORM', 'CALENDAR'],
     editableFields: [
@@ -262,7 +262,7 @@ export const EVENT_TYPE_DEFINITIONS: EventTypeDefinition[] = [
 export const EVENT_TYPES = {
   MEETING: {
     key: 'MEETING',
-    label: 'Meeting / Appointment',
+    label: 'Meeting',
     apps: ['SALES', 'CALENDAR'],
     audit: false
   },
@@ -364,16 +364,24 @@ export function getEventTypeByKey(key: string) {
  * Get event type by label (for backward compatibility during migration)
  */
 export function getEventTypeByLabel(label: string) {
-  const definition = EVENT_TYPE_DEFINITIONS.find(type => type.label === label);
-  if (definition) {
+  const normalizedLabel = String(label || '').trim();
+  const aliasLabel = normalizedLabel === 'Meeting / Appointment' ? 'Meeting' : normalizedLabel;
+  const definition = EVENT_TYPE_DEFINITIONS.find(type => type.label === normalizedLabel);
+  const definitionFromAlias = EVENT_TYPE_DEFINITIONS.find(type => type.label === aliasLabel);
+  if (definition || definitionFromAlias) {
+    const resolved = definition || definitionFromAlias;
     return {
-      key: definition.key,
-      label: definition.label,
-      apps: definition.creatableFromApps,
-      audit: definition.isAuditEvent
+      key: resolved.key,
+      label: resolved.label,
+      apps: resolved.creatableFromApps,
+      audit: resolved.isAuditEvent
     };
   }
-  return Object.values(EVENT_TYPES).find(type => type.label === label) || null;
+  return (
+    Object.values(EVENT_TYPES).find(type => type.label === normalizedLabel) ||
+    Object.values(EVENT_TYPES).find(type => type.label === aliasLabel) ||
+    null
+  );
 }
 
 /**

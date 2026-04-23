@@ -24,6 +24,8 @@ const AuditAssignment = require('../models/AuditAssignment');
 const AuditExecutionContext = require('../models/AuditExecutionContext');
 const AuditTimeline = require('../models/AuditTimeline');
 const Event = require('../models/Event');
+const { resolveAppAccess } = require('../services/accessResolutionService');
+const { resolveAccessFeedback } = require('../utils/executionFeedbackResolver');
 
 /**
  * Helper: Validate assignment ownership
@@ -121,10 +123,24 @@ exports.listAssignments = async (req, res) => {
         
         const total = await AuditAssignment.countDocuments(query);
         
+        // Load event names for display in dashboard/list surfaces
+        const eventObjectIds = assignments
+            .map((assignment) => assignment.eventId)
+            .filter(Boolean);
+        const events = eventObjectIds.length > 0
+            ? await Event.find({ _id: { $in: eventObjectIds } })
+                .select('_id eventName')
+                .lean()
+            : [];
+        const eventNameById = new Map(
+            events.map((event) => [String(event._id), event.eventName || null])
+        );
+
         // Format response
         const formattedAssignments = assignments.map(assignment => ({
             assignmentId: assignment._id,
             eventId: assignment.eventId,
+            auditName: eventNameById.get(String(assignment.eventId)) || null,
             auditType: assignment.auditType,
             auditState: assignment.auditState,
             scheduledAt: assignment.scheduledAt,
@@ -186,7 +202,7 @@ exports.getAssignmentDetail = async (req, res) => {
         let event = null;
         if (eventObjectId) {
             event = await Event.findById(eventObjectId)
-                .select('_id eventId auditState eventType startDateTime endDateTime relatedToId location geoRequired')
+                .select('_id eventId eventName auditState eventType startDateTime endDateTime relatedToId location geoRequired linkedFormId metadata formAssignment')
                 .populate('relatedToId', 'name')
                 .lean();
         }
@@ -206,6 +222,7 @@ exports.getAssignmentDetail = async (req, res) => {
                 assignment: {
                     assignmentId: assignment._id,
                     eventId: assignment.eventId,
+                    auditName: event?.eventName || null,
                     auditType: assignment.auditType,
                     auditState: assignment.auditState,
                     scheduledAt: assignment.scheduledAt,
@@ -215,10 +232,14 @@ exports.getAssignmentDetail = async (req, res) => {
                 event: event ? {
                     id: event._id,
                     eventId: event.eventId,
+                    eventName: event.eventName,
                     auditState: event.auditState,
                     eventType: event.eventType,
                     startDateTime: event.startDateTime,
                     endDateTime: event.endDateTime,
+                    linkedFormId: event.linkedFormId || null,
+                    metadata: event.metadata || {},
+                    formAssignment: event.formAssignment || null,
                     relatedToId: event.relatedToId,
                     location: event.location,
                     geoRequired: event.geoRequired,
@@ -294,11 +315,59 @@ exports.getTimeline = async (req, res) => {
             createdAt: entry.createdAt,
             meta: entry.meta || {}
         }));
+
+        // Fallback: derive timeline from Event.auditHistory when synced AuditTimeline is sparse.
+        // This preserves visibility for legacy events where submit/review transitions were not synced.
+        let derivedTimeline = [];
+        if (formattedTimeline.length <= 1) {
+            const eventDoc = await Event.findById(eventObjectId)
+                .select('auditHistory')
+                .populate('auditHistory.actorUserId', 'firstName lastName email')
+                .lean();
+
+            const actionFromState = (toState) => {
+                const state = String(toState || '').toLowerCase();
+                if (state === 'checked_in') return 'CHECK_IN';
+                if (state === 'submitted' || state === 'needs_review' || state === 'pending_corrective') return 'SUBMIT';
+                if (state === 'approved' || state === 'closed') return 'APPROVE';
+                if (state === 'rejected') return 'REJECT';
+                return 'STATUS_CHANGED';
+            };
+
+            const history = Array.isArray(eventDoc?.auditHistory) ? eventDoc.auditHistory : [];
+            derivedTimeline = history
+                .filter(entry => entry && entry.timestamp && entry.action === 'status_changed')
+                .map(entry => ({
+                    action: actionFromState(entry.to),
+                    fromState: entry.from || null,
+                    toState: entry.to || null,
+                    actor: entry.actorUserId ? {
+                        _id: entry.actorUserId._id,
+                        firstName: entry.actorUserId.firstName,
+                        lastName: entry.actorUserId.lastName,
+                        email: entry.actorUserId.email
+                    } : null,
+                    createdAt: entry.timestamp,
+                    meta: entry.metadata || {}
+                }));
+        }
+
+        const dedupeKey = (entry) => `${entry.action}::${new Date(entry.createdAt).getTime()}::${entry.toState || ''}`;
+        const mergedTimeline = [...formattedTimeline];
+        const seen = new Set(formattedTimeline.map(dedupeKey));
+        for (const entry of derivedTimeline) {
+            const key = dedupeKey(entry);
+            if (!seen.has(key)) {
+                seen.add(key);
+                mergedTimeline.push(entry);
+            }
+        }
+        mergedTimeline.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
         
         res.status(200).json({
             success: true,
             data: {
-                timeline: formattedTimeline
+                timeline: mergedTimeline
             }
         });
     } catch (error) {
@@ -351,15 +420,23 @@ exports.getExecutionStatus = async (req, res) => {
         .lean();
         
         // Derive UI state (for button visibility, etc.)
-        // This is UX logic only - actual enforcement is in execution endpoints
+        // Include execution entitlement to avoid offering CTAs that will fail.
         const auditState = assignment.auditState;
         const executionStatus = executionContext?.executionStatus || 'idle';
+        const executionAccess = await resolveAppAccess({
+            user: req.user?.toObject ? req.user.toObject() : req.user,
+            organization: req.organization || req.user?.organizationId,
+            appKey: req.appKey || 'AUDIT',
+            intent: 'EXECUTE'
+        });
+        const executionFeedback = resolveAccessFeedback(executionAccess);
+        const canExecute = executionAccess.allowed && executionAccess.mode === 'EXECUTION';
         
         // Determine available actions based on state
-        const canCheckIn = auditState === 'Ready to start' && executionStatus !== 'in_progress';
-        const canSubmit = auditState === 'checked_in' && executionStatus === 'in_progress';
-        const canApprove = auditState === 'needs_review';
-        const canReject = auditState === 'needs_review';
+        const canCheckIn = canExecute && auditState === 'Ready to start' && executionStatus !== 'in_progress';
+        const canSubmit = canExecute && auditState === 'checked_in' && executionStatus === 'in_progress';
+        const canApprove = canExecute && auditState === 'needs_review';
+        const canReject = canExecute && auditState === 'needs_review';
         
         res.status(200).json({
             success: true,
@@ -370,6 +447,12 @@ exports.getExecutionStatus = async (req, res) => {
                 canSubmit,
                 canApprove,
                 canReject,
+                executionAccess: {
+                    allowed: canExecute,
+                    reason: executionAccess.reason || null,
+                    mode: executionAccess.mode || null,
+                    feedback: executionFeedback || null
+                },
                 checkedInAt: executionContext?.checkedInAt || null,
                 checkedOutAt: executionContext?.checkedOutAt || null
             }

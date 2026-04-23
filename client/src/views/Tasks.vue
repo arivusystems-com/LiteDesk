@@ -1,12 +1,5 @@
 <template>
   <div class="mx-auto w-full" :data-view="currentView">
-    <!-- Entity Description -->
-    <!-- <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-      <p class="text-sm text-gray-700 dark:text-gray-300">
-        <strong>Tasks</strong> are shared across all apps. They can be linked to deals, tickets, audits, and other records to track work and follow-ups.
-      </p>
-    </div> -->
-
     <!-- Registry-Driven ModuleList with Kanban/List View Switcher -->
     <ModuleList
       ref="moduleListRef"

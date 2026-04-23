@@ -26,13 +26,6 @@
       </nav>
     </div>
 
-    <!-- Entity Description -->
-    <!-- <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-      <p class="text-sm text-gray-700 dark:text-gray-300">
-        <strong>People</strong> are shared across Sales, Helpdesk, and Automations. They represent contacts, leads, and customers that can be linked to deals, tickets, and other records throughout the platform.
-      </p>
-    </div> -->
-
     <!-- Registry-Driven ModuleList -->
     <ModuleList
       ref="moduleListRef"
@@ -43,6 +36,7 @@
       @import="showImportModal = true"
       @export="exportContacts"
       @row-click="handleRowClick"
+      @delete="handleInlineDelete"
       @bulk-action="handleBulkAction"
     >
       <!-- Custom Name Cell -->
@@ -589,6 +583,11 @@ const handleBulkAction = async (actionId, selectedRows) => {
   } else if (actionId === 'export' || actionId === 'bulk-export') {
     await bulkExportPeople(selectedRows);
   }
+};
+
+const handleInlineDelete = async (row) => {
+  if (!row) return;
+  await bulkDeletePeople([row]);
 };
 
 // Bulk delete - identity-level only

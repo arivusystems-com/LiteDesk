@@ -172,8 +172,8 @@
         <div v-if="isEventsModule" class="px-2 flex-shrink-0">
           <p class="text-sm text-gray-600 dark:text-gray-400">
             Configure how Event fields are displayed. Field ownership and application scope are defined by the platform and apps.
-            <strong>Note:</strong> Events Settings configure structure and constraints only, not scheduling or execution. 
-            Event lists, calendars, scheduling, execution, audit workflows, and geo tracking belong in Surfaces and Work interfaces.
+            <strong>Note:</strong> Events Settings handle structure and constraints only.
+            Scheduling, calendars, execution, audit workflows, and geo tracking belong in Surfaces and Work interfaces.
           </p>
         </div>
         
@@ -3104,37 +3104,37 @@
           See: docs/architecture/event-settings.md Section 2.2
         -->
         <div class="flex-1 overflow-y-auto" v-else-if="activeTopTab === 'status' && isEventsModule">
-          <div class="p-6">
+          <div class="p-6 lg:p-8 max-w-4xl mx-auto space-y-8">
             <!-- Header -->
-            <div class="mb-6">
+            <div class="space-y-2">
               <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Event Status</h3>
               <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                Event statuses are system-controlled and required for execution. These statuses cannot be modified.
+                Event statuses are system-controlled and required for lifecycle execution.
               </p>
               <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
                 <p class="text-xs text-blue-800 dark:text-blue-400">
-                  <strong>System-Owned Statuses:</strong> All event statuses (Planned, Completed, Cancelled) are system-controlled and cannot be deleted, renamed, or reordered. 
-                  These statuses are required for event execution and lifecycle management. Status transitions happen via system actions (complete, cancel) in Work interfaces, not Settings.
+                  <strong>System-Owned Statuses:</strong> Planned, Completed, and Cancelled are locked.
+                  They cannot be renamed, deleted, reordered, or disabled in Settings.
                 </p>
               </div>
             </div>
 
             <!-- Status Picklist Section -->
-            <div class="mb-8">
-              <div class="flex items-center justify-between mb-4">
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
                 <div>
                   <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Event Status Picklist</h4>
                   <p class="text-sm text-gray-500 dark:text-gray-400">
-                    System-owned event statuses required for execution. These cannot be modified.
+                    Visibility-only view of the system status values.
                   </p>
                 </div>
               </div>
               
-              <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+              <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
                 <div v-if="eventStatusPicklist.length === 0" class="text-center py-8 text-sm text-gray-500 dark:text-gray-400">
                   Loading status values...
                 </div>
-                <div v-else class="space-y-2">
+                <div v-else class="space-y-3">
                   <div
                     v-for="(status, index) in eventStatusPicklist"
                     :key="status.value || index"
@@ -3156,31 +3156,11 @@
                         :disabled="true"
                         switch-class="w-9 h-5"
                       />
-                      <button
-                        disabled
-                        class="p-1.5 text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-50"
-                        title="System-locked - Cannot rename"
-                      >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button
-                        disabled
-                        class="p-1.5 text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-50"
-                        title="System-locked - Cannot delete"
-                      >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
                     </div>
                   </div>
                 </div>
                 <div class="text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                  <strong>System-Owned Statuses:</strong> Event statuses (Planned, Completed, Cancelled) are system-controlled and required for execution. 
-                  These statuses cannot be deleted, renamed, or reordered. Status transitions happen via system actions in Work interfaces, not Settings.
-                  See: <a href="/docs/architecture/event-settings.md" target="_blank" class="text-indigo-600 dark:text-indigo-400 hover:underline">docs/architecture/event-settings.md</a>
+                  Status transitions happen from Work interfaces (for example, complete or cancel actions), not from Settings.
                 </div>
               </div>
             </div>
@@ -3197,25 +3177,24 @@
           See: docs/architecture/event-settings.md Section 4.3, 4.4, 4.5
         -->
         <div class="flex-1 overflow-y-auto" v-else-if="activeTopTab === 'roles-rules' && isEventsModule">
-          <div class="p-6">
+          <div class="p-6 lg:p-8 max-w-4xl mx-auto space-y-10">
             <!-- Header -->
-            <div class="mb-6">
+            <div class="space-y-2">
               <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Roles & Rules</h3>
               <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                Configure role requirements, geo rules, and form linking rules per event type. These settings define constraints, not behavior.
+                Configure role requirements, geo rules, and form-linking rules per event type.
               </p>
               <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
                 <p class="text-xs text-blue-800 dark:text-blue-400">
-                  <strong>Note:</strong> This tab configures constraints (which roles are required, geo requirements, form linking eligibility). 
-                  It does not configure role assignment, user selection, workflow transitions, or execution behavior. 
-                  Those belong in Work interfaces.
+                  <strong>Note:</strong> This tab configures constraints only.
+                  Assignment, workflow transitions, and execution behavior are handled in Work interfaces.
                 </p>
               </div>
             </div>
 
             <!-- Role Requirements per Event Type Section -->
-            <div class="mb-8">
-              <div class="mb-4">
+            <div class="space-y-4">
+              <div class="space-y-3">
                 <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Role Requirements per Event Type</h4>
                 <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
                   Configure which roles are mandatory for each event type. This controls field requirements, not role assignment.
@@ -3230,46 +3209,46 @@
               
               <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
                 <div class="space-y-6">
-                  <!-- Meeting / Appointment -->
+                  <!-- Meeting -->
                   <div class="border-b border-gray-200 dark:border-gray-700 pb-4 last:border-b-0 last:pb-0">
-                    <h5 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Meeting / Appointment</h5>
+                    <h5 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Meeting</h5>
                     <div class="space-y-3">
                       <label class="flex items-start gap-3">
                         <HeadlessCheckbox
-                          :checked="eventRoleRules['Meeting / Appointment']?.auditorRequired || false"
-                          @change="updateEventRoleRule('Meeting / Appointment', 'auditorRequired', $event.target.checked)"
+                          :checked="eventRoleRules['Meeting']?.auditorRequired || false"
+                          @change="updateEventRoleRule('Meeting', 'auditorRequired', $event.target.checked)"
                           checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Auditor Required</span>
                           <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                            Auditor field is optional for Meeting / Appointment events.
+                            Auditor field is optional for Meeting events.
                           </p>
                         </div>
                       </label>
                       <label class="flex items-start gap-3">
                         <HeadlessCheckbox
-                          :checked="eventRoleRules['Meeting / Appointment']?.reviewerRequired || false"
-                          @change="updateEventRoleRule('Meeting / Appointment', 'reviewerRequired', $event.target.checked)"
+                          :checked="eventRoleRules['Meeting']?.reviewerRequired || false"
+                          @change="updateEventRoleRule('Meeting', 'reviewerRequired', $event.target.checked)"
                           checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Reviewer Required</span>
                           <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                            Reviewer field is optional for Meeting / Appointment events.
+                            Reviewer field is optional for Meeting events.
                           </p>
                         </div>
                       </label>
                       <label class="flex items-start gap-3">
                         <HeadlessCheckbox
-                          :checked="eventRoleRules['Meeting / Appointment']?.correctiveOwnerRequired || false"
-                          @change="updateEventRoleRule('Meeting / Appointment', 'correctiveOwnerRequired', $event.target.checked)"
+                          :checked="eventRoleRules['Meeting']?.correctiveOwnerRequired || false"
+                          @change="updateEventRoleRule('Meeting', 'correctiveOwnerRequired', $event.target.checked)"
                           checkbox-class="mt-1 w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                         />
                         <div class="flex-1">
                           <span class="text-sm font-medium text-gray-900 dark:text-white">Corrective Owner Required</span>
                           <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                            Corrective Owner field is optional for Meeting / Appointment events.
+                            Corrective Owner field is optional for Meeting events.
                           </p>
                         </div>
                       </label>
@@ -3471,8 +3450,8 @@
             </div>
 
             <!-- Geo Rules Section -->
-            <div class="mb-8">
-              <div class="mb-4">
+            <div class="space-y-4">
+              <div class="space-y-3">
                 <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Geo Rules</h4>
                 <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
                   Configure geo requirements per event type. This controls whether geo tracking is required, not geo tracking execution.
@@ -3488,7 +3467,7 @@
               <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
                 <div class="space-y-4">
                   <div
-                    v-for="eventType in ['Meeting / Appointment', 'Internal Audit', 'External Audit — Single Org', 'External Audit Beat', 'Field Sales Beat']"
+                    v-for="eventType in ['Meeting', 'Internal Audit', 'External Audit — Single Org', 'External Audit Beat', 'Field Sales Beat']"
                     :key="eventType"
                     class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
                   >
@@ -3524,7 +3503,7 @@
 
             <!-- Form Linking Rules Section -->
             <div>
-              <div class="mb-4">
+              <div class="space-y-3 mb-4">
                 <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-1">Form Linking Rules</h4>
                 <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
                   Configure form linking eligibility per event type. This controls whether forms can be linked, not form assignment or execution.
@@ -3540,7 +3519,7 @@
               <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
                 <div class="space-y-6">
                   <div
-                    v-for="eventType in ['Meeting / Appointment', 'Internal Audit', 'External Audit — Single Org', 'External Audit Beat', 'Field Sales Beat']"
+                    v-for="eventType in ['Meeting', 'Internal Audit', 'External Audit — Single Org', 'External Audit Beat', 'Field Sales Beat']"
                     :key="eventType"
                     class="border-b border-gray-200 dark:border-gray-700 pb-4 last:border-b-0 last:pb-0"
                   >
@@ -4649,24 +4628,6 @@
                     </ul>
                   </div>
                   
-                  <!-- System Fields -->
-                  <div v-if="quickCreateAvailableFields.some(f => getPeopleFieldMetadata(f.key)?.owner === 'system')" class="mb-4">
-                    <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">System</div>
-                    <ul class="space-y-1">
-                      <li
-                        v-for="f in quickCreateAvailableFields.filter(f => getPeopleFieldMetadata(f.key)?.owner === 'system')"
-                        :key="f.key"
-                        class="px-3 py-2 rounded flex items-center gap-2 cursor-pointer"
-                        :class="quickCreateSelected.has(f.key) ? 'bg-gray-100 dark:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/5'"
-                        @click="toggleQuickRow(f)"
-                        :title="f.required ? 'Required field is always included' : ''"
-                      >
-                        <HeadlessCheckbox :checked="quickCreateSelected.has(f.key)" :disabled="f.required" @change="toggleQuickCreate(f.key, $event.target.checked)" @click.stop />
-                        <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
-                      </li>
-                    </ul>
-                  </div>
-                  
                   <!-- Custom / org-defined fields (not in PEOPLE_FIELD_METADATA) -->
                   <div v-if="quickCreateAvailableFields.some(f => f.key && !getPeopleFieldMetadata(f.key))" class="mb-4">
                     <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Custom</div>
@@ -4798,15 +4759,15 @@
                   Eligible fields: eventName (required, locked), eventType, startDateTime, endDateTime, location
                   Excluded: audit roles, geo, forms, recurrence, multi-org routing, notes, metadata
                   Rationale: Audit events require complex configuration (roles, forms, geo) and should not be created via Quick Create.
-                  Quick Create is for simple scheduling (Meeting / Appointment, Field Sales Beat), not audit workflows.
+                  Quick Create is for simple scheduling (Meeting, Field Sales Beat), not audit workflows.
                   See: docs/architecture/event-settings.md Section 7
                 -->
                 <template v-else-if="isEventsModule">
-                  <div v-if="quickCreateAvailableFields.length > 0" class="mb-4">
+                  <div v-if="quickCreateEventGroupedFields.core.length > 0" class="mb-4">
                     <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Core Event Fields</div>
                     <ul class="space-y-1">
                       <li
-                        v-for="f in quickCreateAvailableFields"
+                        v-for="f in quickCreateEventGroupedFields.core"
                         :key="f.key"
                         class="px-3 py-2 rounded flex items-center gap-2"
                         :class="[
@@ -4828,6 +4789,64 @@
                       </li>
                     </ul>
                   </div>
+
+                  <div
+                    v-for="[appKey, fields] in quickCreateEventParticipationEntries"
+                    :key="appKey"
+                    class="mb-4"
+                  >
+                    <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">
+                      {{ appKey === 'AUDIT' ? 'Audit Participation' : appKey === 'SALES' ? 'Sales Participation' : `${appKey} Participation` }}
+                    </div>
+                    <ul class="space-y-1">
+                      <li
+                        v-for="f in fields"
+                        :key="f.key"
+                        class="px-3 py-2 rounded flex items-center gap-2"
+                        :class="[
+                          quickCreateSelected.has(f.key) ? 'bg-gray-100 dark:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/5',
+                          f.key?.toLowerCase() === 'eventname' ? 'cursor-default' : 'cursor-pointer'
+                        ]"
+                        @click="f.key?.toLowerCase() !== 'eventname' ? toggleQuickRow(f) : null"
+                        :title="f.key?.toLowerCase() === 'eventname' ? 'Event Name is required and cannot be removed' : (f.required ? 'Required field is always included' : '')"
+                      >
+                        <HeadlessCheckbox
+                          :checked="quickCreateSelected.has(f.key)"
+                          :disabled="f.key?.toLowerCase() === 'eventname' || f.required"
+                          @change="f.key?.toLowerCase() !== 'eventname' ? toggleQuickCreate(f.key, $event.target.checked) : null"
+                          @click.stop
+                        />
+                        <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
+                        <span class="px-1.5 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded ml-auto">{{ appKey }}</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div v-if="quickCreateEventGroupedFields.custom.length > 0" class="mb-4">
+                    <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Custom Fields</div>
+                    <ul class="space-y-1">
+                      <li
+                        v-for="f in quickCreateEventGroupedFields.custom"
+                        :key="f.key"
+                        class="px-3 py-2 rounded flex items-center gap-2"
+                        :class="[
+                          quickCreateSelected.has(f.key) ? 'bg-gray-100 dark:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/5',
+                          f.key?.toLowerCase() === 'eventname' ? 'cursor-default' : 'cursor-pointer'
+                        ]"
+                        @click="f.key?.toLowerCase() !== 'eventname' ? toggleQuickRow(f) : null"
+                        :title="f.key?.toLowerCase() === 'eventname' ? 'Event Name is required and cannot be removed' : (f.required ? 'Required field is always included' : '')"
+                      >
+                        <HeadlessCheckbox
+                          :checked="quickCreateSelected.has(f.key)"
+                          :disabled="f.key?.toLowerCase() === 'eventname' || f.required"
+                          @change="f.key?.toLowerCase() !== 'eventname' ? toggleQuickCreate(f.key, $event.target.checked) : null"
+                          @click.stop
+                        />
+                        <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
+                        <span class="px-1.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded ml-auto">Custom</span>
+                      </li>
+                    </ul>
+                  </div>
                   
                   <!-- Info message if no fields -->
                   <div v-if="quickCreateAvailableFields.length === 0" class="p-3 text-xs text-gray-500 dark:text-gray-400 text-center">
@@ -4837,38 +4856,19 @@
                   <!-- Helper text for Events -->
                   <div class="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                     <p class="text-xs text-blue-800 dark:text-blue-400">
-                      <strong>Quick Create is for fast event scheduling.</strong> Only minimal scheduling-safe fields appear. 
-                      <strong>Audit events require complex configuration (roles, forms, geo) and should be created via full event edit, not Quick Create.</strong>
+                      Select non-system event fields to include in Quick Create.
+                      Fields are grouped by ownership (core, participation, custom) to match field configuration.
                     </p>
                   </div>
                 </template>
                 
-                <!-- Other modules: grouped by regular and system fields -->
+                <!-- Other modules: non-system fields only -->
                 <template v-else>
-                  <!-- Regular Fields -->
-                  <div v-if="quickCreateAvailableFields.some(f => !isSystemField(f))" class="mb-4">
+                  <div v-if="quickCreateAvailableFields.length > 0" class="mb-4">
                     <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Fields</div>
                     <ul class="space-y-1">
                       <li
-                        v-for="f in quickCreateAvailableFields.filter(f => !isSystemField(f))"
-                        :key="f.key"
-                        class="px-3 py-2 rounded flex items-center gap-2 cursor-pointer"
-                        :class="quickCreateSelected.has(f.key) ? 'bg-gray-100 dark:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/5'"
-                        @click="toggleQuickRow(f)"
-                        :title="f.required ? 'Required field is always included' : ''"
-                      >
-                        <HeadlessCheckbox :checked="quickCreateSelected.has(f.key)" :disabled="f.required" @change="toggleQuickCreate(f.key, $event.target.checked)" @click.stop />
-                        <span class="text-sm text-gray-800 dark:text-gray-200 truncate">{{ f.label || f.key }}</span>
-                      </li>
-                    </ul>
-                  </div>
-                  
-                  <!-- System Fields -->
-                  <div v-if="quickCreateAvailableFields.some(f => isSystemField(f))" class="mb-4">
-                    <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">System</div>
-                    <ul class="space-y-1">
-                      <li
-                        v-for="f in quickCreateAvailableFields.filter(f => isSystemField(f))"
+                        v-for="f in quickCreateAvailableFields"
                         :key="f.key"
                         class="px-3 py-2 rounded flex items-center gap-2 cursor-pointer"
                         :class="quickCreateSelected.has(f.key) ? 'bg-gray-100 dark:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/5'"
@@ -4897,8 +4897,7 @@
                     <strong>Quick Create is for fast task capture.</strong> Only essential fields (title, dueDate, priority, assignedTo, relatedTo) are eligible. Detailed configuration happens later.
                   </span>
                   <span v-else-if="isEventsModule">
-                    <strong>Quick Create is for fast event scheduling.</strong> Only minimal scheduling-safe fields (eventName, eventType, startDateTime, endDateTime, location) are eligible. 
-                    Audit events require complex configuration (roles, forms, geo) and should be created via full event edit, not Quick Create.
+                    Select non-system event fields to include in Quick Create. Fields are grouped by ownership (core, participation, custom).
                   </span>
                   <span v-else>Select fields to include in Quick Create.</span>
                 </div>
@@ -7214,12 +7213,7 @@ function isFieldEligibleForQuickCreate(fieldKey) {
       metadata.intent === 'identity' &&
       metadata.editable === true
     );
-    const isAllowedSystemField = (
-      metadata.owner === 'system' &&
-      metadata.editable === true &&
-      metadata.allowOnCreate === true
-    );
-    return isCoreIdentity || isAllowedSystemField;
+    return isCoreIdentity;
   } catch (err) {
     throw new Error(
       `Field "${fieldKey}" is not eligible for Quick Create. ` +
@@ -7227,6 +7221,23 @@ function isFieldEligibleForQuickCreate(fieldKey) {
       `Error: ${err.message}`
     );
   }
+}
+
+function classifyEventQuickCreateField(field) {
+  const key = field?.key;
+  if (!key) return 'system';
+
+  let classification = classifyEventField(key);
+  if (classification !== 'system') return classification;
+
+  // Nested event keys (e.g. kpiTargets.conversionRate) inherit ownership from root key.
+  const rootKey = key.split('.')[0];
+  if (rootKey && rootKey !== key) {
+    const rootClassification = classifyEventField(rootKey);
+    if (rootClassification) return rootClassification;
+  }
+
+  return classification;
 }
 
 // Computed: Fields available for Quick Create — all fields except system fields (for selection in Settings)
@@ -7290,6 +7301,7 @@ const quickCreateAvailableFields = computed(() => {
     return editFields.value.filter(f => {
       if (!f.key) return false;
       if (!eligibleKeys.has(f.key)) return false;
+      if (isSystemField(f)) return false;
       if (!showTenantFields.value) {
         const keyLower = f.key.toLowerCase();
         const tenantFieldPatterns = ['subscription.', 'limits.', 'settings.', 'slug', 'isactive', 'enabledmodules'];
@@ -7306,9 +7318,16 @@ const quickCreateAvailableFields = computed(() => {
     return editFields.value.filter(f => f.key && !isSystemField(f));
   }
 
-  // For Events: all fields except system
+  // For Events: exclude system fields and SALES participation fields
+  // to match field configuration behavior.
   if (isEventsModule.value) {
-    return editFields.value.filter(f => f.key && !isSystemField(f));
+    return editFields.value.filter((field) => {
+      if (!field?.key) return false;
+      const classification = classifyEventQuickCreateField(field);
+      if (classification === 'system') return false;
+      if (classification === 'SALES') return false;
+      return true;
+    });
   }
 
   // For Deals: include all core/usable fields, exclude only system fields
@@ -7324,6 +7343,41 @@ const quickCreateAvailableFields = computed(() => {
 
   // For other modules (Deals, Items, etc.): only non-system fields
   return editFields.value.filter(f => f.key && !isSystemField(f));
+});
+
+const quickCreateEventGroupedFields = computed(() => {
+  const core = [];
+  const custom = [];
+  const participation = {};
+  if (!isEventsModule.value) {
+    return { core, participation, custom };
+  }
+
+  for (const field of quickCreateAvailableFields.value) {
+    if (!field?.key) continue;
+    const classification = classifyEventQuickCreateField(field);
+    if (classification === 'system') continue;
+
+    if (classification !== 'core') {
+      const scope = (classification || 'Participation').toUpperCase();
+      if (!participation[scope]) participation[scope] = [];
+      participation[scope].push(field);
+      continue;
+    }
+
+    if (field.owner === 'org') {
+      custom.push(field);
+      continue;
+    }
+
+    core.push(field);
+  }
+
+  return { core, participation, custom };
+});
+
+const quickCreateEventParticipationEntries = computed(() => {
+  return Object.entries(quickCreateEventGroupedFields.value.participation);
 });
 
 // Grouped fields for People module (derived from metadata)
@@ -8884,7 +8938,6 @@ const fetchModules = async () => {
         const baseKeys = useLayout ? layoutKeysInit : quickKeysInit;
         // Normalize baseKeys to match actual field keys in editFields (case-insensitive match)
         // This ensures keys like "event-type" or "eventType" both match the actual field key
-        // For People module, also allow system fields with allowOnCreate even if not in editFields
         const normalizedBaseKeys = baseKeys.map(key => {
           if (!key) return null;
           // Try exact match first
@@ -8897,26 +8950,13 @@ const fetchModules = async () => {
           const camelCaseKey = key.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
           field = editFields.value.find(f => f.key && f.key.toLowerCase() === camelCaseKey.toLowerCase());
           if (field) return field.key;
-          
-          // For People module: allow system fields with allowOnCreate even if not in editFields
-          if (isPeopleModule.value) {
-            try {
-              const metadata = getFieldMetadata(key);
-              if (metadata.owner === 'system' && metadata.allowOnCreate === true) {
-                // System field with allowOnCreate - allow it even if not in editFields
-                return key;
-              }
-            } catch (err) {
-              // Field not found in metadata - will be filtered out below
-            }
-          }
-          
+
           // If no match found, log warning and return null (will be filtered out)
           console.warn(`⚠️  Field key "${key}" from quickCreate not found in module fields. Available keys:`, editFields.value.map(f => f.key).slice(0, 10));
           return null;
         }).filter(key => key !== null);
         
-        // For People module, filter normalizedBaseKeys to only eligible fields (core identity + system fields with allowOnCreate)
+        // For People module, filter normalizedBaseKeys to only eligible core identity fields.
         let filteredBaseKeys = normalizedBaseKeys;
         if (isPeopleModule.value) {
           filteredBaseKeys = normalizedBaseKeys.filter(key => {
@@ -8929,8 +8969,8 @@ const fetchModules = async () => {
           });
         }
         
-        // Always include required fields in Simple mode (but filter for People module)
-        let requiredKeys = editFields.value.filter(f => !!f.required && !!f.key).map(f => f.key);
+        // Always include required fields in Simple mode (excluding system fields)
+        let requiredKeys = editFields.value.filter(f => !!f.required && !!f.key && !isSystemField(f)).map(f => f.key);
         if (isPeopleModule.value) {
           requiredKeys = requiredKeys.filter(key => {
             try {
@@ -8944,7 +8984,7 @@ const fetchModules = async () => {
         // Always include required fields in Quick Create selection
         const combined = Array.from(new Set([...filteredBaseKeys, ...requiredKeys]));
         
-        // For People module, ensure we only include eligible fields (core identity + system fields with allowOnCreate)
+        // For People module, ensure we only include eligible core identity fields.
         let finalCombined = combined;
         if (isPeopleModule.value) {
           finalCombined = combined.filter(key => {
@@ -8957,7 +8997,9 @@ const fetchModules = async () => {
           });
         }
         
-        quickCreateSelected.value = new Set(finalCombined);
+        const allowedQuickCreateKeys = new Set(quickCreateAvailableFields.value.map(f => f.key));
+        const sanitizedCombined = finalCombined.filter(key => allowedQuickCreateKeys.has(key));
+        quickCreateSelected.value = new Set(sanitizedCombined);
         
         // Initialize field order from saved quickCreate array (preserves order)
         // If quickCreate has order, use it; otherwise use editFields order
@@ -11723,11 +11765,20 @@ async function saveQuickCreate() {
           return exists;
         });
     
-    // Always include required fields in saved Quick Create
-    const requiredKeysSave = editFields.value.filter(f => !!f.required && !!f.key).map(f => f.key);
+    // Always include required fields in saved Quick Create (excluding system fields)
+    const requiredKeysSave = editFields.value.filter(f => !!f.required && !!f.key && !isSystemField(f)).map(f => f.key);
     allKeys = Array.from(new Set([...allKeys, ...requiredKeysSave]));
+    // Guardrail: never persist system fields in Quick Create settings.
+    allKeys = allKeys.filter(key => {
+      const field = editFields.value.find(f => f.key === key);
+      if (!field) return false;
+      if (isEventsModule.value) {
+        return classifyEventQuickCreateField(field) !== 'system';
+      }
+      return !isSystemField(field);
+    });
     
-    // For People module, filter to only eligible fields (core identity + system fields with allowOnCreate)
+    // For People module, filter to only eligible core identity fields.
     if (isPeopleModule.value) {
       const coreIdentityFieldKeys = getCoreIdentityFields();
       console.log('🔍 Filtering People module quickCreate fields:', {
@@ -11739,7 +11790,7 @@ async function saveQuickCreate() {
       
       const beforeFilter = [...allKeys];
       allKeys = allKeys.filter(key => {
-        // Use the same eligibility check as the UI (core identity OR system fields with allowOnCreate)
+        // Use the same eligibility check as the UI (core identity only).
         try {
           const metadata = getFieldMetadata(key);
           
@@ -11750,15 +11801,7 @@ async function saveQuickCreate() {
             metadata.editable === true
           );
           
-          // System fields with allowOnCreate: owner === 'system', editable === true, allowOnCreate === true
-          const isAllowedSystemField = (
-            metadata.owner === 'system' &&
-            metadata.editable === true &&
-            metadata.allowOnCreate === true
-          );
-          
-          const isValid = isCoreIdentity || isAllowedSystemField;
-          return isValid;
+          return isCoreIdentity;
         } catch (err) {
           return false;
         }
@@ -11941,7 +11984,7 @@ const itemStatusTypesDirty = computed(() => {
 // These state variables track role requirements, geo rules, and form linking rules per event type.
 // See: docs/architecture/event-settings.md Section 4.3, 4.4, 4.5
 const eventRoleRules = ref({
-  'Meeting / Appointment': { auditorRequired: false, reviewerRequired: false, correctiveOwnerRequired: false },
+  'Meeting': { auditorRequired: false, reviewerRequired: false, correctiveOwnerRequired: false },
   'Internal Audit': { auditorRequired: true, reviewerRequired: false, correctiveOwnerRequired: true }, // auditor and correctiveOwner locked
   'External Audit — Single Org': { auditorRequired: true, reviewerRequired: true, correctiveOwnerRequired: true }, // all locked
   'External Audit Beat': { auditorRequired: true, reviewerRequired: false, correctiveOwnerRequired: true }, // auditor and correctiveOwner locked
@@ -11949,7 +11992,7 @@ const eventRoleRules = ref({
 });
 
 const eventGeoRules = ref({
-  'Meeting / Appointment': false,
+  'Meeting': false,
   'Internal Audit': true, // locked
   'External Audit — Single Org': true, // locked
   'External Audit Beat': true, // locked
@@ -11957,7 +12000,7 @@ const eventGeoRules = ref({
 });
 
 const eventFormRules = ref({
-  'Meeting / Appointment': { allowLinking: true, requireOnCreation: false, preventUnlinkingAfterStart: false },
+  'Meeting': { allowLinking: true, requireOnCreation: false, preventUnlinkingAfterStart: false },
   'Internal Audit': { allowLinking: true, requireOnCreation: false, preventUnlinkingAfterStart: false },
   'External Audit — Single Org': { allowLinking: true, requireOnCreation: false, preventUnlinkingAfterStart: false },
   'External Audit Beat': { allowLinking: true, requireOnCreation: false, preventUnlinkingAfterStart: false },

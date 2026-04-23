@@ -188,6 +188,7 @@
 import { ref, computed, h, watch, defineAsyncComponent } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { canAccessSettingsTab } from '@/utils/settingsTabAccess';
 import { useColorMode } from '@/composables/useColorMode';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 
@@ -347,17 +348,25 @@ const BellIcon = () => h('svg', {
   })
 ]);
 
+const settingsAccessCtx = computed(() => ({
+  isOwner: !!authStore.user?.isOwner,
+  role: authStore.user?.role,
+  permissions: authStore.user?.permissions,
+}));
+
 const tabs = computed(() => {
-  return [
-            { id: 'organization', name: 'Organization', icon: PlatformIcon, component: OrganizationSettings },
+  const all = [
+    { id: 'organization', name: 'Organization', icon: PlatformIcon, component: OrganizationSettings },
     { id: 'users-access', name: 'Users & Access', icon: UsersIcon, component: UsersAccessSettings },
     { id: 'core-modules', name: 'Core Modules', icon: CoreModulesIcon, component: CoreModulesList },
-            { id: 'applications', name: 'Applications', icon: AppsIcon, component: ApplicationsList },
-            { id: 'subscriptions', name: 'Subscriptions', icon: SubscriptionsIcon, component: SubscriptionsList },
-            { id: 'notifications', name: 'Notifications', icon: BellIcon, component: NotificationSettings },
-            { id: 'security', name: 'Security', icon: SecurityIcon, component: SecuritySettings },
-    { id: 'integrations', name: 'Integrations', icon: IntegrationsIcon, component: IntegrationsSettings }
+    { id: 'applications', name: 'Applications', icon: AppsIcon, component: ApplicationsList },
+    { id: 'subscriptions', name: 'Subscriptions', icon: SubscriptionsIcon, component: SubscriptionsList },
+    { id: 'notifications', name: 'Notifications', icon: BellIcon, component: NotificationSettings },
+    { id: 'security', name: 'Security', icon: SecurityIcon, component: SecuritySettings },
+    { id: 'integrations', name: 'Integrations', icon: IntegrationsIcon, component: IntegrationsSettings },
   ];
+  const ctx = settingsAccessCtx.value;
+  return all.filter((t) => canAccessSettingsTab(t.id, ctx));
 });
 
 const SubscriptionsIcon = () => h('svg', {
@@ -431,11 +440,9 @@ const InstancesIcon = () => h('svg', {
   })
 ]);
 
-// Environment check: Internal section only shows in development/internal environments
-// This section is for internal/operational tooling only and must never be used for customer-facing configuration
+// Internal tooling: dev build only AND master org (same intent as routes with requiresMasterOrganization)
 const isInternalEnvironment = computed(() => {
-  // Gate by development environment - NEVER expose in production builds
-  return import.meta.env.DEV === true;
+  return import.meta.env.DEV === true && authStore.isMasterOrganization;
 });
 
 // Internal section tabs (environment-gated)
@@ -522,7 +529,14 @@ const syncTabFromRoute = () => {
   const q = route.query.tab;
   if (typeof q === 'string') {
     const exists = tabs.value.some(t => t.id === q) || internalTabs.value.some(t => t.id === q);
-    if (exists) activeTab.value = q;
+    if (exists) {
+      activeTab.value = q;
+    } else {
+      activeTab.value = null;
+      const nextQuery = { ...route.query };
+      delete nextQuery.tab;
+      router.replace({ path: '/settings', query: nextQuery });
+    }
   } else if (route.path.includes('/notifications') && !route.query.tab) {
     // If directly navigating to a notification route, set tab but don't change path
     activeTab.value = 'notifications';
@@ -536,9 +550,16 @@ watch(() => route.query.tab, () => {
 
 watch(activeTab, (val) => {
   const current = route.query.tab;
-  if (current !== val) {
-    router.replace({ query: { ...route.query, tab: val } });
+  const normalizedCurrent = current == null || current === '' ? null : String(current);
+  const normalizedVal = val == null || val === '' ? null : String(val);
+  if (normalizedCurrent === normalizedVal) return;
+  const nextQuery = { ...route.query };
+  if (normalizedVal == null) {
+    delete nextQuery.tab;
+  } else {
+    nextQuery.tab = normalizedVal;
   }
+  router.replace({ path: '/settings', query: nextQuery });
 });
 
 // Restore last active tab and persist changes

@@ -18,7 +18,7 @@
     </h3>
 
     <!-- Type (required): ListboxOption renders as <li> — slot content must NOT be another <li> -->
-    <div class="mb-4">
+    <div class="mb-4" data-field-key="participationType">
       <Listbox
         :model-value="modelValue?.participationType ?? null"
         :disabled="loading"

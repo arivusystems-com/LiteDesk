@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
 import { useAuthStore } from '@/stores/auth';
+import { hasAnySettingsAccess } from '@/utils/settingsTabAccess';
 import { useColorMode } from '@/composables/useColorMode';
 import clickOutside from '@/directives/clickOutside';
 import NotificationBell from '@/components/notifications/NotificationBell.vue';
@@ -25,6 +26,12 @@ const isAdmin = computed(
   () => authStore.isAdminLike || authStore.isPlatformAdmin
 );
 
+const settingsAccessCtx = computed(() => ({
+  isOwner: !!authStore.user?.isOwner,
+  role: authStore.user?.role,
+  permissions: authStore.user?.permissions,
+}));
+
 const showProfileDropdown = ref(false);
 const profileDropdownRef = ref(null);
 
@@ -41,10 +48,12 @@ const profileMenuItems = computed(() => {
     items.push({ name: 'Control Panel', action: () => router.push('/control') });
   }
 
-  items.push({
-    name: 'Settings',
-    action: () => openTab('/settings', { title: 'Settings' }),
-  });
+  if (hasAnySettingsAccess(settingsAccessCtx.value)) {
+    items.push({
+      name: 'Settings',
+      action: () => openTab('/settings', { title: 'Settings' }),
+    });
+  }
 
   if (authStore.can('settings', 'view')) {
     items.push({ name: 'Trash', action: () => router.push('/trash') });

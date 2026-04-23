@@ -1,11 +1,14 @@
 <template>
-  <div class="mx-auto w-full">
+  <div
+    class="mx-auto w-full"
+    :class="isAuditFindingsSurface ? 'px-4 sm:px-6 lg:px-8 py-4' : ''"
+  >
     <!-- List: use ModuleList with moduleKey from route -->
     <ModuleList
       v-if="routeType === 'list' && moduleKey"
       ref="moduleListRef"
       :module-key="moduleKey"
-      app-key="SALES"
+      :app-key="resolvedAppKey"
       view-mode="list"
       @create="handleCreate"
       @row-click="handleRowClick"
@@ -42,6 +45,12 @@ const router = useRouter();
 
 const moduleKey = computed(() => (route.meta?.moduleKey || '').toLowerCase());
 const routeType = computed(() => route.meta?.routeType || 'list');
+const resolvedAppKey = computed(() => String(route.meta?.appKey || 'SALES').toUpperCase());
+const isAuditFindingsSurface = computed(() => (
+  resolvedAppKey.value === 'AUDIT' &&
+  moduleKey.value === 'cases' &&
+  routeType.value === 'list'
+));
 
 function handleCreate() {
   if (moduleKey.value) {

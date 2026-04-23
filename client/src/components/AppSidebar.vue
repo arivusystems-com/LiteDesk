@@ -43,7 +43,7 @@
       <div v-if="searchSurface" class="px-[0.667rem] pt-[0.667rem] pb-[0.667rem]">
       <button
         type="button"
-        @click="handleNavClick(searchSurface.route, searchSurface.label, $event)"
+        @click="handleNavClick(searchSurface.route, searchSurface.label, $event, { icon: searchSurface.icon })"
         class="w-full h-[2.333rem] border border-[#EAEEF4] dark:border-gray-700 rounded-[0.5rem] flex items-center justify-start transition-colors hover:bg-[#F8F9FB] dark:hover:bg-gray-800 bg-white dark:bg-gray-900 px-[0.583rem] py-[0.5rem]"
         :class="collapsed ? '' : 'gap-[0.583rem]'"
         :title="collapsed ? 'Search' : ''"
@@ -62,8 +62,8 @@
           v-for="item in shellNavItems"
           :key="item.id"
           :href="item.route"
-          @click.prevent="handleNavClick(item.route, item.label, $event)"
-          @auxclick.prevent="handleNavClick(item.route, item.label, $event)"
+          @click.prevent="handleNavClick(item.route, item.label, $event, { icon: item.icon })"
+          @auxclick.prevent="handleNavClick(item.route, item.label, $event, { icon: item.icon })"
           class="w-full h-[2.333rem] rounded-[0.5rem] px-[0.583rem] gap-[0.667rem] py-[0.333rem] flex items-center justify-start transition-colors"
           :class="[
             isActiveRoute(item.route) 
@@ -143,8 +143,8 @@
                 v-for="item in sidebarStructure.coreModules"
                 :key="item.id"
                 :href="item.route"
-                @click.prevent="handleNavClick(item.route, item.label, $event)"
-                @auxclick.prevent="handleNavClick(item.route, item.label, $event)"
+                @click.prevent="handleNavClick(item.route, item.label, $event, { icon: item.icon })"
+                @auxclick.prevent="handleNavClick(item.route, item.label, $event, { icon: item.icon })"
                 class="w-full h-[2.333rem] rounded-[0.5rem] py-[0.333rem] flex items-center transition-colors"
                 :class="[
                   'px-[0.5rem] gap-[0.667rem]',
@@ -184,8 +184,8 @@
               v-for="item in sidebarStructure.coreModules"
               :key="item.id"
               :href="item.route"
-              @click.prevent="handleNavClick(item.route, item.label, $event)"
-              @auxclick.prevent="handleNavClick(item.route, item.label, $event)"
+              @click.prevent="handleNavClick(item.route, item.label, $event, { icon: item.icon })"
+              @auxclick.prevent="handleNavClick(item.route, item.label, $event, { icon: item.icon })"
               class="w-full h-[2.333rem] rounded-[0.5rem] px-[0.5rem] py-[0.333rem] flex items-center justify-start transition-colors"
               :class="[
                 isActiveRoute(item.route) 
@@ -212,9 +212,9 @@
 
     <!-- App switcher + app navigation (switcher 28px ÷ 12 = 2.333rem, app rows 24px ÷ 12 = 2rem, gap 4px ÷ 12 = 0.333rem) -->
     <div class="px-[0.667rem] pt-[1rem] flex flex-col gap-[0.333rem]">
-      <!-- App switcher -->
+      <!-- App switcher: only when user has more than one entitled app (no pointless dropdown) -->
       <div
-        v-if="sidebarStructure.appSwitcher.apps.length > 0"
+        v-if="sidebarStructure.appSwitcher.apps.length > 1"
         ref="appSwitcherDropdownRef"
         v-click-outside="closeAppSwitcherDropdown"
         class="relative w-full"
@@ -225,7 +225,11 @@
           :class="collapsed ? '' : 'gap-[0.667rem]'"
         >
           <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
-            <FigmaSackDollarIcon class="w-full h-full" :fill="iconColors.primary" />
+            <component
+              :is="getAppIcon(activeApp || { id: 'SALES', name: 'Sales', dashboardRoute: '/dashboard/sales' })"
+              class="w-full h-full"
+              :fill="iconColors.primary"
+            />
           </span>
           <div v-if="!collapsed" class="flex items-center gap-[0.333rem] flex-1 min-w-0">
             <span class="text-[1rem] font-semibold text-[#070922] dark:text-gray-100 truncate">
@@ -275,12 +279,15 @@
       </div>
 
       <!-- App navigation -->
-      <div class="mt-[0.5rem] flex flex-col gap-[0.333rem]">
+      <div
+        class="flex flex-col gap-[0.333rem]"
+        :class="sidebarStructure.appSwitcher.apps.length > 1 ? 'mt-[0.5rem]' : ''"
+      >
         <a
           v-if="sidebarStructure.appNav.dashboard"
           :href="sidebarStructure.appNav.dashboard.route"
-          @click.prevent="handleNavClick(sidebarStructure.appNav.dashboard.route, sidebarStructure.appNav.dashboard.label, $event, { isAppContext: true })"
-          @auxclick.prevent="handleNavClick(sidebarStructure.appNav.dashboard.route, sidebarStructure.appNav.dashboard.label, $event, { isAppContext: true })"
+          @click.prevent="handleNavClick(sidebarStructure.appNav.dashboard.route, sidebarStructure.appNav.dashboard.label, $event, { isAppContext: true, icon: sidebarStructure.appNav.dashboard.icon })"
+          @auxclick.prevent="handleNavClick(sidebarStructure.appNav.dashboard.route, sidebarStructure.appNav.dashboard.label, $event, { isAppContext: true, icon: sidebarStructure.appNav.dashboard.icon })"
           class="w-full h-[2.333rem] rounded-[0.5rem] px-[0.5rem] gap-[0.667rem] py-[0.333rem] flex items-center justify-start transition-colors"
           :class="[
             isActiveRoute(sidebarStructure.appNav.dashboard.route) 
@@ -290,7 +297,11 @@
           :title="collapsed ? sidebarStructure.appNav.dashboard.label : ''"
         >
           <span class="w-[1.333rem] h-[1.333rem] flex-shrink-0 flex items-center justify-center">
-            <FigmaGridIcon class="w-full h-full" :fill="isActiveRoute(sidebarStructure.appNav.dashboard.route) ? iconColors.active : iconColors.primary" />
+            <component
+              :is="getFigmaNavIcon(sidebarStructure.appNav.dashboard)"
+              class="w-full h-full"
+              :fill="isActiveRoute(sidebarStructure.appNav.dashboard.route) ? iconColors.active : iconColors.primary"
+            />
           </span>
           <span
             v-if="!collapsed"
@@ -309,8 +320,8 @@
           v-for="module in sidebarStructure.appNav.modules"
           :key="module.id"
           :href="module.route"
-          @click.prevent="handleNavClick(module.route, module.label, $event, { isAppContext: true })"
-          @auxclick.prevent="handleNavClick(module.route, module.label, $event, { isAppContext: true })"
+          @click.prevent="handleNavClick(module.route, module.label, $event, { isAppContext: true, icon: module.icon })"
+          @auxclick.prevent="handleNavClick(module.route, module.label, $event, { isAppContext: true, icon: module.icon })"
           class="w-full h-[2.333rem] rounded-[0.5rem] px-[0.5rem] gap-[0.667rem] py-[0.333rem] flex items-center justify-start transition-colors"
           :class="[
             isActiveRoute(module.route) 
@@ -386,23 +397,11 @@ import logoDarkUrl from '/assets/logo/Logo_dark.svg';
 import logoWordmarkLightUrl from '/assets/logo/Logo_word_light.svg';
 import logoLightUrl from '/assets/logo/Logo_light.svg';
 import {
-  HomeIcon,
-  InboxIcon,
-  MagnifyingGlassIcon,
-  UsersIcon,
-  BuildingOfficeIcon,
-  BriefcaseIcon,
-  CheckCircleIcon,
-  CalendarIcon,
-  CalendarDaysIcon,
-  CogIcon,
-  Squares2X2Icon,
-  ClipboardDocumentIcon,
-  ClipboardDocumentListIcon,
-  FolderIcon,
-  CubeIcon,
-  ArrowDownTrayIcon,
+  LifebuoyIcon,
+  PresentationChartLineIcon,
+  ShieldCheckIcon,
 } from '@heroicons/vue/24/outline';
+import { getIconComponent, getNavigationIconComponent } from '@/utils/navigationIcons';
 
 // Props
 const props = defineProps<{
@@ -549,11 +548,6 @@ const FigmaBriefcaseIcon = defineFigmaIcon(
   'M4 1.2V2.4H8.8V1.2C8.8 0.98 8.62 0.8 8.4 0.8H4.4C4.18 0.8 4 0.98 4 1.2ZM3.2 2.4V1.2C3.2 0.5375 3.7375 0 4.4 0H8.4C9.0625 0 9.6 0.5375 9.6 1.2V2.4H11.2C12.0825 2.4 12.8 3.1175 12.8 4V10.4C12.8 11.2825 12.0825 12 11.2 12H1.6C0.7175 12 0 11.2825 0 10.4V4C0 3.1175 0.7175 2.4 1.6 2.4H3.2ZM9.2 3.2H3.6H1.6C1.1575 3.2 0.8 3.5575 0.8 4V6.4H4.4H5.2H7.6H8.4H12V4C12 3.5575 11.6425 3.2 11.2 3.2H9.2ZM12 7.2H8.4V8.4C8.4 8.8425 8.0425 9.2 7.6 9.2H5.2C4.7575 9.2 4.4 8.8425 4.4 8.4V7.2H0.8V10.4C0.8 10.8425 1.1575 11.2 1.6 11.2H11.2C11.6425 11.2 12 10.8425 12 10.4V7.2ZM5.2 7.2V8.4H7.6V7.2H5.2Z'
 );
 
-const FigmaFilesIcon = defineFigmaIcon(
-  '0 0 11.2 12.8',
-  'M4 9.6C3.5575 9.6 3.2 9.2425 3.2 8.8V1.6C3.2 1.1575 3.5575 0.8 4 0.8H7.6V2.8C7.6 3.2425 7.9575 3.6 8.4 3.6H10.4C10.4 3.6075 10.4 3.6125 10.4 3.62V8.8C10.4 9.2425 10.0425 9.6 9.6 9.6H4ZM8.4 1.4375L9.75 2.8H8.4V1.4375ZM4 0C3.1175 0 2.4 0.7175 2.4 1.6V8.8C2.4 9.6825 3.1175 10.4 4 10.4H9.6C10.4825 10.4 11.2 9.6825 11.2 8.8V3.62C11.2 3.3025 11.075 3 10.8525 2.775L8.4525 0.355C8.2275 0.1275 7.92 0 7.6 0H4ZM0.8 2.8C0.8 2.58 0.62 2.4 0.4 2.4C0.18 2.4 0 2.58 0 2.8V9.6C0 11.3675 1.4325 12.8 3.2 12.8H8.4C8.62 12.8 8.8 12.62 8.8 12.4C8.8 12.18 8.62 12 8.4 12H3.2C1.875 12 0.8 10.925 0.8 9.6V2.8Z'
-);
-
 const FigmaSidebarIcon = defineFigmaIcon(
   '0 0 11.2 9.8',
   'M9.8 0.7C10.1872 0.7 10.5 1.01281 10.5 1.4V8.4C10.5 8.78719 10.1872 9.1 9.8 9.1H4.9V0.7H9.8ZM1.4 0.7H4.2V9.1H1.4C1.01281 9.1 0.7 8.78719 0.7 8.4V1.4C0.7 1.01281 1.01281 0.7 1.4 0.7ZM1.4 0C0.627812 0 0 0.627813 0 1.4V8.4C0 9.17219 0.627812 9.8 1.4 9.8H9.8C10.5722 9.8 11.2 9.17219 11.2 8.4V1.4C11.2 0.627813 10.5722 0 9.8 0H1.4ZM1.75 1.4C1.5575 1.4 1.4 1.5575 1.4 1.75C1.4 1.9425 1.5575 2.1 1.75 2.1H3.15C3.3425 2.1 3.5 1.9425 3.5 1.75C3.5 1.5575 3.3425 1.4 3.15 1.4H1.75ZM1.4 3.15C1.4 3.3425 1.5575 3.5 1.75 3.5H3.15C3.3425 3.5 3.5 3.3425 3.5 3.15C3.5 2.9575 3.3425 2.8 3.15 2.8H1.75C1.5575 2.8 1.4 2.9575 1.4 3.15ZM1.75 4.2C1.5575 4.2 1.4 4.3575 1.4 4.55C1.4 4.7425 1.5575 4.9 1.75 4.9H3.15C3.3425 4.9 3.5 4.7425 3.5 4.55C3.5 4.3575 3.3425 4.2 3.15 4.2H1.75Z'
@@ -574,51 +568,6 @@ function wrapHeroIcon(hero: any) {
   };
 }
 
-// Icon mapping
-const iconMap: Record<string, any> = {
-  home: HomeIcon,
-  inbox: InboxIcon,
-  'magnifying-glass': MagnifyingGlassIcon,
-  users: UsersIcon,
-  'building-office': BuildingOfficeIcon,
-  building: BuildingOfficeIcon,
-  briefcase: BriefcaseIcon,
-  'check-circle': CheckCircleIcon,
-  check: CheckCircleIcon,
-  calendar: CalendarIcon,
-  cog: CogIcon,
-  squares: Squares2X2Icon,
-  'clipboard-document': ClipboardDocumentIcon,
-  clipboard: ClipboardDocumentIcon,
-  cube: CubeIcon,
-  'arrow-down-tray': ArrowDownTrayIcon,
-  download: ArrowDownTrayIcon,
-};
-
-const emojiToIconId: Record<string, string> = {
-  '👥': 'users',
-  '🏢': 'building',
-  '💼': 'briefcase',
-  '✅': 'check',
-  '📅': 'calendar',
-  '📦': 'cube',
-  '📝': 'clipboard',
-  '📥': 'download',
-  '⚙️': 'cog',
-  '💰': 'briefcase',
-  '🎧': 'briefcase',
-  '🌐': 'squares',
-  '📋': 'clipboard',
-};
-
-/**
- * Get icon component from icon identifier
- */
-function getIconComponent(icon?: string) {
-  const normalized = icon ? (emojiToIconId[icon] || icon) : '';
-  return iconMap[normalized] || Squares2X2Icon;
-}
-
 function getFigmaNavIcon(item: any) {
   if (item?.kind === 'surface') {
     if (item.id === 'home') return FigmaHomeIcon;
@@ -626,44 +575,54 @@ function getFigmaNavIcon(item: any) {
   }
   if (item?.kind === 'coreModule') {
     const moduleKey = item.moduleKey?.toLowerCase() || item.id?.toLowerCase() || '';
-    const coreModuleIcons: Record<string, any> = {
-      people: FigmaPeopleIcon,
-      organizations: BuildingOfficeIcon,
-      tasks: wrapHeroIcon(CheckCircleIcon),
-      events: wrapHeroIcon(CalendarDaysIcon),
-      items: wrapHeroIcon(FolderIcon),
-      forms: wrapHeroIcon(ClipboardDocumentListIcon),
-    };
-    if (coreModuleIcons[moduleKey]) return coreModuleIcons[moduleKey];
-    return wrapHeroIcon(getIconComponent(item?.icon));
+    if (moduleKey === 'people') return FigmaPeopleIcon;
+    return wrapHeroIcon(getNavigationIconComponent(item));
   }
   if (item?.kind === 'app') {
+    const route = String(item.route || '').toLowerCase();
     const label = String(item.label || '').toLowerCase();
+    const rawId = String(item.id || '');
+
+    // App dashboard row (no moduleKey): Audit dashboard ≠ generic grid used for CRM dashboards
+    if (!item.moduleKey && label === 'dashboard') {
+      if (route.startsWith('/audit/') || rawId.toUpperCase() === 'AUDIT') {
+        return wrapHeroIcon(PresentationChartLineIcon);
+      }
+      return FigmaGridIcon;
+    }
+
     if (label.includes('deal')) return FigmaBriefcaseIcon;
-    if (label.includes('response')) return FigmaFilesIcon;
   }
 
   // Fallback to existing heroicon mapping, but allow exact `fill` control.
-  return wrapHeroIcon(getIconComponent(item?.icon));
+  return wrapHeroIcon(getNavigationIconComponent(item));
 }
 
 /**
  * Get icon component for app switcher apps
  */
 function getAppIcon(app: AppSummary) {
+  const appId = (app.id || '').toLowerCase();
+  if (appId.includes('helpdesk')) return wrapHeroIcon(LifebuoyIcon);
+  if (appId.includes('audit')) return wrapHeroIcon(ShieldCheckIcon);
   // Use app icon if available, otherwise use default icon based on app name
   if (app.icon) {
     return wrapHeroIcon(getIconComponent(app.icon));
   }
-  
+
   // Fallback to icon based on app name/ID
-  const appId = (app.id || '').toLowerCase();
   if (appId.includes('sales')) return FigmaSackDollarIcon;
-  if (appId.includes('audit')) return FigmaBriefcaseIcon;
   if (appId.includes('project')) return FigmaGridIcon;
   
   // Default icon
-  return wrapHeroIcon(Squares2X2Icon);
+  return wrapHeroIcon(getNavigationIconComponent({}));
+}
+
+function getCanonicalAppIconId(app: AppSummary): string | undefined {
+  const appId = String(app.id || '').toLowerCase();
+  if (appId.includes('helpdesk')) return 'lifebuoy';
+  if (appId.includes('audit')) return 'shield-check';
+  return app.icon;
 }
 
 /**
@@ -697,14 +656,14 @@ function switchAppLens(nextAppId: string): void {
   lastActiveAppId.value = app.id;
 
   // Switching the lens is explicit. We express it by routing to the app dashboard.
-  openTab(app.dashboardRoute, { title: app.name });
+  openTab(app.dashboardRoute, { title: app.name, icon: getCanonicalAppIconId(app) });
 }
 
 function handleNavClick(
   routePath: string,
   label: string,
   event?: MouseEvent,
-  opts: { isAppContext?: boolean } = {}
+  opts: { isAppContext?: boolean; icon?: string } = {}
 ): void {
   // Search is a shell surface executed as a modal, not navigation.
   if (routePath === '/search') {
@@ -729,6 +688,7 @@ function handleNavClick(
 
   openTab(routePath, {
     title: label,
+    icon: opts.icon,
     background: openInBackground,
   });
 }

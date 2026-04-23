@@ -42,6 +42,17 @@ function hasDependencyValue(value) {
   return normalized !== null && normalized !== undefined && String(normalized).trim() !== '';
 }
 
+function extractId(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'object') {
+    if (value._id !== undefined && value._id !== null && value._id !== '') return value._id;
+    if (value.id !== undefined && value.id !== null && value.id !== '') return value.id;
+    return null;
+  }
+  const str = String(value).trim();
+  return str === '' ? null : value;
+}
+
 /**
  * Evaluates if a dependency condition is met based on form data
  * @param {Object} dependency - The dependency rule
@@ -188,7 +199,17 @@ export function getFieldDependencyState(field, formData, allFields = [], context
     if (typeof value === 'string') {
       const s = value.trim();
       if (s === '$currentUser.organizationId') {
-        return context?.currentUser?.organizationId || context?.currentUser?.organizationId?._id || null;
+        // Fallback chain:
+        // 1) currentUser.organizationId (id or populated object)
+        // 2) currentUser.organization (some profile payloads)
+        // 3) auth organization store value passed through context.organization
+        return (
+          extractId(context?.currentUser?.organizationId) ||
+          extractId(context?.currentUser?.organization) ||
+          extractId(context?.organization?._id) ||
+          extractId(context?.organization?.id) ||
+          null
+        );
       }
       if (s.startsWith('$field:')) {
         const key = s.slice('$field:'.length).trim();
@@ -256,7 +277,7 @@ export function getFieldDependencyState(field, formData, allFields = [], context
         }
         break;
       
-      case 'picklistValue':
+      case 'picklistvalue':
         // For picklistValue, filter options based on parent field value
         if (dep.parentFieldKey && dep.mappings && Array.isArray(dep.mappings)) {
           const parentFld = findFieldByKey(allFields, dep.parentFieldKey);
@@ -298,7 +319,7 @@ export function getFieldDependencyState(field, formData, allFields = [], context
         }
         break;
 
-      case 'setValue':
+      case 'setvalue':
         // Forced field value: last matching rule wins
         if (dep.setValue !== undefined) {
           setValue = resolveLookupQuery(dep.setValue);

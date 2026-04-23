@@ -1,12 +1,5 @@
 <template>
   <div class="mx-auto w-full" :data-view="currentView">
-    <!-- Entity Description -->
-    <!-- <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-      <p class="text-sm text-gray-700 dark:text-gray-300">
-        <strong>Deals</strong> are sales opportunities in your pipeline. Track stages from qualification to close, link contacts and organizations, and manage value and probability in one place.
-      </p>
-    </div> -->
-
     <!-- Error Message (plan limitation or load error) -->
     <div v-if="error && !loading" class="mb-6">
       <div :class="[

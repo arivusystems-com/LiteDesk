@@ -2,18 +2,27 @@ import { ref, computed, watch, getCurrentInstance, nextTick } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { 
   HomeIcon,
+  InboxIcon,
   UsersIcon,
   BuildingOfficeIcon,
   BriefcaseIcon,
   CheckCircleIcon,
   CalendarIcon,
+  MagnifyingGlassIcon,
+  ClipboardDocumentListIcon,
+  ExclamationTriangleIcon,
+  ShieldCheckIcon,
+  Squares2X2Icon,
+  PresentationChartLineIcon,
+  DocumentMagnifyingGlassIcon,
   ArrowDownTrayIcon,
   FolderIcon,
   BookOpenIcon,
   ComputerDesktopIcon,
   DocumentTextIcon,
   TrashIcon,
-  Cog6ToothIcon
+  Cog6ToothIcon,
+  LifebuoyIcon
 } from '@heroicons/vue/24/outline';
 
 // Tab state management
@@ -25,6 +34,7 @@ const activeTabId = ref(null);
 let storageKey = null;
 let storageConfigured = false;
 let tabsInitialized = false;
+const TABS_SCHEMA_VERSION = 2;
 
 // Flag to track programmatic navigation (to avoid circular loops)
 let isProgrammaticNavigation = false;
@@ -37,18 +47,37 @@ let isCreatingHomeTab = false;
 // Icon mapping for serialization/deserialization
 const iconMap = {
   'home': HomeIcon,
+  'inbox': InboxIcon,
   'users': UsersIcon,
   'building': BuildingOfficeIcon,
   'briefcase': BriefcaseIcon,
   'check': CheckCircleIcon,
+  'check-circle': CheckCircleIcon,
   'calendar': CalendarIcon,
+  'clipboard-list': ClipboardDocumentListIcon,
+  'clipboard-document-list': ClipboardDocumentListIcon,
+  'exclamation': ExclamationTriangleIcon,
+  'exclamation-triangle': ExclamationTriangleIcon,
+  'shield': ShieldCheckIcon,
+  'shield-check': ShieldCheckIcon,
+  'magnifying-glass': MagnifyingGlassIcon,
+  'squares': Squares2X2Icon,
+  'presentation-chart': PresentationChartLineIcon,
+  'document-magnifying-glass': DocumentMagnifyingGlassIcon,
+  // Audit app module aliases from registry/backend
+  'audits': DocumentMagnifyingGlassIcon,
+  'cases': ExclamationTriangleIcon,
+  'responses': ClipboardDocumentListIcon,
   'download': ArrowDownTrayIcon,
   'folder': FolderIcon,
   'book': BookOpenIcon,
   'computer': ComputerDesktopIcon,
   'trash': TrashIcon,
   'document': DocumentTextIcon,
-  'cog': Cog6ToothIcon
+  'cog': Cog6ToothIcon,
+  'lifebuoy': LifebuoyIcon,
+  'helpdesk': LifebuoyIcon,
+  'support': LifebuoyIcon
 };
 
 // Map emoji icons to icon identifiers
@@ -61,6 +90,10 @@ const migrateEmojiToIconId = (emojiIcon) => {
     '💼': 'briefcase',
     '✅': 'check',
     '📅': 'calendar',
+    '📋': 'shield-check',
+    '🛡️': 'shield-check',
+    '🎧': 'lifebuoy',
+    '🛟': 'lifebuoy',
     '⬇️': 'download',
     '📁': 'folder',
     '📚': 'book',
@@ -73,7 +106,54 @@ const migrateEmojiToIconId = (emojiIcon) => {
 
 // Convert icon identifier to component
 const getIconComponent = (iconId) => {
-  return iconMap[iconId] || DocumentTextIcon;
+  const rawIcon = String(iconId || '');
+  const normalized = rawIcon.trim().toLowerCase();
+
+  const aliases = {
+    helpdesk: 'lifebuoy',
+    audit: 'shield-check',
+    '🛡️': 'shield-check',
+    '📋': 'shield-check',
+    '🎧': 'lifebuoy',
+    '🛟': 'lifebuoy',
+  };
+
+  const resolved = aliases[normalized] || normalized;
+  return iconMap[resolved] || iconMap[rawIcon] || DocumentTextIcon;
+};
+
+const APP_KEYS = ['sales', 'helpdesk', 'audit', 'portal', 'projects'];
+const inferAppKeyFromTitle = (title = '') => {
+  const normalized = String(title || '').toLowerCase();
+  for (const appKey of APP_KEYS) {
+    if (normalized.includes(appKey)) return appKey;
+  }
+  return null;
+};
+
+const normalizeLegacyDashboardPath = (path, title) => {
+  const normalizedPath = String(path || '');
+  const inferredFromTitle = inferAppKeyFromTitle(title);
+
+  // Very old shared dashboard route.
+  if (normalizedPath === '/dashboard') {
+    return inferredFromTitle ? `/dashboard/${inferredFromTitle}` : '/dashboard/sales';
+  }
+
+  // Legacy sales alias; keep Sales, but recover other app tabs incorrectly saved as sales.
+  if (normalizedPath === '/sales/dashboard') {
+    if (inferredFromTitle && inferredFromTitle !== 'sales') {
+      return `/dashboard/${inferredFromTitle}`;
+    }
+    return '/dashboard/sales';
+  }
+
+  // Already app-scoped route.
+  if (normalizedPath.startsWith('/dashboard/')) {
+    return normalizedPath;
+  }
+
+  return normalizedPath;
 };
 
 // Compute storage key based on instance and user identifiers
@@ -119,6 +199,7 @@ const loadTabsFromStorage = () => {
       console.log('🔄 [loadTabsFromStorage] Parsed tabs:', parsed.tabs?.length || 0);
       let loadedTabs = parsed.tabs || [];
       let loadedActiveTabId = parsed.activeTabId || null;
+      const hasLegacySchema = Number(parsed.schemaVersion || 1) < TABS_SCHEMA_VERSION;
       
       // Deduplicate home tabs before setting tabs.value
       // Keep only the first home tab found (by ID or path)
@@ -145,6 +226,13 @@ const loadTabsFromStorage = () => {
         console.log('✅ [loadTabsFromStorage] Removed duplicate home tabs, remaining tabs:', loadedTabs.length);
       }
       
+      if (hasLegacySchema) {
+        loadedTabs = loadedTabs.map((tab) => ({
+          ...tab,
+          path: normalizeLegacyDashboardPath(tab.path, tab.title)
+        }));
+      }
+
       tabs.value = loadedTabs;
       activeTabId.value = loadedActiveTabId;
       
@@ -159,12 +247,23 @@ const loadTabsFromStorage = () => {
           // Convert icon ID to component
           tab.icon = getIconComponent(tab.icon);
         }
+
+        // Recovery: older persisted tabs may contain un-serializable icon objects.
+        // If icon cannot be recognized, infer from path to avoid generic-document icons.
+        const currentIconId = getIconId(tab.icon);
+        if (currentIconId === 'document') {
+          const inferredIconId = getIconForPath(tab.path || '');
+          if (inferredIconId !== 'document') {
+            tab.icon = getIconComponent(inferredIconId);
+          }
+        }
         
-        // Migrate old dashboard tab to sales dashboard tab
-        if (tab.id === 'dashboard' || tab.path === '/dashboard') {
-          console.log('🔄 Migrating dashboard tab to sales dashboard tab');
+        // Migrate only legacy shared /dashboard tabs.
+        // Keep app-scoped routes like /dashboard/helpdesk untouched.
+        if (tab.path === '/dashboard' || (tab.id === 'dashboard' && (!tab.path || tab.path === '/'))) {
+          console.log('🔄 Migrating legacy dashboard tab to scoped sales dashboard route');
           tab.id = generateTabId(); // Generate new ID since it's not the home tab
-          tab.path = '/sales/dashboard';
+          tab.path = '/dashboard/sales';
           tab.title = 'Sales Dashboard';
           tab.icon = getIconComponent('home');
           tab.closable = true; // Dashboard tabs are closable
@@ -173,7 +272,7 @@ const loadTabsFromStorage = () => {
       
       // Update activeTabId if it was 'dashboard' - find the migrated tab
       if (activeTabId.value === 'dashboard') {
-        const migratedTab = tabs.value.find(tab => tab.path === '/sales/dashboard');
+        const migratedTab = tabs.value.find(tab => tab.path === '/dashboard/sales');
         if (migratedTab) {
           activeTabId.value = migratedTab.id;
         } else {
@@ -188,6 +287,11 @@ const loadTabsFromStorage = () => {
         console.log('🔄 [loadTabsFromStorage] No tabs found, will be created by setupRouteWatcher based on route');
       } else {
         console.log('✅ [loadTabsFromStorage] Loaded', tabs.value.length, 'tabs from storage');
+      }
+
+      // Persist migrated shape once so legacy cleanup is one-time.
+      if (hasLegacySchema) {
+        saveTabsToStorage();
       }
     } else {
       // No stored tabs - don't create home tab here, let setupRouteWatcher decide
@@ -219,10 +323,11 @@ const saveTabsToStorage = () => {
     // Convert icon components to identifiers for serialization
     const tabsToSave = tabs.value.map(tab => ({
       ...tab,
-      icon: typeof tab.icon === 'function' ? getIconId(tab.icon) : tab.icon
+      icon: typeof tab.icon === 'string' ? tab.icon : getIconId(tab.icon)
     }));
     
     localStorage.setItem(storageKey, JSON.stringify({
+      schemaVersion: TABS_SCHEMA_VERSION,
       tabs: tabsToSave,
       activeTabId: activeTabId.value
     }));
@@ -329,12 +434,18 @@ const getIconForPath = (path) => {
     '/platform/home': 'home',
     '/sales/dashboard': 'home',
     '/dashboard': 'home', // backward compat
+    '/inbox': 'inbox',
+    '/approvals': 'check',
     '/contacts': 'users',
     '/people': 'users',
     '/organizations': 'building',
     '/deals': 'briefcase',
     '/tasks': 'check',
     '/events': 'calendar',
+    '/forms': 'document',
+    '/responses': 'clipboard-list',
+    '/findings': 'exclamation',
+    '/audit': 'shield',
     '/calendar': 'calendar', // backward compat
     '/imports': 'download',
     '/items': 'folder',
@@ -343,6 +454,16 @@ const getIconForPath = (path) => {
     '/instances': 'computer',
     '/settings': 'cog'
   };
+
+  // Audit app route-specific mappings (must run before base-path fallback).
+  if (path === '/audit/dashboard' || path.startsWith('/audit/dashboard')) return 'presentation-chart';
+  if (path === '/audit/audits' || path.startsWith('/audit/audits')) return 'document-magnifying-glass';
+  if (path === '/audit/findings' || path.startsWith('/audit/findings')) return 'exclamation-triangle';
+  if (path === '/audit/responses' || path.startsWith('/audit/responses')) return 'clipboard-document-list';
+  if (path === '/helpdesk/dashboard' || path.startsWith('/helpdesk/')) return 'lifebuoy';
+  if (path === '/dashboard/helpdesk' || path.startsWith('/dashboard/helpdesk')) return 'lifebuoy';
+  if (path === '/dashboard/audit' || path.startsWith('/dashboard/audit')) return 'shield-check';
+  if (path.startsWith('/dashboard/')) return 'home';
   
   // Check for exact match first
   if (icons[path]) return icons[path];
@@ -364,9 +485,10 @@ const getTitleForPath = (path, params = {}) => {
     '/deals': 'Deals',
     '/tasks': 'Tasks',
     '/events': 'Events',
+    '/forms': 'Forms',
     '/calendar': 'Events', // backward compat
     '/imports': 'Imports',
-    '/items': 'Projects',
+    '/items': 'Items',
     '/trash': 'Trash',
     '/demo-requests': 'Demo Requests',
     '/instances': 'Instances',
@@ -429,9 +551,13 @@ const getTitleForPath = (path, params = {}) => {
     return 'Audit';
   }
   
-  // Special case: Dashboard routes (backward compat)
-  // Routes like /dashboard or /dashboard/:appKey should just be "Dashboard"
+  // Special case: App-scoped dashboard routes
   if (segments[1] === 'dashboard') {
+    const appKey = String(segments[2] || '').toUpperCase();
+    if (appKey) {
+      const normalized = appKey.charAt(0) + appKey.slice(1).toLowerCase();
+      return `${normalized} Dashboard`;
+    }
     return 'Dashboard';
   }
   

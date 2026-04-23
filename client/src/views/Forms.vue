@@ -1,12 +1,5 @@
 <template>
   <div class="mx-auto w-full">
-    <!-- Entity Description -->
-    <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-      <p class="text-sm text-gray-700 dark:text-gray-300">
-        <strong>Forms</strong> are shared across all apps. They can be used for data collection, surveys, audits, and feedback that can be linked to records throughout the platform.
-      </p>
-    </div>
-
     <ListView
       title="Forms"
       description="Create and manage forms, surveys, audits, and feedback"

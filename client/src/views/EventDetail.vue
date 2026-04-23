@@ -900,6 +900,7 @@ const eventTypeKey = computed(() => {
   // Otherwise, try to map from label to key
   // This handles cases where backend returns label instead of key
   const labelToKeyMap: Record<string, string> = {
+    'Meeting': 'MEETING',
     'Meeting / Appointment': 'MEETING',
     'Internal Audit': 'INTERNAL_AUDIT',
     'External Audit — Single Org': 'EXTERNAL_AUDIT_SINGLE',

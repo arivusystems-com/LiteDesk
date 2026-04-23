@@ -15,7 +15,13 @@ import {
   SparklesIcon,
   BellIcon,
   XCircleIcon,
-  InformationCircleIcon
+  InformationCircleIcon,
+  ShieldCheckIcon,
+  BriefcaseIcon,
+  LifebuoyIcon,
+  RectangleStackIcon,
+  GlobeAltIcon,
+  Squares2X2Icon
 } from '@heroicons/vue/24/outline';
 
 const router = useRouter();
@@ -33,6 +39,55 @@ const tasks = ref({
 const recentActivity = ref([]);
 const quickAccessApps = ref([]);
 const alerts = ref([]);
+
+const quickAccessIconByAppKey = {
+  AUDIT: ShieldCheckIcon,
+  SALES: BriefcaseIcon,
+  HELPDESK: LifebuoyIcon,
+  PROJECTS: RectangleStackIcon,
+  PORTAL: GlobeAltIcon
+};
+
+const quickAccessIconByRawIcon = {
+  calendar: CalendarIcon,
+  briefcase: BriefcaseIcon,
+  'check-circle': CheckCircleIcon,
+  'exclamation-triangle': ExclamationTriangleIcon,
+  squares: Squares2X2Icon,
+  'squares-2x2': Squares2X2Icon,
+  globe: GlobeAltIcon,
+  'globe-alt': GlobeAltIcon,
+  lifebuoy: LifebuoyIcon,
+  shield: ShieldCheckIcon,
+  'shield-check': ShieldCheckIcon,
+  'shield-check-icon': ShieldCheckIcon
+};
+
+const quickAccessIconByEmoji = {
+  '📅': CalendarIcon,
+  '💼': BriefcaseIcon,
+  '🛟': LifebuoyIcon,
+  '🧩': RectangleStackIcon,
+  '🌐': GlobeAltIcon,
+  '🛡️': ShieldCheckIcon,
+  '✅': CheckCircleIcon
+};
+
+const normalizeIconKey = (rawIcon) => {
+  if (!rawIcon || typeof rawIcon !== 'string') return '';
+  return rawIcon.trim().toLowerCase().replace(/_/g, '-');
+};
+
+const getQuickAccessIcon = (app) => {
+  const appKey = String(app?.appKey || '').toUpperCase();
+  if (quickAccessIconByAppKey[appKey]) return quickAccessIconByAppKey[appKey];
+
+  const rawIcon = normalizeIconKey(app?.icon);
+  if (rawIcon && quickAccessIconByRawIcon[rawIcon]) return quickAccessIconByRawIcon[rawIcon];
+  if (app?.icon && quickAccessIconByEmoji[app.icon]) return quickAccessIconByEmoji[app.icon];
+
+  return Squares2X2Icon;
+};
 
 // Computed
 const hasAnyData = computed(() => {
@@ -165,6 +220,7 @@ const fetchRecentActivity = async () => {
     const response = await apiClient.get('/events', {
       params: {
         startDateTime: thirtyDaysAgo.toISOString(),
+        scope: 'mine',
         limit: 15,
         sortBy: 'startDateTime',
         sortOrder: 'desc'
@@ -542,9 +598,10 @@ onMounted(() => {
                 class="p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900/50 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors text-left group"
               >
                 <div class="flex items-center gap-3">
-                  <span v-if="app.icon && typeof app.icon === 'string' && !app.icon.startsWith('<')" class="text-2xl">
-                    {{ app.icon }}
-                  </span>
+                  <component
+                    :is="getQuickAccessIcon(app)"
+                    class="w-6 h-6 text-gray-500 dark:text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 flex-shrink-0"
+                  />
                   <div class="flex-1 min-w-0">
                     <p class="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
                       {{ app.name || app.appKey }}

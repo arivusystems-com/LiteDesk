@@ -33,12 +33,13 @@ export type EventAttentionType = 'start' | 'review' | 'corrective' | 'approval';
 /**
  * Event type (from Event model)
  * 
- * The actual event type: 'Meeting / Appointment', 'Internal Audit', 
+ * The actual event type: 'Meeting', 'Internal Audit', 
  * 'External Audit — Single Org', 'External Audit Beat', 'Field Sales Beat'.
  * 
  * Used for context and filtering, but does not determine Inbox inclusion.
  */
 export type EventType = 
+  | 'Meeting'
   | 'Meeting / Appointment'
   | 'Internal Audit'
   | 'External Audit — Single Org'

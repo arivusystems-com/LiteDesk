@@ -502,12 +502,13 @@ async function getRecordContext(organizationId, appKey, moduleKey, recordId, opt
           }).select('eventType').lean();
           if (record?.eventType) {
             // Map eventType to projection type
-            // 'Meeting / Appointment' -> 'MEETING'
+            // 'Meeting' -> 'MEETING'
             // 'Internal Audit' -> 'INTERNAL_AUDIT'
             // 'External Audit — Single Org' -> 'EXTERNAL_AUDIT_SINGLE'
             // 'External Audit Beat' -> 'EXTERNAL_AUDIT_BEAT'
             // 'Field Sales Beat' -> 'FIELD_SALES_BEAT'
             const eventTypeMap = {
+              'Meeting': 'MEETING',
               'Meeting / Appointment': 'MEETING',
               'Internal Audit': 'INTERNAL_AUDIT',
               'External Audit — Single Org': 'EXTERNAL_AUDIT_SINGLE',

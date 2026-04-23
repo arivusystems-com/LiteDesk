@@ -212,6 +212,7 @@ exports.getEvents = async (req, res) => {
             search,
             relatedType,
             relatedId,
+            scope,
             includeRelated = 'false',
             page = 1, 
             limit = 100,
@@ -268,6 +269,19 @@ exports.getEvents = async (req, res) => {
         // Related organization filter
         if (relatedId) {
             query.relatedToId = relatedId;
+        }
+
+        // Visibility scope filter
+        // scope=mine returns only events directly related to the authenticated user.
+        if (scope === 'mine') {
+            const currentUserId = req.user._id;
+            query.$or = [
+                { eventOwnerId: currentUserId },
+                { auditorId: currentUserId },
+                { reviewerId: currentUserId },
+                { correctiveOwnerId: currentUserId },
+                { createdBy: currentUserId }
+            ];
         }
         
         // Search filter
@@ -426,7 +440,7 @@ exports.createEvent = async (req, res) => {
             });
 
             // ARCHITECTURE NOTE: Validate and use resolved type to prevent label ↔ enum boundary violations.
-            // The projection resolver maps projection types (MEETING) to model values (Meeting / Appointment).
+            // The projection resolver maps projection types (MEETING) to model values (Meeting).
             // If resolution fails, block the request.
             if (resolved.allowed === false) {
                 return res.status(400).json({
@@ -437,7 +451,7 @@ exports.createEvent = async (req, res) => {
             }
 
             // Use resolved type (mapped model value) if available
-            // This ensures canonical validation: client sends key (MEETING), backend maps to label (Meeting / Appointment)
+            // This ensures canonical validation: client sends key (MEETING), backend maps to label (Meeting)
             if (resolved.type && resolved.type !== explicitType) {
                 req.body[typeFieldName] = resolved.type;
                 console.log(`[createEvent] Mapped eventType "${explicitType}" → "${resolved.type}" via projection resolver`);
@@ -685,7 +699,15 @@ exports.createEvent = async (req, res) => {
         // Extract custom fields into customFields bucket for persistence
         const { extractCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
         const { standardPayload, customFieldsSet } = extractCustomFields(eventData, Event);
-        const eventDataFinal = { ...standardPayload };
+        const eventDataFinal = {
+            ...standardPayload,
+            // Preserve required system fields for Event model after custom-field extraction.
+            // The extractor intentionally excludes reserved keys from user payload handling,
+            // so we must explicitly carry trusted server-assigned values forward.
+            organizationId: eventData.organizationId,
+            createdBy: eventData.createdBy,
+            modifiedBy: eventData.modifiedBy
+        };
         if (Object.keys(customFieldsSet).length > 0) {
             eventDataFinal.customFields = customFieldsSet;
         }

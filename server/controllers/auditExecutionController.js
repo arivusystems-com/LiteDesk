@@ -260,8 +260,12 @@ exports.checkInAudit = async (req, res) => {
                 executionContext: {
                     checkedInAt: new Date(),
                     executionStatus: 'in_progress'
-                }
-            }
+                },
+                formResponseId: crmResponse.formResponseId || null,
+                hasForm: Boolean(crmResponse.hasForm)
+            },
+            formResponseId: crmResponse.formResponseId || null,
+            hasForm: Boolean(crmResponse.hasForm)
         });
     } catch (error) {
         console.error('Error in checkInAudit:', error);

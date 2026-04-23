@@ -33,6 +33,70 @@ function dedupeFieldsByKey(fields) {
   return Array.from(byCanonical.values());
 }
 
+function normalizeMeetingEventTypeLabel(value) {
+  return String(value || '').trim() === 'Meeting / Appointment' ? 'Meeting' : value;
+}
+
+function normalizeEventTypeOptions(options) {
+  if (!Array.isArray(options)) return options;
+
+  const normalized = [];
+  const seen = new Set();
+
+  for (const option of options) {
+    const rawValue =
+      option && typeof option === 'object'
+        ? String(option.value ?? option.key ?? '').trim()
+        : String(option || '').trim();
+    const value = normalizeMeetingEventTypeLabel(rawValue);
+    if (!value) continue;
+
+    const dedupeKey = value.toLowerCase();
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+
+    if (option && typeof option === 'object') {
+      normalized.push({ ...option, value });
+    } else {
+      normalized.push(value);
+    }
+  }
+
+  return normalized;
+}
+
+function normalizeEventTypeDependencies(dependencies) {
+  if (!Array.isArray(dependencies)) return dependencies;
+  return dependencies.map((dep) => {
+    if (!dep || dep.fieldKey !== 'eventType') return dep;
+    const next = { ...dep };
+    if (Array.isArray(next.value)) {
+      next.value = Array.from(
+        new Set(
+          next.value
+            .map((v) => normalizeMeetingEventTypeLabel(v))
+            .filter((v) => String(v || '').trim() !== '')
+            .map((v) => String(v).trim())
+        )
+      );
+    } else {
+      next.value = normalizeMeetingEventTypeLabel(next.value);
+    }
+    return next;
+  });
+}
+
+function normalizeEventFieldConfig(field) {
+  if (!field || typeof field !== 'object') return field;
+  const next = { ...field };
+  if (String(next.key || '').toLowerCase() === 'eventtype') {
+    next.options = normalizeEventTypeOptions(next.options);
+    next.defaultValue = normalizeMeetingEventTypeLabel(next.defaultValue);
+  }
+  next.dependencies = normalizeEventTypeDependencies(next.dependencies);
+  return next;
+}
+
 /**
  * Validate field mutations based on ownership rules
  * 
@@ -1042,6 +1106,13 @@ function getBaseFieldsForKey(key) {
                     }
                 }
                 
+                const eventTypeOptions = (key === 'events' && String(name).toLowerCase() === 'eventtype')
+                    ? normalizeEventTypeOptions(options)
+                    : options;
+                const eventTypeDefaultValue = (key === 'events' && String(name).toLowerCase() === 'eventtype')
+                    ? normalizeMeetingEventTypeLabel(path.defaultValue ?? null)
+                    : (path.defaultValue ?? null);
+
                 return {
                     key: name,
                     label: fieldLabel,
@@ -1050,8 +1121,8 @@ function getBaseFieldsForKey(key) {
                     // IMPORTANT: Some schema fields are conditionally required (function-based required).
                     // For dependency-driven required fields (like events.reviewerId), the module definition must NOT mark them required globally.
                     required: (key === 'events' && name === 'reviewerId') ? false : !!path.isRequired,
-                    options: options,
-                    defaultValue: path.defaultValue ?? null,
+                    options: eventTypeOptions,
+                    defaultValue: eventTypeDefaultValue,
                     // Use placeholder as helper text for Lookup fields (shown under label in UI); never show technical IDs.
                     placeholder:
                         (key === 'events' && name === 'reviewerId') ? 'User responsible for reviewing and approving this audit.' :
@@ -1724,6 +1795,27 @@ const ORGANIZATIONS_DEFAULT_RELATIONSHIPS = Object.freeze([
     { name: 'Related Deals', type: 'one_to_many', isLookup: false, targetModuleKey: 'deals', relationshipKey: 'deal_organizations' }
 ]);
 
+const EVENTS_DEFAULT_RELATIONSHIPS = Object.freeze([
+    { name: 'Related Deal', type: 'many_to_one', isLookup: true, targetModuleKey: 'deals', relationshipKey: 'deal_events' },
+    { name: 'Related Contacts', type: 'many_to_many', isLookup: false, targetModuleKey: 'people', relationshipKey: 'people_events' },
+    { name: 'Related Tasks', type: 'many_to_many', isLookup: false, targetModuleKey: 'tasks', relationshipKey: 'task_events' },
+    {
+        name: 'Linked Forms',
+        type: 'lookup',
+        targetModuleKey: 'forms',
+        localField: 'linkedFormId',
+        foreignField: '_id',
+        inverseName: 'Linked Events',
+        inverseField: '',
+        required: false,
+        unique: false,
+        index: true,
+        cascadeDelete: false,
+        label: 'Linked Form',
+        description: 'Link audit forms to events for audit event types'
+    }
+]);
+
 function cloneDealDefaultRelationships() {
     return JSON.parse(JSON.stringify(DEAL_DEFAULT_RELATIONSHIPS));
 }
@@ -1734,6 +1826,43 @@ function clonePeopleDefaultRelationships() {
 
 function cloneOrganizationsDefaultRelationships() {
     return JSON.parse(JSON.stringify(ORGANIZATIONS_DEFAULT_RELATIONSHIPS));
+}
+
+function cloneEventsDefaultRelationships() {
+    return JSON.parse(JSON.stringify(EVENTS_DEFAULT_RELATIONSHIPS));
+}
+
+function shouldUseOverrideRelationships(override, sys) {
+    if (override?.relationships === undefined) {
+        return false;
+    }
+
+    const moduleKey = String(
+        override?.key
+        || override?.moduleKey
+        || sys?.key
+        || sys?.moduleKey
+        || ''
+    ).toLowerCase();
+
+    // Events must always surface system defaults when config is empty.
+    // Empty arrays in legacy org docs should not suppress seeded defaults.
+    if (moduleKey === 'events' && Array.isArray(override.relationships) && override.relationships.length === 0) {
+        return false;
+    }
+
+    // Organization-level overrides intentionally control behavior, including explicit empty arrays.
+    if (override?.organizationId) {
+        return true;
+    }
+
+    // Platform-level docs with empty relationships should not erase in-code defaults.
+    if (Array.isArray(override.relationships) && override.relationships.length === 0) {
+        return false;
+    }
+
+    // Non-array values (legacy) and non-empty arrays should be honored.
+    return true;
 }
 
 exports.listModules = async (req, res) => {
@@ -1766,23 +1895,7 @@ exports.listModules = async (req, res) => {
                 createdAt: null,
                 updatedAt: null,
                 pipelineSettings: m.key === 'deals' ? getDefaultPipelineSettings() : [],
-            relationships: m.key === 'events' ? [
-                {
-                    name: 'Linked Forms',
-                    type: 'lookup',
-                    targetModuleKey: 'forms',
-                    localField: 'linkedFormId',
-                    foreignField: '_id',
-                    inverseName: 'Linked Events',
-                    inverseField: '',
-                    required: false,
-                    unique: false,
-                    index: true,
-                    cascadeDelete: false,
-                    label: 'Linked Form',
-                    description: 'Link audit forms to events for audit event types'
-                }
-            ] : m.key === 'deals' ? cloneDealDefaultRelationships() : m.key === 'people' ? clonePeopleDefaultRelationships() : m.key === 'organizations' ? cloneOrganizationsDefaultRelationships() : m.key === 'tasks' ? [] : m.key === 'items' ? [
+            relationships: m.key === 'events' ? cloneEventsDefaultRelationships() : m.key === 'deals' ? cloneDealDefaultRelationships() : m.key === 'people' ? clonePeopleDefaultRelationships() : m.key === 'organizations' ? cloneOrganizationsDefaultRelationships() : m.key === 'tasks' ? [] : m.key === 'items' ? [
                 {
                     name: 'Vendor',
                     type: 'lookup',
@@ -2886,12 +2999,18 @@ exports.listModules = async (req, res) => {
                     const peopleCfg = await getPeopleTypesConfig(req.user.organizationId, 'SALES');
                     finalFields = enrichPeopleFieldsWithPeopleTypes(finalFields, peopleCfg.typeDefs);
                 }
+                if (sys.key === 'events') {
+                    finalFields = (Array.isArray(finalFields) ? finalFields : []).map(normalizeEventFieldConfig);
+                }
+                const resolvedRelationships = shouldUseOverrideRelationships(override, sys)
+                    ? override.relationships
+                    : (sys.relationships || []);
                 merged.push({ 
                     ...sys, 
                     fields: finalFields,
                     quickCreate: finalQuickCreate,
                     quickCreateLayout: finalQuickCreateLayout,
-                    relationships: override.relationships !== undefined ? override.relationships : (sys.relationships || []),
+                    relationships: resolvedRelationships,
                     // Phase 17: Preserve notification metadata (use override if exists, else default)
                     notifications: override.notifications || sys.notifications || getDefaultNotificationMetadata(sys.key),
                     name: override.name || sys.name,
@@ -2973,6 +3092,9 @@ exports.listModules = async (req, res) => {
                     const { getPeopleTypesConfig } = require('../utils/tenantMetadata');
                     const peopleCfg = await getPeopleTypesConfig(req.user.organizationId, 'SALES');
                     fieldsToPush = enrichPeopleFieldsWithPeopleTypes(fieldsToPush, peopleCfg.typeDefs);
+                }
+                if (sys.key === 'events') {
+                    fieldsToPush = (Array.isArray(fieldsToPush) ? fieldsToPush : []).map(normalizeEventFieldConfig);
                 }
                 merged.push({ 
                     ...sys, 
@@ -3193,6 +3315,9 @@ exports.updateModule = async (req, res) => {
             let sanitizedFields = (mod.key === 'events')
                 ? fieldsToSave.filter(f => !deprecatedEventAliasKeys.has(String(f?.key || '').toLowerCase()))
                 : fieldsToSave;
+            if (mod.key === 'events') {
+                sanitizedFields = sanitizedFields.map(normalizeEventFieldConfig);
+            }
             // Tasks: expose only single "relatedTo" field; strip relatedToType/relatedToId from persisted config
             if (mod.key === 'tasks') sanitizedFields = normalizeTasksModuleFields(sanitizedFields);
             mod.fields = sanitizedFields;
@@ -3596,6 +3721,9 @@ exports.updateSystemModule = async (req, res) => {
             let fieldsOut = (key === 'events')
                 ? fieldsToSave.filter(f => !deprecatedEventAliasKeys.has(String(f?.key || '').toLowerCase()))
                 : fieldsToSave;
+            if (key === 'events') {
+                fieldsOut = fieldsOut.map(normalizeEventFieldConfig);
+            }
             if (key === 'tasks') {
                 fieldsOut = dedupeFieldsByKey(fieldsOut);
                 fieldsOut = normalizeTasksModuleFields(fieldsOut);

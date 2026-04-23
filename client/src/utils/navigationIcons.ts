@@ -1,0 +1,140 @@
+import {
+  ArchiveBoxIcon,
+  ArrowDownTrayIcon,
+  BriefcaseIcon,
+  BuildingOfficeIcon,
+  CalendarDaysIcon,
+  CalendarIcon,
+  CheckCircleIcon,
+  ClipboardDocumentIcon,
+  ClipboardDocumentListIcon,
+  CogIcon,
+  CubeIcon,
+  DocumentChartBarIcon,
+  DocumentMagnifyingGlassIcon,
+  ExclamationTriangleIcon,
+  FolderIcon,
+  InboxIcon,
+  LifebuoyIcon,
+  MagnifyingGlassIcon,
+  PresentationChartLineIcon,
+  ShieldCheckIcon,
+  Squares2X2Icon,
+  UserGroupIcon,
+  UsersIcon
+} from '@heroicons/vue/24/outline';
+
+type IconLookupItem = {
+  moduleKey?: string;
+  icon?: string;
+  label?: string;
+  route?: string;
+  id?: string;
+};
+
+const MODULE_ICON_MAP: Record<string, any> = {
+  people: UserGroupIcon,
+  organizations: BuildingOfficeIcon,
+  deals: BriefcaseIcon,
+  tasks: CheckCircleIcon,
+  events: CalendarDaysIcon,
+  items: CubeIcon,
+  forms: ClipboardDocumentListIcon,
+  responses: InboxIcon,
+  import: ArchiveBoxIcon,
+  dashboard: DocumentChartBarIcon,
+  audits: DocumentMagnifyingGlassIcon,
+  cases: ExclamationTriangleIcon,
+  findings: ExclamationTriangleIcon
+};
+
+const RAW_ICON_MAP: Record<string, any> = {
+  users: UsersIcon,
+  user: UserGroupIcon,
+  'building-office': BuildingOfficeIcon,
+  building: BuildingOfficeIcon,
+  briefcase: BriefcaseIcon,
+  'check-circle': CheckCircleIcon,
+  check: CheckCircleIcon,
+  calendar: CalendarIcon,
+  'calendar-days': CalendarDaysIcon,
+  cog: CogIcon,
+  squares: Squares2X2Icon,
+  'presentation-chart': PresentationChartLineIcon,
+  'document-magnifying-glass': DocumentMagnifyingGlassIcon,
+  'exclamation-triangle': ExclamationTriangleIcon,
+  'clipboard-document': ClipboardDocumentIcon,
+  clipboard: ClipboardDocumentIcon,
+  'clipboard-document-list': ClipboardDocumentListIcon,
+  cube: CubeIcon,
+  'arrow-down-tray': ArrowDownTrayIcon,
+  download: ArrowDownTrayIcon,
+  inbox: InboxIcon,
+  folder: FolderIcon,
+  search: MagnifyingGlassIcon,
+  lifebuoy: LifebuoyIcon,
+  support: LifebuoyIcon,
+  'shield-check': ShieldCheckIcon,
+  shield: ShieldCheckIcon
+};
+
+const EMOJI_ICON_MAP: Record<string, string> = {
+  '👥': 'users',
+  '🏢': 'building',
+  '💼': 'briefcase',
+  '✅': 'check',
+  '📅': 'calendar',
+  '📦': 'cube',
+  '📝': 'clipboard',
+  '📥': 'download',
+  '⚙️': 'cog',
+  '💰': 'briefcase',
+  '🎧': 'lifebuoy',
+  '🛟': 'lifebuoy',
+  '🌐': 'squares',
+  '📋': 'clipboard',
+  '🛡️': 'shield-check'
+};
+
+export function getIconComponent(icon?: string): any {
+  const normalized = String(EMOJI_ICON_MAP[icon || ''] || icon || '').toLowerCase();
+  return RAW_ICON_MAP[normalized] || Squares2X2Icon;
+}
+
+export function getNavigationIconComponent(item: IconLookupItem): any {
+  const moduleKey = String(item.moduleKey || '').toLowerCase();
+  if (moduleKey && MODULE_ICON_MAP[moduleKey]) {
+    return MODULE_ICON_MAP[moduleKey];
+  }
+
+  const route = String(item.route || '').toLowerCase();
+  if (route.includes('/audit/audits')) {
+    return DocumentMagnifyingGlassIcon;
+  }
+  if (route.includes('/audit/findings')) {
+    return ExclamationTriangleIcon;
+  }
+  if (route.includes('/audit/responses')) {
+    return ClipboardDocumentListIcon;
+  }
+
+  const iconComponent = getIconComponent(item.icon);
+  if (iconComponent !== Squares2X2Icon) {
+    return iconComponent;
+  }
+
+  const label = String(item.label || '').toLowerCase();
+  if (label.includes('deal')) return BriefcaseIcon;
+  if (label.includes('response')) return InboxIcon;
+  if (label.includes('import')) return ArchiveBoxIcon;
+  if (label.includes('dashboard')) return DocumentChartBarIcon;
+
+  const rawId = String(item.id || '');
+  const idTail = rawId.includes(':') ? String(rawId.split(':').pop() || '').toLowerCase() : '';
+  if (idTail && MODULE_ICON_MAP[idTail]) {
+    return MODULE_ICON_MAP[idTail];
+  }
+
+  return Squares2X2Icon;
+}
+

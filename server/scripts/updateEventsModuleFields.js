@@ -27,15 +27,48 @@ const MONGODB_URI = `${baseUri}/${masterDbName}${mongoQueryString}`;
 const ModuleDefinition = require('../models/ModuleDefinition');
 const Event = require('../models/Event');
 
-async function updateEventsModuleFields() {
+const defaultEventRelationships = Object.freeze([
+  { name: 'Related Deal', type: 'many_to_one', isLookup: true, targetModuleKey: 'deals', relationshipKey: 'deal_events' },
+  { name: 'Related Contacts', type: 'many_to_many', isLookup: false, targetModuleKey: 'people', relationshipKey: 'people_events' },
+  { name: 'Related Tasks', type: 'many_to_many', isLookup: false, targetModuleKey: 'tasks', relationshipKey: 'task_events' },
+  {
+    name: 'Linked Forms',
+    type: 'lookup',
+    targetModuleKey: 'forms',
+    localField: 'linkedFormId',
+    foreignField: '_id',
+    inverseName: 'Linked Events',
+    inverseField: '',
+    required: false,
+    unique: false,
+    index: true,
+    cascadeDelete: false,
+    label: 'Linked Form',
+    description: 'Link audit forms to events for audit event types'
+  }
+]);
+
+function cloneDefaultEventRelationships() {
+  return JSON.parse(JSON.stringify(defaultEventRelationships));
+}
+
+async function updateEventsModuleFields(organizationId = null) {
+  let shouldDisconnect = false;
   try {
-    console.log('🔄 Connecting to MongoDB...');
-    await mongoose.connect(MONGODB_URI);
-    console.log('✅ Connected to MongoDB\n');
+    if (mongoose.connection.readyState === 0) {
+      console.log('🔄 Connecting to MongoDB...');
+      await mongoose.connect(MONGODB_URI);
+      shouldDisconnect = true;
+      console.log('✅ Connected to MongoDB\n');
+    } else {
+      console.log('✅ Using existing MongoDB connection\n');
+    }
 
     // Get all organizations
-    const Organization = mongoose.model('Organization', new mongoose.Schema({}, { strict: false }), 'organizations');
-    const organizations = await Organization.find({}).select('_id').lean();
+    const Organization = mongoose.models.Organization
+      || mongoose.model('Organization', new mongoose.Schema({}, { strict: false }), 'organizations');
+    const orgQuery = organizationId ? { _id: organizationId } : {};
+    const organizations = await Organization.find(orgQuery).select('_id').lean();
     console.log(`📊 Found ${organizations.length} organizations\n`);
 
     // System fields that should be excluded from quick create (auto-generated or system-managed)
@@ -129,7 +162,7 @@ async function updateEventsModuleFields() {
           fields: [],
           quickCreate: [],
           quickCreateLayout: { version: 1, rows: [] },
-          relationships: []
+          relationships: cloneDefaultEventRelationships()
         });
         created++;
       } else {
@@ -143,6 +176,9 @@ async function updateEventsModuleFields() {
         // Update organizationId if it's a platform-level module being used for this org
         if (!moduleDef.organizationId) {
           moduleDef.organizationId = org._id;
+        }
+        if (!Array.isArray(moduleDef.relationships) || moduleDef.relationships.length === 0) {
+          moduleDef.relationships = cloneDefaultEventRelationships();
         }
       }
 
@@ -574,7 +610,10 @@ async function updateEventsModuleFields() {
             $set: { 
               fields: fields,
               quickCreate: moduleDef.quickCreate || [],
-              quickCreateLayout: moduleDef.quickCreateLayout || { version: 1, rows: [] }
+              quickCreateLayout: moduleDef.quickCreateLayout || { version: 1, rows: [] },
+              relationships: Array.isArray(moduleDef.relationships) && moduleDef.relationships.length > 0
+                ? moduleDef.relationships
+                : cloneDefaultEventRelationships()
             }
           }
         );
@@ -602,6 +641,9 @@ async function updateEventsModuleFields() {
         }
         if (quickCreateUpdated && moduleDef.quickCreate) {
           updateDoc.quickCreate = moduleDef.quickCreate;
+        }
+        if (!Array.isArray(moduleDef.relationships) || moduleDef.relationships.length === 0) {
+          updateDoc.relationships = cloneDefaultEventRelationships();
         }
         
         if (Object.keys(updateDoc).length > 0) {
@@ -641,10 +683,12 @@ async function updateEventsModuleFields() {
 
   } catch (error) {
     console.error('❌ Update failed:', error);
-    process.exit(1);
+    throw error;
   } finally {
-    await mongoose.disconnect();
-    console.log('🔌 Disconnected from MongoDB');
+    if (shouldDisconnect && mongoose.connection.readyState === 1) {
+      await mongoose.disconnect();
+      console.log('🔌 Disconnected from MongoDB');
+    }
   }
 }
 

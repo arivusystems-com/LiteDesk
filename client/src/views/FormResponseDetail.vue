@@ -70,7 +70,8 @@
         <div class="flex items-center justify-between mb-6">
         <div>
           <button 
-            @click="$router.push(`/forms/${formId}/responses`)" 
+            type="button"
+            @click="goBackToResponseList" 
             class="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors mb-4"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -500,6 +501,9 @@ const { activeTabId, updateTabTitle } = useTabs();
 const formId = computed(() => route.params.id);
 const responseId = computed(() => route.params.responseId);
 
+const isAuditFormsRoute = computed(() => String(route.path || '').startsWith('/audit/forms'));
+const formsApiBase = computed(() => (isAuditFormsRoute.value ? '/audit/forms' : '/forms'));
+
 // State
 const loading = ref(true);
 const error = ref(null);
@@ -512,8 +516,11 @@ const activeSectionId = ref('');
 const selectedSectionId = ref('');
 const observer = ref(null);
 
-// Permissions
-const canEditForms = computed(() => authStore.can('forms', 'edit'));
+// Permissions — Audit form response detail uses `/api/audit/forms/*` (no Sales `forms.edit`); server enforces stakeholders.
+const canEditForms = computed(() => {
+  if (isAuditFormsRoute.value) return true;
+  return authStore.can('forms', 'edit');
+});
 
 // Audit approval permissions: only the assigned reviewer can approve/reject.
 const currentUserId = computed(() => authStore.user?._id || null);
@@ -582,10 +589,18 @@ const formSectionsNavigation = computed(() => {
   return items;
 });
 
+const goBackToResponseList = () => {
+  if (isAuditFormsRoute.value) {
+    router.push('/audit/responses');
+    return;
+  }
+  router.push(`/forms/${formId.value}/responses`);
+};
+
 // Methods
 const fetchForm = async () => {
   try {
-    const result = await apiClient(`/forms/${formId.value}`, { method: 'GET' });
+    const result = await apiClient(`${formsApiBase.value}/${formId.value}`, { method: 'GET' });
     if (result.success) {
       form.value = result.data.data || result.data;
     }
@@ -599,7 +614,7 @@ const fetchResponse = async () => {
   loading.value = true;
   error.value = null;
   try {
-    const result = await apiClient(`/forms/${formId.value}/responses/${responseId.value}`, { method: 'GET' });
+    const result = await apiClient(`${formsApiBase.value}/${formId.value}/responses/${responseId.value}`, { method: 'GET' });
     if (result.success) {
       response.value = result.data.data || result.data;
 
@@ -638,7 +653,10 @@ const fetchResponse = async () => {
               : rawLinkedId;
 
           if (linkedEventId) {
-            const ev = await apiClient(`/events/${linkedEventId}`, { method: 'GET' });
+            const evPath = isAuditFormsRoute.value
+              ? `/audit/linked-events/${linkedEventId}`
+              : `/events/${linkedEventId}`;
+            const ev = await apiClient(evPath, { method: 'GET' });
             if (ev.success) {
               linkedEvent.value = ev.data;
               setResponseTabTitle();
@@ -652,7 +670,10 @@ const fetchResponse = async () => {
       // Fetch previous response if available
       if (result.data.data?.finalReport?.previousResponseId) {
         try {
-          const prevResult = await apiClient(`/forms/${formId.value}/responses/${result.data.data.finalReport.previousResponseId}`, { method: 'GET' });
+          const prevResult = await apiClient(
+            `${formsApiBase.value}/${formId.value}/responses/${result.data.data.finalReport.previousResponseId}`,
+            { method: 'GET' }
+          );
           if (prevResult.success) {
             previousResponse.value = prevResult.data.data || prevResult.data;
           }
@@ -739,7 +760,7 @@ const approveResponse = async () => {
   }
 
   try {
-    const result = await apiClient(`/forms/${formId.value}/responses/${responseId.value}/approve`, {
+    const result = await apiClient(`${formsApiBase.value}/${formId.value}/responses/${responseId.value}/approve`, {
       method: 'POST'
     });
 
@@ -762,7 +783,7 @@ const rejectResponse = async () => {
   }
 
   try {
-    const result = await apiClient(`/forms/${formId.value}/responses/${responseId.value}/reject`, {
+    const result = await apiClient(`${formsApiBase.value}/${formId.value}/responses/${responseId.value}/reject`, {
       method: 'POST'
     });
 

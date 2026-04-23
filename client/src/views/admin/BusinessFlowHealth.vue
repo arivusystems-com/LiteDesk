@@ -511,7 +511,7 @@ const viewProcessLogs = (proc) => {
 };
 
 onMounted(() => {
-  document.title = 'Flow Health | LiteDesk';
+  document.title = 'Flow Health | Arivu';
   loadAllData();
 });
 </script>

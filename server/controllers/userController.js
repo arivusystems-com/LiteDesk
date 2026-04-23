@@ -718,10 +718,12 @@ exports.inviteUser = async (req, res) => {
                 delete: false
             },
             settings: {
+                view: roleDoc.permissions.settings?.view || false,
+                edit: roleDoc.permissions.settings?.edit || false,
                 manageUsers: roleDoc.permissions.settings.manageUsers || false,
                 manageBilling: roleDoc.permissions.settings.manageBilling || false,
                 manageIntegrations: false,
-                customizeFields: false
+                customizeFields: roleDoc.permissions.settings?.edit || false
             },
             reports: {
                 viewStandard: roleDoc.permissions.reports.read,
@@ -785,7 +787,7 @@ exports.inviteUser = async (req, res) => {
 
 // --- Update user role and permissions ---
 exports.updateUser = async (req, res) => {
-    const { role, roleId, status, permissions, firstName, lastName, phoneNumber } = req.body;
+    const { role, roleId, status, permissions, firstName, lastName, phoneNumber, appAccess } = req.body;
 
     try {
         const user = await User.findOne({ 
@@ -800,8 +802,13 @@ exports.updateUser = async (req, res) => {
             });
         }
 
-        // Prevent changing owner role
-        if (user.isOwner) {
+        const requestKeys = Object.keys(req.body || {});
+        const isOwnerAppAccessOnlyUpdate = user.isOwner &&
+            requestKeys.length > 0 &&
+            requestKeys.every((key) => key === 'appAccess');
+
+        // Prevent changing owner profile/role/status, but allow app seat updates.
+        if (user.isOwner && !isOwnerAppAccessOnlyUpdate) {
             return res.status(403).json({ 
                 success: false,
                 message: 'Cannot modify the organization owner',
@@ -809,14 +816,24 @@ exports.updateUser = async (req, res) => {
             });
         }
 
-        // Update fields
-        if (firstName !== undefined) user.firstName = firstName;
-        if (lastName !== undefined) user.lastName = lastName;
-        if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
-        if (status !== undefined) user.status = status;
+        const organization = await Organization.findById(req.user.organizationId);
+        if (!organization) {
+            return res.status(404).json({
+                success: false,
+                message: 'Organization not found'
+            });
+        }
+
+        // Update fields (owner profile remains immutable from this endpoint)
+        if (!user.isOwner) {
+            if (firstName !== undefined) user.firstName = firstName;
+            if (lastName !== undefined) user.lastName = lastName;
+            if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
+            if (status !== undefined) user.status = status;
+        }
         
         // Update role if roleId is provided (new dynamic role system)
-        if (roleId !== undefined && roleId !== user.roleId?.toString()) {
+        if (!user.isOwner && roleId !== undefined && roleId !== user.roleId?.toString()) {
             const Role = require('../models/Role');
             const roleDoc = await Role.findById(roleId);
             
@@ -883,10 +900,12 @@ exports.updateUser = async (req, res) => {
                     delete: false
                 },
                 settings: {
+                    view: roleDoc.permissions.settings?.view || false,
+                    edit: roleDoc.permissions.settings?.edit || false,
                     manageUsers: roleDoc.permissions.settings.manageUsers || false,
                     manageBilling: roleDoc.permissions.settings.manageBilling || false,
                     manageIntegrations: false,
-                    customizeFields: false
+                    customizeFields: roleDoc.permissions.settings?.edit || false
                 },
                 reports: {
                     viewStandard: roleDoc.permissions.reports.read,
@@ -900,19 +919,142 @@ exports.updateUser = async (req, res) => {
             await Role.findByIdAndUpdate(roleId, { $inc: { userCount: 1 } });
         }
         // Fallback to legacy role update (for backward compatibility)
-        else if (role !== undefined && role !== user.role) {
+        else if (!user.isOwner && role !== undefined && role !== user.role) {
             user.role = role;
             user.setPermissionsByRole(role);
         }
 
         // Allow custom permissions override (if provided)
-        if (permissions !== undefined) {
+        if (!user.isOwner && permissions !== undefined) {
             const normalized = { ...permissions };
             if (normalized.people) {
                 normalized.contacts = normalized.people;
                 delete normalized.people;
             }
             user.permissions = { ...user.permissions, ...normalized };
+        }
+
+        // Update app access (seat-gated execution entitlement)
+        if (appAccess !== undefined) {
+            if (!Array.isArray(appAccess) || appAccess.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'At least one app access entry is required'
+                });
+            }
+
+            const currentAccessByApp = new Map((user.appAccess || []).map((entry) => [entry.appKey, entry]));
+            const seenAppKeys = new Set();
+            const normalizedAppAccess = [];
+
+            for (let i = 0; i < appAccess.length; i++) {
+                const raw = appAccess[i] || {};
+                const appKey = String(raw.appKey || '').trim().toUpperCase();
+                const roleKey = String(raw.roleKey || '').trim().toUpperCase();
+                const entryStatus = String(raw.status || 'ACTIVE').trim().toUpperCase();
+
+                if (!appKey) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `appAccess[${i}]: appKey is required`
+                    });
+                }
+
+                if (!roleKey) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `appAccess[${i}]: roleKey is required`
+                    });
+                }
+
+                if (seenAppKeys.has(appKey)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Duplicate appAccess entry for ${appKey}`
+                    });
+                }
+                seenAppKeys.add(appKey);
+
+                const appConfig = getAppConfig(appKey);
+                if (!appConfig) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `App ${appKey} is not registered in the system`
+                    });
+                }
+
+                if (!isAppEnabledForOrg(organization, appKey)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `App ${appKey} is not enabled for this organization`
+                    });
+                }
+
+                if (!validateAppRole(appKey, roleKey)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Role ${roleKey} is not valid for app ${appKey}`
+                    });
+                }
+
+                if (!validateUserTypeForApp(user.userType || 'INTERNAL', appKey)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `${appKey} does not support ${user.userType || 'INTERNAL'} users`
+                    });
+                }
+
+                const previous = currentAccessByApp.get(appKey);
+                normalizedAppAccess.push({
+                    appKey,
+                    roleKey,
+                    status: entryStatus === 'DISABLED' ? 'DISABLED' : 'ACTIVE',
+                    addedAt: previous?.addedAt || new Date()
+                });
+            }
+
+            const previousActiveApps = new Set(
+                (user.appAccess || [])
+                    .filter((entry) => entry.status === 'ACTIVE')
+                    .map((entry) => entry.appKey)
+            );
+            const nextActiveApps = new Set(
+                normalizedAppAccess
+                    .filter((entry) => entry.status === 'ACTIVE')
+                    .map((entry) => entry.appKey)
+            );
+
+            // Validate seat availability only for newly activated app memberships.
+            for (const appKey of nextActiveApps) {
+                if (!previousActiveApps.has(appKey)) {
+                    const canAdd = await canAddUserToApp(organization._id, appKey);
+                    if (!canAdd.allowed) {
+                        return res.status(403).json({
+                            success: false,
+                            code: 'SEAT_LIMIT_EXCEEDED',
+                            message: canAdd.reason || `Cannot add user to ${appKey}`,
+                            appKey
+                        });
+                    }
+                }
+            }
+
+            user.appAccess = normalizedAppAccess;
+            user.allowedApps = normalizedAppAccess
+                .filter((entry) => entry.status === 'ACTIVE')
+                .map((entry) => entry.appKey);
+
+            // Keep seat counters in sync.
+            for (const appKey of previousActiveApps) {
+                if (!nextActiveApps.has(appKey)) {
+                    await decrementSeat(user.organizationId, appKey);
+                }
+            }
+            for (const appKey of nextActiveApps) {
+                if (!previousActiveApps.has(appKey)) {
+                    await incrementSeat(user.organizationId, appKey);
+                }
+            }
         }
 
         await user.save();
@@ -931,7 +1073,9 @@ exports.updateUser = async (req, res) => {
                 role: user.role,
                 roleId: user.roleId,
                 status: user.status,
-                permissions: user.permissions
+                permissions: user.permissions,
+                appAccess: user.appAccess,
+                allowedApps: user.allowedApps
             },
             message: 'User updated successfully'
         });
@@ -1081,11 +1225,12 @@ exports.getProfile = async (req, res) => {
                     delete: false
                 },
                 settings: {
+                    view: user.roleId.permissions.settings?.view || false,
+                    edit: user.roleId.permissions.settings?.edit || false,
                     manageUsers: user.roleId.permissions.settings?.manageUsers || false,
                     manageBilling: user.roleId.permissions.settings?.manageBilling || false,
                     manageIntegrations: false,
-                    customizeFields: user.roleId.permissions.settings?.edit || false,
-                    edit: user.roleId.permissions.settings?.edit || false
+                    customizeFields: user.roleId.permissions.settings?.edit || false
                 },
                 reports: {
                     viewStandard: user.roleId.permissions.reports?.read || false,
@@ -1110,7 +1255,14 @@ exports.getProfile = async (req, res) => {
             ensureModule('forms', { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false });
             ensureModule('items', { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false });
             ensureModule('imports', { view: false, create: false, delete: false });
-            ensureModule('settings', { manageUsers: false, manageBilling: false, manageIntegrations: false, customizeFields: false });
+            ensureModule('settings', {
+                view: false,
+                edit: false,
+                manageUsers: false,
+                manageBilling: false,
+                manageIntegrations: false,
+                customizeFields: false
+            });
             ensureModule('reports', { viewStandard: false, viewCustom: false, createCustom: false, exportReports: false });
             user.permissions = merged;
         }

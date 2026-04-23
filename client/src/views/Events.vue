@@ -1,12 +1,5 @@
 <template>
   <div class="mx-auto w-full" :data-view="currentView">
-    <!-- Entity Description -->
-    <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-      <p class="text-sm text-gray-700 dark:text-gray-300">
-        <strong>Events</strong> are shared across all apps. They represent meetings, calls, and calendar items that can be linked to deals, tickets, and other records.
-      </p>
-    </div>
-
     <!-- Registry-Driven ModuleList with Calendar/List View Switcher -->
     <ModuleList
       ref="moduleListRef"
@@ -16,6 +9,7 @@
       @import="showImportModal = true"
       @export="exportEvents"
       @row-click="handleRowClick"
+      @delete="handleInlineDelete"
       @bulk-action="handleBulkAction"
       @filters-changed="handleFiltersChanged"
       @search-changed="handleSearchChanged"
@@ -48,6 +42,13 @@
               List
             </button>
           </div>
+          <ModuleActions
+            module="events"
+            create-label="New Event"
+            @create="openEventModal"
+            @import="showImportModal = true"
+            @export="exportEvents"
+          />
         </div>
       </template>
 
@@ -136,103 +137,12 @@
       </div>
     </div>
 
-    <!-- Calendar Event Creation Modal -->
-    <div v-if="showEventModal" class="fixed inset-0 z-50 overflow-y-auto" @click.self="closeEventModal">
-      <div class="flex min-h-full items-center justify-center p-4">
-        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="closeEventModal"></div>
-        
-        <div class="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6" @click.stop>
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">New Event</h3>
-            <button
-              @click="closeEventModal"
-              class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
-            >
-              <XMarkIcon class="w-5 h-5" />
-            </button>
-          </div>
-
-          <form @submit.prevent="handleCreateEvent" class="space-y-4">
-            <!-- Title -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Title <span class="text-red-500">*</span>
-              </label>
-              <input
-                v-model="eventForm.title"
-                type="text"
-                required
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                placeholder="Event title"
-              />
-            </div>
-
-            <!-- Start Date -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Start Date <span class="text-red-500">*</span>
-              </label>
-              <input
-                v-model="eventForm.startDate"
-                type="datetime-local"
-                required
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer"
-                @click="openDatePicker"
-              />
-            </div>
-
-            <!-- End Date (optional) -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                End Date (optional)
-              </label>
-              <input
-                v-model="eventForm.dueDate"
-                type="datetime-local"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent cursor-pointer"
-                @click="openDatePicker"
-              />
-            </div>
-
-            <!-- Description (optional) -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Description (optional)
-              </label>
-              <textarea
-                v-model="eventForm.description"
-                rows="3"
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                placeholder="Event description"
-              ></textarea>
-            </div>
-
-            <!-- Error message -->
-            <div v-if="eventFormError" class="text-sm text-red-600 dark:text-red-400">
-              {{ eventFormError }}
-            </div>
-
-            <!-- Actions -->
-            <div class="flex justify-end gap-3 pt-4">
-              <button
-                type="button"
-                @click="closeEventModal"
-                class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                :disabled="creatingEvent"
-                class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {{ creatingEvent ? 'Creating...' : 'Create Event' }}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+    <EventQuickCreateDrawer
+      :isOpen="showEventQuickCreate"
+      :initialData="eventQuickCreateInitialData"
+      @close="closeEventQuickCreate"
+      @saved="handleEventQuickCreateSaved"
+    />
 
     <!-- CSV Import Modal -->
     <CSVImportModal 
@@ -253,7 +163,6 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
 import apiClient from '@/utils/apiClient';
-import { openDatePicker } from '@/utils/dateUtils';
 import { useTabs } from '@/composables/useTabs';
 import { useAuthStore } from '@/stores/auth';
 import ModuleList from '@/components/module-list/ModuleList.vue';
@@ -261,8 +170,10 @@ import BadgeCell from '@/components/common/table/BadgeCell.vue';
 import DateCell from '@/components/common/table/DateCell.vue';
 import Avatar from '@/components/common/Avatar.vue';
 import CSVImportModal from '@/components/import/CSVImportModal.vue';
+import ModuleActions from '@/components/common/ModuleActions.vue';
+import EventQuickCreateDrawer from '@/components/events/EventQuickCreateDrawer.vue';
 import { getModuleListConfig } from '@/platform/modules/moduleListRegistry';
-import { CalendarIcon, ListBulletIcon, XMarkIcon } from '@heroicons/vue/24/outline';
+import { CalendarIcon, ListBulletIcon } from '@heroicons/vue/24/outline';
 
 const router = useRouter();
 const route = useRoute();
@@ -290,19 +201,10 @@ const calendarEvents = ref([]);
 const calendarLoading = ref(false);
 
 // Event creation modal state
-const showEventModal = ref(false);
+const showEventQuickCreate = ref(false);
+const eventQuickCreateInitialData = ref({});
 const showImportModal = ref(false);
-const creatingEvent = ref(false);
-const eventFormError = ref('');
 const isDarkMode = ref(false);
-
-// Event creation form
-const eventForm = ref({
-  title: '',
-  startDate: '',
-  dueDate: '',
-  description: ''
-});
 
 // Initialize view from route query or localStorage (persist so returning to page keeps list/calendar)
 const initializeView = () => {
@@ -586,11 +488,18 @@ const handleEventClick = (info) => {
 };
 
 const handleDateSelect = (selectInfo) => {
-  eventForm.value.startDate = selectInfo.startStr.slice(0, 16);
-  if (selectInfo.endStr) {
-    eventForm.value.dueDate = selectInfo.endStr.slice(0, 16);
-  }
-  showEventModal.value = true;
+  const toDateTimeLocalValue = (dateValue) => {
+    if (!dateValue) return '';
+    const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+    if (Number.isNaN(date.getTime())) return '';
+    const pad = (value) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  };
+
+  openEventModal({
+    startDateTime: toDateTimeLocalValue(selectInfo.start),
+    endDateTime: toDateTimeLocalValue(selectInfo.end)
+  });
   
   if (calendarRef.value) {
     const calendarApi = calendarRef.value.getApi();
@@ -653,7 +562,7 @@ const handleBulkAction = async (action, rows) => {
   const eventIds = rows.map(event => event._id || event.eventId);
   
   try {
-    if (action === 'delete') {
+    if (action === 'delete' || action === 'bulk-delete') {
       await Promise.all(eventIds.map(id => apiClient.delete(`/events/${id}`)));
       // Refresh both calendar and list views
       await fetchCalendarEvents();
@@ -667,6 +576,11 @@ const handleBulkAction = async (action, rows) => {
     console.error('Error performing bulk action:', error);
     alert('Error performing bulk action. Please try again.');
   }
+};
+
+const handleInlineDelete = async (row) => {
+  if (!row) return;
+  await handleBulkAction('delete', [row]);
 };
 
 const exportEvents = async () => {
@@ -704,77 +618,21 @@ const getUserDisplayName = (user) => {
 };
 
 // Event modal handlers
-const openEventModal = () => {
-  eventForm.value = {
-    title: '',
-    startDate: '',
-    dueDate: '',
-    description: ''
-  };
-  eventFormError.value = '';
-  showEventModal.value = true;
+const openEventModal = (initialData = {}) => {
+  eventQuickCreateInitialData.value = { ...initialData };
+  showEventQuickCreate.value = true;
 };
 
-const closeEventModal = () => {
-  showEventModal.value = false;
-  eventForm.value = {
-    title: '',
-    startDate: '',
-    dueDate: '',
-    description: ''
-  };
-  eventFormError.value = '';
+const closeEventQuickCreate = () => {
+  showEventQuickCreate.value = false;
+  eventQuickCreateInitialData.value = {};
 };
 
-const handleCreateEvent = async () => {
-  try {
-    creatingEvent.value = true;
-    eventFormError.value = '';
-    
-    const organizationId = authStore.user?.organizationId;
-    if (!organizationId) {
-      eventFormError.value = 'Organization ID is required. Please refresh and try again.';
-      creatingEvent.value = false;
-      return;
-    }
-    
-    const payload = {
-      type: 'event',
-      title: eventForm.value.title.trim(),
-      startDate: new Date(eventForm.value.startDate).toISOString(),
-      entityType: 'Organization',
-      entityId: organizationId
-    };
-    
-    if (eventForm.value.dueDate) {
-      payload.dueDate = new Date(eventForm.value.dueDate).toISOString();
-    }
-    
-    if (eventForm.value.description?.trim()) {
-      payload.description = eventForm.value.description.trim();
-    }
-    
-    const response = await apiClient.post('/scheduling', payload);
-    
-    if (response.success) {
-      // Refresh both views
-      await fetchCalendarEvents();
-      if (moduleListRef.value && moduleListRef.value.refresh) {
-        moduleListRef.value.refresh();
-      }
-      closeEventModal();
-    } else {
-      eventFormError.value = response.message || 'Failed to create event. Please try again.';
-    }
-  } catch (error) {
-    console.error('Error creating event:', error);
-    if (error.response?.data?.message) {
-      eventFormError.value = error.response.data.message;
-    } else {
-      eventFormError.value = 'Error creating event. Please try again.';
-    }
-  } finally {
-    creatingEvent.value = false;
+const handleEventQuickCreateSaved = async () => {
+  closeEventQuickCreate();
+  await fetchCalendarEvents();
+  if (moduleListRef.value && moduleListRef.value.refresh) {
+    moduleListRef.value.refresh();
   }
 };
 

@@ -511,7 +511,7 @@ const colorOptions = [
 const form = ref({
   eventName: '',
   notes: '',
-  eventType: 'Meeting / Appointment',
+  eventType: 'Meeting',
   // status is system-controlled, not user-editable
   eventOwnerId: '',
   auditorId: '',
@@ -546,16 +546,17 @@ const form = ref({
 });
 
 const isEditing = computed(() => !!props.event?._id);
+const isMeetingType = computed(() => ['Meeting', 'Meeting / Appointment'].includes(form.value.eventType));
 
 // Computed properties for dynamic field visibility
 const showEventTypeFields = computed(() => {
   // Show fields for all event types except basic Meeting/Appointment
   // This ensures audit form field appears for audit types
-  return form.value.eventType !== 'Meeting / Appointment';
+  return !isMeetingType.value;
 });
 
 const showGeoToggle = computed(() => {
-  return form.value.eventType === 'Meeting / Appointment' || 
+  return isMeetingType.value || 
          form.value.eventType === 'External Audit — Single Org' || 
          form.value.eventType === 'Field Sales Beat';
 });
@@ -572,7 +573,7 @@ const canToggleGeo = computed(() => {
 });
 
 const geoRequiredDescription = computed(() => {
-  if (form.value.eventType === 'Meeting / Appointment') {
+  if (isMeetingType.value) {
     return 'Optional: Enable location tracking for this meeting';
   } else if (form.value.eventType === 'External Audit — Single Org') {
     return 'Default: ON. Admin can disable if needed';
@@ -726,7 +727,7 @@ const onEventTypeChange = () => {
     form.value.geoRequired = true; // Always ON
   } else if (form.value.eventType === 'External Audit — Single Org' || form.value.eventType === 'Field Sales Beat') {
     form.value.geoRequired = true; // Default ON
-  } else if (form.value.eventType === 'Meeting / Appointment') {
+  } else if (isMeetingType.value) {
     form.value.geoRequired = false; // Default OFF
   }
   
@@ -835,7 +836,7 @@ watch(() => props.isOpen, (newVal) => {
     form.value = {
       eventName: props.event.eventName || '',
       notes: props.event.notes || '',
-      eventType: props.event.eventType || 'Meeting / Appointment',
+      eventType: props.event.eventType || 'Meeting',
       // status is system-controlled, not user-editable
       eventOwnerId: props.event.eventOwnerId?._id || props.event.eventOwnerId || currentUser.value._id || '',
       auditorId: props.event.auditorId?._id || props.event.auditorId || '',
@@ -905,7 +906,7 @@ const resetForm = () => {
   const baseForm = {
     eventName: '',
     notes: '',
-    eventType: 'Meeting / Appointment',
+    eventType: 'Meeting',
     // status is system-controlled, defaults to 'Planned' on creation
     eventOwnerId: currentUser.value._id || '',
     auditorId: '',

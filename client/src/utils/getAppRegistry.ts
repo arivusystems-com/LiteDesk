@@ -19,6 +19,22 @@ import apiClient from '@/utils/apiClient';
  */
 export async function getAppRegistry(): Promise<AppRegistry> {
   try {
+    const resolveModulePermission = (appKey: string, moduleKey: string): string | undefined => {
+      const normalizedAppKey = String(appKey || '').toUpperCase();
+      const normalizedModuleKey = String(moduleKey || '').toLowerCase();
+
+      // Audit modules are app-entitlement scoped and should not be hidden behind
+      // synthetic permission keys like "audits.view" / "cases.view" that are not
+      // part of the permission snapshot contract.
+      if (normalizedAppKey === 'AUDIT') {
+        if (normalizedModuleKey === 'audits' || normalizedModuleKey === 'cases' || normalizedModuleKey === 'responses') {
+          return undefined;
+        }
+      }
+
+      return `${moduleKey}.view`;
+    };
+
     // Fetch apps and their modules from the UI composition API
     const appsResponse = await apiClient('/ui/apps');
     
@@ -37,11 +53,28 @@ export async function getAppRegistry(): Promise<AppRegistry> {
       try {
         const modulesResponse = await apiClient(`/ui/apps/${app.appKey}/modules`);
         if (modulesResponse.success && modulesResponse.data) {
-          modules = modulesResponse.data.map((module: any) => ({
+          modules = modulesResponse.data.map((module: any) => {
+            const normalizedAppKey = String(app.appKey || '').toUpperCase();
+            const normalizedModuleKey = String(module.moduleKey || '').toLowerCase();
+            let route = module.routeBase || `/${module.moduleKey}`;
+
+            // Audit app modules with dedicated static routes should open those routes
+            // instead of generic dynamic module routes.
+            if (normalizedAppKey === 'AUDIT' && normalizedModuleKey === 'audits') {
+              route = '/audit/audits';
+            }
+            if (normalizedAppKey === 'AUDIT' && normalizedModuleKey === 'cases') {
+              route = '/audit/findings';
+            }
+            if (normalizedAppKey === 'AUDIT' && normalizedModuleKey === 'responses') {
+              route = '/audit/responses';
+            }
+
+            return {
             moduleKey: module.moduleKey,
             label: module.label,
-            route: module.routeBase || `/${module.moduleKey}`,
-            permission: `${module.moduleKey}.view`, // Default permission pattern
+            route,
+            permission: resolveModulePermission(app.appKey, module.moduleKey),
             icon: module.icon,
             order: module.sidebarOrder || 0,
             // Navigation intent flags (for four-section sidebar)
@@ -54,7 +87,29 @@ export async function getAppRegistry(): Promise<AppRegistry> {
             coreEntity: module.coreEntity || false,
             // Include list configuration if available
             list: module.list || undefined,
-          }));
+          };
+          });
+
+          if (
+            String(app.appKey || '').toUpperCase() === 'AUDIT' &&
+            !modules.some((m: any) => String(m.moduleKey || '').toLowerCase() === 'responses')
+          ) {
+            modules.push({
+              moduleKey: 'responses',
+              label: 'Responses',
+              route: '/audit/responses',
+              permission: undefined,
+              icon: 'responses',
+              order: 3,
+              appKey: 'AUDIT',
+              navigationCore: false,
+              navigationEntity: false,
+              excludeFromApps: false,
+              system: false,
+              coreEntity: false,
+              list: undefined
+            });
+          }
         }
       } catch (error) {
         console.warn(`[getAppRegistry] Failed to fetch modules for app ${app.appKey}:`, error);
@@ -74,6 +129,12 @@ export async function getAppRegistry(): Promise<AppRegistry> {
 
       // API may still send legacy shared /dashboard for multiple apps — scope per app
       if (dashboardRoute === '/dashboard') {
+        dashboardRoute = `/dashboard/${appKeyLower}`;
+      }
+
+      // Safety: prevent cross-app dashboard leakage from stale metadata.
+      // Example bad payload: HELPDESK app returning /sales/dashboard.
+      if (appKeyLower !== 'sales' && (dashboardRoute === '/sales/dashboard' || dashboardRoute.startsWith('/sales/'))) {
         dashboardRoute = `/dashboard/${appKeyLower}`;
       }
 

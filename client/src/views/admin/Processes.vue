@@ -319,7 +319,7 @@ const handleProcessSaved = async (duplicatedProcess) => {
 };
 
 onMounted(() => {
-  document.title = 'Processes | LiteDesk';
+  document.title = 'Processes | Arivu';
   loadProcesses();
 });
 </script>

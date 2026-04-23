@@ -468,7 +468,7 @@ function formatEventRelatedLabel(event, organization) {
     return `Sales Beat · ${organization?.name || 'Route'}`;
   }
 
-  if (event.eventType === 'Meeting / Appointment' && organization) {
+  if ((event.eventType === 'Meeting' || event.eventType === 'Meeting / Appointment') && organization) {
     return `Meeting · ${organization.name}`;
   }
 

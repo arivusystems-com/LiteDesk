@@ -27,10 +27,22 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
 const { organizationIsolation } = require('../middleware/organizationMiddleware');
+const { checkPermission, filterByOwnership } = require('../middleware/permissionMiddleware');
 const { resolveAppContext } = require('../middleware/resolveAppContextMiddleware');
 const { requireAppEntitlement } = require('../middleware/requireAppEntitlementMiddleware');
 const { requireAuditApp } = require('../middleware/requireAuditAppMiddleware');
 const eventController = require('../controllers/eventController');
+const formController = require('../controllers/formController');
+const { getTasks } = require('../controllers/taskController');
+const {
+    getAllResponses,
+    getResponseById,
+    submitForm,
+    approveResponse,
+    rejectResponse
+} = require('../controllers/formResponseController');
+const mongoose = require('mongoose');
+const Event = require('../models/Event');
 const Organization = require('../models/Organization');
 const User = require('../models/User');
 const {
@@ -38,6 +50,12 @@ const {
     getOrg,
     getHealth
 } = require('../controllers/auditController');
+const {
+    assertAuditorLinkedFormAccess,
+    assertAuditorFormResponseStakeholderAccess,
+    assertUserIsAuditEventStakeholder,
+    AUDIT_EVENT_TYPES
+} = require('../utils/auditLinkedFormAccess');
 
 // Apply middleware to all Audit routes
 // Order: auth → app context → app entitlement → audit enforcement → organization isolation
@@ -51,6 +69,153 @@ router.use(organizationIsolation); // Organization context
 router.get('/me', getMe); // User profile
 router.get('/org', getOrg); // Organization summary
 router.get('/health', getHealth); // Health check
+router.get('/findings', filterByOwnership('tasks'), checkPermission('tasks', 'view'), getTasks); // Findings list (Audit-scoped)
+// Audit-only users do not have Sales `forms` permissions; scoped listing is enforced in getAllResponses when appKey is AUDIT.
+router.get('/responses', (req, res) => {
+    req.auditScopedResponses = true;
+    return getAllResponses(req, res);
+}); // Responses list (Audit-scoped, shared source)
+
+// ============================================================================
+// Linked audit forms (read + submit) without Sales app context
+// ============================================================================
+// `/api/forms/*` is Sales-gated. Auditors who own an event with linkedFormId may
+// load and submit that form via `/api/audit/forms/*` instead.
+const auditFormForbidden = (res, message) =>
+    res.status(403).json({
+        success: false,
+        message,
+        code: 'AUDIT_FORM_ACCESS_DENIED'
+    });
+
+// Linked audit event (stakeholder read) — used by Audit Form Response detail instead of Sales `/api/events/:id`.
+router.get('/linked-events/:eventId', async (req, res) => {
+    try {
+        const { eventId } = req.params;
+        if (!mongoose.Types.ObjectId.isValid(eventId)) {
+            return res.status(400).json({ success: false, message: 'Invalid event id.' });
+        }
+
+        const event = await Event.findOne({
+            _id: eventId,
+            organizationId: req.user.organizationId,
+            deletedAt: null,
+            eventType: { $in: AUDIT_EVENT_TYPES }
+        })
+            .populate('auditorId reviewerId correctiveOwnerId eventOwnerId', 'firstName lastName email')
+            .lean();
+
+        if (!event) {
+            return res.status(404).json({ success: false, message: 'Event not found.' });
+        }
+
+        if (!assertUserIsAuditEventStakeholder(event, req.user._id)) {
+            return res.status(403).json({
+                success: false,
+                message: 'You do not have access to this audit event.',
+                code: 'AUDIT_EVENT_ACCESS_DENIED'
+            });
+        }
+
+        return res.status(200).json({ success: true, data: event });
+    } catch (error) {
+        console.error('[AuditRoutes] linked-events error:', error);
+        return res.status(500).json({ success: false, message: 'Error loading audit event.' });
+    }
+});
+
+router.get('/forms/:formId/responses/:responseId', async (req, res) => {
+    const ok = await assertAuditorFormResponseStakeholderAccess({
+        userId: req.user._id,
+        organizationId: req.user.organizationId,
+        formId: req.params.formId,
+        responseId: req.params.responseId
+    });
+    if (!ok) {
+        return auditFormForbidden(res, 'You cannot access this form response.');
+    }
+    const prevParams = req.params;
+    req.params = { id: req.params.formId, responseId: req.params.responseId };
+    try {
+        return await getResponseById(req, res);
+    } finally {
+        req.params = prevParams;
+    }
+});
+
+router.post('/forms/:formId/responses/:responseId/approve', async (req, res) => {
+    const ok = await assertAuditorFormResponseStakeholderAccess({
+        userId: req.user._id,
+        organizationId: req.user.organizationId,
+        formId: req.params.formId,
+        responseId: req.params.responseId
+    });
+    if (!ok) {
+        return auditFormForbidden(res, 'You cannot approve this form response.');
+    }
+    const prevParams = req.params;
+    req.params = { id: req.params.formId, responseId: req.params.responseId };
+    try {
+        return await approveResponse(req, res);
+    } finally {
+        req.params = prevParams;
+    }
+});
+
+router.post('/forms/:formId/responses/:responseId/reject', async (req, res) => {
+    const ok = await assertAuditorFormResponseStakeholderAccess({
+        userId: req.user._id,
+        organizationId: req.user.organizationId,
+        formId: req.params.formId,
+        responseId: req.params.responseId
+    });
+    if (!ok) {
+        return auditFormForbidden(res, 'You cannot reject this form response.');
+    }
+    const prevParams = req.params;
+    req.params = { id: req.params.formId, responseId: req.params.responseId };
+    try {
+        return await rejectResponse(req, res);
+    } finally {
+        req.params = prevParams;
+    }
+});
+
+router.post('/forms/:formId/submit', async (req, res) => {
+    const ok = await assertAuditorLinkedFormAccess({
+        userId: req.user._id,
+        organizationId: req.user.organizationId,
+        formId: req.params.formId
+    });
+    if (!ok) {
+        return auditFormForbidden(res, 'You cannot submit this form from the Audit app.');
+    }
+    const prevParams = req.params;
+    req.params = { ...prevParams, id: req.params.formId };
+    try {
+        return await submitForm(req, res);
+    } finally {
+        req.params = prevParams;
+    }
+});
+
+router.get('/forms/:formId', async (req, res) => {
+    const ok = await assertAuditorLinkedFormAccess({
+        userId: req.user._id,
+        organizationId: req.user.organizationId,
+        formId: req.params.formId
+    });
+    if (!ok) {
+        return auditFormForbidden(res, 'You cannot open this form from the Audit app.');
+    }
+    const prevParams = req.params;
+    req.params = { id: req.params.formId };
+    try {
+        return await formController.getFormById(req, res);
+    } finally {
+        req.params = prevParams;
+    }
+});
 
 // ============================================================================
 // Audit Scheduling Support: Organization List (read-only)

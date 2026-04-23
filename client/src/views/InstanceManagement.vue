@@ -517,7 +517,7 @@ const getSubscriptionClass = (tier) => {
 };
 
 onMounted(() => {
-  document.title = 'Instances | LiteDesk';
+  document.title = 'Instances | Arivu';
   fetchInstances();
 });
 </script>
