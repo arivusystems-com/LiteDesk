@@ -108,6 +108,7 @@
       <div
               v-for="(question, qIdx) in rootQuestions"
               :key="question.questionId || qIdx"
+              data-question-card
         :draggable="true"
               @dragstart="(e) => handleRootQuestionDragStart(e, qIdx)"
               @dragover.prevent="(e) => handleRootQuestionDragOver(e, qIdx)"
@@ -139,7 +140,7 @@
               <input
                       v-model="question.questionText"
                 type="text"
-                      placeholder="Enter question text"
+                      placeholder="New Question"
                       class="w-full text-base font-medium text-gray-900 dark:text-white bg-transparent border-none focus:outline-none focus:ring-0 placeholder-gray-400 dark:placeholder-gray-500"
               />
                 <input
@@ -235,6 +236,8 @@
                         <input
                     v-model="selectedRootQuestion.questionText"
                           type="text"
+                    data-question-settings-text-input="true"
+                    placeholder="New Question"
                     class="w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
                   />
                 </div>
@@ -429,13 +432,13 @@
                   Section {{ sIdx + 1 }} ·
                 </span>
               <input
-                  :ref="(el) => { if (el) sectionInputRefs[section.sectionId] = el; }"
+                  :ref="(el) => setSectionInputRef(el, section.sectionId)"
                 v-model="section.name"
                 type="text"
                 placeholder="Section name"
                   class="flex-1 text-sm font-medium text-gray-900 dark:text-white bg-transparent border-none focus:outline-none focus:ring-0 p-0 placeholder-gray-400 dark:placeholder-gray-500"
-                  @click.stop="handleSectionInputClick"
-                  @focus="() => { focusedSectionId = section.sectionId; }"
+                  @click.stop="(e) => handleSectionInputClick(e, getActualSectionIndex(section))"
+                  @focus="() => { selectSection(getActualSectionIndex(section), true, true); focusedSectionId = section.sectionId; }"
                   @blur="handleSectionNameBlur"
                 />
               </div>
@@ -507,13 +510,13 @@
                         : 'text-gray-600 dark:text-gray-400'
                     ]"
                     @click.stop="(e) => handleSubsectionInputClick(e, getActualSectionIndex(section), subIdx)"
-                    @focus="() => { selectSubsection(getActualSectionIndex(section), subIdx, false); focusedSubsectionId = sub.subsectionId; }"
+                    @focus="() => { selectSubsection(getActualSectionIndex(section), subIdx, true); focusedSubsectionId = sub.subsectionId; }"
                     @blur="handleSubsectionNameBlur"
                 />
               </div>
                 
                 <!-- Action buttons -->
-                <div class="flex items-center gap-1 opacity-0 group-hover/subsection:opacity-100 transition-opacity">
+                <div class="relative flex items-center gap-1 opacity-0 group-hover/subsection:opacity-100 transition-opacity" data-subsection-menu-root>
               <button
                     type="button"
                     @click.stop="(e) => {
@@ -532,11 +535,37 @@
                     + Add
                   </button>
                   <button
-                    @click.stop
+                    type="button"
+                    @click.stop="toggleSubsectionMenu(getActualSectionIndex(section), subIdx)"
                     class="px-2 py-1 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+                    title="Subsection actions"
                   >
                     ...
               </button>
+                  <div
+                    v-if="openSubsectionMenuKey === `${getActualSectionIndex(section)}-${subIdx}`"
+                    class="absolute right-0 top-full z-20 mt-1 min-w-[130px] rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg py-1"
+                    data-subsection-menu
+                  >
+                    <button
+                      type="button"
+                      class="w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
+                      @click.stop="duplicateSubsectionFromMenu(getActualSectionIndex(section), subIdx)"
+                      :disabled="!canModifyFormStructure"
+                      :title="!canModifyFormStructure ? getBlockingMessage(formStatus) : 'Duplicate subsection'"
+                    >
+                      Duplicate
+                    </button>
+                    <button
+                      type="button"
+                      class="w-full text-left px-3 py-1.5 text-xs text-red-600 dark:text-red-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+                      @click.stop="deleteSubsectionFromMenu(getActualSectionIndex(section), subIdx)"
+                      :disabled="!canModifyFormStructure"
+                      :title="!canModifyFormStructure ? getBlockingMessage(formStatus) : 'Delete subsection'"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -613,6 +642,7 @@
               <div
                 v-for="(question, qIdx) in currentQuestions"
                 :key="question.questionId || qIdx"
+                data-question-card
                 :ref="el => { if (el && qIdx !== undefined) questionRefs[qIdx] = el }"
                   :draggable="true"
                 @dragstart="(e) => handleQuestionDragStart(e, selectedSectionIndex, selectedSubsectionIndex, qIdx)"
@@ -734,7 +764,7 @@
         </div>
 
         <!-- Question Settings -->
-        <div v-if="currentQuestion" class="flex-1 overflow-y-auto px-6 py-4" @click.stop>
+        <div v-if="currentQuestion" data-question-settings-panel class="flex-1 overflow-y-auto px-6 py-4" @click.stop>
           <!-- Question basics -->
           <div class="space-y-5">
             <div>
@@ -747,6 +777,8 @@
                           <input
                     v-model="currentQuestion.questionText"
                             type="text"
+                    data-question-settings-text-input="true"
+                    placeholder="New Question"
                     @focus="handleQuestionSettingsFocus"
                     @blur="handleQuestionSettingsBlur"
                     class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
@@ -2066,7 +2098,10 @@ const questionRefs = ref({}); // Refs for question elements
 const focusedSectionId = ref(null); // Track which section input is currently focused
 const focusedSubsectionId = ref(null); // Track which subsection input is currently focused
 const focusedQuestionSettingsInput = ref(false); // Track if a question settings input is currently focused
+const openSubsectionMenuKey = ref(null); // Track active subsection actions menu
 let questionSettingsBlurTimeout = null; // Timeout for delaying blur handler
+const pendingSectionFocusId = ref(null); // Track section input that should receive autofocus after mount
+let suppressOutsideInputBlurUntil = 0; // Prevent document handlers from blurring just-autofocused inputs
 
 // Helper functions for question settings input focus/blur
 const handleQuestionSettingsFocus = () => {
@@ -2160,15 +2195,30 @@ watch(() => props.form, (newForm) => {
       // Preserve selection IDs before reinitializing
       // BUT if we have a pending section to select, don't capture the old selection
       // We want to select the pending section instead
-      const selectedSectionId = !pendingSectionIdToSelect.value && selectedSectionIndex.value !== null && localForm.value.sections && localForm.value.sections[selectedSectionIndex.value]
-        ? localForm.value.sections[selectedSectionIndex.value].sectionId
-        : null;
-      const selectedSubsectionId = selectedSectionId && selectedSubsectionIndex.value !== null && localForm.value.sections && localForm.value.sections[selectedSectionIndex.value]?.subsections?.[selectedSubsectionIndex.value]
-        ? localForm.value.sections[selectedSectionIndex.value].subsections[selectedSubsectionIndex.value].subsectionId
-        : null;
-      const selectedQuestionId = selectedSubsectionId && selectedQuestionIndex.value !== null && localForm.value.sections && localForm.value.sections[selectedSectionIndex.value]?.subsections?.[selectedSubsectionIndex.value]?.questions?.[selectedQuestionIndex.value]
-        ? localForm.value.sections[selectedSectionIndex.value].subsections[selectedSubsectionIndex.value].questions[selectedQuestionIndex.value].questionId
-        : null;
+      const selectedSection = !pendingSectionIdToSelect.value &&
+        selectedSectionIndex.value !== null &&
+        localForm.value.sections &&
+        localForm.value.sections[selectedSectionIndex.value]
+          ? localForm.value.sections[selectedSectionIndex.value]
+          : null;
+      const selectedSectionId = selectedSection?.sectionId || null;
+      const selectedSubsection = selectedSectionId &&
+        selectedSubsectionIndex.value !== null &&
+        selectedSection?.subsections?.[selectedSubsectionIndex.value]
+          ? selectedSection.subsections[selectedSubsectionIndex.value]
+          : null;
+      const selectedSubsectionId = selectedSubsection?.subsectionId || null;
+      const selectedQuestionIndexSnapshot = !pendingSectionIdToSelect.value ? selectedQuestionIndex.value : null;
+      const selectedQuestionId =
+        selectedQuestionIndexSnapshot !== null
+          ? (
+              selectedSubsection?.questions?.[selectedQuestionIndexSnapshot]?.questionId ||
+              selectedSection?.questions?.[selectedQuestionIndexSnapshot]?.questionId ||
+              (isFlatMode.value ? rootQuestions.value?.[selectedQuestionIndexSnapshot]?.questionId : null) ||
+              null
+            )
+          : null;
+      const hadFlatModeQuestionSelection = !pendingSectionIdToSelect.value && isFlatMode.value && selectedQuestionIndexSnapshot !== null;
       
       isSyncing = true;
       localForm.value = initializeLocalForm();
@@ -2208,7 +2258,29 @@ watch(() => props.form, (newForm) => {
       
       // Restore selection by finding the items by ID in the newly initialized form
       // BUT only if we don't have a pending section to select
-      if (selectedSectionId && localForm.value.sections && !pendingSectionIdToSelect.value) {
+      if ((selectedSectionId || hadFlatModeQuestionSelection) && localForm.value.sections && !pendingSectionIdToSelect.value) {
+        // Flat mode questions live under the root section's first subsection.
+        if (!selectedSectionId && hadFlatModeQuestionSelection) {
+          selectedSectionIndex.value = null;
+          selectedSubsectionIndex.value = null;
+          const rootSection = localForm.value.sections.find(s => s?._isRootSection);
+          const rootQuestionsList = rootSection?.subsections?.[0]?.questions || [];
+          if (selectedQuestionId) {
+            const newQuestionIndex = rootQuestionsList.findIndex(q => q?.questionId === selectedQuestionId);
+            selectedQuestionIndex.value = newQuestionIndex !== -1 ? newQuestionIndex : null;
+          } else if (
+            selectedQuestionIndexSnapshot !== null &&
+            selectedQuestionIndexSnapshot >= 0 &&
+            selectedQuestionIndexSnapshot < rootQuestionsList.length
+          ) {
+            selectedQuestionIndex.value = selectedQuestionIndexSnapshot;
+          } else {
+            selectedQuestionIndex.value = null;
+          }
+          setTimeout(() => { isSyncing = false; }, 100);
+          return;
+        }
+
         const newSectionIndex = localForm.value.sections.findIndex(s => s.sectionId === selectedSectionId);
         if (newSectionIndex !== -1) {
           selectedSectionIndex.value = newSectionIndex;
@@ -2239,7 +2311,12 @@ watch(() => props.form, (newForm) => {
             }
           } else {
             selectedSubsectionIndex.value = null;
-            selectedQuestionIndex.value = null;
+            if (selectedQuestionId && newSection.questions) {
+              const newQuestionIndex = newSection.questions.findIndex(q => q.questionId === selectedQuestionId);
+              selectedQuestionIndex.value = newQuestionIndex !== -1 ? newQuestionIndex : null;
+            } else {
+              selectedQuestionIndex.value = null;
+            }
           }
         } else {
           // Section not found - but don't reset if we have a pending selection
@@ -2358,10 +2435,11 @@ const cleanFormDataForEmit = (formData) => {
         const cleanedSection = { ...section };
         delete cleanedSection._isRootSection; // Remove frontend-only marker (just in case)
         
-        // Clean section-level questions: filter out questions with empty questionText
+        // Keep draft questions with empty text so placeholder-driven UX works.
+        // Remove only non-object entries from unexpected malformed payloads.
         if (cleanedSection.questions && Array.isArray(cleanedSection.questions)) {
           cleanedSection.questions = cleanedSection.questions.filter(question => {
-            return question.questionText && question.questionText.trim();
+            return question && typeof question === 'object';
           });
         }
         
@@ -2374,10 +2452,10 @@ const cleanFormDataForEmit = (formData) => {
               // Remove frontend-only flags
               delete cleanedSubsection._pendingFocus;
               
-              // Filter out questions with empty questionText
+              // Keep draft questions with empty text so first-click add is preserved.
               if (cleanedSubsection.questions && Array.isArray(cleanedSubsection.questions)) {
                 cleanedSubsection.questions = cleanedSubsection.questions.filter(question => {
-                  return question.questionText && question.questionText.trim();
+                  return question && typeof question === 'object';
                 });
               }
               
@@ -2478,14 +2556,32 @@ const ensureSelectionWhenVisible = () => {
 
 // Handle clicks outside to blur focused inputs
 const handleDocumentClick = (e) => {
+  const clickedElement = e.target instanceof Element ? e.target : null;
+  if (!clickedElement) return;
+
+  if (!clickedElement.closest('[data-subsection-menu-root]')) {
+    openSubsectionMenuKey.value = null;
+  }
+
+  // If a question is selected and user clicks outside question surfaces,
+  // unselect question and fall back to its parent section settings.
+  if (selectedQuestionIndex.value !== null) {
+    const clickedInsideQuestionSurface = !!clickedElement.closest('[data-question-card], [data-question-settings-panel]');
+    if (!clickedInsideQuestionSurface) {
+      selectedQuestionIndex.value = null;
+    }
+  }
+
   // Get the clicked element and check if it's an input
-  const clickedElement = e.target;
   const isSectionInput = clickedElement.tagName === 'INPUT' && 
     (clickedElement.getAttribute('placeholder') === 'Section name' || 
      clickedElement.getAttribute('placeholder') === 'Subsection name');
   
   // If we clicked outside section/subsection inputs, blur any focused ones
   if (!isSectionInput) {
+    if (Date.now() < suppressOutsideInputBlurUntil) {
+      return;
+    }
     // Get the currently active element
     const activeElement = document.activeElement;
     
@@ -2547,6 +2643,9 @@ const handleDocumentMousedown = (e) => {
   // Use setTimeout to run after the click event completes
   if (!isSectionInput) {
     setTimeout(() => {
+      if (Date.now() < suppressOutsideInputBlurUntil) {
+        return;
+      }
       const activeElement = document.activeElement;
       // Check if there's a focused section/subsection input
       if (activeElement && activeElement.tagName === 'INPUT') {
@@ -3074,14 +3173,41 @@ const toggleSectionExpand = (sectionId) => {
 };
 
 // Helper method for section input click (to avoid accessing document in template)
-const handleSectionInputClick = (e) => {
+const handleSectionInputClick = (e, sectionIndex) => {
   e.stopPropagation();
+  if (sectionIndex !== null && sectionIndex !== undefined && sectionIndex >= 0) {
+    selectSection(sectionIndex, true, true);
+  }
   // Only focus if not already focused to avoid unwanted selection
   if (typeof document !== 'undefined' && document.activeElement !== e.target) {
     e.target.focus();
     // Place cursor at end of text instead of selecting all
     const length = e.target.value.length;
     e.target.setSelectionRange(length, length);
+  }
+};
+
+const setSectionInputRef = (el, sectionId) => {
+  if (!sectionId) return;
+  if (el) {
+    sectionInputRefs.value[sectionId] = el;
+    if (pendingSectionFocusId.value === sectionId) {
+      setTimeout(() => {
+        if (pendingSectionFocusId.value !== sectionId) return;
+        if (el && typeof el.focus === 'function') {
+          suppressOutsideInputBlurUntil = Date.now() + 800;
+          el.focus();
+          const length = el.value ? el.value.length : 0;
+          if (typeof el.setSelectionRange === 'function') {
+            el.setSelectionRange(length, length);
+          }
+          focusedSectionId.value = sectionId;
+        }
+        pendingSectionFocusId.value = null;
+      }, 10);
+    }
+  } else {
+    delete sectionInputRefs.value[sectionId];
   }
 };
 
@@ -3148,7 +3274,7 @@ const setSubsectionInputRef = (el, subsectionId) => {
 // Helper method for subsection input click
 const handleSubsectionInputClick = (e, sectionIndex, subsectionIndex) => {
   e.stopPropagation();
-  selectSubsection(sectionIndex, subsectionIndex);
+  selectSubsection(sectionIndex, subsectionIndex, true);
   // Focus the input
   if (typeof document !== 'undefined' && document.activeElement !== e.target) {
     e.target.focus();
@@ -3284,6 +3410,38 @@ const scrollToQuestion = (qIndex) => {
         behavior: 'smooth'
       });
     }
+  });
+};
+
+const focusSectionNameInputById = (sectionId, attempt = 0) => {
+  if (!sectionId || attempt > 30) return;
+  nextTick(() => {
+    const inputRef = sectionInputRefs.value?.[sectionId];
+    if (inputRef && typeof inputRef.focus === 'function') {
+      inputRef.focus();
+      const length = inputRef.value ? inputRef.value.length : 0;
+      if (typeof inputRef.setSelectionRange === 'function') {
+        inputRef.setSelectionRange(length, length);
+      }
+      return;
+    }
+    setTimeout(() => focusSectionNameInputById(sectionId, attempt + 1), 50);
+  });
+};
+
+const focusQuestionSettingsTextInput = (attempt = 0) => {
+  if (attempt > 30 || typeof document === 'undefined') return;
+  nextTick(() => {
+    const inputEl = document.querySelector('input[data-question-settings-text-input="true"]');
+    if (inputEl && typeof inputEl.focus === 'function') {
+      inputEl.focus();
+      const length = inputEl.value ? inputEl.value.length : 0;
+      if (typeof inputEl.setSelectionRange === 'function') {
+        inputEl.setSelectionRange(length, length);
+      }
+      return;
+    }
+    setTimeout(() => focusQuestionSettingsTextInput(attempt + 1), 50);
   });
 };
 
@@ -3528,6 +3686,8 @@ const addSection = () => {
   };
   
   const sectionIdToSelect = newSection.sectionId;
+  pendingSectionFocusId.value = sectionIdToSelect;
+  suppressOutsideInputBlurUntil = Date.now() + 800;
   
   // CRITICAL: Set pendingSectionIdToSelect BEFORE pushing to array
   // This ensures ensureSelection can see it if it runs immediately after the push
@@ -3547,6 +3707,7 @@ const addSection = () => {
   selectedSectionIndex.value = actualIndex;
   selectedSubsectionIndex.value = null;
   selectedQuestionIndex.value = null;
+  focusSectionNameInputById(sectionIdToSelect);
   
   // Expand and select IMMEDIATELY - synchronously, before any async operations
   expandedSections.value[newSection.sectionId] = true;
@@ -3891,10 +4052,51 @@ const removeSubsection = (sectionIndex, subsectionIndex) => {
   ensureSelection();
 };
 
+const duplicateSubsection = (sectionIndex, subsectionIndex) => {
+  if (!canModifyFormStructure.value) return;
+  const section = localForm.value.sections?.[sectionIndex];
+  const source = section?.subsections?.[subsectionIndex];
+  if (!section || !source) return;
+
+  const clone = JSON.parse(JSON.stringify(source));
+  clone.subsectionId = generateId('SUB');
+  clone.name = source.name ? `${source.name} (Copy)` : '';
+  clone.questions = (clone.questions || []).map((q, idx) => ({
+    ...q,
+    questionId: generateId('Q'),
+    order: idx
+  }));
+  clone.order = subsectionIndex + 1;
+
+  section.subsections.splice(subsectionIndex + 1, 0, clone);
+  section.subsections.forEach((sub, idx) => {
+    sub.order = idx;
+  });
+
+  selectedSectionIndex.value = sectionIndex;
+  selectedSubsectionIndex.value = subsectionIndex + 1;
+  selectedQuestionIndex.value = null;
+};
+
+const toggleSubsectionMenu = (sectionIndex, subsectionIndex) => {
+  const menuKey = `${sectionIndex}-${subsectionIndex}`;
+  openSubsectionMenuKey.value = openSubsectionMenuKey.value === menuKey ? null : menuKey;
+};
+
+const duplicateSubsectionFromMenu = (sectionIndex, subsectionIndex) => {
+  openSubsectionMenuKey.value = null;
+  duplicateSubsection(sectionIndex, subsectionIndex);
+};
+
+const deleteSubsectionFromMenu = (sectionIndex, subsectionIndex) => {
+  openSubsectionMenuKey.value = null;
+  removeSubsection(sectionIndex, subsectionIndex);
+};
+
 const buildDefaultQuestion = (type) => {
   const base = {
     questionId: generateId('Q'),
-    questionText: 'New Question',
+    questionText: '',
     helpText: '',
     type,
     options: [],
@@ -4000,6 +4202,7 @@ const addQuestion = (sectionIndex, subsectionIndex, explicitType) => {
     nextTick(() => {
       selectedQuestionIndex.value = newQuestionIndex;
       scrollToQuestion(newQuestionIndex);
+      focusQuestionSettingsTextInput();
     });
   } else {
     // Add question to subsection (existing behavior)
@@ -4034,6 +4237,7 @@ const addQuestion = (sectionIndex, subsectionIndex, explicitType) => {
     nextTick(() => {
       selectedQuestionIndex.value = newQuestionIndex;
       scrollToQuestion(newQuestionIndex);
+      focusQuestionSettingsTextInput();
     });
   }
 };
@@ -4106,7 +4310,7 @@ const duplicateQuestion = (sectionIndex, subsectionIndex, questionIndex) => {
   const original = subsection.questions[questionIndex];
   const clone = JSON.parse(JSON.stringify(original));
   clone.questionId = generateId('Q');
-  clone.questionText = `${original.questionText || 'New Question'} (Copy)`;
+  clone.questionText = original.questionText ? `${original.questionText} (Copy)` : '';
   subsection.questions.splice(questionIndex + 1, 0, clone);
 
   // Reorder
@@ -4137,6 +4341,7 @@ const addRootQuestion = (explicitType) => {
   selectedQuestionIndex.value = rootSubsection.questions.length - 1;
   selectedSectionIndex.value = null;
   selectedSubsectionIndex.value = null;
+  focusQuestionSettingsTextInput();
 };
 
 const removeRootQuestion = (questionIndex) => {
@@ -4169,7 +4374,7 @@ const duplicateRootQuestion = (questionIndex) => {
   const original = rootSubsection.questions[questionIndex];
   const clone = JSON.parse(JSON.stringify(original));
   clone.questionId = generateId('Q');
-  clone.questionText = `${original.questionText || 'New Question'} (Copy)`;
+  clone.questionText = original.questionText ? `${original.questionText} (Copy)` : '';
   rootSubsection.questions.splice(questionIndex + 1, 0, clone);
   
   // Reorder
