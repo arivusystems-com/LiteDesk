@@ -1550,7 +1550,7 @@ const handleSubmit = async () => {
             'deals': 'briefcase',
             'tasks': 'check',
             'events': '📅',
-            'cases': 'lifebuoy',
+            'cases': 'ticket',
             'users': 'user'
           };
           

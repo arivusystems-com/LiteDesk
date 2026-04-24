@@ -138,7 +138,7 @@ const viewAllCases = () => {
   // Helpdesk cases live under /helpdesk/cases.
   openTab(`/helpdesk/cases?personId=${props.personId}`, {
     title: `Cases for ${props.personName}`,
-    icon: 'clipboard-document',
+    icon: 'ticket',
     insertAdjacent: true
   });
 };

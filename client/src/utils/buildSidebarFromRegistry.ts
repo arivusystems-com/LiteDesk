@@ -303,7 +303,11 @@ function buildAppNav(appRegistry: AppRegistry, activeAppId: string, snapshot: Pe
           id: `${activeAppId}:${m.moduleKey}`,
           label: m.label,
           route: m.route,
-          icon: m.icon,
+          icon:
+            String(activeAppId || '').toUpperCase() === 'HELPDESK' &&
+            String(m.moduleKey || '').toLowerCase() === 'cases'
+              ? 'ticket'
+              : m.icon,
           moduleKey: m.moduleKey,
         }) satisfies SidebarItem
     );

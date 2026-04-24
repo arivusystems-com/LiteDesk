@@ -54,7 +54,7 @@
             <!-- Card Header (match Core Modules) -->
             <div class="flex items-start gap-3 mb-4">
               <div class="flex-shrink-0 flex items-center justify-center w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/30 transition-colors">
-                <component :is="getModuleCardIcon(mod.key)" class="w-6 h-6" />
+                <component :is="getModuleCardIcon(mod)" class="w-6 h-6" />
               </div>
               <div class="min-w-0 flex-1">
                 <div class="flex items-start justify-between gap-2">
@@ -5510,6 +5510,7 @@ import {
   ClipboardDocumentListIcon,
   BanknotesIcon,
   LifebuoyIcon,
+  TicketIcon,
   CubeIcon
 } from '@heroicons/vue/24/outline';
 
@@ -5722,10 +5723,14 @@ const moduleCardIconMap = {
   items: FolderIcon,
   forms: ClipboardDocumentListIcon,
   deals: BanknotesIcon,
-  cases: LifebuoyIcon
+  cases: TicketIcon
 };
-function getModuleCardIcon(moduleKey) {
-  const key = (moduleKey || '').toLowerCase();
+function getModuleCardIcon(mod) {
+  const key = String((mod && mod.key) || mod || '').toLowerCase();
+  const app = String((mod && (mod.appKey || mod.app)) || '').toUpperCase();
+  if (key === 'cases' && app === 'AUDIT') {
+    return ExclamationTriangleIcon;
+  }
   return moduleCardIconMap[key] || CubeIcon;
 }
 

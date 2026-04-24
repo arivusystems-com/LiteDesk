@@ -517,7 +517,7 @@ const MODULE_DEFINITIONS = [
     },
     ui: {
       routeBase: '/helpdesk/cases',
-      icon: 'lifebuoy',
+      icon: 'ticket',
       showInSidebar: true,
       sidebarOrder: 1,
       createLabel: 'Create Case',
