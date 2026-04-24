@@ -25,6 +25,7 @@
  */
 
 import { getFieldMetadataFromRegistry } from './FieldRegistry';
+import type { BaseFieldMetadata } from './BaseFieldModel';
 import {
   getIsSystemBase,
   getIsEditableBase,
@@ -88,6 +89,21 @@ export function isGlobalSystemFieldKey(fieldKey: string): boolean {
   return GLOBAL_SYSTEM_FIELD_KEYS.has(normalizeFieldKeyForSystemMatch(fieldKey));
 }
 
+/**
+ * For flattened paths (e.g. list columns from schema paths: "assignmentControl.lockReason"),
+ * resolve metadata from the root segment when the full path is not in the registry.
+ */
+function getFieldMetadataForSystemLookup(
+  moduleKey: string,
+  fieldKey: string
+): BaseFieldMetadata | undefined {
+  const exact = getFieldMetadataFromRegistry(moduleKey, fieldKey);
+  if (exact) return exact;
+  const dot = fieldKey.indexOf('.');
+  if (dot <= 0) return undefined;
+  return getFieldMetadataFromRegistry(moduleKey, fieldKey.slice(0, dot));
+}
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -122,7 +138,7 @@ export interface CapabilityContext {
  *   - OR field key is in GLOBAL_SYSTEM_FIELD_KEYS (e.g. trash: deletedAt, deletedBy, deletionReason)
  */
 export function isSystemField(moduleKey: string, field: Field): boolean {
-  const metadata = getFieldMetadataFromRegistry(moduleKey, field.key);
+  const metadata = getFieldMetadataForSystemLookup(moduleKey, field.key);
   if (metadata) return getIsSystemBase(metadata);
   // Unknown fields that are model-level system fields (trash, etc.) - never show in create/edit
   const keyLower = normalizeFieldKeyForMetadataLookup(field.key);
@@ -168,9 +184,9 @@ export function canEditField(moduleKey: string, field: Field): boolean {
   const keyLower = normalizeFieldKeyForMetadataLookup(field.key);
   if (GLOBAL_SYSTEM_FIELD_KEYS.has(keyLower)) return false;
   if (IMMUTABLE_NON_EDITABLE_KEYS.has(keyLower)) return false;
-  const metadata = getFieldMetadataFromRegistry(moduleKey, field.key);
+  const metadata = getFieldMetadataForSystemLookup(moduleKey, field.key);
   if (metadata?.isEditable === false) return false;
-  if (metadata?.isSystem === true) return false;
+  if (getIsSystemBase(metadata)) return false;
   if (metadata?.isComputed === true) return false;
   if (!getIsEditableBase(metadata)) return false;
   return true;

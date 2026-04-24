@@ -543,10 +543,21 @@ exports.createOrAttach = async (req, res) => {
       }
     });
 
-    // Validate type/role if provided (for SALES writes to participations only)
+    // Validate type/role if provided (SALES + HELPDESK → participations.*.role)
     // Do NOT set appFields.type - type is deprecated, use participations.SALES.role
     let validatedRole = null;
     if (normalizedType && normalizedAppKey === 'SALES') {
+      const typeValidation = await validatePeopleType(req.user.organizationId, normalizedAppKey, normalizedType);
+      if (!typeValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          message: typeValidation.message,
+          code: 'TYPE_NOT_ALLOWED',
+          allowedTypes: typeValidation.allowedTypes
+        });
+      }
+      validatedRole = typeValidation.canonicalValue;
+    } else if (normalizedType && normalizedAppKey === 'HELPDESK') {
       const typeValidation = await validatePeopleType(req.user.organizationId, normalizedAppKey, normalizedType);
       if (!typeValidation.valid) {
         return res.status(400).json({
@@ -631,6 +642,15 @@ exports.createOrAttach = async (req, res) => {
 
       if (normalizedAppKey === 'SALES' && salesParticipation && (salesParticipation.role ?? salesParticipation.lead_status ?? salesParticipation.contact_status)) {
         updateData.participations = setSalesParticipationIn(existingPerson.participations || {}, salesParticipation);
+      }
+
+      if (normalizedAppKey === 'HELPDESK' && validatedRole) {
+        const base =
+          existingPerson.participations && typeof existingPerson.participations === 'object'
+            ? { ...existingPerson.participations }
+            : {};
+        base.HELPDESK = { role: validatedRole };
+        updateData.participations = base;
       }
 
       // Update core fields if provided (but don't overwrite existing non-empty values)
@@ -747,6 +767,10 @@ exports.createOrAttach = async (req, res) => {
           Object.entries(appFields).forEach(([key, value]) => {
             if (!salesKeys.includes(key)) attachUpdateData[key] = value;
           });
+        } else if (normalizedAppKey === 'HELPDESK' && validatedRole) {
+          const base = result.participations && typeof result.participations === 'object' ? { ...result.participations } : {};
+          base.HELPDESK = { role: validatedRole };
+          attachUpdateData.participations = base;
         } else {
           Object.entries(appFields).forEach(([key, value]) => { attachUpdateData[key] = value; });
         }

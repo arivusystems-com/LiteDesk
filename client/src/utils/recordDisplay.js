@@ -13,6 +13,7 @@
  */
 
 import apiClient from '@/utils/apiClient';
+import { getModuleRecordCrudPathBase } from '@/utils/moduleRecordApiPath';
 
 // Cache for record data (key: appKey.moduleKey.recordId)
 const recordCache = new Map();
@@ -24,6 +25,8 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
  */
 function getRecordEndpoint(appKey, moduleKey) {
   const normalizedModule = (moduleKey ?? '').toString().toLowerCase().trim();
+  const helpdeskCases = getModuleRecordCrudPathBase(normalizedModule, { appKey, routePath: '' });
+  if (helpdeskCases === '/helpdesk/cases') return helpdeskCases;
   // Map moduleKey to actual server path (no appKey in path)
   const moduleToPath = {
     tasks: '/tasks',

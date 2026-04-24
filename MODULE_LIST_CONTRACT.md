@@ -14,7 +14,7 @@ Define a standard, enforceable contract for:
 
 This must work for:
 - Sales (Leads, Deals)
-- Helpdesk (Tickets)
+- Helpdesk (Cases)
 - Any marketplace app
 
 ---
@@ -158,7 +158,7 @@ function buildModuleListFromRegistry(
   - List contract (from buildModuleListFromRegistry)
   - Empty state (from builder)
 
-/helpdesk/tickets → resolves:
+/helpdesk/cases → resolves:
   - Module definition
   - List contract
   - Empty state
@@ -204,7 +204,7 @@ function buildModuleListFromRegistry(
 
 **Samples:**
 - Sales Leads (Contacts)
-- Helpdesk Tickets
+- Helpdesk Cases
 - Read-only user example
 
 ---

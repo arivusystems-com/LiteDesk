@@ -48,21 +48,48 @@
           </ListboxButton>
           <Transition leave-active-class="transition duration-100 ease-in" leave-from-class="opacity-100" leave-to-class="opacity-0">
             <ListboxOptions
-              class="absolute left-0 top-full !bottom-auto z-10 mt-1 max-h-60 min-w-[140px] overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm"
+              class="absolute left-0 top-full !bottom-auto z-10 mt-1 w-full max-w-[min(100vw,24rem)] min-w-[200px] max-h-72 flex flex-col overflow-hidden rounded-lg bg-white dark:bg-gray-700 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm"
             >
-              <ListboxOption v-if="allowEmpty || type === 'user' || type === 'entity'" :value="null" v-slot="{ active }">
-                <li :class="['relative cursor-default select-none py-2 pl-4 pr-10', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
-                  <span :class="['editable-labeled-value__text block truncate', active ? '' : 'text-gray-500 dark:text-gray-400']">{{ type === 'user' ? 'Unassigned' : (type === 'entity' ? 'Select an option' : (emptyLabel || 'Select an option')) }}</span>
-                </li>
-              </ListboxOption>
-              <ListboxOption v-for="option in selectOptions" :key="option.value" :value="option.value" v-slot="{ active, selected }">
-                <li :class="['relative cursor-default select-none py-2 pl-4 pr-10', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
-                  <span :class="['editable-labeled-value__text block truncate', selected ? 'font-medium' : 'font-normal']">{{ option.label }}</span>
-                  <span v-if="selected" class="absolute inset-y-0 right-0 flex items-center pr-3 text-indigo-600 dark:text-indigo-400">
-                    <CheckIcon class="h-5 w-5" aria-hidden="true" />
-                  </span>
-                </li>
-              </ListboxOption>
+              <div
+                v-if="showListboxSearch"
+                class="shrink-0 p-2 border-b border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700"
+                @click.stop
+                @mousedown.stop
+              >
+                <div class="relative">
+                  <MagnifyingGlassIcon class="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500 pointer-events-none" />
+                  <input
+                    v-model="listboxSearchQuery"
+                    type="text"
+                    :placeholder="listboxSearchPlaceholder"
+                    class="w-full pl-8 pr-2 py-1.5 text-sm rounded-md border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/80 text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                    autocomplete="off"
+                    @click.stop
+                    @keydown.stop
+                  />
+                </div>
+              </div>
+              <div class="min-h-0 max-h-52 overflow-y-auto py-1">
+                <ListboxOption v-if="allowEmpty || type === 'user' || type === 'entity'" :value="null" v-slot="{ active }">
+                  <li :class="['relative cursor-default select-none py-2 pl-4 pr-10', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
+                    <span :class="['editable-labeled-value__text block truncate', active ? '' : 'text-gray-500 dark:text-gray-400']">{{ type === 'user' ? 'Unassigned' : (type === 'entity' ? 'Select an option' : (emptyLabel || 'Select an option')) }}</span>
+                  </li>
+                </ListboxOption>
+                <ListboxOption v-for="option in filteredSelectOptions" :key="String(option.value)" :value="option.value" v-slot="{ active, selected }">
+                  <li :class="['relative cursor-default select-none py-2 pl-4 pr-10', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
+                    <span :class="['editable-labeled-value__text block truncate', selected ? 'font-medium' : 'font-normal']">{{ option.label }}</span>
+                    <span v-if="selected" class="absolute inset-y-0 right-0 flex items-center pr-3 text-indigo-600 dark:text-indigo-400">
+                      <CheckIcon class="h-5 w-5" aria-hidden="true" />
+                    </span>
+                  </li>
+                </ListboxOption>
+                <div
+                  v-if="showListboxSearch && filteredSelectOptions.length === 0"
+                  class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400"
+                >
+                  No matches.
+                </div>
+              </div>
             </ListboxOptions>
           </Transition>
           </div>
@@ -245,26 +272,53 @@
             leave-to-class="opacity-0"
           >
             <ListboxOptions
-              class="absolute left-0 top-full !bottom-auto z-10 mt-1 max-h-60 w-full min-w-[140px] overflow-auto rounded-lg bg-white dark:bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm"
+              class="absolute left-0 top-full !bottom-auto z-10 mt-1 w-full max-w-[min(100vw,24rem)] min-w-[200px] max-h-72 flex flex-col overflow-hidden rounded-lg bg-white dark:bg-gray-700 text-base shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none sm:text-sm"
             >
-              <ListboxOption v-if="allowEmpty || type === 'user' || type === 'entity'" :value="null" v-slot="{ active }">
-                <li :class="['relative cursor-default select-none py-2 pl-4 pr-10', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
-                  <span :class="['editable-labeled-value__text block truncate', active ? '' : 'text-gray-500 dark:text-gray-400']">{{ type === 'user' ? 'Unassigned' : (type === 'entity' ? 'Select an option' : (emptyLabel || 'Select an option')) }}</span>
-                </li>
-              </ListboxOption>
-              <ListboxOption
-                v-for="option in selectOptions"
-                :key="option.value"
-                :value="option.value"
-                v-slot="{ active, selected }"
+              <div
+                v-if="showListboxSearch"
+                class="shrink-0 p-2 border-b border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700"
+                @click.stop
+                @mousedown.stop
               >
-                <li :class="['relative cursor-default select-none py-2 pl-4 pr-10', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
-                  <span :class="['editable-labeled-value__text block truncate', selected ? 'font-medium' : 'font-normal']">{{ option.label }}</span>
-                  <span v-if="selected" class="absolute inset-y-0 right-0 flex items-center pr-3 text-indigo-600 dark:text-indigo-400">
-                    <CheckIcon class="h-5 w-5" aria-hidden="true" />
-                  </span>
-                </li>
-              </ListboxOption>
+                <div class="relative">
+                  <MagnifyingGlassIcon class="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500 pointer-events-none" />
+                  <input
+                    v-model="listboxSearchQuery"
+                    type="text"
+                    :placeholder="listboxSearchPlaceholder"
+                    class="w-full pl-8 pr-2 py-1.5 text-sm rounded-md border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/80 text-gray-900 dark:text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                    autocomplete="off"
+                    @click.stop
+                    @keydown.stop
+                  />
+                </div>
+              </div>
+              <div class="min-h-0 max-h-52 overflow-y-auto py-1">
+                <ListboxOption v-if="allowEmpty || type === 'user' || type === 'entity'" :value="null" v-slot="{ active }">
+                  <li :class="['relative cursor-default select-none py-2 pl-4 pr-10', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
+                    <span :class="['editable-labeled-value__text block truncate', active ? '' : 'text-gray-500 dark:text-gray-400']">{{ type === 'user' ? 'Unassigned' : (type === 'entity' ? 'Select an option' : (emptyLabel || 'Select an option')) }}</span>
+                  </li>
+                </ListboxOption>
+                <ListboxOption
+                  v-for="option in filteredSelectOptions"
+                  :key="String(option.value)"
+                  :value="option.value"
+                  v-slot="{ active, selected }"
+                >
+                  <li :class="['relative cursor-default select-none py-2 pl-4 pr-10', active ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-100' : 'text-gray-900 dark:text-gray-100']">
+                    <span :class="['editable-labeled-value__text block truncate', selected ? 'font-medium' : 'font-normal']">{{ option.label }}</span>
+                    <span v-if="selected" class="absolute inset-y-0 right-0 flex items-center pr-3 text-indigo-600 dark:text-indigo-400">
+                      <CheckIcon class="h-5 w-5" aria-hidden="true" />
+                    </span>
+                  </li>
+                </ListboxOption>
+                <div
+                  v-if="showListboxSearch && filteredSelectOptions.length === 0"
+                  class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400"
+                >
+                  No matches.
+                </div>
+              </div>
             </ListboxOptions>
           </Transition>
           </div>
@@ -417,6 +471,7 @@ import {
   CalendarDaysIcon,
   DocumentTextIcon,
   DevicePhoneMobileIcon,
+  MagnifyingGlassIcon,
   TagIcon,
   UserIcon
 } from '@heroicons/vue/24/outline';
@@ -571,6 +626,8 @@ const isEditing = ref(false);
 const localValue = ref(null);
 const inputRef = ref(null);
 const users = ref(props.users || []);
+/** Filters select/user/entity Listbox options (inline record details). */
+const listboxSearchQuery = ref('');
 /** Inline error for phone (incomplete digits on blur) */
 const phoneError = ref(null);
 /** Server / validation error after commitSave fails */
@@ -662,6 +719,20 @@ watch(() => props.value, () => {
   }
 });
 
+function getEntityOrPeopleRecordLabel(val) {
+  if (val == null) return null;
+  if (typeof val === 'object') {
+    if (val.name) return String(val.name).trim() || null;
+    const first = val.firstName ?? val.first_name;
+    const last = val.lastName ?? val.last_name;
+    const n = [first, last].filter(Boolean).join(' ').trim();
+    if (n) return n;
+    if (val.email) return String(val.email);
+    if (val.label) return String(val.label);
+  }
+  return null;
+}
+
 const displayValue = computed(() => {
   if (props.formatValue) {
     return props.formatValue(props.value);
@@ -677,6 +748,26 @@ const displayValue = computed(() => {
       return getUserDisplayName(user);
     }
     return props.value;
+  }
+
+  if (props.type === 'entity' && props.value) {
+    const fromObj = getEntityOrPeopleRecordLabel(props.value);
+    if (fromObj) return fromObj;
+    if (typeof props.value === 'string' || typeof props.value === 'number') {
+      const id = String(props.value);
+      const rawOpts = props.options || [];
+      const found = rawOpts.find((o) => {
+        const v = o?.value ?? o?._id ?? o?.id;
+        return v != null && String(v) === id;
+      });
+      if (found) {
+        return found.label ?? found.name ?? getEntityOrPeopleRecordLabel(found) ?? id;
+      }
+    }
+    if (typeof props.value === 'object') {
+      return getEntityOrPeopleRecordLabel(props.value) ?? String(props.value);
+    }
+    return String(props.value);
   }
   
   return props.value;
@@ -735,7 +826,21 @@ const selectModelValue = computed(() => {
 // For select/user/entity Listbox: options array
 const selectOptions = computed(() => {
   if (props.type === 'select') return props.options || [];
-  if (props.type === 'entity') return props.options || [];
+  if (props.type === 'entity') {
+    const raw = props.options || [];
+    const base = raw.map((o) => {
+      if (o && typeof o === 'object' && 'value' in o && 'label' in o) return { value: o.value, label: o.label };
+      const id = o?._id ?? o?.id ?? o?.value;
+      const label = o?.label ?? o?.name ?? getEntityOrPeopleRecordLabel(o) ?? (id != null ? String(id) : '—');
+      return { value: id, label };
+    });
+    const selectedId = selectModelValue.value;
+    if (selectedId != null && !base.some((opt) => String(opt.value) === String(selectedId))) {
+      const fallbackLabel = getEntityOrPeopleRecordLabel(props.value) || 'Selected';
+      base.unshift({ value: selectedId, label: fallbackLabel });
+    }
+    return base;
+  }
   if (props.type === 'user') {
     const mapped = (users.value || []).map(u => ({
       value: u._id,
@@ -753,7 +858,27 @@ const selectOptions = computed(() => {
   return [];
 });
 
+const showListboxSearch = computed(
+  () =>
+    (props.type === 'select' || props.type === 'user' || props.type === 'entity') &&
+    (selectOptions.value?.length > 0)
+);
+
+const listboxSearchPlaceholder = 'Search…';
+
+const filteredSelectOptions = computed(() => {
+  const opts = selectOptions.value || [];
+  const q = listboxSearchQuery.value.trim().toLowerCase();
+  if (!q) return opts;
+  return opts.filter((o) => {
+    const label = String(o.label ?? '').toLowerCase();
+    const val = String(o.value ?? '');
+    return label.includes(q) || val.toLowerCase().includes(q);
+  });
+});
+
 const handleSelectChange = async (value) => {
+  listboxSearchQuery.value = '';
   if (value === props.value || (props.type === 'user' && value === (props.value?._id ?? props.value))) {
     return;
   }

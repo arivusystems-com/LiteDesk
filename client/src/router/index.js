@@ -326,6 +326,44 @@ const routes = [
     component: () => import('@/views/ItemDetail.vue'),
     meta: { requiresAuth: true, requiresPermission: { module: 'items', action: 'view' } }
   },
+  // Helpdesk cases: register statically so /helpdesk/* always resolves. Dynamic /api/ui/routes
+  // also emits these (same names); addRoute will skip duplicates. Order: /new before /:id.
+  {
+    path: '/helpdesk/cases',
+    name: 'helpdesk-cases-list',
+    component: () => import('@/views/GenericModule.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresPermission: { module: 'cases', action: 'view' },
+      moduleKey: 'cases',
+      appKey: 'HELPDESK',
+      routeType: 'list'
+    }
+  },
+  {
+    path: '/helpdesk/cases/new',
+    name: 'helpdesk-cases-create',
+    component: () => import('@/views/GenericModule.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresPermission: { module: 'cases', action: 'create' },
+      moduleKey: 'cases',
+      appKey: 'HELPDESK',
+      routeType: 'create'
+    }
+  },
+  {
+    path: '/helpdesk/cases/:id',
+    name: 'helpdesk-cases-detail',
+    component: () => import('@/pages/ModuleRecordPage.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresPermission: { module: 'cases', action: 'view' },
+      moduleKey: 'cases',
+      appKey: 'HELPDESK',
+      routeType: 'detail'
+    }
+  },
   {
     path: '/imports',
     name: 'imports',

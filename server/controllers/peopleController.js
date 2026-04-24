@@ -213,8 +213,32 @@ exports.create = async (req, res) => {
     if (record.derivedStatus !== undefined) {
       await record.save();
     }
-    
-    res.status(201).json({ success: true, data: flattenPeopleForResponse(record) });
+
+    try {
+      const { runImmediateAssignmentForSalesRecord } = require('../services/assignmentExecutionService');
+      const { enqueueAssignmentJobsForSalesRecord } = require('../services/assignmentSchedulingService');
+      const fresh = await People.findById(record._id);
+      if (fresh) {
+        await runImmediateAssignmentForSalesRecord({
+          record: fresh,
+          moduleKey: 'people',
+          actorId: req.user._id,
+          triggerSource: 'immediate',
+          changedFields: []
+        });
+        await enqueueAssignmentJobsForSalesRecord({
+          record: fresh,
+          moduleKey: 'people',
+          actorId: req.user._id,
+          changedFields: []
+        });
+      }
+    } catch (assignErr) {
+      console.error('[peopleController] assignment on create failed:', assignErr?.message || assignErr);
+    }
+
+    const createdOut = await People.findById(record._id);
+    res.status(201).json({ success: true, data: flattenPeopleForResponse(createdOut || record) });
   } catch (error) {
     console.error('Error creating people record:', error);
     console.error('Error name:', error.name);
@@ -986,6 +1010,33 @@ exports.update = async (req, res) => {
       });
     } catch (logErr) {
       console.warn('Record activity log (people update) failed:', logErr?.message || logErr);
+    }
+
+    try {
+      const { runImmediateAssignmentForSalesRecord } = require('../services/assignmentExecutionService');
+      const { enqueueAssignmentJobsForSalesRecord } = require('../services/assignmentSchedulingService');
+      const changedFieldKeys = [
+        ...Object.keys(updateDataWithoutSales),
+        ...(hasSalesWrite || helpdeskTouched ? ['participations'] : [])
+      ];
+      const assignDoc = await People.findById(updated._id);
+      if (assignDoc) {
+        await runImmediateAssignmentForSalesRecord({
+          record: assignDoc,
+          moduleKey: 'people',
+          actorId: req.user._id,
+          triggerSource: 'immediate',
+          changedFields: changedFieldKeys
+        });
+        await enqueueAssignmentJobsForSalesRecord({
+          record: assignDoc,
+          moduleKey: 'people',
+          actorId: req.user._id,
+          changedFields: changedFieldKeys
+        });
+      }
+    } catch (assignErr) {
+      console.error('[peopleController] assignment on update failed:', assignErr?.message || assignErr);
     }
 
     // Re-fetch with populated fields to ensure populate works correctly

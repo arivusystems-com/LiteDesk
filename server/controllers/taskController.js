@@ -328,6 +328,29 @@ const createTask = async (req, res) => {
     assignResolvedSource(taskPayload, 'ui');
     const task = await Task.create(taskPayload);
 
+    try {
+      const { runImmediateAssignmentForSalesRecord } = require('../services/assignmentExecutionService');
+      const { enqueueAssignmentJobsForSalesRecord } = require('../services/assignmentSchedulingService');
+      const fresh = await Task.findById(task._id);
+      if (fresh) {
+        await runImmediateAssignmentForSalesRecord({
+          record: fresh,
+          moduleKey: 'tasks',
+          actorId: req.user._id,
+          triggerSource: 'immediate',
+          changedFields: []
+        });
+        await enqueueAssignmentJobsForSalesRecord({
+          record: fresh,
+          moduleKey: 'tasks',
+          actorId: req.user._id,
+          changedFields: []
+        });
+      }
+    } catch (assignErr) {
+      console.error('[taskController] assignment on create failed:', assignErr?.message || assignErr);
+    }
+
     const populatedTask = await Task.findById(task._id)
       .populate('assignedTo', 'firstName lastName email avatar')
       .populate('assignedBy', 'firstName lastName')
@@ -862,6 +885,29 @@ const updateTask = async (req, res) => {
     }
 
     await task.save();
+
+    try {
+      const { runImmediateAssignmentForSalesRecord } = require('../services/assignmentExecutionService');
+      const { enqueueAssignmentJobsForSalesRecord } = require('../services/assignmentSchedulingService');
+      const assignDoc = await Task.findById(task._id);
+      if (assignDoc) {
+        await runImmediateAssignmentForSalesRecord({
+          record: assignDoc,
+          moduleKey: 'tasks',
+          actorId: req.user._id,
+          triggerSource: 'immediate',
+          changedFields: requestedFields
+        });
+        await enqueueAssignmentJobsForSalesRecord({
+          record: assignDoc,
+          moduleKey: 'tasks',
+          actorId: req.user._id,
+          changedFields: requestedFields
+        });
+      }
+    } catch (assignErr) {
+      console.error('[taskController] assignment on update failed:', assignErr?.message || assignErr);
+    }
 
     const updatedTask = await Task.findById(task._id)
       .populate('assignedTo', 'firstName lastName email avatar')

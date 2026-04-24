@@ -336,6 +336,29 @@ exports.createDeal = async (req, res) => {
             organizationsMode: 'replace'
         });
 
+        try {
+            const { runImmediateAssignmentForSalesRecord } = require('../services/assignmentExecutionService');
+            const { enqueueAssignmentJobsForSalesRecord } = require('../services/assignmentSchedulingService');
+            const freshDeal = await Deal.findById(newDeal._id);
+            if (freshDeal) {
+                await runImmediateAssignmentForSalesRecord({
+                    record: freshDeal,
+                    moduleKey: 'deals',
+                    actorId: req.user._id,
+                    triggerSource: 'immediate',
+                    changedFields: []
+                });
+                await enqueueAssignmentJobsForSalesRecord({
+                    record: freshDeal,
+                    moduleKey: 'deals',
+                    actorId: req.user._id,
+                    changedFields: []
+                });
+            }
+        } catch (assignErr) {
+            console.error('[dealController] assignment on create failed:', assignErr?.message || assignErr);
+        }
+
         const deal = await Deal.findById(newDeal._id)
             .populate('contactId', 'first_name last_name email')
             .populate('ownerId', 'firstName lastName email')
@@ -828,6 +851,26 @@ exports.updateDeal = async (req, res) => {
 
         await syncRoleBasedToLegacy(updatedDeal);
         await updatedDeal.save();
+
+        try {
+            const { runImmediateAssignmentForSalesRecord } = require('../services/assignmentExecutionService');
+            const { enqueueAssignmentJobsForSalesRecord } = require('../services/assignmentSchedulingService');
+            await runImmediateAssignmentForSalesRecord({
+                record: updatedDeal,
+                moduleKey: 'deals',
+                actorId: req.user._id,
+                triggerSource: 'immediate',
+                changedFields: requestedFields
+            });
+            await enqueueAssignmentJobsForSalesRecord({
+                record: updatedDeal,
+                moduleKey: 'deals',
+                actorId: req.user._id,
+                changedFields: requestedFields
+            });
+        } catch (assignErr) {
+            console.error('[dealController] assignment on update failed:', assignErr?.message || assignErr);
+        }
 
         if (touchedDealPeople || touchedDealOrganizations || touchedLegacyContact || touchedLegacyAccount) {
             await syncDealRelationshipInstances({

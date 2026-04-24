@@ -1,0 +1,1229 @@
+const mongoose = require('mongoose');
+const Case = require('../models/Case');
+const User = require('../models/User');
+const TenantAppConfiguration = require('../models/TenantAppConfiguration');
+const { extractCustomFields, flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+const {
+  validateCaseRecordId,
+  normalizeRelatedItemIds,
+  normalizeOptionalText
+} = require('../utils/caseApiValidators');
+const { parseCaseListQuery } = require('../utils/caseListQuery');
+const {
+  computeResolutionMetrics,
+  computeResponseMetrics,
+  computeDailyTrends,
+  computeOwnerPerformance,
+  computeSegmentPerformance
+} = require('../utils/caseAnalytics');
+const { handleChannelInteractionForHelpdesk } = require('../services/helpdeskChannelIngestionService');
+const { stripClientSource, assignResolvedSource } = require('../services/sourceResolver');
+const {
+  CASE_TYPES,
+  CASE_PRIORITIES,
+  CASE_CHANNELS
+} = require('../constants/caseLifecycle');
+const {
+  isValidCaseStatus,
+  canTransitionCaseStatus,
+  createInitialSlaCycle,
+  applyStatusToSlaCycle,
+  createReopenedSlaState
+} = require('../services/caseLifecycleService');
+const { applySlaTargetsToCycle } = require('../services/helpdeskSlaService');
+const caseExecutionService = require('../services/caseExecutionService');
+
+function getActorDisplayName(user) {
+  if (!user) return 'System';
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+  return fullName || user.username || user.email || 'System';
+}
+
+/**
+ * "Contact Id" / "contactid" / "ContactId" → `contactid` (matches ModuleDefinition label-style keys).
+ */
+function looseCaseFieldName(key) {
+  return String(key || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+const CASE_REF_LOOSE_TO_CANONICAL = {
+  contactid: 'contactId',
+  organizationrefid: 'organizationRefId',
+  caseownerid: 'caseOwnerId'
+};
+
+/**
+ * Module definitions / UIs may send `contactid`, "Contact Id", etc.; Case schema uses `contactId`.
+ * Without this, extractCustomFields routes the wrong key into `customFields` and `contactId` stays null.
+ */
+function normalizeCaseRequestBody(body) {
+  if (!body || typeof body !== 'object') return;
+  const keys = Object.keys(body);
+  for (const k of keys) {
+    if (!Object.prototype.hasOwnProperty.call(body, k)) continue;
+    const loose = looseCaseFieldName(k);
+    const canonical = CASE_REF_LOOSE_TO_CANONICAL[loose];
+    if (!canonical) continue;
+    if (k === canonical) continue;
+    if (!Object.prototype.hasOwnProperty.call(body, canonical) || body[canonical] == null || body[canonical] === '') {
+      body[canonical] = body[k];
+    }
+    delete body[k];
+  }
+}
+
+/** Legacy rows may only have IDs under customFields with odd keys; promote before populate. */
+function promoteCaseReferenceIdsFromCustomFields(doc) {
+  if (!doc || typeof doc !== 'object') return;
+  const cf = doc.customFields;
+  if (!cf || typeof cf !== 'object') return;
+  for (const [k, v] of Object.entries(cf)) {
+    if (v == null || v === '') continue;
+    const loose = looseCaseFieldName(k);
+    const canonical = CASE_REF_LOOSE_TO_CANONICAL[loose];
+    if (!canonical) continue;
+    if (!doc[canonical]) {
+      doc[canonical] = v;
+    }
+  }
+}
+
+/** After flattenCustomFieldsForResponse, promote alias keys to canonical; drop duplicate alias props. */
+function patchCaseFlattenedAliases(plain) {
+  if (!plain || typeof plain !== 'object') return;
+  if (typeof plain.caseId !== 'string' || !String(plain.caseId).startsWith('CAS-')) return;
+  for (const [k, v] of Object.entries(plain)) {
+    if (v == null || v === '') continue;
+    const loose = looseCaseFieldName(k);
+    const canonical = CASE_REF_LOOSE_TO_CANONICAL[loose];
+    if (!canonical) continue;
+    if (k === canonical) continue;
+    if (plain[canonical] == null || plain[canonical] === '') {
+      plain[canonical] = v;
+    }
+  }
+  for (const k of Object.keys(plain)) {
+    const loose = looseCaseFieldName(k);
+    if (!CASE_REF_LOOSE_TO_CANONICAL[loose]) continue;
+    const canonical = CASE_REF_LOOSE_TO_CANONICAL[loose];
+    if (k !== canonical && plain[canonical] != null && plain[canonical] !== '') {
+      delete plain[k];
+    }
+  }
+}
+
+function toSafeObject(record) {
+  const plain = typeof record?.toObject === 'function' ? record.toObject() : record;
+  const out = flattenCustomFieldsForResponse(plain, plain?.customFields);
+  patchCaseFlattenedAliases(out);
+  return out;
+}
+
+async function ensureOwnerInOrg(ownerId, organizationId) {
+  if (!ownerId || !mongoose.Types.ObjectId.isValid(ownerId)) return false;
+  const user = await User.findOne({ _id: ownerId, organizationId }).select('_id').lean();
+  return Boolean(user);
+}
+
+function buildSlaContextFromCasePayload(payload) {
+  return {
+    caseType: payload.caseType || 'Support Ticket',
+    priority: payload.priority || 'Medium',
+    channel: payload.channel || 'Internal'
+  };
+}
+
+function isValidOptionalObjectId(value) {
+  return value == null || value === '' || mongoose.Types.ObjectId.isValid(value);
+}
+
+function isAllowedEnumValue(value, allowed) {
+  return value == null || value === '' || allowed.includes(value);
+}
+
+const MUTABLE_CASE_FIELDS = new Set([
+  'title',
+  'caseType',
+  'priority',
+  'contactId',
+  'organizationRefId',
+  'caseOwnerId',
+  'channel',
+  'relatedItemIds',
+  'caseNotes',
+  'resolutionSummary'
+]);
+
+/** Reserved incoming keys to skip when merging `incoming` onto the document (extend if needed). */
+const CASE_INCOMING_ASSIGN_BLOCKED = new Set();
+
+async function loadChannelDefaults(organizationId, channel) {
+  if (!channel) return {};
+  const config = await TenantAppConfiguration.findOne({
+    organizationId,
+    appKey: 'HELPDESK'
+  })
+    .select('settings.helpdeskExecution.channelRules settings.channelRules')
+    .lean();
+  const channelRules =
+    config?.settings?.helpdeskExecution?.channelRules ||
+    config?.settings?.channelRules ||
+    {};
+  const rule = channelRules[channel] || channelRules[String(channel).toLowerCase()] || {};
+  return {
+    defaultCaseType: rule.defaultCaseType || null,
+    defaultPriority: rule.defaultPriority || null
+  };
+}
+
+exports.createCase = async (req, res) => {
+  try {
+    stripClientSource(req.body);
+    normalizeCaseRequestBody(req.body);
+    const {
+      title,
+      caseType,
+      priority,
+      status,
+      contactId,
+      organizationRefId,
+      caseOwnerId,
+      channel,
+      relatedItemIds,
+      caseNotes,
+      resolutionSummary
+    } = req.body || {};
+
+    const resolvedChannel = channel || 'Internal';
+    const channelDefaults = await loadChannelDefaults(req.user.organizationId, resolvedChannel);
+    const resolvedCaseType = caseType || channelDefaults.defaultCaseType || 'Support Ticket';
+    const resolvedPriority = priority || channelDefaults.defaultPriority || 'Medium';
+
+    if (!title || !String(title).trim()) {
+      return res.status(400).json({ success: false, message: 'title is required' });
+    }
+
+    if (!isAllowedEnumValue(resolvedCaseType, CASE_TYPES)) {
+      return res.status(400).json({ success: false, message: 'Invalid caseType value' });
+    }
+    if (!isAllowedEnumValue(resolvedPriority, CASE_PRIORITIES)) {
+      return res.status(400).json({ success: false, message: 'Invalid priority value' });
+    }
+    if (!isAllowedEnumValue(resolvedChannel, CASE_CHANNELS)) {
+      return res.status(400).json({ success: false, message: 'Invalid channel value' });
+    }
+
+    if (!isValidOptionalObjectId(contactId) || !isValidOptionalObjectId(organizationRefId)) {
+      return res.status(400).json({ success: false, message: 'Invalid contactId or organizationRefId' });
+    }
+    const relatedItemsValidation = normalizeRelatedItemIds(relatedItemIds);
+    if (!relatedItemsValidation.valid) {
+      return res.status(400).json({ success: false, message: relatedItemsValidation.error });
+    }
+    const notesValidation = normalizeOptionalText(caseNotes, 4000);
+    if (!notesValidation.valid) {
+      return res.status(400).json({ success: false, message: notesValidation.error });
+    }
+    const resolutionValidation = normalizeOptionalText(resolutionSummary, 4000);
+    if (!resolutionValidation.valid) {
+      return res.status(400).json({ success: false, message: resolutionValidation.error });
+    }
+
+    const ownerId = caseOwnerId || req.user._id;
+    const ownerExists = await ensureOwnerInOrg(ownerId, req.user.organizationId);
+    if (!ownerExists) {
+      return res.status(400).json({
+        success: false,
+        message: 'caseOwnerId must be an active user in your organization'
+      });
+    }
+
+    if (status && !isValidCaseStatus(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status value' });
+    }
+
+    const normalizedStatus = status || 'New';
+    if ((normalizedStatus === 'Resolved' || normalizedStatus === 'Closed') && !String(resolutionSummary || '').trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'resolutionSummary is required when creating a Resolved or Closed case'
+      });
+    }
+    const cycle = createInitialSlaCycle(1, new Date());
+    const adjustedCycle = applyStatusToSlaCycle(cycle, normalizedStatus);
+    const targetAwareCycle = await applySlaTargetsToCycle({
+      organizationId: req.user.organizationId,
+      cycle: adjustedCycle,
+      context: buildSlaContextFromCasePayload({
+        caseType: resolvedCaseType,
+        priority: resolvedPriority,
+        channel: resolvedChannel
+      }),
+      startedAt: adjustedCycle.startedAt
+    });
+
+    const { customFieldsSet } = extractCustomFields(req.body, Case);
+    const now = new Date();
+    const caseId = `CAS-${now.getUTCFullYear()}-${String(Date.now()).slice(-6)}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const actorName = getActorDisplayName(req.user);
+
+    const payload = {
+      organizationId: req.user.organizationId,
+      caseId,
+      title: String(title).trim(),
+      caseType: resolvedCaseType,
+      priority: resolvedPriority,
+      status: normalizedStatus,
+      contactId: contactId || null,
+      organizationRefId: organizationRefId || null,
+      caseOwnerId: ownerId,
+      channel: resolvedChannel,
+      relatedItemIds: relatedItemsValidation.ids,
+      caseNotes: notesValidation.value,
+      resolutionSummary: resolutionValidation.value,
+      currentSlaCycle: targetAwareCycle,
+      activities: [
+        {
+          activityType: 'case_created',
+          message: 'Case created',
+          internal: true,
+          metadata: {},
+          actorId: req.user._id,
+          actorName,
+          createdAt: now
+        }
+      ],
+      ...(Object.keys(customFieldsSet).length > 0 && { customFields: customFieldsSet }),
+      createdBy: req.user._id,
+      updatedBy: req.user._id
+    };
+
+    assignResolvedSource(payload, 'ui');
+    const created = await Case.create(payload);
+    await caseExecutionService.onCaseCreated({
+      caseRecord: created,
+      actorId: req.user._id
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: toSafeObject(created),
+      meta: {
+        operation: 'create_case'
+      }
+    });
+  } catch (error) {
+    console.error('[caseController] createCase error', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to create case'
+    });
+  }
+};
+
+exports.getCases = async (req, res) => {
+  try {
+    const parsedQuery = parseCaseListQuery(req.query || {}, {
+      CASE_STATUSES: Case.CASE_STATUSES || [],
+      CASE_PRIORITIES: CASE_PRIORITIES,
+      CASE_TYPES: CASE_TYPES,
+      CASE_CHANNELS: CASE_CHANNELS
+    });
+    if (parsedQuery.errors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: parsedQuery.errors[0]
+      });
+    }
+    if (parsedQuery.filters.caseOwnerId && !mongoose.Types.ObjectId.isValid(parsedQuery.filters.caseOwnerId)) {
+      return res.status(400).json({ success: false, message: 'Invalid caseOwnerId filter' });
+    }
+
+    const query = {
+      organizationId: req.user.organizationId,
+      deletedAt: null,
+      ...parsedQuery.filters
+    };
+    const limit = parsedQuery.limit;
+    const skip = parsedQuery.skip;
+
+    const [rows, total] = await Promise.all([
+      Case.find(query).sort(parsedQuery.sort).skip(skip).limit(limit).lean(),
+      Case.countDocuments(query)
+    ]);
+    for (const row of rows) {
+      promoteCaseReferenceIdsFromCustomFields(row);
+    }
+    await Case.populate(rows, [
+      { path: 'caseOwnerId', select: 'firstName lastName email username' },
+      { path: 'contactId', select: 'first_name last_name name email' },
+      { path: 'organizationRefId', select: 'name' }
+    ]);
+
+    return res.json({
+      success: true,
+      data: rows.map((row) => {
+        const flat = flattenCustomFieldsForResponse(row, row.customFields);
+        patchCaseFlattenedAliases(flat);
+        return flat;
+      }),
+      meta: { total, skip, limit }
+    });
+  } catch (error) {
+    console.error('[caseController] getCases error', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch cases'
+    });
+  }
+};
+
+exports.getCaseById = async (req, res) => {
+  try {
+    const caseIdValidation = validateCaseRecordId(req.params.id);
+    if (!caseIdValidation.valid) {
+      return res.status(400).json({ success: false, message: caseIdValidation.error });
+    }
+
+    const row = await Case.findOne({
+      _id: req.params.id,
+      organizationId: req.user.organizationId,
+      deletedAt: null
+    }).lean();
+
+    if (!row) {
+      return res.status(404).json({
+        success: false,
+        message: 'Case not found'
+      });
+    }
+
+    promoteCaseReferenceIdsFromCustomFields(row);
+    await Case.populate(row, [
+      { path: 'caseOwnerId', select: 'firstName lastName email' },
+      { path: 'contactId', select: 'first_name last_name email' },
+      { path: 'organizationRefId', select: 'name' },
+      { path: 'relatedItemIds', select: 'name sku' }
+    ]);
+
+    const activityLimit = Math.max(0, Math.min(Number(req.query.activityLimit) || 200, 500));
+    const allActivities = Array.isArray(row.activities) ? row.activities : [];
+    const trimmedActivities = activityLimit > 0 ? allActivities.slice(-activityLimit) : [];
+    const shaped = {
+      ...row,
+      activities: trimmedActivities
+    };
+
+    const flat = flattenCustomFieldsForResponse(shaped, shaped.customFields);
+    patchCaseFlattenedAliases(flat);
+
+    return res.json({
+      success: true,
+      data: flat,
+      meta: {
+        totalActivities: allActivities.length,
+        returnedActivities: trimmedActivities.length,
+        activityLimit
+      }
+    });
+  } catch (error) {
+    console.error('[caseController] getCaseById error', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch case'
+    });
+  }
+};
+
+exports.updateCase = async (req, res) => {
+  try {
+    const caseIdValidation = validateCaseRecordId(req.params.id);
+    if (!caseIdValidation.valid) {
+      return res.status(400).json({ success: false, message: caseIdValidation.error });
+    }
+
+    const row = await Case.findOne({
+      _id: req.params.id,
+      organizationId: req.user.organizationId,
+      deletedAt: null
+    });
+
+    if (!row) {
+      return res.status(404).json({ success: false, message: 'Case not found' });
+    }
+
+    const previousSnapshot = row.toObject ? row.toObject() : { ...row };
+
+    const incomingRaw = { ...req.body };
+    stripClientSource(incomingRaw);
+    normalizeCaseRequestBody(incomingRaw);
+    const { standardPayload, customFieldsSet } = extractCustomFields(incomingRaw, Case);
+    const incoming = {};
+    const previousState = {
+      caseOwnerId: row.caseOwnerId,
+      status: row.status,
+      priority: row.priority,
+      caseType: row.caseType,
+      channel: row.channel
+    };
+    const changedFields = [];
+
+    if (Object.prototype.hasOwnProperty.call(incomingRaw, 'status')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Use PATCH /:id/status for lifecycle transitions'
+      });
+    }
+
+    const disallowedSystemFields = Object.keys(standardPayload).filter((key) => !MUTABLE_CASE_FIELDS.has(key));
+    if (disallowedSystemFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Unsupported or system-managed fields in payload: ${disallowedSystemFields.join(', ')}`
+      });
+    }
+
+    Object.keys(standardPayload).forEach((key) => {
+      if (MUTABLE_CASE_FIELDS.has(key)) {
+        incoming[key] = standardPayload[key];
+      }
+    });
+
+    if (!isAllowedEnumValue(incoming.caseType, CASE_TYPES)) {
+      return res.status(400).json({ success: false, message: 'Invalid caseType value' });
+    }
+    if (!isAllowedEnumValue(incoming.priority, CASE_PRIORITIES)) {
+      return res.status(400).json({ success: false, message: 'Invalid priority value' });
+    }
+    if (!isAllowedEnumValue(incoming.channel, CASE_CHANNELS)) {
+      return res.status(400).json({ success: false, message: 'Invalid channel value' });
+    }
+    if (
+      !isValidOptionalObjectId(incoming.contactId) ||
+      !isValidOptionalObjectId(incoming.organizationRefId)
+    ) {
+      return res.status(400).json({ success: false, message: 'Invalid contactId or organizationRefId' });
+    }
+    if (Object.prototype.hasOwnProperty.call(incoming, 'relatedItemIds')) {
+      const relatedItemsValidation = normalizeRelatedItemIds(incoming.relatedItemIds);
+      if (!relatedItemsValidation.valid) {
+        return res.status(400).json({ success: false, message: relatedItemsValidation.error });
+      }
+      incoming.relatedItemIds = relatedItemsValidation.ids;
+    }
+    if (Object.prototype.hasOwnProperty.call(incoming, 'caseNotes')) {
+      const notesValidation = normalizeOptionalText(incoming.caseNotes, 4000);
+      if (!notesValidation.valid) {
+        return res.status(400).json({ success: false, message: notesValidation.error });
+      }
+      incoming.caseNotes = notesValidation.value;
+    }
+    if (Object.prototype.hasOwnProperty.call(incoming, 'resolutionSummary')) {
+      const resolutionValidation = normalizeOptionalText(incoming.resolutionSummary, 4000);
+      if (!resolutionValidation.valid) {
+        return res.status(400).json({ success: false, message: resolutionValidation.error });
+      }
+      incoming.resolutionSummary = resolutionValidation.value;
+    }
+
+    if (incoming.caseOwnerId && String(incoming.caseOwnerId) !== String(row.caseOwnerId)) {
+      const ownerExists = await ensureOwnerInOrg(incoming.caseOwnerId, req.user.organizationId);
+      if (!ownerExists) {
+        return res.status(400).json({
+          success: false,
+          message: 'caseOwnerId must be an active user in your organization'
+        });
+      }
+    }
+
+    Object.keys(incoming).forEach((key) => {
+      if (CASE_INCOMING_ASSIGN_BLOCKED.has(key)) {
+        return;
+      }
+      const previousValue = row[key];
+      row[key] = incoming[key];
+      if (String(previousValue ?? '') !== String(incoming[key] ?? '')) {
+        changedFields.push(key);
+      }
+    });
+
+    const shouldRecalculateSlaTargets = ['priority', 'caseType', 'channel']
+      .some((key) => Object.prototype.hasOwnProperty.call(incoming, key));
+
+    if (Object.keys(customFieldsSet).length > 0) {
+      row.customFields = {
+        ...(row.customFields || {}),
+        ...customFieldsSet
+      };
+    }
+
+    row.updatedBy = req.user._id;
+    assignResolvedSource(row, row.source || 'ui');
+
+    if (shouldRecalculateSlaTargets && row.currentSlaCycle?.status !== 'stopped') {
+      row.currentSlaCycle = await applySlaTargetsToCycle({
+        organizationId: req.user.organizationId,
+        cycle: row.currentSlaCycle?.toObject?.() || row.currentSlaCycle,
+        context: buildSlaContextFromCasePayload(row.toObject ? row.toObject() : row),
+        startedAt: row.currentSlaCycle?.startedAt
+      });
+      row.activities.push({
+        activityType: 'sla_recalculated',
+        message: 'SLA targets recalculated from updated case context',
+        internal: true,
+        metadata: { reason: 'case_context_changed' },
+        actorId: req.user._id,
+        actorName: getActorDisplayName(req.user),
+        createdAt: new Date()
+      });
+    }
+
+    await row.save();
+
+    const prevCustom = { ...(previousSnapshot.customFields || {}) };
+    const nextCustom = { ...(row.customFields || {}) };
+    const customChangedKeys = [];
+    for (const ck of Object.keys(customFieldsSet)) {
+      if (String(prevCustom[ck] ?? '') !== String(nextCustom[ck] ?? '')) {
+        customChangedKeys.push(ck);
+      }
+    }
+    const recordActivityKeys = [...changedFields, ...customChangedKeys];
+    if (recordActivityKeys.length > 0) {
+      try {
+        const { appendFieldChangeLogs } = require('../utils/recordActivityLogger');
+        const ModuleDefinition = require('../models/ModuleDefinition');
+        const rowPlain = row.toObject ? row.toObject() : row;
+        const previousForLog = {};
+        const updatedForLog = {};
+        for (const k of changedFields) {
+          previousForLog[k] = previousSnapshot[k];
+          updatedForLog[k] = rowPlain[k];
+        }
+        for (const ck of customChangedKeys) {
+          previousForLog[ck] = prevCustom[ck];
+          updatedForLog[ck] = nextCustom[ck];
+        }
+        const moduleDef = await ModuleDefinition.findOne({
+          organizationId: req.user.organizationId,
+          key: 'cases'
+        });
+        await appendFieldChangeLogs({
+          organizationId: req.user.organizationId,
+          moduleKey: 'cases',
+          recordId: req.params.id,
+          authorId: req.user._id,
+          previous: previousForLog,
+          updated: updatedForLog,
+          updateDataKeys: recordActivityKeys,
+          fieldLabels: moduleDef && Array.isArray(moduleDef.fields) ? moduleDef.fields : undefined
+        });
+      } catch (logErr) {
+        console.warn('Record activity log (case update) failed:', logErr?.message || logErr);
+      }
+    }
+
+    await caseExecutionService.onCaseUpdated({
+      caseRecord: row,
+      actorId: req.user._id,
+      previousState,
+      changedFields
+    });
+    return res.json({
+      success: true,
+      data: toSafeObject(row),
+      meta: {
+        operation: 'update_case',
+        changedFields
+      }
+    });
+  } catch (error) {
+    console.error('[caseController] updateCase error', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update case'
+    });
+  }
+};
+
+exports.deleteCase = async (req, res) => {
+  try {
+    const caseIdValidation = validateCaseRecordId(req.params.id);
+    if (!caseIdValidation.valid) {
+      return res.status(400).json({ success: false, message: caseIdValidation.error });
+    }
+
+    const deletionService = require('../services/deletionService');
+    const result = await deletionService.moveToTrash({
+      moduleKey: 'cases',
+      recordId: req.params.id,
+      organizationId: req.user.organizationId,
+      userId: req.user._id,
+      appKey: 'HELPDESK',
+      reason: req.body?.reason,
+      cascadeConfirmed: !!req.body.cascadeConfirmed
+    });
+
+    if (!result.ok) {
+      if (result.blocked) {
+        return res.status(400).json({
+          success: false,
+          blocked: true,
+          dependencies: result.dependencies,
+          message: result.message
+        });
+      }
+      const msg = result.message || '';
+      if (/not found|access denied/i.test(msg)) {
+        return res.status(404).json({ success: false, message: msg || 'Case not found' });
+      }
+      return res.status(400).json({ success: false, message: msg || 'Failed to delete case' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Case moved to trash',
+      retentionExpiresAt: result.retentionExpiresAt
+    });
+  } catch (error) {
+    console.error('[caseController] deleteCase error', error);
+    return res.status(500).json({ success: false, message: 'Failed to delete case' });
+  }
+};
+
+exports.updateCaseStatus = async (req, res) => {
+  try {
+    const caseIdValidation = validateCaseRecordId(req.params.id);
+    if (!caseIdValidation.valid) {
+      return res.status(400).json({ success: false, message: caseIdValidation.error });
+    }
+
+    const { status } = req.body || {};
+    if (!status) {
+      return res.status(400).json({ success: false, message: 'status is required' });
+    }
+    if (!isValidCaseStatus(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status value' });
+    }
+
+    const row = await Case.findOne({
+      _id: req.params.id,
+      organizationId: req.user.organizationId,
+      deletedAt: null
+    });
+    if (!row) {
+      return res.status(404).json({ success: false, message: 'Case not found' });
+    }
+
+    if (!canTransitionCaseStatus(row.status, status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid lifecycle transition from ${row.status} to ${status}`
+      });
+    }
+
+    if ((status === 'Resolved' || status === 'Closed') && !String(req.body.resolutionSummary || row.resolutionSummary || '').trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'resolutionSummary is required before resolving or closing a case'
+      });
+    }
+
+    const fromStatus = row.status;
+    row.status = status;
+    row.currentSlaCycle = applyStatusToSlaCycle(row.currentSlaCycle?.toObject?.() || row.currentSlaCycle, status);
+    if (typeof req.body.resolutionSummary === 'string') {
+      row.resolutionSummary = req.body.resolutionSummary.trim();
+    }
+    row.updatedBy = req.user._id;
+
+    row.activities.push({
+      activityType: 'status_changed',
+      message: `Status changed from ${fromStatus} to ${status}`,
+      internal: true,
+      metadata: { fromStatus, toStatus: status },
+      actorId: req.user._id,
+      actorName: getActorDisplayName(req.user),
+      createdAt: new Date()
+    });
+
+    await row.save();
+    await caseExecutionService.onCaseStatusChanged({
+      caseRecord: row,
+      actorId: req.user._id,
+      fromStatus,
+      toStatus: status
+    });
+    return res.json({
+      success: true,
+      data: toSafeObject(row),
+      meta: {
+        operation: 'update_case_status',
+        fromStatus,
+        toStatus: status
+      }
+    });
+  } catch (error) {
+    console.error('[caseController] updateCaseStatus error', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update case status'
+    });
+  }
+};
+
+exports.reopenCase = async (req, res) => {
+  try {
+    const caseIdValidation = validateCaseRecordId(req.params.id);
+    if (!caseIdValidation.valid) {
+      return res.status(400).json({ success: false, message: caseIdValidation.error });
+    }
+
+    const row = await Case.findOne({
+      _id: req.params.id,
+      organizationId: req.user.organizationId,
+      deletedAt: null
+    });
+
+    if (!row) {
+      return res.status(404).json({ success: false, message: 'Case not found' });
+    }
+
+    if (row.status !== 'Resolved' && row.status !== 'Closed') {
+      return res.status(400).json({
+        success: false,
+        message: 'Only Resolved or Closed cases can be reopened'
+      });
+    }
+
+    const { previousCycle, nextCycle } = createReopenedSlaState(row.currentSlaCycle?.toObject?.() || row.currentSlaCycle, new Date());
+    row.slaCycles.push(previousCycle);
+    row.currentSlaCycle = await applySlaTargetsToCycle({
+      organizationId: req.user.organizationId,
+      cycle: nextCycle,
+      context: buildSlaContextFromCasePayload(row.toObject ? row.toObject() : row),
+      startedAt: nextCycle.startedAt
+    });
+    row.status = 'In Progress';
+    row.updatedBy = req.user._id;
+
+    row.activities.push({
+      activityType: 'case_reopened',
+      message: 'Case reopened and moved to In Progress',
+      internal: true,
+      metadata: { previousCycleNo: previousCycle.cycleNo, newCycleNo: row.currentSlaCycle.cycleNo },
+      actorId: req.user._id,
+      actorName: getActorDisplayName(req.user),
+      createdAt: new Date()
+    });
+
+    await row.save();
+    await caseExecutionService.onCaseReopened({
+      caseRecord: row,
+      actorId: req.user._id,
+      previousCycleNo: previousCycle.cycleNo,
+      newCycleNo: row.currentSlaCycle.cycleNo
+    });
+    return res.json({
+      success: true,
+      data: toSafeObject(row),
+      meta: {
+        operation: 'reopen_case'
+      }
+    });
+  } catch (error) {
+    console.error('[caseController] reopenCase error', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to reopen case'
+    });
+  }
+};
+
+exports.addCaseActivity = async (req, res) => {
+  try {
+    const caseIdValidation = validateCaseRecordId(req.params.id);
+    if (!caseIdValidation.valid) {
+      return res.status(400).json({ success: false, message: caseIdValidation.error });
+    }
+
+    const { activityType, message, channel, internal = true, metadata = {} } = req.body || {};
+    if (!activityType || !String(activityType).trim()) {
+      return res.status(400).json({ success: false, message: 'activityType is required' });
+    }
+
+    const row = await Case.findOne({
+      _id: req.params.id,
+      organizationId: req.user.organizationId,
+      deletedAt: null
+    });
+    if (!row) {
+      return res.status(404).json({ success: false, message: 'Case not found' });
+    }
+
+    row.activities.push({
+      activityType: String(activityType).trim(),
+      message: message ? String(message).trim() : '',
+      channel,
+      internal: Boolean(internal),
+      metadata: metadata && typeof metadata === 'object' ? metadata : {},
+      actorId: req.user._id,
+      actorName: getActorDisplayName(req.user),
+      createdAt: new Date()
+    });
+
+    row.updatedBy = req.user._id;
+    await row.save();
+    await caseExecutionService.onCaseActivityLogged({
+      caseRecord: row,
+      actorId: req.user._id,
+      activityType: String(activityType).trim()
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: toSafeObject(row),
+      meta: {
+        operation: 'add_case_activity',
+        activityType: String(activityType).trim()
+      }
+    });
+  } catch (error) {
+    console.error('[caseController] addCaseActivity error', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to add case activity'
+    });
+  }
+};
+
+exports.getCaseAnalyticsSummary = async (req, res) => {
+  try {
+    const from = req.query.from ? new Date(req.query.from) : null;
+    const to = req.query.to ? new Date(req.query.to) : null;
+    if ((from && Number.isNaN(from.getTime())) || (to && Number.isNaN(to.getTime()))) {
+      return res.status(400).json({ success: false, message: 'Invalid from/to date filter' });
+    }
+    if (from && to && from > to) {
+      return res.status(400).json({ success: false, message: 'from must be earlier than to' });
+    }
+
+    const baseQuery = {
+      organizationId: req.user.organizationId,
+      deletedAt: null
+    };
+    if (from || to) {
+      baseQuery.createdAt = {};
+      if (from) baseQuery.createdAt.$gte = from;
+      if (to) baseQuery.createdAt.$lte = to;
+    }
+
+    const [cases, statusCounts, ownerLoads] = await Promise.all([
+      Case.find(baseQuery)
+        .select('status createdAt activities currentSlaCycle slaCycles caseOwnerId')
+        .lean(),
+      Case.aggregate([
+        { $match: baseQuery },
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+      ]),
+      Case.aggregate([
+        {
+          $match: {
+            ...baseQuery,
+            status: { $nin: ['Resolved', 'Closed'] }
+          }
+        },
+        { $group: { _id: '$caseOwnerId', openCases: { $sum: 1 } } },
+        { $sort: { openCases: -1 } },
+        { $limit: 20 }
+      ])
+    ]);
+
+    const statusMap = Object.fromEntries(statusCounts.map((row) => [row._id, row.count]));
+    const totals = {
+      totalCases: cases.length,
+      openCases: (statusMap.New || 0) + (statusMap.Assigned || 0) + (statusMap['In Progress'] || 0) + (statusMap['On Hold'] || 0),
+      closedCases: (statusMap.Resolved || 0) + (statusMap.Closed || 0),
+      reopenCount: cases.filter((row) => Array.isArray(row.slaCycles) && row.slaCycles.length > 0).length
+    };
+
+    const resolution = computeResolutionMetrics(cases);
+    const response = computeResponseMetrics(cases);
+
+    return res.json({
+      success: true,
+      data: {
+        totals,
+        resolution,
+        response,
+        statusBreakdown: statusMap,
+        workloadByOwner: ownerLoads.map((row) => ({
+          ownerId: row._id,
+          openCases: row.openCases
+        }))
+      },
+      meta: {
+        operation: 'case_analytics_summary',
+        from: from ? from.toISOString() : null,
+        to: to ? to.toISOString() : null
+      }
+    });
+  } catch (error) {
+    console.error('[caseController] getCaseAnalyticsSummary error', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch case analytics summary'
+    });
+  }
+};
+
+exports.getCaseAnalyticsTrends = async (req, res) => {
+  try {
+    const now = new Date();
+    const defaultFrom = new Date(now.getTime() - (29 * 24 * 60 * 60 * 1000));
+    const from = req.query.from ? new Date(req.query.from) : defaultFrom;
+    const to = req.query.to ? new Date(req.query.to) : now;
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+      return res.status(400).json({ success: false, message: 'Invalid from/to date filter' });
+    }
+    if (from > to) {
+      return res.status(400).json({ success: false, message: 'from must be earlier than to' });
+    }
+
+    const days = Math.ceil((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+    if (days > 180) {
+      return res.status(400).json({ success: false, message: 'Date range too large. Max 180 days.' });
+    }
+
+    const rows = await Case.find({
+      organizationId: req.user.organizationId,
+      deletedAt: null,
+      createdAt: { $lte: to },
+      $or: [
+        { createdAt: { $gte: from } },
+        { 'currentSlaCycle.stoppedAt': { $gte: from, $lte: to } },
+        { slaCycles: { $elemMatch: { stoppedAt: { $gte: from, $lte: to } } } }
+      ]
+    })
+      .select('createdAt currentSlaCycle slaCycles')
+      .lean();
+
+    const points = computeDailyTrends(rows, { from, to });
+
+    return res.json({
+      success: true,
+      data: {
+        granularity: 'day',
+        points
+      },
+      meta: {
+        operation: 'case_analytics_trends',
+        from: from.toISOString(),
+        to: to.toISOString(),
+        days
+      }
+    });
+  } catch (error) {
+    console.error('[caseController] getCaseAnalyticsTrends error', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch case analytics trends'
+    });
+  }
+};
+
+exports.getCaseAnalyticsOwners = async (req, res) => {
+  try {
+    const now = new Date();
+    const defaultFrom = new Date(now.getTime() - (29 * 24 * 60 * 60 * 1000));
+    const from = req.query.from ? new Date(req.query.from) : defaultFrom;
+    const to = req.query.to ? new Date(req.query.to) : now;
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+      return res.status(400).json({ success: false, message: 'Invalid from/to date filter' });
+    }
+    if (from > to) {
+      return res.status(400).json({ success: false, message: 'from must be earlier than to' });
+    }
+    const days = Math.ceil((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+    if (days > 180) {
+      return res.status(400).json({ success: false, message: 'Date range too large. Max 180 days.' });
+    }
+
+    const rows = await Case.find({
+      organizationId: req.user.organizationId,
+      deletedAt: null,
+      createdAt: { $gte: from, $lte: to },
+      caseOwnerId: { $ne: null }
+    })
+      .select('caseOwnerId status currentSlaCycle slaCycles')
+      .lean();
+
+    const metrics = computeOwnerPerformance(rows)
+      .sort((a, b) => b.totalCases - a.totalCases)
+      .slice(0, 50);
+
+    const ownerIds = metrics
+      .map((row) => row.ownerId)
+      .filter((id) => mongoose.Types.ObjectId.isValid(id));
+    const owners = await User.find({
+      _id: { $in: ownerIds },
+      organizationId: req.user.organizationId
+    })
+      .select('_id firstName lastName email')
+      .lean();
+    const ownerMap = new Map(owners.map((row) => [String(row._id), row]));
+
+    const data = metrics.map((row) => {
+      const owner = ownerMap.get(String(row.ownerId));
+      return {
+        ...row,
+        owner: owner
+          ? {
+              id: owner._id,
+              firstName: owner.firstName || '',
+              lastName: owner.lastName || '',
+              email: owner.email || ''
+            }
+          : null
+      };
+    });
+
+    return res.json({
+      success: true,
+      data,
+      meta: {
+        operation: 'case_analytics_owners',
+        from: from.toISOString(),
+        to: to.toISOString(),
+        days,
+        ownerCount: data.length
+      }
+    });
+  } catch (error) {
+    console.error('[caseController] getCaseAnalyticsOwners error', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch case owner analytics'
+    });
+  }
+};
+
+exports.getCaseAnalyticsDistribution = async (req, res) => {
+  try {
+    const now = new Date();
+    const defaultFrom = new Date(now.getTime() - (29 * 24 * 60 * 60 * 1000));
+    const from = req.query.from ? new Date(req.query.from) : defaultFrom;
+    const to = req.query.to ? new Date(req.query.to) : now;
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+      return res.status(400).json({ success: false, message: 'Invalid from/to date filter' });
+    }
+    if (from > to) {
+      return res.status(400).json({ success: false, message: 'from must be earlier than to' });
+    }
+    const days = Math.ceil((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+    if (days > 180) {
+      return res.status(400).json({ success: false, message: 'Date range too large. Max 180 days.' });
+    }
+
+    const rows = await Case.find({
+      organizationId: req.user.organizationId,
+      deletedAt: null,
+      createdAt: { $gte: from, $lte: to }
+    })
+      .select('priority channel caseType currentSlaCycle slaCycles')
+      .lean();
+
+    const byPriority = computeSegmentPerformance(rows, 'priority')
+      .sort((a, b) => b.totalCases - a.totalCases);
+    const byChannel = computeSegmentPerformance(rows, 'channel')
+      .sort((a, b) => b.totalCases - a.totalCases);
+    const byCaseType = computeSegmentPerformance(rows, 'caseType')
+      .sort((a, b) => b.totalCases - a.totalCases);
+
+    return res.json({
+      success: true,
+      data: {
+        byPriority,
+        byChannel,
+        byCaseType
+      },
+      meta: {
+        operation: 'case_analytics_distribution',
+        from: from.toISOString(),
+        to: to.toISOString(),
+        days
+      }
+    });
+  } catch (error) {
+    console.error('[caseController] getCaseAnalyticsDistribution error', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch case analytics distribution'
+    });
+  }
+};
+
+exports.ingestCaseChannelInteraction = async (req, res) => {
+  try {
+    const {
+      channel,
+      caseId,
+      externalReference,
+      subject,
+      message,
+      contactId,
+      organizationRefId,
+      metadata
+    } = req.body || {};
+
+    if (!channel || !CASE_CHANNELS.includes(channel)) {
+      return res.status(400).json({ success: false, message: 'Valid channel is required' });
+    }
+    if (channel === 'Email') {
+      return res.status(400).json({
+        success: false,
+        message: 'Use inbound email webhook for Email channel ingestion'
+      });
+    }
+    if (!externalReference || !String(externalReference).trim()) {
+      return res.status(400).json({ success: false, message: 'externalReference is required' });
+    }
+    if (!isValidOptionalObjectId(contactId) || !isValidOptionalObjectId(organizationRefId)) {
+      return res.status(400).json({ success: false, message: 'Invalid contactId or organizationRefId' });
+    }
+
+    const result = await handleChannelInteractionForHelpdesk({
+      organizationId: req.user.organizationId,
+      actorId: req.user._id,
+      channel,
+      explicitCaseId: caseId || null,
+      externalReference: String(externalReference).trim(),
+      subject: subject ? String(subject).trim() : '',
+      message: message ? String(message).trim() : '',
+      links: {
+        contactId: contactId || null,
+        organizationRefId: organizationRefId || null
+      },
+      metadata: metadata && typeof metadata === 'object' ? metadata : {}
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: toSafeObject(result.caseRecord),
+      meta: {
+        operation: 'ingest_case_channel_interaction',
+        channel,
+        action: result.action
+      }
+    });
+  } catch (error) {
+    console.error('[caseController] ingestCaseChannelInteraction error', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to ingest channel interaction'
+    });
+  }
+};
+

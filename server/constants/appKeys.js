@@ -17,6 +17,8 @@
  * Application Keys Enum
  * 
  * - SALES: Sales application (formerly CRM)
+ * - HELPDESK: Helpdesk application
+ * - PROJECTS: Projects application
  * - PORTAL: Customer/Partner portal application
  * - AUDIT: Audit management application
  * - LMS: Learning Management System application
@@ -24,6 +26,8 @@
  */
 const APP_KEYS = {
     SALES: 'SALES',
+    HELPDESK: 'HELPDESK',
+    PROJECTS: 'PROJECTS',
     PORTAL: 'PORTAL',
     AUDIT: 'AUDIT',
     LMS: 'LMS',

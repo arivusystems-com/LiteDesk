@@ -59,6 +59,16 @@ function cloneEventsLinkableDefaultRelationships() {
   return JSON.parse(JSON.stringify(EVENTS_LINKABLE_DEFAULT_RELATIONSHIPS));
 }
 
+const CASES_LINKABLE_DEFAULT_RELATIONSHIPS = Object.freeze([
+  { name: 'Related Contact', type: 'many_to_one', isLookup: true, targetModuleKey: 'people', relationshipKey: 'case_people' },
+  { name: 'Related Organization', type: 'many_to_one', isLookup: true, targetModuleKey: 'organizations', relationshipKey: 'case_organizations' },
+  { name: 'Related Tasks', type: 'many_to_many', isLookup: false, targetModuleKey: 'tasks', relationshipKey: 'task_cases' }
+]);
+
+function cloneCasesLinkableDefaultRelationships() {
+  return JSON.parse(JSON.stringify(CASES_LINKABLE_DEFAULT_RELATIONSHIPS));
+}
+
 async function syncPeopleOrganizationLink({ organizationId, relationshipKey, source, target }) {
   if (relationshipKey !== 'people_organizations') return;
   if (!source?.recordId || !target?.recordId) return;
@@ -139,6 +149,9 @@ exports.getLinkableTargets = async (req, res) => {
     if (normalizedModuleKey === 'events' && relationships.length === 0) {
       relationships = cloneEventsLinkableDefaultRelationships();
     }
+    if (normalizedModuleKey === 'cases' && relationships.length === 0) {
+      relationships = cloneCasesLinkableDefaultRelationships();
+    }
     // Resolve missing relationshipKey from platform (so Settings relationships show even if saved before relationshipKey was set)
     const outgoing = await getOutgoingRelationships(normalizedAppKey, normalizedModuleKey);
     const toTargetKey = (r) => {
@@ -206,7 +219,7 @@ exports.getLinkableTargets = async (req, res) => {
       usedTenantModule &&
       linkable.length === 0 &&
       (!Array.isArray(relationships) || relationships.length === 0) &&
-      (normalizedModuleKey === 'people' || normalizedModuleKey === 'deals' || normalizedModuleKey === 'events');
+      (normalizedModuleKey === 'people' || normalizedModuleKey === 'deals' || normalizedModuleKey === 'events' || normalizedModuleKey === 'cases');
     const linkableFromFallback = linkable.length === 0 && (!usedTenantModule || allowSystemDefaultFallback);
     // Fallback to platform registry when no tenant module exists.
     // Also allow fallback for core Sales system modules when tenant module exists but has empty relationships,

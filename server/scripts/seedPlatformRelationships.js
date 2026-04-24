@@ -218,7 +218,40 @@ const RELATIONSHIP_DEFINITIONS = [
     automation: { allowed: true },
     enabled: true
   },
-  
+  // Helpdesk — Cases → People (contactId; stable key: case_people)
+  {
+    relationshipKey: 'case_people',
+    source: { appKey: 'helpdesk', moduleKey: 'cases' },
+    target: { appKey: 'sales', moduleKey: 'people' },
+    cardinality: 'MANY_TO_ONE',
+    ownership: 'TARGET',
+    required: false,
+    cascade: { onDelete: 'DETACH' },
+    ui: {
+      source: { showAs: 'TAB', label: 'Related Contact' },
+      target: { showAs: 'TAB', label: 'Related Cases' },
+      picker: { enabled: true, searchable: true }
+    },
+    automation: { allowed: true },
+    enabled: true
+  },
+  // Helpdesk — Cases → Organizations (organizationRefId; stable key: case_organizations)
+  {
+    relationshipKey: 'case_organizations',
+    source: { appKey: 'helpdesk', moduleKey: 'cases' },
+    target: { appKey: 'sales', moduleKey: 'organizations' },
+    cardinality: 'MANY_TO_ONE',
+    ownership: 'TARGET',
+    required: false,
+    cascade: { onDelete: 'DETACH' },
+    ui: {
+      source: { showAs: 'TAB', label: 'Related Organization' },
+      target: { showAs: 'TAB', label: 'Related Cases' },
+      picker: { enabled: true, searchable: true }
+    },
+    automation: { allowed: true },
+    enabled: true
+  },
   // Audit → Audits ↔ Helpdesk → Cases
   {
     relationshipKey: 'audit.audits-to-helpdesk.cases',

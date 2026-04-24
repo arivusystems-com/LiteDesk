@@ -123,6 +123,13 @@ const eventTypeMapping = {
   'TASK_ASSIGNED': { moduleKey: 'tasks', entityType: 'TASK', eventType: 'ASSIGNED' },
   'TASK_STATUS_CHANGED': { moduleKey: 'tasks', entityType: 'TASK', eventType: 'STATUS_CHANGED' },
   'TASK_CREATED': { moduleKey: 'tasks', entityType: 'TASK', eventType: 'CREATED' },
+  [domainEvents.PEOPLE_ASSIGNED]: { moduleKey: 'people', entityType: 'PEOPLE', eventType: 'ASSIGNED' },
+  [domainEvents.DEAL_ASSIGNED]: { moduleKey: 'deals', entityType: 'DEAL', eventType: 'ASSIGNED' },
+  [domainEvents.ORGANIZATION_ASSIGNED]: {
+    moduleKey: 'organizations',
+    entityType: 'ORGANIZATION',
+    eventType: 'ASSIGNED'
+  },
   
   // Audit events
   [domainEvents.AUDIT_ASSIGNED]: { moduleKey: 'audit', entityType: 'AUDIT', eventType: 'ASSIGNED' },

@@ -167,6 +167,33 @@ exports.create = async (req, res) => {
     
     // Create organization
     const org = await Organization.create(body);
+
+    try {
+      if (req.user?.organizationId) {
+        const { runImmediateAssignmentForSalesRecord } = require('../services/assignmentExecutionService');
+        const { enqueueAssignmentJobsForSalesRecord } = require('../services/assignmentSchedulingService');
+        const fresh = await Organization.findById(org._id);
+        if (fresh) {
+          await runImmediateAssignmentForSalesRecord({
+            record: fresh,
+            moduleKey: 'organizations',
+            actorId: req.user._id,
+            triggerSource: 'immediate',
+            changedFields: [],
+            tenantOrganizationId: req.user.organizationId
+          });
+          await enqueueAssignmentJobsForSalesRecord({
+            record: fresh,
+            moduleKey: 'organizations',
+            actorId: req.user._id,
+            changedFields: [],
+            tenantOrganizationId: req.user.organizationId
+          });
+        }
+      }
+    } catch (assignErr) {
+      console.error('[organizationCreateController] assignment failed:', assignErr?.message || assignErr);
+    }
     
     // Return minimal organization identity (id, name, types)
     const response = {

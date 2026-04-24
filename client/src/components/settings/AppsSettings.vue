@@ -80,17 +80,18 @@
 
     <!-- Other Apps Options (when app is selected but not Sales) -->
     <div v-else-if="selectedApp && !isSalesApp" class="space-y-6">
-      <div>
+      <div v-if="activeAppTab === 'options'">
         <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Configuration Options</h3>
         <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Available settings for {{ appDisplayName }}</p>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div v-if="activeAppTab === 'options'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <div
           v-for="option in getAppOptions(selectedApp)"
           :key="option.id"
           class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md hover:border-indigo-500 dark:hover:border-indigo-400 transition-all cursor-pointer group"
           :class="{ 'opacity-50 cursor-not-allowed': !option.available }"
+          @click="openAppOption(option)"
         >
           <div class="flex items-start gap-4">
             <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/30 transition-colors flex-shrink-0">
@@ -107,6 +108,14 @@
             </div>
           </div>
         </div>
+      </div>
+
+      <component :is="currentAppTabComponent" v-else-if="currentAppTabComponent" />
+
+      <div v-else class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+        <p class="text-sm text-yellow-800 dark:text-yellow-300">
+          This settings panel is not available yet.
+        </p>
       </div>
     </div>
 
@@ -133,17 +142,21 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, h, nextTick } from 'vue';
+import { ref, computed, watch, h, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import SalesSchema from './SalesSchema.vue';
 import SalesPipelines from './SalesPipelines.vue';
 import SalesPlaybooks from './SalesPlaybooks.vue';
+import HelpdeskSchema from './HelpdeskSchema.vue';
+import HelpdeskExecutionSettings from './HelpdeskExecutionSettings.vue';
+import HelpdeskAnalyticsDashboard from './HelpdeskAnalyticsDashboard.vue';
 
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const activeSalesTab = ref('options'); // Start with options view
+const activeAppTab = ref('options');
 
 // Ref to current Sales tab content (SalesSchema when on schema tab) so we can call openCreateModal
 const salesTabContentRef = ref(null);
@@ -206,7 +219,7 @@ const appDisplayName = computed(() => {
 // App descriptions shown below app name in header (when app is opened)
 const appDescriptions = {
   sales: 'Manage your sales pipeline, deals, and customer relationships',
-  helpdesk: 'Manage tickets, support workflows, and customer issues',
+  helpdesk: 'Manage cases, support workflows, and customer issues',
   projects: 'Plan and track projects, tasks, and deliverables',
   portal: 'Customer and partner self-service portal',
   audit: 'Audit and compliance tracking',
@@ -226,6 +239,9 @@ const salesPageHeading = computed(() => {
   if (hasSalesAccess.value && isSalesApp.value && activeSalesTab.value && activeSalesTab.value !== 'options') {
     return getOptionName(activeSalesTab.value);
   }
+  if (!isSalesApp.value && activeAppTab.value && activeAppTab.value !== 'options') {
+    return getAppOptionName(selectedApp.value, activeAppTab.value);
+  }
   return `${appDisplayName.value} Settings`;
 });
 
@@ -235,6 +251,9 @@ const salesPageSubheading = computed(() => {
   }
   if (hasSalesAccess.value && isSalesApp.value && activeSalesTab.value && activeSalesTab.value !== 'options') {
     return getOptionDescription(activeSalesTab.value);
+  }
+  if (!isSalesApp.value && activeAppTab.value && activeAppTab.value !== 'options') {
+    return getAppOptionDescription(selectedApp.value, activeAppTab.value);
   }
   return appDescription.value || `Configure ${appDisplayName.value} app-specific settings and options`;
 });
@@ -327,18 +346,36 @@ const getAppOptions = (app) => {
   const appSpecificOptions = {
     'helpdesk': [
       {
-        id: 'tickets',
-        name: 'Ticket Settings',
-        description: 'Configure ticket types, priorities, and SLA rules',
-        icon: SettingsIcon,
-        available: false
+        id: 'schema',
+        name: 'Cases Module',
+        description: 'Configure Helpdesk case fields, relationships, and quick create',
+        icon: SchemaIcon,
+        available: true
       },
       {
-        id: 'automation',
-        name: 'Automation Rules',
-        description: 'Set up automated ticket routing and responses',
+        id: 'execution-settings',
+        name: 'Execution Settings',
+        description: 'Configure case types, SLA policies, business hours, and escalation rules',
         icon: SettingsIcon,
-        available: false
+        available: true
+      },
+      {
+        id: 'analytics',
+        name: 'Analytics Dashboard',
+        description: 'Review SLA compliance, owner performance, and distribution trends',
+        icon: PipelineIcon,
+        available: true
+      },
+      {
+        id: 'assignment-rules',
+        name: 'Assignment rules',
+        description: 'Group-first routing, distribution modes, delays, and schedules for cases',
+        icon: SettingsIcon,
+        available: true,
+        navigateTo: {
+          path: '/settings',
+          query: { tab: 'automation', assignmentApp: 'HELPDESK', assignmentModule: 'cases' }
+        }
       }
     ],
     'projects': [
@@ -407,7 +444,60 @@ const getAppOptions = (app) => {
     ]
   };
 
-  return [...commonOptions, ...(appSpecificOptions[appLower] || [])];
+  const specificOptions = appSpecificOptions[appLower] || [];
+
+  // Merge by id so app-specific options can override common placeholders
+  // (e.g., Helpdesk "schema" should replace generic "Schema (Coming Soon)").
+  const mergedById = new Map();
+  for (const option of commonOptions) {
+    mergedById.set(option.id, option);
+  }
+  for (const option of specificOptions) {
+    mergedById.set(option.id, option);
+  }
+
+  // Helpdesk has explicit options; hide generic placeholders that create noise.
+  if (appLower === 'helpdesk') {
+    mergedById.delete('settings');
+  }
+
+  return Array.from(mergedById.values());
+};
+
+const appSettingsComponents = {
+  helpdesk: {
+    'schema': HelpdeskSchema,
+    'execution-settings': HelpdeskExecutionSettings,
+    'analytics': HelpdeskAnalyticsDashboard
+  }
+};
+
+const currentAppTabComponent = computed(() => {
+  if (isSalesApp.value || activeAppTab.value === 'options') return null;
+  const appKey = String(selectedApp.value || '').toLowerCase();
+  return appSettingsComponents[appKey]?.[activeAppTab.value] || null;
+});
+
+const openAppOption = (option) => {
+  if (!option?.available) return;
+  if (option.navigateTo) {
+    router.push(option.navigateTo);
+    return;
+  }
+  activeAppTab.value = option.id;
+};
+
+const getAppOptionById = (app, optionId) => {
+  const options = getAppOptions(app);
+  return options.find((option) => option.id === optionId) || null;
+};
+
+const getAppOptionName = (app, optionId) => {
+  return getAppOptionById(app, optionId)?.name || 'Settings';
+};
+
+const getAppOptionDescription = (app, optionId) => {
+  return getAppOptionById(app, optionId)?.description || '';
 };
 
 const goBack = () => {
@@ -421,6 +511,10 @@ const goBack = () => {
     const appKey = selectedApp.value.toUpperCase();
     router.push({ path: '/settings', query: { tab: 'applications', appKey: appKey } });
     activeSalesTab.value = 'options';
+    return;
+  }
+  if (!isSalesApp.value && activeAppTab.value !== 'options') {
+    activeAppTab.value = 'options';
     return;
   }
   // Go back to application detail
@@ -443,16 +537,24 @@ watch(() => route.query.app, (newApp) => {
   if (newApp) {
     // Reset to options view when switching apps
     activeSalesTab.value = 'options';
+    activeAppTab.value = 'options';
   }
 });
 
 // Watch for config query parameter to navigate directly to a config option
 watch(() => route.query.config, (configId) => {
-  if (configId && isSalesApp.value && activeSalesTab.value === 'options') {
-    // Check if the config ID exists in salesOptions
+  if (!configId) return;
+
+  if (isSalesApp.value && activeSalesTab.value === 'options') {
     const configExists = salesOptions.some(opt => opt.id === configId);
-    if (configExists) {
-      activeSalesTab.value = configId;
+    if (configExists) activeSalesTab.value = configId;
+    return;
+  }
+
+  if (!isSalesApp.value && activeAppTab.value === 'options') {
+    const option = getAppOptionById(selectedApp.value, String(configId));
+    if (option?.available) {
+      activeAppTab.value = option.id;
     }
   }
 }, { immediate: true });

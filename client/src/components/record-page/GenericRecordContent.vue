@@ -783,7 +783,7 @@
       v-if="record && supportsEmail"
       :is-open="showEmailModal"
       :related-to="record?._id ? { moduleKey, recordId: String(record._id) } : null"
-      :initial-to="record?.email || record?.primaryContact?.email || ''"
+      :initial-to="emailComposeInitialTo"
       @close="showEmailModal = false"
       @submit="handleEmailSubmit"
     />
@@ -832,6 +832,12 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
+import { getModuleRecordCrudPathBase } from '@/utils/moduleRecordApiPath';
+import {
+  getOrgContactCoordinatedPatches,
+  resolveOrgContactPair,
+  unwrapRecordFromListOrGetResponse,
+} from '@/utils/orgContactFormPairing';
 import RecordPageShell from '@/components/record-page/RecordPageShell.vue';
 import RecordHeader from '@/components/record-page/RecordHeader.vue';
 import RecordStateSection from '@/components/record-page/RecordStateSection.vue';
@@ -1024,6 +1030,45 @@ async function handleParticipationEditUpdated(updated) {
 }
 /** Organization list for people record page (organization field dropdown). Fetched when moduleKey is people. */
 const peopleOrganizationList = ref([]);
+/** People + org lists for helpdesk case contact / organization ref fields (Details inline edit). */
+const caseContactLookupList = ref([]);
+const caseOrganizationLookupList = ref([]);
+
+/** CRM org id on a person row from /people list (populated or id). */
+function casePersonRowOrgId(p) {
+  if (!p) return '';
+  const o = p.organization;
+  if (o == null || o === '') return '';
+  if (typeof o === 'object' && o._id != null) return String(o._id);
+  return String(o);
+}
+
+/**
+ * When an account is set on the case, limit contact choices to that org; always include the current contact so the value is not blanked in the UI.
+ * Org + contact: org filters the list; org/contact coordination is in DynamicForm and saveDetailField (clear contact on org mismatch; set org from contact).
+ */
+function caseContactOptionsForRecord(rec, allContacts) {
+  if (!Array.isArray(allContacts) || allContacts.length === 0) return allContacts || [];
+  if (!rec) return allContacts;
+  const rawOrg = rec.organizationRefId;
+  const orgId = rawOrg
+    ? (typeof rawOrg === 'object' && rawOrg?._id != null ? rawOrg._id : rawOrg)
+    : null;
+  if (orgId == null || orgId === '') return allContacts;
+  const orgStr = String(orgId);
+  const filtered = allContacts.filter((p) => {
+    const pid = casePersonRowOrgId(p);
+    return pid && pid === orgStr;
+  });
+  const rawContact = rec.contactId;
+  const contactId = rawContact
+    ? (typeof rawContact === 'object' && rawContact?._id != null ? rawContact._id : rawContact)
+    : null;
+  if (!contactId) return filtered;
+  if (filtered.some((p) => String(p._id) === String(contactId))) return filtered;
+  const selected = allContacts.find((p) => String(p._id) === String(contactId));
+  return selected ? [...filtered, selected] : filtered;
+}
 /** Tenant user list used to render user lookup labels (e.g., assignedTo) in generic sections. */
 const userLookupList = ref([]);
 const deleting = ref(false);
@@ -1038,6 +1083,13 @@ const {
 } = useStickyTitleRow(genericRecordContentRootRef);
 
 const moduleKeyLower = computed(() => (props.moduleKey || '').toLowerCase());
+/** REST + in-app paths for record CRUD (helpdesk cases use /helpdesk/cases, not /cases). */
+const recordCrudPathBase = computed(() =>
+  getModuleRecordCrudPathBase(props.moduleKey, {
+    appKey: route.meta?.appKey,
+    routePath: route.path
+  })
+);
 const isPeopleModule = computed(() => moduleKeyLower.value === 'people');
 const supportsTags = computed(() => ['people', 'organizations'].includes(moduleKeyLower.value));
 
@@ -1149,10 +1201,29 @@ const attachableAppsForRecordContext = computed(() => {
 });
 const supportsEmail = computed(() => MODULES_WITH_EMAIL.has(moduleKeyLower.value));
 
-/** App key for record context / link drawer (must match relationship definitions). */
+/** Default To: line for EmailComposeDrawer (case contact when populated). */
+const emailComposeInitialTo = computed(() => {
+  const r = record.value;
+  if (!r) return '';
+  if (moduleKeyLower.value === 'cases') {
+    const c = r.contactId;
+    if (c && typeof c === 'object' && c.email) return String(c.email).trim();
+    return '';
+  }
+  return r.email || r.primaryContact?.email || '';
+});
+
+/** App key for record context / link drawer (must match RelationshipDefinition source/target appKey). */
 const recordContextAppKey = computed(() => {
+  const metaApp = String(route.meta?.appKey || '').toUpperCase();
+  if (metaApp) return metaApp;
   const key = moduleKeyLower.value;
   if (key === 'people' || key === 'organizations' || key === 'deals') return 'SALES';
+  const p = String(route.path || '').toLowerCase();
+  if (p.startsWith('/helpdesk/')) return 'HELPDESK';
+  if (p.startsWith('/audit/')) return 'AUDIT';
+  if (p.startsWith('/portal/')) return 'PORTAL';
+  if (p.startsWith('/projects/')) return 'PROJECTS';
   return 'PLATFORM';
 });
 
@@ -1238,7 +1309,9 @@ const genericRelatedGroupsFromContext = computed(() => {
         const id = r.recordId ?? r.id ?? r._id;
         const moduleKey = (r.moduleKey || '').toLowerCase();
         const appKey = (r.appKey || 'SALES').toUpperCase();
-        const path = moduleKey ? `/${moduleKey}/${id}` : null;
+        const path = moduleKey && id
+          ? `${getModuleRecordCrudPathBase(moduleKey, { appKey: r.appKey })}/${id}`
+          : null;
         const personName = [r.first_name || r.firstName || '', r.last_name || r.lastName || '']
           .filter(Boolean)
           .join(' ')
@@ -1286,8 +1359,8 @@ const persistRecordTags = async (cleaned) => {
     const moduleKey = moduleKeyLower.value;
     const supportsDedicatedTagsEndpoint = moduleKey === 'deals' || moduleKey === 'tasks';
     const response = supportsDedicatedTagsEndpoint
-      ? await apiClient.put(`/${props.moduleKey}/${props.recordId}/tags`, { tags: cleaned })
-      : await apiClient.put(`/${props.moduleKey}/${props.recordId}`, { tags: cleaned });
+      ? await apiClient.put(`${recordCrudPathBase.value}/${props.recordId}/tags`, { tags: cleaned })
+      : await apiClient.put(`${recordCrudPathBase.value}/${props.recordId}`, { tags: cleaned });
     if (response?.success && response?.data) {
       record.value.tags = Array.isArray(response.data.tags) ? response.data.tags : cleaned;
     } else {
@@ -1603,7 +1676,7 @@ const genericAdapter = computed(() => {
         };
         if (fullName) payload.name = fullName;
 
-        const response = await apiClient.put(`/${props.moduleKey}/${props.recordId}`, payload);
+        const response = await apiClient.put(`${recordCrudPathBase.value}/${props.recordId}`, payload);
         const updatedRecord = response?.data?.data ?? response?.data ?? null;
         if (record.value && updatedRecord && typeof updatedRecord === 'object') {
           Object.assign(record.value, updatedRecord);
@@ -1616,19 +1689,79 @@ const genericAdapter = computed(() => {
         return;
       }
 
-      const response = await apiClient.put(`/${props.moduleKey}/${props.recordId}`, { [fieldKey]: value });
+      if (moduleKeyLower === 'cases' && fieldKey === 'status') {
+        const patchBody = { status: value };
+        const rs = String(
+          record.value?.resolutionSummary ?? ''
+        ).trim();
+        if ((value === 'Resolved' || value === 'Closed') && rs) {
+          patchBody.resolutionSummary = rs;
+        }
+        const response = await apiClient.patch(
+          `${recordCrudPathBase.value}/${props.recordId}/status`,
+          patchBody
+        );
+        const updatedRecord = response?.data ?? null;
+        if (record.value) {
+          record.value.status = value;
+          if (updatedRecord && typeof updatedRecord === 'object') {
+            Object.assign(record.value, updatedRecord);
+          }
+        }
+        await refreshRecordActivity();
+        return;
+      }
+
+      const caseLoose = String(fieldKey || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+      const caseCanonical = { contactid: 'contactId', organizationrefid: 'organizationRefId', caseownerid: 'caseOwnerId' }[caseLoose];
+      const payloadKey = moduleKeyLower === 'cases' && caseCanonical ? caseCanonical : fieldKey;
+      const payload = { [payloadKey]: value };
+
+      const pair = resolveOrgContactPair(moduleKeyLower, moduleDefinition.value?.fields || []);
+      if (pair) {
+        const formAfter = { ...record.value, [payloadKey]: value };
+        const fetchPersonById = async (id) => {
+          if (!id) return null;
+          try {
+            const r = await apiClient.get(`/people/${id}`);
+            return unwrapRecordFromListOrGetResponse(r);
+          } catch {
+            return null;
+          }
+        };
+        const extra = await getOrgContactCoordinatedPatches({
+          pair,
+          formAfter,
+          changedKey: payloadKey,
+          newValue: value,
+          fetchPersonById,
+        });
+        Object.assign(payload, extra);
+      }
+      const response = await apiClient.put(`${recordCrudPathBase.value}/${props.recordId}`, payload);
       const updatedRecord = response?.data?.data ?? response?.data ?? null;
       if (record.value) {
-        record.value[fieldKey] = value;
+        if (moduleKeyLower === 'cases' && caseCanonical && caseCanonical !== fieldKey) {
+          try {
+            delete record.value[fieldKey];
+          } catch {
+            /* ignore */
+          }
+        }
         if (updatedRecord && typeof updatedRecord === 'object') {
           Object.assign(record.value, updatedRecord);
+        } else {
+          record.value[payloadKey] = value;
         }
       }
       await refreshRecordActivity();
     },
     getRelatedGroups: () => genericRelatedGroupsFromContext.value,
     openRelatedItem: (item) => {
-      const path = item?.recordPath || (item?.moduleKey && item?.id ? `/${item.moduleKey}/${item.id}` : null);
+      const path = item?.recordPath
+        || (item?.moduleKey && item?.id
+          ? `${getModuleRecordCrudPathBase(item.moduleKey, { appKey: item.appKey })}/${item.id}`
+          : null);
       if (path) openTab(path, { background: false, insertAdjacent: true });
     },
     canUnlinkRelated: () => genericRecordContextCanUnlink.value,
@@ -1638,7 +1771,7 @@ const genericAdapter = computed(() => {
     openAddRecordDrawer,
     handleDescriptionSave: async (value) => {
       try {
-        await apiClient.put(`/${props.moduleKey}/${props.recordId}`, { description: value });
+        await apiClient.put(`${recordCrudPathBase.value}/${props.recordId}`, { description: value });
         if (record.value) record.value.description = value;
       } catch (e) {
         console.error('Save description error:', e);
@@ -1654,11 +1787,27 @@ const genericAdapter = computed(() => {
       if ((props.moduleKey || '').toLowerCase() === 'people' && key === 'organization') {
         return peopleOrganizationList.value;
       }
+      if ((props.moduleKey || '').toLowerCase() === 'cases' && key === 'contactid') {
+        return caseContactOptionsForRecord(record.value, caseContactLookupList.value);
+      }
+      if ((props.moduleKey || '').toLowerCase() === 'cases' && (key === 'organizationrefid' || key === 'accountid')) {
+        return caseOrganizationLookupList.value;
+      }
       const fieldDef = (moduleDefinition.value?.fields || []).find(
         (f) => String(f?.key || '').toLowerCase().trim() === key
       );
       const dataType = String(fieldDef?.dataType || '').toLowerCase();
-      if (dataType.includes('user') || key === 'assignedto' || key === 'ownerid' || key === 'owner') {
+      if (
+        dataType.includes('user') ||
+        key === 'assignedto' ||
+        key === 'ownerid' ||
+        key === 'owner' ||
+        key === 'caseownerid' ||
+        key === 'createdby' ||
+        key === 'updatedby' ||
+        key === 'modifiedby' ||
+        key === 'deletedby'
+      ) {
         return userLookupList.value;
       }
       return [];
@@ -1900,7 +2049,7 @@ const activityUi = computed(() => {
   return normalizeActivityUiContract(moduleUi);
 });
 
-const MODULES_WITH_EMAIL = new Set(['people', 'organizations', 'deals', 'tasks']);
+const MODULES_WITH_EMAIL = new Set(['people', 'organizations', 'deals', 'tasks', 'cases']);
 
 const activityEvents = computed(() => {
   const raw = activityRaw.value || [];
@@ -2013,7 +2162,7 @@ async function fetchRecord() {
   error.value = null;
   try {
     const [recordRes, modulesRes, activityRes, neighborsRes] = await Promise.all([
-      apiClient.get(`/${props.moduleKey}/${props.recordId}`),
+      apiClient.get(`${recordCrudPathBase.value}/${props.recordId}`),
       apiClient.get('/modules'),
       apiClient.get(`/modules/${props.moduleKey}/records/${props.recordId}/activity`).catch(() => ({ success: true, data: [] })),
       apiClient.get(`/modules/${props.moduleKey}/records/${props.recordId}/neighbors`).catch(() => ({ success: true, data: { previousId: null, nextId: null } }))
@@ -2066,6 +2215,37 @@ async function fetchRecord() {
       }
     } else {
       peopleOrganizationList.value = [];
+    }
+
+    if ((props.moduleKey || '').toLowerCase() === 'cases') {
+      try {
+        const [contactRes, caseOrgRes] = await Promise.all([
+          apiClient.get('/people', { params: { limit: 500, sortBy: 'firstName', sortOrder: 'asc' } }),
+          apiClient.get('/v2/organization', { params: { limit: 500 } })
+        ]);
+        const contactRows = Array.isArray(contactRes?.data) ? contactRes.data : (contactRes?.data?.data && Array.isArray(contactRes.data.data) ? contactRes.data.data : []);
+        caseContactLookupList.value = contactRows.map((p) => {
+          const id = p?._id ?? p?.id;
+          const name = [p?.first_name, p?.last_name].filter(Boolean).join(' ').trim()
+            || p?.name
+            || p?.email
+            || (id != null ? String(id) : '—');
+          return { _id: id, name, ...p };
+        }).filter((p) => Boolean(p._id));
+        const orgData = caseOrgRes?.data ?? caseOrgRes;
+        const orgRows = Array.isArray(orgData) ? orgData : (orgData?.data && Array.isArray(orgData.data) ? orgData.data : []);
+        caseOrganizationLookupList.value = orgRows.map((o) => {
+          const id = o?._id ?? o?.id;
+          return { _id: id, name: o?.name ?? (id != null ? String(id) : '—'), ...o };
+        }).filter((o) => Boolean(o._id));
+      } catch (e) {
+        console.error('Fetch case contact/organization lists error:', e);
+        caseContactLookupList.value = [];
+        caseOrganizationLookupList.value = [];
+      }
+    } else {
+      caseContactLookupList.value = [];
+      caseOrganizationLookupList.value = [];
     }
 
     try {
@@ -2133,7 +2313,7 @@ function handleTitleSave(value) {
       last_name: lastName || undefined
     };
 
-    apiClient.put(`/${props.moduleKey}/${props.recordId}`, payload).then(() => {
+    apiClient.put(`${recordCrudPathBase.value}/${props.recordId}`, payload).then(() => {
       if (!record.value) return;
       record.value.name = title;
       if (firstName !== undefined) record.value.first_name = firstName;
@@ -2142,20 +2322,30 @@ function handleTitleSave(value) {
     return;
   }
 
+  if (moduleKeyLower === 'cases') {
+    apiClient
+      .put(`${recordCrudPathBase.value}/${props.recordId}`, { title })
+      .then(() => {
+        if (record.value) record.value.title = title;
+      })
+      .catch((e) => console.error('Save case title error:', e));
+    return;
+  }
+
   // Other modules: only update the generic name/title field.
-  apiClient.put(`/${props.moduleKey}/${props.recordId}`, { name: title }).then(() => {
+  apiClient.put(`${recordCrudPathBase.value}/${props.recordId}`, { name: title }).then(() => {
     if (record.value) record.value.name = title;
   }).catch((e) => console.error('Save title error:', e));
 }
 
 function goToPrevious() {
   if (!neighbors.value.previousId) return;
-  const path = `/${props.moduleKey}/${neighbors.value.previousId}`;
+  const path = `${recordCrudPathBase.value}/${neighbors.value.previousId}`;
   replaceActiveTab(path, { title: moduleLabelSingular.value || 'Record' });
 }
 function goToNext() {
   if (!neighbors.value.nextId) return;
-  const path = `/${props.moduleKey}/${neighbors.value.nextId}`;
+  const path = `${recordCrudPathBase.value}/${neighbors.value.nextId}`;
   replaceActiveTab(path, { title: moduleLabelSingular.value || 'Record' });
 }
 
@@ -2185,7 +2375,7 @@ function copyUrl() {
 
 function getRecordPageUrl() {
   if (!record.value?._id) return '';
-  const path = `/${props.moduleKey}/${record.value._id}`;
+  const path = `${recordCrudPathBase.value}/${record.value._id}`;
   const resolved = router.resolve(path);
   const href = resolved.href.startsWith('http') ? resolved.href : new URL(resolved.href, window.location.origin).href;
   return href;
@@ -2193,7 +2383,7 @@ function getRecordPageUrl() {
 
 function openRecordInNewTab() {
   if (!record.value?._id) return;
-  const path = `/${props.moduleKey}/${record.value._id}`;
+  const path = `${recordCrudPathBase.value}/${record.value._id}`;
   openTab(path, { title: moduleLabelSingular.value || 'Record', background: false, insertAdjacent: true });
   emit('close');
 }
@@ -2238,11 +2428,11 @@ async function handleDuplicate() {
         payload[key] = v;
       }
     }
-    const res = await apiClient.post(`/${props.moduleKey}`, payload);
+    const res = await apiClient.post(recordCrudPathBase.value, payload);
     const data = res?.data ?? res;
     const newId = data?._id ?? data?.id;
     if (newId) {
-      router.push(`/${props.moduleKey}/${newId}`);
+      router.push(`${recordCrudPathBase.value}/${newId}`);
     }
   } catch (e) {
     console.error('Duplicate record error:', e);
@@ -2372,8 +2562,8 @@ async function handleAddRelatedRecordSaved(savedRecord) {
 async function confirmDelete() {
   deleting.value = true;
   try {
-    await apiClient.delete(`/${props.moduleKey}/${props.recordId}`);
-    router.push(`/${props.moduleKey}`);
+    await apiClient.delete(`${recordCrudPathBase.value}/${props.recordId}`);
+    router.push(recordCrudPathBase.value);
     emit('close');
   } catch (e) {
     error.value = e?.message || 'Failed to delete';
@@ -2407,7 +2597,8 @@ watch(
     const tab = findTabById(tabId);
     if (!tab?.path) return;
     const pathBase = tab.path.split('?')[0].replace(/\/$/, '');
-    if (!pathBase.toLowerCase().includes(`/${moduleKeyLower.value}/${props.recordId}`)) return;
+    const idSuffix = `/${props.recordId}`;
+    if (!pathBase.toLowerCase().endsWith(idSuffix.toLowerCase())) return;
     updateTabTitle(tabId, displayName);
   },
   { immediate: true }

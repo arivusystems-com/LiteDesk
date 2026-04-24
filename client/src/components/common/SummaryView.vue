@@ -1666,6 +1666,7 @@ import DateCell from '@/components/common/table/DateCell.vue';
 import Avatar from '@/components/common/Avatar.vue';
 import { getDefaultTagChipClass, getDefaultTagDotClass } from '@/components/record-page/composables/useRecordTags';
 import { getFieldDependencyState, evaluateDependency } from '@/utils/dependencyEvaluation';
+import { mergeOrgContactLookupForField } from '@/utils/orgContactFormPairing';
 import { useRouter, useRoute } from 'vue-router';
 import { resolveFieldContext, filterFieldsByContext } from '@/utils/fieldContextFilter';
 import {
@@ -1934,21 +1935,27 @@ const hasManageFieldsPermission = computed(() => {
   return authStore.can('settings', 'edit');
 });
 
-// Get field dependency state for a field (reactive)
+// Get field dependency state for a field (reactive). Same pipeline as DynamicForm, including org/contact paired lookupQuery (people by org, orgs by id when contact selected).
 const getFieldState = (field) => {
-  if (!field || !field.dependencies || !Array.isArray(field.dependencies) || field.dependencies.length === 0) {
+  if (!field) {
     return {
       visible: true,
       readonly: false,
-      required: field.required || false,
-      allowedOptions: null
+      required: false,
+      allowedOptions: null,
+      label: null,
+      lookupQuery: null,
+      setValue: null,
     };
   }
-  // Use record data for dependency evaluation
   const currentFormData = props.record || {};
-  return getFieldDependencyState(field, currentFormData, moduleDefinition.value?.fields || [], {
+  const fields = moduleDefinition.value?.fields || [];
+  const base = getFieldDependencyState(field, currentFormData, fields, {
+    currentUser: authStore.user,
+    organization: authStore.organization,
     moduleKey: props.recordType,
   });
+  return mergeOrgContactLookupForField(field, base, currentFormData, props.recordType, fields);
 };
 
 // Get fields with their definitions for details tab

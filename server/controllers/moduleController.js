@@ -277,6 +277,11 @@ function getDefaultNotificationMetadata(moduleKey) {
       ruleEligible: true,
       supportedEvents: ['ASSIGNED', 'STATUS_CHANGED'],
       supportedConditions: ['assignedTo', 'status']
+    },
+    cases: {
+      ruleEligible: true,
+      supportedEvents: ['ASSIGNED', 'STATUS_CHANGED'],
+      supportedConditions: ['caseOwnerId', 'priority', 'status']
     }
     // Other modules (forms, items, imports, reports, users) are not rule-eligible by default
   };
@@ -602,6 +607,7 @@ function getBaseFieldsForKey(key) {
             organizations: require('../models/Organization'),
             deals: require('../models/Deal'),
             tasks: require('../models/Task'),
+            cases: require('../models/Case'),
             events: require('../models/Event'),
             imports: require('../models/ImportHistory'),
             forms: require('../models/Form'),
@@ -1795,6 +1801,12 @@ const ORGANIZATIONS_DEFAULT_RELATIONSHIPS = Object.freeze([
     { name: 'Related Deals', type: 'one_to_many', isLookup: false, targetModuleKey: 'deals', relationshipKey: 'deal_organizations' }
 ]);
 
+const CASES_DEFAULT_RELATIONSHIPS = Object.freeze([
+    { name: 'Related Contact', type: 'many_to_one', isLookup: true, targetModuleKey: 'people', relationshipKey: 'case_people' },
+    { name: 'Related Organization', type: 'many_to_one', isLookup: true, targetModuleKey: 'organizations', relationshipKey: 'case_organizations' },
+    { name: 'Related Tasks', type: 'many_to_many', isLookup: false, targetModuleKey: 'tasks', relationshipKey: 'task_cases' }
+]);
+
 const EVENTS_DEFAULT_RELATIONSHIPS = Object.freeze([
     { name: 'Related Deal', type: 'many_to_one', isLookup: true, targetModuleKey: 'deals', relationshipKey: 'deal_events' },
     { name: 'Related Contacts', type: 'many_to_many', isLookup: false, targetModuleKey: 'people', relationshipKey: 'people_events' },
@@ -1832,6 +1844,10 @@ function cloneEventsDefaultRelationships() {
     return JSON.parse(JSON.stringify(EVENTS_DEFAULT_RELATIONSHIPS));
 }
 
+function cloneCasesDefaultRelationships() {
+    return JSON.parse(JSON.stringify(CASES_DEFAULT_RELATIONSHIPS));
+}
+
 function shouldUseOverrideRelationships(override, sys) {
     if (override?.relationships === undefined) {
         return false;
@@ -1848,6 +1864,10 @@ function shouldUseOverrideRelationships(override, sys) {
     // Events must always surface system defaults when config is empty.
     // Empty arrays in legacy org docs should not suppress seeded defaults.
     if (moduleKey === 'events' && Array.isArray(override.relationships) && override.relationships.length === 0) {
+        return false;
+    }
+
+    if (moduleKey === 'cases' && Array.isArray(override.relationships) && override.relationships.length === 0) {
         return false;
     }
 
@@ -1875,6 +1895,7 @@ exports.listModules = async (req, res) => {
             { key: 'people', name: 'People' },
             { key: 'organizations', name: 'Organizations' },
             { key: 'deals', name: 'Deals' },
+            { key: 'cases', name: 'Cases' },
             { key: 'tasks', name: 'Tasks' },
             { key: 'events', name: 'Events' },
             { key: 'forms', name: 'Forms' },
@@ -1895,7 +1916,7 @@ exports.listModules = async (req, res) => {
                 createdAt: null,
                 updatedAt: null,
                 pipelineSettings: m.key === 'deals' ? getDefaultPipelineSettings() : [],
-            relationships: m.key === 'events' ? cloneEventsDefaultRelationships() : m.key === 'deals' ? cloneDealDefaultRelationships() : m.key === 'people' ? clonePeopleDefaultRelationships() : m.key === 'organizations' ? cloneOrganizationsDefaultRelationships() : m.key === 'tasks' ? [] : m.key === 'items' ? [
+            relationships: m.key === 'events' ? cloneEventsDefaultRelationships() : m.key === 'deals' ? cloneDealDefaultRelationships() : m.key === 'people' ? clonePeopleDefaultRelationships() : m.key === 'organizations' ? cloneOrganizationsDefaultRelationships() : m.key === 'cases' ? cloneCasesDefaultRelationships() : m.key === 'tasks' ? [] : m.key === 'items' ? [
                 {
                     name: 'Vendor',
                     type: 'lookup',
@@ -3139,6 +3160,7 @@ exports.listModules = async (req, res) => {
                 people: People,
                 organizations: Organization,
                 deals: Deal,
+                cases: require('../models/Case'),
                 tasks: Task,
                 events: Event,
                 forms: Form,
@@ -3332,7 +3354,10 @@ exports.updateModule = async (req, res) => {
         // relationships show in the Link Record drawer without requiring relationshipKey in the UI).
         if (relationships !== undefined) {
             const newRelationships = Array.isArray(relationships) ? [...relationships] : [];
-            const sourceAppKey = (mod.appKey || (mod.key === 'deals' ? 'sales' : mod.key === 'tasks' ? 'platform' : 'platform')).toString().toLowerCase();
+            const sourceAppKey = (
+                mod.appKey ||
+                (mod.key === 'deals' ? 'sales' : mod.key === 'cases' ? 'helpdesk' : mod.key === 'tasks' ? 'platform' : 'platform')
+            ).toString().toLowerCase();
             const sourceModuleKey = (mod.moduleKey || mod.key || '').toString().toLowerCase();
             const toTargetKey = (r) => {
                 const raw = r.targetModuleKey ?? r.targetModule;
@@ -3665,7 +3690,7 @@ exports.getPeopleQuickCreate = async (req, res) => {
 exports.updateSystemModule = async (req, res) => {
     try {
         const { key } = req.params;
-        const systemKeys = new Set(['people','organizations','deals','tasks','events','forms','items','imports','reports']);
+        const systemKeys = new Set(['people','organizations','deals','cases','tasks','events','forms','items','imports','reports']);
         if (!systemKeys.has(key)) return res.status(400).json({ success: false, message: 'Invalid system module key' });
         const { fields, enabled, name, relationships, quickCreate, quickCreateLayout, pipelineSettings } = req.body;
         const deprecatedEventAliasKeys = new Set(['relatedorg', 'relatedorgid', 'relatedorganization']);
@@ -3739,7 +3764,7 @@ exports.updateSystemModule = async (req, res) => {
         // Resolve and validate relationships (same as updateModule) so saved config works in Link Record drawer
         if (relationships !== undefined) {
             const newRelationships = Array.isArray(relationships) ? [...relationships] : [];
-            const sourceAppKey = (key === 'deals' ? 'sales' : key === 'tasks' ? 'platform' : 'platform').toString().toLowerCase();
+            const sourceAppKey = (key === 'deals' ? 'sales' : key === 'cases' ? 'helpdesk' : key === 'tasks' ? 'platform' : 'platform').toString().toLowerCase();
             const sourceModuleKey = key.toLowerCase();
             const toTargetKey = (r) => {
                 const raw = r.targetModuleKey ?? r.targetModule;

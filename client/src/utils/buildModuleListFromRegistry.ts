@@ -76,7 +76,7 @@ function getFallbackColumns(moduleKey: string): Array<{
 /**
  * Get fallback actions for common modules when list config is missing
  */
-function getFallbackActions(moduleKey: string): Array<{
+function getFallbackActions(moduleKey: string, appKey?: string): Array<{
   key: string;
   label: string;
   type: ActionType;
@@ -96,7 +96,7 @@ function getFallbackActions(moduleKey: string): Array<{
       key: 'create',
       label: createLabel,
       type: 'create',
-      route: `/${moduleKey}/new`,
+      route: getCreateRoute(moduleKey, appKey),
       permission: `${moduleKey}.create`,
       variant: 'primary',
       order: 1,
@@ -118,6 +118,15 @@ function getFallbackActions(moduleKey: string): Array<{
       order: 3,
     },
   ];
+}
+
+function getCreateRoute(moduleKey: string, appKey?: string): string {
+  const key = String(moduleKey || '').toLowerCase().trim();
+  const app = String(appKey || '').toUpperCase().trim();
+  if (key === 'cases' && app === 'HELPDESK') {
+    return '/helpdesk/cases/new';
+  }
+  return `/${key}/new`;
 }
 
 /**
@@ -263,23 +272,34 @@ function buildColumns(
  */
 function buildPrimaryActions(
   actions: NonNullable<AppRegistryModuleEntry['list']>['primaryActions'] = [],
-  snapshot: PermissionSnapshot
+  snapshot: PermissionSnapshot,
+  moduleKey?: string,
+  appKey?: string
 ): ListAction[] {
   if (!actions) return [];
   
   return actions
-    .map((action) => ({
-      key: action.key,
-      label: action.label,
-      type: action.type,
-      route: action.route,
-      permission: action.permission,
-      visibility: getPermissionOutcome(action.permission, snapshot),
-      icon: action.icon,
-      variant: action.variant || 'primary',
-      order: action.order ?? 999,
-      bulk: false,
-    }))
+    .map((action) => {
+      const normalizedRoute =
+        action.type === 'create' &&
+        moduleKey &&
+        appKey &&
+        (!action.route || String(action.route).trim() === '/cases/new')
+          ? getCreateRoute(moduleKey, appKey)
+          : action.route;
+      return {
+        key: action.key,
+        label: action.label,
+        type: action.type,
+        route: normalizedRoute,
+        permission: action.permission,
+        visibility: getPermissionOutcome(action.permission, snapshot),
+        icon: action.icon,
+        variant: action.variant || 'primary',
+        order: action.order ?? 999,
+        bulk: false,
+      };
+    })
     .filter((action) => action.visibility !== PermissionOutcome.HIDDEN)
     .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
 }
@@ -368,7 +388,7 @@ function getModuleDisplayName(moduleKey: string): string {
     contacts: 'People',
     deals: 'Deals',
     tasks: 'Tasks',
-    tickets: 'Tickets',
+    tickets: 'Cases',
     cases: 'Cases',
     organizations: 'Organizations',
     companies: 'Organizations',
@@ -439,7 +459,7 @@ function determineListEmptyState(
     primaryAction: hasPrimaryActions
       ? {
           label: createActionLabel,
-          route: `/${moduleKey}/new`,
+          route: getCreateRoute(moduleKey, appKey),
         }
       : undefined,
   };
@@ -493,7 +513,7 @@ export function buildModuleListFromRegistry(
         // Module exists but has no list configuration
         // Provide fallback columns based on moduleKey for common modules
         const fallbackColumns = getFallbackColumns(moduleKey);
-        const fallbackActions = getFallbackActions(moduleKey);
+        const fallbackActions = getFallbackActions(moduleKey, appKey);
         
         const displayName = getModuleDisplayName(moduleKey);
         const createActionLabel = moduleKey === 'people' ? 'Add your first person' :
@@ -512,14 +532,14 @@ export function buildModuleListFromRegistry(
           title: module.label,
           layout: 'TABLE',
           columns: buildColumns(fallbackColumns, snapshot, moduleKey),
-          primaryActions: buildPrimaryActions(fallbackActions, snapshot),
+          primaryActions: buildPrimaryActions(fallbackActions, snapshot, moduleKey, appKey),
           emptyState: {
             type: EmptyStateType.NO_DATA,
             title: `No ${displayName.toLowerCase()} yet`,
             description: `${displayName} will appear here as you add them. Get started by creating your first one.`,
             primaryAction: fallbackActions.find(a => a.type === 'create') ? {
               label: createActionLabel,
-              route: `/${moduleKey}/new`,
+              route: getCreateRoute(moduleKey, appKey),
             } : undefined,
           },
         };
@@ -527,7 +547,7 @@ export function buildModuleListFromRegistry(
       
       // Build list definition
       const columns = buildColumns(listConfig.columns, snapshot, moduleKey);
-      const primaryActions = buildPrimaryActions(listConfig.primaryActions, snapshot);
+      const primaryActions = buildPrimaryActions(listConfig.primaryActions, snapshot, moduleKey, appKey);
       const bulkActions = buildBulkActions(listConfig.bulkActions, snapshot);
       const rowActions = buildRowActions(listConfig.rowActions, snapshot);
       const filters = buildFilters(listConfig.filters, snapshot);

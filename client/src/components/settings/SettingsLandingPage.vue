@@ -107,6 +107,20 @@ const ApplicationsIcon = () => h('svg', {
   })
 ]);
 
+const AutomationIcon = () => h('svg', {
+  fill: 'none',
+  stroke: 'currentColor',
+  viewBox: '0 0 24 24',
+  xmlns: 'http://www.w3.org/2000/svg'
+}, [
+  h('path', {
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    'stroke-width': '2',
+    d: 'M13 10V3L4 14h7v7l9-11h-7z'
+  })
+]);
+
 const SubscriptionsIcon = () => h('svg', {
   fill: 'none',
   stroke: 'currentColor',
@@ -193,6 +207,13 @@ const sections = computed(() => {
       description: 'Install and configure the business applications your organization uses',
       icon: ApplicationsIcon,
       route: '/settings?tab=applications',
+    },
+    {
+      id: 'automation',
+      name: 'Automation',
+      description: 'Assignment rules: route records to groups, distribute work, run on a schedule, and notify new owners when automation applies',
+      icon: AutomationIcon,
+      route: '/settings?tab=automation',
     },
     {
       id: 'subscriptions',

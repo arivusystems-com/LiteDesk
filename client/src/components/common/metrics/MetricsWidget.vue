@@ -276,7 +276,7 @@ function defaultMetricsForContext() {
     return [
       { id: 'total_active_deals', label: 'Total Open Deals', source: 'stats', field: 'activeDealsCount', agg: 'count', icon: '#' },
       { id: 'open_invoices_value', label: 'Open Invoices', source: 'stats', field: 'openInvoicesValue', agg: 'sum', icon: '$' },
-      { id: 'active_tickets', label: 'Active Tickets', source: 'stats', field: 'activeTickets', agg: 'count', icon: '#' },
+      { id: 'active_cases', label: 'Active Cases', source: 'stats', field: 'activeTickets', agg: 'count', icon: '#' },
       { id: 'account_manager', label: 'Account Manager', source: 'record', field: 'accountManagerName', agg: 'value', icon: 'AM' }
     ];
   }

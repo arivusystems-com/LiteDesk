@@ -518,10 +518,10 @@
           </template>
 
           <!-- Deals module: Grouped by core vs system (same pattern as Tasks, People) -->
-          <template v-else-if="isDealsModule">
+          <template v-else-if="isDealsModule || isCasesModule">
             <!-- Core Deal Fields -->
             <div class="mb-4">
-              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">Core Deal Fields</div>
+              <div class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide mb-2 px-2">{{ isCasesModule ? 'Core Case Fields' : 'Core Deal Fields' }}</div>
               <ul class="space-y-1">
                 <li
                   v-for="(fieldKey, idx) in groupedFields.coreIdentity"
@@ -5509,6 +5509,7 @@ import {
   FolderIcon,
   ClipboardDocumentListIcon,
   BanknotesIcon,
+  LifebuoyIcon,
   CubeIcon
 } from '@heroicons/vue/24/outline';
 
@@ -5590,6 +5591,9 @@ import {
   groupDealFields,
   classifyDealField
 } from '@/platform/fields/dealFieldModel';
+import {
+  classifyCaseField
+} from '@/platform/fields/caseFieldModel';
 import {
   EVENT_FIELD_METADATA,
   getEventFieldMetadata,
@@ -5717,7 +5721,8 @@ const moduleCardIconMap = {
   events: CalendarDaysIcon,
   items: FolderIcon,
   forms: ClipboardDocumentListIcon,
-  deals: BanknotesIcon
+  deals: BanknotesIcon,
+  cases: LifebuoyIcon
 };
 function getModuleCardIcon(moduleKey) {
   const key = (moduleKey || '').toLowerCase();
@@ -5745,11 +5750,18 @@ const ORGANIZATIONS_RELATIONSHIP_DEFAULTS = Object.freeze([
   { name: 'Related Deals', type: 'one_to_many', isLookup: false, targetModuleKey: 'deals', relationshipKey: 'deal_organizations' }
 ]);
 
+const CASES_RELATIONSHIP_DEFAULTS = Object.freeze([
+  { name: 'Related Contact', type: 'many_to_one', isLookup: true, targetModuleKey: 'people', relationshipKey: 'case_people' },
+  { name: 'Related Organization', type: 'many_to_one', isLookup: true, targetModuleKey: 'organizations', relationshipKey: 'case_organizations' },
+  { name: 'Related Tasks', type: 'many_to_many', isLookup: false, targetModuleKey: 'tasks', relationshipKey: 'task_cases' }
+]);
+
 function createRelationshipDefaultsForModule(moduleKey) {
   const normalized = String(moduleKey || '').toLowerCase();
   if (normalized === 'deals') return DEAL_RELATIONSHIP_DEFAULTS.map(rel => ({ ...rel }));
   if (normalized === 'people') return PEOPLE_RELATIONSHIP_DEFAULTS.map(rel => ({ ...rel }));
   if (normalized === 'organizations') return ORGANIZATIONS_RELATIONSHIP_DEFAULTS.map(rel => ({ ...rel }));
+  if (normalized === 'cases') return CASES_RELATIONSHIP_DEFAULTS.map(rel => ({ ...rel }));
   return [];
 }
 
@@ -5757,7 +5769,7 @@ function ensureModuleDefaultRelationships(moduleDef) {
   if (!moduleDef || typeof moduleDef !== 'object') return moduleDef;
   const moduleKey = String(moduleDef.key || moduleDef.moduleKey || '').toLowerCase();
   const hasRelationships = Array.isArray(moduleDef.relationships) && moduleDef.relationships.length > 0;
-  if ((moduleKey === 'deals' || moduleKey === 'people' || moduleKey === 'organizations') && !hasRelationships) {
+  if ((moduleKey === 'deals' || moduleKey === 'people' || moduleKey === 'organizations' || moduleKey === 'cases') && !hasRelationships) {
     moduleDef.relationships = createRelationshipDefaultsForModule(moduleKey);
   }
   return moduleDef;
@@ -5770,7 +5782,7 @@ function normalizeModulesForSettingsDefaults(moduleList) {
 
 function ensureDefaultRelationshipsInState(moduleDef) {
   const moduleKey = String(moduleDef?.key || moduleDef?.moduleKey || '').toLowerCase();
-  if (moduleKey !== 'deals' && moduleKey !== 'people' && moduleKey !== 'organizations') return;
+  if (moduleKey !== 'deals' && moduleKey !== 'people' && moduleKey !== 'organizations' && moduleKey !== 'cases') return;
   if (Array.isArray(relationships.value) && relationships.value.length > 0) return;
   relationships.value = createRelationshipDefaultsForModule(moduleKey);
 }
@@ -7137,9 +7149,12 @@ const isFormsModule = computed(() => {
 const isDealsModule = computed(() => {
   return selectedModule.value?.key?.toLowerCase() === 'deals';
 });
+const isCasesModule = computed(() => {
+  return selectedModule.value?.key?.toLowerCase() === 'cases';
+});
 
 /** Shared core modules where custom fields may be Core vs app-participation scoped. */
-const CUSTOM_FIELD_APP_SCOPE_MODULES = new Set(['people', 'organizations', 'tasks', 'events', 'items', 'deals']);
+const CUSTOM_FIELD_APP_SCOPE_MODULES = new Set(['people', 'organizations', 'tasks', 'events', 'items', 'deals', 'cases']);
 
 const showCustomFieldParticipationScope = computed(() =>
   CUSTOM_FIELD_APP_SCOPE_MODULES.has((selectedModule.value?.key || '').toLowerCase())
@@ -7341,6 +7356,15 @@ const quickCreateAvailableFields = computed(() => {
     });
   }
 
+  // For Cases: include all core/usable fields, exclude only system fields
+  if (isCasesModule.value) {
+    return editFields.value.filter((field) => {
+      if (!field?.key) return false;
+      if (isSystemField(field)) return false;
+      return classifyCaseField(field.key) === 'core';
+    });
+  }
+
   // For other modules (Deals, Items, etc.): only non-system fields
   return editFields.value.filter(f => f.key && !isSystemField(f));
 });
@@ -7392,7 +7416,7 @@ const quickCreateEventParticipationEntries = computed(() => {
 // See: docs/architecture/event-settings.md Section 6
 // See: client/src/platform/modules/forms/formsModule.definition.ts
 const groupedFields = computed(() => {
-  if (!isPeopleModule.value && !isOrganizationsModule.value && !isTasksModule.value && !isEventsModule.value && !isFormsModule.value && !isItemsModule.value && !isDealsModule.value) {
+  if (!isPeopleModule.value && !isOrganizationsModule.value && !isTasksModule.value && !isEventsModule.value && !isFormsModule.value && !isItemsModule.value && !isDealsModule.value && !isCasesModule.value) {
     return { coreIdentity: [], participation: {}, system: [] };
   }
 
@@ -7574,6 +7598,22 @@ const groupedFields = computed(() => {
           continue;
         }
         // Participation fields - group by app scope (e.g. SALES if any in future)
+        if (!participation[classification]) {
+          participation[classification] = [];
+        }
+        participation[classification].push(fieldKey);
+        continue;
+      } else if (isCasesModule.value) {
+        // Cases module: use case field model for classification (core vs system)
+        const classification = classifyCaseField(fieldKey);
+        if (classification === 'core') {
+          coreIdentity.push(fieldKey);
+          continue;
+        }
+        if (classification === 'system') {
+          system.push(fieldKey);
+          continue;
+        }
         if (!participation[classification]) {
           participation[classification] = [];
         }

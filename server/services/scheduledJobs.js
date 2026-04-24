@@ -2,16 +2,22 @@ const cron = require('node-cron');
 const { runDailyDigest, runWeeklyDigest } = require('./digestScheduler');
 const { tick: escalationTick } = require('./escalationResolver');
 const { purgeExpiredRetention } = require('./deletionService');
+const { processDueAssignmentJobs } = require('./assignmentSchedulingService');
+const { tickHelpdeskSlaNotifications } = require('./helpdeskSlaMonitorService');
 
 const NOTIFICATION_DEBUG = process.env.NOTIFICATION_DEBUG === 'true';
 const ENABLE_DIGEST_SCHEDULER = process.env.ENABLE_DIGEST_SCHEDULER !== 'false'; // Default: enabled
 const ENABLE_ESCALATION_SCHEDULER = process.env.ENABLE_ESCALATION_SCHEDULER !== 'false'; // Default: enabled (Phase 3)
 const ENABLE_TRASH_RETENTION_SCHEDULER = process.env.ENABLE_TRASH_RETENTION_SCHEDULER !== 'false'; // Default: enabled
+const ENABLE_ASSIGNMENT_SCHEDULER = process.env.ENABLE_ASSIGNMENT_SCHEDULER !== 'false'; // Default: enabled (Helpdesk Step 7C)
+const ENABLE_HELPDESK_SLA_SCHEDULER = process.env.ENABLE_HELPDESK_SLA_SCHEDULER !== 'false'; // Default: enabled (Step 9)
 
 let dailyDigestJob = null;
 let weeklyDigestJob = null;
 let escalationJob = null;
 let trashRetentionJob = null;
+let assignmentJob = null;
+let helpdeskSlaJob = null;
 
 /**
  * Initialize and start scheduled jobs for notification digests.
@@ -109,6 +115,53 @@ function startScheduledJobs() {
     console.log('[scheduledJobs] Trash retention scheduler disabled (ENABLE_TRASH_RETENTION_SCHEDULER=false)');
   }
 
+  // Assignment scheduler (Helpdesk): execute delayed/scheduled assignment jobs
+  if (ENABLE_ASSIGNMENT_SCHEDULER) {
+    assignmentJob = cron.schedule('* * * * *', async () => {
+      try {
+        const result = await processDueAssignmentJobs();
+        if (result.processed > 0 || NOTIFICATION_DEBUG) {
+          const parts = [
+            `processed=${result.processed}`,
+            `completed=${result.completed}`,
+            `failed=${result.failed}`,
+            `skipped=${result.skipped}`
+          ];
+          if (result.skipped > 0 && result.skipReasons && Object.keys(result.skipReasons).length > 0) {
+            parts.push(`skipReasons=${JSON.stringify(result.skipReasons)}`);
+          }
+          console.log(`[scheduledJobs] Assignment tick: ${parts.join(' ')}`);
+          if (result.failed > 0) {
+            console.warn('[scheduledJobs] Assignment tick completed with failures (see job rows for lastError)');
+          }
+        }
+      } catch (err) {
+        console.error('[scheduledJobs] Assignment tick failed:', err.message);
+      }
+    }, { scheduled: true, timezone: process.env.DIGEST_TIMEZONE || 'UTC' });
+    console.log('[scheduledJobs]   - Assignment scheduler: every minute');
+  } else {
+    console.log('[scheduledJobs] Assignment scheduler disabled (ENABLE_ASSIGNMENT_SCHEDULER=false)');
+  }
+
+  if (ENABLE_HELPDESK_SLA_SCHEDULER) {
+    helpdeskSlaJob = cron.schedule('* * * * *', async () => {
+      try {
+        const result = await tickHelpdeskSlaNotifications();
+        if (result.warningSent > 0 || result.breachSent > 0 || NOTIFICATION_DEBUG) {
+          console.log(
+            `[scheduledJobs] Helpdesk SLA tick: processed=${result.processed} warningSent=${result.warningSent} breachSent=${result.breachSent}`
+          );
+        }
+      } catch (err) {
+        console.error('[scheduledJobs] Helpdesk SLA tick failed:', err.message);
+      }
+    }, { scheduled: true, timezone: process.env.DIGEST_TIMEZONE || 'UTC' });
+    console.log('[scheduledJobs]   - Helpdesk SLA monitor: every minute');
+  } else {
+    console.log('[scheduledJobs] Helpdesk SLA scheduler disabled (ENABLE_HELPDESK_SLA_SCHEDULER=false)');
+  }
+
   console.log(`[scheduledJobs]   - Timezone: ${process.env.DIGEST_TIMEZONE || 'UTC'}`);
   if (NOTIFICATION_DEBUG) {
     console.log('[scheduledJobs]   - Debug mode: enabled');
@@ -141,6 +194,18 @@ function stopScheduledJobs() {
     trashRetentionJob.stop();
     trashRetentionJob = null;
     console.log('[scheduledJobs] Trash retention job stopped');
+  }
+
+  if (assignmentJob) {
+    assignmentJob.stop();
+    assignmentJob = null;
+    console.log('[scheduledJobs] Assignment scheduler job stopped');
+  }
+
+  if (helpdeskSlaJob) {
+    helpdeskSlaJob.stop();
+    helpdeskSlaJob = null;
+    console.log('[scheduledJobs] Helpdesk SLA scheduler job stopped');
   }
 }
 

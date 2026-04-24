@@ -62,17 +62,46 @@ function toReadableLabel(key) {
     .replace(/^./, (c) => c.toUpperCase());
 }
 
+/** 24-char hex ids: compact label for the right pane (full value remains in `value` for copy/edit flows if needed). */
+function formatObjectIdForDisplay(maybeId) {
+  if (maybeId == null || maybeId === '') return '';
+  const s = String(maybeId);
+  if (/^[a-f\d]{24}$/i.test(s)) return `${s.slice(0, 6)}…${s.slice(-4)}`;
+  return s;
+}
+
+function formatActivitiesForDetailPane(rawList) {
+  if (!Array.isArray(rawList) || rawList.length === 0) return '';
+  const n = rawList.length;
+  const tail = rawList.slice(-3);
+  const parts = tail.map((a) => {
+    if (a == null) return '';
+    if (typeof a !== 'object') return String(a);
+    const line = [a.message, a.activityType].map((x) => (x == null ? '' : String(x).trim())).find(Boolean) || 'Entry';
+    return line;
+  }).filter(Boolean);
+  const more = n > 3 ? ` · +${n - 3} more` : '';
+  return `${n} ${n === 1 ? 'entry' : 'entries'}${more}` + (parts.length ? ` — ${parts.join(' · ')}` : '');
+}
+
 function fieldTypeFromDef(field, fieldKey) {
   const key = String(fieldKey || field?.key || '').trim().toLowerCase();
   if (key === 'tags') return 'tags';
   if (!field) {
     if (/(created|updated|modified|deleted|closed|start|end).*(at|date)/i.test(key) || ['duedate', 'birthday'].includes(key)) return 'date';
-    if (/(createdby|modifiedby|updatedby|assignedto)$/i.test(key) || /owner|userid$/i.test(key)) return 'user';
+    if (key === 'caseownerid') return 'user';
+    if (/(createdby|modifiedby|updatedby|assignedto)$/i.test(key) || /(owner|userid|caseowner)$/i.test(key)) return 'user';
     if (/(website|url|link)$/i.test(key)) return 'url';
     if (key === 'phone' || key === 'mobile') return 'phone';
     if (key === '_id' || key === 'id' || key === '__v') return 'text';
   }
   const dt = String(field?.dataType || '').toLowerCase();
+  if (key === 'caseownerid' || (field && String(field.key || '').toLowerCase() === 'caseownerid')) {
+    return 'user';
+  }
+  if (['createdby', 'updatedby', 'modifiedby', 'deletedby'].includes(key)) {
+    return 'user';
+  }
   if (dt.includes('date') || dt.includes('datetime')) return 'date';
   if (dt.includes('number') || dt.includes('currency') || dt.includes('decimal')) return 'number';
   if (dt.includes('select') || dt.includes('picklist') || dt.includes('status')) return 'select';
@@ -112,7 +141,7 @@ function filterFieldsForRecordSurface(fields, fieldContext) {
 function iconForKey(key, field) {
   const k = String(key || '').toLowerCase();
   const dt = String(field?.dataType || '').toLowerCase();
-  if (['ownerid', 'owner_id', 'assignedto', 'user'].includes(k) || dt.includes('user')) return UserIcon;
+  if (['ownerid', 'owner_id', 'assignedto', 'caseownerid', 'createdby', 'updatedby', 'modifiedby', 'user'].includes(k) || dt.includes('user')) return UserIcon;
   if (['date', 'createdat', 'updatedat', 'closedate'].some((x) => k.includes(x)) || dt.includes('date')) return CalendarIcon;
   if (['amount', 'currency', 'number'].some((x) => k.includes(x)) || dt.includes('currency')) return CurrencyDollarIcon;
   const isSelectLikeTypeKey =
@@ -291,8 +320,23 @@ export function createGenericRecordAdapter(opts = {}) {
       const field = fieldsByKey.get(fieldKey);
       const groupMeta = getFieldGroupMeta(field || { key: fieldKey }, moduleKeyStr);
       const fieldType = fieldTypeFromDef(field, fieldKey);
-      const rawValue = record[fieldKey];
       const normalizedFieldKey = String(fieldKey || '').toLowerCase().trim();
+      // Helpdesk: schema uses camelCase (contactId) but field defs may use "Contact Id", contactid, etc.
+      const caseLoose = String(fieldKey || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+      const caseCanonicalByLoose =
+        moduleKeyStr === 'cases'
+          ? { contactid: 'contactId', organizationrefid: 'organizationRefId', caseownerid: 'caseOwnerId' }
+          : null;
+      const canonicalKey = caseCanonicalByLoose?.[caseLoose];
+      let rawValue = record[fieldKey];
+      if (
+        (rawValue === undefined || rawValue === null || rawValue === '') &&
+        canonicalKey &&
+        record[canonicalKey] != null &&
+        record[canonicalKey] !== ''
+      ) {
+        rawValue = record[canonicalKey];
+      }
       const isArrayBackedSelect = fieldType === 'select' && (
         Array.isArray(rawValue) ||
         String(field?.dataType || '').toLowerCase().includes('multi') ||
@@ -301,13 +345,36 @@ export function createGenericRecordAdapter(opts = {}) {
         field?.isArray === true ||
         normalizedFieldKey === 'types'
       );
-      const entityOpts = fieldType === 'entity' ? entityOptionsFor(fieldKey) : [];
+      const entityOpts = (fieldType === 'entity' || fieldType === 'user') ? entityOptionsFor(fieldKey) : [];
       const options = fieldType === 'select'
         ? normalizeSelectOptions(field?.options)
         : ((fieldType === 'entity' || fieldType === 'user') ? entityOpts : []);
       let displayValue = rawValue;
       if (fieldKey === 'tags' && Array.isArray(rawValue)) {
         displayValue = rawValue.length ? rawValue.join(', ') : '';
+      } else if (normalizedFieldKey === 'activities' && Array.isArray(rawValue)) {
+        displayValue = formatActivitiesForDetailPane(rawValue);
+      } else if (Array.isArray(rawValue) && rawValue.length > 0) {
+        const el0 = rawValue[0];
+        if (el0 != null && typeof el0 === 'object' && !Array.isArray(el0) && !(el0 instanceof Date)) {
+          displayValue = rawValue
+            .map((item) => {
+              if (item == null) return '';
+              if (typeof item !== 'object') return String(item);
+              return String(
+                item.name ?? item.title ?? item.message ?? item.label
+                  ?? item.email
+                  ?? item.firstName
+                  ?? [item.firstName, item.lastName].filter(Boolean).join(' ').trim()
+                  ?? item._id
+                  ?? ''
+              ).trim() || '—';
+            })
+            .filter(Boolean)
+            .join(', ');
+        } else {
+          displayValue = rawValue.map((x) => (x == null ? '' : String(x))).join(', ');
+        }
       } else if (isArrayBackedSelect && Array.isArray(rawValue)) {
         const labels = rawValue.map((item) => {
           const itemId = item != null && typeof item === 'object' ? (item.value ?? item._id ?? item.id) : item;
@@ -337,6 +404,18 @@ export function createGenericRecordAdapter(opts = {}) {
         displayValue = matchedOption?.label ?? matchedOption?.name ?? rawValue;
       } else if (rawValue != null && typeof rawValue === 'string' && /^\d{4}-\d{2}/.test(rawValue)) {
         displayValue = formatDate ? formatDate(rawValue) : rawValue.slice(0, 10);
+      } else if (
+        (normalizedFieldKey === '_id' || normalizedFieldKey === 'id') &&
+        rawValue != null
+      ) {
+        const idStr = String(
+          rawValue && typeof rawValue === 'object' && typeof rawValue.toString === 'function'
+            ? rawValue.toString()
+            : rawValue
+        ).trim();
+        if (/^[a-f\d]{24}$/i.test(idStr)) {
+          displayValue = formatObjectIdForDisplay(idStr);
+        }
       }
       const isTags = fieldType === 'tags';
       const registryMk = normalizeModuleKeyForRegistry(moduleKeyStr);
@@ -348,7 +427,22 @@ export function createGenericRecordAdapter(opts = {}) {
           engineAllowsEdit = true;
         }
       }
-      const canEdit = engineAllowsEdit && !isTags && canEditDetails?.(record, fieldKey) === true && ['text', 'url', 'phone', 'number', 'date', 'select', 'entity', 'user'].includes(fieldType);
+      const readOnlyByKey = new Set([
+        'activities',
+        'slacycles',
+        'currentslacycle',
+        'assignmentcontrol'
+      ]);
+      const forceReadonlyRow =
+        readOnlyByKey.has(normalizedFieldKey) ||
+        (normalizedFieldKey === '_id' || normalizedFieldKey === 'id') ||
+        ['createdby', 'updatedby', 'createdat', 'modifiedat', 'updatedat', 'deletedat', 'deletedby'].includes(normalizedFieldKey);
+      const canEdit =
+        !forceReadonlyRow &&
+        engineAllowsEdit &&
+        !isTags &&
+        canEditDetails?.(record, fieldKey) === true &&
+        ['text', 'url', 'phone', 'number', 'date', 'select', 'entity', 'user'].includes(fieldType);
       const canOpenTagsEditor = isTags && typeof context?.openTagsEditor === 'function';
       const orgId = rawValue != null && typeof rawValue === 'object' ? (rawValue._id ?? rawValue.id) : (typeof rawValue === 'string' && rawValue.trim() ? rawValue.trim() : null);
       const recordPathForEntity = fieldType === 'entity' && orgId != null && /^(organization|account|company)$/.test(String(fieldKey).toLowerCase())

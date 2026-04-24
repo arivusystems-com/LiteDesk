@@ -72,6 +72,29 @@ const APP_DEFINITIONS = [
     }
   },
   {
+    appKey: 'helpdesk',
+    name: 'Helpdesk',
+    description: 'Case-centric support application for service execution and SLA commitments',
+    icon: 'lifebuoy',
+    category: 'BUSINESS',
+    owner: 'PLATFORM',
+    enabled: true,
+    order: 3,
+    capabilities: {
+      usesPeople: true,
+      usesOrganization: true,
+      usesTransactions: true,
+      usesAutomation: true
+    },
+    settingsSchema: null,
+    ui: {
+      sidebarOrder: 3,
+      icon: 'lifebuoy',
+      defaultRoute: '/dashboard/helpdesk',
+      showInAppSwitcher: true
+    }
+  },
+  {
     appKey: 'portal',
     name: 'Portal',
     description: 'Customer/Partner self-service portal',
@@ -79,7 +102,7 @@ const APP_DEFINITIONS = [
     category: 'BUSINESS',
     owner: 'PLATFORM',
     enabled: true,
-    order: 3,
+    order: 4,
     capabilities: {
       usesPeople: true,
       usesOrganization: false,
@@ -89,7 +112,7 @@ const APP_DEFINITIONS = [
     settingsSchema: null,
     // Phase 2D: UI Metadata - Updated defaultRoute
     ui: {
-      sidebarOrder: 3,
+      sidebarOrder: 4,
       icon: '🌐',
       defaultRoute: '/portal/dashboard',
       showInAppSwitcher: true
@@ -459,6 +482,46 @@ const MODULE_DEFINITIONS = [
       sidebarOrder: 8,
       createLabel: 'New Import',
       listLabel: 'Import History'
+    }
+  },
+  {
+    moduleKey: 'cases',
+    appKey: 'helpdesk',
+    label: 'Cases',
+    pluralLabel: 'Cases',
+    entityType: 'TRANSACTION',
+    primaryField: 'title',
+    peopleConstraints: {
+      allowedTypes: ['Contact'],
+      required: false
+    },
+    organizationConstraints: {
+      required: false
+    },
+    lifecycle: {
+      statusField: 'status',
+      allowedStatuses: ['New', 'Assigned', 'In Progress', 'On Hold', 'Resolved', 'Closed']
+    },
+    supports: {
+      ownership: true,
+      assignment: true,
+      comments: true,
+      attachments: true,
+      automation: true
+    },
+    permissions: {
+      create: true,
+      edit: true,
+      delete: false,
+      view: true
+    },
+    ui: {
+      routeBase: '/helpdesk/cases',
+      icon: 'lifebuoy',
+      showInSidebar: true,
+      sidebarOrder: 1,
+      createLabel: 'Create Case',
+      listLabel: 'All Cases'
     }
   },
   // Phase 0I.1: Responses as Execution Domain (Sales-owned)

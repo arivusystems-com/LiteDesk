@@ -27,7 +27,8 @@ const MODEL_BY_KEY = {
   deals: () => require('../models/Deal'),
   tasks: () => require('../models/Task'),
   events: () => require('../models/Event'),
-  items: () => require('../models/Item')
+  items: () => require('../models/Item'),
+  cases: () => require('../models/Case')
 };
 
 const APP_KEY_BY_MODULE = {
@@ -36,7 +37,8 @@ const APP_KEY_BY_MODULE = {
   deals: 'SALES',
   tasks: 'platform',
   events: 'platform',
-  items: 'platform'
+  items: 'platform',
+  cases: 'HELPDESK'
 };
 
 /**
@@ -87,6 +89,7 @@ function computeDisplayName(moduleKey, record, originalId) {
   if (moduleKey === 'deals' || moduleKey === 'organizations') return record.name || originalId;
   if (moduleKey === 'tasks' || moduleKey === 'events') return record.title || record.eventName || originalId;
   if (moduleKey === 'items') return record.item_name || originalId;
+  if (moduleKey === 'cases') return record.title || record.caseId || String(originalId || '');
   return String(originalId || '');
 }
 
@@ -108,6 +111,14 @@ function extractParentReferences(moduleKey, record) {
     const typeMap = { contact: 'people', deal: 'deals', organization: 'organizations' };
     const parentModule = typeMap[record.relatedTo.type];
     if (parentModule) refs.push({ moduleKey: parentModule, recordId: record.relatedTo.id, fieldPath: 'relatedTo.id' });
+  }
+  if (moduleKey === 'cases') {
+    if (record.contactId) {
+      refs.push({ moduleKey: 'people', recordId: record.contactId, fieldPath: 'contactId' });
+    }
+    if (record.organizationRefId) {
+      refs.push({ moduleKey: 'organizations', recordId: record.organizationRefId, fieldPath: 'organizationRefId' });
+    }
   }
   return refs;
 }

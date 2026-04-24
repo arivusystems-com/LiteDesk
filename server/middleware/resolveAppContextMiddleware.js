@@ -30,11 +30,15 @@ const { APP_KEYS, DEFAULT_APP_KEY, isValidAppKey } = require('../constants/appKe
  * IMPORTANT: Order matters - more specific paths must come first
  */
 const URL_NAMESPACE_MAP = {
+    '/api/helpdesk': APP_KEYS.HELPDESK, // Must come before /api
+    '/api/projects': APP_KEYS.PROJECTS, // Must come before /api
     '/api/audit': APP_KEYS.AUDIT,  // Must come before /api
     '/api/portal': APP_KEYS.PORTAL, // Must come before /api
     '/api/lms': APP_KEYS.LMS,       // Must come before /api
     '/api/control': APP_KEYS.CONTROL_PLANE, // Must come before /api
     '/app/crm': APP_KEYS.SALES,
+    '/helpdesk': APP_KEYS.HELPDESK,
+    '/projects': APP_KEYS.PROJECTS,
     '/portal': APP_KEYS.PORTAL,
     '/audit': APP_KEYS.AUDIT,
     '/lms': APP_KEYS.LMS,

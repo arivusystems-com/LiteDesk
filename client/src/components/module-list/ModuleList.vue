@@ -949,8 +949,13 @@ const fetchData = async () => {
     const isAuditFindingModule =
       String(props.moduleKey || '').toLowerCase() === 'cases' &&
       String(props.appKey || '').toUpperCase() === 'AUDIT';
+    const isHelpdeskCasesModule =
+      String(props.moduleKey || '').toLowerCase() === 'cases' &&
+      String(props.appKey || '').toUpperCase() === 'HELPDESK';
     const endpoint = isAuditFindingModule
       ? '/audit/findings'
+      : isHelpdeskCasesModule
+        ? '/helpdesk/cases'
       : moduleConfig?.apiEndpoint
         ? moduleConfig.apiEndpoint.startsWith('/')
           ? moduleConfig.apiEndpoint
@@ -1150,6 +1155,13 @@ const handleExport = () => {
 
 const handleAction = (route) => {
   if (!route) return;
+  const normalizedRoute = String(route || '').trim().toLowerCase();
+  const isCreateRoute = /\/new\/?$/.test(normalizedRoute);
+  if (isCreateRoute) {
+    // Create flows should stay in the current tab so the drawer opens in-place.
+    router.push(route);
+    return;
+  }
   openTab(route, {
     title: route.split('/').pop(),
     background: false,
@@ -1625,7 +1637,11 @@ const handleDelete = async (row) => {
   if (!rowId || !props.moduleKey) return;
 
   try {
-    await apiClient.delete(`/${props.moduleKey}/${rowId}`);
+    const isHelpdeskCasesModule =
+      String(props.moduleKey || '').toLowerCase() === 'cases' &&
+      String(props.appKey || '').toUpperCase() === 'HELPDESK';
+    const deleteBase = isHelpdeskCasesModule ? '/helpdesk/cases' : `/${props.moduleKey}`;
+    await apiClient.delete(`${deleteBase}/${rowId}`);
     await fetchData();
   } catch (error) {
     console.error(`[ModuleList] Failed to delete ${props.moduleKey} record:`, error);

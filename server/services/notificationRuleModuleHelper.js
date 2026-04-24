@@ -1,4 +1,8 @@
 const Task = require('../models/Task');
+const People = require('../models/People');
+const Deal = require('../models/Deal');
+const Organization = require('../models/Organization');
+const User = require('../models/User');
 const Event = require('../models/Event');
 const ModuleDefinition = require('../models/ModuleDefinition');
 
@@ -22,6 +26,47 @@ const MODULE_METADATA = {
     },
     statusValues: ['todo', 'in_progress', 'waiting', 'completed', 'cancelled'],
     priorityValues: ['low', 'medium', 'high', 'urgent']
+  },
+  'people': {
+    model: People,
+    modelName: 'People',
+    fields: {
+      assignedTo: 'assignedTo',
+      status: 'derivedStatus',
+      priority: null,
+      title: 'first_name'
+    },
+    statusValues: [],
+    priorityValues: []
+  },
+  'deals': {
+    model: Deal,
+    modelName: 'Deal',
+    fields: {
+      assignedTo: 'ownerId',
+      status: 'status',
+      priority: 'priority',
+      title: 'name'
+    },
+    statusValues: ['Open', 'Won', 'Lost', 'Stalled', 'Active', 'Abandoned'],
+    priorityValues: ['Low', 'Medium', 'High', 'Urgent']
+  },
+  /**
+   * CRM company/partner/vendor record (Organization model, isTenant: false).
+   * Scoped to tenant via createdBy user belonging to organizationId.
+   */
+  'organizations': {
+    model: Organization,
+    modelName: 'CrmOrganization',
+    loadByCreatedByTenant: true,
+    fields: {
+      assignedTo: 'assignedTo',
+      status: 'derivedStatus',
+      priority: null,
+      title: 'name'
+    },
+    statusValues: [],
+    priorityValues: []
   },
   'audit': {
     model: Event,
@@ -90,8 +135,7 @@ async function loadEntity(moduleMetadata, entityId, organizationId) {
 
   try {
     const fieldsToSelect = [];
-    
-    // Build field selection based on available fields
+
     if (moduleMetadata.fields.assignedTo) {
       fieldsToSelect.push(moduleMetadata.fields.assignedTo);
     }
@@ -105,20 +149,40 @@ async function loadEntity(moduleMetadata, entityId, organizationId) {
       fieldsToSelect.push(moduleMetadata.fields.title);
     }
 
-    // For audit/event, also need special fields
     if (moduleMetadata.modelName === 'Event') {
       fieldsToSelect.push('formAssignment', 'auditorId', 'eventOwnerId');
     }
 
-    // Always include _id and organizationId for Mongoose
-    const selectFields = fieldsToSelect.length > 0 
-      ? '_id organizationId ' + fieldsToSelect.join(' ')
-      : '_id organizationId';
-    
-    const entity = await moduleMetadata.model.findOne({
-      _id: entityId,
-      organizationId
-    }).select(selectFields);
+    if (moduleMetadata.loadByCreatedByTenant) {
+      fieldsToSelect.push('createdBy');
+      const selectFields =
+        fieldsToSelect.length > 0 ? `_id ${fieldsToSelect.join(' ')}` : '_id createdBy';
+
+      const entity = await moduleMetadata.model
+        .findOne({
+          _id: entityId,
+          isTenant: false
+        })
+        .select(selectFields);
+
+      if (!entity || !entity.createdBy || !organizationId) {
+        return null;
+      }
+      const allowed = await User.exists({ _id: entity.createdBy, organizationId });
+      return allowed ? entity : null;
+    }
+
+    const selectFields =
+      fieldsToSelect.length > 0
+        ? '_id organizationId ' + fieldsToSelect.join(' ')
+        : '_id organizationId';
+
+    const entity = await moduleMetadata.model
+      .findOne({
+        _id: entityId,
+        organizationId
+      })
+      .select(selectFields);
 
     return entity;
   } catch (err) {

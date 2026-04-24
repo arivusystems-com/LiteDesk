@@ -37,6 +37,7 @@ async function getRecordIdsFromModel(Model, organizationId, baseQuery = {}) {
 const MODEL_BY_KEY = {
   deals: () => Deal,
   tasks: () => Task,
+  cases: () => require('../models/Case'),
   people: () => require('../models/People'),
   organizations: () => require('../models/Organization'),
   events: () => require('../models/Event'),
@@ -53,6 +54,7 @@ const LIST_BASE_QUERY_BY_KEY = {
 const LIST_HANDLERS = {
   deals: (organizationId) => getRecordIdsFromModel(Deal, organizationId),
   tasks: (organizationId) => getRecordIdsFromModel(Task, organizationId),
+  cases: (organizationId) => getRecordIdsFromModel(require('../models/Case'), organizationId),
   people: (organizationId) => getRecordIdsFromModel(require('../models/People'), organizationId),
   organizations: (organizationId) =>
     getRecordIdsFromModel(require('../models/Organization'), organizationId, { isTenant: false }),
@@ -131,6 +133,66 @@ function peopleEmbeddedActivityMessage(log) {
  * @param {string} recordId
  * @param {import('mongoose').Types.ObjectId} organizationId
  */
+/**
+ * Merge embedded Case.activities into unified activity (ModuleRecordPage Activity tab).
+ * Case CRUD writes timeline entries here; they are not stored in RecordActivity.
+ * @param {Array<Record<string, any>>} events
+ * @param {string} recordId
+ * @param {import('mongoose').Types.ObjectId} organizationId
+ */
+async function mergeCaseEmbeddedActivities(events, recordId, organizationId) {
+  const Case = require('../models/Case');
+  const caseDoc = await Case.findOne({
+    _id: recordId,
+    organizationId,
+    deletedAt: null
+  })
+    .select('activities')
+    .lean();
+  if (!caseDoc || !Array.isArray(caseDoc.activities) || caseDoc.activities.length === 0) return;
+  const userIds = [...new Set(caseDoc.activities.map((a) => a.actorId).filter(Boolean))];
+  let usersMap = {};
+  if (userIds.length > 0) {
+    const users = await User.find({ _id: { $in: userIds } }).select('firstName lastName username email').lean();
+    usersMap = users.reduce((acc, u) => {
+      acc[u._id.toString()] = u;
+      return acc;
+    }, {});
+  }
+  for (const a of caseDoc.activities) {
+    const uid = a.actorId && a.actorId.toString();
+    const u = uid && usersMap[uid];
+    const actor = a.actorName
+      ? String(a.actorName)
+      : (u
+        ? `${(u.firstName || '').trim()} ${(u.lastName || '').trim()}`.trim() || u.username || u.email || 'Unknown'
+        : 'System');
+    const actorProfile = u
+      ? {
+          _id: u._id?.toString(),
+          firstName: u.firstName,
+          lastName: u.lastName,
+          email: u.email,
+          username: u.username
+        }
+      : null;
+    const createdAt = a.createdAt ? new Date(a.createdAt).toISOString() : null;
+    const idSuffix = a._id != null ? String(a._id) : `${createdAt || 'na'}-${a.activityType || 'act'}`;
+    events.push({
+      id: `case-embedded-${idSuffix}`,
+      type: 'system',
+      actor,
+      actorProfile,
+      createdAt,
+      payload: {
+        action: a.activityType || 'case_activity',
+        message: a.message || '',
+        details: a.metadata && typeof a.metadata === 'object' ? a.metadata : {}
+      }
+    });
+  }
+}
+
 async function mergePeopleEmbeddedActivity(events, recordId, organizationId) {
   const People = require('../models/People');
   const person = await People.findOne({
@@ -359,6 +421,9 @@ exports.getActivity = async (req, res) => {
 
       if (moduleKey === 'people') {
         await mergePeopleEmbeddedActivity(events, recordId, organizationId);
+      }
+      if (moduleKey === 'cases') {
+        await mergeCaseEmbeddedActivities(events, recordId, organizationId);
       }
     }
 

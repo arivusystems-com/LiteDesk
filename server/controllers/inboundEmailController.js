@@ -19,6 +19,7 @@ const Communication = require('../models/Communication');
 const People = require('../models/People');
 const User = require('../models/User');
 const replyToTokenService = require('../services/replyToTokenService');
+const { handleInboundEmailForHelpdesk } = require('../services/helpdeskChannelIngestionService');
 const { uploadsDir } = require('../middleware/uploadMiddleware');
 const { MAX_ATTACHMENT_SIZE_BYTES } = require('../models/Communication');
 
@@ -88,11 +89,18 @@ exports.handleInbound = async (req, res) => {
     const allRecipients = [...toAddresses, ...ccAddresses, ...bccAddresses];
 
     const tokenPayload = replyToTokenService.extractFromAddresses(allRecipients);
-    if (!tokenPayload) {
-      return res.status(400).json({ success: false, message: 'No valid Reply-To token found in recipient addresses' });
+    const orgHeaderId = req.headers['x-litedesk-organization-id'] || req.headers['x-organization-id'];
+
+    if (!tokenPayload && !orgHeaderId) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid Reply-To token or organization header found'
+      });
     }
 
-    const { orgId, moduleKey, recordId } = tokenPayload;
+    const orgId = tokenPayload?.orgId || orgHeaderId;
+    const moduleKey = tokenPayload?.moduleKey || 'cases';
+    const recordId = tokenPayload?.recordId || null;
 
     // Auto-create Person from new inbound sender (Phase 4)
     const fromEmail = (fromAddr || '').toLowerCase().trim();
@@ -124,7 +132,9 @@ exports.handleInbound = async (req, res) => {
       }
     }
 
-    // Validate record exists and org matches
+    // Validate/resolve target record and module behavior
+    let relatedTo = null;
+    let helpdeskCaseResult = null;
     if (moduleKey === 'people') {
       const person = await People.findOne({
         _id: recordId,
@@ -134,6 +144,19 @@ exports.handleInbound = async (req, res) => {
       if (!person) {
         return res.status(404).json({ success: false, message: 'Record not found or access denied' });
       }
+      relatedTo = { moduleKey, recordId };
+    } else if (moduleKey === 'cases' || (!tokenPayload && moduleKey === 'cases')) {
+      helpdeskCaseResult = await handleInboundEmailForHelpdesk({
+        organizationId: orgId,
+        explicitCaseId: recordId,
+        parsedEmail: {
+          fromAddress: fromAddr,
+          subject: parsed.subject || '(no subject)',
+          body: parsed.html || parsed.text || ''
+        },
+        communicationDraft: {}
+      });
+      relatedTo = { moduleKey: 'cases', recordId: helpdeskCaseResult.caseRecord._id };
     } else {
       return res.status(400).json({ success: false, message: 'Unsupported moduleKey for inbound' });
     }
@@ -192,7 +215,7 @@ exports.handleInbound = async (req, res) => {
       references: parsed.references || null,
       receivedAt: new Date(),
       status: 'delivered',
-      relatedTo: { moduleKey, recordId },
+      relatedTo,
       sentByUserId: null,
       attachments: inboundAttachments
     });
@@ -216,27 +239,41 @@ exports.handleInbound = async (req, res) => {
       timestamp: new Date()
     };
 
-    const personForUpdate = await People.findOne(
-      { _id: recordId, organizationId: orgId, deletedAt: null }
-    ).select('activityLogs').lean();
+    if (moduleKey === 'people') {
+      const personForUpdate = await People.findOne(
+        { _id: recordId, organizationId: orgId, deletedAt: null }
+      ).select('activityLogs').lean();
 
-    if (personForUpdate) {
-      if (!Array.isArray(personForUpdate.activityLogs)) {
-        await People.findOneAndUpdate(
-          { _id: recordId, organizationId: orgId, deletedAt: null },
-          { $set: { activityLogs: [newLog] } },
-          { runValidators: false }
-        );
-      } else {
-        await People.findOneAndUpdate(
-          { _id: recordId, organizationId: orgId, deletedAt: null },
-          { $push: { activityLogs: newLog } },
-          { runValidators: false }
-        );
+      if (personForUpdate) {
+        if (!Array.isArray(personForUpdate.activityLogs)) {
+          await People.findOneAndUpdate(
+            { _id: recordId, organizationId: orgId, deletedAt: null },
+            { $set: { activityLogs: [newLog] } },
+            { runValidators: false }
+          );
+        } else {
+          await People.findOneAndUpdate(
+            { _id: recordId, organizationId: orgId, deletedAt: null },
+            { $push: { activityLogs: newLog } },
+            { runValidators: false }
+          );
+        }
       }
     }
 
-    return res.status(200).json({ success: true, data: { communicationId: doc._id } });
+    return res.status(200).json({
+      success: true,
+      data: {
+        communicationId: doc._id,
+        relatedTo,
+        ...(helpdeskCaseResult && {
+          helpdesk: {
+            caseId: helpdeskCaseResult.caseRecord._id,
+            action: helpdeskCaseResult.action
+          }
+        })
+      }
+    });
   } catch (err) {
     console.error('[inboundEmailController] Error:', err);
     return res.status(500).json({
