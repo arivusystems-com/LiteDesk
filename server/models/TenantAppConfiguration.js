@@ -35,7 +35,7 @@ const TenantAppConfigurationSchema = new mongoose.Schema({
     required: true,
     trim: true,
     uppercase: true,
-    enum: ['SALES', 'AUDIT', 'PORTAL', 'LMS'],
+    enum: ['SALES', 'HELPDESK', 'PROJECTS', 'AUDIT', 'PORTAL', 'LMS'],
     index: true
   },
 

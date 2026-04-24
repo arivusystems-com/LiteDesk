@@ -20,12 +20,13 @@ const People = require('../models/People');
 const Task = require('../models/Task');
 const Organization = require('../models/Organization');
 const Deal = require('../models/Deal');
+const Case = require('../models/Case');
 const User = require('../models/User');
 const emailService = require('../services/emailService');
 const replyToTokenService = require('../services/replyToTokenService');
 const { MAX_ATTACHMENT_SIZE_BYTES, MAX_TOTAL_ATTACHMENTS_BYTES } = require('../models/Communication');
 
-const SUPPORTED_MODULES = new Set(['people', 'organizations', 'deals', 'tasks']);
+const SUPPORTED_MODULES = new Set(['people', 'organizations', 'deals', 'tasks', 'cases']);
 
 async function getTenantUserIds(organizationId) {
   const users = await User.find({ organizationId }).select('_id').lean();
@@ -103,7 +104,7 @@ exports.sendEmail = async (req, res) => {
     if (!SUPPORTED_MODULES.has(moduleKey)) {
       return res.status(400).json({
         success: false,
-        message: `Unsupported moduleKey. Supported: people, organizations, deals, tasks`
+        message: `Unsupported moduleKey. Supported: people, organizations, deals, tasks, cases`
       });
     }
 
@@ -122,6 +123,8 @@ exports.sendEmail = async (req, res) => {
       record = await Deal.findOne({ _id: recordId, organizationId: orgId }).lean();
     } else if (moduleKey === 'tasks') {
       record = await Task.findOne({ _id: recordId, organizationId: orgId }).lean();
+    } else if (moduleKey === 'cases') {
+      record = await Case.findOne({ _id: recordId, organizationId: orgId, deletedAt: null }).lean();
     }
 
     if (!record) {
@@ -276,6 +279,25 @@ exports.sendEmail = async (req, res) => {
       });
     } else if (moduleKey === 'tasks') {
       await pushActivityLog(Task, { _id: recordId, organizationId: orgId });
+    } else if (moduleKey === 'cases') {
+      const caseActivity = {
+        activityType: 'email_sent',
+        message: `Email sent: ${subject.trim()}`,
+        internal: true,
+        metadata: {
+          communicationId: doc._id,
+          to: toList[0],
+          status: finalStatus
+        },
+        actorId: req.user._id,
+        actorName: userName,
+        createdAt: new Date()
+      };
+      await Case.findOneAndUpdate(
+        { _id: recordId, organizationId: orgId, deletedAt: null },
+        { $push: { activities: caseActivity } },
+        { runValidators: false }
+      );
     }
 
     const updated = await Communication.findById(doc._id).lean();
@@ -312,7 +334,7 @@ exports.getThreads = async (req, res) => {
     if (!SUPPORTED_MODULES.has(moduleKey)) {
       return res.status(400).json({
         success: false,
-        message: 'Unsupported moduleKey. Supported: people, organizations, deals, tasks'
+        message: 'Unsupported moduleKey. Supported: people, organizations, deals, tasks, cases'
       });
     }
 
@@ -331,6 +353,8 @@ exports.getThreads = async (req, res) => {
       record = await Deal.findOne({ _id: recordId, organizationId: orgId }).lean();
     } else if (moduleKey === 'tasks') {
       record = await Task.findOne({ _id: recordId, organizationId: orgId }).lean();
+    } else if (moduleKey === 'cases') {
+      record = await Case.findOne({ _id: recordId, organizationId: orgId, deletedAt: null }).lean();
     }
 
     if (!record) {

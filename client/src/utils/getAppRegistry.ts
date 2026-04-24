@@ -57,6 +57,31 @@ export async function getAppRegistry(): Promise<AppRegistry> {
             const normalizedAppKey = String(app.appKey || '').toUpperCase();
             const normalizedModuleKey = String(module.moduleKey || '').toLowerCase();
             let route = module.routeBase || `/${module.moduleKey}`;
+            const normalizedRoute = String(route || '').trim().replace(/\/+$/, '');
+            const normalizedIncomingLabel = String(module.label || '').toLowerCase();
+            const isHelpdeskCaseSurface =
+              normalizedAppKey === 'HELPDESK' &&
+              (
+                normalizedModuleKey === 'cases' ||
+                normalizedModuleKey === 'ticket' ||
+                normalizedModuleKey === 'tickets' ||
+                normalizedModuleKey === 'ticklets' ||
+                normalizedRoute === '/cases' ||
+                normalizedRoute === 'cases' ||
+                normalizedRoute === '/helpdesk/cases' ||
+                normalizedIncomingLabel.includes('ticket') ||
+                normalizedIncomingLabel.includes('ticklet')
+              );
+
+            // Defensive normalization for legacy Helpdesk metadata.
+            // Some tenants may still return "/cases" for the Helpdesk case surface.
+            if (
+              isHelpdeskCaseSurface &&
+              (normalizedRoute === '/cases' || normalizedRoute === 'cases')
+            ) {
+              route = '/helpdesk/cases';
+            }
+            const normalizedLabel = isHelpdeskCaseSurface ? 'Cases' : module.label;
 
             // Audit app modules with dedicated static routes should open those routes
             // instead of generic dynamic module routes.
@@ -72,7 +97,7 @@ export async function getAppRegistry(): Promise<AppRegistry> {
 
             return {
             moduleKey: module.moduleKey,
-            label: module.label,
+            label: normalizedLabel,
             route,
             permission: resolveModulePermission(app.appKey, module.moduleKey),
             icon: module.icon,

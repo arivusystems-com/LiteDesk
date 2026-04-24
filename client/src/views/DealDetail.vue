@@ -175,7 +175,6 @@
                       v-for="(entry, idx) in allPeople"
                       :key="`p-${entry.personId?._id || entry.personId}-${entry.role}-${idx}`"
                       class="flex items-center justify-between gap-2 px-3 py-2"
-                      :class="{ 'opacity-60': !entry.isActive }"
                     >
                       <div class="min-w-0 flex-1">
                         <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
@@ -184,7 +183,6 @@
                         <div class="flex items-center gap-2 mt-0.5 flex-wrap">
                           <span class="text-xs text-gray-500 dark:text-gray-400">{{ participantRoleLabel(entry.role, 'person') }}</span>
                           <span v-if="entry.isPrimary" class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">Primary</span>
-                          <span v-if="!entry.isActive" class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300">Inactive</span>
                         </div>
                       </div>
                     </li>
@@ -200,7 +198,6 @@
                       v-for="(entry, idx) in allOrgs"
                       :key="`o-${entry.organizationId?._id || entry.organizationId}-${entry.role}-${idx}`"
                       class="flex items-center justify-between gap-2 px-3 py-2"
-                      :class="{ 'opacity-60': !entry.isActive }"
                     >
                       <div class="min-w-0 flex-1">
                         <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
@@ -209,7 +206,6 @@
                         <div class="flex items-center gap-2 mt-0.5 flex-wrap">
                           <span class="text-xs text-gray-500 dark:text-gray-400">{{ participantRoleLabel(entry.role, 'org') }}</span>
                           <span v-if="entry.isPrimary" class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300">Primary</span>
-                          <span v-if="!entry.isActive" class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300">Inactive</span>
                         </div>
                       </div>
                     </li>
@@ -566,11 +562,11 @@ const primaryCustomer = computed(() => {
 
 const allPeople = computed(() => {
   if (!deal.value?.dealPeople || !Array.isArray(deal.value.dealPeople)) return [];
-  return deal.value.dealPeople.filter((p) => p.personId);
+  return deal.value.dealPeople.filter((p) => p.personId && p.isActive !== false);
 });
 const allOrgs = computed(() => {
   if (!deal.value?.dealOrganizations || !Array.isArray(deal.value.dealOrganizations)) return [];
-  return deal.value.dealOrganizations.filter((o) => o.organizationId);
+  return deal.value.dealOrganizations.filter((o) => o.organizationId && o.isActive !== false);
 });
 const hasMultipleParticipants = computed(() => {
   return allPeople.value.length > 1 || allOrgs.value.length > 1;

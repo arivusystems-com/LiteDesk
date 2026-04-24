@@ -282,13 +282,47 @@ class UICompositionService {
           (typeof moduleDef.name === 'string' && moduleDef.name.trim()) ||
           moduleDef.label;
 
+        // Normalize known legacy/bad route bases that break frontend navigation.
+        // Helpdesk case surfaces must always route through /helpdesk/cases (not /cases),
+        // regardless of legacy module key names (e.g. "ticket", "tickets", "cases").
+        const computedRouteBase = moduleDef.ui?.routeBase || `/${moduleDef.moduleKey}`;
+        const normalizedComputedRouteBase = String(computedRouteBase || '').trim().replace(/\/+$/, '');
+        const moduleKeyLower = String(moduleDef.moduleKey || '').toLowerCase();
+        const displayNameLower = String(displayName || '').toLowerCase();
+        const isHelpdeskCaseSurface =
+          appKeyLower === 'helpdesk' &&
+          (
+            moduleKeyLower === 'cases' ||
+            moduleKeyLower === 'ticket' ||
+            moduleKeyLower === 'tickets' ||
+            moduleKeyLower === 'ticklets' ||
+            normalizedComputedRouteBase === '/cases' ||
+            normalizedComputedRouteBase === 'cases' ||
+            normalizedComputedRouteBase === '/helpdesk/cases' ||
+            displayNameLower.includes('ticket') ||
+            displayNameLower.includes('ticklet')
+          );
+        const normalizedRouteBase =
+          appKeyLower === 'helpdesk' &&
+          (normalizedComputedRouteBase === '/cases' || normalizedComputedRouteBase === 'cases')
+            ? '/helpdesk/cases'
+            : computedRouteBase;
+        const normalizedDisplayName = isHelpdeskCaseSurface ? 'Cases' : displayName;
+        const normalizedPluralLabel = isHelpdeskCaseSurface ? 'Cases' : moduleDef.pluralLabel;
+        const normalizedCreateLabel = isHelpdeskCaseSurface
+          ? 'Create Case'
+          : (moduleDef.ui?.createLabel || `Create ${normalizedDisplayName}`);
+        const normalizedListLabel = isHelpdeskCaseSurface
+          ? 'All Cases'
+          : (moduleDef.ui?.listLabel || `All ${normalizedPluralLabel || normalizedDisplayName}`);
+
         // Apply tenant overrides on top of platform metadata
         const uiModule = {
           moduleKey: moduleDef.moduleKey,
           appKey: moduleDef.appKey.toUpperCase(),
-          label: displayName,
-          pluralLabel: moduleDef.pluralLabel,
-          routeBase: moduleDef.ui?.routeBase || `/${moduleDef.moduleKey}`,
+          label: normalizedDisplayName,
+          pluralLabel: normalizedPluralLabel,
+          routeBase: normalizedRouteBase,
           icon: moduleDef.ui?.icon,
           showInSidebar: tenantConfig?.ui?.showInSidebar !== false && 
                         (moduleDef.ui?.showInSidebar !== false),
@@ -296,8 +330,8 @@ class UICompositionService {
                        tenantConfig?.ui?.order ?? 
                        moduleDef.ui?.sidebarOrder ?? 
                        0,
-          createLabel: moduleDef.ui?.createLabel || `Create ${displayName}`,
-          listLabel: moduleDef.ui?.listLabel || `All ${moduleDef.pluralLabel || displayName}`,
+          createLabel: normalizedCreateLabel,
+          listLabel: normalizedListLabel,
           // Navigation intent flags (for four-section sidebar)
           navigationCore: moduleDef.ui?.navigationCore || false,
           navigationEntity: moduleDef.ui?.navigationEntity || false,
@@ -405,10 +439,15 @@ class UICompositionService {
         const modules = await this.getUIModulesForApp(organizationId, app.appKey);
         
         for (const module of modules) {
+          const appKeySlug = String(module.appKey || app.appKey || '')
+            .toLowerCase()
+            .trim();
+          const routeNamePrefix = appKeySlug ? `${appKeySlug}-${module.moduleKey}` : module.moduleKey;
+
           // List route
           routes.push({
             path: module.routeBase,
-            name: `${module.moduleKey}-list`,
+            name: `${routeNamePrefix}-list`,
             appKey: module.appKey,
             moduleKey: module.moduleKey,
             type: 'list'
@@ -417,7 +456,7 @@ class UICompositionService {
           // Detail route (if module supports it)
           routes.push({
             path: `${module.routeBase}/:id`,
-            name: `${module.moduleKey}-detail`,
+            name: `${routeNamePrefix}-detail`,
             appKey: module.appKey,
             moduleKey: module.moduleKey,
             type: 'detail'
@@ -426,7 +465,7 @@ class UICompositionService {
           // Create route (if module supports creation)
           routes.push({
             path: `${module.routeBase}/new`,
-            name: `${module.moduleKey}-create`,
+            name: `${routeNamePrefix}-create`,
             appKey: module.appKey,
             moduleKey: module.moduleKey,
             type: 'create'

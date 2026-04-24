@@ -262,7 +262,7 @@ onMounted(() => {
 
 **Verification:**
 - Navigating to `/sales/contacts` auto-expands `SALES` domain
-- Navigating to `/helpdesk/tickets` auto-expands `HELPDESK` domain
+- Navigating to `/helpdesk/cases` auto-expands `HELPDESK` domain
 - Works on initial page load (onMounted)
 
 ### ✅ Adding a new app requires no sidebar UI changes
@@ -433,7 +433,7 @@ The sidebar component assumes these route patterns:
 
 ### Module Routes
 - `/sales/contacts` → Sales app, Contacts module
-- `/helpdesk/tickets` → Helpdesk app, Tickets module
+- `/helpdesk/cases` → Helpdesk app, Cases module
 - `/:appKey/:moduleKey` → Generic module route
 
 ### Core Routes

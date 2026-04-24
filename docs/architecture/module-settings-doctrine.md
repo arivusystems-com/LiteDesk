@@ -289,14 +289,14 @@ Application modules are app-specific work objects. They receive Settings interfa
 
 **Why Settings:** Deals have complex workflow requirements. Pipeline and playbook configuration are essential.
 
-#### Tickets (Helpdesk)
-**Settings Location:** `/settings?tab=applications&appKey=HELPDESK&moduleKey=tickets`  
+#### Cases (Helpdesk)
+**Settings Location:** `/settings?tab=applications&appKey=HELPDESK&moduleKey=cases`  
 **Settings Include:**
 - Field definitions
 - Relationship definitions
 - Quick Create configuration
 
-**Why Settings:** Tickets need configurable structure for different support workflows.
+**Why Settings:** Cases need configurable structure for different support workflows.
 
 #### Other Application Modules
 All application modules receive Settings interfaces following the same pattern:

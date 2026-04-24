@@ -247,11 +247,11 @@ Define how Add Person / Quick Create behaves.
 
 2. **Navigation intent metadata:**
    - Source: Deal detail page → App context: **Sales**
-   - Source: Ticket detail page → App context: **Helpdesk**
+   - Source: Case detail page → App context: **Helpdesk**
 
 3. **Current page context:**
    - User is on `/sales/deals` → App context: **Sales**
-   - User is on `/helpdesk/tickets` → App context: **Helpdesk**
+   - User is on `/helpdesk/cases` → App context: **Helpdesk**
 
 4. **Explicit selection required:**
    - If no app context can be determined → Show app selector dialog
@@ -262,7 +262,7 @@ Define how Add Person / Quick Create behaves.
 **Auto-Selection (Allowed):**
 - ✅ User is in Sales app context → Auto-select Sales
 - ✅ User navigates from Deal → Auto-select Sales
-- ✅ User navigates from Ticket → Auto-select Helpdesk
+- ✅ User navigates from Case → Auto-select Helpdesk
 - ✅ Route has explicit app prefix → Auto-select that app
 
 **User Choice Required:**

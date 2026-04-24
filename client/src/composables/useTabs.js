@@ -153,6 +153,11 @@ const normalizeLegacyDashboardPath = (path, title) => {
     return normalizedPath;
   }
 
+  // Legacy Helpdesk tab route persisted before cases namespace was introduced.
+  if (normalizedPath === '/cases' || normalizedPath === '/cases/') {
+    return '/helpdesk/cases';
+  }
+
   return normalizedPath;
 };
 
@@ -489,6 +494,8 @@ const getTitleForPath = (path, params = {}) => {
     '/calendar': 'Events', // backward compat
     '/imports': 'Imports',
     '/items': 'Items',
+    '/helpdesk/cases': 'Cases',
+    '/helpdesk/cases/': 'Cases',
     '/trash': 'Trash',
     '/demo-requests': 'Demo Requests',
     '/instances': 'Instances',
@@ -549,6 +556,14 @@ const getTitleForPath = (path, params = {}) => {
       return 'My Audits';
     }
     return 'Audit';
+  }
+
+  // Special case: Helpdesk cases routes
+  if (path.startsWith('/helpdesk/cases')) {
+    if (segments[3] === 'new' || segments.length <= 3) {
+      return 'Cases';
+    }
+    return 'Case Detail';
   }
   
   // Special case: App-scoped dashboard routes
@@ -718,6 +733,24 @@ export function useTabs() {
     
     // Find existing tab for this path (with or without query params)
     const existingTab = findTabByPath(path);
+    const pathWithoutQuery = String(path || '').split('?')[0];
+    const isCreateRoute = /\/new\/?$/.test(pathWithoutQuery);
+    const parentListPath = isCreateRoute ? pathWithoutQuery.replace(/\/new\/?$/, '') : null;
+
+    // Create routes should reuse their parent list tab (drawer opens in same tab).
+    if (!existingTab && parentListPath) {
+      const parentTab = findTabByPath(parentListPath);
+      if (parentTab) {
+        if (activeTabId.value !== parentTab.id) {
+          activeTabId.value = parentTab.id;
+        }
+        const parentTitle = getTitleForPath(parentListPath, parentTab.params || {});
+        if (parentTitle && parentTab.title !== parentTitle) {
+          parentTab.title = parentTitle;
+        }
+        return;
+      }
+    }
     
     if (existingTab) {
       // Tab exists, switch to it ONLY if we're not already on it
@@ -1023,6 +1056,8 @@ export function useTabs() {
       const oldPath = oldPathValue ? oldPathValue.split('?')[0] : '';
       const newFullPath = route.fullPath;
       const oldFullPath = oldFullPathValue || '';
+      const isCreateRoute = /\/new\/?$/.test(newPath);
+      const parentListPath = isCreateRoute ? newPath.replace(/\/new\/?$/, '') : null;
       
       // Log EVERY route change to debug
       console.log('👀👀👀 Route watcher FIRED:', {
@@ -1109,6 +1144,21 @@ export function useTabs() {
         if (lastPathWithoutQuery === newPathWithoutQuery || newFullPath === lastProgrammaticPath) {
           console.log('🔒 Programmatic navigation path matches, skipping route sync');
           lastProgrammaticPath = null; // Reset after use
+          return;
+        }
+      }
+
+      // Keep create routes in their parent list tab so drawer flows stay in-tab.
+      if (parentListPath) {
+        const parentTab = findTabByPath(parentListPath);
+        if (parentTab) {
+          if (activeTabId.value !== parentTab.id) {
+            activeTabId.value = parentTab.id;
+          }
+          const parentTitle = getTitleForPath(parentListPath, parentTab.params || {});
+          if (parentTitle && parentTab.title !== parentTitle) {
+            parentTab.title = parentTitle;
+          }
           return;
         }
       }

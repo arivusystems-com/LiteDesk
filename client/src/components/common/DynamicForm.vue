@@ -377,6 +377,12 @@ import TaskSubtasksField from '@/components/tasks/TaskSubtasksField.vue';
 import apiClient from '@/utils/apiClient';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
 import {
+  mergeOrgContactLookupForField,
+  resolveOrgContactPair,
+  getOrgContactCoordinatedPatches,
+  unwrapRecordFromListOrGetResponse,
+} from '@/utils/orgContactFormPairing';
+import {
   getFormFieldValue,
   setFieldValue,
   syncPeopleVirtualFieldKeys,
@@ -1204,23 +1210,25 @@ const shouldShowField = (field) => {
 
 // Get field dependency state for a field (reactive)
 const getFieldState = (field) => {
-  if (!field || !field.dependencies || !Array.isArray(field.dependencies) || field.dependencies.length === 0) {
+  if (!field) {
     return {
       readonly: false,
-      required: field.required || false,
+      required: false,
       allowedOptions: null,
       label: null,
       lookupQuery: null,
-      setValue: null
+      setValue: null,
     };
   }
   // Access localFormData.value to ensure reactivity - Vue tracks this dependency
   const currentFormData = localFormData.value;
-  return getFieldDependencyState(field, currentFormData, moduleDefinition.value?.fields || [], {
+  const fields = moduleDefinition.value?.fields || [];
+  const base = getFieldDependencyState(field, currentFormData, fields, {
     currentUser: authStore.user,
     organization: authStore.organization,
     moduleKey: props.moduleKey,
   });
+  return mergeOrgContactLookupForField(field, base, currentFormData, props.moduleKey, fields);
 };
 
 function normalizedRelatedTo(val) {
@@ -1229,14 +1237,42 @@ function normalizedRelatedTo(val) {
   return { type: val.type || 'none', id };
 }
 
-const updateField = (key, value) => {
-  if (props.moduleKey?.toLowerCase() === 'people' && getPeopleRegistryItem(key)?.setValue) {
-    const next = { ...localFormData.value };
-    setFieldValue(next, key, value);
-    localFormData.value = next;
-  } else {
-    localFormData.value[key] = value;
+const updateField = async (key, value) => {
+  const afterPrimary = (() => {
+    if (props.moduleKey?.toLowerCase() === 'people' && getPeopleRegistryItem(key)?.setValue) {
+      const next = { ...localFormData.value };
+      setFieldValue(next, key, value);
+      return next;
+    }
+    return { ...localFormData.value, [key]: value };
+  })();
+
+  localFormData.value = afterPrimary;
+
+  const fields = moduleDefinition.value?.fields || [];
+  const pair = resolveOrgContactPair(props.moduleKey, fields);
+  if (pair) {
+    const fetchPersonById = async (id) => {
+      if (!id) return null;
+      try {
+        const r = await apiClient.get(`/people/${id}`);
+        return unwrapRecordFromListOrGetResponse(r);
+      } catch {
+        return null;
+      }
+    };
+    const patches = await getOrgContactCoordinatedPatches({
+      pair,
+      formAfter: { ...afterPrimary },
+      changedKey: key,
+      newValue: value,
+      fetchPersonById,
+    });
+    if (patches && Object.keys(patches).length > 0) {
+      localFormData.value = { ...afterPrimary, ...patches };
+    }
   }
+
   emit('update:formData', { ...localFormData.value });
 };
 
@@ -1510,12 +1546,11 @@ const fetchModule = async () => {
             const field = targetModule.fields?.find(f => f.key === key);
             return field ? { key: field.key, label: field.label, found: true } : { key, found: false };
           }));
-        } else {
-          console.warn('⚠️ quickCreate array is empty or missing!', {
+        } else if (props.quickCreateMode) {
+          // In strict quick-create mode, empty configuration is meaningful and should be visible in logs.
+          console.warn('⚠️ quickCreate array is empty in strict quickCreateMode', {
             hasQuickCreate: !!targetModule.quickCreate,
-            quickCreateValue: targetModule.quickCreate,
-            quickCreateMode: props.quickCreateMode,
-            willFallback: !props.quickCreateMode
+            quickCreateValue: targetModule.quickCreate
           });
         }
         

@@ -225,7 +225,7 @@ Each user card displays:
 - Grouped by module within app:
   - Contacts (Sales)
   - Deals (Sales)
-  - Tickets (Helpdesk)
+  - Cases (Helpdesk)
   - etc.
 
 **Legacy Permissions (if present):**
@@ -412,7 +412,7 @@ Each user card displays:
 - Within each app, grouped by module:
   - Contacts (Sales)
   - Deals (Sales)
-  - Tickets (Helpdesk)
+  - Cases (Helpdesk)
   - Projects (Projects)
   - etc.
 

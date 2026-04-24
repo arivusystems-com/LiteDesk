@@ -935,10 +935,19 @@ const isAuditRoleLookupField = computed(() => {
   return isUserLookup && (isAuditorLabel || key === 'auditorid' || key === 'reviewerid' || key === 'correctiveownerid');
 });
 
+/** When Settings omits lookupSettings, map known field keys to /people or /v2/organization list APIs. */
+function inferLookupTargetFromFieldKey(fieldKey) {
+  const k = String(fieldKey || '').toLowerCase();
+  if (k === 'contactid' || k === 'personid') return 'people';
+  if (k === 'organizationrefid' || k === 'accountid') return 'organizations';
+  return '';
+}
+
 const isLookupField = computed(() => {
   const dataType = String(props.field?.dataType || '').toLowerCase();
   const hasLookupSettings = !!props.field?.lookupSettings?.targetModule;
   if (hasLookupSettings) return true;
+  if (inferLookupTargetFromFieldKey(props.field?.key)) return true;
   return dataType.includes('lookup') || dataType.includes('reference') || dataType.includes('related');
 });
 
@@ -1092,7 +1101,8 @@ const filteredSearchableLookupOptions = computed(() => {
 });
 
 const lookupTargetModuleKey = computed(() => {
-  const raw = String(props.field?.lookupSettings?.targetModule || '').toLowerCase().trim();
+  const fromSettings = String(props.field?.lookupSettings?.targetModule || '').toLowerCase().trim();
+  const raw = fromSettings || inferLookupTargetFromFieldKey(props.field?.key);
   if (!raw) return '';
   if (raw === 'organization') return 'organizations';
   if (raw === 'contact' || raw === 'person') return 'people';
@@ -1236,6 +1246,7 @@ const isAssignedToField = computed(() => {
       key === 'eventownerid' ||
       key === 'ownerid' ||
       key === 'owner_id' ||
+      key === 'caseownerid' ||
       key === 'accountmanager' ||
       key === 'account_manager') {
     return true;
@@ -1246,6 +1257,7 @@ const isAssignedToField = computed(() => {
       label.includes('assigned to (owner)') ||
       label.includes('event owner') ||
       label.includes('deal owner') ||
+      label.includes('case owner') ||
       label.includes('account manager') ||
       (label === 'owner' && props.field.lookupSettings?.targetModule === 'users') ||
       (label.includes('manager') && props.field.lookupSettings?.targetModule === 'users')) {
@@ -1256,7 +1268,14 @@ const isAssignedToField = computed(() => {
 });
 
 const isUserLookupField = computed(() => {
-  return String(props.field?.lookupSettings?.targetModule || '').toLowerCase() === 'users';
+  if (String(props.field?.lookupSettings?.targetModule || '').toLowerCase() === 'users') {
+    return true;
+  }
+  if (String(props.field?.key || '').toLowerCase() === 'caseownerid') {
+    return true;
+  }
+  const dt = String(props.field?.dataType || '').toLowerCase();
+  return dt === 'user' || dt === 'users' || (dt.includes('user') && dt.includes('lookup'));
 });
 
 const isOrganizationLookupField = computed(() => {
@@ -1730,7 +1749,9 @@ const getSelectedLookupOption = () => {
   // Otherwise, find it in lookupOptions
   const valueId = normalizedLookupValue.value;
   if (lookupOptions.value.length) {
-    const matched = lookupOptions.value.find(opt => opt._id === valueId || opt._id?.toString() === valueId?.toString());
+    const matched = lookupOptions.value.find(
+      (opt) => String(opt?._id ?? '') === String(valueId ?? '')
+    );
     if (matched) return matched;
   }
 
@@ -1768,12 +1789,17 @@ const getLookupSelectedLabel = () => {
   if (isUserLookupField.value) {
     return '';
   }
-  return props.value;
+  // Same for other ID-backed lookups: never show raw ObjectId in the control.
+  const v = props.value;
+  if (typeof v === 'string' && /^[a-f0-9]{24}$/i.test(v)) {
+    return '';
+  }
+  return v;
 };
 
-// Fetch users for any users-lookup field (assignedTo, eventOwnerId, auditorId, reviewerId, etc.)
+// Fetch users for any users-lookup field (assignedTo, eventOwnerId, caseOwnerId, auditorId, etc.)
 const fetchUsers = async ({ autoDefault = false } = {}) => {
-  if (props.field.lookupSettings?.targetModule !== 'users') return;
+  if (!isUserLookupField.value) return;
   
   isLoadingUsers.value = true;
   try {
@@ -1825,18 +1851,19 @@ const fetchLookupOptions = async () => {
   if (!isLookupField.value) return;
   
   // Users lookup: always use /users/list. Only auto-default for assignee/owner fields (never audit roles).
-  if (props.field.lookupSettings?.targetModule === 'users') {
+  if (isUserLookupField.value) {
     await fetchUsers({ autoDefault: isAssignedToField.value || String(props.field?.key || '').toLowerCase() === 'eventownerid' });
     return;
   }
   
-  if (!props.field.lookupSettings?.targetModule) {
+  const targetModule = props.field.lookupSettings?.targetModule || inferLookupTargetFromFieldKey(props.field?.key);
+  if (!targetModule) {
     console.warn('Lookup field missing targetModule:', props.field.key, props.field);
     return;
   }
   
   try {
-    const moduleKey = props.field.lookupSettings.targetModule;
+    const moduleKey = targetModule;
     console.log('Fetching lookup options for module:', moduleKey, 'field:', props.field.key);
     
     // Handle special module key mappings
@@ -1845,8 +1872,16 @@ const fetchLookupOptions = async () => {
       // Try v2 endpoint first, fallback to v1
       endpoint = '/v2/organization';
     }
+    const depParams =
+      props.dependencyState?.lookupQuery && typeof props.dependencyState.lookupQuery === 'object'
+        ? { ...props.dependencyState.lookupQuery }
+        : {};
+    const mk = String(moduleKey || '').toLowerCase();
+    const isPeopleList =
+      mk === 'people' || mk === 'person' || mk === 'contact';
+    const params = isPeopleList ? { limit: 1000, ...depParams } : { limit: 1000 };
     
-    const response = await apiClient.get(endpoint, { params: { limit: 1000 } });
+    const response = await apiClient.get(endpoint, { params });
     
     console.log('Lookup response for', moduleKey, ':', response);
     
@@ -1875,29 +1910,42 @@ const fetchLookupOptions = async () => {
   }
 };
 
-// Ensure read-only lookups can still render a human-friendly label
-// by fetching the record by id if it isn't in the option list.
+// If the option list (org filter, pagination, etc.) omits the selected id, load that record
+// so the combobox shows a name instead of a raw id. Applies to read-only and create/edit.
 const fetchLookupOptionById = async (id) => {
   if (!id || !isLookupField.value) return;
-  const moduleKey = props.field.lookupSettings?.targetModule;
-  if (!moduleKey || moduleKey === 'users') return; // users list is list-only here
+  if (isUserLookupField.value) return;
+
+  const mk = lookupTargetModuleKey.value;
+  if (!mk || mk === 'users') return;
 
   try {
-    let endpoint = `/${moduleKey}/${id}`;
-    if (moduleKey === 'organization' || moduleKey === 'organizations') {
+    let endpoint;
+    if (mk === 'organizations') {
       endpoint = `/v2/organization/${id}`;
+    } else {
+      endpoint = `/${mk}/${id}`;
     }
     const response = await apiClient.get(endpoint);
     if (response?.success) {
       const record = response.data?.data || response.data;
       if (record && record._id) {
-        const exists = lookupOptions.value.some(opt => String(opt._id) === String(record._id));
+        const exists = lookupOptions.value.some((opt) => String(opt?._id) === String(record._id));
         if (!exists) lookupOptions.value = [record, ...lookupOptions.value];
       }
     }
   } catch {
-    // Non-fatal: we can still display the raw id fallback
+    // Non-fatal: label may stay empty until options load
   }
+};
+
+const ensureLookupLabelHydrated = async () => {
+  if (!isLookupField.value) return;
+  if (isUserLookupField.value) return;
+  const id = normalizedLookupValue.value;
+  if (id == null || id === '') return;
+  if (getSelectedLookupOption()) return;
+  await fetchLookupOptionById(String(id));
 };
 
 // Get lookup module name for modal header
@@ -1981,6 +2029,14 @@ const fetchLookupModalData = async () => {
         endpoint = '/v2/organization';
       } else {
         endpoint = `/${moduleKey}`;
+      }
+      if (props.dependencyState?.lookupQuery && typeof props.dependencyState.lookupQuery === 'object') {
+        const mk = String(moduleKey || '').toLowerCase();
+        const isPeopleList = mk === 'people' || mk === 'person' || mk === 'contact';
+        const isOrgList = mk === 'organization' || mk === 'organizations';
+        if (isPeopleList || isOrgList) {
+          params = { ...params, ...props.dependencyState.lookupQuery };
+        }
       }
     } else {
       lookupModalLoading.value = false;
@@ -2073,8 +2129,8 @@ const handlePopulatedValue = () => {
   if (!props.value || typeof props.value !== 'object' || !props.value._id) return;
   
   // Check if this populated object is already in lookupOptions
-  const exists = lookupOptions.value.some(opt => 
-    opt._id === props.value._id || opt._id?.toString() === props.value._id?.toString()
+  const exists = lookupOptions.value.some(
+    (opt) => String(opt?._id) === String(props.value?._id)
   );
   
   // If not found and it's a populated object (has more than just _id), add it
@@ -2083,29 +2139,80 @@ const handlePopulatedValue = () => {
   }
 };
 
+// Stable id for "filter people by org" (avoid refetching when parent re-creates a new lookupQuery object with the same org id)
+const peopleListFilterOrgId = computed(() => {
+  if (lookupTargetModuleKey.value !== 'people' || isUserLookupField.value) return null;
+  const o = props.dependencyState?.lookupQuery?.organization;
+  return o == null || o === '' ? null : String(o);
+});
+
+watch(peopleListFilterOrgId, async (next, prev) => {
+  if (next === prev) return;
+  if (!isLookupField.value) return;
+  if (isUserLookupField.value) return;
+  if (lookupTargetModuleKey.value !== 'people') return;
+  await fetchLookupOptions();
+  handlePopulatedValue();
+  await ensureLookupLabelHydrated();
+});
+
+// When a contact is selected, org lookup uses `ids` to show only that org; refetch when it changes
+const orgListRestrictIds = computed(() => {
+  if (lookupTargetModuleKey.value !== 'organizations' || isUserLookupField.value) return null;
+  const ids = props.dependencyState?.lookupQuery?.ids;
+  if (ids == null || ids === '') return null;
+  return String(ids);
+});
+
+watch(orgListRestrictIds, async (next, prev) => {
+  if (next === prev) return;
+  if (!isLookupField.value) return;
+  if (isUserLookupField.value) return;
+  if (lookupTargetModuleKey.value !== 'organizations') return;
+  await fetchLookupOptions();
+  handlePopulatedValue();
+  await ensureLookupLabelHydrated();
+});
+
 // Watch for field changes to refetch lookup options
 watch(() => props.field, async (newField, oldField) => {
   // If targetModule changed, refetch
   const newDataType = String(newField?.dataType || '').toLowerCase();
   const oldDataType = String(oldField?.dataType || '').toLowerCase();
-  const isNewLookupLike = !!newField?.lookupSettings?.targetModule || newDataType.includes('lookup') || newDataType.includes('reference') || newDataType.includes('related');
-  const isOldLookupLike = !!oldField?.lookupSettings?.targetModule || oldDataType.includes('lookup') || oldDataType.includes('reference') || oldDataType.includes('related');
+  const isNewLookupLike = !!newField?.lookupSettings?.targetModule
+    || newDataType.includes('lookup')
+    || newDataType.includes('reference')
+    || newDataType.includes('related')
+    || newDataType.includes('entity')
+    || !!inferLookupTargetFromFieldKey(newField?.key);
+  const isOldLookupLike = !!oldField?.lookupSettings?.targetModule
+    || oldDataType.includes('lookup')
+    || oldDataType.includes('reference')
+    || oldDataType.includes('related')
+    || oldDataType.includes('entity')
+    || !!inferLookupTargetFromFieldKey(oldField?.key);
   if (isNewLookupLike) {
     const newTargetModule = newField?.lookupSettings?.targetModule;
     const oldTargetModule = oldField?.lookupSettings?.targetModule;
     if (!isOldLookupLike || newTargetModule !== oldTargetModule || !lookupOptions.value.length) {
       await fetchLookupOptions();
       handlePopulatedValue();
+      await ensureLookupLabelHydrated();
     }
   }
 }, { deep: true, immediate: false });
 
 // Watch for value changes to handle populated objects
-watch(() => props.value, () => {
-  if (isLookupField.value) {
-    handlePopulatedValue();
-  }
-}, { deep: true, immediate: true });
+watch(
+  () => props.value,
+  async () => {
+    if (isLookupField.value) {
+      handlePopulatedValue();
+      await ensureLookupLabelHydrated();
+    }
+  },
+  { deep: true, immediate: true }
+);
 
 onMounted(async () => {
   // Fetch lookup options immediately when component mounts
@@ -2113,8 +2220,7 @@ onMounted(async () => {
     await fetchLookupOptions();
     // Handle populated object value after fetching options
     handlePopulatedValue();
-    // If read-only and we still can't resolve display label, fetch the single record
-    if (isReadOnly.value && normalizedLookupValue.value && !getSelectedLookupOption()) {
+    if (normalizedLookupValue.value && !getSelectedLookupOption()) {
       await fetchLookupOptionById(normalizedLookupValue.value);
     }
   }

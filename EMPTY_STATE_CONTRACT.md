@@ -187,7 +187,7 @@ All behavior flows from:
 }
 ```
 
-### Helpdesk with No Tickets (NO_DATA at list level)
+### Helpdesk with No Cases (NO_DATA at list level)
 
 Dashboard:
 
@@ -196,25 +196,25 @@ Dashboard:
   "appKey": "HELPDESK",
   "title": "Helpdesk",
   "modules": [
-    { "moduleKey": "tickets", "route": "/helpdesk/tickets", "visibility": "ENABLED" }
+    { "moduleKey": "cases", "route": "/helpdesk/cases", "visibility": "ENABLED" }
   ],
   "emptyState": null
 }
 ```
 
-Tickets list builder (future):
+Cases list builder (future):
 
 ```json
 {
   "records": [],
   "emptyState": {
     "type": "NO_DATA",
-    "title": "No tickets yet",
-    "description": "You haven't received any helpdesk tickets yet.",
+    "title": "No cases yet",
+    "description": "You haven't received any helpdesk cases yet.",
     "primaryAction": {
-      "label": "Create a test ticket",
-      "route": "/helpdesk/tickets/new",
-      "permission": "tickets.create"
+      "label": "Create a test case",
+      "route": "/helpdesk/cases/new",
+      "permission": "cases.create"
     }
   }
 }

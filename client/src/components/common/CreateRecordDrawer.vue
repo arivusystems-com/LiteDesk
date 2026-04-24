@@ -1,6 +1,6 @@
 <template>
   <TransitionRoot as="template" :show="isOpen">
-    <Dialog class="relative z-[10000]" @close="handleDialogClose">
+    <Dialog :initialFocus="closeButtonRef" class="relative z-[10000]" @close="handleDialogClose">
       <!-- Background overlay -->
       <TransitionChild
         as="template"
@@ -11,7 +11,7 @@
         leave-from="opacity-100"
         leave-to="opacity-0"
       >
-        <div class="fixed inset-0 bg-gray-500/75 dark:bg-black/75" />
+        <div class="fixed inset-0 bg-gray-500/50 dark:bg-black/60" />
       </TransitionChild>
 
       <div class="fixed inset-0 overflow-hidden">
@@ -32,6 +32,8 @@
                     'flex h-full flex-col bg-white dark:bg-gray-800 shadow-xl max-w-[95vw] transition-[width] duration-200 ease-out',
                     fullMode ? 'w-[60rem]' : 'w-[30rem]'
                   ]"
+                  @pointerdown.capture="markUserInteraction"
+                  @focusin.capture="markUserInteraction"
                 >
                 <form @submit.prevent="handleSubmit" class="relative flex h-full flex-col divide-y divide-gray-200 dark:divide-gray-700">
                   <!-- Header: fixed at top -->
@@ -39,6 +41,7 @@
                     <div class="flex items-center justify-between">
                       <DialogTitle class="text-base font-semibold text-white">{{ computedTitle }}</DialogTitle>
                       <button
+                        ref="closeButtonRef"
                         type="button"
                         class="relative rounded-md text-indigo-200 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white cursor-pointer"
                         @click="closeDrawer"
@@ -86,8 +89,8 @@
                             :excludeFields="effectiveExcludeFields"
                             :lockedFields="lockedFields"
                             :showAllFields="isEditing || fullMode || !effectiveQuickCreateMode"
-                            :quickCreateMode="effectiveQuickCreateMode"
-                            :useQuickCreateOrder="(useQuickCreateOrder || effectiveQuickCreateMode) && !fullMode"
+                            :quickCreateMode="strictQuickCreateForForm"
+                            :useQuickCreateOrder="(useQuickCreateOrder || strictQuickCreateForForm) && !fullMode"
                             :singleColumn="!fullMode"
                             :quickCreateFirstWhenExpanded="effectiveQuickCreateMode"
                             @update:formData="updateFormData"
@@ -162,6 +165,7 @@ import { isAuditEventType } from '@/utils/eventUtils';
 import { getEventTypeByKey, getEventTypeByLabel, EVENT_TYPE_DEFINITIONS } from '@/metadata/eventTypes';
 import { useTabs } from '@/composables/useTabs';
 import { getTaskSystemFields } from '@/platform/fields/taskFieldModel';
+import { getCaseSystemFields } from '@/platform/fields/caseFieldModel';
 import { getGlobalSystemFieldKeys, normalizeFieldKeyForSystemMatch } from '@/platform/fields/fieldCapabilityEngine';
 import { useCreationContext } from '@/utils/creationContext';
 import { getParticipationFields, getCoreIdentityFields, mergePeopleVirtualFieldDefinitions } from '@/platform/fields/peopleFieldModel';
@@ -231,6 +235,7 @@ const { openTab, activeTab } = useTabs();
 const { isSalesContext } = useCreationContext();
 const isEditing = computed(() => !!props.record);
 const fullMode = ref(false);
+const closeButtonRef = ref(null);
 
 // Two modes: Quick Create Mode (only quick create fields) | Full Form Mode (all fields from config except system)
 // Show toggle only when in quick create mode (limited fields)
@@ -246,9 +251,25 @@ function toggleFullMode() {
 const effectiveQuickCreateMode = computed(() => {
   if (isEditing.value) return false;
   if (props.quickCreateMode) return true;
-  // Default to Quick Create Mode for these modules (drawer follows Settings)
-  const useQuickCreateByDefault = ['organizations', 'tasks', 'items', 'deals'];
+  // If module settings provide a quickCreate config, default to strict quick-create mode.
+  // This keeps create drawers aligned with Settings-selected fields.
+  const hasConfiguredQuickCreate =
+    Array.isArray(moduleOverrideFromSettings.value?.quickCreate) &&
+    moduleOverrideFromSettings.value.quickCreate.length > 0;
+  if (hasConfiguredQuickCreate) return true;
+
+  // Fallback defaults for modules where create drawers are quick-create first by design.
+  const useQuickCreateByDefault = ['organizations', 'tasks', 'items', 'deals', 'cases'];
   return useQuickCreateByDefault.includes(props.moduleKey?.toLowerCase());
+});
+
+// DynamicForm treats quickCreateMode as strict: empty quickCreate → no fields. Only enable strict
+// mode when Settings (or parent prop) actually defines quickCreate keys; otherwise show required-field fallback.
+const strictQuickCreateForForm = computed(() => {
+  if (!effectiveQuickCreateMode.value) return false;
+  if (props.quickCreateMode) return true;
+  const qc = moduleOverrideFromSettings.value?.quickCreate;
+  return Array.isArray(qc) && qc.length > 0;
 });
 
 // Module name mapping for titles
@@ -257,6 +278,7 @@ const moduleNameMap = {
   'organizations': 'Organization',
   'deals': 'Deal',
   'tasks': 'Task',
+  'cases': 'Case',
   'events': 'Event',
   'users': 'User'
 };
@@ -275,9 +297,28 @@ const computedDescription = computed(() => {
     : `Fill in the information below to create a new ${moduleName.toLowerCase()}.`;
 });
 
+const coreSystemFieldKeys = [
+  '_id',
+  '__v',
+  'organizationId',
+  'organizationid',
+  'createdBy',
+  'createdby',
+  'createdAt',
+  'createdat',
+  'updatedAt',
+  'updatedat',
+  'activityLogs',
+  'activitylogs',
+];
+
 const effectiveExcludeFields = computed(() => {
   const base = props.excludeFields || [];
-  const excluded = new Set([...(base || []), ...getGlobalSystemFieldKeys()]);
+  const excluded = new Set([
+    ...(base || []),
+    ...getGlobalSystemFieldKeys(),
+    ...coreSystemFieldKeys,
+  ]);
   // RULE: Global system fields (trash: deletedAt, deletedBy, deletionReason) never show in create/edit
   if (props.moduleKey === 'deals' && props.useDealRelationshipEditor) {
     // Deal create/edit uses DealRelationshipEditor for links and should hide model-level
@@ -302,6 +343,20 @@ const effectiveExcludeFields = computed(() => {
     ['relatedToType', 'relatedToId', ...taskSystemFields].forEach((k) => excluded.add(k));
     return Array.from(excluded);
   }
+  if (props.moduleKey === 'cases') {
+    const caseSystemFields = (getCaseSystemFields() || []).map((k) => String(k).toLowerCase());
+    const caseSystemPrefixes = ['assignmentcontrol', 'currentslacycle', 'slacycles', 'activities', 'source'];
+    const caseFields = effectiveModuleOverrideForDrawer.value?.fields || [];
+    const caseSystemFieldsFromModule = caseFields
+      .map((field) => String(field?.key || ''))
+      .filter(Boolean)
+      .filter((key) => {
+        const normalized = normalizeFieldKeyForSystemMatch(key);
+        return caseSystemPrefixes.some((prefix) => normalized.startsWith(prefix));
+      });
+    [...caseSystemFields, ...caseSystemFieldsFromModule].forEach((k) => excluded.add(k));
+    return Array.from(excluded);
+  }
   return Array.from(excluded);
 });
 
@@ -315,7 +370,19 @@ async function fetchModuleForDrawer() {
     const data = await apiClient.get('/modules');
     if (!data?.data || !Array.isArray(data.data)) return;
     const keyLower = (props.moduleKey || '').toLowerCase().trim();
-    const mod = data.data.find((m) => (m.key || '').toLowerCase().trim() === keyLower);
+    const currentPath = String(activeTab.value?.path || (typeof window !== 'undefined' ? window.location.pathname : '') || '').toLowerCase();
+    const inferredAppKey =
+      currentPath.startsWith('/helpdesk/') ? 'helpdesk'
+      : currentPath.startsWith('/audit/') ? 'audit'
+      : currentPath.startsWith('/portal/') ? 'portal'
+      : currentPath.startsWith('/projects/') ? 'projects'
+      : currentPath.startsWith('/sales/') ? 'sales'
+      : '';
+
+    const candidates = data.data.filter((m) => (m.key || '').toLowerCase().trim() === keyLower);
+    const mod = inferredAppKey
+      ? (candidates.find((m) => String(m.appKey || '').toLowerCase().trim() === inferredAppKey) || candidates[0])
+      : candidates[0];
     if (mod) {
       if (!mod.quickCreate) mod.quickCreate = [];
       if (!mod.quickCreateLayout) mod.quickCreateLayout = { version: 1, rows: [] };
@@ -350,7 +417,21 @@ const moduleOverrideLoading = ref(false);
 const dealOverrideCache = { mod: null, pipelineKey: undefined, quickMode: undefined, result: null };
 const effectiveModuleOverrideForDrawer = computed(() => {
   const mod = moduleOverrideFromSettings.value;
-  if (!mod || props.moduleKey?.toLowerCase() !== 'deals') return mod;
+  if (!mod) return mod;
+  const moduleKeyLower = String(props.moduleKey || '').toLowerCase();
+
+  // Cases quick create should follow only selected quick-create fields.
+  // Clear advanced layout rows in quick mode to prevent non-selected fields from rendering.
+  if (moduleKeyLower === 'cases') {
+    const quickMode = effectiveQuickCreateMode.value && !fullMode.value;
+    if (!quickMode) return mod;
+    return {
+      ...mod,
+      quickCreateLayout: { version: 1, rows: [] }
+    };
+  }
+
+  if (moduleKeyLower !== 'deals') return mod;
   const pipelineSettings = mod.pipelineSettings;
   const pipelineKey = formData.value?.pipeline;
   const quickMode = effectiveQuickCreateMode.value && !fullMode.value;
@@ -528,7 +609,8 @@ const closeDrawer = () => {
   }
 };
 
-// Handle dialog close (triggered by Esc or backdrop click) — X/Cancel still call closeDrawer() directly
+// Handle dialog close (escape/backdrop/portal interactions).
+// If the user already interacted with the drawer content, treat close as accidental.
 const handleDialogClose = () => {
   if (userHasEdited.value) return;
   closeDrawer();
@@ -604,9 +686,10 @@ const getPreferredPrefillField = (module) => {
     if (match) return match;
   }
 
-  const quickCreateKeys = effectiveQuickCreateMode.value && Array.isArray(module?.quickCreate)
-    ? new Set(module.quickCreate.map((k) => normalizeKey(k)).filter(Boolean))
-    : null;
+  const quickCreateKeys =
+    strictQuickCreateForForm.value && Array.isArray(module?.quickCreate)
+      ? new Set(module.quickCreate.map((k) => normalizeKey(k)).filter(Boolean))
+      : null;
 
   const candidates = fields.filter((f) => {
     if (!f?.key) return false;
@@ -709,6 +792,27 @@ const initializeForm = (module) => {
     }
   }
 
+  // Helpdesk cases: default owner to the signed-in user when creating (unless initialData already set it).
+  if (props.moduleKey === 'cases' && !props.record) {
+    const currentPath = String(
+      activeTab.value?.path ||
+        (typeof window !== 'undefined' ? window.location.pathname : '') ||
+        ''
+    ).toLowerCase();
+    if (currentPath.startsWith('/helpdesk/')) {
+      const raw = authStore.user?._id;
+      const ownerId =
+        raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw._id ?? raw.id ?? null) : raw;
+      if (ownerId != null && ownerId !== '') {
+        const co = formData.value?.caseOwnerId;
+        const isEmpty = co === '' || co === null || co === undefined;
+        if (isEmpty) {
+          formData.value = { ...formData.value, caseOwnerId: ownerId };
+        }
+      }
+    }
+  }
+
 };
 
 const onFormReady = (module) => {
@@ -773,8 +877,21 @@ watch(() => [props.isOpen, props.moduleKey], async ([open, key]) => {
       apiClient.get('/people', { params: { limit: 200 } }),
       apiClient.get('/v2/organization', { params: { limit: 200 } })
     ]);
-    dealPeopleList.value = Array.isArray(peopleRes?.data) ? peopleRes.data : [];
-    dealOrgList.value = Array.isArray(orgRes?.data) ? orgRes.data : [];
+    const normalizeList = (response) => {
+      if (Array.isArray(response)) return response;
+      const candidates = [
+        response?.data,
+        response?.data?.data,
+        response?.data?.items,
+        response?.data?.rows
+      ];
+      for (const c of candidates) {
+        if (Array.isArray(c)) return c;
+      }
+      return [];
+    };
+    dealPeopleList.value = normalizeList(peopleRes);
+    dealOrgList.value = normalizeList(orgRes);
   } catch (e) {
     console.warn('[CreateRecordDrawer] Failed to fetch people/organizations for deal relationships:', e);
     dealPeopleList.value = [];
@@ -873,7 +990,16 @@ const handleSubmit = async () => {
         ...getGlobalSystemFieldKeys(),
         ...(props.moduleKey === 'events' ? ['status'] : [])
       ];
-      
+      // Helpdesk Case: module schema may mark server-managed keys as required; never validate on create.
+      if (props.moduleKey === 'cases' && !isEditing.value) {
+        for (const k of getCaseSystemFields()) {
+          const n = normalizeFieldKeyForSystemMatch(k);
+          if (n && !systemFieldKeys.includes(n)) systemFieldKeys.push(n);
+        }
+        const caseIdNorm = normalizeFieldKeyForSystemMatch('caseId');
+        if (!systemFieldKeys.includes(caseIdNorm)) systemFieldKeys.push(caseIdNorm);
+      }
+
       const allFields = moduleDefinition.value.fields || [];
 
       // Get effective required fields (dependency-driven), excluding system fields
@@ -928,9 +1054,10 @@ const handleSubmit = async () => {
     // See: docs/architecture/task-settings.md Section 3.5
     let submitData = { ...formData.value };
     
-    if (effectiveQuickCreateMode.value && moduleDefinition.value?.quickCreate) {
+    const qcList = moduleDefinition.value?.quickCreate;
+    if (effectiveQuickCreateMode.value && Array.isArray(qcList) && qcList.length > 0) {
       const quickCreateKeys = new Set(
-        (moduleDefinition.value.quickCreate || []).map(k => k?.toLowerCase().trim()).filter(Boolean)
+        qcList.map(k => k?.toLowerCase().trim()).filter(Boolean)
       );
       
       // Fields that are always required by the API (even if not in quickCreate)
@@ -1054,6 +1181,55 @@ const handleSubmit = async () => {
         delete submitData.status;
       }
     }
+
+    // Helpdesk cases: status transitions must use PATCH /:id/status, not PUT
+    let caseEditNextStatus = undefined;
+    if (props.moduleKey === 'cases' && isEditing.value) {
+      if (Object.prototype.hasOwnProperty.call(submitData, 'status')) {
+        caseEditNextStatus = submitData.status;
+        delete submitData.status;
+      }
+    }
+
+    // Helpdesk cases: the form is seeded with the full record; updateCase() only accepts
+    // mutable fields + ad-hoc custom keys. Read-only schema keys (caseId, activities, …)
+    // in the body cause 400 "Unsupported or system-managed fields" and block every save.
+    if (props.moduleKey === 'cases') {
+      const caseReadOnlyTopLevel = new Set([
+        'caseId',
+        'currentSlaCycle',
+        'slaCycles',
+        'activities',
+        'assignmentControl',
+        'source',
+        'customFields',
+        'createdBy',
+        'updatedBy',
+        'organizationId',
+        'deletedAt',
+        'deletedBy',
+        'deletionReason',
+        '_id',
+        '__v'
+      ]);
+      if (isEditing.value) {
+        caseReadOnlyTopLevel.add('status');
+      }
+      // Flattened nested paths (e.g. from record seeding) must not be sent — server rejects them.
+      const caseDottedReadOnlyPrefixes = [
+        'assignmentControl.',
+        'currentSlaCycle.',
+        'slaCycles.',
+        'activities.'
+      ];
+      const pruned = {};
+      for (const [key, value] of Object.entries(submitData)) {
+        if (caseReadOnlyTopLevel.has(key)) continue;
+        if (caseDottedReadOnlyPrefixes.some((p) => key.startsWith(p))) continue;
+        pruned[key] = value;
+      }
+      submitData = pruned;
+    }
     
     // Handle nested object conflicts (e.g., 'settings' and 'settings.primaryColor')
     // Remove parent keys if nested dot-notation keys exist to avoid Mongoose conflicts
@@ -1123,19 +1299,23 @@ const handleSubmit = async () => {
         preferredPersonId: normalizeRelationshipId(formData.value?.contactId || props.record?.contactId),
         preferredOrganizationId: normalizeRelationshipId(formData.value?.accountId || props.record?.accountId)
       });
-      const people = (normalizedRelationships.dealPeople || []).map((p) => ({
+      const people = (normalizedRelationships.dealPeople || [])
+        .filter((p) => p.isActive !== false)
+        .map((p) => ({
         personId: norm(p.personId),
         role: p.role,
         isPrimary: !!p.isPrimary,
-        isActive: p.isActive !== false,
+        isActive: true,
         addedAt: p.addedAt || new Date(),
         addedBy: p.addedBy || null
       }));
-      const orgs = (normalizedRelationships.dealOrganizations || []).map((o) => ({
+      const orgs = (normalizedRelationships.dealOrganizations || [])
+        .filter((o) => o.isActive !== false)
+        .map((o) => ({
         organizationId: norm(o.organizationId),
         role: o.role,
         isPrimary: !!o.isPrimary,
-        isActive: o.isActive !== false,
+        isActive: true,
         addedAt: o.addedAt || new Date(),
         addedBy: o.addedBy || null
       }));
@@ -1173,6 +1353,7 @@ const handleSubmit = async () => {
       'deals': '/deals',
       'tasks': '/tasks',
       'events': '/events',
+      'cases': '/helpdesk/cases',
       'users': '/users'
     };
     
@@ -1258,8 +1439,42 @@ const handleSubmit = async () => {
 
     let response;
     if (isEditing.value && props.record?._id) {
-      // Update existing record
-      response = await apiClient.put(`${endpoint}/${props.record._id}`, submitData);
+      if (props.moduleKey === 'cases') {
+        const id = props.record._id;
+        const prevStatus = props.record?.status;
+        const statusChanged =
+          caseEditNextStatus != null && String(caseEditNextStatus) !== String(prevStatus ?? '');
+
+        let putResult = null;
+        if (Object.keys(submitData).length > 0) {
+          putResult = await apiClient.put(`${endpoint}/${id}`, submitData);
+        } else if (!statusChanged) {
+          throw new Error('No changes to save');
+        }
+
+        let patchResult = null;
+        if (statusChanged) {
+          const patchBody = { status: caseEditNextStatus };
+          const rs = String(
+            (formData.value?.resolutionSummary ??
+              putResult?.data?.resolutionSummary ??
+              props.record?.resolutionSummary) ||
+              ''
+          ).trim();
+          if (
+            (caseEditNextStatus === 'Resolved' || caseEditNextStatus === 'Closed') &&
+            rs
+          ) {
+            patchBody.resolutionSummary = rs;
+          }
+          patchResult = await apiClient.patch(`${endpoint}/${id}/status`, patchBody);
+        }
+
+        const merged = patchResult?.data ?? putResult?.data;
+        response = { success: true, data: merged };
+      } else {
+        response = await apiClient.put(`${endpoint}/${props.record._id}`, submitData);
+      }
     } else if (usePeopleCreateFlow) {
       // People create in Sales context: create→attach as Lead (standardized: appKey + role)
       response = await apiClient.post('/people/create', {
@@ -1302,6 +1517,7 @@ const handleSubmit = async () => {
             'deals': () => savedRecord.name || 'Deal',
             'tasks': () => savedRecord.title || 'Task',
             'events': () => savedRecord.eventName || savedRecord.title || 'Event',
+            'cases': () => savedRecord.caseId || savedRecord.title || 'Case',
             'users': () => savedRecord.firstName && savedRecord.lastName 
               ? `${savedRecord.firstName} ${savedRecord.lastName}`.trim()
               : savedRecord.email || savedRecord.username || 'User'
@@ -1321,6 +1537,7 @@ const handleSubmit = async () => {
             'deals': `/deals/${recordId}`,
             'tasks': `/tasks/${recordId}`,
             'events': `/events/${recordId}`,
+            'cases': `/helpdesk/cases/${recordId}`,
             'users': `/users/${recordId}`
           };
           
@@ -1333,6 +1550,7 @@ const handleSubmit = async () => {
             'deals': 'briefcase',
             'tasks': 'check',
             'events': '📅',
+            'cases': 'lifebuoy',
             'users': 'user'
           };
           

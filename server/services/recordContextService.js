@@ -380,12 +380,18 @@ async function getRecordContext(organizationId, appKey, moduleKey, recordId, opt
           relDef.source.moduleKey
         );
         const sourceLookupKeys = getLookupFieldKeysForTarget(sourceDef, relDef.target.moduleKey);
-        const effectiveLookupKeys =
-          sourceLookupKeys.length === 0 &&
-          String(relDef.source?.moduleKey || '').toLowerCase() === 'people' &&
-          String(relDef.target?.moduleKey || '').toLowerCase() === 'organizations'
-            ? ['organization', 'organizationId']
-            : sourceLookupKeys;
+        const srcMod = String(relDef.source?.moduleKey || '').toLowerCase();
+        const tgtMod = String(relDef.target?.moduleKey || '').toLowerCase();
+        let effectiveLookupKeys = sourceLookupKeys;
+        if (sourceLookupKeys.length === 0) {
+          if (srcMod === 'people' && tgtMod === 'organizations') {
+            effectiveLookupKeys = ['organization', 'organizationId'];
+          } else if (srcMod === 'cases' && tgtMod === 'people') {
+            effectiveLookupKeys = ['contactId'];
+          } else if (srcMod === 'cases' && tgtMod === 'organizations') {
+            effectiveLookupKeys = ['organizationRefId'];
+          }
+        }
         const lookupRefs = await getRecordLookupLinks(
           organizationId,
           relDef.source.appKey,
@@ -403,12 +409,18 @@ async function getRecordContext(organizationId, appKey, moduleKey, recordId, opt
           relDef.source.moduleKey
         );
         const sourceLookupKeys = getLookupFieldKeysForTarget(sourceDef, moduleKey);
-        const effectiveSourceLookupKeys =
-          sourceLookupKeys.length === 0 &&
-          String(relDef.source?.moduleKey || '').toLowerCase() === 'people' &&
-          String(moduleKey || '').toLowerCase() === 'organizations'
-            ? ['organization', 'organizationId']
-            : sourceLookupKeys;
+        const srcModRev = String(relDef.source?.moduleKey || '').toLowerCase();
+        const curMod = String(moduleKey || '').toLowerCase();
+        let effectiveSourceLookupKeys = sourceLookupKeys;
+        if (sourceLookupKeys.length === 0) {
+          if (srcModRev === 'people' && curMod === 'organizations') {
+            effectiveSourceLookupKeys = ['organization', 'organizationId'];
+          } else if (srcModRev === 'cases' && curMod === 'people') {
+            effectiveSourceLookupKeys = ['contactId'];
+          } else if (srcModRev === 'cases' && curMod === 'organizations') {
+            effectiveSourceLookupKeys = ['organizationRefId'];
+          }
+        }
         const reverseRefs = await getReverseLookupLinks(
           organizationId,
           relDef.source.appKey,

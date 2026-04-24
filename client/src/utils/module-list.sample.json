@@ -211,20 +211,20 @@
         "pageSizeOptions": [10, 25, 50, 100]
       }
     },
-    "helpdeskTickets": {
-      "moduleKey": "tickets",
+    "helpdeskCases": {
+      "moduleKey": "cases",
       "appKey": "HELPDESK",
-      "title": "Tickets",
+      "title": "Cases",
       "layout": "BOARD",
       "columns": [
         {
           "key": "id",
-          "label": "Ticket #",
+          "label": "Case #",
           "dataType": "text",
           "sortable": true,
           "filterable": false,
           "visibility": "ENABLED",
-          "fieldPath": "ticketNumber",
+          "fieldPath": "caseNumber",
           "order": 1
         },
         {
@@ -281,10 +281,10 @@
       "primaryActions": [
         {
           "key": "create",
-          "label": "New Ticket",
+          "label": "New Case",
           "type": "create",
-          "route": "/helpdesk/tickets/new",
-          "permission": "tickets.create",
+          "route": "/helpdesk/cases/new",
+          "permission": "cases.create",
           "visibility": "ENABLED",
           "icon": "plus",
           "variant": "primary",
@@ -296,7 +296,7 @@
           "key": "assign",
           "label": "Assign",
           "type": "assign",
-          "permission": "tickets.edit",
+          "permission": "cases.edit",
           "visibility": "ENABLED",
           "icon": "user",
           "variant": "secondary",
@@ -307,7 +307,7 @@
           "key": "close",
           "label": "Close",
           "type": "custom",
-          "permission": "tickets.edit",
+          "permission": "cases.edit",
           "visibility": "ENABLED",
           "icon": "check",
           "variant": "secondary",
@@ -320,7 +320,7 @@
           "key": "view",
           "label": "View",
           "type": "view",
-          "route": "/helpdesk/tickets/:id",
+          "route": "/helpdesk/cases/:id",
           "visibility": "ENABLED",
           "icon": "eye",
           "variant": "secondary",
@@ -330,8 +330,8 @@
           "key": "edit",
           "label": "Edit",
           "type": "edit",
-          "route": "/helpdesk/tickets/:id/edit",
-          "permission": "tickets.edit",
+          "route": "/helpdesk/cases/:id/edit",
+          "permission": "cases.edit",
           "visibility": "ENABLED",
           "icon": "pencil",
           "variant": "secondary",
@@ -370,11 +370,11 @@
       ],
       "emptyState": {
         "type": "NO_DATA",
-        "title": "No tickets found",
-        "description": "Get started by creating your first ticket.",
+        "title": "No cases found",
+        "description": "Get started by creating your first case.",
         "primaryAction": {
-          "label": "Create ticket",
-          "route": "/helpdesk/tickets/new"
+          "label": "Create case",
+          "route": "/helpdesk/cases/new"
         }
       },
       "defaultSort": {

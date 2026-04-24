@@ -491,7 +491,7 @@ exports.getApplications = async (req, res) => {
         // Valid apps registry (platform apps currently supported for tenants)
         // NOTE: Helpdesk, Projects, and LMS have been removed from the platform
         // for this deployment. Keep this list in sync with AppDefinition seeds.
-        const VALID_APPS = ['SALES', 'PORTAL', 'AUDIT'];
+        const VALID_APPS = ['SALES', 'HELPDESK', 'PROJECTS', 'PORTAL', 'AUDIT', 'LMS'];
         
         // App metadata (in a real implementation, this would come from AppDefinition model)
         const appMetadata = {
@@ -610,7 +610,7 @@ exports.getApplication = async (req, res) => {
 
         // Validate app key
         // Keep in sync with getApplications VALID_APPS
-        const VALID_APPS = ['SALES', 'PORTAL', 'AUDIT'];
+        const VALID_APPS = ['SALES', 'HELPDESK', 'PROJECTS', 'PORTAL', 'AUDIT', 'LMS'];
         const appKeyUpper = appKey.toUpperCase();
         if (!VALID_APPS.includes(appKeyUpper)) {
             return res.status(400).json({

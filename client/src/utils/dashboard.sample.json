@@ -234,14 +234,14 @@
     "helpdesk": {
       "appKey": "HELPDESK",
       "title": "Helpdesk",
-      "description": "Manage support tickets and customer service",
+      "description": "Manage support cases and customer service",
       "actions": [
         {
-          "key": "create-ticket",
-          "label": "New Ticket",
+          "key": "create-case",
+          "label": "New Case",
           "type": "create",
-          "route": "/helpdesk/tickets/new",
-          "permission": "tickets.create",
+          "route": "/helpdesk/cases/new",
+          "permission": "cases.create",
           "icon": "plus",
           "variant": "primary",
           "order": 1
@@ -259,8 +259,8 @@
       ],
       "kpis": [
         {
-          "key": "open-tickets",
-          "label": "Open Tickets",
+          "key": "open-cases",
+          "label": "Open Cases",
           "value": 42,
           "previousValue": 38,
           "change": {
@@ -269,10 +269,10 @@
             "period": "vs last week"
           },
           "timeScope": "this_week",
-          "permission": "tickets.view",
+          "permission": "cases.view",
           "icon": "ticket",
           "variant": "warning",
-          "linkTo": "/helpdesk/tickets?status=open",
+          "linkTo": "/helpdesk/cases?status=open",
           "order": 1
         },
         {
@@ -286,7 +286,7 @@
             "period": "vs last week"
           },
           "timeScope": "this_week",
-          "permission": "tickets.view",
+          "permission": "cases.view",
           "icon": "clock",
           "variant": "success",
           "order": 2
@@ -302,7 +302,7 @@
             "period": "vs last month"
           },
           "timeScope": "this_month",
-          "permission": "tickets.view",
+          "permission": "cases.view",
           "icon": "star",
           "variant": "success",
           "order": 3
@@ -318,7 +318,7 @@
             "period": "vs yesterday"
           },
           "timeScope": "today",
-          "permission": "tickets.view",
+          "permission": "cases.view",
           "icon": "check-circle",
           "variant": "success",
           "order": 4
@@ -326,11 +326,11 @@
       ],
       "modules": [
         {
-          "moduleKey": "tickets",
-          "label": "Tickets",
-          "route": "/helpdesk/tickets",
-          "description": "View and manage support tickets",
-          "permission": "tickets.view",
+          "moduleKey": "cases",
+          "label": "Cases",
+          "route": "/helpdesk/cases",
+          "description": "View and manage support cases",
+          "permission": "cases.view",
           "icon": "ticket",
           "count": 42,
           "order": 1
@@ -347,23 +347,23 @@
       ],
       "widgets": [
         {
-          "key": "recent-tickets",
+          "key": "recent-cases",
           "type": "activity",
-          "title": "Recent Tickets",
-          "permission": "tickets.view",
+          "title": "Recent Cases",
+          "permission": "cases.view",
           "order": 1,
           "data": {
             "items": [
               {
                 "id": "1",
-                "type": "ticket_created",
-                "message": "New ticket: Login issue",
+                "type": "case_created",
+                "message": "New case: Login issue",
                 "timestamp": "2025-01-15T09:15:00Z",
                 "entity": {
-                  "type": "ticket",
+                  "type": "case",
                   "id": "456",
                   "name": "Login issue",
-                  "route": "/helpdesk/tickets/456"
+                  "route": "/helpdesk/cases/456"
                 }
               }
             ]
@@ -380,10 +380,10 @@
               {
                 "id": "1",
                 "type": "warning",
-                "title": "High ticket volume",
-                "message": "You have 15 tickets pending response",
-                "actionLink": "/helpdesk/tickets?status=pending",
-                "actionLabel": "View Tickets",
+                "title": "High case volume",
+                "message": "You have 15 cases pending response",
+                "actionLink": "/helpdesk/cases?status=pending",
+                "actionLabel": "View Cases",
                 "timestamp": "2025-01-15T08:00:00Z"
               }
             ]
@@ -392,12 +392,12 @@
       ],
       "emptyState": {
         "type": "NO_DATA",
-        "title": "No tickets yet",
-        "description": "You haven't received any helpdesk tickets yet.",
+        "title": "No cases yet",
+        "description": "You haven't received any helpdesk cases yet.",
         "primaryAction": {
-          "label": "Create a test ticket",
-          "route": "/helpdesk/tickets/new",
-          "permission": "tickets.create"
+          "label": "Create a test case",
+          "route": "/helpdesk/cases/new",
+          "permission": "cases.create"
         },
         "secondaryAction": {
           "label": "Configure helpdesk",

@@ -255,8 +255,8 @@
           "appKey": "SALES"
         },
         {
-          "id": "module-HELPDESK-tickets",
-          "label": "Tickets",
+          "id": "module-HELPDESK-cases",
+          "label": "Cases",
           "scope": "MODULE",
           "category": "modules",
           "appKey": "HELPDESK"

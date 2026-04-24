@@ -151,6 +151,45 @@ function formatPeopleOrganizationForLog(value, nameMap) {
 }
 
 /**
+ * @param {*} value
+ * @param {Map<string, string>} nameMap
+ * @returns {string}
+ */
+function formatCaseUserRefForLog(value, nameMap) {
+  if (value === undefined || value === null || value === '') return 'Empty';
+  if (typeof value === 'object' && !Array.isArray(value) && value !== null) {
+    const fn = value.firstName;
+    const ln = value.lastName;
+    const combined = [fn, ln].filter(Boolean).join(' ').trim();
+    if (combined) return combined;
+  }
+  const id = extractObjectIdRef(value);
+  if (!id) return formatValueForLog(value);
+  const key = id.toString();
+  if (nameMap && nameMap.has(key)) return nameMap.get(key);
+  return '[Reference]';
+}
+
+/**
+ * @param {*} value
+ * @param {Map<string, string>} nameMap
+ * @returns {string}
+ */
+function formatCaseContactRefForLog(value, nameMap) {
+  if (value === undefined || value === null || value === '') return 'Empty';
+  if (typeof value === 'object' && !Array.isArray(value) && value !== null) {
+    if (typeof value.name === 'string' && value.name.trim()) return value.name.trim();
+    const parts = [value.first_name, value.last_name].filter(Boolean);
+    if (parts.length) return parts.join(' ').trim();
+  }
+  const id = extractObjectIdRef(value);
+  if (!id) return formatValueForLog(value);
+  const key = id.toString();
+  if (nameMap && nameMap.has(key)) return nameMap.get(key);
+  return '[Reference]';
+}
+
+/**
  * Append a single activity log entry to RecordActivity.
  * @param {{
  *   organizationId: mongoose.Types.ObjectId,
@@ -222,6 +261,75 @@ async function appendFieldChangeLogs({
   const crmOrgNameMap =
     orgIdsToResolve.size > 0 ? await resolveCrmOrganizationNames(orgIdsToResolve, organizationId) : new Map();
 
+  let caseUserNameMap = new Map();
+  let caseContactNameMap = new Map();
+  let caseCrmOrgNameMap = new Map();
+  if (mod === 'cases') {
+    const caseUserIds = new Set();
+    const caseContactIds = new Set();
+    const caseOrgIds = new Set();
+    for (const fieldKey of keys) {
+      if (SYSTEM_KEYS.has(fieldKey)) continue;
+      if (fieldKey === 'caseOwnerId') {
+        for (const val of [prev[fieldKey], updated[fieldKey]]) {
+          const id = extractObjectIdRef(val);
+          if (id) caseUserIds.add(id.toString());
+        }
+      } else if (fieldKey === 'contactId') {
+        for (const val of [prev[fieldKey], updated[fieldKey]]) {
+          const id = extractObjectIdRef(val);
+          if (id) caseContactIds.add(id.toString());
+        }
+      } else if (fieldKey === 'organizationRefId') {
+        for (const val of [prev[fieldKey], updated[fieldKey]]) {
+          const id = extractObjectIdRef(val);
+          if (id) caseOrgIds.add(id.toString());
+        }
+      }
+    }
+    if (caseUserIds.size > 0) {
+      const User = require('../models/User');
+      const uids = [...caseUserIds]
+        .filter((id) => mongoose.Types.ObjectId.isValid(id))
+        .map((id) => new mongoose.Types.ObjectId(id));
+      const users = await User.find({ _id: { $in: uids }, organizationId })
+        .select('firstName lastName username email')
+        .lean();
+      caseUserNameMap = new Map(
+        users.map((u) => {
+          const name =
+            [u.firstName, u.lastName].filter(Boolean).join(' ').trim() || u.username || u.email || u._id.toString();
+          return [u._id.toString(), name];
+        })
+      );
+    }
+    if (caseContactIds.size > 0) {
+      const People = require('../models/People');
+      const pids = [...caseContactIds]
+        .filter((id) => mongoose.Types.ObjectId.isValid(id))
+        .map((id) => new mongoose.Types.ObjectId(id));
+      const people = await People.find({
+        _id: { $in: pids },
+        organizationId,
+        deletedAt: null
+      })
+        .select('first_name last_name name')
+        .lean();
+      caseContactNameMap = new Map(
+        people.map((p) => {
+          const name =
+            (p.name && String(p.name).trim()) ||
+            [p.first_name, p.last_name].filter(Boolean).join(' ').trim() ||
+            p._id.toString();
+          return [p._id.toString(), name];
+        })
+      );
+    }
+    if (caseOrgIds.size > 0) {
+      caseCrmOrgNameMap = await resolveCrmOrganizationNames(caseOrgIds, organizationId);
+    }
+  }
+
   const entries = [];
 
   for (const fieldKey of keys) {
@@ -238,6 +346,18 @@ async function appendFieldChangeLogs({
     } else if (mod === 'people' && fieldKey === 'organization') {
       fromStr = formatPeopleOrganizationForLog(fromVal, crmOrgNameMap);
       toStr = formatPeopleOrganizationForLog(toVal, crmOrgNameMap);
+      fieldLabel = getFieldLabel(fieldKey, fieldLabels);
+    } else if (mod === 'cases' && fieldKey === 'caseOwnerId') {
+      fromStr = formatCaseUserRefForLog(fromVal, caseUserNameMap);
+      toStr = formatCaseUserRefForLog(toVal, caseUserNameMap);
+      fieldLabel = getFieldLabel(fieldKey, fieldLabels);
+    } else if (mod === 'cases' && fieldKey === 'contactId') {
+      fromStr = formatCaseContactRefForLog(fromVal, caseContactNameMap);
+      toStr = formatCaseContactRefForLog(toVal, caseContactNameMap);
+      fieldLabel = getFieldLabel(fieldKey, fieldLabels);
+    } else if (mod === 'cases' && fieldKey === 'organizationRefId') {
+      fromStr = formatPeopleOrganizationForLog(fromVal, caseCrmOrgNameMap);
+      toStr = formatPeopleOrganizationForLog(toVal, caseCrmOrgNameMap);
       fieldLabel = getFieldLabel(fieldKey, fieldLabels);
     } else {
       fromStr = formatValueForLog(fromVal);

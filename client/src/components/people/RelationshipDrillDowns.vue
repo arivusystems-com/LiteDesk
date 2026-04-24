@@ -135,8 +135,8 @@ const viewAllMeetings = () => {
 };
 
 const viewAllCases = () => {
-  // Cases might be under helpdesk or a different module
-  openTab(`/cases?personId=${props.personId}`, {
+  // Helpdesk cases live under /helpdesk/cases.
+  openTab(`/helpdesk/cases?personId=${props.personId}`, {
     title: `Cases for ${props.personName}`,
     icon: 'clipboard-document',
     insertAdjacent: true

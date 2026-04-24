@@ -68,6 +68,21 @@ describe('FieldCapabilityEngine', () => {
     });
   });
 
+  describe('Cases: flattened nested paths under system objects', () => {
+    it('isSystemField is true for assignmentControl leaf paths (list columns from schema)', () => {
+      expect(isSystemField('cases', field('assignmentControl.lockReason'))).toBe(true);
+      expect(isSystemField('case', field('assignmentControl.isLocked'))).toBe(true);
+    });
+
+    it('canEditField is false for those paths', () => {
+      expect(canEditField('cases', field('assignmentControl.lockReason'))).toBe(false);
+    });
+
+    it('core case fields with dotted keys are not treated as system unless root is system', () => {
+      expect(isSystemField('cases', field('title'))).toBe(false);
+    });
+  });
+
   describe('Unknown module', () => {
     it('safe fallback: isSystemField returns false', () => {
       expect(isSystemField('unknownModule', field('_id'))).toBe(false);

@@ -3,6 +3,8 @@ const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
 const { organizationIsolation } = require('../middleware/organizationMiddleware');
 const controller = require('../controllers/settingsController');
+const helpdeskSettingsController = require('../controllers/helpdeskSettingsController');
+const assignmentRulesController = require('../controllers/assignmentRulesController');
 
 // All routes require authentication and organization context
 router.use(protect);
@@ -24,7 +26,14 @@ router.put('/core-modules/people/people-types', controller.updatePeopleTypes);
 
 // Applications endpoints
 router.get('/applications', controller.getApplications);
+router.get('/applications/helpdesk/execution-settings', helpdeskSettingsController.getHelpdeskExecutionSettings);
+router.put('/applications/helpdesk/execution-settings', helpdeskSettingsController.updateHelpdeskExecutionSettings);
 router.get('/applications/:appKey', controller.getApplication);
+
+// Assignment Rules (Step 7A simulation foundation)
+router.get('/automation/assignment-rules', assignmentRulesController.getAssignmentRuleSet);
+router.put('/automation/assignment-rules', assignmentRulesController.upsertAssignmentRuleSet);
+router.post('/automation/assignment-rules/simulate', assignmentRulesController.simulateAssignmentRules);
 
 // Subscriptions endpoints
 router.get('/subscriptions', controller.getSubscriptions);

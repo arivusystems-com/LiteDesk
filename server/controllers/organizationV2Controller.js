@@ -70,8 +70,37 @@ exports.create = async (req, res) => {
     if (org.derivedStatus !== undefined) {
       await org.save();
     }
+
+    try {
+      const { runImmediateAssignmentForSalesRecord } = require('../services/assignmentExecutionService');
+      const { enqueueAssignmentJobsForSalesRecord } = require('../services/assignmentSchedulingService');
+      const tenantOrganizationId = req.user?.organizationId;
+      if (tenantOrganizationId) {
+        const fresh = await Organization.findById(org._id);
+        if (fresh) {
+          await runImmediateAssignmentForSalesRecord({
+            record: fresh,
+            moduleKey: 'organizations',
+            actorId: req.user._id,
+            triggerSource: 'immediate',
+            changedFields: [],
+            tenantOrganizationId
+          });
+          await enqueueAssignmentJobsForSalesRecord({
+            record: fresh,
+            moduleKey: 'organizations',
+            actorId: req.user._id,
+            changedFields: [],
+            tenantOrganizationId
+          });
+        }
+      }
+    } catch (assignErr) {
+      console.error('[organizationV2Controller] assignment on create failed:', assignErr?.message || assignErr);
+    }
     
-    res.status(201).json({ success: true, data: flattenCustomFieldsForResponse(org) });
+    const createdOrg = await Organization.findById(org._id);
+    res.status(201).json({ success: true, data: flattenCustomFieldsForResponse(createdOrg || org) });
   } catch (error) {
     res.status(400).json({ success: false, message: 'Error creating organization', error: error.message });
   }
@@ -104,6 +133,20 @@ exports.list = async (req, res) => {
       createdBy: { $in: userIds }, // Only Sales orgs created by users from this tenant
       deletedAt: null
     };
+
+    // Restrict list to specific id(s), e.g. paired contact→org UI (lookup combobox shows one org)
+    if (req.query.ids) {
+      const parts = String(req.query.ids)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const valid = parts.filter((id) => mongoose.Types.ObjectId.isValid(id));
+      if (valid.length === 1) {
+        query._id = valid[0];
+      } else if (valid.length > 1) {
+        query._id = { $in: valid };
+      }
+    }
     
     // Note: Organizations use 'types' array field, not 'type'
     // For query params, we'll filter on the types array
@@ -397,7 +440,36 @@ exports.update = async (req, res) => {
       console.warn('Record activity log (organization update) failed:', logErr?.message || logErr);
     }
 
-    res.json({ success: true, data: flattenCustomFieldsForResponse(updated) });
+    try {
+      const { runImmediateAssignmentForSalesRecord } = require('../services/assignmentExecutionService');
+      const { enqueueAssignmentJobsForSalesRecord } = require('../services/assignmentSchedulingService');
+      const assignDoc = await Organization.findById(updated._id);
+      if (assignDoc) {
+        const changedKeys = Object.keys(req.body || {});
+        await runImmediateAssignmentForSalesRecord({
+          record: assignDoc,
+          moduleKey: 'organizations',
+          actorId: req.user._id,
+          triggerSource: 'immediate',
+          changedFields: changedKeys,
+          tenantOrganizationId
+        });
+        await enqueueAssignmentJobsForSalesRecord({
+          record: assignDoc,
+          moduleKey: 'organizations',
+          actorId: req.user._id,
+          changedFields: changedKeys,
+          tenantOrganizationId
+        });
+      }
+    } catch (assignErr) {
+      console.error('[organizationV2Controller] assignment on update failed:', assignErr?.message || assignErr);
+    }
+
+    const out = await Organization.findById(updated._id)
+      .populate('createdBy', 'firstName lastName email avatar username')
+      .populate('assignedTo', 'firstName lastName email avatar username');
+    res.json({ success: true, data: flattenCustomFieldsForResponse(out || updated) });
   } catch (error) {
     res.status(400).json({ success: false, message: 'Error updating organization', error: error.message });
   }

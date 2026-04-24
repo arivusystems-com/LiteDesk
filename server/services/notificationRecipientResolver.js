@@ -1,5 +1,9 @@
 const Event = require('../models/Event');
 const Task = require('../models/Task');
+const Case = require('../models/Case');
+const People = require('../models/People');
+const Deal = require('../models/Deal');
+const Organization = require('../models/Organization');
 const User = require('../models/User');
 const domainEvents = require('../constants/domainEvents');
 const { aggregateDigest } = require('./notificationDigestService');
@@ -35,6 +39,14 @@ async function resolveKey(key, context) {
       return resolveUserSelf(context);
     case 'TASK_ASSIGNEE':
       return resolveTaskAssignee(context);
+    case 'PEOPLE_ASSIGNEE':
+      return resolvePeopleAssignee(context);
+    case 'DEAL_OWNER':
+      return resolveDealOwnerNotify(context);
+    case 'ORGANIZATION_ASSIGNEE':
+      return resolveSalesOrganizationAssignee(context);
+    case 'CASE_OWNER':
+      return resolveCaseOwner(context);
     default:
       console.warn('[notificationRecipientResolver] Unhandled recipient key:', key);
       return [];
@@ -64,6 +76,92 @@ async function resolveTaskAssignee({ entity, organizationId, eventType }) {
     userId: task.assignedTo,
     title: titles[eventType] || 'Task Notification',
     body: bodies[eventType] || `Update on task "${task.title || 'Task'}".`
+  }];
+}
+
+async function resolvePeopleAssignee({ entity, organizationId, eventType }) {
+  if (!entity || entity.type !== 'Person' || !entity.id || !organizationId) return [];
+  const row = await People.findOne({ _id: entity.id, organizationId })
+    .select('assignedTo first_name last_name');
+  if (!row || !row.assignedTo) return [];
+
+  const label = [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || 'Contact';
+  const title = eventType === domainEvents.PEOPLE_ASSIGNED ? 'Contact assigned' : 'Contact update';
+  const body =
+    eventType === domainEvents.PEOPLE_ASSIGNED
+      ? `You have been assigned to "${label}".`
+      : `Update on contact "${label}".`;
+
+  return [{ userId: row.assignedTo, title, body }];
+}
+
+async function resolveDealOwnerNotify({ entity, organizationId, eventType }) {
+  if (!entity || entity.type !== 'Deal' || !entity.id || !organizationId) return [];
+  const row = await Deal.findOne({ _id: entity.id, organizationId }).select('ownerId name');
+  if (!row || !row.ownerId) return [];
+
+  const label = row.name || 'Deal';
+  const title = eventType === domainEvents.DEAL_ASSIGNED ? 'Deal assigned' : 'Deal update';
+  const body =
+    eventType === domainEvents.DEAL_ASSIGNED
+      ? `You are now the owner of "${label}".`
+      : `Update on deal "${label}".`;
+
+  return [{ userId: row.ownerId, title, body }];
+}
+
+async function resolveSalesOrganizationAssignee({ entity, organizationId, eventType }) {
+  if (!entity || entity.type !== 'Organization' || !entity.id || !organizationId) return [];
+  const row = await Organization.findOne({ _id: entity.id, isTenant: false }).select(
+    'assignedTo name createdBy'
+  );
+  if (!row || !row.assignedTo) return [];
+
+  const allowed = await User.exists({ _id: row.createdBy, organizationId });
+  if (!allowed) return [];
+
+  const label = row.name || 'Organization';
+  const title =
+    eventType === domainEvents.ORGANIZATION_ASSIGNED ? 'Organization assigned' : 'Organization update';
+  const body =
+    eventType === domainEvents.ORGANIZATION_ASSIGNED
+      ? `You have been assigned to "${label}".`
+      : `Update on organization "${label}".`;
+
+  return [{ userId: row.assignedTo, title, body }];
+}
+
+async function resolveCaseOwner({ entity, organizationId, eventType }) {
+  if (!entity || entity.type !== 'Case' || !entity.id) return [];
+  const row = await Case.findOne({ _id: entity.id, organizationId })
+    .select('caseOwnerId caseId title');
+  if (!row || !row.caseOwnerId) return [];
+
+  const titles = {
+    [domainEvents.CASE_CREATED]: 'Case Created',
+    [domainEvents.CASE_ASSIGNED]: 'Case Assigned',
+    [domainEvents.CASE_STATUS_CHANGED]: 'Case Status Updated',
+    [domainEvents.CASE_REOPENED]: 'Case Reopened',
+    [domainEvents.CASE_ESCALATED]: 'Case Escalated',
+    [domainEvents.CASE_SLA_WARNING]: 'SLA Warning',
+    [domainEvents.CASE_SLA_BREACHED]: 'SLA Breached'
+  };
+
+  const caseLabel = row.caseId || row.title || 'Case';
+  const bodies = {
+    [domainEvents.CASE_CREATED]: `${caseLabel} has been created and assigned to you.`,
+    [domainEvents.CASE_ASSIGNED]: `${caseLabel} has been assigned to you.`,
+    [domainEvents.CASE_STATUS_CHANGED]: `${caseLabel} status has changed.`,
+    [domainEvents.CASE_REOPENED]: `${caseLabel} has been reopened.`,
+    [domainEvents.CASE_ESCALATED]: `${caseLabel} has been escalated.`,
+    [domainEvents.CASE_SLA_WARNING]: `${caseLabel} is nearing SLA breach.`,
+    [domainEvents.CASE_SLA_BREACHED]: `${caseLabel} has breached SLA.`
+  };
+
+  return [{
+    userId: row.caseOwnerId,
+    title: titles[eventType] || 'Case Notification',
+    body: bodies[eventType] || `Update on ${caseLabel}.`
   }];
 }
 

@@ -27,6 +27,20 @@ const { initTabs, setupRouteWatcher } = useTabs();
 const { warning } = useNotifications();
 const { lastActiveAppId } = useSidebarState();
 
+const recoverUnmatchedDynamicRoute = async () => {
+  const currentPath = route.fullPath || route.path;
+  if (!currentPath || route.matched.length > 0) return;
+
+  const resolved = router.resolve(currentPath);
+  if (!resolved?.matched?.length) return;
+
+  try {
+    await router.replace(currentPath);
+  } catch (error) {
+    console.warn('[App] Failed to recover unmatched dynamic route:', currentPath, error);
+  }
+};
+
 // Store cleanup function for route watcher (popstate listener)
 let cleanupRouteWatcher = null;
 
@@ -188,6 +202,7 @@ onMounted(async () => {
       console.log('Initializing dynamic routes...');
       await initializeDynamicRoutes();
     }
+    await recoverUnmatchedDynamicRoute();
     
     // Phase 2D: Set initial activeApp based on current route
     const detectedApp = detectActiveAppFromRoute(route.path);

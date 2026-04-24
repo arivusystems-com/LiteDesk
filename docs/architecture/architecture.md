@@ -494,8 +494,8 @@ Application modules are app-specific work objects:
 - **Features:** Pipeline Settings (stages, automation), Playbook Configuration
 - **Lifecycle:** Stage-based pipeline with automation rules
 
-#### Tickets (Helpdesk)
-- **Settings Location:** `/settings?tab=applications&appKey=HELPDESK&moduleKey=tickets`
+#### Cases (Helpdesk)
+- **Settings Location:** `/settings?tab=applications&appKey=HELPDESK&moduleKey=cases`
 - **Features:** SLA management, status workflows
 - **Lifecycle:** Status-based workflow with SLA tracking
 

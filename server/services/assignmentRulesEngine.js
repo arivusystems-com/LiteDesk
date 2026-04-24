@@ -1,0 +1,241 @@
+const Group = require('../models/Group');
+
+function getValueByPath(source, path) {
+  if (!path) return undefined;
+  const parts = String(path).split('.');
+  let current = source;
+  for (const part of parts) {
+    if (current == null) return undefined;
+    current = current[part];
+  }
+  return current;
+}
+
+function evaluateClause(clause, data) {
+  const left = getValueByPath(data, clause.field);
+  const right = clause.value;
+  const operator = String(clause.operator || 'equals').toLowerCase();
+
+  switch (operator) {
+    case 'equals':
+    case '==':
+    case '===':
+      if (left === right) return true;
+      if (typeof left === 'string' && typeof right === 'string') {
+        return left.trim().toLowerCase() === right.trim().toLowerCase();
+      }
+      return false;
+    case 'not_equals':
+    case '!=':
+    case '!==':
+      if (left === right) return false;
+      if (typeof left === 'string' && typeof right === 'string') {
+        return left.trim().toLowerCase() !== right.trim().toLowerCase();
+      }
+      return left !== right;
+    case 'contains':
+      return String(left || '').toLowerCase().includes(String(right || '').toLowerCase());
+    case 'in':
+      return Array.isArray(right) && right.includes(left);
+    case 'not_in':
+      return Array.isArray(right) && !right.includes(left);
+    case 'exists':
+      return left !== undefined && left !== null && left !== '';
+    case 'gt':
+      return Number(left) > Number(right);
+    case 'gte':
+      return Number(left) >= Number(right);
+    case 'lt':
+      return Number(left) < Number(right);
+    case 'lte':
+      return Number(left) <= Number(right);
+    default:
+      return false;
+  }
+}
+
+function evaluateConditionGroup(group, data) {
+  if (!group || !Array.isArray(group.clauses) || group.clauses.length === 0) return true;
+  const combinator = String(group.combinator || 'all').toLowerCase();
+  const results = group.clauses.map((clause) => evaluateClause(clause, data));
+  return combinator === 'any' ? results.some(Boolean) : results.every(Boolean);
+}
+
+function chooseUserFromGroup({ mode, group, userWeights = [], context = {} }) {
+  const members = Array.isArray(group?.members) ? group.members.map((id) => id.toString()) : [];
+  if (mode === 'queue') {
+    return { assignedUserId: null, assignmentState: 'queued', strategyDetail: 'queue_claim' };
+  }
+  if (members.length === 0) {
+    return { assignedUserId: null, assignmentState: 'skipped', strategyDetail: 'group_has_no_members' };
+  }
+
+  if (mode === 'weighted') {
+    const ranked = userWeights
+      .map((entry) => ({ userId: entry.userId?.toString(), weight: Number(entry.weight || 0) }))
+      .filter((entry) => entry.userId && members.includes(entry.userId) && entry.weight > 0)
+      .sort((a, b) => b.weight - a.weight);
+    const selected = ranked[0]?.userId || members[0];
+    return { assignedUserId: selected, assignmentState: 'assigned', strategyDetail: 'weighted_highest' };
+  }
+
+  if (mode === 'availability_based') {
+    const available = Array.isArray(context.availableUserIds)
+      ? context.availableUserIds.map((id) => id.toString())
+      : [];
+    const selected = members.find((id) => available.includes(id));
+    return selected
+      ? { assignedUserId: selected, assignmentState: 'assigned', strategyDetail: 'availability_first' }
+      : { assignedUserId: null, assignmentState: 'skipped', strategyDetail: 'no_available_users' };
+  }
+
+  if (mode === 'load_balanced') {
+    // Step 7A: simulation-only placeholder; real load metrics added in execution phases.
+    return { assignedUserId: members[0], assignmentState: 'assigned', strategyDetail: 'load_balanced_placeholder' };
+  }
+
+  if (mode === 'round_robin') {
+    const prevRaw = context.previousOwnerId != null ? context.previousOwnerId : context.caseOwnerId;
+    const prevStr = prevRaw != null ? String(prevRaw) : null;
+    if (members.length === 1) {
+      return {
+        assignedUserId: members[0],
+        assignmentState: 'assigned',
+        strategyDetail: 'round_robin_single_member'
+      };
+    }
+    if (prevStr && members.includes(prevStr)) {
+      const idx = members.indexOf(prevStr);
+      const next = members[(idx + 1) % members.length];
+      return { assignedUserId: next, assignmentState: 'assigned', strategyDetail: 'round_robin_rotate' };
+    }
+    const rid = context.recordId != null ? String(context.recordId) : '';
+    let hash = 0;
+    for (let i = 0; i < rid.length; i += 1) {
+      hash = (hash * 31 + rid.charCodeAt(i)) >>> 0;
+    }
+    const pick = members[hash % members.length];
+    return { assignedUserId: pick, assignmentState: 'assigned', strategyDetail: 'round_robin_seeded' };
+  }
+
+  return { assignedUserId: members[0], assignmentState: 'assigned', strategyDetail: 'distribution_fallback_first_member' };
+}
+
+async function resolveGroupCandidates(organizationId, primaryGroupId, fallbackGroupIds = []) {
+  const groupIds = [primaryGroupId, ...(fallbackGroupIds || [])].filter(Boolean);
+  const groups = await Group.find({
+    organizationId,
+    _id: { $in: groupIds },
+    isActive: true
+  })
+    .select('_id name members isActive')
+    .lean();
+  const map = new Map(groups.map((group) => [group._id.toString(), group]));
+  return groupIds.map((id) => map.get(id.toString())).filter(Boolean);
+}
+
+function normalizeRules(rules) {
+  return (Array.isArray(rules) ? rules : [])
+    .filter((rule) => rule && rule.enabled !== false)
+    .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+}
+
+async function simulateAssignment({ organizationId, appKey, moduleKey, rules, record = {}, context = {} }) {
+  const orderedRules = normalizeRules(rules);
+  const trace = [];
+
+  for (const rule of orderedRules) {
+    const matched = evaluateConditionGroup(rule.conditions, record);
+    trace.push({
+      ruleId: rule.ruleId,
+      name: rule.name,
+      order: rule.order,
+      matched
+    });
+
+    if (!matched) continue;
+
+    const groupCandidates = await resolveGroupCandidates(
+      organizationId,
+      rule.primaryGroupId,
+      rule.fallbackGroupIds || []
+    );
+
+    if (groupCandidates.length === 0) {
+      return {
+        appKey,
+        moduleKey,
+        matched: true,
+        ruleId: rule.ruleId,
+        outcome: {
+          state: 'skipped',
+          reason: 'no_group_candidates',
+          assignedGroupId: null,
+          assignedUserId: null
+        },
+        trace
+      };
+    }
+
+    let chosenGroup = groupCandidates[0];
+    let userDecision = chooseUserFromGroup({
+      mode: rule.distribution?.mode || 'queue',
+      group: chosenGroup,
+      userWeights: rule.distribution?.userWeights || [],
+      context
+    });
+
+    if (!userDecision.assignedUserId && userDecision.assignmentState !== 'queued' && groupCandidates.length > 1) {
+      for (let index = 1; index < groupCandidates.length; index += 1) {
+        const fallbackGroup = groupCandidates[index];
+        const fallbackDecision = chooseUserFromGroup({
+          mode: rule.distribution?.mode || 'queue',
+          group: fallbackGroup,
+          userWeights: rule.distribution?.userWeights || [],
+          context
+        });
+        if (fallbackDecision.assignedUserId || fallbackDecision.assignmentState === 'queued') {
+          chosenGroup = fallbackGroup;
+          userDecision = {
+            ...fallbackDecision,
+            strategyDetail: `${fallbackDecision.strategyDetail}|fallback_group`
+          };
+          break;
+        }
+      }
+    }
+
+    return {
+      appKey,
+      moduleKey,
+      matched: true,
+      ruleId: rule.ruleId,
+      outcome: {
+        state: userDecision.assignmentState,
+        reason: userDecision.strategyDetail,
+        assignedGroupId: chosenGroup?._id?.toString() || null,
+        assignedUserId: userDecision.assignedUserId || null,
+        groupName: chosenGroup?.name || null
+      },
+      trace
+    };
+  }
+
+  return {
+    appKey,
+    moduleKey,
+    matched: false,
+    ruleId: null,
+    outcome: {
+      state: 'skipped',
+      reason: 'no_rule_matched',
+      assignedGroupId: null,
+      assignedUserId: null
+    },
+    trace
+  };
+}
+
+module.exports = {
+  simulateAssignment
+};

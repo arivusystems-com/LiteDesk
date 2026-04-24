@@ -153,6 +153,45 @@ module.exports = {
       sms: false
     }
   },
+  [domainEvents.PEOPLE_ASSIGNED]: {
+    appKey: 'SALES',
+    recipients: ['PEOPLE_ASSIGNEE'],
+    priority: 'NORMAL',
+    defaultChannels: ['IN_APP', 'EMAIL'],
+    channels: {
+      inApp: true,
+      email: true,
+      push: false,
+      whatsapp: false,
+      sms: false
+    }
+  },
+  [domainEvents.DEAL_ASSIGNED]: {
+    appKey: 'SALES',
+    recipients: ['DEAL_OWNER'],
+    priority: 'NORMAL',
+    defaultChannels: ['IN_APP', 'EMAIL'],
+    channels: {
+      inApp: true,
+      email: true,
+      push: false,
+      whatsapp: false,
+      sms: false
+    }
+  },
+  [domainEvents.ORGANIZATION_ASSIGNED]: {
+    appKey: 'SALES',
+    recipients: ['ORGANIZATION_ASSIGNEE'],
+    priority: 'NORMAL',
+    defaultChannels: ['IN_APP', 'EMAIL'],
+    channels: {
+      inApp: true,
+      email: true,
+      push: false,
+      whatsapp: false,
+      sms: false
+    }
+  },
   [domainEvents.TASK_CREATED]: {
     appKey: 'SALES',
     recipients: ['TASK_ASSIGNEE'],
@@ -191,6 +230,55 @@ module.exports = {
       whatsapp: false,
       sms: false
     }
+  },
+  [domainEvents.CASE_CREATED]: {
+    appKey: 'HELPDESK',
+    recipients: ['CASE_OWNER'],
+    priority: 'NORMAL',
+    defaultChannels: ['IN_APP', 'EMAIL'],
+    channels: { inApp: true, email: true, push: false, whatsapp: false, sms: false }
+  },
+  [domainEvents.CASE_ASSIGNED]: {
+    appKey: 'HELPDESK',
+    recipients: ['CASE_OWNER'],
+    priority: 'HIGH',
+    defaultChannels: ['IN_APP', 'EMAIL'],
+    channels: { inApp: true, email: true, push: true, whatsapp: false, sms: false }
+  },
+  [domainEvents.CASE_STATUS_CHANGED]: {
+    appKey: 'HELPDESK',
+    recipients: ['CASE_OWNER'],
+    priority: 'NORMAL',
+    defaultChannels: ['IN_APP'],
+    channels: { inApp: true, email: false, push: false, whatsapp: false, sms: false }
+  },
+  [domainEvents.CASE_REOPENED]: {
+    appKey: 'HELPDESK',
+    recipients: ['CASE_OWNER'],
+    priority: 'HIGH',
+    defaultChannels: ['IN_APP', 'EMAIL'],
+    channels: { inApp: true, email: true, push: true, whatsapp: false, sms: false }
+  },
+  [domainEvents.CASE_ESCALATED]: {
+    appKey: 'HELPDESK',
+    recipients: ['CASE_OWNER', 'CRM_ADMIN'],
+    priority: 'HIGH',
+    defaultChannels: ['IN_APP', 'EMAIL'],
+    channels: { inApp: true, email: true, push: true, whatsapp: true, sms: false }
+  },
+  [domainEvents.CASE_SLA_WARNING]: {
+    appKey: 'HELPDESK',
+    recipients: ['CASE_OWNER'],
+    priority: 'NORMAL',
+    defaultChannels: ['IN_APP', 'EMAIL'],
+    channels: { inApp: true, email: true, push: false, whatsapp: false, sms: false }
+  },
+  [domainEvents.CASE_SLA_BREACHED]: {
+    appKey: 'HELPDESK',
+    recipients: ['CASE_OWNER', 'CRM_ADMIN'],
+    priority: 'HIGH',
+    defaultChannels: ['IN_APP', 'EMAIL'],
+    channels: { inApp: true, email: true, push: true, whatsapp: true, sms: false }
   },
   [domainEvents.USER_ADDED_TO_APP]: {
     appKey: 'SALES',

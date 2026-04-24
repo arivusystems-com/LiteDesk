@@ -2186,12 +2186,12 @@ const primaryCustomer = computed(() => {
 
 const allPeople = computed(() => {
   if (!deal.value?.dealPeople || !Array.isArray(deal.value.dealPeople)) return [];
-  return deal.value.dealPeople.filter((p) => p.personId);
+  return deal.value.dealPeople.filter((p) => p.personId && p.isActive !== false);
 });
 
 const allOrgs = computed(() => {
   if (!deal.value?.dealOrganizations || !Array.isArray(deal.value.dealOrganizations)) return [];
-  return deal.value.dealOrganizations.filter((o) => o.organizationId);
+  return deal.value.dealOrganizations.filter((o) => o.organizationId && o.isActive !== false);
 });
 
 const hasMultipleParticipants = computed(() => allPeople.value.length > 1 || allOrgs.value.length > 1);

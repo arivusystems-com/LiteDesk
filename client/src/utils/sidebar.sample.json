@@ -62,10 +62,10 @@
         "expanded": true,
         "children": [
           {
-            "moduleKey": "tickets",
-            "label": "Tickets",
-            "route": "/helpdesk/tickets",
-            "permission": "tickets.view",
+            "moduleKey": "cases",
+            "label": "Cases",
+            "route": "/helpdesk/cases",
+            "permission": "cases.view",
             "icon": "ticket",
             "order": 1
           },

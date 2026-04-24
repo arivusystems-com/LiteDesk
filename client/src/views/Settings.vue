@@ -208,6 +208,7 @@ const SubscriptionDetail = defineAsyncComponent(() => import('@/components/setti
 const NotificationSettings = defineAsyncComponent(() => import('@/components/settings/NotificationSettings.vue'));
 const DemoRequests = defineAsyncComponent(() => import('@/views/DemoRequests.vue'));
 const InstanceManagement = defineAsyncComponent(() => import('@/views/InstanceManagement.vue'));
+const AssignmentRulesSettings = defineAsyncComponent(() => import('@/components/settings/AssignmentRulesSettings.vue'));
 
 const authStore = useAuthStore();
 const { colorMode, toggleColorMode } = useColorMode();
@@ -334,6 +335,20 @@ const AppsIcon = () => h('svg', {
   })
 ]);
 
+const AutomationIcon = () => h('svg', {
+  fill: 'none',
+  stroke: 'currentColor',
+  viewBox: '0 0 24 24',
+  xmlns: 'http://www.w3.org/2000/svg'
+}, [
+  h('path', {
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    'stroke-width': '2',
+    d: 'M13 10V3L4 14h7v7l9-11h-7z'
+  })
+]);
+
 const BellIcon = () => h('svg', {
   fill: 'none',
   stroke: 'currentColor',
@@ -360,6 +375,7 @@ const tabs = computed(() => {
     { id: 'users-access', name: 'Users & Access', icon: UsersIcon, component: UsersAccessSettings },
     { id: 'core-modules', name: 'Core Modules', icon: CoreModulesIcon, component: CoreModulesList },
     { id: 'applications', name: 'Applications', icon: AppsIcon, component: ApplicationsList },
+    { id: 'automation', name: 'Automation', icon: AutomationIcon, component: AssignmentRulesSettings },
     { id: 'subscriptions', name: 'Subscriptions', icon: SubscriptionsIcon, component: SubscriptionsList },
     { id: 'notifications', name: 'Notifications', icon: BellIcon, component: NotificationSettings },
     { id: 'security', name: 'Security', icon: SecurityIcon, component: SecuritySettings },

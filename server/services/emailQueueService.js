@@ -67,6 +67,7 @@ async function processSendJob(communicationId) {
   const Communication = require('../models/Communication');
   const People = require('../models/People');
   const Organization = require('../models/Organization');
+  const Case = require('../models/Case');
   const User = require('../models/User');
   const emailService = require('./emailService');
   const replyToTokenService = require('./replyToTokenService');
@@ -153,6 +154,25 @@ async function processSendJob(communicationId) {
     await pushActivityLog(People, { _id: recordId, organizationId, deletedAt: null });
   } else if (moduleKey === 'organizations') {
     await pushActivityLog(Organization, { _id: recordId, organizationId, isTenant: false, deletedAt: null });
+  } else if (moduleKey === 'cases') {
+    const caseActivity = {
+      activityType: 'email_sent',
+      message: `Email sent: ${(subject || '').trim()}`,
+      internal: true,
+      metadata: {
+        communicationId: String(doc._id),
+        to: toAddresses?.[0],
+        status: finalStatus
+      },
+      actorId: doc.sentByUserId,
+      actorName: userName,
+      createdAt: new Date()
+    };
+    await Case.findOneAndUpdate(
+      { _id: recordId, organizationId, deletedAt: null },
+      { $push: { activities: caseActivity } },
+      { runValidators: false }
+    );
   }
 }
 

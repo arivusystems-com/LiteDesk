@@ -16,7 +16,6 @@
             v-for="(entry, idx) in sortedPeople"
             :key="peopleKey(entry, idx)"
             class="flex items-center justify-between gap-2 py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-800/80"
-            :class="{ 'opacity-60': !entry.isActive }"
           >
             <div class="min-w-0 flex-1">
               <span class="font-medium text-gray-900 dark:text-white block truncate">
@@ -30,17 +29,10 @@
                 >
                   Primary
                 </span>
-                <span
-                  v-if="!entry.isActive"
-                  class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300"
-                >
-                  Inactive
-                </span>
               </div>
             </div>
             <div v-if="!readOnly" class="flex items-center gap-1 shrink-0">
               <button
-                v-if="entry.isActive"
                 type="button"
                 @click="setPrimaryPerson(entry)"
                 :disabled="entry.isPrimary"
@@ -51,9 +43,8 @@
                 <StarIcon v-else class="w-4 h-4" />
               </button>
               <button
-                v-if="entry.isActive"
                 type="button"
-                @click="softRemovePerson(entry)"
+                @click="removePerson(entry)"
                 class="p-1.5 rounded text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
                 title="Remove from deal"
               >
@@ -66,7 +57,7 @@
 
         <div v-if="!readOnly" class="pt-2 border-t border-gray-200 dark:border-gray-700">
           <div class="flex flex-wrap gap-3">
-            <div class="flex-1 min-w-[180px]">
+            <div class="flex-1 min-w-[180px] space-y-1">
               <select
                 v-model="addPersonForm.personId"
                 class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
@@ -76,6 +67,11 @@
                   {{ (p.first_name || '') + ' ' + (p.last_name || '') }} {{ p.email ? `(${p.email})` : '' }}
                 </option>
               </select>
+              <p v-if="contextOrgIdForPeopleFilter" class="text-xs text-gray-500 dark:text-gray-400">
+                Showing contacts for
+                <span class="font-medium text-gray-700 dark:text-gray-300">{{ orgNameForFilterHint }}</span>
+                . Choose or change the account in Organizations below, or clear that selection to see everyone.
+              </p>
             </div>
             <div class="w-36">
               <select
@@ -123,7 +119,6 @@
             v-for="(entry, idx) in sortedOrgs"
             :key="orgKey(entry, idx)"
             class="flex items-center justify-between gap-2 py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-800/80"
-            :class="{ 'opacity-60': !entry.isActive }"
           >
             <div class="min-w-0 flex-1">
               <span class="font-medium text-gray-900 dark:text-white block truncate">
@@ -137,17 +132,11 @@
                 >
                   Primary
                 </span>
-                <span
-                  v-if="!entry.isActive"
-                  class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300"
-                >
-                  Inactive
-                </span>
               </div>
             </div>
             <div v-if="!readOnly" class="flex items-center gap-1 shrink-0">
               <button
-                v-if="entry.isActive && entry.role === 'customer'"
+                v-if="entry.role === 'customer'"
                 type="button"
                 @click="setPrimaryOrg(entry)"
                 :disabled="entry.isPrimary"
@@ -158,9 +147,8 @@
                 <StarIcon v-else class="w-4 h-4" />
               </button>
               <button
-                v-if="entry.isActive"
                 type="button"
-                @click="softRemoveOrg(entry)"
+                @click="removeOrg(entry)"
                 class="p-1.5 rounded text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
                 title="Remove from deal"
               >
@@ -222,11 +210,12 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import { StarIcon } from '@heroicons/vue/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/vue/24/solid';
 import { TrashIcon } from '@heroicons/vue/24/outline';
 import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
+import apiClient from '@/utils/apiClient';
 
 const personRoles = [
   { value: 'primary_contact', label: 'Primary contact' },
@@ -277,6 +266,47 @@ const activePrimaryCustomerOrgId = computed(() => {
   return normalizeId(primary?.organizationId);
 });
 
+/** CRM org on the person record (list API populates `organization`). */
+function personOrgId(person) {
+  if (!person) return '';
+  const o = person.organization;
+  if (o == null || o === '') return '';
+  if (typeof o === 'object' && o._id != null) return normalizeId(o._id);
+  return normalizeId(o);
+}
+
+/**
+ * When set, the "Add person" dropdown only lists contacts in that org:
+ * - org selected in the add-org row (before Add), else
+ * - primary customer on the deal, else
+ * - the only active customer org on the deal (unambiguous).
+ */
+const contextOrgIdForPeopleFilter = computed(() => {
+  const fromAdd = normalizeId(addOrgForm.value.organizationId);
+  if (fromAdd) return fromAdd;
+  const primaryCust = activePrimaryCustomerOrgId.value;
+  if (primaryCust) return primaryCust;
+  const activeCustomers = dealOrganizations.value.filter(
+    (o) =>
+      o.isActive !== false &&
+      String(o.role || '') === 'customer' &&
+      normalizeId(o.organizationId)
+  );
+  if (activeCustomers.length === 1) {
+    return normalizeId(activeCustomers[0].organizationId);
+  }
+  return '';
+});
+
+const orgNameForFilterHint = computed(() => {
+  const id = contextOrgIdForPeopleFilter.value;
+  if (!id) return '';
+  const o = (props.organizations || []).find((x) => String(x._id) === String(id));
+  return o?.name || 'this account';
+});
+
+const syncingOrgFromPersonSelection = ref(false);
+
 const canMarkAddPersonPrimary = computed(() => {
   const selected = normalizeId(addPersonForm.value.personId);
   const currentPrimary = activePrimaryPersonId.value;
@@ -301,6 +331,42 @@ watch(
   }
 );
 
+// Contact → pre-select matching org in the "Add organization" row (before Add).
+watch(
+  () => addPersonForm.value.personId,
+  async (pid) => {
+    if (syncingOrgFromPersonSelection.value) return;
+    const id = normalizeId(pid);
+    if (!id) return;
+    const person = (props.people || []).find((x) => String(x._id) === String(id));
+    if (!person) return;
+
+    let oid = personOrgId(person);
+    if (!oid) {
+      try {
+        const res = await apiClient.get(`/people/${id}`);
+        const body = res && typeof res === 'object' ? res : {};
+        const detail = body.data !== undefined && body.data !== null ? body.data : body;
+        oid = personOrgId(detail);
+      } catch (e) {
+        console.warn('[DealRelationshipEditor] Could not load contact to resolve account:', e);
+        return;
+      }
+    }
+    if (normalizeId(addPersonForm.value.personId) !== id) return;
+    if (!oid) return;
+    const cur = normalizeId(addOrgForm.value.organizationId);
+    if (String(oid) === String(cur)) return;
+    syncingOrgFromPersonSelection.value = true;
+    try {
+      addOrgForm.value = { ...addOrgForm.value, organizationId: oid };
+      await nextTick();
+    } finally {
+      syncingOrgFromPersonSelection.value = false;
+    }
+  }
+);
+
 watch(
   () => [addPersonForm.value.personId, activePrimaryPersonId.value],
   () => {
@@ -320,15 +386,33 @@ watch(
 );
 
 const sortedPeople = computed(() => {
-  const list = dealPeople.value.filter((p) => p.personId);
-  return [...list].sort((a, b) => (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0));
+  const list = dealPeople.value.filter((p) => p.personId && p.isActive !== false);
+  return [...list].sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
 });
 const sortedOrgs = computed(() => {
-  const list = dealOrganizations.value.filter((o) => o.organizationId);
-  return [...list].sort((a, b) => (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0));
+  const list = dealOrganizations.value.filter((o) => o.organizationId && o.isActive !== false);
+  return [...list].sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
 });
 
-const peopleOptions = computed(() => props.people || []);
+const peopleOptions = computed(() => {
+  const all = props.people || [];
+  const fid = contextOrgIdForPeopleFilter.value;
+  let list;
+  if (!fid) {
+    list = all;
+  } else {
+    list = all.filter((p) => {
+      const oid = personOrgId(p);
+      return oid && String(oid) === String(fid);
+    });
+  }
+  // Keep the current selection in the <select> even if list payload hadn't matched the filter yet
+  const selectedId = normalizeId(addPersonForm.value.personId);
+  if (!selectedId) return list;
+  if (list.some((p) => String(p._id) === String(selectedId))) return list;
+  const found = all.find((p) => String(p._id) === String(selectedId));
+  return found ? [...list, found] : list;
+});
 const organizationOptions = computed(() => props.organizations || []);
 
 function normalizeId(value) {
@@ -430,12 +514,12 @@ function setPrimaryPerson(entry) {
   dealPeople.value = list;
 }
 
-function softRemovePerson(entry) {
+function removePerson(entry) {
   const id = normalizeId(entry.personId);
-  const list = dealPeople.value.map((p) =>
-    normalizeId(p.personId) === id && p.role === entry.role ? { ...p, isActive: false } : p
+  const role = String(entry.role || '');
+  dealPeople.value = dealPeople.value.filter(
+    (p) => !(normalizeId(p.personId) === id && String(p.role || '') === role)
   );
-  dealPeople.value = list;
 }
 
 function addOrganization() {
@@ -498,12 +582,12 @@ function setPrimaryOrg(entry) {
   dealOrganizations.value = list;
 }
 
-function softRemoveOrg(entry) {
+function removeOrg(entry) {
   const id = normalizeId(entry.organizationId);
-  const list = dealOrganizations.value.map((o) =>
-    normalizeId(o.organizationId) === id && o.role === entry.role ? { ...o, isActive: false } : o
+  const role = String(entry.role || '');
+  dealOrganizations.value = dealOrganizations.value.filter(
+    (o) => !(normalizeId(o.organizationId) === id && String(o.role || '') === role)
   );
-  dealOrganizations.value = list;
 }
 
 function enforceSinglePrimaryState() {

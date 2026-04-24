@@ -22,6 +22,7 @@ const MODULE_LABELS = {
   tasks: 'Tasks',
   events: 'Events',
   items: 'Items',
+  cases: 'Cases',
   responses: 'Form Responses'
 };
 

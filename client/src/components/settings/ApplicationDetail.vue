@@ -113,6 +113,44 @@
         </div>
       </div>
 
+      <!-- SECTION B2: Configure Helpdesk (Primary Actions) -->
+      <div v-if="(application.status === 'ENABLED' || application.status === 'TRIAL') && isHelpdeskApp" class="space-y-4">
+        <div>
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-1">Configure Helpdesk</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Manage Helpdesk-owned configuration and case settings
+          </p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <button
+            v-for="config in helpdeskConfigOptions"
+            :key="config.id"
+            @click="navigateToHelpdeskConfig(config.id)"
+            class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md hover:border-indigo-500 dark:hover:border-indigo-400 transition-all cursor-pointer group text-left"
+          >
+            <div class="flex items-start gap-4">
+              <div class="flex items-center justify-center w-12 h-12 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/30 transition-colors flex-shrink-0">
+                <component :is="config.icon" class="w-6 h-6" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <h4 class="text-base font-semibold text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors mb-1">
+                  {{ config.name }}
+                </h4>
+                <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                  {{ config.description }}
+                </p>
+              </div>
+            </div>
+            <div class="mt-4 flex items-center gap-2 text-xs text-indigo-600 dark:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">
+              <span>Configure</span>
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </button>
+        </div>
+      </div>
+
       <!-- SECTION A: Dependencies (Informational - Read-Only) -->
       <div class="space-y-6">
         <div>
@@ -300,6 +338,9 @@ const appKey = computed(() => {
 const isSalesApp = computed(() => {
   return appKey.value === 'SALES';
 });
+const isHelpdeskApp = computed(() => {
+  return appKey.value === 'HELPDESK';
+});
 
 // Icon components for Sales configuration options
 const PipelineIcon = () => h('svg', { class: 'w-6 h-6', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
@@ -318,8 +359,16 @@ const PlaybookIcon = () => h('svg', { class: 'w-6 h-6', fill: 'none', stroke: 'c
   h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' })
 ]);
 
+const SettingsIcon = () => h('svg', { class: 'w-6 h-6', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+  h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' }),
+  h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M15 12a3 3 0 11-6 0 3 3 0 016 0z' })
+]);
+
 const PermissionsIcon = () => h('svg', { class: 'w-6 h-6', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
   h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' })
+]);
+const AnalyticsIcon = () => h('svg', { class: 'w-6 h-6', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [
+  h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M13 17h8m0 0V9m0 8l-8-8-4 4-6-6' })
 ]);
 
 // Sales-owned configuration options – Sales Modules first
@@ -356,6 +405,27 @@ const salesConfigOptions = [
   }
 ];
 
+const helpdeskConfigOptions = [
+  {
+    id: 'schema',
+    name: 'Cases Module',
+    description: 'Configure case fields, relationships, and quick create',
+    icon: SchemaIcon
+  },
+  {
+    id: 'execution-settings',
+    name: 'Execution Settings',
+    description: 'Configure case types, SLA policies, business hours, and escalation rules',
+    icon: SettingsIcon
+  },
+  {
+    id: 'analytics',
+    name: 'Analytics Dashboard',
+    description: 'Review SLA compliance, owner performance, and distribution trends',
+    icon: AnalyticsIcon
+  }
+];
+
 // Shared Core entities that Sales uses
 const sharedCoreEntities = [
   {
@@ -379,6 +449,21 @@ const navigateToSalesConfig = (configId) => {
       app: 'sales',
       config: configId
     } 
+  });
+};
+
+const navigateToHelpdeskConfig = (configId) => {
+  const query = {
+    tab: 'applications',
+    app: 'helpdesk',
+    config: configId
+  };
+  if (configId === 'schema') {
+    query.module = 'cases';
+  }
+  router.push({
+    path: '/settings',
+    query
   });
 };
 

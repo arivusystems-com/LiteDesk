@@ -147,6 +147,7 @@ const businessFlowTemplateRoutes = require('./routes/businessFlowTemplateRoutes'
 const automationContextRoutes = require('./routes/automationContextRoutes');
 const trashRoutes = require('./routes/trashRoutes');
 const moduleRecordRoutes = require('./routes/moduleRecordRoutes');
+const caseRoutes = require('./routes/caseRoutes');
 
 // Route Linking
 app.use('/api/auth', authRoutes);
@@ -177,6 +178,7 @@ app.use('/api/user-preferences', userPreferencesRoutes);
 app.use('/api/notification-preferences', notificationPreferenceRoutes);
 app.use('/api/notification-rules', notificationRuleRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/helpdesk/cases', caseRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/internal/notifications', notificationHealthRoutes); // Internal notification health endpoint
 app.use('/health', healthRoutes); // Public health check endpoint
