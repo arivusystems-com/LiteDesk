@@ -20,6 +20,7 @@ import {
   PresentationChartLineIcon,
   ShieldCheckIcon,
   Squares2X2Icon,
+  TicketIcon,
   UserGroupIcon,
   UsersIcon
 } from '@heroicons/vue/24/outline';
@@ -44,7 +45,6 @@ const MODULE_ICON_MAP: Record<string, any> = {
   import: ArchiveBoxIcon,
   dashboard: DocumentChartBarIcon,
   audits: DocumentMagnifyingGlassIcon,
-  cases: ExclamationTriangleIcon,
   findings: ExclamationTriangleIcon
 };
 
@@ -73,6 +73,7 @@ const RAW_ICON_MAP: Record<string, any> = {
   folder: FolderIcon,
   search: MagnifyingGlassIcon,
   lifebuoy: LifebuoyIcon,
+  ticket: TicketIcon,
   support: LifebuoyIcon,
   'shield-check': ShieldCheckIcon,
   shield: ShieldCheckIcon
@@ -93,7 +94,8 @@ const EMOJI_ICON_MAP: Record<string, string> = {
   '🛟': 'lifebuoy',
   '🌐': 'squares',
   '📋': 'clipboard',
-  '🛡️': 'shield-check'
+  '🛡️': 'shield-check',
+  '🎫': 'ticket'
 };
 
 export function getIconComponent(icon?: string): any {
@@ -103,6 +105,15 @@ export function getIconComponent(icon?: string): any {
 
 export function getNavigationIconComponent(item: IconLookupItem): any {
   const moduleKey = String(item.moduleKey || '').toLowerCase();
+  // Shared platform key `cases`: Helpdesk tickets vs Audit findings (also moduleKey `cases`).
+  if (moduleKey === 'cases') {
+    const routeLower = String(item.route || '').toLowerCase();
+    const rawId = String(item.id || '');
+    if (routeLower.startsWith('/audit/') || rawId.toUpperCase().startsWith('AUDIT:')) {
+      return ExclamationTriangleIcon;
+    }
+    return TicketIcon;
+  }
   if (moduleKey && MODULE_ICON_MAP[moduleKey]) {
     return MODULE_ICON_MAP[moduleKey];
   }

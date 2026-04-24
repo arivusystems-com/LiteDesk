@@ -21,7 +21,8 @@ import {
   LifebuoyIcon,
   RectangleStackIcon,
   GlobeAltIcon,
-  Squares2X2Icon
+  Squares2X2Icon,
+  TicketIcon
 } from '@heroicons/vue/24/outline';
 
 const router = useRouter();
@@ -58,6 +59,7 @@ const quickAccessIconByRawIcon = {
   globe: GlobeAltIcon,
   'globe-alt': GlobeAltIcon,
   lifebuoy: LifebuoyIcon,
+  ticket: TicketIcon,
   shield: ShieldCheckIcon,
   'shield-check': ShieldCheckIcon,
   'shield-check-icon': ShieldCheckIcon

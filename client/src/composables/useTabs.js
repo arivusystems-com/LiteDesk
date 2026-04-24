@@ -22,7 +22,8 @@ import {
   DocumentTextIcon,
   TrashIcon,
   Cog6ToothIcon,
-  LifebuoyIcon
+  LifebuoyIcon,
+  TicketIcon
 } from '@heroicons/vue/24/outline';
 
 // Tab state management
@@ -66,7 +67,8 @@ const iconMap = {
   'document-magnifying-glass': DocumentMagnifyingGlassIcon,
   // Audit app module aliases from registry/backend
   'audits': DocumentMagnifyingGlassIcon,
-  'cases': ExclamationTriangleIcon,
+  'cases': TicketIcon,
+  'ticket': TicketIcon,
   'responses': ClipboardDocumentListIcon,
   'download': ArrowDownTrayIcon,
   'folder': FolderIcon,
@@ -98,7 +100,8 @@ const migrateEmojiToIconId = (emojiIcon) => {
     '📁': 'folder',
     '📚': 'book',
     '🖥️': 'computer',
-    '📄': 'document'
+    '📄': 'document',
+    '🎫': 'ticket'
   };
   
   return emojiToIconIdMap[emojiIcon] || 'document';
@@ -260,6 +263,17 @@ const loadTabsFromStorage = () => {
           const inferredIconId = getIconForPath(tab.path || '');
           if (inferredIconId !== 'document') {
             tab.icon = getIconComponent(inferredIconId);
+          }
+        }
+
+        // Registry may expose a wrong leaf icon (e.g. cog) while the shell renders Cases via moduleKey.
+        const tabPathBase = String(tab.path || '').split('?')[0].split('#')[0];
+        const isHelpdeskCasesPath =
+          tabPathBase === '/helpdesk/cases' || tabPathBase.startsWith('/helpdesk/cases/');
+        if (isHelpdeskCasesPath) {
+          const id = getIconId(tab.icon);
+          if (id !== 'cases' && id !== 'ticket') {
+            tab.icon = getIconComponent('cases');
           }
         }
         
@@ -433,8 +447,9 @@ const generateTabId = () => {
   return `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 };
 
-// Get icon for route
+// Get icon for route (query/hash ignored so /helpdesk/cases?foo matches cases, not generic helpdesk)
 const getIconForPath = (path) => {
+  const pathOnly = String(path || '').split('?')[0].split('#')[0];
   const icons = {
     '/platform/home': 'home',
     '/sales/dashboard': 'home',
@@ -461,20 +476,21 @@ const getIconForPath = (path) => {
   };
 
   // Audit app route-specific mappings (must run before base-path fallback).
-  if (path === '/audit/dashboard' || path.startsWith('/audit/dashboard')) return 'presentation-chart';
-  if (path === '/audit/audits' || path.startsWith('/audit/audits')) return 'document-magnifying-glass';
-  if (path === '/audit/findings' || path.startsWith('/audit/findings')) return 'exclamation-triangle';
-  if (path === '/audit/responses' || path.startsWith('/audit/responses')) return 'clipboard-document-list';
-  if (path === '/helpdesk/dashboard' || path.startsWith('/helpdesk/')) return 'lifebuoy';
-  if (path === '/dashboard/helpdesk' || path.startsWith('/dashboard/helpdesk')) return 'lifebuoy';
-  if (path === '/dashboard/audit' || path.startsWith('/dashboard/audit')) return 'shield-check';
-  if (path.startsWith('/dashboard/')) return 'home';
+  if (pathOnly === '/audit/dashboard' || pathOnly.startsWith('/audit/dashboard')) return 'presentation-chart';
+  if (pathOnly === '/audit/audits' || pathOnly.startsWith('/audit/audits')) return 'document-magnifying-glass';
+  if (pathOnly === '/audit/findings' || pathOnly.startsWith('/audit/findings')) return 'exclamation-triangle';
+  if (pathOnly === '/audit/responses' || pathOnly.startsWith('/audit/responses')) return 'clipboard-document-list';
+  if (pathOnly === '/helpdesk/cases' || pathOnly.startsWith('/helpdesk/cases/')) return 'cases';
+  if (pathOnly === '/helpdesk/dashboard' || pathOnly.startsWith('/helpdesk/')) return 'lifebuoy';
+  if (pathOnly === '/dashboard/helpdesk' || pathOnly.startsWith('/dashboard/helpdesk')) return 'lifebuoy';
+  if (pathOnly === '/dashboard/audit' || pathOnly.startsWith('/dashboard/audit')) return 'shield-check';
+  if (pathOnly.startsWith('/dashboard/')) return 'home';
   
   // Check for exact match first
-  if (icons[path]) return icons[path];
+  if (icons[pathOnly]) return icons[pathOnly];
   
   // Check for base path
-  const basePath = '/' + path.split('/')[1];
+  const basePath = '/' + pathOnly.split('/')[1];
   return icons[basePath] || 'document';
 };
 
@@ -1173,6 +1189,7 @@ export function useTabs() {
           const isListRoute = newPathWithoutQuery === '/tasks' || newPathWithoutQuery === '/deals' || newPathWithoutQuery === '/events' ||
             newPathWithoutQuery === '/people' || newPathWithoutQuery === '/organizations' || newPathWithoutQuery === '/forms' ||
             newPathWithoutQuery === '/items' || newPathWithoutQuery === '/imports' || newPathWithoutQuery === '/trash' ||
+            newPathWithoutQuery === '/helpdesk/cases' ||
             newPathWithoutQuery === '/platform/home' || newPathWithoutQuery === '/sales/dashboard' || newPathWithoutQuery.startsWith('/control/');
           if (isListRoute) {
             const moduleTitle = getTitleForPath(newPathWithoutQuery, currentActiveTab.params || {});
@@ -1242,6 +1259,7 @@ export function useTabs() {
         const isListRoute = newPathBase === '/tasks' || newPathBase === '/deals' || newPathBase === '/events' ||
           newPathBase === '/people' || newPathBase === '/organizations' || newPathBase === '/forms' ||
           newPathBase === '/items' || newPathBase === '/imports' || newPathBase === '/trash' ||
+          newPathBase === '/helpdesk/cases' ||
           newPathBase === '/platform/home' || newPathBase === '/sales/dashboard' || newPathBase.startsWith('/control/');
         if (isListRoute) {
           const titleForPath = getTitleForPath(newPathBase, existingTabForRoute.params || {});
@@ -1436,6 +1454,10 @@ export function useTabs() {
       });
       return null;
     }
+
+    const pathOnly = String(path || '').split('?')[0].split('#')[0];
+    const isHelpdeskCasesTab =
+      pathOnly === '/helpdesk/cases' || pathOnly.startsWith('/helpdesk/cases/');
     
     // Check if tab already exists
     const existingTab = findTabByPath(path);
@@ -1447,6 +1469,10 @@ export function useTabs() {
       const newTitle = options.title || getTitleForPath(path, options.params);
       if (newTitle && existingTab.title !== newTitle) {
         existingTab.title = newTitle;
+      }
+
+      if (isHelpdeskCasesTab) {
+        existingTab.icon = getIconComponent('cases');
       }
       
       // If not background mode, focus the tab
@@ -1473,12 +1499,17 @@ export function useTabs() {
       return existingTab;
     }
     
+    const tabIconId =
+      options.icon && !isHelpdeskCasesTab
+        ? String(options.icon).toLowerCase()
+        : getIconForPath(pathOnly);
+
     // Create new tab
     const newTab = {
       id: options.id || generateTabId(),
       title: options.title || getTitleForPath(path, options.params),
       path: path,
-      icon: options.icon ? getIconComponent(options.icon) : getIconComponent(getIconForPath(path)),
+      icon: getIconComponent(tabIconId),
       closable: options.closable !== false, // Default to closable
       params: options.params || {}
     };
@@ -1569,6 +1600,7 @@ export function useTabs() {
         const isListPath = pathBase === '/tasks' || pathBase === '/deals' || pathBase === '/events' ||
           pathBase === '/people' || pathBase === '/organizations' || pathBase === '/forms' ||
           pathBase === '/items' || pathBase === '/imports' || pathBase === '/trash' ||
+          pathBase === '/helpdesk/cases' ||
           pathBase === '/platform/home' || pathBase === '/sales/dashboard' || pathBase.startsWith('/control/');
         if (isListPath) {
           const listTitle = getTitleForPath(pathBase, newActiveTab.params || {});
