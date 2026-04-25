@@ -331,12 +331,16 @@ exports.getEvents = async (req, res) => {
           queryAfter: JSON.stringify(query)
         });
         
+        const pageNum = Math.max(1, parseInt(page, 10) || 1);
+        const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 100), 200);
+        
         // Sort order
         const sortOptions = {};
         sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
         
-        // Fetch events
-        const events = await Event.find(query)
+        // Fetch events and count in parallel for lower request latency.
+        const [events, count] = await Promise.all([
+          Event.find(query)
             .populate('eventOwnerId', 'firstName lastName email')
             .populate('auditorId', 'firstName lastName email')
             .populate('reviewerId', 'firstName lastName email')
@@ -346,17 +350,17 @@ exports.getEvents = async (req, res) => {
             .populate('createdBy', 'firstName lastName')
             .populate('modifiedBy', 'firstName lastName')
             .sort(sortOptions)
-            .limit(limit * 1)
-            .skip((page - 1) * limit)
-            .lean();
-        
-        const count = await Event.countDocuments(query);
+            .limit(limitNum)
+            .skip((pageNum - 1) * limitNum)
+            .lean(),
+          Event.countDocuments(query)
+        ]);
         
         res.status(200).json({
             success: true,
             data: events,
-            totalPages: Math.ceil(count / limit),
-            currentPage: page,
+            totalPages: Math.ceil(count / limitNum),
+            currentPage: pageNum,
             total: count
         });
     } catch (error) {
@@ -365,6 +369,54 @@ exports.getEvents = async (req, res) => {
         res.status(500).json({ 
             success: false,
             message: 'Error fetching events.', 
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+};
+
+// Get a compact summary of recent events for homepage dashboards
+exports.getEventSummary = async (req, res) => {
+    try {
+        const { scope = 'mine', startDateTime, limit = 15 } = req.query;
+        const query = { organizationId: req.user.organizationId, deletedAt: null };
+        const start = startDateTime ? new Date(startDateTime) : null;
+
+        if (start && !Number.isNaN(start.getTime())) {
+            query.startDateTime = { $gte: start };
+        } else {
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            query.startDateTime = { $gte: thirtyDaysAgo };
+        }
+
+        if (scope === 'mine') {
+            const currentUserId = req.user._id;
+            query.$or = [
+                { eventOwnerId: currentUserId },
+                { auditorId: currentUserId },
+                { reviewerId: currentUserId },
+                { correctiveOwnerId: currentUserId },
+                { createdBy: currentUserId }
+            ];
+        }
+
+        const limitNum = Math.min(Math.max(parseInt(limit, 10) || 15, 1), 50);
+
+        const events = await Event.find(query)
+            .select({ eventName: 1, startDateTime: 1 })
+            .sort({ startDateTime: -1 })
+            .limit(limitNum)
+            .lean();
+
+        res.status(200).json({
+            success: true,
+            data: events
+        });
+    } catch (error) {
+        console.error('Get event summary error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching event summary.',
             error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
         });
     }

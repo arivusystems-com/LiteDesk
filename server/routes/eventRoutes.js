@@ -6,6 +6,7 @@ const { resolveAppContext } = require('../middleware/resolveAppContextMiddleware
 const { requireAppEntitlement } = require('../middleware/requireAppEntitlementMiddleware');
 const { lazySalesInitialization } = require('../middleware/lazySalesInitializationMiddleware');
 const { requireSalesApp } = require('../middleware/requireSalesAppMiddleware');
+const { checkPermission } = require('../middleware/permissionMiddleware');
 
 // All routes require authentication
 router.use(protect);
@@ -15,6 +16,7 @@ router.use(lazySalesInitialization); // Lazy initialize Sales if needed
 router.use(requireSalesApp); // Enforce Sales-only access
 
 // Event CRUD routes
+router.get('/summary', checkPermission('events', 'view'), eventController.getEventSummary);
 router.get('/', eventController.getEvents);
 router.get('/stats', eventController.getEventStats);
 router.get('/export', eventController.exportEvents);

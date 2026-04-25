@@ -610,22 +610,26 @@ const getTasks = async (req, res) => {
       projectionMeta
     });
 
-    // Pagination
-    const skip = (page - 1) * limit;
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 20), 100);
+    const skip = (pageNum - 1) * limitNum;
 
     // Build sort object
     const sortObject = {};
     sortObject[sortBy] = sortOrder === 'asc' ? 1 : -1;
 
-    // Execute query - use .lean() so we get plain objects for reliable relatedTo.name mutation
-    const tasks = await Task.find(query)
-      .populate('assignedTo', 'firstName lastName email avatar')
-      .populate('assignedBy', 'firstName lastName')
-      .populate('createdBy', 'firstName lastName')
-      .sort(sortObject)
-      .limit(parseInt(limit))
-      .skip(skip)
-      .lean();
+    // Execute query and count concurrently for faster response.
+    const [tasks, total] = await Promise.all([
+      Task.find(query)
+        .populate('assignedTo', 'firstName lastName email avatar')
+        .populate('assignedBy', 'firstName lastName')
+        .populate('createdBy', 'firstName lastName')
+        .sort(sortObject)
+        .limit(limitNum)
+        .skip(skip)
+        .lean(),
+      Task.countDocuments(query)
+    ]);
 
     // Populate relatedTo names for list/kanban display
     try {
@@ -634,17 +638,14 @@ const getTasks = async (req, res) => {
       console.error('[getTasks] populateRelatedToNames error:', err);
     }
 
-    // Get total count
-    const total = await Task.countDocuments(query);
-
     res.status(200).json({
       success: true,
       data: tasks,
       pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(total / limit),
+        currentPage: pageNum,
+        totalPages: Math.ceil(total / limitNum),
         totalTasks: total,
-        tasksPerPage: parseInt(limit)
+        tasksPerPage: limitNum
       }
     });
   } catch (error) {
@@ -652,6 +653,58 @@ const getTasks = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching tasks',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Get task summary for homepage
+const getTaskSummary = async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const nextWeek = new Date(today);
+    nextWeek.setDate(nextWeek.getDate() + 7);
+
+    const baseQuery = {
+      organizationId: req.user.organizationId,
+      deletedAt: null,
+      assignedTo: req.user._id,
+      status: { $nin: ['completed', 'cancelled'] }
+    };
+
+    const projection = { title: 1, dueDate: 1, status: 1 };
+
+    const [overdue, dueToday, upcoming] = await Promise.all([
+      Task.find({
+        ...baseQuery,
+        dueDate: { $lt: today }
+      }).sort({ dueDate: 1 }).limit(10).select(projection).lean(),
+      Task.find({
+        ...baseQuery,
+        dueDate: { $gte: today, $lt: tomorrow }
+      }).sort({ dueDate: 1 }).limit(10).select(projection).lean(),
+      Task.find({
+        ...baseQuery,
+        dueDate: { $gte: tomorrow, $lte: nextWeek }
+      }).sort({ dueDate: 1 }).limit(10).select(projection).lean()
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        overdue,
+        dueToday,
+        upcoming
+      }
+    });
+  } catch (error) {
+    console.error('Get task summary error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching task summary',
       error: error.message
     });
   }

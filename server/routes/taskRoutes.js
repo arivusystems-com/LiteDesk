@@ -11,6 +11,7 @@ const { uploadSingle } = require('../middleware/uploadMiddleware');
 const {
   createTask,
   getTasks,
+  getTaskSummary,
   getTaskById,
   updateTask,
   updateTaskTags,
@@ -42,6 +43,7 @@ router.use(checkFeatureAccess('tasks')); // Ensure 'tasks' module is enabled
 
 // Task statistics
 router.get('/stats/summary', checkPermission('tasks', 'view'), getTaskStats);
+router.get('/summary', checkPermission('tasks', 'view'), getTaskSummary);
 
 // Task CRUD routes
 router.route('/')
