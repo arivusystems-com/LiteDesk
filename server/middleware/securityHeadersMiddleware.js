@@ -21,24 +21,45 @@ const securityHeaders = (req, res, next) => {
         'geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=()'
     );
     
-    // Content Security Policy
-    // Adjust based on your needs - this is a strict policy
+    const extraConnect = (process.env.CSP_EXTRA_CONNECT_SRC || '')
+        .split(/[\s,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    // API + Sentry + PostHog (set origins explicitly in env for your tenant)
+    const defaultConnect = [
+        "'self'",
+        'https://arivusystems.com',
+        'https://www.arivusystems.com',
+        'https://app.arivusystems.com',
+        'https://*.sentry.io',
+        'https://o*.ingest.sentry.io',
+        'https://us.i.posthog.com',
+        'https://eu.i.posthog.com',
+        'https://app.posthog.com',
+    ];
+    const connectSrc = Array.from(new Set([...defaultConnect, ...extraConnect]));
+
+    // Content-Security-Policy: primarily protects HTML responses; JSON API still gets the header
     const csp = [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Adjust for Vue.js
-        "style-src 'self' 'unsafe-inline'", // Adjust for CSS
-        "img-src 'self' data: https:",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: https: blob:",
         "font-src 'self' data:",
-        "connect-src 'self'",
+        `connect-src ${connectSrc.join(' ')}`,
         "frame-ancestors 'none'",
         "base-uri 'self'",
-        "form-action 'self'"
+        "form-action 'self'",
+        "object-src 'none'"
     ].join('; ');
     
     res.setHeader('Content-Security-Policy', csp);
     
-    // Strict Transport Security (HSTS) - only in production with HTTPS
-    if (process.env.NODE_ENV === 'production' && req.secure) {
+    // Strict Transport Security (HSTS) - behind Cloudflare / Railway, trust X-Forwarded-Proto
+    const isHttps =
+        process.env.FORCE_HTTPS_HSTS === 'true' ||
+        (process.env.NODE_ENV === 'production' && (req.secure || req.get('X-Forwarded-Proto') === 'https'));
+    if (isHttps) {
         res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
     }
     

@@ -19,6 +19,8 @@
     "lint": "run-s lint:*"
   },
   "dependencies": {
+    "@sentry/vue": "^8.47.0",
+    "posthog-js": "^1.255.0",
     "@tiptap/extension-bubble-menu": "^2.18.0",
     "@tiptap/extension-heading": "^2.18.0",
     "@tiptap/extension-link": "^2.18.0",

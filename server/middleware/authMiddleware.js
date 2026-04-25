@@ -110,7 +110,24 @@ const protect = async (req, res, next) => {
             if (!req.user) {
                 return res.status(401).json({ message: 'User not found' });
             }
-            
+
+            try {
+                const { getSentry } = require('../lib/sentryNode');
+                const Sentry = getSentry();
+                if (Sentry && process.env.SENTRY_DSN && typeof Sentry.setUser === 'function') {
+                    Sentry.setUser({
+                        id: req.user._id ? String(req.user._id) : undefined,
+                        email: req.user.email,
+                        username: req.user.username,
+                    });
+                    if (typeof Sentry.setTag === 'function' && req.user.organizationId) {
+                        Sentry.setTag('organizationId', String(req.user.organizationId));
+                    }
+                }
+            } catch (_e) {
+                /* optional */
+            }
+
             next();
         } catch (error) {
             console.error('Token verification error:', error.message);

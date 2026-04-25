@@ -2,17 +2,16 @@ import { fileURLToPath, URL } from 'node:url'
 
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import path from 'path'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   // Avoid writing cache under node_modules (can fail on some setups with restricted permissions)
   cacheDir: '.vite',
   plugins: [
     vue(),
-    vueDevTools(),
+    ...(mode === 'development' ? [vueDevTools()] : []),
     tailwindcss(),
   ],
   resolve: {
@@ -40,6 +39,7 @@ export default defineConfig({
     }
   },
   build: {
+    sourcemap: true,
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -129,4 +129,4 @@ export default defineConfig({
     }
   },
   // resolve: { alias: { '@': path.resolve(__dirname, './src') } }
-})
+}))

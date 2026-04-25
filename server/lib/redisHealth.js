@@ -1,0 +1,58 @@
+const { createClient } = require('redis');
+
+/**
+ * True when the app is configured to use Redis (Bull, cache, or Upstash).
+ */
+function isRedisRequiredForHealth() {
+  return Boolean(
+    process.env.REDIS_URL ||
+    process.env.REDIS_HOST ||
+    process.env.ENABLE_REDIS_REQUIRED === 'true',
+  );
+}
+
+/**
+ * PING Redis if configured. Used by /health/ready.
+ * @returns {Promise<{ ok: boolean, skipped?: boolean, error?: string }>}
+ */
+async function checkRedis() {
+  const url = process.env.REDIS_URL;
+  if (!url && !process.env.REDIS_HOST) {
+    return { ok: true, skipped: true, reason: 'not_configured' };
+  }
+
+  const connectUrl = url || buildUrlFromParts();
+  if (!connectUrl) {
+    return { ok: true, skipped: true, reason: 'not_configured' };
+  }
+
+  const client = createClient({
+    url: connectUrl,
+    socket: {
+      connectTimeout: 5000,
+      reconnectStrategy: () => new Error('no-reconnect-in-health'),
+    },
+  });
+
+  try {
+    await client.connect();
+    const pong = await client.ping();
+    await client.quit().catch(() => {});
+    return { ok: pong === 'PONG' || pong === 'pong' };
+  } catch (e) {
+    return { ok: false, error: e.message || String(e) };
+  }
+}
+
+function buildUrlFromParts() {
+  const host = process.env.REDIS_HOST;
+  if (!host) return null;
+  const port = process.env.REDIS_PORT || 6379;
+  const pass = process.env.REDIS_PASSWORD;
+  if (pass) {
+    return `redis://:${encodeURIComponent(pass)}@${host}:${port}`;
+  }
+  return `redis://${host}:${port}`;
+}
+
+module.exports = { checkRedis, isRedisRequiredForHealth };
