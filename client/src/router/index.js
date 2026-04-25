@@ -1,11 +1,11 @@
 /**
- * Boot order: do not statically import @/utils/apiClient here; use @/stores/authRegistry + dynamic useAuth.
- * Those created a production TDZ (vue-router "Cannot access before initialization")
- * when apiClient → auth and router each pulled the other at module init. Guards use
- * dynamic import(); apiClient also lazy-imports the auth store.
+ * Boot order: apiClient and authRegistry are static; no dynamic import in guards (avoids Vite
+ * static+dynamic split on the same module graph during bootstrap).
  */
 import { createRouter, createWebHistory } from 'vue-router'
 import { hasAnySettingsAccess } from '@/utils/settingsTabAccess'
+import { useAuthStore } from '@/stores/authRegistry'
+import apiClient from '@/utils/apiClient'
 import auditRoutes from './audit.routes'
 import portalRoutes from './portal.routes'
 import { loadAndRegisterRoutes } from '@/utils/dynamicRouteLoader'
@@ -412,8 +412,6 @@ const routes = [
     component: () => import('@/pages/ModuleRecordPage.vue'),
     meta: { requiresAuth: true, requiresPermission: { module: 'organizations', action: 'view' } },
     beforeEnter: async (to, from, next) => {
-      const { useAuthStore } = await import('@/stores/authRegistry');
-      const apiClient = (await import('@/utils/apiClient')).default;
       const authStore = useAuthStore();
       const orgId = to.params.id;
       
@@ -565,7 +563,6 @@ const getDefaultRoute = (authStore) => {
 
 // Add debug logging and permission checks
 router.beforeEach(async (to, from, next) => {
-  const { useAuthStore } = await import('@/stores/authRegistry')
   const authStore = useAuthStore()
   console.log('Navigation guard:', {
     to: to.path,
@@ -827,11 +824,9 @@ router.beforeEach(async (to, from, next) => {
 // Phase 1A: Load and register dynamic routes after router is created
 // This will be called from App.vue after UI metadata is loaded
 export async function initializeDynamicRoutes() {
-  const { useAuthStore } = await import('@/stores/authRegistry');
   const authStore = useAuthStore();
   if (authStore.isAuthenticated) {
     try {
-      const apiClient = (await import('@/utils/apiClient')).default;
       await loadAndRegisterRoutes(router, apiClient);
     } catch (error) {
       console.error('[Router] Error initializing dynamic routes:', error);

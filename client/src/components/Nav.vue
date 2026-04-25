@@ -5,7 +5,7 @@ import { useAuthStore } from '@/stores/authRegistry';
 import { useAppShellStore } from '@/stores/appShell';
 import NotificationBell from '@/components/notifications/NotificationBell.vue';
 import NotificationDrawer from '@/components/notifications/NotificationDrawer.vue';
-import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
+import { computed, inject, ref, watch, onMounted, onUnmounted } from 'vue';
 import { buildSidebarStructureForSession } from '@/utils/buildSidebarForSession';
 import { createPermissionSnapshot, hasPermission as hasSnapshotPermission } from '@/types/permission-snapshot.types';
 import { hasAnySettingsAccess } from '@/utils/settingsTabAccess';
@@ -35,6 +35,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue']);
 
+const initDynamicRoutes = inject('litedeskInitializeDynamicRoutes');
 const router = useRouter();
 const route = useRoute();
 const { openTab } = useTabs();
@@ -260,8 +261,9 @@ const onCoreModulesUpdated = async () => {
   if (authStore.user && authStore.isAuthenticated) {
     buildSidebar();
     try {
-      const { initializeDynamicRoutes } = await import('@/router');
-      await initializeDynamicRoutes();
+      if (typeof initDynamicRoutes === 'function') {
+        await initDynamicRoutes();
+      }
     } catch (e) {
       console.warn('[Nav] Failed to refresh dynamic routes:', e);
     }
