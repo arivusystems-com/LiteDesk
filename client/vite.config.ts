@@ -16,7 +16,12 @@ export default defineConfig(({ mode }) => ({
   ],
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // Published "module" is UMD (`require("vue")`); Rollup interop in vendor-dnd can yield
+      // "Object.defineProperty called on non-object" inside vue.cjs.prod.js. Source is plain ESM.
+      vuedraggable: fileURLToPath(
+        new URL('./node_modules/vuedraggable/src/vuedraggable.js', import.meta.url)
+      ),
     },
   },
   // Add this proxy configuration:
