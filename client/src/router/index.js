@@ -6,7 +6,6 @@
  */
 import { createRouter, createWebHistory } from 'vue-router'
 import { hasAnySettingsAccess } from '@/utils/settingsTabAccess'
-import LandingPage from '@/views/LandingPage.vue'
 import auditRoutes from './audit.routes'
 import portalRoutes from './portal.routes'
 import { loadAndRegisterRoutes } from '@/utils/dynamicRouteLoader'
@@ -15,7 +14,7 @@ const routes = [
   {
     path: '/',
     name: 'landing',
-    component: LandingPage
+    component: () => import('@/views/LandingPage.vue')
   },
   {
     path: '/login',
