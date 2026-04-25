@@ -13,8 +13,8 @@ alwaysApply: false
 1. **Server** – `server/controllers/moduleController.js`  
    Add to the `excluded` Set in `getBaseFieldsForKey()` so the field is never included in module definition base fields.
 
-2. **Client** – `client/src/platform/fields/fieldCapabilityEngine.ts`  
-   Add to `GLOBAL_SYSTEM_FIELD_KEYS` (lowercase, no hyphens) so `isSystemField()` and `canEditField()` treat it as system.
+2. **Client** – `client/src/platform/fields/globalSystemFields.ts`  
+   Add to the `GLOBAL_SYSTEM_FIELD_KEYS` set (lowercase, no hyphens) so `isSystemField()` and `canEditField()` treat it as system.
 
 3. **Server** – `server/utils/customFieldsExtractor.js`  
    Add to `RESERVED_KEYS` so custom field extraction never routes it into `customFields`.
@@ -28,11 +28,11 @@ alwaysApply: false
 ## Checklist for New System Fields
 
 - [ ] Add to `moduleController.js` `excluded` Set
-- [ ] Add to `fieldCapabilityEngine.ts` `GLOBAL_SYSTEM_FIELD_KEYS`
+- [ ] Add to `globalSystemFields.ts` `GLOBAL_SYSTEM_FIELD_KEYS`
 - [ ] Add to `customFieldsExtractor.js` `RESERVED_KEYS` (if applicable)
 
 ## Reference
 
-- `client/src/platform/fields/fieldCapabilityEngine.ts` – `getGlobalSystemFieldKeys()`, `isGlobalSystemFieldKey()`
+- `client/src/platform/fields/globalSystemFields.ts` – canonical set; re-exported from `fieldCapabilityEngine.ts` as `getGlobalSystemFieldKeys()`, `isGlobalSystemFieldKey()`
 - `server/utils/customFieldsExtractor.js` – `RESERVED_KEYS`
 - `docs/TRASH_IMPLEMENTATION_SPEC.md` – Trash field spec

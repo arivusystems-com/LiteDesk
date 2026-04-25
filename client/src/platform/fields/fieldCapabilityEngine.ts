@@ -34,26 +34,17 @@ import {
   getIsHideableBase,
   normalizeFieldKeyForMetadataLookup,
 } from './BaseFieldModel';
+import { globalSystemFieldKeySetHas } from './globalSystemFields';
 
-// =============================================================================
-// GLOBAL SYSTEM FIELDS (never show in create/edit)
-// =============================================================================
-//
-// Fields that exist on models but are NOT in field metadata (e.g. trash fields).
-// When metadata lookup returns undefined, we still treat these as system fields.
-//
-// RULE: When adding new system fields to models (e.g. trash, audit), add them here
-// so they NEVER appear in create/edit flows. See .cursor/rules/system-field-exclusion.mdc
-//
-const GLOBAL_SYSTEM_FIELD_KEYS = new Set([
-  'deletedat',
-  'deletedby',
-  'deletionreason',
-  'source',
-]);
+// Re-export for existing imports from fieldCapabilityEngine (see globalSystemFields.ts).
+export {
+  getGlobalSystemFieldKeys,
+  isGlobalSystemFieldKey,
+  normalizeFieldKeyForSystemMatch,
+} from './globalSystemFields';
 
 /**
- * Document identity + audit keys (normalized like GLOBAL_SYSTEM_FIELD_KEYS).
+ * Document identity + audit keys (normalized like global system keys).
  * Always non-editable even when registry has no metadata — getIsEditableBase(undefined) is true.
  * Includes `id` from `_id` (normalize strips underscores).
  */
@@ -65,29 +56,6 @@ const IMMUTABLE_NON_EDITABLE_KEYS = new Set([
   'modifiedby',
   'updatedby',
 ]);
-
-/**
- * Get all system field keys that must NEVER appear in create/edit flows.
- * Use this when building exclude lists for DynamicForm, CreateRecordDrawer, etc.
- */
-export function getGlobalSystemFieldKeys(): string[] {
-  return Array.from(GLOBAL_SYSTEM_FIELD_KEYS);
-}
-
-/**
- * Normalize field key for system-field matching.
- * Handles "Deleted By", "deleted-by", "deletedBy" -> "deletedby".
- */
-export function normalizeFieldKeyForSystemMatch(fieldKey: string): string {
-  return normalizeFieldKeyForMetadataLookup(fieldKey);
-}
-
-/**
- * Check if a field key (case-insensitive) is a global system field.
- */
-export function isGlobalSystemFieldKey(fieldKey: string): boolean {
-  return GLOBAL_SYSTEM_FIELD_KEYS.has(normalizeFieldKeyForSystemMatch(fieldKey));
-}
 
 /**
  * For flattened paths (e.g. list columns from schema paths: "assignmentControl.lockReason"),
@@ -142,7 +110,7 @@ export function isSystemField(moduleKey: string, field: Field): boolean {
   if (metadata) return getIsSystemBase(metadata);
   // Unknown fields that are model-level system fields (trash, etc.) - never show in create/edit
   const keyLower = normalizeFieldKeyForMetadataLookup(field.key);
-  return GLOBAL_SYSTEM_FIELD_KEYS.has(keyLower);
+  return globalSystemFieldKeySetHas(keyLower);
 }
 
 /**
@@ -182,7 +150,7 @@ export function canEditField(moduleKey: string, field: Field): boolean {
   const raw = String(field.key || '');
   if (raw === '__v') return false;
   const keyLower = normalizeFieldKeyForMetadataLookup(field.key);
-  if (GLOBAL_SYSTEM_FIELD_KEYS.has(keyLower)) return false;
+  if (globalSystemFieldKeySetHas(keyLower)) return false;
   if (IMMUTABLE_NON_EDITABLE_KEYS.has(keyLower)) return false;
   const metadata = getFieldMetadataForSystemLookup(moduleKey, field.key);
   if (metadata?.isEditable === false) return false;
