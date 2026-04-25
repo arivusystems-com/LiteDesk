@@ -8,14 +8,13 @@
  * Or copy-paste the function into console
  */
 
+import { useAppShellStore } from '@/stores/appShell';
+import { useAuthStore } from '@/stores/authRegistry';
+
 export async function verifyDynamicSidebar() {
   console.log('🔍 Verifying Dynamic Sidebar (Phase 0D)...\n');
   
   try {
-    // Import stores
-    const { useAppShellStore } = await import('@/stores/appShell');
-    const { useAuthStore } = await import('@/stores/authRegistry');
-    
     const appShellStore = useAppShellStore();
     const authStore = useAuthStore();
     

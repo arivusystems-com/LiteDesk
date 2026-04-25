@@ -4,7 +4,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import './stores/auth'
 // @ts-ignore: no declaration file for './router'
-import router from './router'
+import router, { initializeDynamicRoutes } from './router'
 import App from './App.vue'
 import HeadlessCheckbox from './components/ui/HeadlessCheckbox.vue'
 import HeadlessSwitch from './components/ui/HeadlessSwitch.vue'
@@ -15,6 +15,7 @@ import { installFetchApiBase } from './config/installFetchApiBase'
 installFetchApiBase()
 
 const app = createApp(App)
+app.provide('litedeskInitializeDynamicRoutes', initializeDynamicRoutes)
 app.use(createPinia())
 app.use(router)
 app.component('HeadlessCheckbox', HeadlessCheckbox)

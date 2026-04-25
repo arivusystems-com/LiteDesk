@@ -1,4 +1,5 @@
 import { withApiOrigin } from '@/config/apiBase';
+import { useAuthStore } from '@/stores/authRegistry';
 
 /**
  * Portal API Client
@@ -13,7 +14,6 @@ import { withApiOrigin } from '@/config/apiBase';
  * - Portal app entitlement
  */
 const portalApiClient = async (url, options = {}) => {
-  const { useAuthStore } = await import('@/stores/authRegistry');
   const authStore = useAuthStore();
   const token = authStore.user?.token;
 

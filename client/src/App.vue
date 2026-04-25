@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 
 import { useAuthStore } from '@/stores/authRegistry';
@@ -19,6 +19,7 @@ import GlobalSurfacesProvider from '@/components/global/GlobalSurfacesProvider.v
 import { useSidebarState } from '@/composables/useSidebarState';
 import { identifyProductUser } from '@/config/posthogUser';
 
+const initDynamicRoutes = inject('litedeskInitializeDynamicRoutes');
 const authStore = useAuthStore();
 const appShellStore = useAppShellStore();
 const router = useRouter();
@@ -207,8 +208,9 @@ onMounted(async () => {
       
       // Phase 1A: Initialize dynamic routes after UI metadata is loaded
       console.log('Initializing dynamic routes...');
-      const { initializeDynamicRoutes } = await import('@/router');
-      await initializeDynamicRoutes();
+      if (typeof initDynamicRoutes === 'function') {
+        await initDynamicRoutes();
+      }
     }
     await recoverUnmatchedDynamicRoute();
     
