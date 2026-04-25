@@ -1,6 +1,11 @@
 declare module '@/stores/appShell' {
   // JS Pinia store (no TS declarations yet)
-  export function useAppShellStore(): { activeApp?: string | null };
+  import type { AppRegistry } from '@/types/sidebar.types';
+  export function useAppShellStore(): {
+    activeApp?: string | null;
+    ensureCachedAppRegistry(): Promise<AppRegistry>;
+    invalidateAppRegistryCache(): void;
+  };
 }
 
 declare module '@/stores/authRegistry' {
