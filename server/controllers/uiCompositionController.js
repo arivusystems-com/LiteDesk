@@ -65,6 +65,9 @@ exports.getSidebar = async (req, res) => {
 
     const sidebar = await uiCompositionService.getSidebarDefinition(organizationId, req.user);
 
+    // Cache sidebar definition in browser for 24 hours (user-specific, private)
+    // Safe: changes are infrequent; sidebar is org+user scoped; users can force refresh if needed
+    res.set('Cache-Control', 'private, max-age=86400');
     res.json({
       success: true,
       data: sidebar
@@ -96,6 +99,9 @@ exports.getRoutes = async (req, res) => {
 
     const routes = await uiCompositionService.getRouteDefinitions(organizationId, req.user);
 
+    // Cache route definitions in browser for 24 hours (user-specific, private)
+    // Safe: changes are infrequent; routes are org+user scoped; users can force refresh if needed
+    res.set('Cache-Control', 'private, max-age=86400');
     res.json({
       success: true,
       data: routes

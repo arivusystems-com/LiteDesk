@@ -3220,15 +3220,26 @@ exports.listModules = async (req, res) => {
             fields: ensurePhoneFieldDefaultValidations(module.fields || [])
         }));
 
-        // Filter by key if provided in query parameter
-        if (req.query.key) {
-            const requestedKey = req.query.key.toLowerCase().trim();
-            const filtered = filteredMerged.filter(module => 
-                module.key && module.key.toLowerCase() === requestedKey
+        // Filter by key if provided in query parameter (supports single key or comma-separated list)
+        if (req.query.key || req.query.keys) {
+            const keyParam = req.query.key || req.query.keys;
+            const requestedKeys = new Set(
+                keyParam
+                    .split(',')
+                    .map(k => k.toLowerCase().trim())
+                    .filter(k => k)
             );
+            
+            const filtered = filteredMerged.filter(module => 
+                module.key && requestedKeys.has(module.key.toLowerCase())
+            );
+            // Cache module definitions for 24 hours (org-scoped, user-specific, private)
+            res.set('Cache-Control', 'private, max-age=86400');
             return res.json({ success: true, data: filtered });
         }
 
+        // Cache module definitions for 24 hours (org-scoped, user-specific, private)
+        res.set('Cache-Control', 'private, max-age=86400');
         res.json({ success: true, data: filteredMerged });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Error listing modules', error: error.message });

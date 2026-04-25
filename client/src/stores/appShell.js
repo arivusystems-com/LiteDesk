@@ -97,6 +97,41 @@ export const useAppShellStore = defineStore('appShell', {
           'Content-Type': 'application/json'
         };
 
+        const cacheKey = `ui-metadata:${authStore.user?._id || ''}`;
+        const cachedData = sessionStorage.getItem(cacheKey);
+        
+        if (cachedData) {
+          try {
+            const { sidebar, routes } = JSON.parse(cachedData);
+            console.log('[AppShell] Using cached sidebar and routes from sessionStorage');
+            
+            if (sidebar?.success) {
+              const apps = sidebar.data?.apps || [];
+              this.availableApps = apps.filter(app => {
+                const appKeyUpper = app.appKey?.toUpperCase();
+                return appKeyUpper !== 'CONTROL_PLANE' && appKeyUpper !== 'CONTROL PLANE';
+              });
+
+              if (!this.activeApp && this.availableApps.length > 0) {
+                this.activeApp = this.availableApps[0].appKey;
+              }
+
+              this.updateSidebarModules();
+            }
+            
+            if (routes?.success) {
+              this.routes = routes.data || [];
+            }
+            
+            this.lastLoaded = new Date();
+            this.loading = false;
+            return;
+          } catch (e) {
+            console.warn('[AppShell] Failed to parse cached metadata, fetching fresh:', e);
+            sessionStorage.removeItem(cacheKey);
+          }
+        }
+
         const [sidebarResponse, routesResponse] = await Promise.all([
           fetch('/api/ui/sidebar', { headers }),
           fetch('/api/ui/routes', { headers })
@@ -135,11 +170,22 @@ export const useAppShellStore = defineStore('appShell', {
           throw new Error(sidebarData.message || 'Failed to load sidebar');
         }
 
+        let routesData = null;
         if (routesResponse.ok) {
-          const routesData = await routesResponse.json();
+          routesData = await routesResponse.json();
           if (routesData.success) {
             this.routes = routesData.data || [];
           }
+        }
+
+        // Cache the response for future page loads within the session
+        try {
+          sessionStorage.setItem(cacheKey, JSON.stringify({
+            sidebar: sidebarData,
+            routes: routesData
+          }));
+        } catch (e) {
+          console.warn('[AppShell] Failed to cache UI metadata:', e);
         }
 
         this.lastLoaded = new Date();
@@ -203,6 +249,15 @@ export const useAppShellStore = defineStore('appShell', {
       this.cachedAppRegistry = null;
       this.appRegistrySessionKey = null;
       this._appRegistryPromise = null;
+      
+      // Also clear UI metadata cache when invalidating app registry
+      const authStore = useAuthStore();
+      const cacheKey = `ui-metadata:${authStore.user?._id || ''}`;
+      try {
+        sessionStorage.removeItem(cacheKey);
+      } catch (e) {
+        console.warn('[AppShell] Failed to clear UI metadata cache:', e);
+      }
     },
 
     /**
