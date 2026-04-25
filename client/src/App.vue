@@ -5,24 +5,30 @@ import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/authRegistry';
 import { useAppShellStore } from '@/stores/appShell';
 import { usePermissionSync } from '@/composables/usePermissionSync';
-import { configureTabsStorage, resetTabsState, useTabs } from '@/composables/useTabs';
 import { useColorMode } from '@/composables/useColorMode';
 import { useNotifications } from '@/composables/useNotifications';
 const PlatformShell = defineAsyncComponent(() => import('@/components/PlatformShell.vue'));
 const NotificationSheet = defineAsyncComponent(() =>
   import('@/components/notifications/NotificationSheet.vue')
 );
-import NotificationContainer from '@/components/NotificationContainer.vue';
-import GlobalSurfacesProvider from '@/components/global/GlobalSurfacesProvider.vue';
+const NotificationContainer = defineAsyncComponent(() =>
+  import('@/components/NotificationContainer.vue')
+);
+const GlobalSurfacesProvider = defineAsyncComponent(() =>
+  import('@/components/global/GlobalSurfacesProvider.vue')
+);
 import { useSidebarState } from '@/composables/useSidebarState';
 import { identifyProductUser } from '@/config/posthogUser';
+
+function resetTabsStateFromModule() {
+  void import('@/composables/useTabs').then((m) => m.resetTabsState());
+}
 
 const initDynamicRoutes = inject('litedeskInitializeDynamicRoutes');
 const authStore = useAuthStore();
 const appShellStore = useAppShellStore();
 const router = useRouter();
 const route = useRoute();
-const { initTabs, setupRouteWatcher } = useTabs();
 const { warning } = useNotifications();
 const { lastActiveAppId } = useSidebarState();
 
@@ -134,7 +140,7 @@ const handleStorageEvent = (e) => {
   if (!e.newValue) {
     warning('You were signed out because your session changed in another tab.', 6000);
     authStore.logout();
-    resetTabsState(); // Clear in-memory tabs so next login starts clean
+    resetTabsStateFromModule();
     router.push('/');
     return;
   }
@@ -145,7 +151,7 @@ const handleStorageEvent = (e) => {
     if (incomingId && String(incomingId) !== String(authStore.user._id)) {
       warning('You were signed out because you logged into a different account in another tab.', 6500);
       authStore.logout();
-      resetTabsState(); // Clear in-memory tabs so next login starts clean
+      resetTabsStateFromModule();
       router.push('/');
     }
   } catch (err) {
@@ -153,7 +159,7 @@ const handleStorageEvent = (e) => {
     // Safe fallback: logout rather than risk inconsistent state
     warning('You were signed out due to a session change in another tab.', 6000);
     authStore.logout();
-    resetTabsState(); // Clear in-memory tabs so next login starts clean
+    resetTabsStateFromModule();
     router.push('/');
   }
 };
@@ -230,23 +236,18 @@ onMounted(async () => {
       const userId = authStore.user?._id;
 
       if (instanceId && userId) {
+        const { configureTabsStorage, useTabs } = await import('@/composables/useTabs');
+        const { initTabs, setupRouteWatcher } = useTabs();
         configureTabsStorage({ instanceId, userId });
-        // Initialize tabs system after storage is configured
-        // This creates the home tab synchronously
         initTabs();
-        
-        // Ensure tabs are created and visible before setting up route watcher
-        // Use nextTick to ensure reactive updates are processed
+
         await nextTick();
-        
-        // Log tabs state for debugging
+
         console.log('📊 [App] After initTabs, checking tabs state...');
         const { tabs: tabsRef } = useTabs();
         console.log('📊 [App] Tabs count:', tabsRef.value.length);
         console.log('📊 [App] Tabs:', tabsRef.value.map(t => ({ id: t.id, title: t.title, path: t.path })));
 
-        // Setup route watcher for browser navigation (pass route from setup context)
-        // Store cleanup function to remove popstate listener on unmount
         cleanupRouteWatcher = setupRouteWatcher(route);
       } else {
         console.error('[Tabs] Skipping tab initialization: missing instanceId or userId', {
@@ -289,8 +290,7 @@ watch(
   () => authStore.isAuthenticated,
   async (isAuthed, wasAuthed) => {
     if (wasAuthed && !isAuthed) {
-      // User logged out - clear tabs
-      resetTabsState();
+      resetTabsStateFromModule();
       // Cleanup route watcher when logging out
       if (typeof cleanupRouteWatcher === 'function') {
         cleanupRouteWatcher();
@@ -315,14 +315,14 @@ watch(
         const isPortalRoute = route.path.startsWith('/portal/');
         
         if (!isAuditRoute && !isPortalRoute) {
+          const { configureTabsStorage, useTabs } = await import('@/composables/useTabs');
+          const { initTabs, setupRouteWatcher } = useTabs();
           configureTabsStorage({ instanceId, userId });
           initTabs();
-          
-          // Wait for router to be ready and route to stabilize after login
+
           await router.isReady();
           await nextTick();
-          
-          // Log tabs state for debugging
+
           console.log('📊 [App] After login - After initTabs, checking tabs state...');
           const { tabs: tabsRef } = useTabs();
           console.log('📊 [App] After login - Tabs count:', tabsRef.value.length);
