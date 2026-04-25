@@ -53,10 +53,15 @@ export default defineConfig(({ mode }) => ({
               return 'vendor-posthog'
             }
 
+            // Keep `vue`, `vue-router`, `pinia`, and all `@vue/*` in one chunk. The `vue` package is
+            // only a re-export of `@vue/runtime-dom`; splitting them into separate manual chunks
+            // creates a circular chunk graph and production TDZ errors (e.g. "Cannot access before
+            // initialization" in runtime-core / vue-router).
             if (
               id.includes('/node_modules/vue/') ||
               id.includes('/node_modules/vue-router/') ||
-              id.includes('/node_modules/pinia/')
+              id.includes('/node_modules/pinia/') ||
+              id.includes('/node_modules/@vue/')
             ) {
               return 'vendor-vue'
             }
@@ -85,10 +90,6 @@ export default defineConfig(({ mode }) => ({
               id.includes('/node_modules/gridstack/')
             ) {
               return 'vendor-visual'
-            }
-
-            if (id.includes('/node_modules/@vue/')) {
-              return 'vendor-vue-ecosystem'
             }
 
             if (id.includes('/node_modules/@tanstack/')) {
