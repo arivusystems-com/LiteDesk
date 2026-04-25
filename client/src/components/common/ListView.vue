@@ -279,6 +279,7 @@
                   >
                     <div class="relative">
                       <ListboxButton
+                        @click="emit('filter-opened', filter.key)"
                         class="relative z-[26] inline-flex h-10 w-full items-center rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 px-3 text-gray-900 dark:text-white text-sm outline-1 -outline-offset-1 outline-gray-300/20 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 cursor-pointer text-left"
                       >
                         <span class="block truncate pr-6">
@@ -429,6 +430,7 @@
             >
               <div class="relative">
                 <ListboxButton
+                  @click="emit('filter-opened', filter.key)"
                   class="inline-flex h-10 items-center rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-3 text-gray-900 dark:text-white text-sm outline-1 -outline-offset-1 outline-gray-300/20 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 dark:focus:bg-gray-800 dark:outline-white/10 dark:focus:outline-indigo-500 cursor-pointer relative w-auto min-w-[140px] text-left leading-none"
                 >
                   <span class="block truncate pr-6">
@@ -1551,6 +1553,7 @@ const emit = defineEmits([
   'export',
   'bulk-action',
   'row-updated',
+  'filter-opened',
   'saved-view-selected',
   'set-default-view',
   'stat-click',
