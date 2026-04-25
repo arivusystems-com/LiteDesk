@@ -1,17 +1,20 @@
 import type { App } from 'vue'
 import type { Router } from 'vue-router'
-import * as Sentry from '@sentry/vue'
-import { browserTracingIntegration } from '@sentry/vue'
-import posthog from 'posthog-js'
 
-export function initClientObservability(app: App, router: Router) {
+/**
+ * Load Sentry + PostHog only via dynamic `import()` so the main module graph
+ * (router, Vue, pinia) is not interleaved with heavy vendor bundles that can
+ * trigger "Cannot access before initialization" in production minify.
+ */
+export async function initClientObservability(app: App, router: Router): Promise<void> {
   const dsn = import.meta.env.VITE_SENTRY_DSN as string | undefined
   if (dsn) {
+    const Sentry = await import('@sentry/vue')
     Sentry.init({
       app,
       dsn,
-      environment: import.meta.env.VITE_SENTRY_ENVIRONMENT || import.meta.env.MODE,
-      integrations: [browserTracingIntegration({ router })],
+      environment: (import.meta.env.VITE_SENTRY_ENVIRONMENT as string) || import.meta.env.MODE,
+      integrations: [Sentry.browserTracingIntegration({ router })],
       tracesSampleRate: Math.min(
         1,
         Math.max(0, Number(import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE) || 0.1)
@@ -21,6 +24,7 @@ export function initClientObservability(app: App, router: Router) {
 
   const phKey = import.meta.env.VITE_POSTHOG_KEY as string | undefined
   if (phKey) {
+    const { default: posthog } = await import('posthog-js')
     const host = (import.meta.env.VITE_POSTHOG_HOST as string) || 'https://us.i.posthog.com'
     posthog.init(phKey, {
       api_host: host,
@@ -38,5 +42,3 @@ export function initClientObservability(app: App, router: Router) {
     })
   }
 }
-
-export { posthog }
