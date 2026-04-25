@@ -13,7 +13,17 @@ const SECURITY_DISABLED = process.env.DISABLE_SECURITY === 'true' || process.env
 const isProduction = process.env.NODE_ENV === 'production';
 const bypassDisabled = process.env.BYPASS_RATE_LIMIT === 'false';
 
-const isHealthCheckPath = (req) => req.path === '/health' || req.path === '/api/health';
+const isHealthCheckPath = (req) => {
+    const p = req.path || '';
+    return (
+        p === '/health' ||
+        p === '/health/' ||
+        p === '/health/live' ||
+        p === '/health/ready' ||
+        p === '/health/status' ||
+        p === '/api/health'
+    );
+};
 
 const hasBypassHeader = (req) => {
     const bypassHeader = req.headers['x-bypass-rate-limit'];

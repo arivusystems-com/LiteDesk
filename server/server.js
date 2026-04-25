@@ -1,37 +1,62 @@
 // server.js
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
+
+const { validateEnv } = require('./config/validateEnv');
+const { getAllowedOrigins } = require('./config/corsConfig');
+const { getMongoUris, connectMasterWithRetry, MASTER_DB } = require('./lib/mongoConnect');
+const { initSentryNode, installExpressSentryErrorHandler, flushSentry } = require('./lib/sentryNode');
+
+validateEnv();
+initSentryNode();
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 
 const app = express();
 
+if (process.env.NODE_ENV === 'production') {
+  const trust = process.env.EXPRESS_TRUST_PROXY;
+  if (trust === 'false') {
+    // explicit opt-out
+  } else {
+    const n = trust !== undefined && trust !== 'true' ? Number(trust) : 1;
+    app.set('trust proxy', Number.isNaN(n) ? 1 : n);
+  }
+}
+
 // Server instance (will be set when server starts)
 let server = null;
 
-// Environment-aware configuration
 const isProduction = process.env.NODE_ENV === 'production';
 const PORT = process.env.PORT || 5000;
 
-// Smart MongoDB URI selection (handles both MONGO_URI and MONGODB_URI)
-const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || 
-                  (isProduction ? process.env.MONGO_URI_PRODUCTION : process.env.MONGO_URI_LOCAL);
+let MONGO_URI;
+let masterUri;
+let mongoQueryString;
+let baseUri;
+try {
+  const uriCfg = getMongoUris();
+  MONGO_URI = uriCfg.MONGO_URI;
+  masterUri = uriCfg.masterUri;
+  mongoQueryString = uriCfg.mongoQueryString;
+  baseUri = uriCfg.baseUri;
+} catch (e) {
+  console.error('❌', e.message);
+  process.exit(1);
+}
 
-const [mongoUriWithoutQuery, mongoUriQueryPart] = MONGO_URI ? MONGO_URI.split('?') : [null, null];
-const mongoQueryString = mongoUriQueryPart ? `?${mongoUriQueryPart}` : '';
+const allowedOrigins = getAllowedOrigins();
 
-// Smart CORS configuration
-const allowedOrigins = process.env.CORS_ORIGINS 
-  ? process.env.CORS_ORIGINS.split(',')
-  : (isProduction 
-      ? ['http://13.203.208.47', 'https://13.203.208.47']
-      : ['http://localhost:5173', 'http://localhost:3000']);
-
-console.log(`🚀 Starting LiteDesk CRM in ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'} mode`);
+console.log(
+  `🚀 Starting Arivu API in ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'} mode`,
+);
 console.log(`📊 Port: ${PORT}`);
-console.log(`🗄️  Database: ${MONGO_URI ? MONGO_URI.substring(0, 30) + '...' : 'NOT SET'}`);
-console.log(`🌐 Allowed Origins: ${allowedOrigins.join(', ')}`);
+console.log(
+  `🗄️  Database: ${MONGO_URI ? MONGO_URI.substring(0, 30) + '...' : 'NOT SET'}`,
+);
+console.log(`🌐 Allowed CORS Origins: ${allowedOrigins.join(', ')}`);
 
 // 🚨 CRUCIAL: Configure Express to serve static files (like your CSS)
 // Assuming your final CSS is in a folder named 'public'
@@ -51,6 +76,15 @@ if (!SECURITY_DISABLED) {
     app.use(securityHeaders);
 } else {
     console.warn('⚠️  [DEV] Security headers middleware disabled');
+}
+
+if (isProduction) {
+  try {
+    const compression = require('compression');
+    app.use(compression({ threshold: 1024 }));
+  } catch (e) {
+    console.warn('⚠️  compression not installed, skipping');
+  }
 }
 
 // CORS Configuration
@@ -270,22 +304,11 @@ console.log('🧪 Feature Flags:', {
   FEATURE_DUAL_WRITE_ORG: process.env.FEATURE_DUAL_WRITE_ORG
 });
 
-if (!MONGO_URI || !mongoUriWithoutQuery) {
-  console.error('❌ FATAL ERROR: MONGO_URI is not defined in environment variables!');
-  console.error('📝 Please check your .env file and ensure MONGO_URI or MONGODB_URI is set.');
-  console.error(`   Expected for ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'} mode`);
-  process.exit(1);
-}
-
 // Connect to master database (for Organizations, Users, DemoRequests)
-const baseUri = mongoUriWithoutQuery.split('/').slice(0, -1).join('/');
-const masterDbName = 'litedesk_master';
-const masterUri = `${baseUri}/${masterDbName}${mongoQueryString}`;
-
-mongoose.connect(masterUri)
+connectMasterWithRetry(masterUri)
   .then(async () => {
     console.log('✅ Master database connected successfully.');
-    console.log(`📊 Database: ${masterDbName}`);
+    console.log(`📊 Database: ${MASTER_DB}`);
     console.log(`📊 Connection: ${MONGO_URI.includes('localhost') ? 'Local MongoDB' : 'MongoDB Atlas'}`);
     
     // Initialize database connection manager
@@ -371,23 +394,28 @@ mongoose.connect(masterUri)
     processExecutor.init();
     console.log('✅ Process executor initialized');
 
-    // 3d. Start email queue worker (async send when Redis configured)
-    try {
-      const emailQueueService = require('./services/emailQueueService');
-      emailQueueService.startWorker();
-    } catch (eqErr) {
-      console.warn('⚠️  Email queue worker not started:', eqErr.message);
+    // 3d. Start email queue worker in this process (unless a dedicated worker runs — set ENABLE_BULL_IN_WEB=false on API)
+    if (process.env.ENABLE_BULL_IN_WEB !== 'false') {
+      try {
+        const emailQueueService = require('./services/emailQueueService');
+        emailQueueService.startWorker();
+        console.log('✅ Email queue consumer running in web process (set ENABLE_BULL_IN_WEB=false if using a dedicated worker)');
+      } catch (eqErr) {
+        console.warn('⚠️  Email queue worker not started:', eqErr.message);
+      }
+    } else {
+      console.log('⏭️  Email queue consumer disabled in web (ENABLE_BULL_IN_WEB=false); use worker process for Bull.');
     }
     
     // 4. Start Server after successful DB connection
     server = app.listen(PORT, () => {
       console.log('');
       console.log('╔════════════════════════════════════════════════════════╗');
-      console.log(`║  ✅ LiteDesk CRM Server Running Successfully!        ║`);
+      console.log('║  ✅ Arivu API is running.                             ║');
       console.log('╚════════════════════════════════════════════════════════╝');
       console.log(`🌐 Server: http://localhost:${PORT}`);
       console.log(`🔧 Mode: ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}`);
-      console.log(`💚 Health: http://localhost:${PORT}/health`);
+      console.log(`💚 Health: http://localhost:${PORT}/health/ready (readiness) | /health/live (liveness)`);
       console.log('');
     });
   })
@@ -409,8 +437,11 @@ mongoose.connect(masterUri)
 
 // 3. Basic Test Route
 app.get('/', (req, res) => {
-  res.send('CRM API is operational.');
+  res.send('Arivu API is operational.');
 });
+
+// Sentry Express error handler: must be after all routes
+installExpressSentryErrorHandler(app);
 
 // Graceful shutdown handler
 const gracefulShutdown = async (signal) => {
@@ -433,6 +464,14 @@ const gracefulShutdown = async (signal) => {
   } catch (err) {
     console.error('[server] Error stopping scheduled jobs:', err.message);
   }
+
+  try {
+    const emailQueueService = require('./services/emailQueueService');
+    await emailQueueService.closeQueue();
+    console.log('[server] Email queue closed');
+  } catch (err) {
+    console.error('[server] Error closing email queue:', err.message);
+  }
   
   // Close server
   if (server) {
@@ -443,6 +482,11 @@ const gracefulShutdown = async (signal) => {
       try {
         await mongoose.connection.close();
         console.log('[server] MongoDB connection closed');
+        try {
+          await flushSentry(2000);
+        } catch (e) {
+          /* optional */
+        }
         console.log('[server] Graceful shutdown complete');
         process.exit(0);
       } catch (err) {

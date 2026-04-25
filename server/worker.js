@@ -1,0 +1,78 @@
+/**
+ * Optional Railway / background worker: processes Bull email jobs only.
+ * Run the API with `npm start` and the worker in a second process with `npm run worker`.
+ */
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
+const mongoose = require('mongoose');
+const { validateEnv } = require('./config/validateEnv');
+const { getMongoUris, connectMasterWithRetry, MASTER_DB } = require('./lib/mongoConnect');
+const { initSentryNode, flushSentry } = require('./lib/sentryNode');
+
+validateEnv();
+initSentryNode();
+
+const emailQueueService = require('./services/emailQueueService');
+const dbConnectionManager = require('./utils/databaseConnectionManager');
+
+let exiting = false;
+
+async function run() {
+  if (!process.env.REDIS_URL && !process.env.REDIS_HOST) {
+    console.error('[worker] Set REDIS_URL (recommended) or REDIS_HOST for Bull/Redis.');
+    process.exit(1);
+  }
+
+  let masterUri;
+  let baseUri;
+  let mongoQueryString;
+  try {
+    const u = getMongoUris();
+    masterUri = u.masterUri;
+    baseUri = u.baseUri;
+    mongoQueryString = u.mongoQueryString;
+  } catch (e) {
+    console.error('[worker]', e.message);
+    process.exit(1);
+  }
+  await connectMasterWithRetry(masterUri);
+  console.log(`[worker] MongoDB connected: ${MASTER_DB}`);
+
+  dbConnectionManager.baseMongoUri = baseUri;
+  dbConnectionManager.connectionQuery = mongoQueryString;
+  await dbConnectionManager.initializeMasterConnection();
+
+  emailQueueService.startWorker();
+  console.log('[worker] Email queue worker is running (Bull: email-send)');
+}
+
+async function stop(signal) {
+  if (exiting) return;
+  exiting = true;
+  console.log(`[worker] ${signal} received, shutting down...`);
+  try {
+    await emailQueueService.closeQueue();
+  } catch (e) {
+    console.error('[worker] queue close', e.message);
+  }
+  try {
+    await mongoose.connection.close();
+  } catch (e) {
+    console.error('[worker] mongo close', e.message);
+  }
+  try {
+    await flushSentry(2000);
+  } catch (e) {
+    /* optional */
+  }
+  process.exit(0);
+}
+
+process.on('SIGTERM', () => stop('SIGTERM'));
+process.on('SIGINT', () => stop('SIGINT'));
+
+run().catch((err) => {
+  console.error('[worker] Fatal:', err);
+  process.exit(1);
+});

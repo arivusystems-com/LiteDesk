@@ -367,11 +367,12 @@ async function updateOrganizationsModuleFields(organizationId = null) {
         });
       }
       
-      // If still not found, try by key only
+      // If still not found, only match this tenant or platform (null) — never another org's row
       if (!existing) {
         existing = await ModuleDefinition.findOne({
           key: 'organizations',
-          type: 'system'
+          type: 'system',
+          $or: [{ organizationId: null }, { organizationId: org._id }],
         });
       }
 

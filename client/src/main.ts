@@ -9,10 +9,15 @@ import HeadlessSwitch from './components/ui/HeadlessSwitch.vue'
 import router from './router'
 // @ts-ignore: no declaration file for './composables/useColorMode'
 import { useColorMode } from './composables/useColorMode'
+import { installFetchApiBase } from './config/installFetchApiBase'
+import { initClientObservability } from './config/observability.client'
+
+installFetchApiBase()
 
 const app = createApp(App)
 app.use(createPinia())
 app.use(router)
+initClientObservability(app, router)
 app.component('HeadlessCheckbox', HeadlessCheckbox)
 app.component('HeadlessSwitch', HeadlessSwitch)
 

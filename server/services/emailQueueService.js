@@ -7,7 +7,7 @@ const path = require('path');
 const fs = require('fs');
 let emailQueue = null;
 
-function getRedisUrl() {
+function getLegacyRedisUrl() {
   const host = process.env.REDIS_HOST || 'localhost';
   const port = process.env.REDIS_PORT || 6379;
   const pass = process.env.REDIS_PASSWORD;
@@ -18,7 +18,11 @@ function getRedisUrl() {
 }
 
 function isRedisConfigured() {
-  return !!(process.env.REDIS_HOST || process.env.REDIS_PORT);
+  return !!(
+    process.env.REDIS_URL ||
+    process.env.REDIS_HOST ||
+    process.env.REDIS_PORT
+  );
 }
 
 function initQueue() {
@@ -29,13 +33,31 @@ function initQueue() {
   }
   try {
     const Bull = require('bull');
-    emailQueue = new Bull('email-send', getRedisUrl(), {
+    const redisUrl = process.env.REDIS_URL || getLegacyRedisUrl();
+    const isTls = redisUrl.startsWith('rediss://');
+    /**
+     * ioredis (used by Bull) + Atlas/Upstash: use TLS and disable ready check friction.
+     */
+    const opts = {
       defaultJobOptions: {
         attempts: 3,
         backoff: { type: 'exponential', delay: 2000 },
-        removeOnComplete: 100
-      }
-    });
+        removeOnComplete: 100,
+      },
+    };
+    if (isTls) {
+      opts.redis = {
+        maxRetriesPerRequest: null,
+        enableReadyCheck: false,
+        tls: { rejectUnauthorized: true },
+      };
+    } else {
+      opts.redis = {
+        maxRetriesPerRequest: null,
+        enableReadyCheck: false,
+      };
+    }
+    emailQueue = new Bull('email-send', redisUrl, opts);
     emailQueue.on('error', (err) => console.error('[emailQueue] Redis error:', err.message));
     return emailQueue;
   } catch (err) {
@@ -186,10 +208,22 @@ function startWorker() {
   console.log('[emailQueue] Worker started');
 }
 
+async function closeQueue() {
+  if (emailQueue && emailQueue !== false) {
+    try {
+      await emailQueue.close();
+    } catch (e) {
+      console.error('[emailQueue] close error:', e.message);
+    }
+  }
+  emailQueue = null;
+}
+
 module.exports = {
   initQueue,
   enqueueSend,
   processSendJob,
   startWorker,
-  isQueueAvailable: () => !!initQueue()
+  isQueueAvailable: () => !!initQueue(),
+  closeQueue,
 };

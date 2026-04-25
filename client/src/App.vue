@@ -18,6 +18,7 @@ import NotificationSheet from '@/components/notifications/NotificationSheet.vue'
 import GlobalSurfacesProvider from '@/components/global/GlobalSurfacesProvider.vue';
 import { initializeDynamicRoutes } from '@/router';
 import { useSidebarState } from '@/composables/useSidebarState';
+import { identifyProductUser } from '@/config/observability.client';
 
 const authStore = useAuthStore();
 const appShellStore = useAppShellStore();
@@ -192,7 +193,14 @@ onMounted(async () => {
   if (authStore.isAuthenticated) {
     console.log('Auto-refreshing permissions on page load...');
     await authStore.refreshUser();
-    
+    identifyProductUser({
+      _id: authStore.user?._id,
+      email: authStore.user?.email,
+      organizationId: authStore.organization?._id
+        ? String(authStore.organization._id)
+        : undefined,
+    });
+
     // Phase 1A: Load UI metadata for dynamic composition
     if (!appShellStore.isLoaded) {
       console.log('Loading UI metadata...');

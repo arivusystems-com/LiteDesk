@@ -1,4 +1,6 @@
 import { defineStore } from 'pinia';
+import { getApiUrlForFetch } from '@/config/apiBase';
+import { identifyProductUser } from '@/config/observability.client';
 
 export const useAuthStore = defineStore('auth', {
     state: () => ({
@@ -196,9 +198,23 @@ export const useAuthStore = defineStore('auth', {
             }
             
             localStorage.setItem('user', JSON.stringify(this.user));
+            identifyProductUser({
+                _id: this.user._id,
+                email: this.user.email,
+                organizationId: userData.organization?._id
+                    ? String(userData.organization._id)
+                    : (userData.organizationId ? String(userData.organizationId) : undefined),
+            });
         },
         
         clearUser() {
+            try {
+                import('@/config/observability.client').then(({ posthog: ph }) => {
+                    if (ph && typeof ph.reset === 'function') ph.reset();
+                });
+            } catch (_e) {
+                /* optional */
+            }
             this.user = null;
             this.organization = null;
             localStorage.removeItem('user');
@@ -240,7 +256,7 @@ export const useAuthStore = defineStore('auth', {
             this.loading = true;
             this.error = null;
             try {
-                const url = `/api/auth/${endpoint}`;
+                const url = getApiUrlForFetch(`/api/auth/${endpoint}`);
                 console.log('Auth request ->', url, credentials);
                 const response = await fetch(url, {
                     method: 'POST',
@@ -261,6 +277,14 @@ export const useAuthStore = defineStore('auth', {
                 if (!response.ok) throw new Error(data.message || `HTTP ${response.status}`);
 
                 this.setUser(data);
+                try {
+                    const { posthog: ph } = await import('@/config/observability.client');
+                    if (import.meta.env.VITE_POSTHOG_KEY && ph && typeof ph.capture === 'function') {
+                        ph.capture('user_logged_in', { method: 'password' });
+                    }
+                } catch (_e) {
+                    /* optional */
+                }
                 
                 // Phase 0D: Load UI metadata after successful login
                 import('@/stores/appShell').then(({ useAppShellStore }) => {
@@ -307,7 +331,7 @@ export const useAuthStore = defineStore('auth', {
         // Refresh organization data
         async refreshOrganization() {
             try {
-                const response = await fetch('/api/v2/organization', {
+                const response = await fetch(getApiUrlForFetch('/api/v2/organization'), {
                     headers: {
                         'Authorization': `Bearer ${this.user?.token}`,
                         'Content-Type': 'application/json'
@@ -333,7 +357,7 @@ export const useAuthStore = defineStore('auth', {
             
             try {
                 console.log('Refreshing user permissions...');
-                const response = await fetch('/api/users/profile', {
+                const response = await fetch(getApiUrlForFetch('/api/users/profile'), {
                     headers: {
                         'Authorization': `Bearer ${this.user.token}`,
                         'Content-Type': 'application/json'
@@ -463,7 +487,13 @@ export const useAuthStore = defineStore('auth', {
                             this.organization = incoming.organizationId;
                             localStorage.setItem('organization', JSON.stringify(this.organization));
                         }
-                        
+                        identifyProductUser({
+                            _id: this.user?._id,
+                            email: this.user?.email,
+                            organizationId: this.organization?._id
+                                ? String(this.organization._id)
+                                : undefined,
+                        });
                         console.log('User permissions refreshed successfully');
                         return true;
                     }

@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/stores/auth';
+import { withApiOrigin } from '@/config/apiBase';
 
 /**
  * Portal API Client
@@ -29,7 +30,7 @@ const portalApiClient = async (url, options = {}) => {
   };
 
   // Handle URL params for GET requests
-  let fullUrl = url;
+  let fullUrl = withApiOrigin(url);
   if (options.params) {
     const queryString = new URLSearchParams(options.params).toString();
     fullUrl += `?${queryString}`;

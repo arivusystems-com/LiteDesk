@@ -1,5 +1,44 @@
 const express = require('express');
 const router = express.Router();
+const { checkRedis } = require('../lib/redisHealth');
+
+/**
+ * Liveness: process is up (no dependency checks). Use for cheap probes.
+ */
+router.get('/live', (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        service: 'arivu-api',
+        liveness: true
+    });
+});
+
+/**
+ * Readiness: MongoDB + optional Redis when configured.
+ */
+router.get('/ready', async (req, res) => {
+    const mongoose = require('mongoose');
+    const mongoOk = mongoose.connection.readyState === 1;
+    const payload = {
+        status: mongoOk ? 'ready' : 'not_ready',
+        timestamp: new Date().toISOString(),
+        service: 'arivu-api',
+        database: {
+            connected: mongoOk,
+            state: ['disconnected', 'connected', 'connecting', 'disconnecting'][mongoose.connection.readyState]
+        }
+    };
+
+    const redisResult = await checkRedis();
+    payload.redis = redisResult.skipped
+        ? { configured: false }
+        : { configured: true, ok: redisResult.ok, error: redisResult.error };
+
+    const redisBlocks = !redisResult.skipped && !redisResult.ok;
+    const ok = mongoOk && !redisBlocks;
+    res.status(ok ? 200 : 503).json({ ...payload, status: ok ? 'ready' : 'not_ready' });
+});
 
 /**
  * Master Control Plane Health Check Endpoint
@@ -11,7 +50,7 @@ router.get('/', (req, res) => {
     const health = {
         status: 'healthy',
         timestamp: new Date().toISOString(),
-        service: 'LiteDesk Master Control Plane',
+        service: 'Arivu API (master control plane)',
         uptime: process.uptime(),
         memory: {
             used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
@@ -59,7 +98,7 @@ router.get('/status', async (req, res) => {
         ]);
 
         const status = {
-            service: 'LiteDesk Master Control Plane',
+            service: 'Arivu API (master control plane)',
             version: process.env.npm_package_version || '1.0.0',
             environment: process.env.NODE_ENV || 'development',
             timestamp: new Date().toISOString(),

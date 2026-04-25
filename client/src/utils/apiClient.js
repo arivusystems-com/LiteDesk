@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/stores/auth';
+import { getApiUrlForFetch } from '@/config/apiBase';
 
 const apiClient = async (url, options = {}) => {
     const authStore = useAuthStore();
@@ -15,7 +16,7 @@ const apiClient = async (url, options = {}) => {
     }
 
     // Handle URL params for GET requests
-    let fullUrl = `/api${url}`;
+    let fullUrl = getApiUrlForFetch(url);
     if (options.params) {
         const queryString = new URLSearchParams(options.params).toString();
         fullUrl += `?${queryString}`;
