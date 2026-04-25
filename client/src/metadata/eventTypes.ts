@@ -368,8 +368,8 @@ export function getEventTypeByLabel(label: string) {
   const aliasLabel = normalizedLabel === 'Meeting / Appointment' ? 'Meeting' : normalizedLabel;
   const definition = EVENT_TYPE_DEFINITIONS.find(type => type.label === normalizedLabel);
   const definitionFromAlias = EVENT_TYPE_DEFINITIONS.find(type => type.label === aliasLabel);
-  if (definition || definitionFromAlias) {
-    const resolved = definition || definitionFromAlias;
+  const resolved = definition ?? definitionFromAlias;
+  if (resolved) {
     return {
       key: resolved.key,
       label: resolved.label,

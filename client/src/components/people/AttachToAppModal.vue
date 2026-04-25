@@ -167,7 +167,7 @@
                       wrapper-class="mt-2"
                       :invalid="!!validationErrors[fieldName]"
                       :options-class="attachModalListboxOptionsClass"
-                      @update:model-value="(v) => { formData[fieldName] = v; }"
+                      @update:model-value="bindStateListboxValue(fieldName)"
                     />
                     <input
                       v-else-if="getInputType(fieldName) === 'date'"
@@ -238,7 +238,7 @@
                       wrapper-class="mt-2"
                       :invalid="!!validationErrors[fieldName]"
                       :options-class="attachModalListboxOptionsClass"
-                      @update:model-value="(v) => { formData[fieldName] = v; clearDefaultTracking(fieldName); }"
+                      @update:model-value="bindDetailListboxValue(fieldName)"
                     />
                     <input
                       v-else-if="getInputType(fieldName) === 'date'"
@@ -901,6 +901,15 @@ const clearDefaultTracking = (fieldName: string): void => {
   if (defaultPrefilledFields.value.has(fieldName)) {
     defaultPrefilledFields.value.delete(fieldName);
   }
+};
+
+/** Typed HeadlessSelect handlers — avoids implicit-`any` on `@update:model-value` in templates (vue-tsc). */
+const bindStateListboxValue = (fieldName: string) => (v: string | number | null | undefined) => {
+  formData.value[fieldName] = v;
+};
+const bindDetailListboxValue = (fieldName: string) => (v: string | number | null | undefined) => {
+  formData.value[fieldName] = v;
+  clearDefaultTracking(fieldName);
 };
 
 // Initialize form data
