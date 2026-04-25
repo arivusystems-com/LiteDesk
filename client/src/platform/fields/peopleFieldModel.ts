@@ -48,7 +48,7 @@ import type {
   BaseFilterType,
 } from './BaseFieldModel';
 import { validateBaseFieldMetadata } from './BaseFieldModel';
-import { isGlobalSystemFieldKey } from './fieldCapabilityEngine';
+import { isGlobalSystemFieldKey } from './globalSystemFields';
 
 export { mergePeopleVirtualFieldDefinitions } from './peopleFieldRegistry';
 
