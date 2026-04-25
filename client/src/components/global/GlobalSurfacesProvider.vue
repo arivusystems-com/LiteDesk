@@ -52,8 +52,12 @@
  * Any deviation requires architecture review.
  */
 
-import { ref, onMounted, onBeforeUnmount } from 'vue';
-import GlobalSearch from '@/components/GlobalSearch.vue';
+import { ref, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue';
+
+// Async so GlobalSearch (+ drawers, field engines, command registry, API client) is NOT in the
+// same synchronous ESM pass as app.use(router) / root shell. A static import caused production
+// ReferenceError: Cannot access 'G' before initialization inside defineComponent (TDZ / cycle).
+const GlobalSearch = defineAsyncComponent(() => import('@/components/GlobalSearch.vue'));
 
 // Visibility state for global surfaces
 const showGlobalSearch = ref(false);
