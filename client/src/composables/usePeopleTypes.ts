@@ -2,6 +2,8 @@
  * Composable to fetch people types (Lead, Contact, Customer, Agent, …) from tenant config.
  * Falls back per appKey when config or API is missing.
  *
+ * Shared in-memory cache per appKey so multiple modals/lists do not repeat the same request.
+ *
  * @param appKey - App key (e.g. 'SALES', 'HELPDESK') or Ref/Computed. When null/empty, skips fetch.
  */
 import { ref, onMounted, watch, type Ref } from 'vue';
@@ -18,6 +20,20 @@ const DEFAULT_BY_APP = {
   HELPDESK: ['Customer', 'Agent']
 } as const;
 
+type ParsedPeopleTypes = {
+  types: string[];
+  typeDefs: PeopleTypeDef[];
+  defaultRole: string;
+};
+
+const sharedCache = new Map<string, ParsedPeopleTypes>();
+const sharedInflight = new Map<string, Promise<ParsedPeopleTypes>>();
+
+function clearSharedPeopleTypesCache() {
+  sharedCache.clear();
+  sharedInflight.clear();
+}
+
 function defaultsForApp(key: string | null | undefined): string[] {
   const u = key && String(key).trim() ? String(key).toUpperCase() : 'SALES';
   const list = (DEFAULT_BY_APP as Record<string, readonly string[]>)[u] ?? DEFAULT_BY_APP.SALES;
@@ -27,6 +43,24 @@ function defaultsForApp(key: string | null | undefined): string[] {
 function defaultRoleForApp(key: string | null | undefined): string {
   const types = defaultsForApp(key);
   return types[0] || 'Lead';
+}
+
+function cacheKeyForApp(key: string): string {
+  return String(key).toUpperCase();
+}
+
+async function loadPeopleTypesNetwork(key: string): Promise<ParsedPeopleTypes> {
+  const fallbackTypes = defaultsForApp(key);
+  const fallbackDefault = fallbackTypes[0] || defaultRoleForApp(key);
+  const res = (await apiClient.get('/settings/core-modules/people/people-types', {
+    params: { appKey: key }
+  })) as { success?: boolean; data?: unknown };
+  const parsed = parsePeopleTypesApiPayload(res?.data, fallbackTypes, fallbackDefault);
+  return {
+    types: parsed.types,
+    typeDefs: parsed.typeDefs,
+    defaultRole: parsed.defaultRole
+  };
 }
 
 export function usePeopleTypes(appKey: string | Ref<string | null | undefined> = 'SALES') {
@@ -40,6 +74,12 @@ export function usePeopleTypes(appKey: string | Ref<string | null | undefined> =
   const defaultRole = ref<string>(defaultRoleForApp(fallbackKey));
   const loading = ref(false);
 
+  function applyParsed(parsed: ParsedPeopleTypes) {
+    types.value = parsed.types;
+    typeDefs.value = parsed.typeDefs;
+    defaultRole.value = parsed.defaultRole;
+  }
+
   async function fetchTypes(key: string | null) {
     if (!key || String(key).trim() === '') {
       types.value = [];
@@ -47,21 +87,49 @@ export function usePeopleTypes(appKey: string | Ref<string | null | undefined> =
       defaultRole.value = defaultRoleForApp(null);
       return;
     }
-    const fallbackTypes = defaultsForApp(key);
-    const fallbackDefault = fallbackTypes[0] || defaultRoleForApp(key);
+    const ck = cacheKeyForApp(key);
+    const cached = sharedCache.get(ck);
+    if (cached) {
+      applyParsed(cached);
+      return;
+    }
+
+    const existingFlight = sharedInflight.get(ck);
+    if (existingFlight) {
+      loading.value = true;
+      try {
+        const parsed = await existingFlight;
+        applyParsed(parsed);
+      } finally {
+        loading.value = false;
+      }
+      return;
+    }
+
     loading.value = true;
+    const p = loadPeopleTypesNetwork(key)
+      .then((parsed) => {
+        sharedCache.set(ck, parsed);
+        return parsed;
+      })
+      .finally(() => {
+        sharedInflight.delete(ck);
+      });
+    sharedInflight.set(ck, p);
+
     try {
-      const res = (await apiClient.get('/settings/core-modules/people/people-types', {
-        params: { appKey: key }
-      })) as { success?: boolean; data?: unknown };
-      const parsed = parsePeopleTypesApiPayload(res?.data, fallbackTypes, fallbackDefault);
-      types.value = parsed.types;
-      typeDefs.value = parsed.typeDefs;
-      defaultRole.value = parsed.defaultRole;
+      const parsed = await p;
+      applyParsed(parsed);
     } catch {
-      types.value = fallbackTypes;
-      typeDefs.value = typeDefsFromStrings(fallbackTypes);
-      defaultRole.value = fallbackDefault;
+      const fallbackTypes = defaultsForApp(key);
+      const fallbackDefault = fallbackTypes[0] || defaultRoleForApp(key);
+      const fallbackParsed: ParsedPeopleTypes = {
+        types: fallbackTypes,
+        typeDefs: typeDefsFromStrings(fallbackTypes),
+        defaultRole: fallbackDefault
+      };
+      sharedCache.set(ck, fallbackParsed);
+      applyParsed(fallbackParsed);
     } finally {
       loading.value = false;
     }
@@ -90,6 +158,7 @@ export function usePeopleTypes(appKey: string | Ref<string | null | undefined> =
   }
 
   watch(peopleTypesCacheVersion, () => {
+    clearSharedPeopleTypesCache();
     const key = getKey();
     if (key && String(key).trim() !== '') {
       fetchTypes(key);

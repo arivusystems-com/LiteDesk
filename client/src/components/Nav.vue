@@ -41,6 +41,7 @@ const route = useRoute();
 const { openTab } = useTabs();
 const { colorMode, toggleColorMode, clearStoredMode } = useColorMode();
 const authStore = useAuthStore();
+const appShellStore = useAppShellStore();
 const { lastActiveAppId } = useSidebarState();
 const appRegistry = ref({});
 const sidebarStructure = ref(null);
@@ -259,6 +260,7 @@ watch(() => authStore.isAuthenticated, (isAuthenticated) => {
 // Refresh sidebar and dynamic routes when modules change (e.g. Settings → Module details, or new custom module)
 const onCoreModulesUpdated = async () => {
   if (authStore.user && authStore.isAuthenticated) {
+    appShellStore.invalidateAppRegistryCache();
     buildSidebar();
     try {
       if (typeof initDynamicRoutes === 'function') {

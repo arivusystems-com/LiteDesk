@@ -195,8 +195,12 @@ watch(() => route.path, async (newPath) => {
 // Refresh permissions on app mount (page refresh)
 onMounted(async () => {
   if (authStore.isAuthenticated) {
+    const neededMetadata = !appShellStore.isLoaded;
     console.log('Auto-refreshing permissions on page load...');
-    await authStore.refreshUser();
+    await Promise.all([
+      authStore.refreshUser(),
+      neededMetadata ? appShellStore.loadUIMetadata() : Promise.resolve()
+    ]);
     identifyProductUser({
       _id: authStore.user?._id,
       email: authStore.user?.email,
@@ -205,12 +209,7 @@ onMounted(async () => {
         : undefined,
     });
 
-    // Phase 1A: Load UI metadata for dynamic composition
-    if (!appShellStore.isLoaded) {
-      console.log('Loading UI metadata...');
-      await appShellStore.loadUIMetadata();
-      
-      // Phase 1A: Initialize dynamic routes after UI metadata is loaded
+    if (neededMetadata) {
       console.log('Initializing dynamic routes...');
       if (typeof initDynamicRoutes === 'function') {
         await initDynamicRoutes();

@@ -11,6 +11,12 @@ export const useNotificationStore = defineStore('notifications', () => {
   const nextCursor = ref(null);
   const authStore = useAuthStore();
 
+  /** Coalesce duplicate unread preview requests (multiple NotificationBell mounts, strict mode, etc.) */
+  let unreadPreviewInFlight = null;
+  let lastUnreadPreviewAppKey = '';
+  let lastUnreadPreviewAt = 0;
+  const UNREAD_PREVIEW_COALESCE_MS = 2000;
+
   const hasUnread = computed(() => unreadCount.value > 0);
 
   /**
@@ -267,49 +273,68 @@ export const useNotificationStore = defineStore('notifications', () => {
     return headers;
   };
 
-  async function fetchUnreadPreview() {
-    // Skip if not authenticated
+  async function fetchUnreadPreview(options = {}) {
     if (!authStore.isAuthenticated) return;
-    // Ensure snoozes loaded (affects unread badge)
-    if (!Object.keys(snoozesByApp.value || {}).length) {
-      loadSnoozesFromStorage();
+
+    const appKeyAtStart = currentAppKey();
+    const now = Date.now();
+    if (
+      !options.force &&
+      lastUnreadPreviewAppKey === appKeyAtStart &&
+      now - lastUnreadPreviewAt < UNREAD_PREVIEW_COALESCE_MS
+    ) {
+      return;
     }
-    if (!Object.keys(dismissedByApp.value || {}).length) {
-      loadDismissedFromStorage();
+    if (unreadPreviewInFlight) {
+      return unreadPreviewInFlight;
     }
-    try {
-      const res = await fetch(buildQuery({ unreadOnly: true, limit: 1 }), {
-        headers: buildHeaders()
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      
-      // Use unreadCount from API if available (more accurate)
-      if (data.unreadCount !== undefined && data.unreadCount !== null) {
-        const appKey = currentAppKey();
-        const snoozedUnread = Object.values(getSnoozeMap(appKey)).filter(e => e?.wasUnread).length;
-        unreadCount.value = Math.max(0, data.unreadCount - snoozedUnread);
-      } else {
-        // Fallback: fetch actual unread notifications to count them
-        // Only use this if API doesn't provide count
-        const fullRes = await fetch(buildQuery({ unreadOnly: true, limit: 100 }), {
+
+    unreadPreviewInFlight = (async () => {
+      if (!Object.keys(snoozesByApp.value || {}).length) {
+        loadSnoozesFromStorage();
+      }
+      if (!Object.keys(dismissedByApp.value || {}).length) {
+        loadDismissedFromStorage();
+      }
+      try {
+        const res = await fetch(buildQuery({ unreadOnly: true, limit: 1 }), {
           headers: buildHeaders()
         });
-        if (fullRes.ok) {
-          const fullData = await fullRes.json();
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (currentAppKey() !== appKeyAtStart) return;
+
+        if (data.unreadCount !== undefined && data.unreadCount !== null) {
           const appKey = currentAppKey();
-          const list = fullData.items || [];
-          unreadCount.value = list.filter(n => !isSnoozed(n.id, appKey)).length;
+          const snoozedUnread = Object.values(getSnoozeMap(appKey)).filter(e => e?.wasUnread).length;
+          unreadCount.value = Math.max(0, data.unreadCount - snoozedUnread);
         } else {
-          // Last resort: use preview data length
-          const list = data.items || [];
-          const appKey = currentAppKey();
-          unreadCount.value = list.some(n => !isSnoozed(n.id, appKey)) ? 1 : 0;
+          const fullRes = await fetch(buildQuery({ unreadOnly: true, limit: 100 }), {
+            headers: buildHeaders()
+          });
+          if (currentAppKey() !== appKeyAtStart) return;
+          if (fullRes.ok) {
+            const fullData = await fullRes.json();
+            const appKey = currentAppKey();
+            const list = fullData.items || [];
+            unreadCount.value = list.filter(n => !isSnoozed(n.id, appKey)).length;
+          } else {
+            const list = data.items || [];
+            const appKey = currentAppKey();
+            unreadCount.value = list.some(n => !isSnoozed(n.id, appKey)) ? 1 : 0;
+          }
         }
+        lastUnreadPreviewAt = Date.now();
+        lastUnreadPreviewAppKey = appKeyAtStart;
+      } catch (err) {
+        console.error('[notifications] fetchUnreadPreview error:', err);
       }
-    } catch (err) {
-      console.error('[notifications] fetchUnreadPreview error:', err);
-    }
+    })().finally(() => {
+      unreadPreviewInFlight = null;
+    });
+
+    return unreadPreviewInFlight;
   }
 
   async function fetchNotifications(options = {}) {
