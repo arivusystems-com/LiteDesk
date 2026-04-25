@@ -203,13 +203,14 @@
 </template>
 
 <script setup>
-import { computed, watch, onBeforeUnmount, ref } from 'vue';
+import { computed, watch, onBeforeUnmount, ref, defineAsyncComponent } from 'vue';
 import { TransitionGroup } from 'vue';
 import { useNotificationStore } from '@/stores/notifications';
 import { useOffline } from '@/composables/useOffline';
 import { connectNotificationStream } from '@/composables/useNotificationStream';
 import { useAuthStore } from '@/stores/authRegistry';
-import NotificationItem from './NotificationItem.vue';
+
+const NotificationItem = defineAsyncComponent(() => import('./NotificationItem.vue'));
 
 const props = defineProps({
   open: {

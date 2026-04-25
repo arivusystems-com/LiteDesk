@@ -9,8 +9,10 @@ import { configureTabsStorage, resetTabsState, useTabs } from '@/composables/use
 import { useColorMode } from '@/composables/useColorMode';
 import { useNotifications } from '@/composables/useNotifications';
 const PlatformShell = defineAsyncComponent(() => import('@/components/PlatformShell.vue'));
+const NotificationSheet = defineAsyncComponent(() =>
+  import('@/components/notifications/NotificationSheet.vue')
+);
 import NotificationContainer from '@/components/NotificationContainer.vue';
-import NotificationSheet from '@/components/notifications/NotificationSheet.vue';
 import GlobalSurfacesProvider from '@/components/global/GlobalSurfacesProvider.vue';
 import { useSidebarState } from '@/composables/useSidebarState';
 import { identifyProductUser } from '@/config/posthogUser';
