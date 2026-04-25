@@ -18,11 +18,10 @@ import { fetchAppRegistryFromNetwork } from '@/utils/appRegistryNetwork';
  */
 export async function getAppRegistry(): Promise<AppRegistry> {
   try {
-    const pinia = getActivePinia();
-    if (!pinia) {
+    if (!getActivePinia()) {
       return fetchAppRegistryFromNetwork();
     }
-    const appShellStore = useAppShellStore(pinia);
+    const appShellStore = useAppShellStore();
     return appShellStore.ensureCachedAppRegistry();
   } catch (error) {
     console.error('[getAppRegistry] Error resolving app registry:', error);
