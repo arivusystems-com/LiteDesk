@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { getApiUrlForFetch } from '@/config/apiBase';
-import { identifyProductUser } from '@/config/observability.client';
+import { identifyProductUser, captureUserLoggedIn, resetPosthog } from '@/config/posthogUser';
 
 export const useAuthStore = defineStore('auth', {
     state: () => ({
@@ -209,9 +209,7 @@ export const useAuthStore = defineStore('auth', {
         
         clearUser() {
             try {
-                import('@/config/observability.client').then(({ posthog: ph }) => {
-                    if (ph && typeof ph.reset === 'function') ph.reset();
-                });
+                resetPosthog();
             } catch (_e) {
                 /* optional */
             }
@@ -278,10 +276,7 @@ export const useAuthStore = defineStore('auth', {
 
                 this.setUser(data);
                 try {
-                    const { posthog: ph } = await import('@/config/observability.client');
-                    if (import.meta.env.VITE_POSTHOG_KEY && ph && typeof ph.capture === 'function') {
-                        ph.capture('user_logged_in', { method: 'password' });
-                    }
+                    captureUserLoggedIn({ method: 'password' });
                 } catch (_e) {
                     /* optional */
                 }

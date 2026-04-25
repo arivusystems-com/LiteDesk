@@ -40,19 +40,3 @@ export function initClientObservability(app: App, router: Router) {
 }
 
 export { posthog }
-
-export function identifyProductUser(user: {
-  _id?: string
-  email?: string
-  organizationId?: string
-} | null) {
-  if (!user?._id || !import.meta.env.VITE_POSTHOG_KEY) return
-  try {
-    posthog.identify(String(user._id), {
-      email: user.email,
-      organizationId: user.organizationId ? String(user.organizationId) : undefined,
-    })
-  } catch {
-    /* optional */
-  }
-}

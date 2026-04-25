@@ -35,7 +35,7 @@ Packages alone are not enough: this runbook describes **how to verify** Sentry a
 
 - `VITE_POSTHOG_KEY` enables PostHog; optional `VITE_POSTHOG_HOST` (defaults to US cloud).
 - **Pageviews:** `capture_pageview` is disabled in init; **manual** `$pageview` is sent in `router.afterEach` with `path` and route `name` (`observability.client.ts`).
-- **Identification:** when a user is set in the auth store or on app mount after refresh, `identifyProductUser` runs with user id, email, and `organizationId` where available (`client/src/stores/auth.js`, `client/src/App.vue`).
+- **Identification:** when a user is set in the auth store or on app mount after refresh, `identifyProductUser` runs with user id, email, and `organizationId` where available (`client/src/config/posthogUser.ts`, used from `auth.js` and `App.vue`). It is split from Sentry init on purpose so the auth store does not import `@sentry/vue` during router bootstrap.
 - **Key workflow signal:** on successful password login, `user_logged_in` is captured.
 - On logout, `posthog.reset()` runs to avoid person bleed across accounts (`clearUser`).
 
