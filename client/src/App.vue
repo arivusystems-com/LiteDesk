@@ -1,5 +1,5 @@
 <script setup>
-import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 
 import { useAuthStore } from '@/stores/authRegistry';
@@ -8,9 +8,7 @@ import { usePermissionSync } from '@/composables/usePermissionSync';
 import { configureTabsStorage, resetTabsState, useTabs } from '@/composables/useTabs';
 import { useColorMode } from '@/composables/useColorMode';
 import { useNotifications } from '@/composables/useNotifications';
-import Nav from '@/components/Nav.vue';
-import TabBar from '@/components/TabBar.vue';
-import PlatformShell from '@/components/PlatformShell.vue';
+const PlatformShell = defineAsyncComponent(() => import('@/components/PlatformShell.vue'));
 import NotificationContainer from '@/components/NotificationContainer.vue';
 import NotificationSheet from '@/components/notifications/NotificationSheet.vue';
 import GlobalSurfacesProvider from '@/components/global/GlobalSurfacesProvider.vue';
