@@ -428,9 +428,7 @@ export function useSalesDashboardMetrics({ appKey, authStore }) {
     nowTicker = window.setInterval(() => {
       now.value = new Date();
     }, 60000);
-    if (authStore.user && authStore.isAuthenticated) {
-      buildDashboard();
-    }
+    // Initial dashboard load is handled by watch(authStore.user, …, { immediate: true })
   });
 
   onBeforeUnmount(() => {

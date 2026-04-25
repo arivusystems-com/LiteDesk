@@ -227,6 +227,7 @@ export const useAuthStore = defineStore('auth', {
                 const appShellStore = useAppShellStore();
                 appShellStore.clear();
             });
+            import('@/utils/tenantSchemaApiCache').then((m) => m.invalidateTenantSchemaCaches()).catch(() => {});
             
             // Clear offline data (IndexedDB) on logout
             import('@/services/offlineDb.js').then(({ clearAllData }) => {

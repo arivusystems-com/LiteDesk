@@ -26,8 +26,8 @@ import { hasPermission as checkPermission } from '@/types/permission-snapshot.ty
 import { memoizeBuilder } from '@/utils/builderCache';
 import { validateAppRegistryOrThrow } from '@/utils/validateAppRegistry';
 import { assertValidSidebarStructure } from '@/utils/assertValidSidebarStructure';
-import apiClient from '@/utils/apiClient';
 import { getActivePinia } from 'pinia';
+import { fetchCoreModulesSettingsCached } from '@/utils/tenantSchemaApiCache';
 
 const LAST_ACTIVE_APP_ID_KEY = 'litedesk-sidebar-last-active-app-id';
 
@@ -185,8 +185,7 @@ async function buildCoreModules(snapshot: PermissionSnapshot): Promise<SidebarIt
       return [];
     }
 
-    // Try to use apiClient - Pinia is now guaranteed to be initialized
-    const response = await apiClient('/settings/core-modules', { method: 'GET' });
+    const response = await fetchCoreModulesSettingsCached();
 
     const modules = response?.modules || [];
 

@@ -250,6 +250,7 @@ import { useAppShellStore } from '@/stores/appShell';
 import { useColorMode } from '@/composables/useColorMode';
 import { useSidebarState } from '@/composables/useSidebarState';
 import { buildSidebarStructureForSession } from '@/utils/buildSidebarForSession';
+import { invalidateTenantSchemaCaches } from '@/utils/tenantSchemaApiCache';
 import SyncDrawer from '@/components/audit/SyncDrawer.vue';
 import { getPendingCount } from '@/services/offlineQueue.js';
 import NotificationBell from '@/components/notifications/NotificationBell.vue';
@@ -335,6 +336,7 @@ const buildSidebar = async () => {
 const onCoreModulesUpdated = () => {
   if (authStore.user && authStore.isAuthenticated) {
     appShellStore.invalidateAppRegistryCache();
+    invalidateTenantSchemaCaches();
     buildSidebar();
   }
 };

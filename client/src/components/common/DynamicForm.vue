@@ -375,6 +375,7 @@ import TaskDescriptionEditor from '@/components/record-page/TaskDescriptionEdito
 import TaskRelatedToField from '@/components/tasks/TaskRelatedToField.vue';
 import TaskSubtasksField from '@/components/tasks/TaskSubtasksField.vue';
 import apiClient from '@/utils/apiClient';
+import { fetchModulesListCached } from '@/utils/tenantSchemaApiCache';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
 import {
   mergeOrgContactLookupForField,
@@ -1451,7 +1452,7 @@ const fetchModule = async () => {
       context: context,
       contextSource: props.context ? 'prop' : 'route'
     });
-    const data = await apiClient.get(`/modules${context ? `?context=${context}` : ''}`);
+    const data = await fetchModulesListCached(context ? { context } : {});
     
     // Validate response structure
     if (!data || !data.data) {
