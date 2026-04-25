@@ -63,6 +63,7 @@
       @set-default-view="handleSetDefaultView"
       @saved-views-updated="handleSavedViewsUpdated"
       @stat-click="handleStatClick"
+      @filter-opened="handleFilterOpened"
       @fetch="fetchData"
       @row-click="handleRowClick"
       @edit="handleEdit"
@@ -203,7 +204,9 @@ const activeSavedViewId = ref(null);
 // Schema-driven filter data
 const moduleFieldDefinitions = ref([]);
 const availableUsers = ref([]);
+const availableUsersLoading = ref(false);
 const availableOrganizations = ref([]);
+const availableOrganizationsLoading = ref(false);
 const appRegistry = ref(null);
 
 // Known app keys that can have People participation
@@ -240,9 +243,6 @@ const buildList = async () => {
     // Fetch field definitions for schema-driven filters
     await fetchModuleFieldDefinitions();
     
-    // Fetch lookup data for filter types that need it (user, entity)
-    await fetchFilterLookupData();
-
     // Create permission snapshot
     const snapshot = createPermissionSnapshot(authStore.user);
 
@@ -353,10 +353,18 @@ const buildList = async () => {
         // For other modules, use statsConfig from definition or response
         statsConfig.value = definition?.statsConfig || [];
       }
-      
+
+      // Show the list shell immediately once definition is available.
+      // Data fetch runs in the background, keeping the perceived load faster.
+      loading.value = false;
+
       if (definition && definition.emptyState?.type !== 'NOT_CONFIGURED') {
-        await fetchData();
+        fetchData().catch((error) => {
+          console.error('[ModuleList] Initial data fetch failed:', error);
+        });
       }
+
+      return;
     }
   } catch (error) {
     console.error('[ModuleList] Error building list:', error);
@@ -557,47 +565,57 @@ const fetchModuleFieldDefinitions = async () => {
 };
 
 // Fetch lookup data for filter types that need it (user, entity)
-const fetchFilterLookupData = async () => {
-  // Check if any filters need user lookup
-  const needsUserLookup = moduleFieldDefinitions.value.some(
-    field => field.filterable && field.filterType === 'user'
-  );
-  
-  // Check if any filters need entity lookup
-  const needsEntityLookup = moduleFieldDefinitions.value.some(
-    field => field.filterable && field.filterType === 'entity'
-  );
-  
-  // Fetch users if needed
-  if (needsUserLookup) {
-    try {
-      const response = await apiClient.get('/users/list');
-      if (response.success && Array.isArray(response.data)) {
-        availableUsers.value = response.data;
-      } else {
-        availableUsers.value = [];
-      }
-    } catch (error) {
-      console.error('[ModuleList] Error fetching users for filters:', error);
+const fetchUsersForFilters = async () => {
+  if (availableUsersLoading.value || (Array.isArray(availableUsers.value) && availableUsers.value.length > 0)) {
+    return;
+  }
+  availableUsersLoading.value = true;
+  try {
+    const response = await apiClient.get('/users/list');
+    if (response.success && Array.isArray(response.data)) {
+      availableUsers.value = response.data;
+    } else {
       availableUsers.value = [];
     }
+  } catch (error) {
+    console.error('[ModuleList] Error fetching users for filters:', error);
+    availableUsers.value = [];
+  } finally {
+    availableUsersLoading.value = false;
   }
-  
-  // Fetch organizations if needed (for entity lookups)
-  if (needsEntityLookup && props.moduleKey === 'people') {
-    try {
-      const response = await apiClient.get('/v2/organization', { params: { limit: 1000 } });
-      if (response.success && Array.isArray(response.data)) {
-        availableOrganizations.value = response.data;
-      } else if (response.success && response.data?.data && Array.isArray(response.data.data)) {
-        availableOrganizations.value = response.data.data;
-      } else {
-        availableOrganizations.value = [];
-      }
-    } catch (error) {
-      console.error('[ModuleList] Error fetching organizations for filters:', error);
+};
+
+const fetchOrganizationsForFilters = async () => {
+  if (availableOrganizationsLoading.value || (Array.isArray(availableOrganizations.value) && availableOrganizations.value.length > 0)) {
+    return;
+  }
+  availableOrganizationsLoading.value = true;
+  try {
+    const response = await apiClient.get('/v2/organization', { params: { limit: 1000 } });
+    if (response.success && Array.isArray(response.data)) {
+      availableOrganizations.value = response.data;
+    } else if (response.success && response.data?.data && Array.isArray(response.data.data)) {
+      availableOrganizations.value = response.data.data;
+    } else {
       availableOrganizations.value = [];
     }
+  } catch (error) {
+    console.error('[ModuleList] Error fetching organizations for filters:', error);
+    availableOrganizations.value = [];
+  } finally {
+    availableOrganizationsLoading.value = false;
+  }
+};
+
+const handleFilterOpened = async (filterKey) => {
+  if (!filterKey) return;
+  const filter = adaptedFilters.value.find((f) => f.key === filterKey);
+  if (!filter) return;
+  if (filter.filterType === 'user') {
+    await fetchUsersForFilters();
+  }
+  if (filter.filterType === 'entity' && props.moduleKey === 'people') {
+    await fetchOrganizationsForFilters();
   }
 };
 
@@ -880,12 +898,6 @@ const fetchData = async () => {
     const moduleConfig = getModuleListConfig(props.moduleKey);
     let normalizedFilters = { ...filters.value };
     
-    if (moduleConfig?.normalizeFilters) {
-      normalizedFilters = moduleConfig.normalizeFilters(normalizedFilters, authStore.user?._id);
-    }
-    
-    // Map filters to API params using schema-driven approach
-    // Use registry normalizeFilters if available (it uses generic normalizer internally)
     if (moduleConfig?.normalizeFilters) {
       normalizedFilters = moduleConfig.normalizeFilters(normalizedFilters, authStore.user?._id);
     }
