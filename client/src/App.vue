@@ -8,8 +8,6 @@ import { usePermissionSync } from '@/composables/usePermissionSync';
 import { configureTabsStorage, resetTabsState, useTabs } from '@/composables/useTabs';
 import { useColorMode } from '@/composables/useColorMode';
 import { useNotifications } from '@/composables/useNotifications';
-import LandingPage from '@/views/LandingPage.vue'
-import Dashboard from '@/views/Dashboard.vue'
 import Nav from '@/components/Nav.vue';
 import TabBar from '@/components/TabBar.vue';
 import PlatformShell from '@/components/PlatformShell.vue';
