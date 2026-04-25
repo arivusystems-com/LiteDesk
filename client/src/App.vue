@@ -18,7 +18,7 @@ import NotificationSheet from '@/components/notifications/NotificationSheet.vue'
 import GlobalSurfacesProvider from '@/components/global/GlobalSurfacesProvider.vue';
 import { initializeDynamicRoutes } from '@/router';
 import { useSidebarState } from '@/composables/useSidebarState';
-import { identifyProductUser } from '@/config/observability.client';
+import { identifyProductUser } from '@/config/posthogUser';
 
 const authStore = useAuthStore();
 const appShellStore = useAppShellStore();
