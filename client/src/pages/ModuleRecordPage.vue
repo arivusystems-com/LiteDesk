@@ -24,12 +24,16 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, defineAsyncComponent } from 'vue';
 import { useRoute } from 'vue-router';
 import { getRecordAdapterKey } from '@/components/record-page/adapters/adapterRegistry';
-import DealRecordPage from '@/pages/deals/DealRecordPage.vue';
-import TaskRecordPage from '@/pages/tasks/TaskRecordPage.vue';
-import GenericRecordContent from '@/components/record-page/GenericRecordContent.vue';
+
+/** One async chunk per adapter — avoids loading all three for every record route. */
+const DealRecordPage = defineAsyncComponent(() => import('@/pages/deals/DealRecordPage.vue'));
+const TaskRecordPage = defineAsyncComponent(() => import('@/pages/tasks/TaskRecordPage.vue'));
+const GenericRecordContent = defineAsyncComponent(
+  () => import('@/components/record-page/GenericRecordContent.vue')
+);
 
 const props = defineProps({
   embed: { type: Boolean, default: false },

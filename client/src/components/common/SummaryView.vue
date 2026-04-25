@@ -1652,6 +1652,7 @@ import FormPreview from '@/components/forms/FormPreview.vue';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import LinkRecordsDrawer from '@/components/common/LinkRecordsDrawer.vue';
 import apiClient from '@/utils/apiClient';
+import { fetchModulesListCached } from '@/utils/tenantSchemaApiCache';
 import { sanitizePhoneDigits } from '@/utils/phoneInput';
 import { DEFAULT_PHONE_VALIDATION_MESSAGE } from '@/utils/defaultFieldValidations';
 import { PEOPLE_SALES_ROLE_MODULE_DEFINITION_KEYS } from '@/utils/peopleParticipationUi';
@@ -5304,7 +5305,7 @@ const fetchModuleDefinition = async () => {
   try {
     // Pass current context to API
     const context = currentContext.value;
-    const response = await apiClient.get(`/modules${context ? `?context=${context}` : ''}`);
+    const response = await fetchModulesListCached(context ? { context } : {});
     const modules = response.data || [];
     
     // Create a map of all module definitions by key

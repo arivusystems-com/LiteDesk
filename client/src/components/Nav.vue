@@ -7,6 +7,7 @@ import NotificationBell from '@/components/notifications/NotificationBell.vue';
 import NotificationDrawer from '@/components/notifications/NotificationDrawer.vue';
 import { computed, inject, ref, watch, onMounted, onUnmounted } from 'vue';
 import { buildSidebarStructureForSession } from '@/utils/buildSidebarForSession';
+import { invalidateTenantSchemaCaches } from '@/utils/tenantSchemaApiCache';
 import { createPermissionSnapshot, hasPermission as hasSnapshotPermission } from '@/types/permission-snapshot.types';
 import { hasAnySettingsAccess } from '@/utils/settingsTabAccess';
 import { useColorMode } from '@/composables/useColorMode';
@@ -234,23 +235,18 @@ const buildSidebar = async () => {
   }
 };
 
-// Watch for user changes to rebuild sidebar
-watch(() => authStore.user, (newUser) => {
-  if (newUser && authStore.isAuthenticated) {
-    buildSidebar();
-  } else {
-    sidebarStructure.value = null;
-  }
-}, { immediate: true });
-
-// Watch for authentication changes
-watch(() => authStore.isAuthenticated, (isAuthenticated) => {
-  if (isAuthenticated && authStore.user) {
-    buildSidebar();
-  } else {
-    sidebarStructure.value = null;
-  }
-});
+// Single watcher: user reference updates on login, logout, and refreshUser (permissions).
+watch(
+  () => authStore.user,
+  (newUser) => {
+    if (newUser && authStore.isAuthenticated) {
+      buildSidebar();
+    } else {
+      sidebarStructure.value = null;
+    }
+  },
+  { immediate: true }
+);
 
 // Global search handlers
 // ARCHITECTURE NOTE: GlobalSearch keyboard shortcuts and event listeners
@@ -261,6 +257,7 @@ watch(() => authStore.isAuthenticated, (isAuthenticated) => {
 const onCoreModulesUpdated = async () => {
   if (authStore.user && authStore.isAuthenticated) {
     appShellStore.invalidateAppRegistryCache();
+    invalidateTenantSchemaCaches();
     buildSidebar();
     try {
       if (typeof initDynamicRoutes === 'function') {
@@ -284,9 +281,6 @@ const handleNotificationClick = () => {
 };
 
 onMounted(() => {
-  if (authStore.user && authStore.isAuthenticated) {
-    buildSidebar();
-  }
   window.addEventListener('litedesk:core-modules-updated', onCoreModulesUpdated);
   window.addEventListener('litedesk:open-notifications-panel', handleNotificationClick);
 });

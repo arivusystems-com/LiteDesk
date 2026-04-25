@@ -2844,7 +2844,7 @@ const updateFilters = (key, value) => {
 // Initialize filters from filterConfig
 watch(() => props.filterConfig, (newConfig) => {
   if (!Array.isArray(newConfig) || newConfig.length === 0) {
-    if (props.moduleKey === 'people') {
+    if (import.meta.env.DEV && props.moduleKey === 'people') {
       console.log('[ListView] filterConfig is empty or not an array:', {
         isArray: Array.isArray(newConfig),
         length: newConfig?.length,
@@ -2854,7 +2854,7 @@ watch(() => props.filterConfig, (newConfig) => {
     return;
   }
   
-  if (props.moduleKey === 'people') {
+  if (import.meta.env.DEV && props.moduleKey === 'people') {
     console.log('[ListView] filterConfig received:', {
       count: newConfig.length,
       filters: newConfig.map(f => ({ key: f.key, filterType: f.filterType, hasOptions: !!f.options, optionsCount: f.options?.length || 0 }))

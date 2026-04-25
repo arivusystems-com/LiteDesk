@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import { logAuthAccessDebug, warnAuthAccessDebug } from '@/config/litedeskDebug.js';
 import { getApiUrlForFetch } from '@/config/apiBase';
 import { identifyProductUser, captureUserLoggedIn, resetPosthog } from '@/config/posthogUser';
 import { registerUseAuthStore } from './authRegistry';
@@ -53,7 +54,7 @@ export const useAuthStore = defineStore('auth', {
                     // If explicit user app access exists, honor that first instead of broadening
                     // access to all org-enabled apps.
                     if (allowedApps.length > 0) {
-                        console.log(`[hasAppAccess] Owner explicit app access check for ${appKeyUpper}:`, {
+                        logAuthAccessDebug(`[hasAppAccess] Owner explicit app access check for ${appKeyUpper}:`, {
                             allowedApps,
                             hasAccess: hasExplicitUserAccess
                         });
@@ -80,20 +81,20 @@ export const useAuthStore = defineStore('auth', {
                         }).filter(key => key !== null);
                         
                         if (appKeys.includes(appKeyUpper)) {
-                            console.log(`[hasAppAccess] Owner access granted via enabledApps: ${appKeyUpper}`, {
+                            logAuthAccessDebug(`[hasAppAccess] Owner access granted via enabledApps: ${appKeyUpper}`, {
                                 enabledAppKeys: appKeys,
                                 checking: appKeyUpper
                             });
                             return true;
                         } else {
-                            console.warn(`[hasAppAccess] Owner but app ${appKeyUpper} not in enabledApps:`, {
+                            warnAuthAccessDebug(`[hasAppAccess] Owner but app ${appKeyUpper} not in enabledApps:`, {
                                 enabledAppKeys: appKeys,
                                 checking: appKeyUpper,
                                 enabledApps: enabledApps
                             });
                         }
                     } else {
-                        console.warn(`[hasAppAccess] Owner but no enabledApps in organization:`, {
+                        warnAuthAccessDebug(`[hasAppAccess] Owner but no enabledApps in organization:`, {
                             hasOrganization: !!state.organization,
                             organization: state.organization
                         });
@@ -103,7 +104,7 @@ export const useAuthStore = defineStore('auth', {
                 // For non-owners or if owner check didn't match: check explicit appAccess/allowedApps
                 const hasAccess = hasExplicitUserAccess;
                 
-                console.log(`[hasAppAccess] Final check for ${appKeyUpper}:`, {
+                logAuthAccessDebug(`[hasAppAccess] Final check for ${appKeyUpper}:`, {
                     isOwner: state.user?.isOwner,
                     allowedApps: allowedApps,
                     hasAccess: hasAccess
@@ -227,6 +228,7 @@ export const useAuthStore = defineStore('auth', {
                 const appShellStore = useAppShellStore();
                 appShellStore.clear();
             });
+            import('@/utils/tenantSchemaApiCache').then((m) => m.invalidateTenantSchemaCaches()).catch(() => {});
             
             // Clear offline data (IndexedDB) on logout
             import('@/services/offlineDb.js').then(({ clearAllData }) => {

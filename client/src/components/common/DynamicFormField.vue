@@ -846,6 +846,11 @@ import { useAuthStore } from '@/stores/authRegistry';
 import { canEditField } from '@/platform/fields/fieldCapabilityEngine';
 import { isModuleRegistered } from '@/platform/fields/FieldRegistry';
 
+const _c = globalThis.console;
+function fieldDbg(...args) {
+  if (import.meta.env.DEV) _c.log(...args);
+}
+
 // Note: Headless UI Listbox is still used for Lookup (Relationship) fields and Radio Button
 // Picklist uses native HTML select styled with Tailwind
 // Multi-Picklist uses a custom tag-based dropdown component
@@ -1864,7 +1869,7 @@ const fetchLookupOptions = async () => {
   
   try {
     const moduleKey = targetModule;
-    console.log('Fetching lookup options for module:', moduleKey, 'field:', props.field.key);
+    fieldDbg('Fetching lookup options for module:', moduleKey, 'field:', props.field.key);
     
     // Handle special module key mappings
     let endpoint = `/${moduleKey}`;
@@ -1883,7 +1888,7 @@ const fetchLookupOptions = async () => {
     
     const response = await apiClient.get(endpoint, { params });
     
-    console.log('Lookup response for', moduleKey, ':', response);
+    fieldDbg('Lookup response for', moduleKey, ':', response);
     
     if (response.success) {
       if (Array.isArray(response.data)) {
@@ -1893,13 +1898,13 @@ const fetchLookupOptions = async () => {
         // Also check for pagination info
         if (response.data.total) {
           // If there are more records, we might want to fetch all or handle pagination
-          console.log('Total records:', response.data.total, 'Loaded:', response.data.data.length);
+          fieldDbg('Total records:', response.data.total, 'Loaded:', response.data.data.length);
         }
       } else if (Array.isArray(response.data)) {
         lookupOptions.value = response.data;
       }
       
-      console.log('Loaded lookup options:', lookupOptions.value.length, 'for', props.field.key);
+      fieldDbg('Loaded lookup options:', lookupOptions.value.length, 'for', props.field.key);
     } else {
       console.warn('Lookup fetch unsuccessful:', response);
       lookupOptions.value = [];

@@ -114,7 +114,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import apiClient from '@/utils/apiClient';
+import { fetchCoreModulesSettingsCached, fetchModulesListCached } from '@/utils/tenantSchemaApiCache';
 import {
   UsersIcon,
   BuildingOfficeIcon,
@@ -162,8 +162,8 @@ const fetchCoreModules = async () => {
 
   try {
     const [coreRes, modulesRes] = await Promise.all([
-      apiClient('/settings/core-modules', { method: 'GET' }),
-      apiClient.get('/modules').catch(() => ({ data: {} }))
+      fetchCoreModulesSettingsCached(),
+      fetchModulesListCached({}).catch(() => ({ data: {} }))
     ]);
 
     const data = coreRes;
