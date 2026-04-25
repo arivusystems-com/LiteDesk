@@ -1,5 +1,6 @@
 import { ref, computed, watch, getCurrentInstance, nextTick } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
+import appRouter from '@/router';
 import { 
   HomeIcon,
   InboxIcon,
@@ -637,18 +638,18 @@ export function useTabs() {
   const getRouter = () => {
     if (!router) {
       try {
-        // Try to get router if not already initialized
         const instance = getCurrentInstance();
         if (instance) {
           router = useRouter();
         } else {
-          // Cannot get router without Vue instance context
-          console.warn('[useTabs] Cannot get router: No Vue instance available');
-            return null;
+          // No injection context (e.g. useTabs() after await in a watcher) — use app singleton
+          router = appRouter;
         }
       } catch (e) {
         console.error('[useTabs] Error getting router:', e);
-        return null;
+        if (!router) {
+          router = appRouter;
+        }
       }
     }
     return router;
@@ -1056,40 +1057,65 @@ export function useTabs() {
     }
     
     // Watch for route changes (browser navigation)
-    // Use the internal route from useRoute() which is guaranteed to be reactive
-    if (!route) {
-      console.error('❌ Cannot set up route watcher: route not available from useRoute()');
-      console.error('❌ This means useTabs() was not called in a Vue component setup context');
+    // Prefer useRoute() (component injection); after await (e.g. post-login) there is no instance — use router.currentRoute
+    const getWatchedRoute = () => {
+      if (route != null) {
+        return route;
+      }
+      const r = getRouter();
+      return r ? r.currentRoute.value : null;
+    };
+
+    if (!getWatchedRoute()) {
+      console.error('❌ Cannot set up route watcher: no current route and no router');
       return;
     }
+
+    const firstRoute = getWatchedRoute();
+    console.log('👀 Setting up route watcher, current route:', firstRoute.path, firstRoute.fullPath);
+    console.log('👀 Route from useRoute()?', route != null, firstRoute);
     
-    console.log('👀 Setting up route watcher, current route:', route.path, route.fullPath);
-    console.log('👀 Route object is reactive:', route);
-    
-    // Watch BOTH route.path and route.fullPath to catch all changes including redirects
-    const stopWatcher = watch([() => route.path, () => route.fullPath], ([newPathValue, newFullPathValue], [oldPathValue, oldFullPathValue]) => {
-      const newPath = route.path; // Path without query
-      const oldPath = oldPathValue ? oldPathValue.split('?')[0] : '';
-      const newFullPath = route.fullPath;
-      const oldFullPath = oldFullPathValue || '';
-      const isCreateRoute = /\/new\/?$/.test(newPath);
-      const parentListPath = isCreateRoute ? newPath.replace(/\/new\/?$/, '') : null;
-      
-      // Log EVERY route change to debug
-      console.log('👀👀👀 Route watcher FIRED:', {
-        oldPath,
-        newPath,
-        newFullPath,
-        oldFullPath,
-        isProgrammaticNavigation,
-        isBrowserNavigation,
-        activeTabId: activeTabId.value,
-        routePath: route.path,
-        routeFullPath: route.fullPath
-      });
-      
-      // Skip if paths are the same
-      if (newPath === oldPath) {
+    // Watch BOTH path and fullPath to catch all changes including redirects
+    const stopWatcher = watch(
+      () => {
+        const wr = getWatchedRoute();
+        if (wr) {
+          return [wr.path, wr.fullPath];
+        }
+        const r = getRouter();
+        if (!r) {
+          return ['', ''];
+        }
+        const v = r.currentRoute.value;
+        return [v.path, v.fullPath];
+      },
+      ([newPathValue, newFullPathValue], [oldPathValue, oldFullPathValue]) => {
+        const currentRoute = getWatchedRoute();
+        if (!currentRoute) {
+          return;
+        }
+        const newPath = currentRoute.path; // Path without query
+        const oldPath = oldPathValue ? oldPathValue.split('?')[0] : '';
+        const newFullPath = currentRoute.fullPath;
+        const oldFullPath = oldFullPathValue || '';
+        const isCreateRoute = /\/new\/?$/.test(newPath);
+        const parentListPath = isCreateRoute ? newPath.replace(/\/new\/?$/, '') : null;
+        
+        // Log EVERY route change to debug
+        console.log('👀👀👀 Route watcher FIRED:', {
+          oldPath,
+          newPath,
+          newFullPath,
+          oldFullPath,
+          isProgrammaticNavigation,
+          isBrowserNavigation,
+          activeTabId: activeTabId.value,
+          routePath: currentRoute.path,
+          routeFullPath: currentRoute.fullPath
+        });
+        
+        // Skip if paths are the same
+        if (newPath === oldPath) {
         console.log('⏭️ Route watcher: paths are the same, skipping');
         return;
       }
@@ -1285,7 +1311,7 @@ export function useTabs() {
         targetPathWithoutQuery,
         isProgrammaticNavigation,
         lastProgrammaticPath,
-        currentRoute: route.path
+        currentRoute: getWatchedRoute()?.path
       });
       
       // Skip if this matches a programmatic navigation
@@ -1418,7 +1444,7 @@ export function useTabs() {
     // Also try after a delay in case router initializes later
     setTimeout(registerRouterHook, 500);
     
-    console.log('✅ Route watcher setup complete. Watching route:', route.path);
+    console.log('✅ Route watcher setup complete. Watching route:', getWatchedRoute()?.path);
     console.log('✅ Watcher stop function created:', typeof stopWatcher === 'function');
     
     // Return cleanup function
