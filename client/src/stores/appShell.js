@@ -17,6 +17,7 @@
 
 import { defineStore } from 'pinia';
 import { useAuthStore } from './authRegistry';
+import { fetchAppRegistryFromNetwork } from '@/utils/appRegistryNetwork';
 
 export const useAppShellStore = defineStore('appShell', {
   state: () => ({
@@ -26,7 +27,12 @@ export const useAppShellStore = defineStore('appShell', {
     routes: [],
     loading: false,
     error: null,
-    lastLoaded: null
+    lastLoaded: null,
+    /** Full app registry (sidebar builder, module list) — network once per session unless invalidated */
+    cachedAppRegistry: null,
+    appRegistrySessionKey: null,
+    _appRegistryPromise: null,
+    _loadUIMetadataPromise: null
   }),
 
   getters: {
@@ -61,11 +67,21 @@ export const useAppShellStore = defineStore('appShell', {
 
   actions: {
     /**
-     * Load UI metadata from the backend
+     * Load UI metadata from the backend (single-flight: concurrent callers share one request).
      */
     async loadUIMetadata() {
+      if (this._loadUIMetadataPromise) {
+        return this._loadUIMetadataPromise;
+      }
+      this._loadUIMetadataPromise = this._loadUIMetadataImpl().finally(() => {
+        this._loadUIMetadataPromise = null;
+      });
+      return this._loadUIMetadataPromise;
+    },
+
+    async _loadUIMetadataImpl() {
       const authStore = useAuthStore();
-      
+
       if (!authStore.isAuthenticated) {
         console.warn('[AppShell] Cannot load UI metadata: user not authenticated');
         return;
@@ -75,57 +91,49 @@ export const useAppShellStore = defineStore('appShell', {
       this.error = null;
 
       try {
-        // Load sidebar definition (includes apps and modules)
-        const sidebarResponse = await fetch('/api/ui/sidebar', {
-          headers: {
-            'Authorization': `Bearer ${authStore.user.token}`,
-            'Content-Type': 'application/json'
-          }
-        });
+        const token = authStore.user.token;
+        const headers = {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        };
+
+        const [sidebarResponse, routesResponse] = await Promise.all([
+          fetch('/api/ui/sidebar', { headers }),
+          fetch('/api/ui/routes', { headers })
+        ]);
 
         if (!sidebarResponse.ok) {
           throw new Error(`Failed to load sidebar: ${sidebarResponse.statusText}`);
         }
 
         const sidebarData = await sidebarResponse.json();
-        
+
         console.log('[AppShell] Sidebar API response:', {
           success: sidebarData.success,
           hasData: !!sidebarData.data,
           appsCount: sidebarData.data?.apps?.length || 0,
           dataStructure: sidebarData.data ? Object.keys(sidebarData.data) : []
         });
-        
+
         if (sidebarData.success) {
-          // Phase 1A: Filter out CONTROL_PLANE - platform-only, never for tenants
           const apps = sidebarData.data?.apps || [];
           this.availableApps = apps.filter(app => {
             const appKeyUpper = app.appKey?.toUpperCase();
             return appKeyUpper !== 'CONTROL_PLANE' && appKeyUpper !== 'CONTROL PLANE';
           });
-          
+
           console.log('[AppShell] Available apps after assignment:', this.availableApps.length);
-          
-          // Set active app to first app if not set (and not CONTROL_PLANE)
+
           if (!this.activeApp && this.availableApps.length > 0) {
             this.activeApp = this.availableApps[0].appKey;
             console.log('[AppShell] Set active app:', this.activeApp);
           }
 
-          // Update sidebar modules for active app
           this.updateSidebarModules();
           console.log('[AppShell] Sidebar modules updated:', this.sidebarModules.length);
         } else {
           throw new Error(sidebarData.message || 'Failed to load sidebar');
         }
-
-        // Load route definitions
-        const routesResponse = await fetch('/api/ui/routes', {
-          headers: {
-            'Authorization': `Bearer ${authStore.user.token}`,
-            'Content-Type': 'application/json'
-          }
-        });
 
         if (routesResponse.ok) {
           const routesData = await routesResponse.json();
@@ -150,12 +158,51 @@ export const useAppShellStore = defineStore('appShell', {
           organizationId: authStore.user?.organizationId
         });
         this.error = error.message;
-        // Don't throw - return empty arrays on failure
         this.availableApps = [];
         this.routes = [];
       } finally {
         this.loading = false;
       }
+    },
+
+    /**
+     * Full UI apps/modules registry for dynamic sidebar (cached; invalidate on core module changes).
+     */
+    async ensureCachedAppRegistry() {
+      const authStore = useAuthStore();
+      if (!authStore.isAuthenticated) {
+        return {};
+      }
+      const orgId =
+        authStore.user?.organizationId ||
+        authStore.organization?._id ||
+        authStore.user?.organization?._id ||
+        '';
+      const sessionKey = `${authStore.user?._id || ''}:${orgId}`;
+
+      if (this.cachedAppRegistry && this.appRegistrySessionKey === sessionKey) {
+        return this.cachedAppRegistry;
+      }
+      if (this._appRegistryPromise) {
+        return this._appRegistryPromise;
+      }
+
+      this._appRegistryPromise = (async () => {
+        const registry = await fetchAppRegistryFromNetwork();
+        this.cachedAppRegistry = registry;
+        this.appRegistrySessionKey = sessionKey;
+        return registry;
+      })().finally(() => {
+        this._appRegistryPromise = null;
+      });
+
+      return this._appRegistryPromise;
+    },
+
+    invalidateAppRegistryCache() {
+      this.cachedAppRegistry = null;
+      this.appRegistrySessionKey = null;
+      this._appRegistryPromise = null;
     },
 
     /**
@@ -215,6 +262,10 @@ export const useAppShellStore = defineStore('appShell', {
       this.routes = [];
       this.lastLoaded = null;
       this.error = null;
+      this.cachedAppRegistry = null;
+      this.appRegistrySessionKey = null;
+      this._appRegistryPromise = null;
+      this._loadUIMetadataPromise = null;
     },
 
     /**

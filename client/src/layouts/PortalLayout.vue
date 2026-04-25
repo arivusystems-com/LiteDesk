@@ -328,6 +328,7 @@ const buildSidebar = async () => {
 
 const onCoreModulesUpdated = () => {
   if (authStore.user && authStore.isAuthenticated) {
+    appShellStore.invalidateAppRegistryCache();
     buildSidebar();
   }
 };
