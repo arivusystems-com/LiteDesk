@@ -171,40 +171,12 @@ const fetchTasks = async () => {
     const nextWeek = new Date(today);
     nextWeek.setDate(nextWeek.getDate() + 7);
     
-    // Fetch all tasks assigned to me (not completed/cancelled)
-    // We'll filter client-side to avoid multiple API calls
-    const allTasksResponse = await apiClient.get('/tasks', {
-      params: {
-        assignedTo: 'me',
-        limit: 50,
-        sortBy: 'dueDate',
-        sortOrder: 'asc'
-      }
-    });
-    
-    if (allTasksResponse.success) {
-      const allTasks = (allTasksResponse.data || []).filter(
-        task => task.status !== 'completed' && task.status !== 'cancelled'
-      );
-      
-      // Separate into overdue, due today, and upcoming
-      tasks.value.overdue = allTasks.filter(task => {
-        if (!task.dueDate) return false;
-        const dueDate = new Date(task.dueDate);
-        return dueDate < today;
-      }).slice(0, 10);
-      
-      tasks.value.dueToday = allTasks.filter(task => {
-        if (!task.dueDate) return false;
-        const dueDate = new Date(task.dueDate);
-        return dueDate >= today && dueDate < tomorrow;
-      }).slice(0, 10);
-      
-      tasks.value.upcoming = allTasks.filter(task => {
-        if (!task.dueDate) return false;
-        const dueDate = new Date(task.dueDate);
-        return dueDate >= tomorrow && dueDate <= nextWeek;
-      }).slice(0, 10);
+    const taskSummaryResponse = await apiClient.get('/tasks/summary');
+    if (taskSummaryResponse.success) {
+      const taskData = taskSummaryResponse.data || {};
+      tasks.value.overdue = taskData.overdue || [];
+      tasks.value.dueToday = taskData.dueToday || [];
+      tasks.value.upcoming = taskData.upcoming || [];
     }
   } catch (error) {
     console.error('[PlatformHome] Error fetching tasks:', error);
@@ -219,18 +191,16 @@ const fetchRecentActivity = async () => {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
-    const response = await apiClient.get('/events', {
+    const response = await apiClient.get('/events/summary', {
       params: {
         startDateTime: thirtyDaysAgo.toISOString(),
         scope: 'mine',
-        limit: 15,
-        sortBy: 'startDateTime',
-        sortOrder: 'desc'
+        limit: 15
       }
     });
     
     if (response.success) {
-      recentActivity.value = (response.data || []).slice(0, 15);
+      recentActivity.value = response.data || [];
     }
   } catch (error) {
     console.error('[PlatformHome] Error fetching recent activity:', error);
