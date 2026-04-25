@@ -12,7 +12,6 @@ import { hasAnySettingsAccess } from '@/utils/settingsTabAccess';
 import { useColorMode } from '@/composables/useColorMode';
 import { useSidebarState } from '@/composables/useSidebarState';
 import AppSidebar from '@/components/AppSidebar.vue';
-import { initializeDynamicRoutes } from '@/router';
 import { Dialog, DialogPanel, TransitionChild, TransitionRoot, Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 import { 
   Bars3Icon, 
@@ -261,6 +260,7 @@ const onCoreModulesUpdated = async () => {
   if (authStore.user && authStore.isAuthenticated) {
     buildSidebar();
     try {
+      const { initializeDynamicRoutes } = await import('@/router');
       await initializeDynamicRoutes();
     } catch (e) {
       console.warn('[Nav] Failed to refresh dynamic routes:', e);

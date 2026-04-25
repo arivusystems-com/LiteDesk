@@ -1,5 +1,3 @@
-import { useAuthStore } from '@/stores/auth';
-
 const portalRoutes = [
   {
     path: '/portal',

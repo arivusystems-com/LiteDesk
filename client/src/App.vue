@@ -16,7 +16,6 @@ import PlatformShell from '@/components/PlatformShell.vue';
 import NotificationContainer from '@/components/NotificationContainer.vue';
 import NotificationSheet from '@/components/notifications/NotificationSheet.vue';
 import GlobalSurfacesProvider from '@/components/global/GlobalSurfacesProvider.vue';
-import { initializeDynamicRoutes } from '@/router';
 import { useSidebarState } from '@/composables/useSidebarState';
 import { identifyProductUser } from '@/config/posthogUser';
 
@@ -208,6 +207,7 @@ onMounted(async () => {
       
       // Phase 1A: Initialize dynamic routes after UI metadata is loaded
       console.log('Initializing dynamic routes...');
+      const { initializeDynamicRoutes } = await import('@/router');
       await initializeDynamicRoutes();
     }
     await recoverUnmatchedDynamicRoute();
