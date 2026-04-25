@@ -1,11 +1,11 @@
 /**
- * Boot order: apiClient and authRegistry are static; no dynamic import in guards (avoids Vite
- * static+dynamic split on the same module graph during bootstrap).
+ * Boot order: `useAuthStore` from authRegistry stays static. `apiClient` is NOT imported at file
+ * level — it is dynamically imported in `initializeDynamicRoutes` and in guards that need it, to
+ * avoid router → apiClient → auth → router ESM TDZ in production.
  */
 import { createRouter, createWebHistory } from 'vue-router'
 import { hasAnySettingsAccess } from '@/utils/settingsTabAccess'
 import { useAuthStore } from '@/stores/authRegistry'
-import apiClient from '@/utils/apiClient'
 import auditRoutes from './audit.routes'
 import portalRoutes from './portal.routes'
 import { loadAndRegisterRoutes } from '@/utils/dynamicRouteLoader'
@@ -425,6 +425,7 @@ const routes = [
       
       // Try to fetch the organization to verify it's a business org (not tenant)
       try {
+        const { default: apiClient } = await import('@/utils/apiClient')
         const response = await apiClient(`/v2/organization/${orgId}`, { method: 'GET' });
         
         // If successful, check if it's a tenant org (shouldn't happen via this endpoint, but double-check)
@@ -827,6 +828,7 @@ export async function initializeDynamicRoutes() {
   const authStore = useAuthStore();
   if (authStore.isAuthenticated) {
     try {
+      const { default: apiClient } = await import('@/utils/apiClient')
       await loadAndRegisterRoutes(router, apiClient);
     } catch (error) {
       console.error('[Router] Error initializing dynamic routes:', error);
