@@ -1,6 +1,9 @@
 import { getApiUrlForFetch } from '@/config/apiBase';
 import { useAuthStore } from '@/stores/authRegistry';
 
+// Request deduplication: map of in-flight requests by URL+method
+const _inFlightRequests = new Map();
+
 const apiClient = async (url, options = {}) => {
     const authStore = useAuthStore();
     const token = authStore.user?.token; // Get token from Pinia store
@@ -22,64 +25,87 @@ const apiClient = async (url, options = {}) => {
         fullUrl += `?${queryString}`;
     }
 
-    try {
-        const response = await fetch(fullUrl, {
-            ...options,
-            headers,
-            body: options.body,
-        });
-
-        if (response.status === 401) {
-            // If unauthorized, force logout
-            authStore.logout();
-            throw new Error('Session expired. Please log in again.');
-        }
-
-        // Check for other errors
-        if (!response.ok) {
-            const is404 = response.status === 404;
-            let errorMessage = `HTTP error! Status: ${response.status}`;
-            let errorData = null;
-            try {
-                // Clone response before reading to avoid "body stream already read" error
-                const clonedResponse = response.clone();
-                errorData = await clonedResponse.json();
-                errorMessage = errorData.message || errorMessage;
-            } catch (parseError) {
-                // If response is not JSON (e.g., HTML error page), get text content
-                try {
-                    const clonedResponse = response.clone();
-                    const textContent = await clonedResponse.text();
-                    console.error('Non-JSON response received:', textContent.substring(0, 200));
-                    errorMessage = `Server returned non-JSON response (${response.status}): ${textContent.substring(0, 100)}...`;
-                } catch (textError) {
-                    // If even text reading fails, use status text
-                    errorMessage = `HTTP error! Status: ${response.status} ${response.statusText}`;
-                }
-            }
-            
-            const error = new Error(errorMessage);
-            error.status = response.status;
-            error.is404 = is404;
-            // Attach response data for 400 errors (validation errors)
-            if (errorData) {
-                error.response = { data: errorData };
-            }
-            throw error;
-        }
-
-        return response.json();
-    } catch (error) {
-        // Re-throw if it's already our custom error
-        if (error.status !== undefined) {
-            throw error;
-        }
-        // For network errors or other issues, wrap them
-        const wrappedError = new Error(error.message || 'Network error');
-        wrappedError.status = 0;
-        wrappedError.is404 = false;
-        throw wrappedError;
+    // Request deduplication: only dedupe GET requests (safe idempotent operations)
+    const method = options.method || 'GET';
+    const requestKey = `${method}:${fullUrl}`;
+    
+    if (method === 'GET' && _inFlightRequests.has(requestKey)) {
+        console.log(`[apiClient] Returning cached in-flight request: ${requestKey}`);
+        return _inFlightRequests.get(requestKey);
     }
+
+    const requestPromise = (async () => {
+        try {
+            const response = await fetch(fullUrl, {
+                ...options,
+                headers,
+                body: options.body,
+            });
+
+            if (response.status === 401) {
+                // If unauthorized, force logout
+                authStore.logout();
+                throw new Error('Session expired. Please log in again.');
+            }
+
+            // Check for other errors
+            if (!response.ok) {
+                const is404 = response.status === 404;
+                let errorMessage = `HTTP error! Status: ${response.status}`;
+                let errorData = null;
+                try {
+                    // Clone response before reading to avoid "body stream already read" error
+                    const clonedResponse = response.clone();
+                    errorData = await clonedResponse.json();
+                    errorMessage = errorData.message || errorMessage;
+                } catch (parseError) {
+                    // If response is not JSON (e.g., HTML error page), get text content
+                    try {
+                        const clonedResponse = response.clone();
+                        const textContent = await clonedResponse.text();
+                        console.error('Non-JSON response received:', textContent.substring(0, 200));
+                        errorMessage = `Server returned non-JSON response (${response.status}): ${textContent.substring(0, 100)}...`;
+                    } catch (textError) {
+                        // If even text reading fails, use status text
+                        errorMessage = `HTTP error! Status: ${response.status} ${response.statusText}`;
+                    }
+                }
+                
+                const error = new Error(errorMessage);
+                error.status = response.status;
+                error.is404 = is404;
+                // Attach response data for 400 errors (validation errors)
+                if (errorData) {
+                    error.response = { data: errorData };
+                }
+                throw error;
+            }
+
+            return response.json();
+        } catch (error) {
+            // Re-throw if it's already our custom error
+            if (error.status !== undefined) {
+                throw error;
+            }
+            // For network errors or other issues, wrap them
+            const wrappedError = new Error(error.message || 'Network error');
+            wrappedError.status = 0;
+            wrappedError.is404 = false;
+            throw wrappedError;
+        } finally {
+            // Clean up the in-flight request map
+            if (method === 'GET') {
+                _inFlightRequests.delete(requestKey);
+            }
+        }
+    })();
+
+    // Store the promise for GET requests to deduplicate
+    if (method === 'GET') {
+        _inFlightRequests.set(requestKey, requestPromise);
+    }
+
+    return requestPromise;
 };
 
 // Add convenient methods
