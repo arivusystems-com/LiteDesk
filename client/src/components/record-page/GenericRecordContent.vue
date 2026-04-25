@@ -829,7 +829,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, inject } from 'vue';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
 import { getModuleRecordCrudPathBase } from '@/utils/moduleRecordApiPath';

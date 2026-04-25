@@ -1384,7 +1384,7 @@ import DeleteConfirmationModal from '@/components/common/DeleteConfirmationModal
 import HoverTooltip from '@/components/common/HoverTooltip.vue';
 import QuickPreviewDrawer from '@/components/common/QuickPreviewDrawer.vue';
 import { useBulkActions } from '@/composables/useBulkActions';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
 import { getFieldDisplayLabel } from '@/utils/fieldDisplay';

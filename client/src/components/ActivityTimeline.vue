@@ -114,7 +114,7 @@
 import { ref, onMounted, watch, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import apiClient from '@/utils/apiClient';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { getHistoryDisplayText, getHistoryAppContext } from './people/historyEventMapping';
 import EmailThreadCard from '@/components/communications/EmailThreadCard.vue';
 

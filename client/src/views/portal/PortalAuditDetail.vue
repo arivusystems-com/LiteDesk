@@ -235,7 +235,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 
 // Portal-specific API client (for /portal/* routes)
 const portalApiClient = async (url, options = {}) => {

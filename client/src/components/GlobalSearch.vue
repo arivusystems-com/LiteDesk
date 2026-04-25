@@ -336,7 +336,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { MagnifyingGlassIcon } from '@heroicons/vue/24/outline';
 import { useTabs } from '@/composables/useTabs';
 import { useActiveSurface } from '@/composables/useActiveSurface';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import apiClient from '@/utils/apiClient';
 import { getAvailableCommands } from '@/commands/commandRegistry';
 import type { CommandPaletteItem, CommandContext, NavigationUtilities } from '@/types/commandPalette.types';

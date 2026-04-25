@@ -1119,7 +1119,7 @@ import {
 import { StarIcon as StarIconSolid } from '@heroicons/vue/24/solid';
 import Avatar from '@/components/common/Avatar.vue';
 import { useTabs } from '@/composables/useTabs';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import apiClient from '@/utils/apiClient';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import LinkRecordsDrawer from '@/components/common/LinkRecordsDrawer.vue';

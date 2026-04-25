@@ -260,7 +260,7 @@ import { TransitionGroup } from 'vue';
 import { useNotificationStore } from '@/stores/notifications';
 import { useOffline } from '@/composables/useOffline';
 import { connectNotificationStream } from '@/composables/useNotificationStream';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import NotificationItem from './NotificationItem.vue';
 
 const props = defineProps({

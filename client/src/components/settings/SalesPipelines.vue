@@ -252,7 +252,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue';
 import { TrashIcon } from '@heroicons/vue/24/outline';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import apiClient from '@/utils/apiClient';
 
 const authStore = useAuthStore();

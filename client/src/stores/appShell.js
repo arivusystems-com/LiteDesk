@@ -16,7 +16,7 @@
  */
 
 import { defineStore } from 'pinia';
-import { useAuthStore } from './auth';
+import { useAuthStore } from './authRegistry';
 
 export const useAppShellStore = defineStore('appShell', {
   state: () => ({

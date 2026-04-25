@@ -324,7 +324,7 @@ import { CheckIcon, XMarkIcon } from '@heroicons/vue/24/solid';
 import apiClient from '@/utils/apiClient';
 import { useTabs } from '@/composables/useTabs';
 import { useNotifications, showGlobalNotification } from '@/composables/useNotifications';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import SectionsBuilder from '@/components/forms/SectionsBuilder.vue';
 import FormSettingsTab from '@/components/forms/FormSettingsTab.vue';
 import OutcomesAndRules from '@/components/forms/OutcomesAndRules.vue';

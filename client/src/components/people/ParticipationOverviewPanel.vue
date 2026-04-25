@@ -144,7 +144,7 @@ import { getParticipationActions, normalizeParticipationType } from './participa
 import { getParticipation } from '@/utils/getParticipation';
 import { getAppLabel } from '@/utils/getRoleDisplay';
 import { isDetachAllowed } from './detachPolicy';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import clickOutside from '@/directives/clickOutside';
 import { PEOPLE_PERMISSIONS } from '@/platform/permissions/peoplePermissions';
 import { hasPeoplePermission } from '@/platform/permissions/peoplePermissionHelper';

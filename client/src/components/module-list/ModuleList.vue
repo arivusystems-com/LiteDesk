@@ -92,7 +92,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, useAttrs } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { useTabs } from '@/composables/useTabs';
 import { buildModuleListFromRegistry } from '@/utils/buildModuleListFromRegistry';
 import { getAppRegistry } from '@/utils/getAppRegistry';

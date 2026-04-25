@@ -442,7 +442,7 @@ import apiClient from '@/utils/apiClient';
 import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import dateUtils, { openDatePicker } from '@/utils/dateUtils';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { useTabs } from '@/composables/useTabs';
 import { useProjectionCreate } from '@/composables/useProjectionCreate';
 import { isAuditEventType, filterNonAuditEventTypes, NON_AUDIT_EVENT_TYPES } from '@/utils/eventUtils';

@@ -334,7 +334,7 @@
 </template>
 
 <script setup>
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 
 const authStore = useAuthStore();
 </script>

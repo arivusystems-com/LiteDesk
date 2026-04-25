@@ -426,7 +426,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { TrashIcon, ArrowPathIcon, MagnifyingGlassIcon, ExclamationTriangleIcon, ChevronUpDownIcon, CheckIcon, XMarkIcon } from '@heroicons/vue/24/outline';
 import { Listbox, ListboxButton, ListboxOptions, ListboxOption } from '@headlessui/vue';
 import apiClient from '@/utils/apiClient';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import DeleteConfirmationModal from '@/components/common/DeleteConfirmationModal.vue';
 import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 

@@ -2,6 +2,7 @@ import './assets/main.css'
 
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
+import './stores/auth'
 // @ts-ignore: no declaration file for './router'
 import router from './router'
 import App from './App.vue'

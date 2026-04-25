@@ -6,7 +6,7 @@ import { getApiUrlForFetch } from '@/config/apiBase';
  * That static edge caused "Cannot access before initialization" in production.
  */
 const apiClient = async (url, options = {}) => {
-    const { useAuthStore } = await import('@/stores/auth');
+    const { useAuthStore } = await import('@/stores/authRegistry');
     const authStore = useAuthStore();
     const token = authStore.user?.token; // Get token from Pinia store
 

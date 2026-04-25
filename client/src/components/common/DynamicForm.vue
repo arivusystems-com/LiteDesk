@@ -391,7 +391,7 @@ import {
 import { mergePeopleVirtualFieldDefinitions } from '@/platform/fields/peopleFieldModel';
 import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
 import { DEFAULT_CURRENCY_CODE } from '@/utils/currencyOptions';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { useRoute } from 'vue-router';
 import { resolveFieldContext, filterFieldsByContext } from '@/utils/fieldContextFilter';
 import {

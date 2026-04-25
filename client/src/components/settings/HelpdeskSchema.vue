@@ -12,7 +12,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import ModulesAndFields from './ModulesAndFields.vue';
 
 const emit = defineEmits(['selected-module-change']);

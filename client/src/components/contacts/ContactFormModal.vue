@@ -73,7 +73,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import apiClient from '@/utils/apiClient';
 import DynamicForm from '@/components/common/DynamicForm.vue';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { useProjectionCreate } from '@/composables/useProjectionCreate';
 
 const props = defineProps({

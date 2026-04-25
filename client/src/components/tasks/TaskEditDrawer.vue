@@ -235,7 +235,7 @@ import TaskSubtasksField from '@/components/tasks/TaskSubtasksField.vue';
 import apiClient from '@/utils/apiClient';
 import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
 import { getFieldDependencyState } from '@/utils/dependencyEvaluation';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { getTaskFieldMetadata } from '@/platform/fields/taskFieldModel';
 import { isSystemField as isSystemFieldFromEngine, canEditField } from '@/platform/fields/fieldCapabilityEngine';
 

@@ -266,7 +266,7 @@ import type { Directive, DirectiveBinding } from 'vue';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue';
 import { CheckIcon, PencilSquareIcon, EllipsisVerticalIcon, XMarkIcon } from '@heroicons/vue/24/outline';
 import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { useRecordTags } from '@/components/record-page/composables/useRecordTags';
 
 type ClickOutsideHandler = (e: Event) => void;

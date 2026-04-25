@@ -168,7 +168,7 @@ import { XMarkIcon, Cog6ToothIcon, TrashIcon, PlusIcon, Bars3Icon } from '@heroi
 import Avatar from '@/components/common/Avatar.vue';
 import DynamicFormField from '@/components/common/DynamicFormField.vue';
 import apiClient from '@/utils/apiClient';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { DEFAULT_CURRENCY_CODE, formatCurrencyValue } from '@/utils/currencyOptions';
 
 const props = defineProps({

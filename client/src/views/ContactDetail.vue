@@ -431,7 +431,7 @@ import RelatedOrganizationWidget from '@/components/organizations/RelatedOrganiz
 import RelatedRecordsRenderer from '@/components/relationships/RelatedRecordsRenderer.vue';
 import AutomationContext from '@/components/automation/AutomationContext.vue';
 import Notes from '@/components/Notes.vue';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import Avatar from '@/components/common/Avatar.vue';
 import { useRecordContext } from '@/composables/useRecordContext';
 import { getProjectionTypeLabel, getProjectionTypeBadgeClass, getAppLabel } from '@/utils/projectionLabels';

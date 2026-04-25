@@ -561,7 +561,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { useNotificationStore } from '@/stores/notifications';
 import { useNotificationPreferencesStore } from '@/stores/notificationPreferences';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { useNotifications } from '@/composables/useNotifications';
 import ChannelBadge from '@/components/notifications/ChannelBadge.vue';
 import NotificationChannelSection from '@/components/notifications/NotificationChannelSection.vue';

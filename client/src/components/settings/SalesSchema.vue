@@ -20,7 +20,7 @@ const props = defineProps({
     default: null
   }
 });
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import ModulesAndFields from './ModulesAndFields.vue';
 
 const emit = defineEmits(['selected-module-change']);

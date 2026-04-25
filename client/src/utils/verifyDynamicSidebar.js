@@ -14,7 +14,7 @@ export async function verifyDynamicSidebar() {
   try {
     // Import stores
     const { useAppShellStore } = await import('@/stores/appShell');
-    const { useAuthStore } = await import('@/stores/auth');
+    const { useAuthStore } = await import('@/stores/authRegistry');
     
     const appShellStore = useAppShellStore();
     const authStore = useAuthStore();

@@ -235,7 +235,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import apiClient from '@/utils/apiClient';
 import BadgeCell from '@/components/common/table/BadgeCell.vue';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 
 const props = defineProps({
   response: {

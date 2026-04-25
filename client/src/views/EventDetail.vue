@@ -814,7 +814,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
 import dateUtils from '@/utils/dateUtils';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import RelatedRecordsPanel from '@/components/relationships/RelatedRecordsPanel.vue';
 // @ts-expect-error - JavaScript module without type declarations

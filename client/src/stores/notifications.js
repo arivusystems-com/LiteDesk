@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { useAuthStore } from './auth';
+import { useAuthStore } from './authRegistry';
 import dateUtils from '@/utils/dateUtils';
 
 export const useNotificationStore = defineStore('notifications', () => {

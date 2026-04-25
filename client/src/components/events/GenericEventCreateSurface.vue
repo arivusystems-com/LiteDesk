@@ -210,7 +210,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
 import { openDatePicker } from '@/utils/dateUtils';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { useTabs } from '@/composables/useTabs';
 import { getEventTypesForApp, EVENT_TYPES, getEventTypeByKey, getEventTypeDefinitionByKey } from '@/metadata/eventTypes';
 import type { EventTypeDefinition } from '@/types/eventSettings.types';
