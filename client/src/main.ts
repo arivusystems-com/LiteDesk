@@ -28,7 +28,7 @@ if (import.meta.env.DEV) {
   );
 }
 
-void ;(async () => {
+void (async () => {
   try {
     const { initClientObservability } = await import('./config/observability.client')
     await initClientObservability(app, router)
