@@ -39,11 +39,20 @@ export default defineConfig(({ mode }) => ({
     }
   },
   build: {
+    // App includes very large views (e.g. settings); 500 kB is easy to exceed.
+    chunkSizeWarningLimit: 900,
     sourcemap: true,
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (id.includes('/node_modules/')) {
+            if (id.includes('/node_modules/@sentry/')) {
+              return 'vendor-sentry'
+            }
+            if (id.includes('/node_modules/posthog-js/')) {
+              return 'vendor-posthog'
+            }
+
             if (
               id.includes('/node_modules/vue/') ||
               id.includes('/node_modules/vue-router/') ||
@@ -114,6 +123,14 @@ export default defineConfig(({ mode }) => ({
             }
 
             return 'vendor-misc'
+          }
+
+          // Heavy settings UI — keep it out of the main entry chunk when possible
+          if (
+            id.includes('/src/components/settings/') ||
+            id.includes('/src/views/settings/')
+          ) {
+            return 'chunk-settings'
           }
 
           if (

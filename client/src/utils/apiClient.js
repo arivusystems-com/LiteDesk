@@ -1,7 +1,12 @@
-import { useAuthStore } from '@/stores/auth';
 import { getApiUrlForFetch } from '@/config/apiBase';
 
+/**
+ * Lazy-load the auth store (dynamic import) so the module graph is not:
+ *   router → apiClient → useAuthStore (static) → ... during createRouter.
+ * That static edge caused "Cannot access before initialization" in production.
+ */
 const apiClient = async (url, options = {}) => {
+    const { useAuthStore } = await import('@/stores/auth');
     const authStore = useAuthStore();
     const token = authStore.user?.token; // Get token from Pinia store
 

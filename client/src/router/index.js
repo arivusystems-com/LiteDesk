@@ -1,11 +1,15 @@
+/**
+ * Boot order: do not statically import @/stores/auth or @/utils/apiClient here.
+ * Those created a production TDZ (vue-router "Cannot access before initialization")
+ * when apiClient → auth and router each pulled the other at module init. Guards use
+ * dynamic import(); apiClient also lazy-imports the auth store.
+ */
 import { createRouter, createWebHistory } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
 import { hasAnySettingsAccess } from '@/utils/settingsTabAccess'
 import LandingPage from '@/views/LandingPage.vue'
 import auditRoutes from './audit.routes'
 import portalRoutes from './portal.routes'
 import { loadAndRegisterRoutes } from '@/utils/dynamicRouteLoader'
-import apiClient from '@/utils/apiClient'
 
 const routes = [
   {
@@ -409,6 +413,8 @@ const routes = [
     component: () => import('@/pages/ModuleRecordPage.vue'),
     meta: { requiresAuth: true, requiresPermission: { module: 'organizations', action: 'view' } },
     beforeEnter: async (to, from, next) => {
+      const { useAuthStore } = await import('@/stores/auth');
+      const apiClient = (await import('@/utils/apiClient')).default;
       const authStore = useAuthStore();
       const orgId = to.params.id;
       
@@ -559,7 +565,8 @@ const getDefaultRoute = (authStore) => {
 };
 
 // Add debug logging and permission checks
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
+  const { useAuthStore } = await import('@/stores/auth')
   const authStore = useAuthStore()
   console.log('Navigation guard:', {
     to: to.path,
@@ -821,9 +828,11 @@ router.beforeEach((to, from, next) => {
 // Phase 1A: Load and register dynamic routes after router is created
 // This will be called from App.vue after UI metadata is loaded
 export async function initializeDynamicRoutes() {
+  const { useAuthStore } = await import('@/stores/auth');
   const authStore = useAuthStore();
   if (authStore.isAuthenticated) {
     try {
+      const apiClient = (await import('@/utils/apiClient')).default;
       await loadAndRegisterRoutes(router, apiClient);
     } catch (error) {
       console.error('[Router] Error initializing dynamic routes:', error);
