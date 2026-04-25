@@ -506,6 +506,13 @@ import BadgeCell from '@/components/common/table/BadgeCell.vue';
 import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { formatRawValueForDisplay } from '@/utils/fieldDisplay';
 
+function dtDbg(...args) {
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console -- dev-only diagnostics
+    console.log(...args);
+  }
+}
+
 const props = defineProps({
   // Data
   data: {
@@ -684,12 +691,12 @@ onMounted(() => {
     if (savedFrozen) {
       try {
         frozenColumns.value = JSON.parse(savedFrozen);
-        console.log('Loaded frozen columns:', frozenColumns.value);
+        dtDbg('Loaded frozen columns:', frozenColumns.value);
       } catch (e) {
         console.error('Failed to parse saved frozen columns:', e);
       }
     } else {
-      console.log('No saved frozen columns found');
+      dtDbg('No saved frozen columns found');
     }
   }
   
@@ -701,7 +708,7 @@ onMounted(() => {
         const { by, order } = JSON.parse(savedSort);
         sortBy.value = by;
         sortOrder.value = order;
-        console.log('Loaded sort state in DataTable:', { by, order });
+        dtDbg('Loaded sort state in DataTable:', { by, order });
       } catch (e) {
         console.error('Failed to parse saved sort state:', e);
       }
@@ -731,7 +738,7 @@ const startResize = (event, columnKey) => {
   const startX = event.clientX;
   const startWidth = th.offsetWidth;
   
-  console.log(`Starting resize for ${columnKey}:`, { startX, startWidth });
+  dtDbg(`Starting resize for ${columnKey}:`, { startX, startWidth });
   
   resizing.value = { columnKey, startX, startWidth };
   
@@ -757,7 +764,7 @@ const handleResize = (event) => {
   const minWidth = column?.minWidth ? parseInt(column.minWidth) : 100;
   const newWidth = Math.max(minWidth, startWidth + diff);
   
-  console.log(`Resizing ${columnKey}:`, { diff, newWidth, minWidth });
+  dtDbg(`Resizing ${columnKey}:`, { diff, newWidth, minWidth });
   
   // Update the column width
   columnWidths.value = {
@@ -768,7 +775,7 @@ const handleResize = (event) => {
 
 const stopResize = () => {
   if (resizing.value) {
-    console.log('Stopping resize, saving widths:', columnWidths.value);
+    dtDbg('Stopping resize, saving widths:', columnWidths.value);
     saveColumnWidths();
     resizing.value = null;
   }
@@ -839,8 +846,8 @@ const displayData = computed(() => {
   
   // Client-side sort (only if not using server-side sorting)
   if (props.sortable && !props.serverSide && sortBy.value) {
-    console.log('Client-side sorting by:', sortBy.value, 'order:', sortOrder.value);
-    console.log('Number of records before sort:', result.length);
+    dtDbg('Client-side sorting by:', sortBy.value, 'order:', sortOrder.value);
+    dtDbg('Number of records before sort:', result.length);
     
     result = [...result].sort((a, b) => {
       // Find the column definition to check for custom sortValue
@@ -875,13 +882,13 @@ const displayData = computed(() => {
       return 0;
     });
     
-    console.log('Number of records after sort:', result.length);
+    dtDbg('Number of records after sort:', result.length);
     if (result.length > 0) {
-      console.log('First record:', result[0]);
-      console.log('Last record:', result[result.length - 1]);
+      dtDbg('First record:', result[0]);
+      dtDbg('Last record:', result[result.length - 1]);
     }
   } else if (props.serverSide && sortBy.value) {
-    console.log('Server-side sorting - skipping client-side sort');
+    dtDbg('Server-side sorting - skipping client-side sort');
   }
   
   // Client-side pagination (only if not using server-side pagination)
@@ -1186,7 +1193,7 @@ const toggleColumnFreeze = (columnKey) => {
   // Save immediately to localStorage
   if (props.tableId) {
     localStorage.setItem(`datatable-${props.tableId}-frozen`, JSON.stringify(frozenColumns.value));
-    console.log('Saved frozen columns:', frozenColumns.value);
+    dtDbg('Saved frozen columns:', frozenColumns.value);
   }
 };
 
@@ -1257,7 +1264,7 @@ watch([sortBy, sortOrder], ([newSortBy, newSortOrder]) => {
       `datatable-${props.tableId}-sort`, 
       JSON.stringify({ by: newSortBy, order: newSortOrder })
     );
-    console.log('Saved sort state:', { by: newSortBy, order: newSortOrder });
+    dtDbg('Saved sort state:', { by: newSortBy, order: newSortOrder });
   }
 });
 </script>

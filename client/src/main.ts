@@ -30,33 +30,46 @@ if (import.meta.env.DEV) {
   );
 }
 
-void (async () => {
-  try {
-    const { initClientObservability } = await import('./config/observability.client')
-    await initClientObservability(app, router)
-  } catch (e) {
-    console.error('[observability] init failed', e)
-  }
-
-  // Initialize color mode
+void (() => {
+  // Color mode (must run before first paint: applies <html> class)
   const { colorMode } = useColorMode()
-  console.log('Initial color mode:', colorMode.value)
+  if (import.meta.env.DEV) {
+    console.log('Initial color mode:', colorMode.value)
+  }
 
   // Register service worker for PWA (audit app only)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      // Only register for audit routes
       if (window.location.pathname.startsWith('/audit/')) {
         navigator.serviceWorker.register('/service-worker.js', { scope: '/audit/' })
           .then((registration) => {
-            console.log('[SW] Service Worker registered:', registration.scope);
+            if (import.meta.env.DEV) {
+              console.log('[SW] Service Worker registered:', registration.scope)
+            }
           })
           .catch((error) => {
-            console.error('[SW] Service Worker registration failed:', error);
-          });
+            console.error('[SW] Service Worker registration failed:', error)
+          })
       }
-    });
+    })
   }
 
   app.mount('#app')
+
+  // Sentry + PostHog after first paint: avoids blocking TTI on analytics bundles.
+  const startObservability = () => {
+    void (async () => {
+      try {
+        const { initClientObservability } = await import('./config/observability.client')
+        await initClientObservability(app, router)
+      } catch (e) {
+        console.error('[observability] init failed', e)
+      }
+    })()
+  }
+  if (typeof requestIdleCallback !== 'undefined') {
+    requestIdleCallback(startObservability, { timeout: 4000 })
+  } else {
+    setTimeout(startObservability, 0)
+  }
 })()

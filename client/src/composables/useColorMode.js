@@ -1,5 +1,10 @@
 import { ref, watch, onMounted, getCurrentInstance } from 'vue';
 
+/** Dev-only: hot path; avoid main-thread console cost in production. */
+function dbg(...args) {
+  if (import.meta.env.DEV) console.log(...args);
+}
+
 const colorMode = ref('light'); // Global state shared across the app
 let initialized = false; // Track if color mode has been initialized
 let systemListener = null; // Store the system listener reference
@@ -10,7 +15,7 @@ const applyMode = (mode) => {
   // Target the root <html> element
   const root = document.documentElement;
   
-  console.log('Applying color mode:', mode);
+  dbg('Applying color mode:', mode);
   
   // 1. **CRITICAL STEP:** Remove the 'dark' class (and 'light', if used)
   // This ensures a clean slate, especially important when switching FROM dark TO light.
@@ -20,22 +25,21 @@ const applyMode = (mode) => {
   if (mode === 'system') {
     // Check OS preference and apply 'dark' if preferred
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    console.log('System mode - prefers dark:', prefersDark);
+    dbg('System mode - prefers dark:', prefersDark);
     if (prefersDark) {
       root.classList.add('dark');
     }
   } else if (mode === 'dark') {
     // Explicitly set to dark mode
-    console.log('Adding dark class');
+    dbg('Adding dark class');
     root.classList.add('dark');
   } else if (mode === 'light') {
-    console.log('Light mode - no dark class added');
+    dbg('Light mode - no dark class added');
   }
-  
-  // Debug: Check if dark class is actually present
-  console.log('HTML classes after applyMode:', root.classList.toString());
-  console.log('Dark class present:', root.classList.contains('dark'));
-  console.log('Current mode:', mode);
+
+  dbg('HTML classes after applyMode:', root.classList.toString());
+  dbg('Dark class present:', root.classList.contains('dark'));
+  dbg('Current mode:', mode);
   // If mode is 'light', the 'dark' class remains removed, 
   // and Tailwind defaults to the base (light mode) styles.
 };
@@ -47,12 +51,12 @@ const initializeColorMode = () => {
   }
   
   const storedMode = localStorage.getItem('color-mode');
-  console.log('Stored color mode:', storedMode);
+  dbg('Stored color mode:', storedMode);
   if (['light', 'dark', 'system'].includes(storedMode)) {
     colorMode.value = storedMode;
-    console.log('Using stored mode:', storedMode);
+    dbg('Using stored mode:', storedMode);
   } else {
-    console.log('Using default mode:', colorMode.value);
+    dbg('Using default mode:', colorMode.value);
   }
   
   applyMode(colorMode.value);
@@ -80,12 +84,12 @@ export function useColorMode() {
   initializeColorMode();
   
   const toggleColorMode = (mode) => {
-    console.log('toggleColorMode called with:', mode);
+    dbg('toggleColorMode called with:', mode);
     if (!['light', 'dark', 'system'].includes(mode)) {
-      console.log('Invalid mode:', mode);
+      dbg('Invalid mode:', mode);
       return;
     }
-    console.log('Setting color mode to:', mode);
+    dbg('Setting color mode to:', mode);
     colorMode.value = mode;
     localStorage.setItem('color-mode', mode);
     applyMode(mode);
@@ -114,7 +118,7 @@ export function useColorMode() {
   // Clear stored mode (for debugging)
   const clearStoredMode = () => {
     localStorage.removeItem('color-mode');
-    console.log('Cleared stored color mode');
+    dbg('Cleared stored color mode');
   };
 
   // Expose the current mode for use in templates (e.g., to switch logos)

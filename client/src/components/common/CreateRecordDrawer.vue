@@ -171,6 +171,14 @@ import { useCreationContext } from '@/utils/creationContext';
 import { getParticipationFields, getCoreIdentityFields, mergePeopleVirtualFieldDefinitions } from '@/platform/fields/peopleFieldModel';
 import { getFormFieldValue, syncPeopleVirtualFieldKeys, applyVirtualFieldDefault } from '@/utils/getFieldValue';
 
+const _c = globalThis.console;
+function drawerDbg(...args) {
+  if (import.meta.env.DEV) _c.log(...args);
+}
+function drawerWarn(...args) {
+  if (import.meta.env.DEV) _c.warn(...args);
+}
+
 const props = defineProps({
   isOpen: {
     type: Boolean,
@@ -392,7 +400,7 @@ async function fetchModuleForDrawer() {
       moduleOverrideFromSettings.value = mod;
     }
   } catch (e) {
-    console.warn('[CreateRecordDrawer] Failed to fetch module for quick create:', e);
+    drawerWarn('[CreateRecordDrawer] Failed to fetch module for quick create:', e);
   } finally {
     moduleOverrideLoading.value = false;
   }
@@ -893,7 +901,7 @@ watch(() => [props.isOpen, props.moduleKey], async ([open, key]) => {
     dealPeopleList.value = normalizeList(peopleRes);
     dealOrgList.value = normalizeList(orgRes);
   } catch (e) {
-    console.warn('[CreateRecordDrawer] Failed to fetch people/organizations for deal relationships:', e);
+    drawerWarn('[CreateRecordDrawer] Failed to fetch people/organizations for deal relationships:', e);
     dealPeopleList.value = [];
     dealOrgList.value = [];
   }
@@ -965,7 +973,7 @@ watch(() => formData.value, (newFormData, oldFormData) => {
 }, { deep: true });
 
 const handleSubmit = async () => {
-  console.log('[CreateRecordDrawer] 🚀 handleSubmit called', {
+  drawerDbg('[CreateRecordDrawer] 🚀 handleSubmit called', {
     moduleKey: props.moduleKey,
     isEditing: isEditing.value,
     formDataKeys: Object.keys(formData.value)
@@ -1031,7 +1039,7 @@ const handleSubmit = async () => {
       
       // If validation fails, stop here
       if (Object.keys(errors.value).length > 0) {
-        console.log('[CreateRecordDrawer] ❌ Validation failed:', errors.value);
+        drawerDbg('[CreateRecordDrawer] ❌ Validation failed:', errors.value);
         scrollToFirstErrorField();
         saving.value = false;
         return;
@@ -1047,7 +1055,7 @@ const handleSubmit = async () => {
       }
     }
     
-    console.log('[CreateRecordDrawer] ✅ Validation passed, proceeding with submission...');
+    drawerDbg('[CreateRecordDrawer] ✅ Validation passed, proceeding with submission...');
     
     // ARCHITECTURE NOTE: In Quick Create mode, only send fields that are in quickCreate configuration
     // This ensures the API only receives fields configured in Settings → Core Modules → Tasks → Quick Create
@@ -1080,7 +1088,7 @@ const handleSubmit = async () => {
         }
       }
       
-      console.log('[CreateRecordDrawer] 🔍 Quick Create mode - filtering fields:', {
+      drawerDbg('[CreateRecordDrawer] 🔍 Quick Create mode - filtering fields:', {
         before: Object.keys(submitData),
         after: Object.keys(filteredData),
         quickCreateKeys: Array.from(quickCreateKeys),
@@ -1096,7 +1104,7 @@ const handleSubmit = async () => {
     
     // Debug: Log formData for events before cleaning
     if (props.moduleKey === 'events') {
-      console.log('[CreateRecordDrawer] formData.value before cleaning:', {
+      drawerDbg('[CreateRecordDrawer] formData.value before cleaning:', {
         linkedFormId: formData.value.linkedFormId,
         relatedToId: formData.value.relatedToId,
         eventType: formData.value.eventType,
@@ -1177,7 +1185,7 @@ const handleSubmit = async () => {
     // Strip status field for events (system-controlled)
     if (props.moduleKey === 'events') {
       if (submitData.status !== undefined) {
-        console.log('[CreateRecordDrawer] ⚠️ Stripping status field from event payload:', submitData.status);
+        drawerDbg('[CreateRecordDrawer] ⚠️ Stripping status field from event payload:', submitData.status);
         delete submitData.status;
       }
     }
@@ -1276,7 +1284,7 @@ const handleSubmit = async () => {
     
     // Log the submit data for events to debug linkedFormId/relatedToId
     if (props.moduleKey === 'events') {
-      console.log('[CreateRecordDrawer] Submitting event data:', {
+      drawerDbg('[CreateRecordDrawer] Submitting event data:', {
         linkedFormId: submitData.linkedFormId,
         relatedToId: submitData.relatedToId,
         eventType: submitData.eventType,
@@ -1431,7 +1439,7 @@ const handleSubmit = async () => {
     // People create in Sales context: use create→attach flow (existing endpoint)
     const usePeopleCreateFlow = props.moduleKey === 'people' && !isEditing.value && isSalesContext.value;
 
-    console.log('[CreateRecordDrawer] 📤 Making API call:', {
+    drawerDbg('[CreateRecordDrawer] 📤 Making API call:', {
       method: isEditing.value ? 'PUT' : 'POST',
       endpoint: usePeopleCreateFlow ? '/people/create' : (isEditing.value ? `${endpoint}/${props.record._id}` : createEndpoint),
       payloadKeys: Object.keys(submitData)
@@ -1487,7 +1495,7 @@ const handleSubmit = async () => {
       response = await apiClient.post(createEndpoint, submitData);
     }
     
-    console.log('[CreateRecordDrawer] 📥 API response:', {
+    drawerDbg('[CreateRecordDrawer] 📥 API response:', {
       success: response.success,
       hasData: !!response.data,
       errors: response.errors,
@@ -1495,7 +1503,7 @@ const handleSubmit = async () => {
     });
     
     if (response.success || response.data) {
-      console.log('[CreateRecordDrawer] ✅ Success! Closing drawer...');
+      drawerDbg('[CreateRecordDrawer] ✅ Success! Closing drawer...');
       saving.value = false; // Reset saving state before closing
       
       const savedRecord = response.data || response;
@@ -1588,7 +1596,7 @@ const handleSubmit = async () => {
       emit('saved', savedRecord);
       closeDrawer();
     } else {
-      console.log('[CreateRecordDrawer] ❌ Failed:', response);
+      drawerDbg('[CreateRecordDrawer] ❌ Failed:', response);
       errors.value = response.errors || { _general: response.message || `Failed to ${isEditing.value ? 'update' : 'create'} record` };
       scrollToFirstErrorField();
       saving.value = false;

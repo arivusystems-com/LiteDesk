@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/authRegistry'
 import auditRoutes from './audit.routes'
 import portalRoutes from './portal.routes'
 import { loadAndRegisterRoutes } from '@/utils/dynamicRouteLoader'
+import { logNavDebug } from '@/config/litedeskDebug.js'
 
 const routes = [
   {
@@ -558,14 +559,14 @@ const getDefaultRoute = (authStore) => {
   }
   
   // Phase 1G: Default to platform landing
-  console.log('Default route: platform-home');
-  return { name: 'platform-home' };
-};
+  logNavDebug('Default route: platform-home')
+  return { name: 'platform-home' }
+}
 
 // Add debug logging and permission checks
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
-  console.log('Navigation guard:', {
+  logNavDebug('Navigation guard:', {
     to: to.path,
     isAuthenticated: authStore.isAuthenticated,
     user: authStore.user,
@@ -575,7 +576,7 @@ router.beforeEach(async (to, from, next) => {
 
   // Check authentication
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    console.log('Blocked: Authentication required')
+    logNavDebug('Blocked: Authentication required')
     // Preserve intended path so after rehydration (or when user logs in) we can redirect there.
     // Important for new-tab flows (e.g. Settings opened in new tab before auth is ready).
     if (typeof window !== 'undefined' && to.path) {
@@ -595,7 +596,7 @@ router.beforeEach(async (to, from, next) => {
       permissions: authStore.user?.permissions,
     }
     if (!hasAnySettingsAccess(settingsCtx)) {
-      console.log('Blocked: No access to any Settings section', { path: to.path })
+      logNavDebug('Blocked: No access to any Settings section', { path: to.path })
       alert('You do not have access to Settings. Contact your administrator if you need configuration access.')
       next(getDefaultRoute(authStore))
       return
@@ -606,7 +607,7 @@ router.beforeEach(async (to, from, next) => {
   // so the server always serves the SPA; then we redirect to /settings (works after clear cache).
   const redirectPath = to.query && typeof to.query.redirect === 'string' ? to.query.redirect : null
   if (authStore.isAuthenticated && redirectPath && redirectPath.startsWith('/') && !redirectPath.startsWith('//')) {
-    console.log('Redirecting: query.redirect to', redirectPath)
+    logNavDebug('Redirecting: query.redirect to', redirectPath)
     next({ path: redirectPath, query: {} })
     return
   }
@@ -625,7 +626,7 @@ router.beforeEach(async (to, from, next) => {
       } catch (_) {}
     }
     if (redirect) {
-      console.log('Redirecting: Landing with saved redirect to', redirect)
+      logNavDebug('Redirecting: Landing with saved redirect to', redirect)
       next(redirect)
       return
     }
@@ -635,18 +636,18 @@ router.beforeEach(async (to, from, next) => {
       const query = typeof window !== 'undefined' && window.location.search
         ? Object.fromEntries(new URLSearchParams(window.location.search))
         : {}
-      console.log('Redirecting: Landing but URL is /settings, preserving settings route')
+      logNavDebug('Redirecting: Landing but URL is /settings, preserving settings route')
       next({ path: pathname, query })
       return
     }
-    console.log('Redirecting: Already authenticated')
+    logNavDebug('Redirecting: Already authenticated')
     next(getDefaultRoute(authStore))
     return
   }
   
   // Redirect authenticated users from login page (prevents going back to login)
   if (to.name === 'login' && authStore.isAuthenticated) {
-    console.log('Redirecting: Already authenticated, cannot access login')
+    logNavDebug('Redirecting: Already authenticated, cannot access login')
     next(getDefaultRoute(authStore))
     return
   }
@@ -657,7 +658,7 @@ router.beforeEach(async (to, from, next) => {
   // - Instance is not TERMINATED (check organization status)
   if (to.name === 'platform-home') {
     if (!authStore.isAuthenticated) {
-      console.log('Blocked: Authentication required for platform landing')
+      logNavDebug('Blocked: Authentication required for platform landing')
       next({ name: 'landing' })
       return
     }
@@ -665,7 +666,7 @@ router.beforeEach(async (to, from, next) => {
     // Check if instance is terminated (via organization status)
     const org = authStore.organization;
     if (org && org.subscription?.status === 'terminated') {
-      console.log('Blocked: Instance is terminated')
+      logNavDebug('Blocked: Instance is terminated')
       alert('This instance has been terminated. Please contact support.')
       next({ name: 'landing' })
       return
@@ -692,7 +693,7 @@ router.beforeEach(async (to, from, next) => {
     
     // If user only has AUDIT access, block Sales module routes
     if (hasOnlyAuditAccess && salesModules.includes(normalizedModule)) {
-      console.log('Blocked: Sales route accessed by audit-only user', { route: to.path, module })
+      logNavDebug('Blocked: Sales route accessed by audit-only user', { route: to.path, module })
       alert('You do not have access to Sales features. Redirecting to Audit App.')
       next({ name: 'audit-dashboard' })
       return
@@ -700,7 +701,7 @@ router.beforeEach(async (to, from, next) => {
     
     // If user only has PORTAL access, block Sales module routes
     if (hasOnlyPortalAccess && salesModules.includes(normalizedModule)) {
-      console.log('Blocked: Sales route accessed by portal-only user', { route: to.path, module })
+      logNavDebug('Blocked: Sales route accessed by portal-only user', { route: to.path, module })
       alert('You do not have access to Sales features. Redirecting to Portal.')
       next({ name: 'portal-dashboard' })
       return
@@ -717,13 +718,13 @@ router.beforeEach(async (to, from, next) => {
     const hasOnlyPortalAccess = hasPortalAccess && !hasSalesAccess && !hasAuditAccess;
     
     if (hasOnlyAuditAccess) {
-      console.log('Blocked: Sales dashboard accessed by audit-only user')
+      logNavDebug('Blocked: Sales dashboard accessed by audit-only user')
       next({ name: 'audit-dashboard' })
       return
     }
     
     if (hasOnlyPortalAccess) {
-      console.log('Blocked: Sales dashboard accessed by portal-only user')
+      logNavDebug('Blocked: Sales dashboard accessed by portal-only user')
       next({ name: 'portal-dashboard' })
       return
     }
@@ -731,7 +732,7 @@ router.beforeEach(async (to, from, next) => {
   
   // Check if route requires master organization
   if (to.meta.requiresMasterOrganization && !authStore.isMasterOrganization) {
-    console.log('Blocked: Master organization required')
+    logNavDebug('Blocked: Master organization required')
     alert('This feature is only available to the application owner.')
     next(getDefaultRoute(authStore))
     return
@@ -739,7 +740,7 @@ router.beforeEach(async (to, from, next) => {
   
   // Check if route requires platform admin (Phase 0H - Control Plane)
   if (to.meta.requiresPlatformAdmin && !authStore.isPlatformAdmin) {
-    console.log('Blocked: Platform admin access required')
+    logNavDebug('Blocked: Platform admin access required')
     alert('This feature is only available to platform administrators.')
     next(getDefaultRoute(authStore))
     return
@@ -747,7 +748,7 @@ router.beforeEach(async (to, from, next) => {
   
   // Check if route requires admin (Phase 15)
   if (to.meta.requiresAdmin && !authStore.isAdminLike) {
-    console.log('Blocked: Admin access required')
+    logNavDebug('Blocked: Admin access required')
     alert('This feature is only available to administrators.')
     next(getDefaultRoute(authStore))
     return
@@ -757,7 +758,7 @@ router.beforeEach(async (to, from, next) => {
   if (to.meta.requiresAuditApp) {
     const hasAuditAccess = authStore.hasAppAccess('AUDIT');
     
-    console.log('Audit app access check:', {
+    logNavDebug('Audit app access check:', {
       hasAuditAccess,
       allowedApps: authStore.user?.allowedApps,
       isOwner: authStore.isOwner,
@@ -767,7 +768,7 @@ router.beforeEach(async (to, from, next) => {
     })
     
     if (!hasAuditAccess) {
-      console.log('Blocked: AUDIT app access required')
+      logNavDebug('Blocked: AUDIT app access required')
       alert('You do not have access to the Audit App. Please contact your administrator.')
       next(getDefaultRoute(authStore))
       return
@@ -778,7 +779,7 @@ router.beforeEach(async (to, from, next) => {
   if (to.meta.requiresPortalApp) {
     const hasPortalAccess = authStore.hasAppAccess('PORTAL');
     
-    console.log('Portal app access check:', {
+    logNavDebug('Portal app access check:', {
       hasPortalAccess,
       allowedApps: authStore.user?.allowedApps,
       isOwner: authStore.isOwner,
@@ -788,7 +789,7 @@ router.beforeEach(async (to, from, next) => {
     })
     
     if (!hasPortalAccess) {
-      console.log('Blocked: PORTAL app access required')
+      logNavDebug('Blocked: PORTAL app access required')
       alert('You do not have access to the Portal. Please contact your administrator.')
       next(getDefaultRoute(authStore))
       return
@@ -800,7 +801,7 @@ router.beforeEach(async (to, from, next) => {
     const { module, action } = to.meta.requiresPermission
     const hasPermission = authStore.can(module, action)
     
-    console.log('Permission check:', {
+    logNavDebug('Permission check:', {
       module,
       action,
       hasPermission,
@@ -808,7 +809,7 @@ router.beforeEach(async (to, from, next) => {
     })
     
     if (!hasPermission) {
-      console.log('Blocked: Insufficient permissions')
+      logNavDebug('Blocked: Insufficient permissions')
       alert(`You don't have permission to access ${module}. Please contact your administrator.`)
       next(getDefaultRoute(authStore))
       return
@@ -818,7 +819,7 @@ router.beforeEach(async (to, from, next) => {
   // Note: Tab initialization is handled in App.vue onMounted after storage is configured.
   // Do not call initTabs() here as it requires instanceId + userId context.
   
-  console.log('Allowed: Normal navigation')
+  logNavDebug('Allowed: Normal navigation')
   next()
 })
 

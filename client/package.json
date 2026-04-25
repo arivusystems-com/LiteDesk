@@ -11,6 +11,7 @@
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "build-only": "vite build",
+    "build:chunks": "vite build && du -h dist/assets/*.js | sort -hr",
     "type-check": "vue-tsc --build",
     "test": "vitest run",
     "test:watch": "vitest",

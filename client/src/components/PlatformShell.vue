@@ -24,7 +24,8 @@
         <!-- Router view for dynamic routes; flex-1 min-h-0 so full-height record pages get a defined height -->
         <div class="flex-1 min-h-0 flex flex-col">
           <RouterView v-slot="{ Component }">
-            <keep-alive :max="10">
+            <!-- Cap cached route trees: each slot can hold a large list/record page. -->
+            <keep-alive :max="5">
               <component :is="Component" :key="$route.fullPath" />
             </keep-alive>
           </RouterView>
