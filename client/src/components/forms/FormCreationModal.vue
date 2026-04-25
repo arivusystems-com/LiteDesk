@@ -264,7 +264,7 @@ import { CheckIcon, XMarkIcon } from '@heroicons/vue/24/solid';
 import apiClient from '@/utils/apiClient';
 import { useRouter } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import SectionsBuilder from '@/components/forms/SectionsBuilder.vue';
 import FormSettingsTab from '@/components/forms/FormSettingsTab.vue';
 import FormPreview from '@/components/forms/FormPreview.vue';

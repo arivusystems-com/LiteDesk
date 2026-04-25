@@ -90,7 +90,7 @@
 import MomentumSignal from './MomentumSignal.vue';
 import { deriveMomentumSignals, sortSignalsBySeverity } from './momentum/deriveMomentumSignals';
 import { computed, ref, onMounted, onUnmounted } from 'vue';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { PEOPLE_PERMISSIONS } from '@/platform/permissions/peoplePermissions';
 import { hasPeoplePermission } from '@/platform/permissions/peoplePermissionHelper';
 

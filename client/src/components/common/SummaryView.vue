@@ -1655,7 +1655,7 @@ import apiClient from '@/utils/apiClient';
 import { sanitizePhoneDigits } from '@/utils/phoneInput';
 import { DEFAULT_PHONE_VALIDATION_MESSAGE } from '@/utils/defaultFieldValidations';
 import { PEOPLE_SALES_ROLE_MODULE_DEFINITION_KEYS } from '@/utils/peopleParticipationUi';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { useTabs } from '@/composables/useTabs';
 import PermissionButton from '@/components/common/PermissionButton.vue';
 import DynamicFormField from '@/components/common/DynamicFormField.vue';

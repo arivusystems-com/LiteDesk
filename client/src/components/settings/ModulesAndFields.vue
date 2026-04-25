@@ -5477,7 +5477,7 @@
 
 import { ref, onMounted, onUnmounted, computed, watch, reactive, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { Switch, Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import apiClient from '@/utils/apiClient';
 import { getDefaultPhoneValidations, getDefaultEmailValidations } from '@/utils/defaultFieldValidations';

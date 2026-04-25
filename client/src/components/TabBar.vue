@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { hasAnySettingsAccess } from '@/utils/settingsTabAccess';
 import { useColorMode } from '@/composables/useColorMode';
 import clickOutside from '@/directives/clickOutside';

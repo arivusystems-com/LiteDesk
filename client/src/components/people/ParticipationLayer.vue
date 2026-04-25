@@ -83,7 +83,7 @@
 <script setup>
 import ParticipationCard from './ParticipationCard.vue';
 import { computed } from 'vue';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { PEOPLE_PERMISSIONS } from '@/platform/permissions/peoplePermissions';
 import { hasPeoplePermission } from '@/platform/permissions/peoplePermissionHelper';
 

@@ -282,7 +282,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import apiClient from '@/utils/apiClient';
 import { openDatePicker } from '@/utils/dateUtils';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 
 const props = defineProps({
   deal: {

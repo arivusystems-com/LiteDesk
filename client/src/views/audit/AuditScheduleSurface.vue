@@ -1544,7 +1544,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { AuditScheduleStep } from '@/types/auditSchedule.types';
 import type { AuditScheduleDraft, AuditScheduleValidationResult } from '@/types/auditSchedule.types';
 import { getAuditEventTypes, getEventTypeByLabel } from '@/metadata/eventTypes';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import apiClient from '@/utils/apiClient';
 import { openDatePicker } from '@/utils/dateUtils';
 import clickOutside from '@/directives/clickOutside';

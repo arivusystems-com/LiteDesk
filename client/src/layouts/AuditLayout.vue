@@ -245,7 +245,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { RouterView, RouterLink, useRouter, useRoute } from 'vue-router';
 import { Dialog, DialogPanel, Menu, MenuButton, MenuItem, MenuItems, TransitionChild, TransitionRoot } from '@headlessui/vue';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { useAppShellStore } from '@/stores/appShell';
 import { useColorMode } from '@/composables/useColorMode';
 import { useSidebarState } from '@/composables/useSidebarState';

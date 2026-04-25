@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { useAppShellStore } from '@/stores/appShell';
 import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';

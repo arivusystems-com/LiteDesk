@@ -796,7 +796,7 @@ declare const process: {
 
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import apiClient from '@/utils/apiClient';
 import type { EventExecutionContext, ExecutionState, ExecutionUserRole } from '@/types/eventExecution.types';
 import { isAuditEventType } from '@/utils/eventUtils';

@@ -154,7 +154,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import portalApiClient from '@/utils/portalApiClient';
 
 const router = useRouter();

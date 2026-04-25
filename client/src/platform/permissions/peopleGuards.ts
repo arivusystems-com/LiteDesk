@@ -26,7 +26,7 @@
 import type { PeoplePermission } from './peoplePermissions';
 import { PEOPLE_PERMISSIONS } from './peoplePermissions';
 import { hasPeoplePermission } from './peoplePermissionHelper';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 
 function isKeyOf<T extends object>(obj: T, key: PropertyKey): key is keyof T {
   return key in obj;

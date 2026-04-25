@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { getApiUrlForFetch } from '@/config/apiBase';
 import { identifyProductUser, captureUserLoggedIn, resetPosthog } from '@/config/posthogUser';
+import { registerUseAuthStore } from './authRegistry';
 
 export const useAuthStore = defineStore('auth', {
     state: () => ({
@@ -506,3 +507,5 @@ export const useAuthStore = defineStore('auth', {
         }
     },
 });
+
+registerUseAuthStore(useAuthStore);

@@ -144,7 +144,7 @@
 <script setup>
 import { ref, computed, watch, h, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import SalesSchema from './SalesSchema.vue';
 import SalesPipelines from './SalesPipelines.vue';
 import SalesPlaybooks from './SalesPlaybooks.vue';

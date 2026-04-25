@@ -842,7 +842,7 @@ import { getWebsiteValidationMessage } from '@/utils/urlInputValidation';
 import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
 import { openDatePicker } from '@/utils/dateUtils';
 import { CURRENCY_OPTIONS, DEFAULT_CURRENCY_CODE } from '@/utils/currencyOptions';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { canEditField } from '@/platform/fields/fieldCapabilityEngine';
 import { isModuleRegistered } from '@/platform/fields/FieldRegistry';
 

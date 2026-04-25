@@ -154,7 +154,7 @@ import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } fro
 import { XMarkIcon, ChevronLeftIcon } from '@heroicons/vue/24/outline';
 import apiClient from '@/utils/apiClient';
 import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 
 const RECORD_TYPE_OPTIONS_DEFAULT = [
   { key: 'organizations', label: 'Organization' },

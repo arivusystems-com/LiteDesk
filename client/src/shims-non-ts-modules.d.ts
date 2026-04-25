@@ -3,7 +3,7 @@ declare module '@/stores/appShell' {
   export function useAppShellStore(): { activeApp?: string | null };
 }
 
-declare module '@/stores/auth' {
+declare module '@/stores/authRegistry' {
   // JS Pinia store (no TS declarations yet)
   export function useAuthStore(): any;
 }

@@ -119,7 +119,7 @@ import StatusDropdown from './StatusDropdown.vue';
 import { getParticipationActions, normalizeParticipationType } from './participationActions';
 import { isDetachAllowed } from './detachPolicy';
 import { computed, ref } from 'vue';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { PEOPLE_PERMISSIONS } from '@/platform/permissions/peoplePermissions';
 import { hasPeoplePermission } from '@/platform/permissions/peoplePermissionHelper';
 import { getDetailFields, getFieldMetadata, PEOPLE_FIELD_METADATA } from '@/platform/fields/peopleFieldModel';

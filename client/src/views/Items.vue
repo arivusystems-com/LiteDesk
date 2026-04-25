@@ -159,7 +159,7 @@
 <script setup>
 import { ref, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
 import ModuleList from '@/components/module-list/ModuleList.vue';

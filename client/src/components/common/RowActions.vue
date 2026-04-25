@@ -35,7 +35,7 @@
 </template>
 
 <script setup>
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { EyeIcon, PencilSquareIcon, TrashIcon } from '@heroicons/vue/24/outline';
 
 defineProps({

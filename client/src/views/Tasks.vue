@@ -295,7 +295,7 @@
 import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, computed, watch, nextTick, onMounted, onActivated } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
 import ModuleList from '@/components/module-list/ModuleList.vue';

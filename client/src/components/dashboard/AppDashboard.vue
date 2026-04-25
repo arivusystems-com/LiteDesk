@@ -118,7 +118,7 @@
 
 <script setup>
 import { toRef } from 'vue';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { useTabs } from '@/composables/useTabs';
 import { useSalesDashboardMetrics } from '@/composables/useSalesDashboardMetrics';
 import DashboardHeader from '@/components/dashboard/widgets/DashboardHeader.vue';

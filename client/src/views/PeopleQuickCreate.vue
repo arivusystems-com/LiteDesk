@@ -127,7 +127,7 @@
 import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import apiClient from '@/utils/apiClient';
 import { sanitizePhoneDigits, preventNonDigitPhoneKeys } from '@/utils/phoneInput';
 import { DEFAULT_PHONE_VALIDATION_MESSAGE, getDefaultEmailValidations } from '@/utils/defaultFieldValidations';

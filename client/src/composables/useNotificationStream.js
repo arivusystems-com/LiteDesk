@@ -9,7 +9,7 @@
  */
 
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { useOffline } from './useOffline';
 import { withApiOrigin } from '@/config/apiBase';
 

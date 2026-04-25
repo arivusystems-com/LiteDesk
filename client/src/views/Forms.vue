@@ -258,7 +258,7 @@
 <script setup>
 import { ref, computed, onMounted, onActivated, watch, onBeforeMount } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
 import ListView from '@/components/common/ListView.vue';

@@ -38,7 +38,7 @@
 <script setup>
 import { computed, h } from 'vue';
 import { useRouter } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { canAccessSettingsTab } from '@/utils/settingsTabAccess';
 
 const router = useRouter();

@@ -424,7 +424,7 @@
 <script setup>
 import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import apiClient from '@/utils/apiClient';
 import IdentityLayer from '@/components/people/IdentityLayer.vue';
 import ParticipationLayer from '@/components/people/ParticipationLayer.vue';

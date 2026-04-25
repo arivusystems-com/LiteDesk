@@ -1,5 +1,5 @@
 import { onMounted, onUnmounted } from 'vue';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 
 /**
  * Composable to automatically sync user permissions periodically

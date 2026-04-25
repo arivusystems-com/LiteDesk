@@ -513,7 +513,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import OrganizationQuickCreateDrawer from '@/components/organizations/OrganizationQuickCreateDrawer.vue';
 import EmailComposeDrawer from '@/components/communications/EmailComposeDrawer.vue';
 import ActivityTimeline from '@/components/ActivityTimeline.vue';

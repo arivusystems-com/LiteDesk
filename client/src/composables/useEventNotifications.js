@@ -1,5 +1,5 @@
 import { ref, onMounted } from 'vue';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 
 const notifications = ref([]);
 const unreadCount = ref(0);

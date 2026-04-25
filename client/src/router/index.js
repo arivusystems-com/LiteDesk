@@ -1,5 +1,5 @@
 /**
- * Boot order: do not statically import @/stores/auth or @/utils/apiClient here.
+ * Boot order: do not statically import @/utils/apiClient here; use @/stores/authRegistry + dynamic useAuth.
  * Those created a production TDZ (vue-router "Cannot access before initialization")
  * when apiClient → auth and router each pulled the other at module init. Guards use
  * dynamic import(); apiClient also lazy-imports the auth store.
@@ -413,7 +413,7 @@ const routes = [
     component: () => import('@/pages/ModuleRecordPage.vue'),
     meta: { requiresAuth: true, requiresPermission: { module: 'organizations', action: 'view' } },
     beforeEnter: async (to, from, next) => {
-      const { useAuthStore } = await import('@/stores/auth');
+      const { useAuthStore } = await import('@/stores/authRegistry');
       const apiClient = (await import('@/utils/apiClient')).default;
       const authStore = useAuthStore();
       const orgId = to.params.id;
@@ -566,7 +566,7 @@ const getDefaultRoute = (authStore) => {
 
 // Add debug logging and permission checks
 router.beforeEach(async (to, from, next) => {
-  const { useAuthStore } = await import('@/stores/auth')
+  const { useAuthStore } = await import('@/stores/authRegistry')
   const authStore = useAuthStore()
   console.log('Navigation guard:', {
     to: to.path,
@@ -828,7 +828,7 @@ router.beforeEach(async (to, from, next) => {
 // Phase 1A: Load and register dynamic routes after router is created
 // This will be called from App.vue after UI metadata is loaded
 export async function initializeDynamicRoutes() {
-  const { useAuthStore } = await import('@/stores/auth');
+  const { useAuthStore } = await import('@/stores/authRegistry');
   const authStore = useAuthStore();
   if (authStore.isAuthenticated) {
     try {

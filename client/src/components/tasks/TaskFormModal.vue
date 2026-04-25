@@ -157,7 +157,7 @@
 
 <script setup>
 import { ref, reactive, watch, computed } from 'vue';
-import { useAuthStore } from '../../stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import apiClient from '../../utils/apiClient';
 import { openDatePicker } from '@/utils/dateUtils';
 

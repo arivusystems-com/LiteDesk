@@ -14,7 +14,7 @@
 
 import { ref, computed } from 'vue';
 import apiClient from '@/utils/apiClient';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from '@/stores/authRegistry';
 import { fetchRecordsForDisplay } from '@/utils/recordDisplay';
 
 // Cache for record contexts
