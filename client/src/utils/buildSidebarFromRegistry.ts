@@ -237,7 +237,9 @@ async function buildCoreModules(snapshot: PermissionSnapshot): Promise<SidebarIt
     // Defensive dedupe by module key so the sidebar never renders repeated core modules.
     const uniqueCoreModules = new Map<string, SidebarItem>();
     for (const item of coreModules) {
-      const key = String(item.moduleKey || item.id || '').toLowerCase();
+      const moduleKey =
+        item.kind === 'coreModule' ? item.moduleKey : item.kind === 'app' && item.moduleKey ? item.moduleKey : undefined;
+      const key = String((moduleKey || item.id) || '').toLowerCase();
       if (!key || uniqueCoreModules.has(key)) continue;
       uniqueCoreModules.set(key, item);
     }

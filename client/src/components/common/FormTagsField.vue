@@ -262,27 +262,35 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, nextTick } from 'vue';
+import type { Directive, DirectiveBinding } from 'vue';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue';
 import { CheckIcon, PencilSquareIcon, EllipsisVerticalIcon, XMarkIcon } from '@heroicons/vue/24/outline';
 import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { useAuthStore } from '@/stores/auth';
 import { useRecordTags } from '@/components/record-page/composables/useRecordTags';
 
-const vClickOutside = {
-  mounted(el, binding) {
-    el.clickOutsideEvent = (event) => {
+type ClickOutsideHandler = (e: Event) => void;
+interface ElWithOutside extends HTMLElement {
+  clickOutsideEvent?: (e: PointerEvent) => void;
+}
+
+const vClickOutside: Directive<ElWithOutside, ClickOutsideHandler> = {
+  mounted(el, binding: DirectiveBinding<ClickOutsideHandler>) {
+    el.clickOutsideEvent = (event: PointerEvent) => {
       setTimeout(() => {
         if (!document.contains(el)) return;
         const container = el.closest('.relative');
         if (!container) return;
-        if (!(container === event.target || container.contains(event.target))) {
+        const t = event.target;
+        if (!(t instanceof Node)) return;
+        if (!(container === t || container.contains(t))) {
           binding.value(event);
         }
       }, 10);
     };
     document.addEventListener('pointerdown', el.clickOutsideEvent, true);
   },
-  unmounted(el) {
+  unmounted(el: ElWithOutside) {
     if (el.clickOutsideEvent) {
       document.removeEventListener('pointerdown', el.clickOutsideEvent, true);
     }
@@ -300,15 +308,15 @@ const emit = defineEmits(['update:modelValue', 'blur']);
 
 const authStore = useAuthStore();
 
-const draftRecord = ref({
+const draftRecord = ref<{ _id: string; tags: string[] }>({
   _id: '__form-tags__',
   tags: []
 });
 
 watch(
   () => props.modelValue,
-  (v) => {
-    draftRecord.value.tags = Array.isArray(v) ? [...v] : [];
+  (v: unknown) => {
+    draftRecord.value.tags = Array.isArray(v) ? (v as string[]).map((x) => String(x)) : [];
   },
   { immediate: true, deep: true }
 );
@@ -328,11 +336,11 @@ const instanceTagSource = computed(() => {
 
 const canEdit = computed(() => !props.disabled);
 
-const persistTags = async (cleaned) => {
+const persistTags = async (cleaned: string[]) => {
   emit('update:modelValue', cleaned);
 };
 
-const tagState = useRecordTags(draftRecord, {
+const tagState = useRecordTags(draftRecord as any, {
   tagStorageKey,
   canEdit,
   persistTags,
@@ -373,10 +381,10 @@ const {
   fetchInstanceTagDefinitions
 } = tagState;
 
-const isTagAssigned = (tagName) =>
+const isTagAssigned = (tagName: string) =>
   Array.isArray(draftRecord.value?.tags) && draftRecord.value.tags.includes(tagName);
 
-const openTagEditorByName = (tagName) => {
+const openTagEditorByName = (tagName: string) => {
   const tagDef = getTagDefinitionByName(tagName);
   if (tagDef) {
     openEditTagEditor(tagDef);
@@ -385,12 +393,12 @@ const openTagEditorByName = (tagName) => {
   }
 };
 
-const handleDeleteTagDefinition = async (tagName) => {
+const handleDeleteTagDefinition = async (tagName: string) => {
   await deleteTagDefinition(tagName);
 };
 
-const menuDirectionByKey = ref({});
-const prepareMenuPlacement = (menuKey, event) => {
+const menuDirectionByKey = ref<Record<string, 'up' | 'down'>>({});
+const prepareMenuPlacement = (menuKey: string, event: Event) => {
   const target = event?.currentTarget;
   if (!(target instanceof HTMLElement)) return;
   const rect = target.getBoundingClientRect();
@@ -398,11 +406,11 @@ const prepareMenuPlacement = (menuKey, event) => {
   const roomAbove = rect.top;
   const roomBelow = window.innerHeight - rect.bottom;
   const direction = roomAbove >= estimatedMenuHeight || roomAbove >= roomBelow ? 'up' : 'down';
-  menuDirectionByKey.value = { ...menuDirectionByKey.value, [menuKey]: direction };
+  menuDirectionByKey.value = { ...menuDirectionByKey.value, [menuKey]: direction as 'up' | 'down' };
 };
 
-const menuItemsClass = (menuKey) => {
-  const direction = menuDirectionByKey.value?.[menuKey] || 'up';
+const menuItemsClass = (menuKey: string) => {
+  const direction = menuDirectionByKey.value[menuKey] || 'up';
   return [
     'absolute right-0 z-[220] w-44 rounded-md border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-900',
     direction === 'down' ? 'top-full mt-1' : 'bottom-full mb-1'
