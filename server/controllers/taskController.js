@@ -2099,6 +2099,7 @@ const restoreDescriptionVersion = async (req, res) => {
 module.exports = {
   createTask,
   getTasks,
+  getTaskSummary,
   getTaskById,
   updateTask,
   updateTaskTags,
