@@ -96,8 +96,128 @@ function mapRawModulesToRegistryModules(app: { appKey: string }, modulesData: an
   return modules;
 }
 
+function addPlatformModulesToRegistry(registry: AppRegistry, entityModules: any[] | undefined): void {
+  if (!entityModules?.length) return;
+
+  const moduleKeysInApps = new Set<string>();
+  for (const app of Object.values(registry)) {
+    if (!app || app.appKey === 'PLATFORM') continue;
+    for (const module of app.modules || []) {
+      if (module.moduleKey) moduleKeysInApps.add(module.moduleKey);
+    }
+  }
+
+  const platformModulesRaw = entityModules.map((module: any) => ({
+    moduleKey: module.moduleKey,
+    label: module.label,
+    route: module.routeBase || `/${module.moduleKey}`,
+    permission: `${module.moduleKey}.view`,
+    icon: module.icon,
+    order: module.sidebarOrder || 0,
+    appKey: module.appKey,
+    navigationCore: module.navigationCore || false,
+    navigationEntity: module.navigationEntity || false,
+    excludeFromApps: module.excludeFromApps || false,
+    system: module.system || false,
+    coreEntity: module.coreEntity || false,
+    list: module.list || undefined
+  }));
+
+  const platformModules = platformModulesRaw.filter(
+    (module: { moduleKey: string }) => !moduleKeysInApps.has(module.moduleKey)
+  );
+
+  registry['PLATFORM'] = {
+    appKey: 'PLATFORM',
+    label: 'Platform',
+    dashboardRoute: '/platform/home',
+    modules: platformModules,
+    icon: '⚙️',
+    order: 0
+  };
+}
+
+function buildRegistryFromPayload(payload: {
+  apps?: any[];
+  modulesByAppKey?: Record<string, any[]>;
+  entityModules?: any[];
+}): AppRegistry {
+  const apps = payload.apps || [];
+  const registry: AppRegistry = {};
+  const specialAppRoutes = ['/audit/', '/portal/', '/helpdesk/', '/projects/'];
+
+  for (const app of apps) {
+    const rawModules = payload.modulesByAppKey?.[app.appKey] || [];
+    const modules = mapRawModulesToRegistryModules(app, rawModules);
+
+    console.log(`[appRegistryNetwork] App ${app.appKey}:`, {
+      name: app.name,
+      defaultRoute: app.defaultRoute,
+      sidebarOrder: app.sidebarOrder,
+      icon: app.icon
+    });
+
+    const appKeyLower = app.appKey.toLowerCase();
+    let dashboardRoute = app.defaultRoute || `/${appKeyLower}`;
+
+    if (dashboardRoute === '/dashboard') {
+      dashboardRoute = `/dashboard/${appKeyLower}`;
+    }
+
+    if (appKeyLower !== 'sales' && (dashboardRoute === '/sales/dashboard' || dashboardRoute.startsWith('/sales/'))) {
+      dashboardRoute = `/dashboard/${appKeyLower}`;
+    }
+
+    const isSpecialAppRoute = specialAppRoutes.some((prefix) => dashboardRoute.startsWith(prefix));
+
+    if (isSpecialAppRoute) {
+      // keep
+    } else if (dashboardRoute.startsWith(`/${appKeyLower}/`)) {
+      dashboardRoute = `/dashboard/${appKeyLower}`;
+    } else if (dashboardRoute === `/${appKeyLower}`) {
+      dashboardRoute = `/dashboard/${appKeyLower}`;
+    } else if (dashboardRoute !== '/dashboard' && !dashboardRoute.startsWith('/dashboard/')) {
+      dashboardRoute = `/dashboard/${appKeyLower}`;
+    }
+
+    registry[app.appKey] = {
+      appKey: app.appKey,
+      label: app.name || app.appKey,
+      dashboardRoute,
+      modules,
+      icon: app.icon,
+      order: app.sidebarOrder || 0
+    };
+
+    const entry = registry[app.appKey];
+    if (!entry) continue;
+    const isSpecialRoute = specialAppRoutes.some((prefix) => entry.dashboardRoute.startsWith(prefix));
+    if (
+      !isSpecialRoute &&
+      entry.dashboardRoute !== '/dashboard' &&
+      !entry.dashboardRoute.startsWith('/dashboard/')
+    ) {
+      console.warn(
+        `[appRegistryNetwork] App ${app.appKey} has unexpected dashboardRoute: ${entry.dashboardRoute}. Expected /dashboard or /dashboard/:appKey`
+      );
+    }
+  }
+
+  addPlatformModulesToRegistry(registry, payload.entityModules);
+  return registry;
+}
+
 export async function fetchAppRegistryFromNetwork(): Promise<AppRegistry> {
   try {
+    try {
+      const registryResponse = await apiClient('/ui/registry');
+      if (registryResponse.success && registryResponse.data?.apps) {
+        return buildRegistryFromPayload(registryResponse.data);
+      }
+    } catch (error) {
+      console.debug('[appRegistryNetwork] Aggregated registry endpoint not available, falling back:', error);
+    }
+
     const appsResponse = await apiClient('/ui/apps');
 
     if (!appsResponse.success || !appsResponse.data) {
@@ -124,104 +244,12 @@ export async function fetchAppRegistryFromNetwork(): Promise<AppRegistry> {
       })
     );
 
-    const registry: AppRegistry = {};
-
-    for (const app of apps) {
-      const modules = modulesByAppKey[app.appKey] || [];
-
-      console.log(`[appRegistryNetwork] App ${app.appKey}:`, {
-        name: app.name,
-        defaultRoute: app.defaultRoute,
-        sidebarOrder: app.sidebarOrder,
-        icon: app.icon
-      });
-
-      const appKeyLower = app.appKey.toLowerCase();
-      let dashboardRoute = app.defaultRoute || `/${appKeyLower}`;
-
-      if (dashboardRoute === '/dashboard') {
-        dashboardRoute = `/dashboard/${appKeyLower}`;
-      }
-
-      if (appKeyLower !== 'sales' && (dashboardRoute === '/sales/dashboard' || dashboardRoute.startsWith('/sales/'))) {
-        dashboardRoute = `/dashboard/${appKeyLower}`;
-      }
-
-      const specialAppRoutes = ['/audit/', '/portal/', '/helpdesk/', '/projects/'];
-      const isSpecialAppRoute = specialAppRoutes.some((prefix) => dashboardRoute.startsWith(prefix));
-
-      if (isSpecialAppRoute) {
-        // keep
-      } else if (dashboardRoute.startsWith(`/${appKeyLower}/`)) {
-        dashboardRoute = `/dashboard/${appKeyLower}`;
-      } else if (dashboardRoute === `/${appKeyLower}`) {
-        dashboardRoute = `/dashboard/${appKeyLower}`;
-      } else if (dashboardRoute !== '/dashboard' && !dashboardRoute.startsWith('/dashboard/')) {
-        dashboardRoute = `/dashboard/${appKeyLower}`;
-      }
-
-      registry[app.appKey] = {
-        appKey: app.appKey,
-        label: app.name || app.appKey,
-        dashboardRoute,
-        modules,
-        icon: app.icon,
-        order: app.sidebarOrder || 0
-      };
-
-      const entry = registry[app.appKey];
-      if (!entry) continue;
-      const isSpecialRoute = specialAppRoutes.some((prefix) => entry.dashboardRoute.startsWith(prefix));
-      if (
-        !isSpecialRoute &&
-        entry.dashboardRoute !== '/dashboard' &&
-        !entry.dashboardRoute.startsWith('/dashboard/')
-      ) {
-        console.warn(
-          `[appRegistryNetwork] App ${app.appKey} has unexpected dashboardRoute: ${entry.dashboardRoute}. Expected /dashboard or /dashboard/:appKey`
-        );
-      }
-    }
+    const registry = buildRegistryFromPayload({ apps, modulesByAppKey });
 
     try {
       const entityModulesResponse = await apiClient('/ui/entities');
       if (entityModulesResponse.success && entityModulesResponse.data) {
-        const moduleKeysInApps = new Set<string>();
-        for (const a of Object.values(registry)) {
-          if (!a || a.appKey === 'PLATFORM') continue;
-          for (const m of a.modules || []) {
-            if (m.moduleKey) moduleKeysInApps.add(m.moduleKey);
-          }
-        }
-
-        const platformModulesRaw = entityModulesResponse.data.map((module: any) => ({
-          moduleKey: module.moduleKey,
-          label: module.label,
-          route: module.routeBase || `/${module.moduleKey}`,
-          permission: `${module.moduleKey}.view`,
-          icon: module.icon,
-          order: module.sidebarOrder || 0,
-          appKey: module.appKey,
-          navigationCore: module.navigationCore || false,
-          navigationEntity: module.navigationEntity || false,
-          excludeFromApps: module.excludeFromApps || false,
-          system: module.system || false,
-          coreEntity: module.coreEntity || false,
-          list: module.list || undefined
-        }));
-
-        const platformModules = platformModulesRaw.filter(
-          (m: { moduleKey: string }) => !moduleKeysInApps.has(m.moduleKey)
-        );
-
-        registry['PLATFORM'] = {
-          appKey: 'PLATFORM',
-          label: 'Platform',
-          dashboardRoute: '/platform/home',
-          modules: platformModules,
-          icon: '⚙️',
-          order: 0
-        };
+        addPlatformModulesToRegistry(registry, entityModulesResponse.data);
       }
     } catch (error) {
       console.debug('[appRegistryNetwork] Entity modules not available:', error);
