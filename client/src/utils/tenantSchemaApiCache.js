@@ -100,4 +100,5 @@ export function invalidateTenantSchemaCaches() {
   coreModulesInflight = null;
   modulesCache.clear();
   modulesInflight.clear();
+  apiClient.clearMetadataResponseCache?.();
 }

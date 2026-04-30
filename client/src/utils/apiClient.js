@@ -3,10 +3,64 @@ import { useAuthStore } from '@/stores/authRegistry';
 
 // Request deduplication: map of in-flight requests by URL+method
 const _inFlightRequests = new Map();
+const _metadataResponseCache = new Map();
+
+const METADATA_CACHE_TTL_MS = 5 * 60 * 1000;
+const CACHEABLE_GET_PATHS = [
+    /^\/modules(?:$|\?)/,
+    /^\/settings\/core-modules(?:$|\/|\?)/,
+    /^\/ui\/apps(?:$|\/|\?)/,
+    /^\/ui\/entities(?:$|\?)/,
+    /^\/ui\/routes(?:$|\?)/,
+];
+
+const INVALIDATING_PATHS = [
+    /^\/modules(?:$|\/|\?)/,
+    /^\/settings\/core-modules(?:$|\/|\?)/,
+    /^\/ui(?:$|\/|\?)/,
+];
+
+function authSessionKey(authStore) {
+    const user = authStore.user || {};
+    const orgId =
+        user.organizationId ||
+        authStore.organization?._id ||
+        user.organization?._id ||
+        '';
+    return `${user._id || ''}:${orgId}`;
+}
+
+function normalizeParams(params = {}) {
+    const entries = Object.entries(params || {}).filter(([, value]) => value !== undefined && value !== null);
+    if (!entries.length) return '';
+    return new URLSearchParams(entries.sort(([a], [b]) => a.localeCompare(b))).toString();
+}
+
+function getPathWithSearch(fullUrl) {
+    try {
+        const parsed = new URL(fullUrl, window.location.origin);
+        return `${parsed.pathname.replace(/^\/api/, '')}${parsed.search || ''}`;
+    } catch {
+        return String(fullUrl || '').replace(/^\/api/, '');
+    }
+}
+
+function isCacheableMetadataGet(pathWithSearch) {
+    return CACHEABLE_GET_PATHS.some((pattern) => pattern.test(pathWithSearch));
+}
+
+function invalidatesMetadata(pathWithSearch) {
+    return INVALIDATING_PATHS.some((pattern) => pattern.test(pathWithSearch));
+}
+
+function clearMetadataResponseCache() {
+    _metadataResponseCache.clear();
+}
 
 const apiClient = async (url, options = {}) => {
     const authStore = useAuthStore();
     const token = authStore.user?.token; // Get token from Pinia store
+    const sessionKey = authSessionKey(authStore);
 
     const headers = {
         'Content-Type': 'application/json',
@@ -21,17 +75,35 @@ const apiClient = async (url, options = {}) => {
     // Handle URL params for GET requests
     let fullUrl = getApiUrlForFetch(url);
     if (options.params) {
-        const queryString = new URLSearchParams(options.params).toString();
-        fullUrl += `?${queryString}`;
+        const queryString = normalizeParams(options.params);
+        if (queryString) {
+            fullUrl += `?${queryString}`;
+        }
     }
 
     // Request deduplication: only dedupe GET requests (safe idempotent operations)
     const method = options.method || 'GET';
-    const requestKey = `${method}:${fullUrl}`;
+    const pathWithSearch = getPathWithSearch(fullUrl);
+    const cacheableMetadataGet = method === 'GET' && isCacheableMetadataGet(pathWithSearch) && options.cache !== 'no-store';
+    const requestKey = `${sessionKey}:${method}:${fullUrl}`;
+    
+    if (cacheableMetadataGet) {
+        const cached = _metadataResponseCache.get(requestKey);
+        if (cached && cached.expiresAt > Date.now()) {
+            return cached.data;
+        }
+        if (cached) {
+            _metadataResponseCache.delete(requestKey);
+        }
+    }
     
     if (method === 'GET' && _inFlightRequests.has(requestKey)) {
         console.log(`[apiClient] Returning cached in-flight request: ${requestKey}`);
         return _inFlightRequests.get(requestKey);
+    }
+
+    if (method !== 'GET' && invalidatesMetadata(pathWithSearch)) {
+        clearMetadataResponseCache();
     }
 
     const requestPromise = (async () => {
@@ -81,7 +153,14 @@ const apiClient = async (url, options = {}) => {
                 throw error;
             }
 
-            return response.json();
+            const data = await response.json();
+            if (cacheableMetadataGet) {
+                _metadataResponseCache.set(requestKey, {
+                    data,
+                    expiresAt: Date.now() + METADATA_CACHE_TTL_MS
+                });
+            }
+            return data;
         } catch (error) {
             // Re-throw if it's already our custom error
             if (error.status !== undefined) {
@@ -139,5 +218,7 @@ apiClient.patch = (url, data, options = {}) => {
 apiClient.delete = (url, options = {}) => {
     return apiClient(url, { ...options, method: 'DELETE' });
 };
+
+apiClient.clearMetadataResponseCache = clearMetadataResponseCache;
 
 export default apiClient;
