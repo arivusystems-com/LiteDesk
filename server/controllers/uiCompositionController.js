@@ -48,6 +48,38 @@ exports.getApps = async (req, res) => {
 };
 
 /**
+ * Get app registry metadata for the current tenant
+ * GET /api/ui/registry
+ * Aggregates apps, app modules, and platform/entity modules into one response.
+ */
+exports.getRegistry = async (req, res) => {
+  try {
+    const organizationId = req.user.organizationId;
+
+    if (!organizationId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Organization ID required'
+      });
+    }
+
+    const registry = await uiCompositionService.getAppRegistryDefinition(organizationId, req.user);
+
+    res.set('Cache-Control', 'private, max-age=86400');
+    res.json({
+      success: true,
+      data: registry
+    });
+  } catch (error) {
+    console.error('[UIComposition] Error getting registry:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching app registry'
+    });
+  }
+};
+
+/**
  * Get complete sidebar definition for the current tenant
  * GET /api/ui/sidebar
  * Phase 0F: Uses access resolution service to determine accessible apps
@@ -254,4 +286,3 @@ exports.getAllAppDefinitions = async (req, res) => {
     });
   }
 };
-

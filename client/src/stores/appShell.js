@@ -237,6 +237,24 @@ export const useAppShellStore = defineStore('appShell', {
         const registry = await fetchAppRegistryFromNetwork();
         this.cachedAppRegistry = registry;
         this.appRegistrySessionKey = sessionKey;
+
+        this.availableApps = Object.values(registry)
+          .filter(app => app && app.appKey !== 'PLATFORM')
+          .map(app => ({
+            appKey: app.appKey,
+            name: app.label || app.appKey,
+            icon: app.icon,
+            defaultRoute: app.dashboardRoute,
+            sidebarOrder: app.order || 0,
+            modules: app.modules || []
+          }));
+
+        if (!this.activeApp && this.availableApps.length > 0) {
+          this.activeApp = this.availableApps[0].appKey;
+        }
+        this.updateSidebarModules();
+        this.lastLoaded = new Date();
+
         return registry;
       })().finally(() => {
         this._appRegistryPromise = null;
@@ -331,4 +349,3 @@ export const useAppShellStore = defineStore('appShell', {
     }
   }
 });
-

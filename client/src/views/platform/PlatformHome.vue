@@ -211,8 +211,8 @@ const fetchRecentActivity = async () => {
 // Load Quick Access Apps
 const loadQuickAccessApps = async () => {
   try {
-    if (!appShellStore.isLoaded) {
-      await appShellStore.loadUIMetadata();
+    if (!appShellStore.availableApps?.length) {
+      await appShellStore.ensureCachedAppRegistry();
     }
     
     const availableApps = appShellStore.availableApps || [];

@@ -23,6 +23,7 @@ const { protect } = require('../middleware/authMiddleware');
 const { organizationIsolation } = require('../middleware/organizationMiddleware');
 const {
   getApps,
+  getRegistry,
   getSidebar,
   getRoutes,
   getModulesForApp,
@@ -36,6 +37,7 @@ router.use(protect);
 router.use(organizationIsolation);
 
 // UI Composition Routes
+router.get('/registry', getRegistry);
 router.get('/apps', getApps);
 router.get('/sidebar', getSidebar);
 router.get('/routes', getRoutes);
@@ -47,4 +49,3 @@ router.get('/projection/:appKey/:moduleKey', getProjectionMetadata);
 router.get('/app-definitions', getAllAppDefinitions);
 
 module.exports = router;
-

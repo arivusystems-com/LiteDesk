@@ -393,6 +393,41 @@ class UICompositionService {
   }
 
   /**
+   * Get app registry metadata in one HTTP request.
+   * This keeps the browser from making one modules request per app during startup.
+   * @param {String} organizationId - Organization ID
+   * @param {Object} user - User object (for access resolution)
+   * @returns {Promise<Object>} Apps, app modules, and platform/entity modules
+   */
+  async getAppRegistryDefinition(organizationId, user) {
+    try {
+      const apps = await this.getUIAppsForTenant(organizationId, user);
+      const modulesByAppKey = {};
+
+      await Promise.all(
+        apps.map(async (app) => {
+          modulesByAppKey[app.appKey] = await this.getUIModulesForApp(organizationId, app.appKey);
+        })
+      );
+
+      const entityModules = await this.getUIModulesForApp(organizationId, 'platform');
+
+      return {
+        apps,
+        modulesByAppKey,
+        entityModules
+      };
+    } catch (error) {
+      console.error('[UIComposition] Error getting app registry definition:', error);
+      return {
+        apps: [],
+        modulesByAppKey: {},
+        entityModules: []
+      };
+    }
+  }
+
+  /**
    * Get complete sidebar definition for a tenant
    * Phase 0F: Uses access resolution service
    * @param {String} organizationId - Organization ID
@@ -485,4 +520,3 @@ class UICompositionService {
 const uiCompositionService = new UICompositionService();
 
 module.exports = uiCompositionService;
-
