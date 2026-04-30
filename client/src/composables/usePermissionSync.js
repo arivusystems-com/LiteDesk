@@ -18,7 +18,7 @@ export function usePermissionSync(intervalMinutes = 5) {
     const oldPermissions = JSON.stringify(authStore.user?.permissions || {});
     
     console.log('Background sync: Checking for permission updates...');
-    const success = await authStore.refreshUser();
+    const success = await authStore.refreshUser({ force: true });
     
     if (success) {
       const newPermissions = JSON.stringify(authStore.user?.permissions || {});
@@ -53,4 +53,3 @@ export function usePermissionSync(intervalMinutes = 5) {
     syncPermissions
   };
 }
-

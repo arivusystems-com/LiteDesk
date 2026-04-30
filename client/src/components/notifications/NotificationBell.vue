@@ -91,6 +91,7 @@ const tooltipText = computed(() =>
 let streamDisconnect = null;
 
 onMounted(() => {
+  store.primeUnreadPreviewFromCache();
   store.fetchUnreadPreview();
 
   if (props.connectStream && isOnline.value) {
@@ -156,5 +157,4 @@ function handleClick(e) {
   }
 }
 </style>
-
 
