@@ -4,6 +4,9 @@ import { getApiUrlForFetch } from '@/config/apiBase';
 import { identifyProductUser, captureUserLoggedIn, resetPosthog } from '@/config/posthogUser';
 import { registerUseAuthStore } from './authRegistry';
 
+const PROFILE_REFRESHED_AT_KEY = 'litedesk:user-profile-refreshed-at';
+const PROFILE_REFRESH_FRESH_MS = 5 * 60 * 1000;
+
 export const useAuthStore = defineStore('auth', {
     state: () => ({
         user: JSON.parse(localStorage.getItem('user')) || null,
@@ -347,10 +350,18 @@ export const useAuthStore = defineStore('auth', {
         },
         
         // Refresh user profile and permissions
-        async refreshUser() {
+        async refreshUser(options = {}) {
             if (!this.user?.token) {
                 console.warn('No user token available for refresh');
                 return false;
+            }
+
+            const force = options.force === true;
+            if (!force) {
+                const lastRefreshedAt = Number(localStorage.getItem(PROFILE_REFRESHED_AT_KEY) || 0);
+                if (lastRefreshedAt && Date.now() - lastRefreshedAt < PROFILE_REFRESH_FRESH_MS) {
+                    return true;
+                }
             }
             
             try {
@@ -479,6 +490,7 @@ export const useAuthStore = defineStore('auth', {
                             })
                         };
                         localStorage.setItem('user', JSON.stringify(this.user));
+                        localStorage.setItem(PROFILE_REFRESHED_AT_KEY, String(Date.now()));
                         
                         // Update organization if included in response (for enabledApps)
                         if (incoming.organizationId && typeof incoming.organizationId === 'object') {

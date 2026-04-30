@@ -16,6 +16,7 @@ export const useNotificationStore = defineStore('notifications', () => {
   let lastUnreadPreviewAppKey = '';
   let lastUnreadPreviewAt = 0;
   const UNREAD_PREVIEW_COALESCE_MS = 2000;
+  const UNREAD_PREVIEW_FRESH_MS = 60 * 1000;
 
   const hasUnread = computed(() => unreadCount.value > 0);
 
@@ -51,6 +52,44 @@ export const useNotificationStore = defineStore('notifications', () => {
   function dismissedStorageKey() {
     const userId = authStore.user?._id || authStore.user?.id || 'anon';
     return `notification_dismissed_v1:${userId}`;
+  }
+
+  function unreadPreviewStorageKey(appKey = currentAppKey()) {
+    const userId = authStore.user?._id || authStore.user?.id || 'anon';
+    return `notification_unread_preview_v1:${userId}:${appKey}`;
+  }
+
+  function readCachedUnreadPreview(appKey = currentAppKey()) {
+    try {
+      const raw = localStorage.getItem(unreadPreviewStorageKey(appKey));
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (!parsed || typeof parsed !== 'object') return null;
+      if (Date.now() - Number(parsed.updatedAt || 0) > UNREAD_PREVIEW_FRESH_MS) return null;
+      return Math.max(0, Number(parsed.count || 0));
+    } catch {
+      return null;
+    }
+  }
+
+  function writeCachedUnreadPreview(appKey, count) {
+    try {
+      localStorage.setItem(unreadPreviewStorageKey(appKey), JSON.stringify({
+        count: Math.max(0, Number(count || 0)),
+        updatedAt: Date.now()
+      }));
+    } catch {
+      // localStorage can be unavailable in private browsing; ignore.
+    }
+  }
+
+  function primeUnreadPreviewFromCache() {
+    const appKey = currentAppKey();
+    const cached = readCachedUnreadPreview(appKey);
+    if (cached === null) return false;
+    unreadCount.value = cached;
+    lastUnreadPreviewAt = Date.now();
+    lastUnreadPreviewAppKey = appKey;
+    return true;
   }
 
   function loadSnoozesFromStorage() {
@@ -278,6 +317,15 @@ export const useNotificationStore = defineStore('notifications', () => {
 
     const appKeyAtStart = currentAppKey();
     const now = Date.now();
+    if (!options.force) {
+      const cached = readCachedUnreadPreview(appKeyAtStart);
+      if (cached !== null) {
+        unreadCount.value = cached;
+        lastUnreadPreviewAt = now;
+        lastUnreadPreviewAppKey = appKeyAtStart;
+        return;
+      }
+    }
     if (
       !options.force &&
       lastUnreadPreviewAppKey === appKeyAtStart &&
@@ -309,6 +357,7 @@ export const useNotificationStore = defineStore('notifications', () => {
           const appKey = currentAppKey();
           const snoozedUnread = Object.values(getSnoozeMap(appKey)).filter(e => e?.wasUnread).length;
           unreadCount.value = Math.max(0, data.unreadCount - snoozedUnread);
+          writeCachedUnreadPreview(appKey, unreadCount.value);
         } else {
           const fullRes = await fetch(buildQuery({ unreadOnly: true, limit: 100 }), {
             headers: buildHeaders()
@@ -319,10 +368,12 @@ export const useNotificationStore = defineStore('notifications', () => {
             const appKey = currentAppKey();
             const list = fullData.items || [];
             unreadCount.value = list.filter(n => !isSnoozed(n.id, appKey)).length;
+            writeCachedUnreadPreview(appKey, unreadCount.value);
           } else {
             const list = data.items || [];
             const appKey = currentAppKey();
             unreadCount.value = list.some(n => !isSnoozed(n.id, appKey)) ? 1 : 0;
+            writeCachedUnreadPreview(appKey, unreadCount.value);
           }
         }
         lastUnreadPreviewAt = Date.now();
@@ -373,6 +424,7 @@ export const useNotificationStore = defineStore('notifications', () => {
       const appKey = currentAppKey();
       syncSnoozeUnreadFlags(appKey);
       unreadCount.value = items.value.filter(n => !n.readAt && !isSnoozed(n.id, appKey)).length;
+      writeCachedUnreadPreview(appKey, unreadCount.value);
     } catch (err) {
       console.error('[notifications] fetchNotifications error:', err);
       error.value = err.message || 'Failed to load notifications';
@@ -497,6 +549,7 @@ export const useNotificationStore = defineStore('notifications', () => {
     error,
     nextCursor,
     fetchUnreadPreview,
+    primeUnreadPreviewFromCache,
     fetchNotifications,
     markRead,
     markAllRead,
@@ -513,5 +566,4 @@ export const useNotificationStore = defineStore('notifications', () => {
     dismissNotification
   };
 });
-
 
