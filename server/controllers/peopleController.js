@@ -32,8 +32,19 @@ const {
   peopleLegacyTopLevelTypeViolation,
 } = require('../utils/warnDeprecatedPeopleTypeAlias');
 const { isOptionalEmailWellFormed } = require('../utils/defaultFieldValidations');
+const { performance } = require('perf_hooks');
 
 const DEBUG_PEOPLE_LIST = process.env.DEBUG_PEOPLE_LIST === 'true';
+
+const formatServerTiming = (timings) => {
+  return timings
+    .filter(({ duration }) => Number.isFinite(duration))
+    .map(({ name, duration, description }) => {
+      const desc = description ? `;desc="${description.replace(/"/g, "'")}"` : '';
+      return `${name};dur=${duration.toFixed(1)}${desc}`;
+    })
+    .join(', ');
+};
 
 /**
  * Flatten People record for API response: expose participations as top-level aliases.
@@ -683,18 +694,28 @@ exports.list = async (req, res) => {
 
 // Get by ID
 exports.getById = async (req, res) => {
+  const requestStartedAt = performance.now();
+  const timings = [];
   try {
     const { flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+    const dbStartedAt = performance.now();
     const record = await People.findOne({ _id: req.params.id, organizationId: req.user.organizationId, deletedAt: null })
+      .select('-activityLogs')
       .populate('organization', 'name industry status email phone website')
       .populate('assignedTo', 'firstName lastName email avatar')
       .populate('createdBy', 'firstName lastName email avatar username')
-      .populate('lead_owner', 'firstName lastName email avatar username');
+      .populate('lead_owner', 'firstName lastName email avatar username')
+      .lean();
+    timings.push({ name: 'db', duration: performance.now() - dbStartedAt, description: 'People detail lookup' });
     if (!record) return res.status(404).json({ success: false, message: 'Not found' });
     // Backfill participations on read and flatten for API response
+    const shapeStartedAt = performance.now();
     const { syncSalesParticipation } = require('../utils/syncSalesParticipation');
-    const data = record.toObject ? record.toObject() : { ...record };
+    const data = { ...record };
     syncSalesParticipation(data);
+    timings.push({ name: 'shape', duration: performance.now() - shapeStartedAt, description: 'People detail response shaping' });
+    timings.push({ name: 'total', duration: performance.now() - requestStartedAt, description: 'People detail request' });
+    res.set('Server-Timing', formatServerTiming(timings));
     res.json({ success: true, data: flattenPeopleForResponse(data) });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error fetching record', error: error.message });
