@@ -32,25 +32,67 @@ const {
   restoreDescriptionVersion
 } = require('../controllers/taskController');
 
+const timeSummaryMiddleware = (name, middleware) => {
+  return (req, res, next) => {
+    if (req.path !== '/summary') {
+      return middleware(req, res, next);
+    }
+
+    const startedAt = performance.now();
+    let recorded = false;
+
+    const recordTiming = () => {
+      if (recorded) return;
+      recorded = true;
+      req.taskSummaryTimings = req.taskSummaryTimings || [];
+      req.taskSummaryTimings.push({
+        name,
+        duration: performance.now() - startedAt,
+        description: `${name} middleware`
+      });
+    };
+
+    const timedNext = (error) => {
+      recordTiming();
+      next(error);
+    };
+
+    try {
+      const result = middleware(req, res, timedNext);
+      if (result && typeof result.catch === 'function') {
+        result.catch((error) => {
+          recordTiming();
+          next(error);
+        });
+      }
+      return result;
+    } catch (error) {
+      recordTiming();
+      return next(error);
+    }
+  };
+};
+
 // Apply middleware to all task routes
 router.use((req, res, next) => {
   if (req.path === '/summary') {
     req.taskSummaryRequestStartedAt = performance.now();
+    req.taskSummaryTimings = [];
   }
   next();
 });
-router.use(protect);
-router.use(resolveAppContext); // After auth, resolve appKey from URL
-router.use(requireAppEntitlement); // Check user's app entitlements
-router.use(lazySalesInitialization); // Lazy initialize CRM if needed
-router.use(requireSalesApp); // Enforce Sales-only access
-router.use(organizationIsolation);
-router.use(checkTrialStatus);
-router.use(checkFeatureAccess('tasks')); // Ensure 'tasks' module is enabled
+router.use(timeSummaryMiddleware('mw_auth', protect));
+router.use(timeSummaryMiddleware('mw_app_context', resolveAppContext)); // After auth, resolve appKey from URL
+router.use(timeSummaryMiddleware('mw_app_entitlement', requireAppEntitlement)); // Check user's app entitlements
+router.use(timeSummaryMiddleware('mw_lazy_sales_init', lazySalesInitialization)); // Lazy initialize CRM if needed
+router.use(timeSummaryMiddleware('mw_sales_app', requireSalesApp)); // Enforce Sales-only access
+router.use(timeSummaryMiddleware('mw_org_isolation', organizationIsolation));
+router.use(timeSummaryMiddleware('mw_trial_status', checkTrialStatus));
+router.use(timeSummaryMiddleware('mw_feature_tasks', checkFeatureAccess('tasks'))); // Ensure 'tasks' module is enabled
 
 // Task statistics
 router.get('/stats/summary', checkPermission('tasks', 'view'), getTaskStats);
-router.get('/summary', checkPermission('tasks', 'view'), getTaskSummary);
+router.get('/summary', timeSummaryMiddleware('mw_permission_tasks_view', checkPermission('tasks', 'view')), getTaskSummary);
 
 // Task CRUD routes
 router.route('/')

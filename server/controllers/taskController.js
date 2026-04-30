@@ -717,6 +717,7 @@ const getTaskSummary = async (req, res) => {
         dueDate: { $gte: tomorrow, $lte: nextWeek }
       }).sort({ dueDate: 1 }).limit(10).select(projection).lean())
     ]);
+    timings.push(...(req.taskSummaryTimings || []));
     timings.push({ name: 'db', duration: performance.now() - queryStartedAt, description: 'Task summary queries' });
     timings.push({ name: 'db_overdue', duration: overdueResult.duration, description: 'Overdue tasks' });
     timings.push({ name: 'db_today', duration: dueTodayResult.duration, description: 'Due today tasks' });
