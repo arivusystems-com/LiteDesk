@@ -15,6 +15,17 @@ const People = require('../models/People');
 const Organization = require('../models/Organization');
 const { APP_KEYS } = require('../constants/appKeys');
 const appRegistry = require('../constants/appRegistry');
+const { performance } = require('perf_hooks');
+
+const formatServerTiming = (timings) => {
+  return timings
+    .filter(({ duration }) => Number.isFinite(duration))
+    .map(({ name, duration, description }) => {
+      const desc = description ? `;desc="${description.replace(/"/g, "'")}"` : '';
+      return `${name};dur=${duration.toFixed(1)}${desc}`;
+    })
+    .join(', ');
+};
 
 /**
  * Get activities for a specific entity (e.g., Person).
@@ -22,6 +33,8 @@ const appRegistry = require('../constants/appRegistry');
  * GET /api/activity/:entityType/:entityId
  */
 exports.getEntityActivities = async (req, res) => {
+  const requestStartedAt = performance.now();
+  const timings = [];
   try {
     const { entityType, entityId } = req.params;
     
@@ -41,41 +54,35 @@ exports.getEntityActivities = async (req, res) => {
     }
 
     let rawActivities = [];
-    let entityOrgId = req.user.organizationId;
-
-    if (et === 'person') {
-      const person = await People.findOne({
+    const dbStartedAt = performance.now();
+    const entityQuery = et === 'person'
+      ? People.findOne({
         _id: entityId,
         organizationId: req.user.organizationId
-      }).lean();
-
-      if (!person) {
-        return res.status(404).json({
-          success: false,
-          message: 'Person not found.'
-        });
-      }
-      rawActivities = person.activityLogs || [];
-    } else if (et === 'organization') {
-      const org = await Organization.findOne({
+      }).select('activityLogs').lean()
+      : Organization.findOne({
         _id: entityId,
         organizationId: req.user.organizationId,
         isTenant: false
-      }).lean();
+      }).select('activityLogs').lean();
+    const orgQuery = req.organization
+      ? Promise.resolve(req.organization)
+      : Organization.findById(req.user.organizationId).select('enabledApps').lean();
+    const [entityRecord, organization] = await Promise.all([entityQuery, orgQuery]);
+    timings.push({ name: 'db', duration: performance.now() - dbStartedAt, description: 'Activity entity and app lookup' });
 
-      if (!org) {
-        return res.status(404).json({
-          success: false,
-          message: 'Organization not found.'
-        });
-      }
-      rawActivities = org.activityLogs || [];
+    if (!entityRecord) {
+      return res.status(404).json({
+        success: false,
+        message: et === 'person' ? 'Person not found.' : 'Organization not found.'
+      });
     }
+    rawActivities = entityRecord.activityLogs || [];
 
     // Get enabled apps for the organization
+    const appStartedAt = performance.now();
     let enabledApps = [];
     if (req.user?.organizationId) {
-      const organization = await Organization.findById(req.user.organizationId).select('enabledApps').lean();
       if (organization?.enabledApps) {
         enabledApps = organization.enabledApps.map(app => {
           return typeof app === 'object' && app.appKey ? app.appKey : app;
@@ -87,6 +94,7 @@ exports.getEntityActivities = async (req, res) => {
     if (!enabledApps.length && req.user?.allowedApps) {
       enabledApps = Array.isArray(req.user.allowedApps) ? req.user.allowedApps : [];
     }
+    timings.push({ name: 'app_context_source', duration: performance.now() - appStartedAt, description: 'Enabled app lookup' });
 
     // Build route info from request for app context resolution
     const fullPath = req.originalUrl ? req.originalUrl.split('?')[0] : req.path;
@@ -101,6 +109,7 @@ exports.getEntityActivities = async (req, res) => {
     };
 
     // Resolve app context
+    const resolveStartedAt = performance.now();
     const userAppAccess = req.user?.allowedApps || [];
     const appContextResult = resolvePeopleAppContext({
       routeInfo,
@@ -108,8 +117,10 @@ exports.getEntityActivities = async (req, res) => {
       enabledApps: enabledApps,
       userAppAccess: userAppAccess
     });
+    timings.push({ name: 'resolve_context', duration: performance.now() - resolveStartedAt, description: 'Activity app context resolution' });
 
     // Resolve and filter activities
+    const normalizeStartedAt = performance.now();
     const activityResult = resolveActivities({
       activities: rawActivities,
       resolvedAppContext: appContextResult,
@@ -121,6 +132,9 @@ exports.getEntityActivities = async (req, res) => {
     const normalizedActivities = activityResult.activities
       .map(normalizeActivity)
       .filter(Boolean);
+    timings.push({ name: 'normalize', duration: performance.now() - normalizeStartedAt, description: 'Activity filtering and normalization' });
+    timings.push({ name: 'total', duration: performance.now() - requestStartedAt, description: 'Activity request' });
+    res.set('Server-Timing', formatServerTiming(timings));
 
     res.json({
       success: true,
@@ -145,4 +159,3 @@ exports.getEntityActivities = async (req, res) => {
     });
   }
 };
-
