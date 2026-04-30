@@ -16,6 +16,7 @@
     "migrate:helpdesk-route-base:apply": "node scripts/migrateHelpdeskCasesRouteBase.js --apply",
     "migrate:helpdesk-module-naming": "node scripts/migrateHelpdeskCasesModuleNaming.js",
     "migrate:helpdesk-module-naming:apply": "node scripts/migrateHelpdeskCasesModuleNaming.js --apply",
+    "migrate:task-home-summary-index": "node migrations/addTaskHomeSummaryIndex.js",
     "backfill:people-org-links": "node scripts/backfillPeopleOrganizationLinks.js",
     "backfill:people-org-links:apply": "node scripts/backfillPeopleOrganizationLinks.js --apply",
     "seed:internal-beta": "node scripts/seedInternalBetaData.js",
