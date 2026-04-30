@@ -59,12 +59,60 @@ function cacheTtlForGet(pathWithSearch) {
     return METADATA_CACHE_TTL_MS;
 }
 
+function isPersistentPeopleListGet(pathWithSearch) {
+    return /^\/people(?:$|\?)/.test(pathWithSearch);
+}
+
+function persistentCacheKey(requestKey) {
+    return `litedesk:api-cache:${requestKey}`;
+}
+
+function readPersistentCache(requestKey) {
+    try {
+        const raw = localStorage.getItem(persistentCacheKey(requestKey));
+        const cached = raw ? JSON.parse(raw) : null;
+        if (!cached || cached.expiresAt <= Date.now()) {
+            if (cached) localStorage.removeItem(persistentCacheKey(requestKey));
+            return null;
+        }
+        return cached.data;
+    } catch {
+        return null;
+    }
+}
+
+function writePersistentCache(requestKey, data, ttlMs) {
+    try {
+        localStorage.setItem(persistentCacheKey(requestKey), JSON.stringify({
+            data,
+            expiresAt: Date.now() + ttlMs
+        }));
+    } catch {
+        // Ignore storage failures; in-memory cache still handles same-session reuse.
+    }
+}
+
+function clearPersistentPeopleCache() {
+    try {
+        const prefix = 'litedesk:api-cache:';
+        for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith(prefix) && key.includes('/people')) {
+                localStorage.removeItem(key);
+            }
+        }
+    } catch {
+        // Ignore storage failures.
+    }
+}
+
 function invalidatesMetadata(pathWithSearch) {
     return INVALIDATING_PATHS.some((pattern) => pattern.test(pathWithSearch));
 }
 
 function clearMetadataResponseCache() {
     _metadataResponseCache.clear();
+    clearPersistentPeopleCache();
 }
 
 const apiClient = async (url, options = {}) => {
@@ -104,6 +152,17 @@ const apiClient = async (url, options = {}) => {
         }
         if (cached) {
             _metadataResponseCache.delete(requestKey);
+        }
+
+        if (isPersistentPeopleListGet(pathWithSearch)) {
+            const persistentCached = readPersistentCache(requestKey);
+            if (persistentCached) {
+                _metadataResponseCache.set(requestKey, {
+                    data: persistentCached,
+                    expiresAt: Date.now() + cacheTtlForGet(pathWithSearch)
+                });
+                return persistentCached;
+            }
         }
     }
     
@@ -165,10 +224,14 @@ const apiClient = async (url, options = {}) => {
 
             const data = await response.json();
             if (cacheableMetadataGet) {
+                const ttlMs = cacheTtlForGet(pathWithSearch);
                 _metadataResponseCache.set(requestKey, {
                     data,
-                    expiresAt: Date.now() + cacheTtlForGet(pathWithSearch)
+                    expiresAt: Date.now() + ttlMs
                 });
+                if (isPersistentPeopleListGet(pathWithSearch)) {
+                    writePersistentCache(requestKey, data, ttlMs);
+                }
             }
             return data;
         } catch (error) {
