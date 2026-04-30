@@ -28,6 +28,7 @@ type ParsedPeopleTypes = {
 
 const sharedCache = new Map<string, ParsedPeopleTypes>();
 const sharedInflight = new Map<string, Promise<ParsedPeopleTypes>>();
+const PEOPLE_TYPES_STORAGE_TTL_MS = 5 * 60 * 1000;
 
 function clearSharedPeopleTypesCache() {
   sharedCache.clear();
@@ -47,6 +48,35 @@ function defaultRoleForApp(key: string | null | undefined): string {
 
 function cacheKeyForApp(key: string): string {
   return String(key).toUpperCase();
+}
+
+function storageKeyForApp(key: string): string {
+  return `litedesk:people-types:${cacheKeyForApp(key)}`;
+}
+
+function readStoredPeopleTypes(key: string): ParsedPeopleTypes | null {
+  try {
+    const raw = localStorage.getItem(storageKeyForApp(key));
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (Date.now() - Number(parsed.updatedAt || 0) > PEOPLE_TYPES_STORAGE_TTL_MS) return null;
+    const data = parsed.data as ParsedPeopleTypes | undefined;
+    if (!data?.types || !data?.typeDefs || !data?.defaultRole) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredPeopleTypes(key: string, parsed: ParsedPeopleTypes) {
+  try {
+    localStorage.setItem(storageKeyForApp(key), JSON.stringify({
+      data: parsed,
+      updatedAt: Date.now()
+    }));
+  } catch {
+    // localStorage may be unavailable; in-memory cache still works.
+  }
 }
 
 async function loadPeopleTypesNetwork(key: string): Promise<ParsedPeopleTypes> {
@@ -94,6 +124,13 @@ export function usePeopleTypes(appKey: string | Ref<string | null | undefined> =
       return;
     }
 
+    const stored = readStoredPeopleTypes(ck);
+    if (stored) {
+      sharedCache.set(ck, stored);
+      applyParsed(stored);
+      return;
+    }
+
     const existingFlight = sharedInflight.get(ck);
     if (existingFlight) {
       loading.value = true;
@@ -110,6 +147,7 @@ export function usePeopleTypes(appKey: string | Ref<string | null | undefined> =
     const p = loadPeopleTypesNetwork(key)
       .then((parsed) => {
         sharedCache.set(ck, parsed);
+        writeStoredPeopleTypes(ck, parsed);
         return parsed;
       })
       .finally(() => {
@@ -129,6 +167,7 @@ export function usePeopleTypes(appKey: string | Ref<string | null | undefined> =
         defaultRole: fallbackDefault
       };
       sharedCache.set(ck, fallbackParsed);
+      writeStoredPeopleTypes(ck, fallbackParsed);
       applyParsed(fallbackParsed);
     } finally {
       loading.value = false;
