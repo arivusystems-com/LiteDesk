@@ -7,6 +7,7 @@ const _metadataResponseCache = new Map();
 
 const METADATA_CACHE_TTL_MS = 5 * 60 * 1000;
 const PEOPLE_LIST_CACHE_TTL_MS = 30 * 1000;
+const RECORD_CONTEXT_CACHE_TTL_MS = 30 * 1000;
 const CACHEABLE_GET_PATHS = [
     /^\/modules(?:$|\?)/,
     /^\/settings\/core-modules(?:$|\/|\?)/,
@@ -14,6 +15,12 @@ const CACHEABLE_GET_PATHS = [
     /^\/ui\/entities(?:$|\?)/,
     /^\/ui\/routes(?:$|\?)/,
     /^\/people(?:$|\?)/,
+    /^\/people\/[^/?]+(?:$|\?)/,
+    /^\/activity\/[^/?]+\/[^/?]+(?:$|\?)/,
+    /^\/communications\/threads(?:$|\?)/,
+    /^\/relationships\/(?:record-context|links)(?:$|\?)/,
+    /^\/modules\/[^/?]+\/records\/[^/?]+\/neighbors(?:$|\?)/,
+    /^\/organizations\/list(?:$|\?)/,
 ];
 
 const INVALIDATING_PATHS = [
@@ -21,6 +28,10 @@ const INVALIDATING_PATHS = [
     /^\/settings\/core-modules(?:$|\/|\?)/,
     /^\/ui(?:$|\/|\?)/,
     /^\/people(?:$|\/|\?)/,
+    /^\/activity(?:$|\/|\?)/,
+    /^\/communications(?:$|\/|\?)/,
+    /^\/relationships(?:$|\/|\?)/,
+    /^\/organizations(?:$|\/|\?)/,
 ];
 
 function authSessionKey(authStore) {
@@ -53,14 +64,25 @@ function isCacheableMetadataGet(pathWithSearch) {
 }
 
 function cacheTtlForGet(pathWithSearch) {
-    if (/^\/people(?:$|\?)/.test(pathWithSearch)) {
-        return PEOPLE_LIST_CACHE_TTL_MS;
+    if (isPersistentShortCacheGet(pathWithSearch)) {
+        if (/^\/people(?:$|\?)/.test(pathWithSearch)) {
+            return PEOPLE_LIST_CACHE_TTL_MS;
+        }
+        return RECORD_CONTEXT_CACHE_TTL_MS;
     }
     return METADATA_CACHE_TTL_MS;
 }
 
-function isPersistentPeopleListGet(pathWithSearch) {
-    return /^\/people(?:$|\?)/.test(pathWithSearch);
+function isPersistentShortCacheGet(pathWithSearch) {
+    return [
+        /^\/people(?:$|\?)/,
+        /^\/people\/[^/?]+(?:$|\?)/,
+        /^\/activity\/[^/?]+\/[^/?]+(?:$|\?)/,
+        /^\/communications\/threads(?:$|\?)/,
+        /^\/relationships\/(?:record-context|links)(?:$|\?)/,
+        /^\/modules\/[^/?]+\/records\/[^/?]+\/neighbors(?:$|\?)/,
+        /^\/organizations\/list(?:$|\?)/,
+    ].some((pattern) => pattern.test(pathWithSearch));
 }
 
 function persistentCacheKey(requestKey) {
@@ -92,12 +114,20 @@ function writePersistentCache(requestKey, data, ttlMs) {
     }
 }
 
-function clearPersistentPeopleCache() {
+function clearPersistentShortCache() {
     try {
         const prefix = 'litedesk:api-cache:';
         for (let i = localStorage.length - 1; i >= 0; i -= 1) {
             const key = localStorage.key(i);
-            if (key && key.startsWith(prefix) && key.includes('/people')) {
+            if (!key || !key.startsWith(prefix)) continue;
+            if (
+                key.includes('/people') ||
+                key.includes('/activity') ||
+                key.includes('/communications') ||
+                key.includes('/relationships') ||
+                key.includes('/organizations') ||
+                key.includes('/records/')
+            ) {
                 localStorage.removeItem(key);
             }
         }
@@ -112,7 +142,7 @@ function invalidatesMetadata(pathWithSearch) {
 
 function clearMetadataResponseCache() {
     _metadataResponseCache.clear();
-    clearPersistentPeopleCache();
+    clearPersistentShortCache();
 }
 
 const apiClient = async (url, options = {}) => {
@@ -154,7 +184,7 @@ const apiClient = async (url, options = {}) => {
             _metadataResponseCache.delete(requestKey);
         }
 
-        if (isPersistentPeopleListGet(pathWithSearch)) {
+        if (isPersistentShortCacheGet(pathWithSearch)) {
             const persistentCached = readPersistentCache(requestKey);
             if (persistentCached) {
                 _metadataResponseCache.set(requestKey, {
@@ -229,7 +259,7 @@ const apiClient = async (url, options = {}) => {
                     data,
                     expiresAt: Date.now() + ttlMs
                 });
-                if (isPersistentPeopleListGet(pathWithSearch)) {
+                if (isPersistentShortCacheGet(pathWithSearch)) {
                     writePersistentCache(requestKey, data, ttlMs);
                 }
             }
