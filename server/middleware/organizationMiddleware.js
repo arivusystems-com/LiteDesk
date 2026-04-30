@@ -84,6 +84,16 @@ const organizationIsolation = async (req, res, next) => {
             return res.status(401).json({ message: 'Authentication required' });
         }
 
+        if (req.organization && String(req.organization._id) === String(req.user.organizationId)) {
+            if (!req.organization.isActive) {
+                return res.status(403).json({
+                    message: 'Organization is inactive. Please contact support.',
+                    code: 'ORG_INACTIVE'
+                });
+            }
+            return next();
+        }
+
         // Get organization from user (fresh from database to ensure latest state)
         const organization = await Organization.findById(req.user.organizationId);
         
@@ -254,4 +264,3 @@ module.exports = {
     checkFeatureAccess,
     checkLimit
 };
-

@@ -212,6 +212,8 @@ const requireAppEntitlement = async (req, res, next) => {
                 error: 'Your organization could not be found. Please contact support.'
             });
         }
+
+        req.organization = organization;
         
         // Ensure enabledApps exists and is properly initialized (initialize if missing or empty)
         if (!organization.enabledApps || !Array.isArray(organization.enabledApps) || organization.enabledApps.length === 0) {
@@ -465,6 +467,7 @@ const requireAppEntitlement = async (req, res, next) => {
 
         // Store access result in request for downstream middleware/controllers
         req.accessResult = accessResult;
+        req.organization = organization;
 
         // ============================================================================
         // Phase 0J: Seat Accounting Hook (Metadata Only)
@@ -487,6 +490,10 @@ const requireAppEntitlement = async (req, res, next) => {
         // Note: ADMIN access bypasses billing, EXECUTION access enforces seat limits
         // SUBSCRIPTION RULE: ACTIVE and TRIAL are usable, SUSPENDED/CANCELLED are blocked
         // SPECIAL CASE: CRM is the control plane - if enabled, allow access even without subscription
+        if (accessResult.mode !== 'EXECUTION') {
+            return next();
+        }
+
         try {
             let subscription = await getOrgSubscription(organizationId);
             let appSubscription = subscription?.apps.find(app => app.appKey === req.appKey);
@@ -665,4 +672,3 @@ const requireAppEntitlement = async (req, res, next) => {
 module.exports = {
     requireAppEntitlement
 };
-

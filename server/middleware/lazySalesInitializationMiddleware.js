@@ -64,8 +64,14 @@ const lazySalesInitialization = async (req, res, next) => {
 
     try {
         // STEP 1: Check persistent source of truth (organization.crmInitialized)
-        // Use access resolution service to verify Sales access
-        const organization = await Organization.findById(organizationId);
+        // Use the organization loaded by requireAppEntitlement when available.
+        let organization = req.organization && String(req.organization._id) === orgIdString
+            ? req.organization
+            : null;
+
+        if (!organization) {
+            organization = await Organization.findById(organizationId);
+        }
         
         if (!organization) {
             console.error(`[LazySalesInit] Organization not found: ${orgIdString}`);
@@ -76,14 +82,22 @@ const lazySalesInitialization = async (req, res, next) => {
             });
         }
 
-        // Use unified access resolution service to check Sales access
-        // Intent: VIEW (just checking if user can see/enter Sales)
-        const accessResult = await resolveAppAccess({
-            user: req.user,
-            organization: organization,
-            appKey: APP_KEYS.SALES,
-            intent: 'VIEW'
-        });
+        // Reuse the entitlement decision already made earlier in the task route.
+        // Fall back to unified access resolution if this middleware is used elsewhere.
+        let accessResult = req.accessResult && req.appKey === APP_KEYS.SALES
+            ? req.accessResult
+            : null;
+
+        if (!accessResult) {
+            // Use unified access resolution service to check Sales access
+            // Intent: VIEW (just checking if user can see/enter Sales)
+            accessResult = await resolveAppAccess({
+                user: req.user,
+                organization: organization,
+                appKey: APP_KEYS.SALES,
+                intent: 'VIEW'
+            });
+        }
         
         if (!accessResult.allowed) {
             // Sales app is not accessible (not enabled or user has no access)
@@ -322,4 +336,3 @@ const lazySalesInitialization = async (req, res, next) => {
 module.exports = {
     lazySalesInitialization
 };
-
