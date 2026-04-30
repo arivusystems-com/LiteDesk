@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { performance } = require('perf_hooks');
 const { protect } = require('../middleware/authMiddleware');
 const { organizationIsolation, checkTrialStatus, checkFeatureAccess } = require('../middleware/organizationMiddleware');
 const { checkPermission, filterByOwnership } = require('../middleware/permissionMiddleware');
@@ -32,6 +33,12 @@ const {
 } = require('../controllers/taskController');
 
 // Apply middleware to all task routes
+router.use((req, res, next) => {
+  if (req.path === '/summary') {
+    req.taskSummaryRequestStartedAt = performance.now();
+  }
+  next();
+});
 router.use(protect);
 router.use(resolveAppContext); // After auth, resolve appKey from URL
 router.use(requireAppEntitlement); // Check user's app entitlements

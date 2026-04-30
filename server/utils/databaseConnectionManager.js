@@ -251,6 +251,10 @@ class DatabaseConnectionManager {
       await db.collection('tasks').createIndex({ organizationId: 1, dueDate: 1, status: 1 });
       await db.collection('tasks').createIndex({ organizationId: 1, priority: 1, status: 1 });
       await db.collection('tasks').createIndex({ organizationId: 1, projectId: 1 });
+      await db.collection('tasks').createIndex(
+        { organizationId: 1, assignedTo: 1, deletedAt: 1, dueDate: 1, status: 1 },
+        { name: 'task_home_summary_idx' }
+      );
       await db.collection('tasks').createIndex({ organizationId: 1 });
       await db.collection('tasks').createIndex({ assignedTo: 1 });
       await db.collection('tasks').createIndex({ status: 1 });
@@ -339,4 +343,3 @@ class DatabaseConnectionManager {
 const dbManager = new DatabaseConnectionManager();
 
 module.exports = dbManager;
-

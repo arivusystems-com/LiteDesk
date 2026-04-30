@@ -175,6 +175,10 @@ TaskSchema.index({ organizationId: 1, dueDate: 1, status: 1 });
 TaskSchema.index({ organizationId: 1, priority: 1, status: 1 });
 TaskSchema.index({ organizationId: 1, projectId: 1 });
 TaskSchema.index({ organizationId: 1, deletedAt: 1 });
+TaskSchema.index(
+  { organizationId: 1, assignedTo: 1, deletedAt: 1, dueDate: 1, status: 1 },
+  { name: 'task_home_summary_idx' }
+);
 
 // Virtual for overdue status
 TaskSchema.virtual('isOverdue').get(function() {

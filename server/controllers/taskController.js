@@ -12,6 +12,7 @@ const domainEvents = require('../constants/domainEvents');
 const { applyProjectionFilter } = require('../utils/appProjectionQuery');
 const { getProjection } = require('../utils/moduleProjectionResolver');
 const { resolveCreateType, getTypeFieldName } = require('../utils/appProjectionCreateResolver');
+const { performance } = require('perf_hooks');
 
 const TASK_STATUS_LABELS = {
   todo: 'To Do',
@@ -56,6 +57,26 @@ const getActorDisplayName = (user) => {
   if (!user) return 'System';
   const name = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
   return name || user.username || user.email || 'System';
+};
+
+const formatServerTiming = (timings) => {
+  return timings
+    .filter(({ duration }) => Number.isFinite(duration))
+    .map(({ name, duration, description }) => {
+      const desc = description ? `;desc="${description.replace(/"/g, "'")}"` : '';
+      return `${name};dur=${duration.toFixed(1)}${desc}`;
+    })
+    .join(', ');
+};
+
+const measureTaskSummaryQuery = async (name, query) => {
+  const start = performance.now();
+  const data = await query;
+  return {
+    name,
+    data,
+    duration: performance.now() - start
+  };
 };
 
 /** Map relatedTo.type to model and display field(s) for population */
@@ -660,6 +681,10 @@ const getTasks = async (req, res) => {
 
 // @desc    Get task summary for homepage
 const getTaskSummary = async (req, res) => {
+  const requestStartedAt = req.taskSummaryRequestStartedAt || performance.now();
+  const handlerStartedAt = performance.now();
+  const timings = [];
+
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -677,20 +702,51 @@ const getTaskSummary = async (req, res) => {
 
     const projection = { title: 1, dueDate: 1, status: 1 };
 
-    const [overdue, dueToday, upcoming] = await Promise.all([
-      Task.find({
+    const queryStartedAt = performance.now();
+    const [overdueResult, dueTodayResult, upcomingResult] = await Promise.all([
+      measureTaskSummaryQuery('summary-overdue', Task.find({
         ...baseQuery,
         dueDate: { $lt: today }
-      }).sort({ dueDate: 1 }).limit(10).select(projection).lean(),
-      Task.find({
+      }).sort({ dueDate: 1 }).limit(10).select(projection).lean()),
+      measureTaskSummaryQuery('summary-today', Task.find({
         ...baseQuery,
         dueDate: { $gte: today, $lt: tomorrow }
-      }).sort({ dueDate: 1 }).limit(10).select(projection).lean(),
-      Task.find({
+      }).sort({ dueDate: 1 }).limit(10).select(projection).lean()),
+      measureTaskSummaryQuery('summary-upcoming', Task.find({
         ...baseQuery,
         dueDate: { $gte: tomorrow, $lte: nextWeek }
-      }).sort({ dueDate: 1 }).limit(10).select(projection).lean()
+      }).sort({ dueDate: 1 }).limit(10).select(projection).lean())
     ]);
+    timings.push({ name: 'db', duration: performance.now() - queryStartedAt, description: 'Task summary queries' });
+    timings.push({ name: 'db_overdue', duration: overdueResult.duration, description: 'Overdue tasks' });
+    timings.push({ name: 'db_today', duration: dueTodayResult.duration, description: 'Due today tasks' });
+    timings.push({ name: 'db_upcoming', duration: upcomingResult.duration, description: 'Upcoming tasks' });
+
+    const overdue = overdueResult.data;
+    const dueToday = dueTodayResult.data;
+    const upcoming = upcomingResult.data;
+
+    const totalDuration = performance.now() - requestStartedAt;
+    timings.push({ name: 'handler', duration: performance.now() - handlerStartedAt, description: 'Task summary controller' });
+    timings.push({ name: 'total', duration: totalDuration, description: 'Task summary request' });
+    res.set('Server-Timing', formatServerTiming(timings));
+
+    if (totalDuration > 500) {
+      console.warn('[getTaskSummary] slow request', {
+        durationMs: Math.round(totalDuration),
+        dbMs: Math.round(timings.find((timing) => timing.name === 'db')?.duration || 0),
+        overdueMs: Math.round(overdueResult.duration),
+        dueTodayMs: Math.round(dueTodayResult.duration),
+        upcomingMs: Math.round(upcomingResult.duration),
+        organizationId: req.user.organizationId,
+        userId: req.user._id,
+        counts: {
+          overdue: overdue.length,
+          dueToday: dueToday.length,
+          upcoming: upcoming.length
+        }
+      });
+    }
 
     res.status(200).json({
       success: true,
