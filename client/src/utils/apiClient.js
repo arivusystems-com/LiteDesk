@@ -21,6 +21,9 @@ const CACHEABLE_GET_PATHS = [
     /^\/relationships\/(?:record-context|links)(?:$|\?)/,
     /^\/modules\/[^/?]+\/records\/[^/?]+\/neighbors(?:$|\?)/,
     /^\/organizations\/list(?:$|\?)/,
+    /^\/v2\/organization(?:$|\?)/,
+    /^\/users\/list(?:$|\?)/,
+    /^\/groups(?:$|\?)/,
 ];
 
 const INVALIDATING_PATHS = [
@@ -32,6 +35,9 @@ const INVALIDATING_PATHS = [
     /^\/communications(?:$|\/|\?)/,
     /^\/relationships(?:$|\/|\?)/,
     /^\/organizations(?:$|\/|\?)/,
+    /^\/v2\/organization(?:$|\/|\?)/,
+    /^\/users(?:$|\/|\?)/,
+    /^\/groups(?:$|\/|\?)/,
 ];
 
 function authSessionKey(authStore) {
@@ -82,6 +88,9 @@ function isPersistentShortCacheGet(pathWithSearch) {
         /^\/relationships\/(?:record-context|links)(?:$|\?)/,
         /^\/modules\/[^/?]+\/records\/[^/?]+\/neighbors(?:$|\?)/,
         /^\/organizations\/list(?:$|\?)/,
+        /^\/v2\/organization(?:$|\?)/,
+        /^\/users\/list(?:$|\?)/,
+        /^\/groups(?:$|\?)/,
     ].some((pattern) => pattern.test(pathWithSearch));
 }
 
@@ -126,6 +135,9 @@ function clearPersistentShortCache() {
                 key.includes('/communications') ||
                 key.includes('/relationships') ||
                 key.includes('/organizations') ||
+                key.includes('/v2/organization') ||
+                key.includes('/users/list') ||
+                key.includes('/groups') ||
                 key.includes('/records/')
             ) {
                 localStorage.removeItem(key);
