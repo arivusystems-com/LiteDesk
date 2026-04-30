@@ -1,5 +1,5 @@
 <template>
-  <div class="w-full">
+  <div ref="rootRef" class="w-full">
     <!-- Section Header -->
     <div class="flex items-center gap-2 mb-4">
       <svg class="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -75,7 +75,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/authRegistry';
 import apiClient from '@/utils/apiClient';
@@ -93,6 +93,9 @@ const authStore = useAuthStore();
 const loading = ref(false);
 const error = ref(null);
 const flows = ref([]);
+const rootRef = ref(null);
+const hasRequestedFlows = ref(false);
+let observer = null;
 
 const isAdmin = computed(() => {
   return authStore.user?.role === 'admin' || authStore.user?.role === 'platform_admin';
@@ -100,6 +103,7 @@ const isAdmin = computed(() => {
 
 const loadFlows = async () => {
   if (!props.appKey) return;
+  hasRequestedFlows.value = true;
 
   loading.value = true;
   error.value = null;
@@ -131,10 +135,32 @@ const goToBusinessFlows = () => {
 };
 
 onMounted(() => {
-  loadFlows();
+  if (typeof window === 'undefined' || !('IntersectionObserver' in window)) {
+    window.setTimeout(loadFlows, 0);
+    return;
+  }
+
+  observer = new IntersectionObserver((entries) => {
+    if (entries.some((entry) => entry.isIntersecting)) {
+      observer?.disconnect();
+      observer = null;
+      loadFlows();
+    }
+  }, { rootMargin: '200px 0px' });
+
+  if (rootRef.value) {
+    observer.observe(rootRef.value);
+  }
 });
 
 watch(() => props.appKey, () => {
-  loadFlows();
+  if (hasRequestedFlows.value) {
+    loadFlows();
+  }
+});
+
+onBeforeUnmount(() => {
+  observer?.disconnect();
+  observer = null;
 });
 </script>

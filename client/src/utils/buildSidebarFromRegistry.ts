@@ -12,7 +12,7 @@
  *
  * Enforcement:
  * - Shell: Home / Inbox / Search only
- * - Core Modules: sourced from GET /api/settings/core-modules (permission-gated)
+ * - Core Modules: sourced from the app registry PLATFORM modules first, with settings fallback
  * - App lens: exactly ONE active app at a time (route → lastActiveAppId fallback)
  * - App nav: dashboard + modules for active app only
  * - Platform: governance only
@@ -163,12 +163,43 @@ function buildShell(snapshot: PermissionSnapshot): SidebarItem[] {
 }
 
 /**
- * Build Core Modules section from Core Modules registry API.
- * Sources all items from GET /api/settings/core-modules.
+ * Build Core Modules section from app registry PLATFORM modules.
  * Filters by permissions (hides if user has zero access).
- * Respects module order as defined in Core Modules configuration.
+ * Respects module order as defined in registry metadata.
  */
-async function buildCoreModules(snapshot: PermissionSnapshot): Promise<SidebarItem[]> {
+function buildCoreModulesFromRegistry(appRegistry: AppRegistry, snapshot: PermissionSnapshot): SidebarItem[] {
+  const platformModules = appRegistry.PLATFORM?.modules || [];
+  const modules = platformModules
+    .filter((module) => {
+      const moduleKey = module.moduleKey?.toLowerCase();
+      if (!moduleKey) return false;
+      if (module.navigationEntity !== true && module.navigationCore !== true && module.appKey?.toLowerCase() !== 'platform') {
+        return false;
+      }
+      return hasPermission(module.permission || `${moduleKey}.view`, snapshot);
+    })
+    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
+    .map((module) => {
+      const moduleKey = module.moduleKey?.toLowerCase() || '';
+
+      return {
+        kind: 'coreModule',
+        id: moduleKey,
+        label: module.label || moduleKey,
+        route: module.route || `/${moduleKey}`,
+        icon: module.icon && module.icon !== 'module' ? module.icon : moduleKey,
+        moduleKey,
+        order: module.order,
+      } satisfies SidebarItem;
+    });
+
+  return dedupeCoreModules(modules);
+}
+
+/**
+ * Fallback for older registry payloads that do not include PLATFORM modules.
+ */
+async function fetchCoreModulesFromSettings(snapshot: PermissionSnapshot): Promise<SidebarItem[]> {
   try {
     // Check if we're in a browser environment and can make API calls
     // This prevents errors during dev self-tests or SSR
@@ -233,22 +264,25 @@ async function buildCoreModules(snapshot: PermissionSnapshot): Promise<SidebarIt
         } satisfies SidebarItem;
       });
     
-    // Defensive dedupe by module key so the sidebar never renders repeated core modules.
-    const uniqueCoreModules = new Map<string, SidebarItem>();
-    for (const item of coreModules) {
-      const moduleKey =
-        item.kind === 'coreModule' ? item.moduleKey : item.kind === 'app' && item.moduleKey ? item.moduleKey : undefined;
-      const key = String((moduleKey || item.id) || '').toLowerCase();
-      if (!key || uniqueCoreModules.has(key)) continue;
-      uniqueCoreModules.set(key, item);
-    }
-
-    return Array.from(uniqueCoreModules.values());
+    return dedupeCoreModules(coreModules);
   } catch (error) {
     console.error('[buildSidebarFromRegistry] Failed to fetch core modules:', error);
     // Return empty array on error (graceful degradation)
     return [];
   }
+}
+
+function dedupeCoreModules(coreModules: SidebarItem[]): SidebarItem[] {
+  const uniqueCoreModules = new Map<string, SidebarItem>();
+  for (const item of coreModules) {
+    const moduleKey =
+      item.kind === 'coreModule' ? item.moduleKey : item.kind === 'app' && item.moduleKey ? item.moduleKey : undefined;
+    const key = String((moduleKey || item.id) || '').toLowerCase();
+    if (!key || uniqueCoreModules.has(key)) continue;
+    uniqueCoreModules.set(key, item);
+  }
+
+  return Array.from(uniqueCoreModules.values());
 }
 
 function buildAppSwitcherApps(appRegistry: AppRegistry, snapshot: PermissionSnapshot): AppSummary[] {
@@ -354,8 +388,10 @@ export async function buildSidebarFromRegistry(
 
   const activeAppId = resolveActiveAppId(appRegistry, currentPath, lastActiveAppId);
 
-  // Fetch core modules from API
-  const coreModules = await buildCoreModules(snapshot);
+  const registryCoreModules = buildCoreModulesFromRegistry(appRegistry, snapshot);
+  const coreModules = registryCoreModules.length > 0
+    ? registryCoreModules
+    : await fetchCoreModulesFromSettings(snapshot);
 
   // Note: We can't use memoizeBuilder here because buildCoreModules is async
   // and the memoization would need to handle async results differently.
@@ -452,4 +488,3 @@ if (import.meta.env.DEV) {
     }
   }
 }
-
