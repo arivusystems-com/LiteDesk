@@ -13,6 +13,22 @@ const SECURITY_DISABLED = process.env.DISABLE_SECURITY === 'true' || process.env
 const isProduction = process.env.NODE_ENV === 'production';
 const bypassDisabled = process.env.BYPASS_RATE_LIMIT === 'false';
 
+const parsePositiveInteger = (value, fallback) => {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const RATE_LIMIT_WINDOW_MS = parsePositiveInteger(process.env.RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000);
+const RATE_LIMIT_MAX_REQUESTS = parsePositiveInteger(process.env.RATE_LIMIT_MAX_REQUESTS, 100);
+const AUTH_RATE_LIMIT_WINDOW_MS = parsePositiveInteger(
+    process.env.AUTH_RATE_LIMIT_WINDOW_MS,
+    isProduction ? 15 * 60 * 1000 : 5 * 60 * 1000
+);
+const AUTH_RATE_LIMIT_MAX_REQUESTS = parsePositiveInteger(
+    process.env.AUTH_RATE_LIMIT_MAX_REQUESTS,
+    isProduction ? 5 : 30
+);
+
 const isHealthCheckPath = (req) => {
     const p = req.path || '';
     return (
@@ -29,6 +45,12 @@ const hasBypassHeader = (req) => {
     const bypassHeader = req.headers['x-bypass-rate-limit'];
     const testHeader = req.headers['x-test-mode'];
     return bypassHeader === 'true' || testHeader === 'true';
+};
+
+const isAuthPath = (req) => {
+    const originalUrl = req.originalUrl || '';
+    const path = req.path || '';
+    return originalUrl.startsWith('/api/auth/') || path.startsWith('/auth/');
 };
 
 const shouldBypassRateLimit = (req, { logContext } = {}) => {
@@ -48,8 +70,8 @@ const shouldBypassRateLimit = (req, { logContext } = {}) => {
 
 // General API rate limiter
 const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
+    windowMs: RATE_LIMIT_WINDOW_MS,
+    max: RATE_LIMIT_MAX_REQUESTS,
     message: {
         error: 'Too many requests from this IP, please try again later.',
         code: 'RATE_LIMIT_EXCEEDED'
@@ -67,15 +89,15 @@ const apiLimiter = rateLimit({
             return true;
         }
 
-        // Skip for health checks
-        return isHealthCheckPath(req);
+        // Auth routes have dedicated, stricter limiters mounted on authRoutes.
+        return isHealthCheckPath(req) || isAuthPath(req);
     }
 });
 
 // Strict rate limiter for authentication endpoints
 const authLimiter = rateLimit({
-    windowMs: process.env.NODE_ENV === 'production' ? 15 * 60 * 1000 : 5 * 60 * 1000, // 15 min in prod, 5 min in dev
-    max: process.env.NODE_ENV === 'production' ? 5 : 30, // More lenient in development (30 attempts per 5 minutes)
+    windowMs: AUTH_RATE_LIMIT_WINDOW_MS,
+    max: AUTH_RATE_LIMIT_MAX_REQUESTS,
     message: {
         error: 'Too many login attempts from this IP, please try again after a few minutes.',
         code: 'AUTH_RATE_LIMIT_EXCEEDED'
@@ -164,4 +186,3 @@ module.exports = {
     registrationLimiter,
     sensitiveOperationLimiter
 };
-
