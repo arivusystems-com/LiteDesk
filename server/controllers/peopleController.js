@@ -33,6 +33,8 @@ const {
 } = require('../utils/warnDeprecatedPeopleTypeAlias');
 const { isOptionalEmailWellFormed } = require('../utils/defaultFieldValidations');
 
+const DEBUG_PEOPLE_LIST = process.env.DEBUG_PEOPLE_LIST === 'true';
+
 /**
  * Flatten People record for API response: expose participations as top-level aliases.
  * Canonical: participations.SALES.role, participations.HELPDESK.role
@@ -52,6 +54,12 @@ function flattenPeopleForResponse(record) {
     lead_status: lead_status ?? null,
     contact_status: contact_status ?? null,
   };
+}
+
+function debugPeopleList(message, payload) {
+  if (DEBUG_PEOPLE_LIST) {
+    console.log(message, payload);
+  }
 }
 
 /**
@@ -340,7 +348,7 @@ exports.list = async (req, res) => {
     let query = { organizationId: orgIdObjectId, deletedAt: null };
     
     // Debug logging
-    console.log('[PeopleController] Filtering by organizationId:', {
+    debugPeopleList('[PeopleController] Filtering by organizationId:', {
       organizationId: String(userOrgId),
       organizationIdType: typeof userOrgId,
       orgIdObjectId: String(orgIdObjectId),
@@ -354,7 +362,7 @@ exports.list = async (req, res) => {
     const moduleKey = 'people';
     
     // Debug logging
-    console.log('[PeopleController] appKey determination:', {
+    debugPeopleList('[PeopleController] appKey determination:', {
       queryAppKey: req.query.appKey,
       middlewareAppKey: req.appKey,
       finalAppKey: appKey
@@ -435,7 +443,7 @@ exports.list = async (req, res) => {
           delete query[PEOPLE_SALES_ROLE_PATH];
         }
       }
-      console.log('[PeopleController] PLATFORM appKey detected - skipping projection filter to show all people');
+      debugPeopleList('[PeopleController] PLATFORM appKey detected - skipping projection filter to show all people');
     }
     
     // Apply search condition after projection filter
@@ -481,7 +489,7 @@ exports.list = async (req, res) => {
     if (appKey === 'PLATFORM' && !req.query.sales_type) {
       if (query[PEOPLE_SALES_ROLE_PATH] && typeof query[PEOPLE_SALES_ROLE_PATH] !== 'object') {
         delete query[PEOPLE_SALES_ROLE_PATH];
-        console.log('[PeopleController] Removed role filter for PLATFORM appKey');
+        debugPeopleList('[PeopleController] Removed role filter for PLATFORM appKey');
       }
     }
     if (appKey === 'PLATFORM' && !req.query.helpdesk_role) {
@@ -492,7 +500,7 @@ exports.list = async (req, res) => {
     }
     
     // CRITICAL: Double-check the query before executing
-    console.log('[PeopleController] Final query before execution:', {
+    debugPeopleList('[PeopleController] Final query before execution:', {
       appKey: appKey,
       queryAppKey: req.query.appKey,
       middlewareAppKey: req.appKey,
@@ -504,54 +512,27 @@ exports.list = async (req, res) => {
     });
     
     // Execute query with detailed logging
-    console.log('[PeopleController] Executing find query:', {
+    debugPeopleList('[PeopleController] Executing find query:', {
       query: JSON.stringify(query),
       sortOptions: sortOptions,
       limit: limit,
       skip: skip
     });
     
-    const data = await People.find(query)
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+
+    const dataQuery = People.find(query)
       .populate('assignedTo', 'firstName lastName email avatar')
       .populate('createdBy', 'firstName lastName email avatar username')
       .populate('lead_owner', 'firstName lastName email avatar username')
       .populate('organization', 'name')
       .sort(sortOptions)
       .limit(limit)
-      .skip(skip);
-    
-    const total = await People.countDocuments(query);
-    
-    // Log types distribution (from participations.SALES.role)
-    const typesInResults = {};
-    data.forEach(r => {
-      const { role } = getSalesParticipationValues(r);
-      const type = role ?? 'NO_TYPE';
-      typesInResults[type] = (typesInResults[type] || 0) + 1;
-    });
-    
-    console.log('[PeopleController] Query results:', {
-      returnedCount: data.length,
-      page: page,
-      limit: limit,
-      total: total,
-      typesDistribution: typesInResults,
-      sampleIds: data.slice(0, 5).map(r => {
-        const { role } = getSalesParticipationValues(r);
-        return {
-          id: r._id,
-          name: `${r.first_name} ${r.last_name}`,
-          type: role ?? 'NO_TYPE',
-          createdAt: r.createdAt
-        };
-      })
-    });
-    
-    console.log('[PeopleController] Total count:', total);
-    
-    // Calculate statistics with projection filter applied
-    // Use participations.SALES.role (source of truth)
-    const statistics = await People.aggregate([
+      .skip(skip)
+      .lean();
+
+    const statisticsQuery = People.aggregate([
       { $match: query },
       {
         $group: {
@@ -562,21 +543,50 @@ exports.list = async (req, res) => {
         }
       }
     ]);
-    
-    // Get new contacts this week
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-    const newThisWeek = await People.countDocuments({
-      ...query,
-      createdAt: { $gte: oneWeekAgo }
-    });
-    
-    // Get new customers this week (participations.SALES.role = Contact)
-    const newCustomers = await People.countDocuments({
-      ...query,
-      [getPeopleFieldQueryPath('sales_type')]: 'Contact',
-      createdAt: { $gte: oneWeekAgo }
-    });
+
+    const [data, total, statistics, newThisWeek, newCustomers] = await Promise.all([
+      dataQuery,
+      People.countDocuments(query),
+      statisticsQuery,
+      People.countDocuments({
+        ...query,
+        createdAt: { $gte: oneWeekAgo }
+      }),
+      People.countDocuments({
+        ...query,
+        [getPeopleFieldQueryPath('sales_type')]: 'Contact',
+        createdAt: { $gte: oneWeekAgo }
+      })
+    ]);
+
+    // Log types distribution (from participations.SALES.role)
+    if (DEBUG_PEOPLE_LIST) {
+      const typesInResults = {};
+      data.forEach(r => {
+        const { role } = getSalesParticipationValues(r);
+        const type = role ?? 'NO_TYPE';
+        typesInResults[type] = (typesInResults[type] || 0) + 1;
+      });
+
+      debugPeopleList('[PeopleController] Query results:', {
+        returnedCount: data.length,
+        page: page,
+        limit: limit,
+        total: total,
+        typesDistribution: typesInResults,
+        sampleIds: data.slice(0, 5).map(r => {
+          const { role } = getSalesParticipationValues(r);
+          return {
+            id: r._id,
+            name: `${r.first_name} ${r.last_name}`,
+            type: role ?? 'NO_TYPE',
+            createdAt: r.createdAt
+          };
+        })
+      });
+
+      debugPeopleList('[PeopleController] Total count:', total);
+    }
     
     // Calculate conversion rate (customers / total * 100)
     const statsData = statistics[0] || {
@@ -608,14 +618,14 @@ exports.list = async (req, res) => {
           }))
         });
       } else {
-        console.log('[PeopleController] ✅ All records have correct organizationId:', {
+        debugPeopleList('[PeopleController] ✅ All records have correct organizationId:', {
           recordCount: data.length,
           organizationId: String(userOrgId)
         });
       }
       
       // Also log the first few records to verify
-      console.log('[PeopleController] Sample records organizationId:', 
+      debugPeopleList('[PeopleController] Sample records organizationId:',
         data.slice(0, 3).map(r => ({
           name: `${r.first_name} ${r.last_name}`,
           orgId: String(r.organizationId?._id || r.organizationId)
@@ -1229,5 +1239,3 @@ exports.addActivityLog = async (req, res) => {
     });
   }
 };
-
-
