@@ -6,18 +6,21 @@ const _inFlightRequests = new Map();
 const _metadataResponseCache = new Map();
 
 const METADATA_CACHE_TTL_MS = 5 * 60 * 1000;
+const PEOPLE_LIST_CACHE_TTL_MS = 30 * 1000;
 const CACHEABLE_GET_PATHS = [
     /^\/modules(?:$|\?)/,
     /^\/settings\/core-modules(?:$|\/|\?)/,
     /^\/ui\/apps(?:$|\/|\?)/,
     /^\/ui\/entities(?:$|\?)/,
     /^\/ui\/routes(?:$|\?)/,
+    /^\/people(?:$|\?)/,
 ];
 
 const INVALIDATING_PATHS = [
     /^\/modules(?:$|\/|\?)/,
     /^\/settings\/core-modules(?:$|\/|\?)/,
     /^\/ui(?:$|\/|\?)/,
+    /^\/people(?:$|\/|\?)/,
 ];
 
 function authSessionKey(authStore) {
@@ -47,6 +50,13 @@ function getPathWithSearch(fullUrl) {
 
 function isCacheableMetadataGet(pathWithSearch) {
     return CACHEABLE_GET_PATHS.some((pattern) => pattern.test(pathWithSearch));
+}
+
+function cacheTtlForGet(pathWithSearch) {
+    if (/^\/people(?:$|\?)/.test(pathWithSearch)) {
+        return PEOPLE_LIST_CACHE_TTL_MS;
+    }
+    return METADATA_CACHE_TTL_MS;
 }
 
 function invalidatesMetadata(pathWithSearch) {
@@ -157,7 +167,7 @@ const apiClient = async (url, options = {}) => {
             if (cacheableMetadataGet) {
                 _metadataResponseCache.set(requestKey, {
                     data,
-                    expiresAt: Date.now() + METADATA_CACHE_TTL_MS
+                    expiresAt: Date.now() + cacheTtlForGet(pathWithSearch)
                 });
             }
             return data;
