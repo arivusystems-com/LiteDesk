@@ -146,7 +146,7 @@ onMounted(() => {
       observer = null;
       loadFlows();
     }
-  }, { rootMargin: '200px 0px' });
+  }, { rootMargin: '0px', threshold: 0.1 });
 
   if (rootRef.value) {
     observer.observe(rootRef.value);
