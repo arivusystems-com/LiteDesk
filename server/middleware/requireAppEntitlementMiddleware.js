@@ -21,7 +21,7 @@
 const mongoose = require('mongoose');
 const { APP_KEYS, isValidAppKey } = require('../constants/appKeys');
 const Organization = require('../models/Organization');
-const { validateUserTypeForApp } = require('../utils/appAccessUtils');
+const { isAppEnabledForOrg, validateUserTypeForApp } = require('../utils/appAccessUtils');
 const { getOrgSubscription, assertSubscriptionUsable } = require('../utils/subscriptionUtils');
 const { resolveAppAccess } = require('../services/accessResolutionService');
 const { resolveAccessFeedback } = require('../utils/executionFeedbackResolver');
@@ -317,25 +317,37 @@ const requireAppEntitlement = async (req, res, next) => {
             });
         }
         
-        // Use unified access resolution service
+        // Fast path for read-only app entry/list/dashboard calls. The full access
+        // resolver performs extra metadata and instance lookups needed for
+        // execution/configuration, but GET requests only need app enablement here.
         let accessResult;
-        try {
-            accessResult = await resolveAppAccess({
-                user: userForAccess,
-                organization: orgForAccess,
-                appKey: req.appKey,
-                intent: intent
-            });
-        } catch (accessError) {
-            console.error(`[AppEntitlement] ❌ Error in resolveAppAccess:`, {
-                error: accessError.message,
-                stack: accessError.stack,
-                appKey: req.appKey,
-                organizationId: organizationId,
-                userEmail: req.user?.email,
-                intent: intent
-            });
-            throw accessError; // Re-throw to be caught by outer catch
+        if (intent === 'VIEW' && isAppEnabledForOrg(orgForAccess, req.appKey)) {
+            accessResult = {
+                allowed: true,
+                mode: 'ADMIN',
+                billable: false,
+                reason: 'ADMIN_VISIBILITY_ALLOWED',
+                roleKey: null
+            };
+        } else {
+            try {
+                accessResult = await resolveAppAccess({
+                    user: userForAccess,
+                    organization: orgForAccess,
+                    appKey: req.appKey,
+                    intent: intent
+                });
+            } catch (accessError) {
+                console.error(`[AppEntitlement] ❌ Error in resolveAppAccess:`, {
+                    error: accessError.message,
+                    stack: accessError.stack,
+                    appKey: req.appKey,
+                    organizationId: organizationId,
+                    userEmail: req.user?.email,
+                    intent: intent
+                });
+                throw accessError; // Re-throw to be caught by outer catch
+            }
         }
 
         // Check access result
