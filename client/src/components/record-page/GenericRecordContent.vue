@@ -1652,6 +1652,44 @@ async function refreshRecordActivity() {
   }
 }
 
+function buildRawActivityFromCreatedComment(comment) {
+  if (!comment || typeof comment !== 'object') return null;
+  const commentId = comment._id || comment.id;
+  if (!commentId) return null;
+
+  const author = comment.author || null;
+  const actorProfile = author && typeof author === 'object' ? author : null;
+
+  return {
+    id: `comment-${commentId}`,
+    type: 'comment',
+    actor: actorProfile ? getAuthorName(actorProfile) : (author || 'Unknown'),
+    actorProfile,
+    createdAt: comment.createdAt ? new Date(comment.createdAt).toISOString() : new Date().toISOString(),
+    payload: {
+      body: comment.content || '',
+      parentCommentId: comment.parentCommentId ? String(comment.parentCommentId) : null,
+      attachments: comment.attachments || [],
+      reactions: comment.reactions || [],
+      commentId: String(commentId)
+    },
+    meta: {
+      authorId: actorProfile?._id ? String(actorProfile._id) : null
+    }
+  };
+}
+
+function appendRawActivityEvent(event) {
+  if (!event?.id) return;
+  const eventCommentId = event.payload?.commentId ? String(event.payload.commentId) : null;
+  const withoutDuplicate = (activityRaw.value || []).filter((existing) => {
+    if (existing?.id === event.id) return false;
+    const existingCommentId = existing?.payload?.commentId ? String(existing.payload.commentId) : null;
+    return !eventCommentId || existingCommentId !== eventCommentId;
+  });
+  activityRaw.value = [...withoutDuplicate, event].sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+}
+
 const genericAdapter = computed(() => {
   if (!record.value || !moduleDefinition.value) return null;
   return createGenericRecordAdapter({
@@ -2272,12 +2310,13 @@ async function fetchRecord() {
 
 async function addComment(content, attachments, parentCommentId) {
   try {
-    await apiClient.post(`/modules/${props.moduleKey}/records/${props.recordId}/comments`, {
+    const response = await apiClient.post(`/modules/${props.moduleKey}/records/${props.recordId}/comments`, {
       content: typeof content === 'string' ? content : (content?.content || ''),
       parentCommentId: parentCommentId || null
     });
+    const createdComment = response?.data?.data ?? response?.data ?? null;
+    appendRawActivityEvent(buildRawActivityFromCreatedComment(createdComment));
     newCommentText.value = '';
-    await refreshRecordActivity();
   } catch (e) {
     console.error('Add comment error:', e);
   }
