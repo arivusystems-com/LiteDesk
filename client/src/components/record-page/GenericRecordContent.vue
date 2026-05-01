@@ -2276,7 +2276,8 @@ async function addComment(content, attachments, parentCommentId) {
       content: typeof content === 'string' ? content : (content?.content || ''),
       parentCommentId: parentCommentId || null
     });
-    await fetchRecord();
+    newCommentText.value = '';
+    await refreshRecordActivity();
   } catch (e) {
     console.error('Add comment error:', e);
   }
