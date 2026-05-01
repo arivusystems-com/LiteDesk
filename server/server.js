@@ -103,6 +103,16 @@ app.use(cors({
   credentials: true
 }));
 
+app.use((req, res, next) => {
+  const origin = req.get('Origin');
+  if (allowedOrigins.includes('*')) {
+    res.setHeader('Timing-Allow-Origin', '*');
+  } else if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Timing-Allow-Origin', origin);
+  }
+  next();
+});
+
 // Body Parsing
 app.use(express.json({ limit: '10mb' })); // Limit request size
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
