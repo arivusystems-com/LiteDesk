@@ -1073,6 +1073,7 @@ function caseContactOptionsForRecord(rec, allContacts) {
 const userLookupList = ref([]);
 const deleting = ref(false);
 const rightPaneRef = ref(null);
+let fetchRecordRunId = 0;
 
 const genericRecordContentRootRef = ref(null);
 const {
@@ -2196,15 +2197,19 @@ async function fetchRecord() {
     error.value = 'Invalid record';
     return;
   }
+  const runId = ++fetchRecordRunId;
   loading.value = true;
   error.value = null;
+  activityRaw.value = [];
+  emailThreads.value = [];
+  neighbors.value = { previousId: null, nextId: null };
   try {
-    const [recordRes, modulesRes, activityRes, neighborsRes] = await Promise.all([
+    const [recordRes, modulesRes] = await Promise.all([
       apiClient.get(`${recordCrudPathBase.value}/${props.recordId}`),
-      apiClient.get('/modules'),
-      apiClient.get(`/modules/${props.moduleKey}/records/${props.recordId}/activity`).catch(() => ({ success: true, data: [] })),
-      apiClient.get(`/modules/${props.moduleKey}/records/${props.recordId}/neighbors`).catch(() => ({ success: true, data: { previousId: null, nextId: null } }))
+      apiClient.get('/modules')
     ]);
+
+    if (runId !== fetchRecordRunId) return;
 
     if (recordRes?.success && recordRes?.data) {
       record.value = recordRes.data;
@@ -2218,93 +2223,149 @@ async function fetchRecord() {
 
     const modules = Array.isArray(modulesRes) ? modulesRes : modulesRes?.data ?? modulesRes?.data?.data ?? modulesRes?.modules ?? [];
     moduleDefinition.value = modules.find((m) => String(m?.key || '').toLowerCase() === props.moduleKey.toLowerCase()) || null;
-
-    if (activityRes?.success && Array.isArray(activityRes.data)) activityRaw.value = activityRes.data;
-    else activityRaw.value = [];
-
-    if (neighborsRes?.success && neighborsRes.data) neighbors.value = neighborsRes.data;
-    else neighbors.value = { previousId: null, nextId: null };
-
-    if (MODULES_WITH_EMAIL.has((props.moduleKey || '').toLowerCase()) && record.value?._id) {
-      try {
-        const threadsRes = await apiClient.get('/communications/threads', {
-          params: { moduleKey: props.moduleKey, recordId: record.value._id }
-        });
-        if (threadsRes?.success && Array.isArray(threadsRes?.data?.threads)) {
-          emailThreads.value = threadsRes.data.threads;
-        } else {
-          emailThreads.value = [];
-        }
-      } catch {
-        emailThreads.value = [];
-      }
-    } else {
-      emailThreads.value = [];
-    }
-
-    if ((props.moduleKey || '').toLowerCase() === 'people') {
-      try {
-        const orgRes = await apiClient.get('/v2/organization', { params: { limit: 500 } });
-        const data = orgRes?.data ?? orgRes;
-        peopleOrganizationList.value = Array.isArray(data) ? data : (data?.data ? (Array.isArray(data.data) ? data.data : []) : []);
-      } catch (e) {
-        console.error('Fetch people organization list error:', e);
-        peopleOrganizationList.value = [];
-      }
-    } else {
-      peopleOrganizationList.value = [];
-    }
-
-    if ((props.moduleKey || '').toLowerCase() === 'cases') {
-      try {
-        const [contactRes, caseOrgRes] = await Promise.all([
-          apiClient.get('/people', { params: { limit: 500, sortBy: 'firstName', sortOrder: 'asc' } }),
-          apiClient.get('/v2/organization', { params: { limit: 500 } })
-        ]);
-        const contactRows = Array.isArray(contactRes?.data) ? contactRes.data : (contactRes?.data?.data && Array.isArray(contactRes.data.data) ? contactRes.data.data : []);
-        caseContactLookupList.value = contactRows.map((p) => {
-          const id = p?._id ?? p?.id;
-          const name = [p?.first_name, p?.last_name].filter(Boolean).join(' ').trim()
-            || p?.name
-            || p?.email
-            || (id != null ? String(id) : '—');
-          return { _id: id, name, ...p };
-        }).filter((p) => Boolean(p._id));
-        const orgData = caseOrgRes?.data ?? caseOrgRes;
-        const orgRows = Array.isArray(orgData) ? orgData : (orgData?.data && Array.isArray(orgData.data) ? orgData.data : []);
-        caseOrganizationLookupList.value = orgRows.map((o) => {
-          const id = o?._id ?? o?.id;
-          return { _id: id, name: o?.name ?? (id != null ? String(id) : '—'), ...o };
-        }).filter((o) => Boolean(o._id));
-      } catch (e) {
-        console.error('Fetch case contact/organization lists error:', e);
-        caseContactLookupList.value = [];
-        caseOrganizationLookupList.value = [];
-      }
-    } else {
-      caseContactLookupList.value = [];
-      caseOrganizationLookupList.value = [];
-    }
-
-    try {
-      const usersRes = await apiClient.get('/users/list', { params: { limit: 500 } });
-      const usersData = usersRes?.data ?? usersRes;
-      const users = Array.isArray(usersData)
-        ? usersData
-        : (Array.isArray(usersData?.data) ? usersData.data : []);
-      userLookupList.value = users.map((u) => ({
-        _id: u?._id || u?.id,
-        name: [u?.firstName, u?.lastName].filter(Boolean).join(' ').trim() || u?.username || u?.email || (u?._id || u?.id || '')
-      })).filter((u) => Boolean(u._id));
-    } catch (userErr) {
-      console.error('Fetch user lookup list error:', userErr);
-      userLookupList.value = [];
-    }
   } catch (e) {
+    if (runId !== fetchRecordRunId) return;
     error.value = e?.message || 'Failed to load record';
     record.value = null;
   } finally {
-    loading.value = false;
+    if (runId === fetchRecordRunId) {
+      loading.value = false;
+      if (record.value?._id) {
+        loadDeferredRecordData(runId, record.value).catch((deferredErr) => {
+          console.warn('Deferred record data load failed:', deferredErr);
+        });
+      }
+    }
+  }
+}
+
+async function loadDeferredRecordData(runId, loadedRecord) {
+  const isCurrentRun = () => runId === fetchRecordRunId && String(record.value?._id || '') === String(loadedRecord?._id || '');
+  const lowerModuleKey = (props.moduleKey || '').toLowerCase();
+  const deferredLoads = [
+    loadActivityForRecord(isCurrentRun),
+    loadNeighborsForRecord(isCurrentRun),
+    loadEmailThreadsForRecord(loadedRecord, isCurrentRun),
+    loadPeopleOrganizationLookup(lowerModuleKey, isCurrentRun),
+    loadCaseLookups(lowerModuleKey, isCurrentRun),
+    loadUserLookup(isCurrentRun)
+  ];
+
+  await Promise.allSettled(deferredLoads);
+}
+
+async function loadActivityForRecord(isCurrentRun) {
+  try {
+    const activityRes = await apiClient.get(`/modules/${props.moduleKey}/records/${props.recordId}/activity`);
+    if (!isCurrentRun()) return;
+    activityRaw.value = activityRes?.success && Array.isArray(activityRes.data) ? activityRes.data : [];
+  } catch {
+    if (isCurrentRun()) activityRaw.value = [];
+  }
+}
+
+async function loadNeighborsForRecord(isCurrentRun) {
+  try {
+    const neighborsRes = await apiClient.get(`/modules/${props.moduleKey}/records/${props.recordId}/neighbors`);
+    if (!isCurrentRun()) return;
+    neighbors.value = neighborsRes?.success && neighborsRes.data
+      ? neighborsRes.data
+      : { previousId: null, nextId: null };
+  } catch {
+    if (isCurrentRun()) neighbors.value = { previousId: null, nextId: null };
+  }
+}
+
+async function loadEmailThreadsForRecord(loadedRecord, isCurrentRun) {
+  if (!MODULES_WITH_EMAIL.has((props.moduleKey || '').toLowerCase()) || !loadedRecord?._id) {
+    if (isCurrentRun()) emailThreads.value = [];
+    return;
+  }
+
+  try {
+    const threadsRes = await apiClient.get('/communications/threads', {
+      params: { moduleKey: props.moduleKey, recordId: loadedRecord._id }
+    });
+    if (!isCurrentRun()) return;
+    emailThreads.value = threadsRes?.success && Array.isArray(threadsRes?.data?.threads)
+      ? threadsRes.data.threads
+      : [];
+  } catch {
+    if (isCurrentRun()) emailThreads.value = [];
+  }
+}
+
+async function loadPeopleOrganizationLookup(lowerModuleKey, isCurrentRun) {
+  if (lowerModuleKey !== 'people') {
+    if (isCurrentRun()) peopleOrganizationList.value = [];
+    return;
+  }
+
+  try {
+    const orgRes = await apiClient.get('/v2/organization', { params: { limit: 500 } });
+    if (!isCurrentRun()) return;
+    const data = orgRes?.data ?? orgRes;
+    peopleOrganizationList.value = Array.isArray(data) ? data : (data?.data ? (Array.isArray(data.data) ? data.data : []) : []);
+  } catch (e) {
+    console.error('Fetch people organization list error:', e);
+    if (isCurrentRun()) peopleOrganizationList.value = [];
+  }
+}
+
+async function loadCaseLookups(lowerModuleKey, isCurrentRun) {
+  if (lowerModuleKey !== 'cases') {
+    if (isCurrentRun()) {
+      caseContactLookupList.value = [];
+      caseOrganizationLookupList.value = [];
+    }
+    return;
+  }
+
+  try {
+    const [contactRes, caseOrgRes] = await Promise.all([
+      apiClient.get('/people', { params: { limit: 500, sortBy: 'firstName', sortOrder: 'asc' } }),
+      apiClient.get('/v2/organization', { params: { limit: 500 } })
+    ]);
+    if (!isCurrentRun()) return;
+    const contactRows = Array.isArray(contactRes?.data) ? contactRes.data : (contactRes?.data?.data && Array.isArray(contactRes.data.data) ? contactRes.data.data : []);
+    caseContactLookupList.value = contactRows.map((p) => {
+      const id = p?._id ?? p?.id;
+      const name = [p?.first_name, p?.last_name].filter(Boolean).join(' ').trim()
+        || p?.name
+        || p?.email
+        || (id != null ? String(id) : '—');
+      return { _id: id, name, ...p };
+    }).filter((p) => Boolean(p._id));
+    const orgData = caseOrgRes?.data ?? caseOrgRes;
+    const orgRows = Array.isArray(orgData) ? orgData : (orgData?.data && Array.isArray(orgData.data) ? orgData.data : []);
+    caseOrganizationLookupList.value = orgRows.map((o) => {
+      const id = o?._id ?? o?.id;
+      return { _id: id, name: o?.name ?? (id != null ? String(id) : '—'), ...o };
+    }).filter((o) => Boolean(o._id));
+  } catch (e) {
+    console.error('Fetch case contact/organization lists error:', e);
+    if (isCurrentRun()) {
+      caseContactLookupList.value = [];
+      caseOrganizationLookupList.value = [];
+    }
+  }
+}
+
+async function loadUserLookup(isCurrentRun) {
+  try {
+    const usersRes = await apiClient.get('/users/list', { params: { limit: 500 } });
+    if (!isCurrentRun()) return;
+    const usersData = usersRes?.data ?? usersRes;
+    const users = Array.isArray(usersData)
+      ? usersData
+      : (Array.isArray(usersData?.data) ? usersData.data : []);
+    userLookupList.value = users.map((u) => ({
+      _id: u?._id || u?.id,
+      name: [u?.firstName, u?.lastName].filter(Boolean).join(' ').trim() || u?.username || u?.email || (u?._id || u?.id || '')
+    })).filter((u) => Boolean(u._id));
+  } catch (userErr) {
+    console.error('Fetch user lookup list error:', userErr);
+    if (isCurrentRun()) userLookupList.value = [];
   }
 }
 
