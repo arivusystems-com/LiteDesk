@@ -13,8 +13,6 @@ const { resolvePeopleAppContext } = require('../utils/peopleAppContextResolver')
 const { resolveActivities, normalizeActivity } = require('../utils/activityResolver');
 const People = require('../models/People');
 const Organization = require('../models/Organization');
-const { APP_KEYS } = require('../constants/appKeys');
-const appRegistry = require('../constants/appRegistry');
 const { performance } = require('perf_hooks');
 
 const formatServerTiming = (timings) => {
@@ -65,11 +63,8 @@ exports.getEntityActivities = async (req, res) => {
         organizationId: req.user.organizationId,
         isTenant: false
       }).select('activityLogs').lean();
-    const orgQuery = req.organization
-      ? Promise.resolve(req.organization)
-      : Organization.findById(req.user.organizationId).select('enabledApps').lean();
-    const [entityRecord, organization] = await Promise.all([entityQuery, orgQuery]);
-    timings.push({ name: 'db', duration: performance.now() - dbStartedAt, description: 'Activity entity and app lookup' });
+    const entityRecord = await entityQuery;
+    timings.push({ name: 'db', duration: performance.now() - dbStartedAt, description: 'Activity entity lookup' });
 
     if (!entityRecord) {
       return res.status(404).json({
@@ -81,8 +76,11 @@ exports.getEntityActivities = async (req, res) => {
 
     // Get enabled apps for the organization
     const appStartedAt = performance.now();
-    let enabledApps = [];
-    if (req.user?.organizationId) {
+    const userAllowedApps = Array.isArray(req.user?.allowedApps) ? req.user.allowedApps : [];
+    let enabledApps = userAllowedApps.length ? userAllowedApps : [];
+
+    if (!enabledApps.length && req.user?.organizationId) {
+      const organization = req.organization || await Organization.findById(req.user.organizationId).select('enabledApps').lean();
       if (organization?.enabledApps) {
         enabledApps = organization.enabledApps.map(app => {
           return typeof app === 'object' && app.appKey ? app.appKey : app;
@@ -91,8 +89,8 @@ exports.getEntityActivities = async (req, res) => {
     }
 
     // If no enabledApps found, fall back to user's allowedApps
-    if (!enabledApps.length && req.user?.allowedApps) {
-      enabledApps = Array.isArray(req.user.allowedApps) ? req.user.allowedApps : [];
+    if (!enabledApps.length && userAllowedApps.length) {
+      enabledApps = userAllowedApps;
     }
     timings.push({ name: 'app_context_source', duration: performance.now() - appStartedAt, description: 'Enabled app lookup' });
 
