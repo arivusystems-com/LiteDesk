@@ -147,18 +147,19 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue';
 import { PaperClipIcon, HandThumbUpIcon, HandThumbDownIcon } from '@heroicons/vue/24/outline';
 
 const feedEl = ref(null);
 
-function scrollToBottom() {
+function scrollToBottom(options = {}) {
   const el = feedEl.value;
   if (!el) return;
-  el.scrollTop = el.scrollHeight;
+  const behavior = options.behavior || 'auto';
+  el.scrollTo({ top: el.scrollHeight, behavior });
   // Fallback: scroll last item into view (more resilient with nested scroll containers)
   const lastItem = el.querySelector('.record-activity-timeline__item:last-of-type');
-  if (lastItem) lastItem.scrollIntoView({ block: 'end', behavior: 'auto' });
+  if (lastItem) lastItem.scrollIntoView({ block: 'end', behavior });
 }
 
 defineExpose({ feedEl, scrollToBottom });
@@ -236,6 +237,28 @@ const props = defineProps({
 const emit = defineEmits(['comment', 'like', 'dislike', 'reply']);
 
 const commentText = ref('');
+
+const getEventKey = (event) => String(
+  event?.id
+  ?? event?._id
+  ?? event?.payload?.commentId
+  ?? `${event?.type || ''}:${event?.createdAt || ''}`
+);
+
+watch(() => props.events, async (events, previousEvents = []) => {
+  const current = Array.isArray(events) ? events : [];
+  const previous = Array.isArray(previousEvents) ? previousEvents : [];
+  if (current.length <= previous.length) return;
+
+  const newestEvent = current[current.length - 1];
+  if (newestEvent?.type !== 'comment') return;
+
+  const newestKey = getEventKey(newestEvent);
+  if (previous.some((event) => getEventKey(event) === newestKey)) return;
+
+  await nextTick();
+  requestAnimationFrame(() => scrollToBottom({ behavior: 'smooth' }));
+});
 
 const handleSubmitComment = (payload) => {
   const content = typeof payload === 'string'

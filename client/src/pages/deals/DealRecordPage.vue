@@ -2889,8 +2889,9 @@ const handleAddComment = async (payload) => {
   if (!content) return;
   await addComment(content, [], isThreadViewActive.value ? activeThreadRootCommentId.value : null);
   newCommentText.value = '';
+  await nextTick();
   if (activityTimelineRef.value?.scrollToBottom) {
-    activityTimelineRef.value.scrollToBottom();
+    activityTimelineRef.value.scrollToBottom({ behavior: 'smooth' });
   }
 };
 
