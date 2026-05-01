@@ -18,6 +18,7 @@
 
 const People = require('../models/People');
 const RelationshipInstance = require('../models/RelationshipInstance');
+const mongoose = require('mongoose');
 const { applyProjectionFilter } = require('../utils/appProjectionQuery');
 const { getProjection } = require('../utils/moduleProjectionResolver');
 const { getSalesParticipationValues } = require('../utils/getSalesParticipationValues');
@@ -698,14 +699,66 @@ exports.getById = async (req, res) => {
   const timings = [];
   try {
     const { flattenCustomFieldsForResponse } = require('../utils/customFieldsExtractor');
+    if (!mongoose.Types.ObjectId.isValid(req.params.id) || !mongoose.Types.ObjectId.isValid(req.user.organizationId)) {
+      return res.status(400).json({ success: false, message: 'Invalid record id' });
+    }
+
     const dbStartedAt = performance.now();
-    const record = await People.findOne({ _id: req.params.id, organizationId: req.user.organizationId, deletedAt: null })
-      .select('-activityLogs')
-      .populate('organization', 'name industry status email phone website')
-      .populate('assignedTo', 'firstName lastName email avatar')
-      .populate('createdBy', 'firstName lastName email avatar username')
-      .populate('lead_owner', 'firstName lastName email avatar username')
-      .lean();
+    const [record] = await People.aggregate([
+      {
+        $match: {
+          _id: new mongoose.Types.ObjectId(req.params.id),
+          organizationId: new mongoose.Types.ObjectId(req.user.organizationId),
+          deletedAt: null
+        }
+      },
+      { $project: { activityLogs: 0 } },
+      {
+        $lookup: {
+          from: 'organizations',
+          localField: 'organization',
+          foreignField: '_id',
+          as: 'organizationDoc',
+          pipeline: [{ $project: { name: 1, industry: 1, status: 1, email: 1, phone: 1, website: 1 } }]
+        }
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'assignedTo',
+          foreignField: '_id',
+          as: 'assignedToDoc',
+          pipeline: [{ $project: { firstName: 1, lastName: 1, email: 1, avatar: 1 } }]
+        }
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'createdBy',
+          foreignField: '_id',
+          as: 'createdByDoc',
+          pipeline: [{ $project: { firstName: 1, lastName: 1, email: 1, avatar: 1, username: 1 } }]
+        }
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'lead_owner',
+          foreignField: '_id',
+          as: 'leadOwnerDoc',
+          pipeline: [{ $project: { firstName: 1, lastName: 1, email: 1, avatar: 1, username: 1 } }]
+        }
+      },
+      {
+        $set: {
+          organization: { $ifNull: [{ $first: '$organizationDoc' }, null] },
+          assignedTo: { $ifNull: [{ $first: '$assignedToDoc' }, null] },
+          createdBy: { $ifNull: [{ $first: '$createdByDoc' }, null] },
+          lead_owner: { $ifNull: [{ $first: '$leadOwnerDoc' }, null] }
+        }
+      },
+      { $project: { organizationDoc: 0, assignedToDoc: 0, createdByDoc: 0, leadOwnerDoc: 0 } }
+    ]);
     timings.push({ name: 'db', duration: performance.now() - dbStartedAt, description: 'People detail lookup' });
     if (!record) return res.status(404).json({ success: false, message: 'Not found' });
     // Backfill participations on read and flatten for API response
