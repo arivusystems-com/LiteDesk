@@ -111,7 +111,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, computed } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import apiClient from '@/utils/apiClient';
 import { useAuthStore } from '@/stores/authRegistry';
@@ -186,6 +186,8 @@ const threads = ref([]);
 const blocked = ref(false);
 const blockedReason = ref(null);
 const appContext = ref(null);
+const inFlightSignature = ref(null);
+const lastLoadedSignature = ref(null);
 
 // Map communicationId -> thread for collapse logic
 const commIdToThread = computed(() => {
@@ -238,7 +240,24 @@ const mergedActivities = computed(() => {
 
 // Methods
 const loadActivities = async () => {
+  const effectiveAppKey = props.appKey || route.query.appKey || null;
+  const signature = JSON.stringify({
+    entityType: (props.entityType || '').toLowerCase(),
+    entityId: props.entityId || '',
+    appKey: effectiveAppKey || '',
+    routePath: route.path,
+    routeName: route.name || ''
+  });
+
+  if (inFlightSignature.value === signature) {
+    return;
+  }
+  if (lastLoadedSignature.value === signature && activities.value.length > 0) {
+    return;
+  }
+
   try {
+    inFlightSignature.value = signature;
     loading.value = true;
     error.value = null;
     blocked.value = false;
@@ -264,7 +283,7 @@ const loadActivities = async () => {
         params: {
           routePath: route.path,
           routeName: route.name,
-          appKey: props.appKey || route.query.appKey || null
+          appKey: effectiveAppKey
         }
       }),
       (() => {
@@ -296,10 +315,14 @@ const loadActivities = async () => {
     } else {
       threads.value = [];
     }
+    lastLoadedSignature.value = signature;
   } catch (err) {
     console.error('Error loading activities:', err);
     error.value = err.message || 'Failed to load activities';
   } finally {
+    if (inFlightSignature.value === signature) {
+      inFlightSignature.value = null;
+    }
     loading.value = false;
   }
 };
@@ -370,25 +393,16 @@ const formatDate = (dateValue) => {
   }
 };
 
-// Watch for prop changes
-watch(() => props.entityId, () => {
-  if (props.entityId) {
-    loadActivities();
-  }
-});
-
-watch(() => props.appKey, () => {
-  if (props.entityId) {
-    loadActivities();
-  }
-});
-
-// Lifecycle
-onMounted(() => {
-  if (props.entityId) {
-    loadActivities();
-  }
-});
+// Watch the request identity once, including initial load, to avoid mount/watch double-fetches.
+watch(
+  () => [props.entityType, props.entityId, props.appKey || route.query.appKey || null],
+  () => {
+    if (props.entityId) {
+      loadActivities();
+    }
+  },
+  { immediate: true }
+);
 </script>
 
 <style scoped>
@@ -396,4 +410,3 @@ onMounted(() => {
   /* Component-specific styles if needed */
 }
 </style>
-
