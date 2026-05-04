@@ -16,14 +16,14 @@ const cors = require('cors');
 
 const app = express();
 
-if (process.env.NODE_ENV === 'production') {
-  const trust = process.env.EXPRESS_TRUST_PROXY;
-  if (trust === 'false') {
-    // explicit opt-out
-  } else {
-    const n = trust !== undefined && trust !== 'true' ? Number(trust) : 1;
-    app.set('trust proxy', Number.isNaN(n) ? 1 : n);
-  }
+const trust = process.env.EXPRESS_TRUST_PROXY;
+if (trust === 'false') {
+  console.warn('⚠️  Express trust proxy disabled by EXPRESS_TRUST_PROXY=false');
+} else {
+  const n = trust !== undefined && trust !== 'true' ? Number(trust) : 1;
+  const trustProxyValue = Number.isNaN(n) ? 1 : n;
+  app.set('trust proxy', trustProxyValue);
+  console.log(`🌐 Express trust proxy: ${trustProxyValue}`);
 }
 
 // Server instance (will be set when server starts)
@@ -116,6 +116,17 @@ app.use((req, res, next) => {
 // Body Parsing
 app.use(express.json({ limit: '10mb' })); // Limit request size
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+if (!SECURITY_DISABLED && process.env.RATE_LIMIT_IP_DEBUG === 'true') {
+    app.use('/api', (req, res, next) => {
+        console.log('RATE LIMIT IP DEBUG:', req.ip, req.originalUrl, {
+            xForwardedFor: req.headers['x-forwarded-for'] || null,
+            forwarded: req.headers.forwarded || null,
+            remoteAddress: req.socket?.remoteAddress || null
+        });
+        next();
+    });
+}
 
 // General API Rate Limiting (skip if security disabled)
 if (!SECURITY_DISABLED) {
@@ -481,6 +492,14 @@ const gracefulShutdown = async (signal) => {
     console.log('[server] Email queue closed');
   } catch (err) {
     console.error('[server] Error closing email queue:', err.message);
+  }
+
+  try {
+    const { closeRedisClient } = require('./lib/redisClient');
+    await closeRedisClient();
+    console.log('[server] Redis client closed');
+  } catch (err) {
+    console.error('[server] Error closing Redis client:', err.message);
   }
   
   // Close server

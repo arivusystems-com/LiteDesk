@@ -141,7 +141,7 @@ const handleStorageEvent = (e) => {
     warning('You were signed out because your session changed in another tab.', 6000);
     authStore.logout();
     resetTabsStateFromModule();
-    router.push('/');
+    router.replace('/login');
     return;
   }
 
@@ -152,7 +152,7 @@ const handleStorageEvent = (e) => {
       warning('You were signed out because you logged into a different account in another tab.', 6500);
       authStore.logout();
       resetTabsStateFromModule();
-      router.push('/');
+      router.replace('/login');
     }
   } catch (err) {
     console.warn('Failed to parse localStorage user in storage event:', err);
@@ -160,7 +160,7 @@ const handleStorageEvent = (e) => {
     warning('You were signed out due to a session change in another tab.', 6000);
     authStore.logout();
     resetTabsStateFromModule();
-    router.push('/');
+    router.replace('/login');
   }
 };
 

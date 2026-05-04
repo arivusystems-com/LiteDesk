@@ -372,7 +372,7 @@ const portalAvatarUrl = computed(() => authStore.user?.avatar || DEFAULT_AVATAR)
 const handleLogout = () => {
   showUserMenu.value = false;
   authStore.logout();
-  router.push('/login');
+  router.replace('/login');
 };
 
 // Phase 2D: Logo source (same as Nav.vue)
@@ -385,4 +385,3 @@ const logoSrc = computed(() => {
 });
 
 </script>
-

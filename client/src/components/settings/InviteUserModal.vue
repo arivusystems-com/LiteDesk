@@ -103,6 +103,26 @@
               </p>
             </div>
 
+            <!-- Organization Role Selection -->
+            <div v-if="availableRoles.length > 0">
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Role *
+              </label>
+              <select
+                v-model="form.roleId"
+                required
+                class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
+              >
+                <option value="">Select a role</option>
+                <option v-for="role in availableRoles" :key="role._id" :value="role._id">
+                  {{ role.name }} - {{ role.description }}
+                </option>
+              </select>
+              <p v-if="validationErrors.roleId" class="text-xs text-red-600 dark:text-red-400 mt-1">
+                {{ validationErrors.roleId }}
+              </p>
+            </div>
+
             <!-- App Access Selection -->
             <div v-if="form.userType">
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -187,22 +207,6 @@
               <p v-if="validationErrors.appAccess" class="text-xs text-red-600 dark:text-red-400 mt-1">
                 {{ validationErrors.appAccess }}
               </p>
-            </div>
-
-            <!-- Legacy Role Selection (for backward compatibility) -->
-            <div v-if="!form.userType && availableRoles.length > 0">
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Role *
-              </label>
-              <select
-                v-model="form.roleId"
-                class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
-              >
-                <option value="">Select a role</option>
-                <option v-for="role in availableRoles" :key="role._id" :value="role._id">
-                  {{ role.name }} - {{ role.description }}
-                </option>
-              </select>
             </div>
 
             <!-- Password Option -->
@@ -330,6 +334,7 @@ const validationErrors = ref({});
 
 // App display names
 const appDisplayNames = {
+  SALES: 'SALES',
   CRM: 'CRM',
   AUDIT: 'Audit',
   PORTAL: 'Portal'
@@ -337,6 +342,11 @@ const appDisplayNames = {
 
 // Role display names
 const roleDisplayNames = {
+  SALES: {
+    ADMIN: 'Admin',
+    MANAGER: 'Manager',
+    USER: 'User'
+  },
   CRM: {
     ADMIN: 'Admin',
     MANAGER: 'Manager',
@@ -371,6 +381,10 @@ const isFormValid = computed(() => {
     return false;
   }
 
+  if (!form.value.roleId) {
+    return false;
+  }
+
   // If userType is selected, require appAccess
   if (form.value.userType) {
     if (selectedApps.value.length === 0) {
@@ -382,11 +396,6 @@ const isFormValid = computed(() => {
       if (app && !isAppEnabled(app)) {
         return false;
       }
-    }
-  } else {
-    // Legacy: require roleId
-    if (!form.value.roleId) {
-      return false;
     }
   }
 
@@ -494,6 +503,11 @@ const getRoleDisplayName = (appKey, roleKey) => {
 const validateForm = () => {
   validationErrors.value = {};
 
+  if (!form.value.roleId) {
+    validationErrors.value.roleId = 'Role is required';
+    return false;
+  }
+
   // If using new unified format (userType selected)
   if (form.value.userType) {
     // Validate at least one app is selected
@@ -518,12 +532,6 @@ const validateForm = () => {
         validationErrors.value.appAccess = `${getAppDisplayName(appKey)} does not support ${form.value.userType} users`;
         return false;
       }
-    }
-  } else {
-    // Legacy mode: validate roleId is provided
-    if (!form.value.roleId) {
-      validationErrors.value.roleId = 'Role is required';
-      return false;
     }
   }
 
@@ -550,6 +558,7 @@ const handleSubmit = async () => {
         firstName: form.value.firstName,
         lastName: form.value.lastName,
         email: form.value.email,
+        roleId: form.value.roleId,
         userType: form.value.userType,
         appAccess: selectedApps.value.map(appKey => ({
           appKey: appKey,

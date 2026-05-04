@@ -555,7 +555,7 @@ if (import.meta.env.DEV) {
 // Helper function to determine the correct dashboard based on user's app access
 const getDefaultRoute = (authStore) => {
   if (!authStore.isAuthenticated) {
-    return { name: 'landing' };
+    return { name: 'login' };
   }
   
   // Phase 1G: Default to platform landing
@@ -574,6 +574,12 @@ router.beforeEach(async (to, from, next) => {
     allowedApps: authStore.user?.allowedApps
   })
 
+  if (to.name === 'landing' && !authStore.isAuthenticated) {
+    logNavDebug('Redirecting: Unauthenticated landing to login')
+    next({ name: 'login' })
+    return
+  }
+
   // Check authentication
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     logNavDebug('Blocked: Authentication required')
@@ -584,7 +590,7 @@ router.beforeEach(async (to, from, next) => {
         sessionStorage.setItem('litedesk_redirect_after_login', to.fullPath || to.path)
       } catch (_) {}
     }
-    next({ name: 'landing' })
+    next({ name: 'login' })
     return
   }
 
@@ -659,7 +665,7 @@ router.beforeEach(async (to, from, next) => {
   if (to.name === 'platform-home') {
     if (!authStore.isAuthenticated) {
       logNavDebug('Blocked: Authentication required for platform landing')
-      next({ name: 'landing' })
+      next({ name: 'login' })
       return
     }
     
@@ -668,7 +674,7 @@ router.beforeEach(async (to, from, next) => {
     if (org && org.subscription?.status === 'terminated') {
       logNavDebug('Blocked: Instance is terminated')
       alert('This instance has been terminated. Please contact support.')
-      next({ name: 'landing' })
+      next({ name: 'login' })
       return
     }
     
