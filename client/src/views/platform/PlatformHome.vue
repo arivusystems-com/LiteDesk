@@ -187,6 +187,10 @@ const fetchTasks = async () => {
 // Fetch Recent Activity (Events)
 const fetchRecentActivity = async () => {
   try {
+    if (!authStore.can('events', 'view')) {
+      return;
+    }
+
     // Fetch recent events (last 30 days, cross-app)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);

@@ -194,6 +194,7 @@ export const useAuthStore = defineStore('auth', {
                 isOwner: userData.isOwner,
                 permissions: userData.permissions,
                 token: userData.token,
+                appAccess: userData.appAccess,
                 allowedApps: allowedApps
             };
             

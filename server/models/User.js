@@ -80,6 +80,14 @@ const UserSchema = new mongoose.Schema({
             viewAll: { type: Boolean, default: true },
             exportData: { type: Boolean, default: false }
         },
+        people: {
+            view: { type: Boolean, default: true },
+            create: { type: Boolean, default: true },
+            edit: { type: Boolean, default: true },
+            delete: { type: Boolean, default: false },
+            viewAll: { type: Boolean, default: true },
+            exportData: { type: Boolean, default: false }
+        },
         deals: {
             view: { type: Boolean, default: true },
             create: { type: Boolean, default: true },
@@ -109,6 +117,36 @@ const UserSchema = new mongoose.Schema({
             edit: { type: Boolean, default: true },
             delete: { type: Boolean, default: true },
             viewAll: { type: Boolean, default: true }
+        },
+        events: {
+            view: { type: Boolean, default: true },
+            create: { type: Boolean, default: true },
+            edit: { type: Boolean, default: true },
+            delete: { type: Boolean, default: false },
+            viewAll: { type: Boolean, default: true }
+        },
+        forms: {
+            view: { type: Boolean, default: true },
+            create: { type: Boolean, default: true },
+            edit: { type: Boolean, default: true },
+            delete: { type: Boolean, default: false },
+            viewAll: { type: Boolean, default: true },
+            exportData: { type: Boolean, default: false }
+        },
+        items: {
+            view: { type: Boolean, default: true },
+            create: { type: Boolean, default: true },
+            edit: { type: Boolean, default: true },
+            delete: { type: Boolean, default: false },
+            viewAll: { type: Boolean, default: true },
+            exportData: { type: Boolean, default: false }
+        },
+        cases: {
+            view: { type: Boolean, default: false },
+            create: { type: Boolean, default: false },
+            edit: { type: Boolean, default: false },
+            delete: { type: Boolean, default: false },
+            viewAll: { type: Boolean, default: false }
         },
         imports: {
             view: { type: Boolean, default: true },
@@ -211,6 +249,10 @@ UserSchema.methods.setPermissionsByRole = function(role) {
             organizations: { view: true, create: true, edit: true, delete: true, viewAll: true, exportData: true },
             projects: { view: true, create: true, edit: true, delete: true, viewAll: true },
             tasks: { view: true, create: true, edit: true, delete: true, viewAll: true },
+            events: { view: true, create: true, edit: true, delete: true, viewAll: true },
+            forms: { view: true, create: true, edit: true, delete: true, viewAll: true, exportData: true },
+            items: { view: true, create: true, edit: true, delete: true, viewAll: true, exportData: true },
+            cases: { view: true, create: true, edit: true, delete: true, viewAll: true },
             imports: { view: true, create: true, delete: true },
             settings: { manageUsers: true, manageBilling: true, manageIntegrations: true, customizeFields: true },
             reports: { viewStandard: true, viewCustom: true, createCustom: true, exportReports: true }
@@ -221,6 +263,10 @@ UserSchema.methods.setPermissionsByRole = function(role) {
             organizations: { view: true, create: true, edit: true, delete: false, viewAll: true, exportData: true },
             projects: { view: true, create: true, edit: true, delete: true, viewAll: true },
             tasks: { view: true, create: true, edit: true, delete: true, viewAll: true },
+            events: { view: true, create: true, edit: true, delete: true, viewAll: true },
+            forms: { view: true, create: true, edit: true, delete: true, viewAll: true, exportData: true },
+            items: { view: true, create: true, edit: true, delete: true, viewAll: true, exportData: true },
+            cases: { view: true, create: true, edit: true, delete: true, viewAll: true },
             imports: { view: true, create: true, delete: true },
             settings: { manageUsers: true, manageBilling: false, manageIntegrations: true, customizeFields: true },
             reports: { viewStandard: true, viewCustom: true, createCustom: true, exportReports: true }
@@ -231,6 +277,10 @@ UserSchema.methods.setPermissionsByRole = function(role) {
             organizations: { view: true, create: true, edit: true, delete: false, viewAll: false, exportData: false },
             projects: { view: true, create: true, edit: true, delete: false, viewAll: true },
             tasks: { view: true, create: true, edit: true, delete: true, viewAll: true },
+            events: { view: true, create: true, edit: true, delete: false, viewAll: true },
+            forms: { view: true, create: true, edit: true, delete: false, viewAll: true, exportData: true },
+            items: { view: true, create: true, edit: true, delete: false, viewAll: true, exportData: true },
+            cases: { view: true, create: true, edit: true, delete: false, viewAll: true },
             imports: { view: true, create: true, delete: false },
             settings: { manageUsers: false, manageBilling: false, manageIntegrations: false, customizeFields: false },
             reports: { viewStandard: true, viewCustom: true, createCustom: false, exportReports: false }
@@ -241,6 +291,10 @@ UserSchema.methods.setPermissionsByRole = function(role) {
             organizations: { view: true, create: false, edit: false, delete: false, viewAll: false, exportData: false },
             projects: { view: true, create: true, edit: true, delete: false, viewAll: false },
             tasks: { view: true, create: true, edit: true, delete: true, viewAll: false },
+            events: { view: true, create: true, edit: true, delete: false, viewAll: false },
+            forms: { view: true, create: true, edit: true, delete: false, viewAll: false, exportData: false },
+            items: { view: true, create: true, edit: true, delete: false, viewAll: false, exportData: false },
+            cases: { view: true, create: true, edit: true, delete: false, viewAll: false },
             imports: { view: true, create: false, delete: false },
             settings: { manageUsers: false, manageBilling: false, manageIntegrations: false, customizeFields: false },
             reports: { viewStandard: true, viewCustom: false, createCustom: false, exportReports: false }
@@ -251,6 +305,10 @@ UserSchema.methods.setPermissionsByRole = function(role) {
             organizations: { view: true, create: false, edit: false, delete: false, viewAll: false, exportData: false },
             projects: { view: true, create: false, edit: false, delete: false, viewAll: false },
             tasks: { view: true, create: false, edit: false, delete: false, viewAll: false },
+            events: { view: true, create: false, edit: false, delete: false, viewAll: false },
+            forms: { view: true, create: false, edit: false, delete: false, viewAll: false, exportData: false },
+            items: { view: true, create: false, edit: false, delete: false, viewAll: false, exportData: false },
+            cases: { view: true, create: false, edit: false, delete: false, viewAll: false },
             imports: { view: true, create: false, delete: false },
             settings: { manageUsers: false, manageBilling: false, manageIntegrations: false, customizeFields: false },
             reports: { viewStandard: false, viewCustom: false, createCustom: false, exportReports: false }
@@ -258,6 +316,68 @@ UserSchema.methods.setPermissionsByRole = function(role) {
     };
     
     this.permissions = rolePermissions[role] || rolePermissions.user;
+    if (this.permissions.contacts) {
+        const contactsPermissions = this.permissions.contacts.toObject
+            ? this.permissions.contacts.toObject()
+            : { ...this.permissions.contacts };
+        this.set('permissions.people', contactsPermissions);
+    }
+    return this.permissions;
+};
+
+UserSchema.methods.setPermissionsByAppAccess = function(appAccess = []) {
+    const activeAccess = Array.isArray(appAccess)
+        ? appAccess.filter((access) => String(access?.status || 'ACTIVE').toUpperCase() === 'ACTIVE')
+        : [];
+
+    const salesAccess = activeAccess.find((access) => String(access?.appKey || '').toUpperCase() === 'SALES');
+    const salesRoleMap = {
+        ADMIN: 'admin',
+        MANAGER: 'manager',
+        USER: 'user',
+        VIEWER: 'viewer'
+    };
+    const baseRole = salesRoleMap[String(salesAccess?.roleKey || '').toUpperCase()] || 'user';
+    const permissions = salesAccess
+        ? this.setPermissionsByRole(baseRole)
+        : {
+            contacts: { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false },
+            deals: { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false },
+            organizations: { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false },
+            projects: { view: false, create: false, edit: false, delete: false, viewAll: false },
+            tasks: { view: false, create: false, edit: false, delete: false, viewAll: false },
+            events: { view: false, create: false, edit: false, delete: false, viewAll: false },
+            forms: { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false },
+            items: { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false },
+            cases: { view: false, create: false, edit: false, delete: false, viewAll: false },
+            imports: { view: false, create: false, delete: false },
+            settings: { manageUsers: false, manageBilling: false, manageIntegrations: false, customizeFields: false },
+            reports: { viewStandard: false, viewCustom: false, createCustom: false, exportReports: false }
+        };
+
+    for (const access of activeAccess) {
+        const appKey = String(access?.appKey || '').toUpperCase();
+        const roleKey = String(access?.roleKey || '').toUpperCase();
+
+        if (appKey === 'HELPDESK') {
+            const canWrite = ['ADMIN', 'MANAGER', 'AGENT', 'USER'].includes(roleKey);
+            permissions.cases = {
+                view: true,
+                create: canWrite,
+                edit: canWrite,
+                delete: roleKey === 'ADMIN',
+                viewAll: ['ADMIN', 'MANAGER', 'AGENT'].includes(roleKey)
+            };
+        }
+    }
+
+    this.permissions = permissions;
+    if (this.permissions.contacts) {
+        const contactsPermissions = this.permissions.contacts.toObject
+            ? this.permissions.contacts.toObject()
+            : { ...this.permissions.contacts };
+        this.set('permissions.people', contactsPermissions);
+    }
     return this.permissions;
 };
 

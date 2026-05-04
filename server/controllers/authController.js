@@ -455,10 +455,35 @@ exports.loginUser = async (req, res) => {
                     viewCustom: orgUser.roleId.permissions.reports?.read || false,
                     createCustom: orgUser.roleId.permissions.reports?.create || false,
                     exportReports: orgUser.roleId.permissions.reports?.export || false
+                },
+                cases: {
+                    view: orgUser.appAccess?.some((entry) => entry.appKey === APP_KEYS.HELPDESK) || false,
+                    create: orgUser.appAccess?.some((entry) => entry.appKey === APP_KEYS.HELPDESK && entry.roleKey !== 'VIEWER') || false,
+                    edit: orgUser.appAccess?.some((entry) => entry.appKey === APP_KEYS.HELPDESK && entry.roleKey !== 'VIEWER') || false,
+                    delete: orgUser.appAccess?.some((entry) => entry.appKey === APP_KEYS.HELPDESK && entry.roleKey === 'ADMIN') || false,
+                    viewAll: orgUser.appAccess?.some((entry) => entry.appKey === APP_KEYS.HELPDESK && ['ADMIN', 'MANAGER', 'AGENT'].includes(entry.roleKey)) || false
                 }
             };
+            orgUser.set('permissions.people', orgUser.permissions.contacts?.toObject
+                ? orgUser.permissions.contacts.toObject()
+                : { ...(orgUser.permissions.contacts || {}) });
             await orgUser.save();
             console.log('✅ Permissions synced from role');
+        }
+
+        const permissionObject = orgUser.permissions?.toObject ? orgUser.permissions.toObject() : orgUser.permissions;
+        const hasUsablePermissions = permissionObject &&
+            typeof permissionObject === 'object' &&
+            Object.keys(permissionObject).length > 0 &&
+            permissionObject.events &&
+            permissionObject.forms &&
+            permissionObject.items;
+
+        if (((!orgUser.roleId && orgUser.appAccess && orgUser.appAccess.length > 0) || !hasUsablePermissions) && orgUser.appAccess && orgUser.appAccess.length > 0) {
+            console.log('🔄 Deriving permissions from appAccess:', JSON.stringify(orgUser.appAccess));
+            orgUser.setPermissionsByAppAccess(orgUser.appAccess);
+            await orgUser.save();
+            console.log('✅ Permissions derived from appAccess');
         }
 
         // 8. Log successful login
@@ -494,6 +519,7 @@ exports.loginUser = async (req, res) => {
             isOwner: orgUser.isOwner,
             permissions: orgUser.permissions,
             allowedApps: allowedApps, // Include app access
+            appAccess: orgUser.appAccess,
             organization: {
                 _id: user.organizationId._id,
                 name: user.organizationId.name,
