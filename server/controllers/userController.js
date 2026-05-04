@@ -682,6 +682,14 @@ exports.inviteUser = async (req, res) => {
                 viewAll: roleDoc.permissions.contacts.viewAll || false,
                 exportData: roleDoc.permissions.contacts.export || false
             },
+            people: {
+                view: roleDoc.permissions.contacts.read,
+                create: roleDoc.permissions.contacts.create,
+                edit: roleDoc.permissions.contacts.update,
+                delete: roleDoc.permissions.contacts.delete,
+                viewAll: roleDoc.permissions.contacts.viewAll || false,
+                exportData: roleDoc.permissions.contacts.export || false
+            },
             organizations: {
                 view: roleDoc.permissions.organizations?.read || false,
                 create: roleDoc.permissions.organizations?.create || false,
@@ -712,6 +720,36 @@ exports.inviteUser = async (req, res) => {
                 delete: roleDoc.permissions.tasks.delete,
                 viewAll: roleDoc.permissions.tasks.viewAll || false
             },
+            events: {
+                view: roleDoc.permissions.events?.read || false,
+                create: roleDoc.permissions.events?.create || false,
+                edit: roleDoc.permissions.events?.update || false,
+                delete: roleDoc.permissions.events?.delete || false,
+                viewAll: roleDoc.permissions.events?.viewAll || false
+            },
+            forms: {
+                view: roleDoc.permissions.forms?.read || false,
+                create: roleDoc.permissions.forms?.create || false,
+                edit: roleDoc.permissions.forms?.update || false,
+                delete: roleDoc.permissions.forms?.delete || false,
+                viewAll: roleDoc.permissions.forms?.viewAll || false,
+                exportData: roleDoc.permissions.forms?.export || false
+            },
+            items: {
+                view: roleDoc.permissions.items?.read || false,
+                create: roleDoc.permissions.items?.create || false,
+                edit: roleDoc.permissions.items?.update || false,
+                delete: roleDoc.permissions.items?.delete || false,
+                viewAll: roleDoc.permissions.items?.viewAll || false,
+                exportData: roleDoc.permissions.items?.export || false
+            },
+            cases: {
+                view: finalAppAccess.some((entry) => entry.appKey === APP_KEYS.HELPDESK),
+                create: finalAppAccess.some((entry) => entry.appKey === APP_KEYS.HELPDESK && entry.roleKey !== 'VIEWER'),
+                edit: finalAppAccess.some((entry) => entry.appKey === APP_KEYS.HELPDESK && entry.roleKey !== 'VIEWER'),
+                delete: finalAppAccess.some((entry) => entry.appKey === APP_KEYS.HELPDESK && entry.roleKey === 'ADMIN'),
+                viewAll: finalAppAccess.some((entry) => entry.appKey === APP_KEYS.HELPDESK && ['ADMIN', 'MANAGER', 'AGENT'].includes(entry.roleKey))
+            },
             imports: {
                 view: true,
                 create: roleDoc.permissions.contacts.import || roleDoc.permissions.deals.import,
@@ -733,9 +771,9 @@ exports.inviteUser = async (req, res) => {
             }
         };
         } else {
-            // For unified format without roleId, set minimal permissions
-            // Permissions will be derived from appAccess at runtime
-            newUser.permissions = {};
+            // Unified app access can be role-less; derive the legacy permission
+            // snapshot used by existing sidebar and route permission checks.
+            newUser.setPermissionsByAppAccess(finalAppAccess);
         }
         
         await newUser.save();
@@ -1166,6 +1204,14 @@ exports.getProfile = async (req, res) => {
                     viewAll: user.roleId.permissions.contacts?.viewAll || false,
                     exportData: user.roleId.permissions.contacts?.export || false
                 },
+                people: {
+                    view: user.roleId.permissions.contacts?.read || false,
+                    create: user.roleId.permissions.contacts?.create || false,
+                    edit: user.roleId.permissions.contacts?.update || false,
+                    delete: user.roleId.permissions.contacts?.delete || false,
+                    viewAll: user.roleId.permissions.contacts?.viewAll || false,
+                    exportData: user.roleId.permissions.contacts?.export || false
+                },
                 organizations: {
                     view: user.roleId.permissions.organizations?.read || false,
                     create: user.roleId.permissions.organizations?.create || false,
@@ -1237,6 +1283,13 @@ exports.getProfile = async (req, res) => {
                     viewCustom: user.roleId.permissions.reports?.read || false,
                     createCustom: user.roleId.permissions.reports?.create || false,
                     exportReports: user.roleId.permissions.reports?.export || false
+                },
+                cases: {
+                    view: user.appAccess?.some((entry) => entry.appKey === APP_KEYS.HELPDESK) || false,
+                    create: user.appAccess?.some((entry) => entry.appKey === APP_KEYS.HELPDESK && entry.roleKey !== 'VIEWER') || false,
+                    edit: user.appAccess?.some((entry) => entry.appKey === APP_KEYS.HELPDESK && entry.roleKey !== 'VIEWER') || false,
+                    delete: user.appAccess?.some((entry) => entry.appKey === APP_KEYS.HELPDESK && entry.roleKey === 'ADMIN') || false,
+                    viewAll: user.appAccess?.some((entry) => entry.appKey === APP_KEYS.HELPDESK && ['ADMIN', 'MANAGER', 'AGENT'].includes(entry.roleKey)) || false
                 }
             };
             // Merge stored user.permissions over rolePerms
@@ -1254,6 +1307,7 @@ exports.getProfile = async (req, res) => {
             ensureModule('events', { view: false, create: false, edit: false, delete: false, viewAll: false });
             ensureModule('forms', { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false });
             ensureModule('items', { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false });
+            ensureModule('cases', { view: false, create: false, edit: false, delete: false, viewAll: false });
             ensureModule('imports', { view: false, create: false, delete: false });
             ensureModule('settings', {
                 view: false,
@@ -1265,6 +1319,12 @@ exports.getProfile = async (req, res) => {
             });
             ensureModule('reports', { viewStandard: false, viewCustom: false, createCustom: false, exportReports: false });
             user.permissions = merged;
+        } else {
+            const permissionObject = user.permissions?.toObject ? user.permissions.toObject() : user.permissions;
+            const missingCorePermissions = !permissionObject?.events || !permissionObject?.forms || !permissionObject?.items;
+            if (((!user.roleId && user.appAccess && user.appAccess.length > 0) || missingCorePermissions) && user.appAccess && user.appAccess.length > 0) {
+                user.setPermissionsByAppAccess(user.appAccess);
+            }
         }
 
         res.json({
@@ -1409,4 +1469,3 @@ exports.resetUserPassword = async (req, res) => {
         });
     }
 };
-
