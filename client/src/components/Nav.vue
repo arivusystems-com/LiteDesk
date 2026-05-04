@@ -314,7 +314,7 @@ const shellTopBarBellClass =
 
 const handleLogout = () => {
   authStore.logout();
-  router.push('/');
+  router.replace('/login');
   authStore.error = null;
 };
 

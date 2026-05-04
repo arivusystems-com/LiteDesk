@@ -224,6 +224,11 @@ export const useAuthStore = defineStore('auth', {
             localStorage.removeItem('organization');
             // Legacy cleanup (older builds stored auth under 'auth')
             localStorage.removeItem('auth');
+            try {
+                sessionStorage.removeItem('litedesk_redirect_after_login');
+            } catch (_e) {
+                /* optional */
+            }
             this.error = null;
             
             // Phase 0D: Clear UI metadata on logout
@@ -314,6 +319,11 @@ export const useAuthStore = defineStore('auth', {
         
         logout() {
             this.clearUser();
+            import('@/router').then(({ default: router }) => {
+                if (router.currentRoute.value.name !== 'login') {
+                    router.replace({ name: 'login' }).catch(() => {});
+                }
+            }).catch(() => {});
         },
         
         // Check if user has a specific permission

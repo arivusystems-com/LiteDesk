@@ -37,7 +37,7 @@ const profileDropdownRef = ref(null);
 
 const handleLogout = () => {
   authStore.logout();
-  router.push('/');
+  router.replace('/login');
   authStore.error = null;
 };
 
@@ -535,4 +535,3 @@ onUnmounted(() => {
     </transition>
   </div>
 </template>
-

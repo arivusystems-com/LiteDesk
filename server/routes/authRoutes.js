@@ -5,6 +5,7 @@ const {
     registrationLimiter, 
     passwordResetLimiter 
 } = require('../middleware/rateLimitMiddleware');
+const { progressiveAuthThrottle } = require('../middleware/progressiveAuthThrottleMiddleware');
 const router = express.Router();
 
 // Test endpoint to verify code version
@@ -18,7 +19,7 @@ router.get('/test-version', (req, res) => {
 
 // Apply strict rate limiting to authentication endpoints
 router.post('/register', registrationLimiter, registerUser);
-router.post('/login', authLimiter, loginUser);
+router.post('/login', progressiveAuthThrottle, authLimiter, loginUser);
 
 // Note: Add password reset route with passwordResetLimiter when implemented
 // router.post('/forgot-password', passwordResetLimiter, forgotPassword);

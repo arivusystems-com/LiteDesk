@@ -5,6 +5,11 @@ const { organizationIsolation } = require('../middleware/organizationMiddleware'
 const controller = require('../controllers/settingsController');
 const helpdeskSettingsController = require('../controllers/helpdeskSettingsController');
 const assignmentRulesController = require('../controllers/assignmentRulesController');
+const { organizationSettingsLimiter } = require('../middleware/rateLimitMiddleware');
+const {
+    cacheJsonResponse,
+    invalidateCacheOnSuccessfulMutation,
+} = require('../middleware/responseCacheMiddleware');
 
 // All routes require authentication and organization context
 router.use(protect);
@@ -25,7 +30,7 @@ router.get('/core-modules/people/people-types', controller.getPeopleTypes);
 router.put('/core-modules/people/people-types', controller.updatePeopleTypes);
 
 // Applications endpoints
-router.get('/applications', controller.getApplications);
+router.get('/applications', cacheJsonResponse({ namespace: 'settings:applications' }), controller.getApplications);
 router.get('/applications/helpdesk/execution-settings', helpdeskSettingsController.getHelpdeskExecutionSettings);
 router.put('/applications/helpdesk/execution-settings', helpdeskSettingsController.updateHelpdeskExecutionSettings);
 router.get('/applications/:appKey', controller.getApplication);
@@ -36,12 +41,21 @@ router.put('/automation/assignment-rules', assignmentRulesController.upsertAssig
 router.post('/automation/assignment-rules/simulate', assignmentRulesController.simulateAssignmentRules);
 
 // Subscriptions endpoints
-router.get('/subscriptions', controller.getSubscriptions);
+router.get('/subscriptions', cacheJsonResponse({ namespace: 'settings:subscriptions' }), controller.getSubscriptions);
 router.get('/subscriptions/:appKey', controller.getSubscription);
 
 // Organization settings endpoints
-router.get('/organization', controller.getOrganizationSettings);
-router.put('/organization', controller.updateOrganizationSettings);
+router.get(
+    '/organization',
+    organizationSettingsLimiter,
+    cacheJsonResponse({ namespace: 'settings:organization' }),
+    controller.getOrganizationSettings
+);
+router.put(
+    '/organization',
+    invalidateCacheOnSuccessfulMutation({ namespace: 'settings:organization' }),
+    controller.updateOrganizationSettings
+);
 
 // Security settings endpoints
 router.get('/security', controller.getSecuritySettings);
@@ -56,4 +70,3 @@ router.post('/integrations/:key/disable', controller.disableIntegration);
 router.post('/integrations/:key/test', controller.testIntegration);
 
 module.exports = router;
-
