@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "test:role-permissions": "node --test utils/__tests__/rolePermissionProjection.test.js",
     "test:people": "node --test utils/__tests__/peopleFieldRegistry.test.js utils/__tests__/warnDeprecatedPeopleTypeAlias.test.js utils/__tests__/normalizePeopleModuleConfig.test.js utils/__tests__/peopleTypeDefsFields.test.js utils/__tests__/collectAllowedPeopleParticipationFieldKeys.test.js",
     "test:helpdesk": "node --test utils/__tests__/caseApiValidators.test.js utils/__tests__/caseListQuery.test.js utils/__tests__/caseAnalytics.test.js",
     "smoke:helpdesk": "node scripts/helpdeskSmokeChecks.js",

@@ -2059,6 +2059,31 @@ exports.listModules = async (req, res) => {
                 }
             }
         }
+
+        // Other tenant system modules: quickCreate is persisted via raw Mongo in updateSystemModule / updateModule.
+        // Mongoose .lean() + select('+quickCreate') can still omit quickCreate on some documents; when undefined,
+        // merge falls back to [] and listModules applies canonical defaults — Settings "saves" but reload shows defaults.
+        // Overlay from native driver (same reliability as People raw merge above).
+        const orgQuickCreateRawKeys = new Set(['tasks', 'organizations', 'events', 'items', 'deals', 'cases', 'forms']);
+        for (const module of custom) {
+            if (!module.organizationId) continue;
+            const moduleKey = String(module.key || module.moduleKey || '').toLowerCase();
+            if (!orgQuickCreateRawKeys.has(moduleKey)) continue;
+            try {
+                const orgId = module.organizationId instanceof mongoose.Types.ObjectId
+                    ? module.organizationId
+                    : new mongoose.Types.ObjectId(String(module.organizationId));
+                const raw = await collection.findOne({ organizationId: orgId, key: moduleKey });
+                if (!raw || !Array.isArray(raw.quickCreate)) continue;
+                module.quickCreate = raw.quickCreate;
+                if (raw.quickCreateLayout && typeof raw.quickCreateLayout === 'object') {
+                    module.quickCreateLayout = raw.quickCreateLayout;
+                }
+                console.log(`✅ ${moduleKey} quickCreate from org doc (raw Mongo):`, module.quickCreate.length, 'fields');
+            } catch (e) {
+                console.warn(`⚠️ Raw quickCreate overlay failed for ${moduleKey}:`, e.message);
+            }
+        }
         
         // Build map of modules by key
         // Priority: organization-specific overrides first, then platform-level modules
@@ -2761,22 +2786,10 @@ exports.listModules = async (req, res) => {
                     console.log('📋 Deals: Applying canonical default Quick Create:', finalQuickCreate);
                 }
 
-                // Organizations: ensure standard quick-create fields are present in simple quick-create mode.
-                // This preserves existing customizations while adding the platform defaults for all instances.
-                if (sys.key === 'organizations') {
-                    const hasAdvancedLayout = !!(finalQuickCreateLayout && Array.isArray(finalQuickCreateLayout.rows) && finalQuickCreateLayout.rows.length > 0);
-                    if (!hasAdvancedLayout) {
-                        const qc = Array.isArray(finalQuickCreate) ? [...finalQuickCreate] : [];
-                        const hasName = qc.some(k => String(k).toLowerCase() === 'name');
-                        const hasIndustry = qc.some(k => String(k).toLowerCase() === 'industry');
-                        const hasWebsite = qc.some(k => String(k).toLowerCase() === 'website');
-                        if (!hasName) qc.unshift('name');
-                        if (!hasIndustry) qc.push('industry');
-                        if (!hasWebsite) qc.push('website');
-                        finalQuickCreate = qc;
-                    }
-                }
-                
+                // Organizations: trust persisted quickCreate when non-empty (see empty-array default above).
+                // Previously we re-injected name/industry/website on every GET, which defeated Settings
+                // (saved N fields, merged list showed N+M) and made Quick Create appear not to save.
+
                 console.log('✅ Final quickCreate:', {
                     value: finalQuickCreate,
                     length: finalQuickCreate?.length || 0,
@@ -2865,11 +2878,16 @@ exports.listModules = async (req, res) => {
                     if (isUnderConfigured || looksLegacy) {
                         finalQuickCreate = eventsDefaultQuickCreate;
                     } else {
-                        // If the org is using simple quickCreate mode (no advanced layout),
-                        // ensure allowSelfReview + reviewerId are present so the fields can appear when dependency-visible.
-                        // NOTE: This affects only the quickCreate list returned by /modules; admins can still manage layout via Settings.
+                        // If the org is using simple quickCreate mode (no advanced layout), we historically appended
+                        // audit scaffolding keys so dependency-gated fields could render. Doing that after a tenant
+                        // has saved explicit quickCreate breaks Settings ("saved N, loaded N+1").
                         const hasAdvancedLayout = !!(finalQuickCreateLayout && Array.isArray(finalQuickCreateLayout.rows) && finalQuickCreateLayout.rows.length > 0);
-                        if (!hasAdvancedLayout) {
+                        const eventsQuickCreateStoredOnTenant =
+                            override &&
+                            override.quickCreate !== undefined &&
+                            override.quickCreate !== null &&
+                            Array.isArray(override.quickCreate);
+                        if (!hasAdvancedLayout && !eventsQuickCreateStoredOnTenant) {
                             const qc2 = Array.isArray(finalQuickCreate) ? [...finalQuickCreate] : [];
                             const hasGeo = qc2.some(k => String(k).toLowerCase() === 'georequired');
                             const hasAllow = qc2.some(k => String(k).toLowerCase() === 'allowselfreview');
@@ -3233,13 +3251,13 @@ exports.listModules = async (req, res) => {
             const filtered = filteredMerged.filter(module => 
                 module.key && requestedKeys.has(module.key.toLowerCase())
             );
-            // Cache module definitions for 24 hours (org-scoped, user-specific, private)
-            res.set('Cache-Control', 'private, max-age=86400');
+            // Tenant module definitions (fields, quickCreate, layouts) change in Settings — never allow
+            // long-lived browser/CDN caching of GET /modules or reloads keep stale quickCreate for 24h.
+            res.set('Cache-Control', 'private, no-store');
             return res.json({ success: true, data: filtered });
         }
 
-        // Cache module definitions for 24 hours (org-scoped, user-specific, private)
-        res.set('Cache-Control', 'private, max-age=86400');
+        res.set('Cache-Control', 'private, no-store');
         res.json({ success: true, data: filteredMerged });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Error listing modules', error: error.message });

@@ -128,6 +128,13 @@ const protect = async (req, res, next) => {
                 /* optional */
             }
 
+            try {
+                const { hydrateUserPermissionsFromRole } = require('../utils/rolePermissionProjection');
+                await hydrateUserPermissionsFromRole(req.user);
+            } catch (hydrateErr) {
+                console.error('[AuthMiddleware] hydrateUserPermissionsFromRole failed:', hydrateErr.message);
+            }
+
             next();
         } catch (error) {
             console.error('Token verification error:', error.message);

@@ -13,7 +13,7 @@
               : 'border-blue-500 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-900/20'
           ]"
           :aria-label="`${reaction.emoji} ${reaction.count} reactions`"
-          @click="ui.toggleCommentReaction(event, reaction.emoji)"
+          @click="ui.handleHideCommentReactionTooltip?.(); ui.toggleCommentReaction(event, reaction.emoji)"
           @mouseenter="ui.handleShowCommentReactionTooltip($event, reaction)"
           @mouseleave="ui.handleHideCommentReactionTooltip"
         >

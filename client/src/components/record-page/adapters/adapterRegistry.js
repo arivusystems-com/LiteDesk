@@ -15,7 +15,7 @@ export const MODULE_RECORD_ADAPTER_KEYS = Object.freeze({
  */
 export function getRecordAdapterKey(moduleKey) {
   const key = (moduleKey || '').toLowerCase().trim();
-  if (key === 'deals') return MODULE_RECORD_ADAPTER_KEYS.DEAL;
-  if (key === 'tasks') return MODULE_RECORD_ADAPTER_KEYS.TASK;
+  if (key === 'deals' || key === 'deal') return MODULE_RECORD_ADAPTER_KEYS.DEAL;
+  if (key === 'tasks' || key === 'task') return MODULE_RECORD_ADAPTER_KEYS.TASK;
   return MODULE_RECORD_ADAPTER_KEYS.GENERIC;
 }

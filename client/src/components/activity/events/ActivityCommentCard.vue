@@ -31,31 +31,38 @@
             <span v-if="event.editedAt" class="text-xs text-gray-400 dark:text-gray-500">(edited)</span>
           </div>
         </div>
-        <Menu
-          v-if="ui.canEditComment(event)"
-          as="div"
-          class="relative ml-2 opacity-0 group-hover/comment:opacity-100 transition-opacity"
-        >
-          <MenuButton
-            class="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+        <div class="ml-2 flex items-center gap-1 opacity-0 group-hover/comment:opacity-100 focus-within:opacity-100 transition-opacity">
+          <HoverTooltip
+            v-if="ui.canEditComment(event)"
+            content="Edit"
+            anchor-selector="button"
+            class="inline-flex"
           >
-            <EllipsisVerticalIcon class="w-4 h-4" />
-          </MenuButton>
-          <MenuItems
-            class="absolute right-0 mt-1 w-36 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 focus:outline-none z-10"
+            <button
+              type="button"
+              class="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+              aria-label="Edit comment"
+              @click="ui.startEditComment(event)"
+            >
+              <PencilSquareIcon class="h-4 w-4" />
+            </button>
+          </HoverTooltip>
+          <HoverTooltip
+            v-if="!isThreadViewActive"
+            content="Reply"
+            anchor-selector="button"
+            class="inline-flex"
           >
-            <MenuItem v-slot="{ active }">
-              <button
-                type="button"
-                :class="[active ? 'bg-gray-100 dark:bg-gray-700' : '', 'flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300']"
-                @click="ui.startEditComment(event)"
-              >
-                <PencilSquareIcon class="w-4 h-4" />
-                Edit
-              </button>
-            </MenuItem>
-          </MenuItems>
-        </Menu>
+            <button
+              type="button"
+              class="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+              aria-label="Reply to comment"
+              @click="ui.openCommentThread(event)"
+            >
+              <ArrowUturnLeftIcon class="h-4 w-4" />
+            </button>
+          </HoverTooltip>
+        </div>
       </div>
 
       <div v-if="ui.editingCommentId === event.id" class="px-4 pb-3.5 text-sm leading-[1.55] text-gray-700 dark:text-gray-300 space-y-2">
@@ -70,7 +77,7 @@
           @files-change="ui.handleEditCommentFilesChange"
           @submit="ui.saveEditComment"
         >
-          <template #footerActions="{ canSubmit }">
+          <template #footerActions="{ canSubmit, submit }">
             <button
               type="button"
               class="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600"
@@ -82,7 +89,7 @@
               type="button"
               :disabled="!canSubmit || !ui.isEditingCommentDirty"
               class="px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              @click="ui.handleSaveEditCommentClick"
+              @click="submit"
             >
               Save
             </button>
@@ -98,7 +105,7 @@
         ></div>
         <CommentContent v-else :content="event.content || event.text" />
 
-        <AttachmentList :attachments="event.attachments || []" :ui="ui" />
+        <AttachmentList :attachments="resolvedAttachments" :ui="ui" />
       </div>
 
       <ReactionBar
@@ -113,9 +120,9 @@
 
 <script setup>
 import { computed } from 'vue';
-import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue';
-import { EllipsisVerticalIcon, PencilSquareIcon } from '@heroicons/vue/24/outline';
+import { PencilSquareIcon, ArrowUturnLeftIcon } from '@heroicons/vue/24/outline';
 import Avatar from '@/components/common/Avatar.vue';
+import HoverTooltip from '@/components/common/HoverTooltip.vue';
 import CommentInput from '@/components/record-page/CommentInput.vue';
 import CommentContent from '@/components/record-page/CommentContent.vue';
 import ReactionBar from '../controls/ReactionBar.vue';
@@ -136,5 +143,12 @@ const editingText = computed({
 const editingAttachments = computed({
   get: () => props.ui.editingCommentAttachments,
   set: (value) => props.ui.setEditingCommentAttachments(value)
+});
+
+const resolvedAttachments = computed(() => {
+  const candidate = props.event?.attachments ?? props.event?.payload?.attachments ?? props.event?.files;
+  if (Array.isArray(candidate)) return candidate;
+  if (candidate && typeof candidate === 'object') return [candidate];
+  return [];
 });
 </script>

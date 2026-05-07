@@ -593,8 +593,12 @@
           </template>
           <template #tab-activity>
             <ActivitySection
-              :events="filteredActivityEvents"
+              ref="activitySectionRef"
+              :events="activityEventsForDisplay"
               :ui="activityUi"
+              :is-thread-view-active="isThreadViewActive"
+              :active-thread-root-comment="activeThreadRootComment"
+              :thread-reply-count="threadReplyCount"
               :activity-pane-ready="true"
               :activity-search-open="activitySearchOpen"
               :activity-search-query="activitySearchQuery"
@@ -604,6 +608,7 @@
               :new-comment-text="newCommentText"
               :show-notifications="false"
               @comment="handleAddComment"
+              @close-thread="closeCommentThread"
               @update:activitySearchOpen="activitySearchOpen = $event"
               @update:activitySearchQuery="activitySearchQuery = $event"
               @update:activityFilterComments="activityFilterComments = $event"
@@ -822,11 +827,80 @@
         />
       </div>
     </Teleport>
+    <Teleport to="body">
+      <div
+        v-if="showCommentReactionPicker"
+        ref="commentReactionPickerRef"
+        :style="commentReactionPickerStyle"
+        class="fixed z-[120] rounded-xl border border-gray-200 bg-white p-1 shadow-xl dark:border-gray-700 dark:bg-gray-900"
+      >
+        <emoji-picker
+          :class="['comment-reaction-emoji-picker', isDarkTheme ? 'dark' : 'light']"
+          :theme="emojiPickerTheme"
+          :style="{ colorScheme: emojiPickerColorScheme }"
+          @emoji-click="handleCommentReactionEmojiClick"
+        />
+      </div>
+    </Teleport>
+    <Teleport to="body">
+      <div
+        v-if="showCommentReactionTooltip && commentReactionTooltipData"
+        ref="commentReactionTooltipRef"
+        :class="[
+          'fixed z-[125] rounded-lg bg-slate-950 px-3 py-2 text-white shadow-2xl',
+          getReactionTooltipMode(commentReactionTooltipData) === 'single' ? 'w-[10rem]' : 'w-[17rem]'
+        ]"
+        :style="commentReactionTooltipStyle"
+        @mouseenter="cancelCommentReactionTooltipHide"
+        @mouseleave="handleHideCommentReactionTooltip"
+      >
+        <template v-if="getReactionTooltipMode(commentReactionTooltipData) === 'single'">
+          <p class="text-center text-3xl leading-none">{{ commentReactionTooltipData.emoji }}</p>
+          <p class="mt-2 text-center text-xs leading-4 text-slate-200">
+            {{ getReactionTooltipSingleText(commentReactionTooltipData) }}
+          </p>
+        </template>
+        <template v-else-if="getReactionTooltipMode(commentReactionTooltipData) === 'few'">
+          <p class="text-center text-3xl leading-none">{{ commentReactionTooltipData.emoji }}</p>
+          <p class="mt-2 text-xs leading-4 text-slate-200">
+            {{ getReactionTooltipInlineText(commentReactionTooltipData) }}
+          </p>
+        </template>
+        <template v-else>
+          <p class="text-xs font-semibold leading-4">
+            {{ commentReactionTooltipData.emoji }} {{ commentReactionTooltipData.count }}
+            {{ commentReactionTooltipData.count === 1 ? 'person reacted' : 'people reacted' }}
+          </p>
+          <ul
+            v-if="commentReactionTooltipData.reactors.length > 0"
+            class="mt-2 max-h-44 space-y-1 overflow-y-auto pr-1"
+          >
+            <li
+              v-for="reactor in commentReactionTooltipData.reactors.slice(0, 12)"
+              :key="`${commentReactionTooltipData.emoji}-${reactor.id || reactor.name}`"
+              class="flex items-center gap-2 text-xs text-slate-200"
+            >
+              <span class="inline-flex h-5 w-5 items-center justify-center rounded bg-slate-800 text-[10px] font-medium uppercase text-slate-100">
+                {{ getReactionUserInitial(reactor) }}
+              </span>
+              <span class="truncate">{{ getReactionUserDisplayName(reactor) }}</span>
+            </li>
+          </ul>
+          <p v-else class="mt-1.5 text-xs leading-4 text-slate-300">Reactor details unavailable</p>
+        </template>
+        <span
+          :class="[
+            'pointer-events-none absolute left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-slate-950',
+            commentReactionTooltipPlacement === 'above' ? 'top-full -mt-1' : 'bottom-full -mb-1'
+          ]"
+        ></span>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount, inject } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount, inject, nextTick } from 'vue';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/authRegistry';
@@ -852,6 +926,13 @@ import RecordTagPopover from '@/components/record-page/RecordTagPopover.vue';
 import { useRecordTagPopoverPosition } from '@/components/record-page/composables/useRecordTagPopoverPosition';
 import { useRecordContext, invalidateRecordContext } from '@/composables/useRecordContext';
 import ActivitySection from '@/components/activity/ActivitySection.vue';
+import {
+  buildCommentReactions,
+  isCommentReactionSelectedForUser
+} from '@/components/activity/utils/commentReactionModel';
+import { createCommentReactionApi } from '@/components/activity/utils/commentReactionApi';
+import { useCommentReactionActions } from '@/components/activity/composables/useCommentReactionActions';
+import { useCommentReactionTooltip } from '@/components/activity/composables/useCommentReactionTooltip';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import DeleteConfirmationModal from '@/components/common/DeleteConfirmationModal.vue';
 import EmailComposeDrawer from '@/components/communications/EmailComposeDrawer.vue';
@@ -911,6 +992,7 @@ import SalesConvertLeadModal from '@/components/people/SalesConvertLeadModal.vue
 import { getParticipationFields } from '@/platform/fields/peopleFieldModel';
 import { hasPeoplePermission } from '@/platform/permissions/peoplePermissionHelper';
 import { PEOPLE_PERMISSIONS } from '@/platform/permissions/peoplePermissions';
+import 'emoji-picker-element';
 
 const formatAppLabel = (appKey) => getAppLabel(appKey) || appKey || 'App';
 
@@ -942,6 +1024,13 @@ const activityRaw = ref([]);
   const descriptionVersionsLoading = ref(false);
   const descriptionRestoreLoading = ref(false);
   const newCommentText = ref('');
+  const activitySectionRef = ref(null);
+  const editingCommentId = ref(null);
+  const editingCommentText = ref('');
+  const editingCommentAttachments = ref([]);
+  const editingCommentOriginalText = ref('');
+  const editingCommentOriginalAttachments = ref([]);
+  const editingCommentHasPendingFiles = ref(false);
   const activitySearchOpen = ref(false);
   const activitySearchQuery = ref('');
   const activityFilterComments = ref(true);
@@ -954,6 +1043,16 @@ const activityRaw = ref([]);
 const showEditModal = ref(false);
 const showEmailModal = ref(false);
 const showLinkRecordDrawer = ref(false);
+const activeThreadRootCommentId = ref(null);
+const showCommentReactionPicker = ref(false);
+const commentReactionPickerCommentKey = ref('');
+const commentReactionPickerPosition = ref({ top: 0, left: 0 });
+const commentReactionButtonRefs = new Map();
+const commentReactionPickerRef = ref(null);
+const isDarkTheme = ref(false);
+const emojiPickerTheme = computed(() => (isDarkTheme.value ? 'dark' : 'light'));
+const emojiPickerColorScheme = computed(() => (isDarkTheme.value ? 'dark' : 'light'));
+let emojiThemeObserver = null;
 const allowCreateFromLinkDrawer = ref(false);
 const showAddRelatedRecordDrawer = ref(false);
 const addRelatedRecordModuleKey = ref('');
@@ -1306,7 +1405,9 @@ const genericRelatedGroupsFromContext = computed(() => {
       const key = rel.relationshipKey || rel.label || 'related';
       const label = rel.ui?.label || rel.label || key;
       const direction = (rel.direction || 'SOURCE').toUpperCase();
-      const items = (rel.records || []).map((r) => {
+      const items = (rel.records || [])
+        .filter((r) => !r?._isBroken)
+        .map((r) => {
         const id = r.recordId ?? r.id ?? r._id;
         const moduleKey = (r.moduleKey || '').toLowerCase();
         const appKey = (r.appKey || 'SALES').toUpperCase();
@@ -1328,8 +1429,10 @@ const genericRelatedGroupsFromContext = computed(() => {
           direction
         };
       });
+      if (items.length === 0 && !isOrganizationModule) return null;
       return { key, label, items };
     })
+    .filter(Boolean)
     : [];
 
   return groups;
@@ -1967,6 +2070,26 @@ function escapeRegExp(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+const {
+  commentReactionTooltipRef,
+  commentReactionTooltipStyle,
+  commentReactionTooltipPlacement,
+  showCommentReactionTooltip,
+  commentReactionTooltipData,
+  getReactionTooltipMode,
+  getReactionTooltipSingleText,
+  getReactionTooltipInlineText,
+  getReactionUserDisplayName,
+  getReactionUserInitial,
+  updateCommentReactionTooltipPosition,
+  cancelCommentReactionTooltipHide,
+  handleShowCommentReactionTooltip,
+  handleHideCommentReactionTooltip,
+  cleanupCommentReactionTooltip
+} = useCommentReactionTooltip({
+  getCurrentUserId: () => authStore.user?._id || authStore.user?.id || ''
+});
+
 const activityUi = computed(() => {
   const searchQuery = activitySearchQuery.value || '';
   const moduleUi = {
@@ -1974,6 +2097,18 @@ const activityUi = computed(() => {
     recordId: props.recordId,
     currentUser: authStore.user || null,
     expandedTaskEmailThreads: expandedTaskEmailThreads.value,
+    editingCommentId: editingCommentId.value,
+    editingCommentText: editingCommentText.value,
+    editingCommentAttachments: editingCommentAttachments.value,
+    isEditingCommentDirty: isEditingCommentDirty.value,
+    setEditingCommentText,
+    setEditingCommentAttachments,
+    handleEditCommentFilesChange,
+    saveEditComment,
+    handleSaveEditCommentClick,
+    cancelEditComment,
+    canEditComment,
+    startEditComment,
     addComment: (content, attachments, parentCommentId) => addComment(content, attachments, parentCommentId),
     getInitials,
     getAuthorName,
@@ -2018,17 +2153,24 @@ const activityUi = computed(() => {
       if (att?.size != null) parts.push(moduleUi.formatFileSize(att.size));
       return parts.join(' • ') || 'Attachment';
     },
-    hasCommentReactions: () => false,
-    getCommentReactions: () => [],
-    isCommentReactionSelected: () => false,
-    toggleCommentReaction: () => {},
-    handleShowCommentReactionTooltip: () => {},
-    handleHideCommentReactionTooltip: () => {},
-    setCommentReactionButtonRef: () => {},
-    toggleCommentReactionPicker: () => {},
-    openCommentThread: () => {},
-    getCommentThreadReplyCount: () => 0,
-    getCommentThreadLatestReplyAuthor: () => null,
+    hasCommentReactions: (event) => buildCommentReactions(event, { includeLikesFallback: true }).length > 0,
+    getCommentReactions: (event) => buildCommentReactions(event, { includeLikesFallback: true }),
+    isCommentReactionSelected: (event, emoji) => {
+      return isCommentReactionSelectedForUser({
+        event,
+        emoji,
+        currentUserId: authStore.user?._id || authStore.user?.id || '',
+        getCommentReactions: (targetEvent) => buildCommentReactions(targetEvent, { includeLikesFallback: true })
+      });
+    },
+    toggleCommentReaction,
+    handleShowCommentReactionTooltip,
+    handleHideCommentReactionTooltip,
+    setCommentReactionButtonRef,
+    toggleCommentReactionPicker,
+    openCommentThread,
+    getCommentThreadReplyCount,
+    getCommentThreadLatestReplyAuthor,
     isFieldChangeSystemEvent: (event) => {
       if (!event || event.type !== 'system') return false;
       const details = event?.details || event?.payload?.details || {};
@@ -2111,6 +2253,7 @@ const activityEvents = computed(() => {
         content: e.payload?.body,
         author,
         createdAt: e.createdAt,
+        editedAt: e.payload?.editedAt,
         parentCommentId: e.payload?.parentCommentId,
         attachments: e.payload?.attachments || [],
         reactions: e.payload?.reactions || [],
@@ -2121,6 +2264,66 @@ const activityEvents = computed(() => {
   }).filter(Boolean);
   return sortActivityEventsByDate(events);
 });
+
+const getCommentEventId = (event) => {
+  if (!event) return '';
+  const rawId = event.id || event._id || event.payload?.commentId || event.commentId;
+  return rawId ? String(rawId) : '';
+};
+
+const getParentCommentId = (event) => {
+  const rawParentId = event?.parentCommentId ?? event?.payload?.parentCommentId;
+  if (!rawParentId) return '';
+  if (typeof rawParentId === 'object') {
+    return String(rawParentId._id || rawParentId.id || '');
+  }
+  return String(rawParentId);
+};
+
+const commentEventsById = computed(() => {
+  const map = new Map();
+  (activityEvents.value || []).forEach((event) => {
+    if (event?.type !== 'comment') return;
+    const id = getCommentEventId(event);
+    if (!id) return;
+    map.set(id, event);
+  });
+  return map;
+});
+
+const commentThreadRepliesByRootId = computed(() => {
+  const grouped = new Map();
+  (activityEvents.value || []).forEach((event) => {
+    if (event?.type !== 'comment') return;
+    const parentId = getParentCommentId(event);
+    if (!parentId) return;
+    const rootId = String(parentId);
+    if (!grouped.has(rootId)) grouped.set(rootId, []);
+    grouped.get(rootId).push(event);
+  });
+  grouped.forEach((replies, rootId) => {
+    replies.sort((a, b) => new Date(a?.createdAt || 0) - new Date(b?.createdAt || 0));
+    grouped.set(rootId, replies);
+  });
+  return grouped;
+});
+
+const activeThreadRootComment = computed(() => {
+  if (!activeThreadRootCommentId.value) return null;
+  return commentEventsById.value.get(String(activeThreadRootCommentId.value)) || null;
+});
+
+const threadReplyEvents = computed(() => {
+  if (!activeThreadRootCommentId.value) return [];
+  return commentThreadRepliesByRootId.value.get(String(activeThreadRootCommentId.value)) || [];
+});
+
+const threadReplyCount = computed(() => threadReplyEvents.value.length);
+const isThreadViewActive = computed(() => Boolean(activeThreadRootCommentId.value && activeThreadRootComment.value));
+const commentReactionPickerStyle = computed(() => ({
+  top: `${commentReactionPickerPosition.value.top}px`,
+  left: `${commentReactionPickerPosition.value.left}px`
+}));
 
 /** Combined activity (logs + comments + email threads) for modules that support email. */
 const combinedActivityEvents = computed(() => {
@@ -2159,6 +2362,7 @@ const filteredActivityEvents = computed(() => {
   if (q) {
     return events.filter((e) => {
       if (e.type !== 'comment') return false;
+      if (getParentCommentId(e)) return false;
       const author = e.author;
       let authorText = '';
       if (author) {
@@ -2184,11 +2388,18 @@ const filteredActivityEvents = computed(() => {
 
   // No search query: respect the type toggles.
   return events.filter((e) => {
-    if (e.type === 'comment') return showComments;
+    if (e.type === 'comment') return showComments && !getParentCommentId(e);
     if (e.type === 'system') return showUpdates;
     if (e.type === 'email_thread') return showEmail;
     return false;
   });
+});
+
+const activityEventsForDisplay = computed(() => {
+  if (!isThreadViewActive.value || !activeThreadRootComment.value) {
+    return filteredActivityEvents.value;
+  }
+  return [activeThreadRootComment.value, ...threadReplyEvents.value];
 });
 
 async function fetchRecord() {
@@ -2373,6 +2584,7 @@ async function addComment(content, attachments, parentCommentId) {
   try {
     const response = await apiClient.post(`/modules/${props.moduleKey}/records/${props.recordId}/comments`, {
       content: typeof content === 'string' ? content : (content?.content || ''),
+      attachments: Array.isArray(attachments) && attachments.length > 0 ? attachments : undefined,
       parentCommentId: parentCommentId || null
     });
     const createdComment = response?.data?.data ?? response?.data ?? null;
@@ -2385,8 +2597,309 @@ async function addComment(content, attachments, parentCommentId) {
 
 function handleAddComment(payload) {
   const content = typeof payload === 'string' ? payload.trim() : String(payload?.content || '').trim();
-  if (!content) return;
-  addComment(content, [], null);
+  const files = typeof payload === 'object' && Array.isArray(payload?.files) ? payload.files : [];
+  if (!content && files.length === 0) return;
+  addCommentWithUploads(content, files, isThreadViewActive.value ? activeThreadRootCommentId.value : null);
+}
+
+async function uploadModuleCommentAttachmentFile(file) {
+  if (!props.moduleKey || !props.recordId || !file) return null;
+  const token = authStore.user?.token;
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const uploadRes = await fetch(`/api/modules/${props.moduleKey}/records/${props.recordId}/comment-attachments`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData
+  });
+
+  if (!uploadRes.ok) {
+    const errData = await uploadRes.json().catch(() => ({}));
+    console.error('Module comment attachment upload failed:', uploadRes.status, errData.error || errData.message || uploadRes.statusText);
+    return null;
+  }
+
+  const result = await uploadRes.json();
+  if (!result?.success || !result?.url) return null;
+  return {
+    url: result.url,
+    filename: result.originalname || file.name,
+    size: result.size ?? file.size,
+    mimetype: result.mimetype || file.type
+  };
+}
+
+async function addCommentWithUploads(content, files, parentCommentId) {
+  try {
+    const attachments = [];
+    for (const file of files) {
+      const uploaded = await uploadModuleCommentAttachmentFile(file);
+      if (uploaded) attachments.push(uploaded);
+    }
+    const finalContent = content || (attachments.length > 0 ? 'Attached file(s)' : '');
+    if (!finalContent) return;
+    await addComment(finalContent, attachments, parentCommentId);
+  } catch (e) {
+    console.error('Add comment with uploads error:', e);
+  }
+}
+
+function closeCommentThread() {
+  activeThreadRootCommentId.value = null;
+}
+
+function openCommentThread(event) {
+  if (!event || event.type !== 'comment') return;
+  const commentId = getCommentEventId(event);
+  if (!commentId) return;
+  activeThreadRootCommentId.value = commentId;
+  nextTick(() => {
+    activitySectionRef.value?.focusCommentInput?.();
+  });
+}
+
+function getCommentThreadReplyCount(event) {
+  const rootId = getCommentEventId(event);
+  if (!rootId) return 0;
+  return (commentThreadRepliesByRootId.value.get(rootId) || []).length;
+}
+
+function getCommentThreadLatestReplyAuthor(event) {
+  const rootId = getCommentEventId(event);
+  if (!rootId) return null;
+  const replies = commentThreadRepliesByRootId.value.get(rootId) || [];
+  const latestReply = replies[replies.length - 1];
+  return latestReply?.author || latestReply?.actor || null;
+}
+
+const setEditingCommentText = (value) => {
+  editingCommentText.value = typeof value === 'string' ? value : '';
+};
+
+const setEditingCommentAttachments = (value) => {
+  editingCommentAttachments.value = Array.isArray(value) ? value : [];
+};
+
+const normalizeCommentTextForCompare = (value) => (
+  typeof value === 'string' ? value.trim() : ''
+);
+
+const normalizeCommentAttachmentForCompare = (attachment) => ({
+  url: attachment?.url || '',
+  filename: attachment?.filename || attachment?.name || '',
+  size: Number(attachment?.size) || 0,
+  mimetype: attachment?.mimetype || attachment?.type || ''
+});
+
+const areCommentAttachmentListsEqual = (left, right) => {
+  if (!Array.isArray(left) || !Array.isArray(right)) return false;
+  if (left.length !== right.length) return false;
+  return left.every((attachment, idx) => {
+    const normalizedLeft = normalizeCommentAttachmentForCompare(attachment);
+    const normalizedRight = normalizeCommentAttachmentForCompare(right[idx]);
+    return normalizedLeft.url === normalizedRight.url
+      && normalizedLeft.filename === normalizedRight.filename
+      && normalizedLeft.size === normalizedRight.size
+      && normalizedLeft.mimetype === normalizedRight.mimetype;
+  });
+};
+
+const isEditingCommentDirty = computed(() => {
+  if (!editingCommentId.value) return false;
+  const textChanged = normalizeCommentTextForCompare(editingCommentText.value) !== normalizeCommentTextForCompare(editingCommentOriginalText.value);
+  const attachmentsChanged = !areCommentAttachmentListsEqual(editingCommentAttachments.value, editingCommentOriginalAttachments.value);
+  return textChanged || attachmentsChanged || editingCommentHasPendingFiles.value;
+});
+
+function canEditComment(event) {
+  if (!event || event.type !== 'comment') return false;
+  const currentUserId = String(authStore.user?._id || authStore.user?.id || '');
+  if (!currentUserId) return false;
+  const author = event.author || event.actor || event.payload?.author || event.payload?.actor;
+  const authorId = String(author?._id || author?.id || event?.meta?.authorId || event?.payload?.authorId || '');
+  return Boolean(authorId) && authorId === currentUserId;
+}
+
+function startEditComment(event) {
+  if (!canEditComment(event)) return;
+  const commentId = getCommentEventId(event);
+  if (!commentId) return;
+  const initialText = String(event.content || event.text || '');
+  const initialAttachmentsSource = event.attachments ?? event.payload?.attachments;
+  const initialAttachments = Array.isArray(initialAttachmentsSource)
+    ? initialAttachmentsSource.map((attachment) => ({ ...attachment }))
+    : [];
+  editingCommentId.value = commentId;
+  editingCommentText.value = initialText;
+  editingCommentAttachments.value = initialAttachments;
+  editingCommentOriginalText.value = initialText;
+  editingCommentOriginalAttachments.value = initialAttachments.map((attachment) => ({ ...attachment }));
+  editingCommentHasPendingFiles.value = false;
+}
+
+function cancelEditComment() {
+  editingCommentId.value = null;
+  editingCommentText.value = '';
+  editingCommentAttachments.value = [];
+  editingCommentOriginalText.value = '';
+  editingCommentOriginalAttachments.value = [];
+  editingCommentHasPendingFiles.value = false;
+}
+
+function handleEditCommentFilesChange(files) {
+  editingCommentHasPendingFiles.value = Array.isArray(files) && files.length > 0;
+}
+
+const isEditCommentSubmitPayload = (payload) => (
+  Boolean(payload)
+  && typeof payload === 'object'
+  && (
+    typeof payload.content === 'string'
+    || Array.isArray(payload.files)
+    || Array.isArray(payload.existingAttachments)
+  )
+);
+
+const handleSaveEditCommentClick = () => {
+  saveEditComment();
+};
+
+async function saveEditComment(submitPayload) {
+  if (!props.moduleKey || !props.recordId || !editingCommentId.value) return;
+  if (!isEditingCommentDirty.value) return;
+  try {
+    const resolvedPayload = isEditCommentSubmitPayload(submitPayload) ? submitPayload : null;
+    const content = String(
+      typeof resolvedPayload?.content === 'string'
+        ? resolvedPayload.content
+        : editingCommentText.value
+    ).trim();
+    const files = Array.isArray(resolvedPayload?.files) ? resolvedPayload.files : [];
+    const existingAttachments = Array.isArray(resolvedPayload?.existingAttachments)
+      ? resolvedPayload.existingAttachments
+      : editingCommentAttachments.value;
+
+    const uploadedAttachments = [];
+    for (const file of files) {
+      const uploaded = await uploadModuleCommentAttachmentFile(file);
+      if (uploaded) uploadedAttachments.push(uploaded);
+    }
+
+    const finalAttachments = [...existingAttachments, ...uploadedAttachments];
+    const response = await apiClient.put(
+      `/modules/${props.moduleKey}/records/${props.recordId}/comments/${editingCommentId.value}`,
+      {
+        content,
+        attachments: finalAttachments
+      }
+    );
+    if (response?.success) {
+      await refreshRecordActivity();
+      cancelEditComment();
+    }
+  } catch (editErr) {
+    console.error('Save edited comment failed:', editErr);
+  }
+}
+
+const commentReactionApi = createCommentReactionApi({
+  type: 'module-record',
+  getModuleKey: () => props.moduleKey,
+  getRecordId: () => props.recordId
+});
+
+const { toggleCommentReaction } = useCommentReactionActions({
+  getCommentId: (event) => getCommentEventId(event),
+  normalizeEmoji: (emoji) => String(emoji || '').trim(),
+  canToggle: () => Boolean(props.moduleKey && props.recordId),
+  requestToggle: ({ commentId, emoji }) => commentReactionApi.toggleReaction({ commentId, emoji }),
+  onSuccess: async () => {
+    await refreshRecordActivity();
+  },
+  logPrefix: 'Failed to toggle comment reaction:'
+});
+
+function setCommentReactionButtonRef(event, el) {
+  const key = getCommentEventId(event);
+  if (!key) return;
+  if (el) {
+    commentReactionButtonRefs.set(key, el);
+    return;
+  }
+  commentReactionButtonRefs.delete(key);
+}
+
+function updateCommentReactionPickerPosition() {
+  if (!showCommentReactionPicker.value || !commentReactionPickerCommentKey.value) return;
+  const anchor = commentReactionButtonRefs.get(commentReactionPickerCommentKey.value);
+  if (!anchor) return;
+
+  const rect = anchor.getBoundingClientRect();
+  const pickerWidth = commentReactionPickerRef.value?.offsetWidth || 320;
+  const pickerHeight = commentReactionPickerRef.value?.offsetHeight || 90;
+  const spaceAbove = rect.top;
+  const spaceBelow = window.innerHeight - rect.bottom;
+
+  let top;
+  if (spaceAbove >= pickerHeight + 8 || spaceAbove >= spaceBelow) {
+    top = rect.top - pickerHeight - 6;
+  } else {
+    top = rect.bottom + 6;
+  }
+  top = Math.max(8, Math.min(top, window.innerHeight - pickerHeight - 8));
+
+  let left = rect.left;
+  left = Math.max(8, Math.min(left, window.innerWidth - pickerWidth - 8));
+  commentReactionPickerPosition.value = { top, left };
+}
+
+function closeCommentReactionPicker() {
+  showCommentReactionPicker.value = false;
+  commentReactionPickerCommentKey.value = '';
+}
+
+function toggleCommentReactionPicker(event) {
+  const key = getCommentEventId(event);
+  if (!key) return;
+  if (showCommentReactionPicker.value && commentReactionPickerCommentKey.value === key) {
+    closeCommentReactionPicker();
+    return;
+  }
+  commentReactionPickerCommentKey.value = key;
+  showCommentReactionPicker.value = true;
+  nextTick(() => {
+    updateCommentReactionPickerPosition();
+  });
+}
+
+async function addCommentReactionFromPicker(emoji) {
+  const key = commentReactionPickerCommentKey.value;
+  if (!key || !emoji) return;
+  const event = commentEventsById.value.get(key) || null;
+  if (!event) return;
+  await toggleCommentReaction(event, emoji);
+  closeCommentReactionPicker();
+}
+
+async function handleCommentReactionEmojiClick(event) {
+  const emoji = event?.detail?.unicode || '';
+  if (!emoji) return;
+  await addCommentReactionFromPicker(emoji);
+}
+
+function handleCommentReactionPickerOutsideClick(event) {
+  if (!showCommentReactionPicker.value) return;
+  const target = event.target;
+  if (commentReactionPickerRef.value?.contains(target)) return;
+  const anchor = commentReactionButtonRefs.get(commentReactionPickerCommentKey.value);
+  if (anchor?.contains(target)) return;
+  closeCommentReactionPicker();
+}
+
+function syncEmojiPickerTheme() {
+  if (typeof document === 'undefined') return;
+  isDarkTheme.value = document.documentElement.classList.contains('dark');
 }
 
 function handleTitleSave(value) {
@@ -2708,17 +3221,68 @@ watch(
 watch(() => [props.moduleKey, props.recordId], () => fetchRecord(), { immediate: false });
 onMounted(() => {
   fetchRecord();
+  syncEmojiPickerTheme();
+  if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined') {
+    emojiThemeObserver = new MutationObserver(() => syncEmojiPickerTheme());
+    emojiThemeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+  }
   window.addEventListener('scroll', updateTagPopoverPosition, true);
   window.addEventListener('resize', updateTagPopoverPosition);
+  window.addEventListener('scroll', updateCommentReactionPickerPosition, true);
+  window.addEventListener('scroll', updateCommentReactionTooltipPosition, true);
+  window.addEventListener('resize', updateCommentReactionPickerPosition);
+  window.addEventListener('resize', updateCommentReactionTooltipPosition);
   document.addEventListener('mousedown', handleTagPopoverMousedown);
   document.addEventListener('click', handleTagPopoverOutsideClick);
+  document.addEventListener('mousedown', handleCommentReactionPickerOutsideClick);
 });
 onBeforeUnmount(() => {
   resetStickyTitle();
   detachStickyTitle();
   window.removeEventListener('scroll', updateTagPopoverPosition, true);
   window.removeEventListener('resize', updateTagPopoverPosition);
+  window.removeEventListener('scroll', updateCommentReactionPickerPosition, true);
+  window.removeEventListener('scroll', updateCommentReactionTooltipPosition, true);
+  window.removeEventListener('resize', updateCommentReactionPickerPosition);
+  window.removeEventListener('resize', updateCommentReactionTooltipPosition);
   document.removeEventListener('mousedown', handleTagPopoverMousedown);
   document.removeEventListener('click', handleTagPopoverOutsideClick);
+  document.removeEventListener('mousedown', handleCommentReactionPickerOutsideClick);
+  closeCommentReactionPicker();
+  cleanupCommentReactionTooltip();
+  if (emojiThemeObserver) {
+    emojiThemeObserver.disconnect();
+    emojiThemeObserver = null;
+  }
 });
 </script>
+
+<style scoped>
+.comment-reaction-emoji-picker {
+  --input-border-color: rgb(99 102 241 / 0.45);
+  --input-border-radius: 12px;
+  --outline-color: rgb(99 102 241 / 0.2);
+  --indicator-color: rgb(99 102 241);
+  --category-font-size: 15px;
+  --button-active-background: rgb(99 102 241 / 0.16);
+}
+
+.comment-reaction-emoji-picker.light {
+  --background: #ffffff;
+  --border-color: #e5e7eb;
+  --text-color: #111827;
+  --input-background: #ffffff;
+  --input-font-color: #111827;
+}
+
+.comment-reaction-emoji-picker.dark {
+  --background: #111827;
+  --border-color: #374151;
+  --text-color: #f9fafb;
+  --input-background: #111827;
+  --input-font-color: #f9fafb;
+}
+</style>

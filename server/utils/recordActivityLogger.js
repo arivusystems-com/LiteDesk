@@ -133,6 +133,36 @@ async function resolveCrmOrganizationNames(idStrings, tenantOrganizationId) {
 }
 
 /**
+ * Resolve tenant user names for user-reference fields in activity logs.
+ * @param {Set<string>|string[]} idStrings
+ * @param {mongoose.Types.ObjectId} tenantOrganizationId
+ * @returns {Promise<Map<string, string>>}
+ */
+async function resolveTenantUserNames(idStrings, tenantOrganizationId) {
+  const map = new Map();
+  if (!tenantOrganizationId || !idStrings || (idStrings.size !== undefined && idStrings.size === 0)) {
+    return map;
+  }
+  const arr = idStrings instanceof Set ? [...idStrings] : idStrings;
+  const ids = arr.filter((id) => mongoose.Types.ObjectId.isValid(id)).map((id) => new mongoose.Types.ObjectId(id));
+  if (ids.length === 0) return map;
+
+  const User = require('../models/User');
+  const users = await User.find({ _id: { $in: ids }, organizationId: tenantOrganizationId })
+    .select('firstName lastName username email')
+    .lean();
+  for (const u of users) {
+    const name =
+      [u.firstName, u.lastName].filter(Boolean).join(' ').trim() ||
+      u.username ||
+      u.email ||
+      u._id.toString();
+    map.set(u._id.toString(), name);
+  }
+  return map;
+}
+
+/**
  * @param {*} value
  * @param {Map<string, string>} nameMap
  * @returns {string}
@@ -162,6 +192,28 @@ function formatCaseUserRefForLog(value, nameMap) {
     const ln = value.lastName;
     const combined = [fn, ln].filter(Boolean).join(' ').trim();
     if (combined) return combined;
+  }
+  const id = extractObjectIdRef(value);
+  if (!id) return formatValueForLog(value);
+  const key = id.toString();
+  if (nameMap && nameMap.has(key)) return nameMap.get(key);
+  return '[Reference]';
+}
+
+/**
+ * @param {*} value
+ * @param {Map<string, string>} nameMap
+ * @returns {string}
+ */
+function formatUserRefForLog(value, nameMap) {
+  if (value === undefined || value === null || value === '') return 'Empty';
+  if (typeof value === 'object' && !Array.isArray(value) && value !== null) {
+    const fn = value.firstName;
+    const ln = value.lastName;
+    const combined = [fn, ln].filter(Boolean).join(' ').trim();
+    if (combined) return combined;
+    if (typeof value.username === 'string' && value.username.trim()) return value.username.trim();
+    if (typeof value.email === 'string' && value.email.trim()) return value.email.trim();
   }
   const id = extractObjectIdRef(value);
   if (!id) return formatValueForLog(value);
@@ -260,6 +312,20 @@ async function appendFieldChangeLogs({
   }
   const crmOrgNameMap =
     orgIdsToResolve.size > 0 ? await resolveCrmOrganizationNames(orgIdsToResolve, organizationId) : new Map();
+  let peopleUserNameMap = new Map();
+  if (mod === 'people') {
+    const peopleUserIds = new Set();
+    for (const fieldKey of keys) {
+      if (SYSTEM_KEYS.has(fieldKey) || fieldKey !== 'assignedTo') continue;
+      const fromId = extractObjectIdRef(prev[fieldKey]);
+      const toId = extractObjectIdRef(updated[fieldKey]);
+      if (fromId) peopleUserIds.add(fromId.toString());
+      if (toId) peopleUserIds.add(toId.toString());
+    }
+    if (peopleUserIds.size > 0) {
+      peopleUserNameMap = await resolveTenantUserNames(peopleUserIds, organizationId);
+    }
+  }
 
   let caseUserNameMap = new Map();
   let caseContactNameMap = new Map();
@@ -343,6 +409,10 @@ async function appendFieldChangeLogs({
       fromStr = summarizeParticipationsForLog(fromVal);
       toStr = summarizeParticipationsForLog(toVal);
       fieldLabel = 'App participation';
+    } else if (mod === 'people' && fieldKey === 'assignedTo') {
+      fromStr = formatUserRefForLog(fromVal, peopleUserNameMap);
+      toStr = formatUserRefForLog(toVal, peopleUserNameMap);
+      fieldLabel = getFieldLabel(fieldKey, fieldLabels);
     } else if (mod === 'people' && fieldKey === 'organization') {
       fromStr = formatPeopleOrganizationForLog(fromVal, crmOrgNameMap);
       toStr = formatPeopleOrganizationForLog(toVal, crmOrgNameMap);

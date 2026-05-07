@@ -914,6 +914,7 @@
           </template>
           <template #tab-activity>
             <ActivitySection
+              ref="activitySectionRef"
               :events="activitySectionEvents"
               :ui="dealActivityUi"
               :is-thread-view-active="isThreadViewActive"
@@ -1041,6 +1042,76 @@
 
     <Teleport to="body">
       <div
+        v-if="showCommentReactionPicker"
+        ref="commentReactionPickerRef"
+        class="fixed z-[110] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+        :style="commentReactionPickerStyle"
+      >
+        <emoji-picker
+          :class="['comment-reaction-emoji-picker', isDarkTheme ? 'dark' : 'light']"
+          :theme="emojiPickerTheme"
+          :style="{ colorScheme: emojiPickerColorScheme }"
+          @emoji-click="handleCommentReactionEmojiClick"
+        ></emoji-picker>
+      </div>
+    </Teleport>
+    <Teleport to="body">
+      <div
+        v-if="showCommentReactionTooltip && commentReactionTooltipData"
+        ref="commentReactionTooltipRef"
+        :class="[
+          'fixed z-[115] rounded-lg bg-slate-950 px-3 py-2 text-white shadow-2xl',
+          getReactionTooltipMode(commentReactionTooltipData) === 'single' ? 'w-[10rem]' : 'w-[17rem]'
+        ]"
+        :style="commentReactionTooltipStyle"
+        @mouseenter="cancelCommentReactionTooltipHide"
+        @mouseleave="handleHideCommentReactionTooltip"
+      >
+        <template v-if="getReactionTooltipMode(commentReactionTooltipData) === 'single'">
+          <p class="text-center text-3xl leading-none">{{ commentReactionTooltipData.emoji }}</p>
+          <p class="mt-2 text-center text-xs leading-4 text-slate-200">
+            {{ getReactionTooltipSingleText(commentReactionTooltipData) }}
+          </p>
+        </template>
+        <template v-else-if="getReactionTooltipMode(commentReactionTooltipData) === 'few'">
+          <p class="text-center text-3xl leading-none">{{ commentReactionTooltipData.emoji }}</p>
+          <p class="mt-2 text-xs leading-4 text-slate-200">
+            {{ getReactionTooltipInlineText(commentReactionTooltipData) }}
+          </p>
+        </template>
+        <template v-else>
+          <p class="text-xs font-semibold leading-4">
+            {{ commentReactionTooltipData.emoji }} {{ commentReactionTooltipData.count }}
+            {{ commentReactionTooltipData.count === 1 ? 'person reacted' : 'people reacted' }}
+          </p>
+          <ul
+            v-if="commentReactionTooltipData.reactors.length > 0"
+            class="mt-2 max-h-44 space-y-1 overflow-y-auto pr-1"
+          >
+            <li
+              v-for="reactor in commentReactionTooltipData.reactors.slice(0, 12)"
+              :key="`${commentReactionTooltipData.emoji}-${reactor.id || reactor.name}`"
+              class="flex items-center gap-2 text-xs text-slate-200"
+            >
+              <span class="inline-flex h-5 w-5 items-center justify-center rounded bg-slate-800 text-[10px] font-medium uppercase text-slate-100">
+                {{ getReactionUserInitial(reactor) }}
+              </span>
+              <span class="truncate">{{ getReactionUserDisplayName(reactor) }}</span>
+            </li>
+          </ul>
+          <p v-else class="mt-1.5 text-xs leading-4 text-slate-300">Reactor details unavailable</p>
+        </template>
+        <span
+          :class="[
+            'pointer-events-none absolute left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 bg-slate-950',
+            commentReactionTooltipPlacement === 'above' ? 'top-full -mt-1' : 'bottom-full -mb-1'
+          ]"
+        ></span>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
         v-if="showTagPopover"
         ref="tagPopoverRef"
         :style="tagPopoverStyle"
@@ -1082,6 +1153,15 @@ import {
   RecordTagPopover
 } from '@/components/record-page';
 import ActivitySection from '@/components/activity/ActivitySection.vue';
+import 'emoji-picker-element';
+import { useCommentReactionPicker } from '@/components/activity/composables/useCommentReactionPicker';
+import { useCommentReactionTooltip } from '@/components/activity/composables/useCommentReactionTooltip';
+import { useCommentReactionActions } from '@/components/activity/composables/useCommentReactionActions';
+import { createCommentReactionApi } from '@/components/activity/utils/commentReactionApi';
+import {
+  buildCommentReactions,
+  isCommentReactionSelectedForUser
+} from '@/components/activity/utils/commentReactionModel';
 import SectionStack from '@/components/record-page/sections/SectionStack.vue';
 import RelatedSection from '@/components/record-page/sections/RelatedSection.vue';
 import { useRecordTagPopoverPosition } from '@/components/record-page/composables/useRecordTagPopoverPosition';
@@ -1155,6 +1235,7 @@ const showEmailModal = ref(false);
 const isFollowing = ref(false);
 const eventToEdit = ref(null);
 const rightPaneRef = ref(null);
+const activitySectionRef = ref(null);
 const activityTimelineRef = ref(null);
 const activityLogs = ref([]);
 const comments = ref([]);
@@ -2882,12 +2963,29 @@ const addComment = async (content = '', attachments = [], parentCommentId = null
   }
 };
 
+const addCommentWithUploads = async (content = '', files = [], parentCommentId = null) => {
+  try {
+    const attachments = [];
+    for (const file of files) {
+      const uploaded = await uploadDealCommentAttachmentFile(file);
+      if (uploaded) attachments.push(uploaded);
+    }
+    const finalContent = content || (attachments.length > 0 ? 'Attached file(s)' : '');
+    if (!finalContent) return;
+    await addComment(finalContent, attachments, parentCommentId);
+  } catch (err) {
+    console.error('Failed to add comment with attachments:', err);
+    alert('Failed to add comment');
+  }
+};
+
 const handleAddComment = async (payload) => {
   const content = typeof payload === 'string'
     ? payload.trim()
     : String(payload?.content || '').trim();
-  if (!content) return;
-  await addComment(content, [], isThreadViewActive.value ? activeThreadRootCommentId.value : null);
+  const files = Array.isArray(payload?.files) ? payload.files : [];
+  if (!content && files.length === 0) return;
+  await addCommentWithUploads(content, files, isThreadViewActive.value ? activeThreadRootCommentId.value : null);
   newCommentText.value = '';
   await nextTick();
   if (activityTimelineRef.value?.scrollToBottom) {
@@ -3058,6 +3156,9 @@ const openCommentThread = (event) => {
   const commentId = getCommentEventId(event);
   if (!commentId) return;
   activeThreadRootCommentId.value = commentId;
+  nextTick(() => {
+    activitySectionRef.value?.focusCommentInput?.();
+  });
 };
 
 const getCommentThreadReplyCount = (event) => {
@@ -3159,47 +3260,84 @@ const downloadAttachment = (attachment) => {
 };
 
 const getCommentReactions = (event) => {
-  const reactions = Array.isArray(event?.reactions) ? event.reactions : [];
-  return reactions
-    .map((reaction) => {
-      const emoji = String(reaction?.emoji || '').trim();
-      if (!emoji) return null;
-      const count = Number(reaction?.count ?? reaction?.users?.length ?? 0);
-      const reactors = Array.isArray(reaction?.reactors) ? reaction.reactors : [];
-      return { emoji, count, reactors };
-    })
-    .filter((reaction) => reaction && reaction.count > 0);
+  return buildCommentReactions(event, { includeLikesFallback: true });
 };
 
 const hasCommentReactions = (event) => getCommentReactions(event).length > 0;
 
 const isCommentReactionSelected = (event, emoji) => {
-  const myReactions = Array.isArray(event?.myReactions) ? event.myReactions : [];
-  if (myReactions.includes(emoji)) return true;
-  const currentId = String(authStore.user?._id || authStore.user?.id || '');
-  if (!currentId) return false;
-  const reaction = getCommentReactions(event).find((entry) => entry.emoji === emoji);
-  return Array.isArray(reaction?.reactors)
-    && reaction.reactors.some((reactor) => String(reactor?.id || reactor?._id || '') === currentId);
+  return isCommentReactionSelectedForUser({
+    event,
+    emoji,
+    currentUserId: authStore.user?._id || authStore.user?.id || '',
+    getCommentReactions
+  });
 };
 
-const toggleCommentReaction = async (event, emoji) => {
-  const commentId = getCommentEventId(event);
-  if (!commentId || !emoji) return;
-  try {
-    const response = await apiClient.post(`/deals/${effectiveDealId.value}/comments/${commentId}/reactions`, { emoji });
-    if (response?.success) {
-      await fetchComments();
-    }
-  } catch (error) {
-    console.error('Failed to toggle deal comment reaction:', error);
-  }
-};
+const commentReactionApi = createCommentReactionApi({
+  type: 'deal',
+  getDealId: () => effectiveDealId.value || ''
+});
 
-const setCommentReactionButtonRef = () => {};
-const toggleCommentReactionPicker = (event) => toggleCommentReaction(event, '👍');
-const handleShowCommentReactionTooltip = () => {};
-const handleHideCommentReactionTooltip = () => {};
+const { toggleCommentReaction } = useCommentReactionActions({
+  getCommentId: (event) => getCommentEventId(event),
+  normalizeEmoji: (emoji) => String(emoji || '').trim(),
+  canToggle: () => Boolean(effectiveDealId.value),
+  requestToggle: ({ commentId, emoji }) => commentReactionApi.toggleReaction({ commentId, emoji }),
+  onSuccess: async () => {
+    await fetchComments();
+  },
+  logPrefix: 'Failed to toggle deal comment reaction:'
+});
+
+const findCommentEventByKey = (commentKey) => (
+  activitySectionEvents.value.find((event) => {
+    if (event?.type !== 'comment') return false;
+    const key = event?.id || event?._id || event?.createdAt;
+    return String(key || '') === String(commentKey || '');
+  }) || null
+);
+
+const {
+  commentReactionPickerRef,
+  commentReactionPickerStyle,
+  showCommentReactionPicker,
+  isDarkTheme,
+  emojiPickerTheme,
+  emojiPickerColorScheme,
+  setCommentReactionButtonRef,
+  toggleCommentReactionPicker,
+  updateCommentReactionPickerPosition,
+  handleCommentReactionPickerOutsideClick,
+  handleCommentReactionEmojiClick,
+  startEmojiThemeObserver,
+  stopEmojiThemeObserver,
+  cleanupCommentReactionPicker
+} = useCommentReactionPicker({
+  findCommentEventByKey,
+  isCommentReactionSelected,
+  toggleCommentReaction
+});
+
+const {
+  commentReactionTooltipRef,
+  commentReactionTooltipStyle,
+  commentReactionTooltipPlacement,
+  showCommentReactionTooltip,
+  commentReactionTooltipData,
+  getReactionTooltipMode,
+  getReactionTooltipSingleText,
+  getReactionTooltipInlineText,
+  getReactionUserDisplayName,
+  getReactionUserInitial,
+  updateCommentReactionTooltipPosition,
+  cancelCommentReactionTooltipHide,
+  handleShowCommentReactionTooltip,
+  handleHideCommentReactionTooltip,
+  cleanupCommentReactionTooltip
+} = useCommentReactionTooltip({
+  getCurrentUserId: () => authStore.user?._id || authStore.user?.id || ''
+});
 
 const isCurrentUserById = (userId) => {
   const currentId = String(authStore.user?._id || authStore.user?.id || '').trim();
@@ -3513,6 +3651,12 @@ useRecordPageLifecycle({
   },
   onMount: [
     () => {
+      startEmojiThemeObserver();
+      window.addEventListener('scroll', updateCommentReactionPickerPosition, true);
+      window.addEventListener('scroll', updateCommentReactionTooltipPosition, true);
+      window.addEventListener('resize', updateCommentReactionPickerPosition);
+      window.addEventListener('resize', updateCommentReactionTooltipPosition);
+      document.addEventListener('click', handleCommentReactionPickerOutsideClick);
       window.addEventListener('scroll', updateTagPopoverPosition, true);
       window.addEventListener('resize', updateTagPopoverPosition);
       document.addEventListener('mousedown', handleTagPopoverMousedown);
@@ -3522,8 +3666,16 @@ useRecordPageLifecycle({
   onUnmounted: [
     () => {
       detachLeftPaneScrollListener();
+      cleanupCommentReactionPicker();
+      cleanupCommentReactionTooltip();
     },
     () => {
+      window.removeEventListener('scroll', updateCommentReactionPickerPosition, true);
+      window.removeEventListener('scroll', updateCommentReactionTooltipPosition, true);
+      window.removeEventListener('resize', updateCommentReactionPickerPosition);
+      window.removeEventListener('resize', updateCommentReactionTooltipPosition);
+      document.removeEventListener('click', handleCommentReactionPickerOutsideClick);
+      stopEmojiThemeObserver();
       window.removeEventListener('scroll', updateTagPopoverPosition, true);
       window.removeEventListener('resize', updateTagPopoverPosition);
       document.removeEventListener('mousedown', handleTagPopoverMousedown);
@@ -3537,3 +3689,30 @@ activityFilterComments.value = initialFilter.comments;
 activityFilterUpdates.value = initialFilter.updates;
 activityFilterEmail.value = initialFilter.email;
 </script>
+
+<style scoped>
+.comment-reaction-emoji-picker {
+  --input-border-color: rgb(99 102 241 / 0.45);
+  --input-border-radius: 12px;
+  --outline-color: rgb(99 102 241 / 0.2);
+  --indicator-color: rgb(99 102 241);
+  --category-font-size: 15px;
+  --button-active-background: rgb(99 102 241 / 0.16);
+}
+
+.comment-reaction-emoji-picker.light {
+  --background: #ffffff;
+  --border-color: #e5e7eb;
+  --text-color: #111827;
+  --input-background: #ffffff;
+  --input-font-color: #111827;
+}
+
+.comment-reaction-emoji-picker.dark {
+  --background: #111827;
+  --border-color: #374151;
+  --text-color: #f9fafb;
+  --input-background: #111827;
+  --input-font-color: #f9fafb;
+}
+</style>

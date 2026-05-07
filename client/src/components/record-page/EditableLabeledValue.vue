@@ -632,6 +632,7 @@ const listboxSearchQuery = ref('');
 const phoneError = ref(null);
 /** Server / validation error after commitSave fails */
 const saveHttpError = ref(null);
+const isValidObjectId = (value) => typeof value === 'string' && /^[0-9a-fA-F]{24}$/.test(value);
 
 /**
  * Stack layout inline edit: match compact right-pane chip (min-height, padding, border) so display → edit does not jump.
@@ -672,7 +673,7 @@ onMounted(async () => {
     try {
       const response = await apiClient.get('/users/list');
       if (response.success && Array.isArray(response.data)) {
-        users.value = response.data;
+        users.value = response.data.filter((u) => isValidObjectId(String(u?._id || '')));
       }
     } catch (err) {
       console.error('Error fetching users:', err);
@@ -835,8 +836,12 @@ const selectOptions = computed(() => {
       return { value: id, label };
     });
     const selectedId = selectModelValue.value;
-    if (selectedId != null && !base.some((opt) => String(opt.value) === String(selectedId))) {
-      const fallbackLabel = getEntityOrPeopleRecordLabel(props.value) || 'Selected';
+    if (
+      selectedId != null &&
+      isValidObjectId(String(selectedId)) &&
+      !base.some((opt) => String(opt.value) === String(selectedId))
+    ) {
+      const fallbackLabel = getEntityOrPeopleRecordLabel(props.value) || 'Unknown record';
       base.unshift({ value: selectedId, label: fallbackLabel });
     }
     return base;
@@ -847,7 +852,11 @@ const selectOptions = computed(() => {
       label: getUserDisplayName(u)
     }));
     const selectedId = selectModelValue.value;
-    if (selectedId != null && !mapped.some((opt) => opt.value === selectedId)) {
+    if (
+      selectedId != null &&
+      isValidObjectId(String(selectedId)) &&
+      !mapped.some((opt) => String(opt.value) === String(selectedId))
+    ) {
       const fallbackLabel = typeof props.value === 'object'
         ? getUserDisplayName(props.value)
         : String(props.value);

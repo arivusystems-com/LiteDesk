@@ -50,6 +50,20 @@ function canReadField(field, user, moduleKey) {
  */
 function canWriteField(field, user, moduleKey) {
   if (!field || !user) return false;
+
+  const normalizedRole = String(user.role || '').toLowerCase();
+  const isLegacyAdmin = normalizedRole === 'admin' || normalizedRole === 'owner';
+  const hasAdminAppAccess = Array.isArray(user.appAccess) && user.appAccess.some((access) => {
+    if (String(access?.status || 'ACTIVE').toUpperCase() !== 'ACTIVE') return false;
+    const roleKey = String(access?.roleKey || '').toUpperCase();
+    return roleKey === 'ADMIN';
+  });
+  const roleElevatesPlatformFields = user._roleAllowsPlatformOwnedFieldEdit === true;
+  const isAdminUser =
+    user.isOwner === true ||
+    isLegacyAdmin ||
+    hasAdminAppAccess ||
+    roleElevatesPlatformFields;
   
   // Owners can write to all fields (except platform-owned fields may have restrictions)
   if (user.isOwner) {
@@ -73,8 +87,7 @@ function canWriteField(field, user, moduleKey) {
   
   // Platform-owned fields: Only owners/admins can edit
   if (fieldOwner === 'platform') {
-    // Regular users cannot edit platform fields
-    return false;
+    return isAdminUser;
   }
   
   // App-owned fields: Users with app access and edit permission can edit

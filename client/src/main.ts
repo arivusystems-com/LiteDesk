@@ -12,6 +12,29 @@ import HeadlessSwitch from './components/ui/HeadlessSwitch.vue'
 import { useColorMode } from './composables/useColorMode'
 import { installFetchApiBase } from './config/installFetchApiBase'
 
+const shouldEnableVerboseConsole = () => {
+  if (import.meta.env.PROD) {
+    return import.meta.env.VITE_ENABLE_PROD_DEBUG_LOGS === 'true'
+  }
+  if (import.meta.env.DEV) {
+    try {
+      return typeof localStorage !== 'undefined' && localStorage.getItem('litedesk:debug:global') === '1'
+    } catch (_e) {
+      return false
+    }
+  }
+  return false
+}
+
+// Silence noisy debug logs by default. Keep warn/error visible.
+if (!shouldEnableVerboseConsole()) {
+  const noop = () => {}
+  console.log = noop
+  console.info = noop
+  console.debug = noop
+  console.trace = noop
+}
+
 installFetchApiBase()
 
 const app = createApp(App)

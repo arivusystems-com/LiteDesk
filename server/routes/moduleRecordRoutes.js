@@ -13,6 +13,7 @@ const { protect } = require('../middleware/authMiddleware');
 const { organizationIsolation } = require('../middleware/organizationMiddleware');
 const { checkPermissionFromParam } = require('../middleware/permissionMiddleware');
 const { resolveAppContext } = require('../middleware/resolveAppContextMiddleware');
+const { uploadSingle } = require('../middleware/uploadMiddleware');
 const controller = require('../controllers/moduleRecordController');
 
 const router = express.Router();
@@ -39,9 +40,25 @@ router.get(
   controller.getComments
 );
 router.post(
+  '/:moduleKey/records/:recordId/comment-attachments',
+  checkPermissionFromParam('moduleKey', 'edit'),
+  uploadSingle('file'),
+  controller.uploadCommentAttachment
+);
+router.post(
   '/:moduleKey/records/:recordId/comments',
   checkPermissionFromParam('moduleKey', 'edit'),
   controller.createComment
+);
+router.put(
+  '/:moduleKey/records/:recordId/comments/:commentId',
+  checkPermissionFromParam('moduleKey', 'edit'),
+  controller.updateComment
+);
+router.post(
+  '/:moduleKey/records/:recordId/comments/:commentId/reactions',
+  checkPermissionFromParam('moduleKey', 'edit'),
+  controller.toggleCommentReaction
 );
 router.post(
   '/:moduleKey/tags/delete',

@@ -24,6 +24,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { APP_KEYS } = require('../constants/appKeys');
+const { materializeEffectiveCRMEnvelopeOnUser } = require('../utils/rolePermissionProjection');
 const securityLogger = require('../middleware/securityLoggingMiddleware');
 const { getDefaultRoleForApp } = require('../utils/appAccessUtils');
 
@@ -239,7 +240,10 @@ exports.loginUser = async (req, res) => {
         // 1. Find User by Email (check master database first)
         const user = await User.findOne({ email: email.toLowerCase() })
             .populate('organizationId', 'name industry subscription limits enabledApps enabledModules settings isActive database')
-            .populate('roleId', 'name description color icon level permissions');
+            .populate(
+                'roleId',
+                'name description color icon level permissions canViewAllData canManageTeam canExportData isSystemRole'
+            );
 
         if (!user) {
             console.log('❌ User not found');
@@ -296,7 +300,10 @@ exports.loginUser = async (req, res) => {
                 }
                 
                 const orgDbUser = await OrgUser.findOne({ email: email.toLowerCase() })
-                    .populate('roleId', 'name description color icon level permissions');
+                    .populate(
+                        'roleId',
+                        'name description color icon level permissions canViewAllData canManageTeam canExportData isSystemRole'
+                    );
                 
                 if (orgDbUser) {
                     orgUser = orgDbUser;
@@ -361,10 +368,11 @@ exports.loginUser = async (req, res) => {
         }
         console.log('✅ Organization is active');
 
-        // 6. Update last login (in both databases if applicable)
+        // 6. Last login + denormalized permission snapshot (one save)
         orgUser.lastLogin = new Date();
+        await materializeEffectiveCRMEnvelopeOnUser(orgUser);
         await orgUser.save();
-        
+
         if (orgUser !== user) {
             user.lastLogin = new Date();
             await user.save();
@@ -372,121 +380,7 @@ exports.loginUser = async (req, res) => {
 
         console.log('✅ Login successful for:', email);
 
-        // 7. Sync permissions from roleId if available (use orgUser)
-        if (orgUser.roleId && orgUser.roleId.permissions) {
-            console.log('🔄 Syncing permissions from role:', orgUser.roleId.name);
-            orgUser.permissions = {
-                contacts: {
-                    view: orgUser.roleId.permissions.contacts?.read || false,
-                    create: orgUser.roleId.permissions.contacts?.create || false,
-                    edit: orgUser.roleId.permissions.contacts?.update || false,
-                    delete: orgUser.roleId.permissions.contacts?.delete || false,
-                    viewAll: orgUser.roleId.permissions.contacts?.viewAll || false,
-                    exportData: orgUser.roleId.permissions.contacts?.export || false
-                },
-                organizations: {
-                    view: orgUser.roleId.permissions.organizations?.read || false,
-                    create: orgUser.roleId.permissions.organizations?.create || false,
-                    edit: orgUser.roleId.permissions.organizations?.update || false,
-                    delete: orgUser.roleId.permissions.organizations?.delete || false,
-                    viewAll: orgUser.roleId.permissions.organizations?.viewAll || false,
-                    exportData: orgUser.roleId.permissions.organizations?.export || false
-                },
-                deals: {
-                    view: orgUser.roleId.permissions.deals?.read || false,
-                    create: orgUser.roleId.permissions.deals?.create || false,
-                    edit: orgUser.roleId.permissions.deals?.update || false,
-                    delete: orgUser.roleId.permissions.deals?.delete || false,
-                    viewAll: orgUser.roleId.permissions.deals?.viewAll || false,
-                    exportData: orgUser.roleId.permissions.deals?.export || false
-                },
-                projects: {
-                    view: orgUser.roleId.permissions.deals?.read || false,
-                    create: orgUser.roleId.permissions.deals?.create || false,
-                    edit: orgUser.roleId.permissions.deals?.update || false,
-                    delete: orgUser.roleId.permissions.deals?.delete || false,
-                    viewAll: orgUser.roleId.permissions.deals?.viewAll || false
-                },
-                tasks: {
-                    view: orgUser.roleId.permissions.tasks?.read || false,
-                    create: orgUser.roleId.permissions.tasks?.create || false,
-                    edit: orgUser.roleId.permissions.tasks?.update || false,
-                    delete: orgUser.roleId.permissions.tasks?.delete || false,
-                    viewAll: orgUser.roleId.permissions.tasks?.viewAll || false
-                },
-                events: {
-                    view: orgUser.roleId.permissions.events?.read || false,
-                    create: orgUser.roleId.permissions.events?.create || false,
-                    edit: orgUser.roleId.permissions.events?.update || false,
-                    delete: orgUser.roleId.permissions.events?.delete || false,
-                    viewAll: orgUser.roleId.permissions.events?.viewAll || false
-                },
-                forms: {
-                    view: orgUser.roleId.permissions.forms?.read || false,
-                    create: orgUser.roleId.permissions.forms?.create || false,
-                    edit: orgUser.roleId.permissions.forms?.update || false,
-                    delete: orgUser.roleId.permissions.forms?.delete || false,
-                    viewAll: orgUser.roleId.permissions.forms?.viewAll || false,
-                    exportData: orgUser.roleId.permissions.forms?.export || false
-                },
-                items: {
-                    view: orgUser.roleId.permissions.items?.read || false,
-                    create: orgUser.roleId.permissions.items?.create || false,
-                    edit: orgUser.roleId.permissions.items?.update || false,
-                    delete: orgUser.roleId.permissions.items?.delete || false,
-                    viewAll: orgUser.roleId.permissions.items?.viewAll || false,
-                    exportData: orgUser.roleId.permissions.items?.export || false
-                },
-                imports: {
-                    view: orgUser.roleId.permissions.contacts?.import || orgUser.roleId.permissions.deals?.import || false,
-                    create: orgUser.roleId.permissions.contacts?.import || orgUser.roleId.permissions.deals?.import || false,
-                    delete: false
-                },
-                settings: {
-                    view: orgUser.roleId.permissions.settings?.view || false,
-                    manageUsers: orgUser.roleId.permissions.settings?.manageUsers || false,
-                    manageBilling: orgUser.roleId.permissions.settings?.manageBilling || false,
-                    manageIntegrations: false,
-                    customizeFields: orgUser.roleId.permissions.settings?.edit || false,
-                    edit: orgUser.roleId.permissions.settings?.edit || false
-                },
-                reports: {
-                    viewStandard: orgUser.roleId.permissions.reports?.read || false,
-                    viewCustom: orgUser.roleId.permissions.reports?.read || false,
-                    createCustom: orgUser.roleId.permissions.reports?.create || false,
-                    exportReports: orgUser.roleId.permissions.reports?.export || false
-                },
-                cases: {
-                    view: orgUser.appAccess?.some((entry) => entry.appKey === APP_KEYS.HELPDESK) || false,
-                    create: orgUser.appAccess?.some((entry) => entry.appKey === APP_KEYS.HELPDESK && entry.roleKey !== 'VIEWER') || false,
-                    edit: orgUser.appAccess?.some((entry) => entry.appKey === APP_KEYS.HELPDESK && entry.roleKey !== 'VIEWER') || false,
-                    delete: orgUser.appAccess?.some((entry) => entry.appKey === APP_KEYS.HELPDESK && entry.roleKey === 'ADMIN') || false,
-                    viewAll: orgUser.appAccess?.some((entry) => entry.appKey === APP_KEYS.HELPDESK && ['ADMIN', 'MANAGER', 'AGENT'].includes(entry.roleKey)) || false
-                }
-            };
-            orgUser.set('permissions.people', orgUser.permissions.contacts?.toObject
-                ? orgUser.permissions.contacts.toObject()
-                : { ...(orgUser.permissions.contacts || {}) });
-            await orgUser.save();
-            console.log('✅ Permissions synced from role');
-        }
-
-        const permissionObject = orgUser.permissions?.toObject ? orgUser.permissions.toObject() : orgUser.permissions;
-        const hasUsablePermissions = permissionObject &&
-            typeof permissionObject === 'object' &&
-            Object.keys(permissionObject).length > 0 &&
-            permissionObject.events &&
-            permissionObject.forms &&
-            permissionObject.items;
-
-        if (((!orgUser.roleId && orgUser.appAccess && orgUser.appAccess.length > 0) || !hasUsablePermissions) && orgUser.appAccess && orgUser.appAccess.length > 0) {
-            console.log('🔄 Deriving permissions from appAccess:', JSON.stringify(orgUser.appAccess));
-            orgUser.setPermissionsByAppAccess(orgUser.appAccess);
-            await orgUser.save();
-            console.log('✅ Permissions derived from appAccess');
-        }
-
-        // 8. Log successful login
+        // Log successful login
         securityLogger.logAuthEvent('LOGIN_SUCCESS', {
             email: email.toLowerCase(),
             userId: orgUser._id,
@@ -496,7 +390,7 @@ exports.loginUser = async (req, res) => {
             success: true
         });
 
-        // 9. Derive allowedApps from appAccess if not set (for backward compatibility)
+        // Derive allowedApps from appAccess if not set (for backward compatibility)
         let allowedApps = orgUser.allowedApps;
         if (!allowedApps || allowedApps.length === 0) {
             // Derive from appAccess array
@@ -510,7 +404,7 @@ exports.loginUser = async (req, res) => {
             }
         }
 
-        // 10. Respond with Token and Organization Info (use orgUser data)
+        // Respond with Token and Organization Info (use orgUser data)
         res.json({
             _id: orgUser._id,
             username: orgUser.username,

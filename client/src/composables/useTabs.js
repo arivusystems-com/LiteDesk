@@ -27,6 +27,35 @@ import {
   TicketIcon
 } from '@heroicons/vue/24/outline';
 
+const tabsDebugEnabled = () => {
+  if (!import.meta.env.DEV) return false;
+  try {
+    return localStorage.getItem('litedesk:debug:tabs') === '1';
+  } catch (_e) {
+    return false;
+  }
+};
+
+const logTabsDebug = (...args) => {
+  if (!tabsDebugEnabled()) return;
+  globalThis.console.log(...args);
+};
+
+// File-local console wrapper so existing tab debug logs stay opt-in without
+// rewriting every callsite in this large module.
+const console = {
+  ...globalThis.console,
+  log: (...args) => logTabsDebug(...args),
+  info: (...args) => {
+    if (!tabsDebugEnabled()) return;
+    globalThis.console.info(...args);
+  },
+  debug: (...args) => {
+    if (!tabsDebugEnabled()) return;
+    globalThis.console.debug(...args);
+  },
+};
+
 // Tab state management
 const tabs = ref([]);
 const activeTabId = ref(null);
@@ -201,11 +230,11 @@ const loadTabsFromStorage = () => {
       throw new Error('[Tabs] loadTabsFromStorage called before storage was configured.');
     }
     const stored = localStorage.getItem(storageKey);
-    console.log('🔄 [loadTabsFromStorage] Loading from storage key:', storageKey, 'stored:', !!stored);
+    logTabsDebug('🔄 [loadTabsFromStorage] Loading from storage key:', storageKey, 'stored:', !!stored);
     
     if (stored) {
       const parsed = JSON.parse(stored);
-      console.log('🔄 [loadTabsFromStorage] Parsed tabs:', parsed.tabs?.length || 0);
+      logTabsDebug('🔄 [loadTabsFromStorage] Parsed tabs:', parsed.tabs?.length || 0);
       let loadedTabs = parsed.tabs || [];
       let loadedActiveTabId = parsed.activeTabId || null;
       const hasLegacySchema = Number(parsed.schemaVersion || 1) < TABS_SCHEMA_VERSION;
@@ -228,11 +257,11 @@ const loadTabsFromStorage = () => {
         
         // If the active tab was one of the removed duplicates, update it to the remaining home tab
         if (loadedActiveTabId && removedHomeTabIds.includes(loadedActiveTabId)) {
-          console.log('🔄 [loadTabsFromStorage] Active tab was a duplicate home tab, updating to remaining home tab');
+          logTabsDebug('🔄 [loadTabsFromStorage] Active tab was a duplicate home tab, updating to remaining home tab');
           loadedActiveTabId = firstHomeTab.id;
         }
         
-        console.log('✅ [loadTabsFromStorage] Removed duplicate home tabs, remaining tabs:', loadedTabs.length);
+        logTabsDebug('✅ [loadTabsFromStorage] Removed duplicate home tabs, remaining tabs:', loadedTabs.length);
       }
       
       if (hasLegacySchema) {
@@ -250,7 +279,7 @@ const loadTabsFromStorage = () => {
         if (typeof tab.icon === 'string') {
           // Check if it's an emoji (for migration)
           if (tab.icon.match(/[\u{1F300}-\u{1F9FF}]/u)) {
-            console.log('🔄 Migrating emoji icon to icon ID:', tab.icon, 'for tab:', tab.title);
+            logTabsDebug('🔄 Migrating emoji icon to icon ID:', tab.icon, 'for tab:', tab.title);
             tab.icon = migrateEmojiToIconId(tab.icon);
           }
           // Convert icon ID to component
@@ -281,7 +310,7 @@ const loadTabsFromStorage = () => {
         // Migrate only legacy shared /dashboard tabs.
         // Keep app-scoped routes like /dashboard/helpdesk untouched.
         if (tab.path === '/dashboard' || (tab.id === 'dashboard' && (!tab.path || tab.path === '/'))) {
-          console.log('🔄 Migrating legacy dashboard tab to scoped sales dashboard route');
+          logTabsDebug('🔄 Migrating legacy dashboard tab to scoped sales dashboard route');
           tab.id = generateTabId(); // Generate new ID since it's not the home tab
           tab.path = '/dashboard/sales';
           tab.title = 'Sales Dashboard';
@@ -304,9 +333,9 @@ const loadTabsFromStorage = () => {
       // Don't create home tab here - let setupRouteWatcher decide based on current route
       // This prevents creating unnecessary home tabs when on dashboard routes
       if (tabs.value.length === 0) {
-        console.log('🔄 [loadTabsFromStorage] No tabs found, will be created by setupRouteWatcher based on route');
+        logTabsDebug('🔄 [loadTabsFromStorage] No tabs found, will be created by setupRouteWatcher based on route');
       } else {
-        console.log('✅ [loadTabsFromStorage] Loaded', tabs.value.length, 'tabs from storage');
+        logTabsDebug('✅ [loadTabsFromStorage] Loaded', tabs.value.length, 'tabs from storage');
       }
 
       // Persist migrated shape once so legacy cleanup is one-time.
@@ -315,12 +344,12 @@ const loadTabsFromStorage = () => {
       }
     } else {
       // No stored tabs - don't create home tab here, let setupRouteWatcher decide
-      console.log('🔄 [loadTabsFromStorage] No stored tabs, will be created by setupRouteWatcher based on route');
+      logTabsDebug('🔄 [loadTabsFromStorage] No stored tabs, will be created by setupRouteWatcher based on route');
     }
   } catch (e) {
     console.error('❌ [loadTabsFromStorage] Error loading tabs:', e);
     // Don't create home tab on error either - let setupRouteWatcher handle it
-    console.log('🔄 [loadTabsFromStorage] Error occurred, will create tab based on route in setupRouteWatcher');
+    logTabsDebug('🔄 [loadTabsFromStorage] Error occurred, will create tab based on route in setupRouteWatcher');
   }
 };
 
@@ -726,7 +755,7 @@ export function useTabs() {
 
   // Sync active tab with current route (for browser navigation ONLY)
   const syncTabWithRoute = (path) => {
-    console.log('🔄 syncTabWithRoute called with path:', path);
+    logTabsDebug('🔄 syncTabWithRoute called with path:', path);
     
     // Skip on mobile
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
@@ -738,13 +767,13 @@ export function useTabs() {
     // Audit app has its own layout and doesn't use the CRM tabs system
     // Settings now uses internal tabs
     if (path === '/login' || path === '/' || path.startsWith('/audit/')) {
-      console.log('⏭️ Skipping sync for path:', path);
+      logTabsDebug('⏭️ Skipping sync for path:', path);
       return;
     }
     
     // Double-check programmatic navigation flag (safety check)
     if (isProgrammaticNavigation) {
-      console.log('🔒 syncTabWithRoute: Programmatic navigation detected, skipping');
+      logTabsDebug('🔒 syncTabWithRoute: Programmatic navigation detected, skipping');
       return;
     }
     
@@ -772,10 +801,10 @@ export function useTabs() {
     if (existingTab) {
       // Tab exists, switch to it ONLY if we're not already on it
       if (activeTabId.value !== existingTab.id) {
-        console.log('🔄 Syncing tab for browser navigation:', existingTab.title, 'from', activeTabId.value, 'to', existingTab.id);
+        logTabsDebug('🔄 Syncing tab for browser navigation:', existingTab.title, 'from', activeTabId.value, 'to', existingTab.id);
         activeTabId.value = existingTab.id;
       } else {
-        console.log('✅ Already on correct tab, no sync needed');
+        logTabsDebug('✅ Already on correct tab, no sync needed');
       }
 
       // Keep titles fresh for routes with dynamic IDs (e.g. form response details)
@@ -787,7 +816,7 @@ export function useTabs() {
       // Tab doesn't exist, create one
       // This handles cases where user navigates via browser back/forward to a route
       // that doesn't have a tab yet (e.g., direct URL entry, bookmark, etc.)
-      console.log('✨ Creating tab for browser navigation:', path);
+      logTabsDebug('✨ Creating tab for browser navigation:', path);
       // Home tab should not be closable
       const isHome = path === '/platform/home';
       

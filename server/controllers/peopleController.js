@@ -918,6 +918,20 @@ exports.update = async (req, res) => {
       }
       // Otherwise keep it as is (should be an ObjectId string)
     }
+
+    // Normalize assignedTo to a valid ObjectId string or null.
+    // This prevents accidental sentinel values (e.g. "selected") from being persisted.
+    if (Object.prototype.hasOwnProperty.call(updateData, 'assignedTo')) {
+      const rawAssignedTo = updateData.assignedTo;
+      if (rawAssignedTo === null || rawAssignedTo === '') {
+        updateData.assignedTo = null;
+      } else {
+        const candidate = (typeof rawAssignedTo === 'object' && rawAssignedTo?._id)
+          ? String(rawAssignedTo._id)
+          : String(rawAssignedTo);
+        updateData.assignedTo = mongoose.Types.ObjectId.isValid(candidate) ? candidate : null;
+      }
+    }
     
     console.log('📝 Updating People record:', {
       id: req.params.id,

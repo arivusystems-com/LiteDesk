@@ -180,6 +180,15 @@ export const useAuthStore = defineStore('auth', {
             return normalizeAppKeys(fallbackAllowedApps);
         },
 
+        _isAuthRequestDebugEnabled() {
+            if (!import.meta.env.DEV) return false;
+            try {
+                return localStorage.getItem('litedesk:debug:authRequests') === '1';
+            } catch (_e) {
+                return false;
+            }
+        },
+
         setUser(userData) {
             // Derive allowedApps from explicit user access first; never default to SALES.
             const allowedApps = this.resolveAllowedApps(userData, {
@@ -267,7 +276,9 @@ export const useAuthStore = defineStore('auth', {
             this.error = null;
             try {
                 const url = getApiUrlForFetch(`/api/auth/${endpoint}`);
-                console.log('Auth request ->', url, credentials);
+                if (this._isAuthRequestDebugEnabled()) {
+                    logAuthAccessDebug('Auth request ->', url, credentials);
+                }
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -275,8 +286,10 @@ export const useAuthStore = defineStore('auth', {
                 });
 
                 const text = await response.text();
-                console.log('Auth response status', response.status);
-                console.log('Auth response body:', text.slice(0, 1000)); // log first 1000 chars
+                if (this._isAuthRequestDebugEnabled()) {
+                    logAuthAccessDebug('Auth response status', response.status);
+                    logAuthAccessDebug('Auth response body:', text.slice(0, 1000)); // log first 1000 chars
+                }
 
                 const contentType = response.headers.get('content-type') || '';
                 if (!contentType.includes('application/json')) {
@@ -376,7 +389,7 @@ export const useAuthStore = defineStore('auth', {
             }
             
             try {
-                console.log('Refreshing user permissions...');
+                logAuthAccessDebug('Refreshing user permissions...');
                 const response = await fetch(getApiUrlForFetch('/api/users/profile'), {
                     headers: {
                         'Authorization': `Bearer ${this.user.token}`,
@@ -515,7 +528,7 @@ export const useAuthStore = defineStore('auth', {
                                 ? String(this.organization._id)
                                 : undefined,
                         });
-                        console.log('User permissions refreshed successfully');
+                        logAuthAccessDebug('User permissions refreshed successfully');
                         return true;
                     }
                 } else if (response.status === 401) {

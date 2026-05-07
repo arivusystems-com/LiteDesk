@@ -4,7 +4,13 @@
  * - Set VITE_API_ORIGIN to your API base (e.g. https://api.arivusystems.com) when the SPA and API are on different origins.
  */
 export function getApiOrigin(): string {
-  return (import.meta.env.VITE_API_ORIGIN as string | undefined)?.replace(/\/$/, '') ?? ''
+  const explicitOrigin = (import.meta.env.VITE_API_ORIGIN as string | undefined)?.replace(/\/$/, '')
+  if (explicitOrigin) return explicitOrigin
+
+  // Backward compatibility: older envs use VITE_API_URL and may include trailing /api.
+  const legacyUrl = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '')
+  if (!legacyUrl) return ''
+  return legacyUrl.replace(/\/api$/, '')
 }
 
 export function withApiOrigin(path: string): string {
