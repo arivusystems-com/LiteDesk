@@ -5480,6 +5480,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/authRegistry';
 import { Switch, Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import apiClient from '@/utils/apiClient';
+import { invalidateTenantSchemaCaches } from '@/utils/tenantSchemaApiCache';
 import { getDefaultPhoneValidations, getDefaultEmailValidations } from '@/utils/defaultFieldValidations';
 import {
   CURRENCY_OPTIONS,
@@ -8677,11 +8678,12 @@ function cancelOptionEdit(index) {
   }
 }
 
-const fetchModules = async () => {
+const fetchModules = async (apiGetOptions = {}) => {
   loading.value = true;
   try {
     // Use context=all so Settings receives both global and app-specific custom fields
-    const data = await apiClient.get('/modules', { params: { context: 'all' } });
+    // Pass cache: 'no-store' after saves — otherwise metadata cache can serve stale quickCreate for 5 minutes
+    const data = await apiClient.get('/modules', { params: { context: 'all' }, ...apiGetOptions });
     if (data.success) {
       modules.value = normalizeModulesForSettingsDefaults(data.data);
       // Initialize from URL first (unless startWithModuleList: show cards first)
@@ -9026,8 +9028,15 @@ const fetchModules = async () => {
           });
         }
         
-        // Always include required fields in Quick Create selection
-        const combined = Array.from(new Set([...filteredBaseKeys, ...requiredKeys]));
+        // Quick Create source-of-truth precedence (mirrors selectModule):
+        //   1. If the tenant has explicitly saved a quickCreate (`filteredBaseKeys.length > 0`),
+        //      trust it as-is. Don't re-inject every field flagged `required: true` —
+        //      otherwise a stale required flag silently re-adds fields that the user
+        //      removed from Quick Create on every page reload.
+        //   2. Only fall back to required fields when there's no saved selection yet.
+        const combined = filteredBaseKeys.length > 0
+          ? Array.from(new Set(filteredBaseKeys))
+          : Array.from(new Set([...filteredBaseKeys, ...requiredKeys]));
         
         // For People module, ensure we only include eligible core identity fields.
         let finalCombined = combined;
@@ -9046,8 +9055,9 @@ const fetchModules = async () => {
         const sanitizedCombined = finalCombined.filter(key => allowedQuickCreateKeys.has(key));
         quickCreateSelected.value = new Set(sanitizedCombined);
         
-        // Initialize field order from saved quickCreate array (preserves order)
-        // If quickCreate has order, use it; otherwise use editFields order
+        // Initialize field order from saved quickCreate array (preserves order).
+        // Mirror the precedence rule above: only seed from required fields when there
+        // is no saved order to respect.
         if (filteredBaseKeys.length > 0) {
           // Filter quickCreateFieldOrder to only include eligible fields for People module
           let fieldOrder = filteredBaseKeys;
@@ -9061,15 +9071,7 @@ const fetchModules = async () => {
               }
             });
           }
-          quickCreateFieldOrder.value = fieldOrder;
-          // Add any required fields that aren't in the order yet (filtered for eligibility)
-          requiredKeys.forEach(key => {
-            if (!quickCreateFieldOrder.value.includes(key)) {
-              if (!isPeopleModule.value || isFieldEligibleForQuickCreate(key)) {
-                quickCreateFieldOrder.value.push(key);
-              }
-            }
-          });
+          quickCreateFieldOrder.value = [...fieldOrder];
           
           // PLATFORM-LEVEL CANONICAL DEFAULT: Organizations Quick Create
           // Ensure name is always first in field order
@@ -9281,20 +9283,17 @@ const fetchModules = async () => {
               return field ? field.key : key;
             }).filter(key => key);
             const requiredKeys = editFields.value.filter(f => !!f.required && !!f.key).map(f => f.key);
-            // Always include required fields in Quick Create selection
-            const combined = Array.from(new Set([...normalizedBaseKeys, ...requiredKeys]));
+            // Quick Create source-of-truth precedence (mirrors selectModule + fetchModules main path):
+            // trust the saved quickCreate when it exists; only seed from required fields on first
+            // visit. Otherwise stale `required: true` flags re-inject removed fields after refresh.
+            const combined = normalizedBaseKeys.length > 0
+              ? Array.from(new Set(normalizedBaseKeys))
+              : Array.from(new Set([...normalizedBaseKeys, ...requiredKeys]));
             quickCreateSelected.value = new Set(combined);
             
-            // Initialize field order from saved quickCreate array (preserves order)
-            // If quickCreate has order, use it; otherwise use editFields order
+            // Initialize field order from saved quickCreate array (preserves order).
             if (normalizedBaseKeys.length > 0) {
-              quickCreateFieldOrder.value = normalizedBaseKeys;
-              // Add any required fields that aren't in the order yet
-              requiredKeys.forEach(key => {
-                if (!quickCreateFieldOrder.value.includes(key)) {
-                  quickCreateFieldOrder.value.push(key);
-                }
-              });
+              quickCreateFieldOrder.value = [...normalizedBaseKeys];
             } else {
               // No saved order, initialize with editFields order
               quickCreateFieldOrder.value = editFields.value
@@ -9564,20 +9563,24 @@ const selectModule = (mod, preferFieldKey = null) => {
     return null;
   }).filter(key => key !== null);
   const requiredKeys = editFields.value.filter(f => !!f.required && !!f.key).map(f => f.key);
-  // Always include required fields in Quick Create selection
-  const combined = Array.from(new Set([...normalizedBaseKeys, ...requiredKeys]));
+  // Quick Create source-of-truth precedence:
+  //   1. If the tenant has an explicit saved quickCreate (`normalizedBaseKeys.length > 0`),
+  //      trust it as-is. Do NOT re-inject every field with `required: true`, because a
+  //      stale required flag on a config-level field (e.g. description / relatedTo set
+  //      required for record creation) would silently re-add it to Quick Create on every
+  //      page reload — making Settings appear to "save 4 fields, then show 6 after refresh".
+  //   2. If there is NO saved quickCreate yet, fall back to required fields so the user
+  //      isn't presented with an empty selection on first visit.
+  const combined = normalizedBaseKeys.length > 0
+    ? Array.from(new Set(normalizedBaseKeys))
+    : Array.from(new Set([...normalizedBaseKeys, ...requiredKeys]));
   quickCreateSelected.value = new Set(combined);
   
-  // Initialize field order from saved quickCreate array (preserves order)
-  // If quickCreate has order, use it; otherwise use editFields order
+  // Initialize field order from saved quickCreate array (preserves order).
+  // Mirror the same precedence as `combined` above — only seed required fields when
+  // there's no saved order to respect.
   if (normalizedBaseKeys.length > 0) {
-    quickCreateFieldOrder.value = normalizedBaseKeys;
-    // Add any required fields that aren't in the order yet
-    requiredKeys.forEach(key => {
-      if (!quickCreateFieldOrder.value.includes(key)) {
-        quickCreateFieldOrder.value.push(key);
-      }
-    });
+    quickCreateFieldOrder.value = [...normalizedBaseKeys];
   } else {
     // No saved order, initialize with editFields order
     quickCreateFieldOrder.value = editFields.value
@@ -9667,7 +9670,7 @@ const closeFormModal = () => {
 
 const handleModuleSaved = async (savedModule) => {
   closeFormModal();
-  await fetchModules();
+  await fetchModules({ cache: 'no-store' });
   // Refresh sidebar so new custom module appears in app nav
   if (savedModule?.type === 'custom') {
     try { window.dispatchEvent(new CustomEvent('litedesk:core-modules-updated')); } catch (e) {}
@@ -9684,7 +9687,7 @@ const deleteModule = async (mod) => {
   try {
     const data = await apiClient.delete(`/modules/${mod._id}`);
     if (!data.success) return alert(data.message || 'Failed to delete module');
-    await fetchModules();
+    await fetchModules({ cache: 'no-store' });
     if (modules.value.length) selectModule(modules.value[0]); else selectedModuleId.value = null;
   } catch (e) {
     console.error('Delete module failed', e);
@@ -9958,23 +9961,25 @@ const saveModule = async () => {
       relationshipsCount: relationships.value.length,
       relationships: relationships.value
     });
-    const res = await fetch(url, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authStore.user?.token}` },
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      // Show detailed error message for field mutation violations
-      if (data.code === 'FIELD_MUTATION_NOT_ALLOWED' && data.violations && data.violations.length > 0) {
-        const violationMessages = data.violations.map(v => `• ${v.field}: ${v.reason}`).join('\n');
-        alert(`${data.message}\n\nViolations:\n${violationMessages}`);
+    let data;
+    try {
+      data = await apiClient.put(url, payload);
+    } catch (err) {
+      const errData = err.response?.data;
+      if (errData?.code === 'FIELD_MUTATION_NOT_ALLOWED' && errData.violations?.length > 0) {
+        const violationMessages = errData.violations.map(v => `• ${v.field}: ${v.reason}`).join('\n');
+        alert(`${errData.message}\n\nViolations:\n${violationMessages}`);
       } else {
-        alert(data.message || 'Failed to save');
+        alert(errData?.message || err.message || 'Failed to save');
       }
       return;
     }
-    await fetchModules();
+    if (!data.success) {
+      alert(data.message || 'Failed to save');
+      return;
+    }
+    invalidateTenantSchemaCaches();
+    await fetchModules({ cache: 'no-store' });
     // Re-select by key to avoid unstable IDs on system modules
     const updated = modules.value.find(m => m.key === mod.key);
     // preserve current selected field
@@ -11766,10 +11771,44 @@ const isDirty = computed(() => {
   if (!originalSnapshot.value) return false;
   return getSnapshot() !== originalSnapshot.value;
 });
+
+/** Align with selectModule quickCreate normalization — strict f.key === key on save dropped variant keys and caused saved N vs loaded N+1 mismatches. */
+function resolveQuickCreateKeyToEditFieldsKey(key) {
+  if (!key) return null;
+  let field = editFields.value.find(f => f.key === key);
+  if (field) return field.key;
+  field = editFields.value.find(f => f.key && f.key.toLowerCase() === String(key).toLowerCase());
+  if (field) return field.key;
+  const camelCaseKey = String(key).replace(/-([a-z])/g, (g) => g[1].toUpperCase());
+  field = editFields.value.find(f => f.key && f.key.toLowerCase() === camelCaseKey.toLowerCase());
+  return field ? field.key : null;
+}
+
+function mergeResolvedQuickCreateKeys(orderedResolved, selectedResolved) {
+  const seen = new Set();
+  const out = [];
+  const push = (k) => {
+    if (!k) return;
+    const low = String(k).toLowerCase();
+    if (seen.has(low)) return;
+    seen.add(low);
+    out.push(k);
+  };
+  for (const k of orderedResolved) push(k);
+  for (const k of selectedResolved) push(k);
+  return out;
+}
+
 function getQuickSnapshot() {
-  const orderedKeys = orderedQuickCreate.value.map(f => f.key);
+  const orderedKeys = orderedQuickCreate.value.map(f => resolveQuickCreateKeyToEditFieldsKey(f.key)).filter(Boolean);
+  const selectedKeys = Array.from(quickCreateSelected.value)
+    .map(k => resolveQuickCreateKeyToEditFieldsKey(k))
+    .filter(Boolean);
+  const qc = quickMode.value === 'simple'
+    ? mergeResolvedQuickCreateKeys(orderedKeys, selectedKeys)
+    : mergeResolvedQuickCreateKeys([], selectedKeys);
   const payload = {
-    quickCreate: quickMode.value === 'simple' ? orderedKeys : Array.from(quickCreateSelected.value),
+    quickCreate: qc,
     quickCreateLayout: quickLayout.value
   };
   return JSON.stringify(payload);
@@ -11788,30 +11827,64 @@ async function saveQuickCreate() {
   isSavingQuickCreate.value = true;
   try {
     const url = mod.type === 'system' ? `/api/modules/system/${mod.key}` : `/api/modules/${mod._id}`;
-    const orderedKeys = orderedQuickCreate.value.map(f => f.key).filter(key => key);
+
+    // CRITICAL DIAGNOSTIC: capture raw state at click time so we can see exactly
+    // what's in the reactive state when the user clicks Save. If the UI shows
+    // a field selected but it's NOT in this Set, we have a reactivity issue.
+    const rawSelectedAtClick = Array.from(quickCreateSelected.value);
+    const rawOrderAtClick = [...quickCreateFieldOrder.value];
+    const visibleOrderedAtClick = orderedQuickCreate.value.map(f => f.key);
+    const editFieldsKeysAll = editFields.value.map(f => f.key);
+    const requiredFieldsRaw = editFields.value
+      .filter(f => !!f.required && !!f.key)
+      .map(f => ({ key: f.key, required: f.required, isSystem: isSystemField(f) }));
+
+    console.log('🟢 [saveQuickCreate] CLICK - raw state at button click:', {
+      module: mod.key,
+      quickMode: quickMode.value,
+      rawSelectedAtClick,
+      rawOrderAtClick,
+      visibleOrderedAtClick,
+      editFieldsKeysAll,
+      requiredFieldsRaw
+    });
+
+    const orderedKeys = orderedQuickCreate.value.map(f => resolveQuickCreateKeyToEditFieldsKey(f.key)).filter(Boolean);
+    const selectedKeys = Array.from(quickCreateSelected.value)
+      .map(k => resolveQuickCreateKeyToEditFieldsKey(k))
+      .filter(Boolean);
+
+    let allKeys =
+      quickMode.value === 'simple'
+        ? mergeResolvedQuickCreateKeys(orderedKeys, selectedKeys)
+        : mergeResolvedQuickCreateKeys([], selectedKeys);
+
+    const dropped = [...new Set([
+      ...orderedQuickCreate.value.map(f => f.key).filter(Boolean),
+      ...Array.from(quickCreateSelected.value)
+    ])].filter((k) => !resolveQuickCreateKeyToEditFieldsKey(k));
+    if (dropped.length) {
+      console.warn('⚠️  Quick Create keys could not be matched to module fields (excluded from save):', dropped);
+    }
     
-    // Also include any keys from quickCreateSelected that might not be in orderedQuickCreate
-    // This handles cases where a field is selected but not yet in the order
-    const selectedKeys = Array.from(quickCreateSelected.value);
-    let allKeys = quickMode.value === 'simple' 
-      ? Array.from(new Set([...orderedKeys, ...selectedKeys])).filter(key => {
-          // Verify the key exists in editFields
-          const exists = editFields.value.some(f => f.key === key);
-          if (!exists) {
-            console.warn(`⚠️  Key "${key}" in quickCreateSelected but not in editFields, excluding from save`);
-          }
-          return exists;
-        })
-      : selectedKeys.filter(key => {
-          const exists = editFields.value.some(f => f.key === key);
-          if (!exists) {
-            console.warn(`⚠️  Key "${key}" in quickCreateSelected but not in editFields, excluding from save`);
-          }
-          return exists;
-        });
-    
-    // Always include required fields in saved Quick Create (excluding system fields)
-    const requiredKeysSave = editFields.value.filter(f => !!f.required && !!f.key && !isSystemField(f)).map(f => f.key);
+    // Always include required fields in saved Quick Create (excluding system fields).
+    // IMPORTANT: only re-add required fields that are ALSO present in the visible/selected
+    // set. Otherwise a stale `required: true` flag on a field config (e.g. from a prior
+    // settings mistake) silently re-injects a field the user explicitly removed, which
+    // looks like "the UI resets after saving" because the saved payload no longer matches
+    // what the user saw on screen.
+    const visibleAvailableKeySet = new Set(
+      (Array.isArray(quickCreateAvailableFields.value) ? quickCreateAvailableFields.value : [])
+        .map(f => f?.key)
+        .filter(Boolean)
+    );
+    const requiredKeysSave = editFields.value
+      .filter(f => !!f.required && !!f.key && !isSystemField(f))
+      .map(f => f.key)
+      .filter(k => visibleAvailableKeySet.has(k));
+    if (requiredKeysSave.length) {
+      console.log('🟢 [saveQuickCreate] required keys re-added to save payload:', requiredKeysSave);
+    }
     allKeys = Array.from(new Set([...allKeys, ...requiredKeysSave]));
     // Guardrail: never persist system fields in Quick Create settings.
     allKeys = allKeys.filter(key => {
@@ -11901,13 +11974,15 @@ async function saveQuickCreate() {
       payload
     });
     
-    const res = await fetch(url, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authStore.user?.token}` },
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
+    let data;
+    try {
+      data = await apiClient.put(url, payload);
+    } catch (err) {
+      console.error('Save Quick Create failed:', err);
+      alert(err.message || 'Failed to save quick create');
+      return;
+    }
+    if (!data.success) {
       console.error('Save Quick Create failed:', data);
       alert(data.message || 'Failed to save quick create');
       return;
@@ -11923,8 +11998,9 @@ async function saveQuickCreate() {
       localStorage.setItem(`litedesk-modfields-quick-${mod.key}`, JSON.stringify(payload.quickCreate));
     } catch (e) {}
     
-    // Refresh modules to get the latest data from server
-    await fetchModules();
+    invalidateTenantSchemaCaches();
+    // Refresh modules from server (bypass client metadata cache + tenantSchemaApiCache for DynamicForm)
+    await fetchModules({ cache: 'no-store' });
     
     // Find the updated module and verify quickCreate was saved
     const updated = modules.value.find(m => m.key === mod.key);
@@ -11936,13 +12012,25 @@ async function saveQuickCreate() {
         expectedLength: payload.quickCreate.length
       });
       
-      // Verify the saved quickCreate matches what we sent
-      if (updated.quickCreate && Array.isArray(updated.quickCreate) && updated.quickCreate.length !== payload.quickCreate.length) {
-        console.warn('⚠️  QuickCreate length mismatch after save:', {
-          saved: payload.quickCreate.length,
-          loaded: updated.quickCreate.length,
-          savedKeys: payload.quickCreate,
-          loadedKeys: updated.quickCreate
+      // Verify the saved quickCreate matches what we sent.
+      // Compare BOTH length and exact contents (set + order). If anything diverges
+      // it tells us the server transformed the payload — the most useful signal
+      // for debugging "UI resets after saving".
+      const sentArr = Array.isArray(payload.quickCreate) ? payload.quickCreate : [];
+      const loadedArr = Array.isArray(updated.quickCreate) ? updated.quickCreate : [];
+      const sentSet = new Set(sentArr.map(k => String(k || '').toLowerCase()));
+      const loadedSet = new Set(loadedArr.map(k => String(k || '').toLowerCase()));
+      const inSentNotLoaded = sentArr.filter(k => !loadedSet.has(String(k || '').toLowerCase()));
+      const inLoadedNotSent = loadedArr.filter(k => !sentSet.has(String(k || '').toLowerCase()));
+      if (inSentNotLoaded.length || inLoadedNotSent.length || sentArr.length !== loadedArr.length) {
+        console.warn('⚠️  QuickCreate diff after save (sent vs loaded):', {
+          module: mod.key,
+          sentLength: sentArr.length,
+          loadedLength: loadedArr.length,
+          sentKeys: sentArr,
+          loadedKeys: loadedArr,
+          droppedByServer: inSentNotLoaded,
+          addedByServer: inLoadedNotSent
         });
       }
       
@@ -11951,6 +12039,7 @@ async function saveQuickCreate() {
       console.error('❌ Updated module not found after refresh');
     }
     quickOriginalSnapshot.value = getQuickSnapshot();
+    try { window.dispatchEvent(new CustomEvent('litedesk:core-modules-updated')); } catch (e) {}
   } catch (e) {
     console.error('Save quick create failed', e);
     alert('Failed to save quick create settings');

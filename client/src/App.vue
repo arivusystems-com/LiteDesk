@@ -20,6 +20,20 @@ const GlobalSurfacesProvider = defineAsyncComponent(() =>
 import { useSidebarState } from '@/composables/useSidebarState';
 import { identifyProductUser } from '@/config/posthogUser';
 
+const appDebugEnabled = () => {
+  if (!import.meta.env.DEV) return false;
+  try {
+    return localStorage.getItem('litedesk:debug:app') === '1';
+  } catch (_e) {
+    return false;
+  }
+};
+
+const appLog = (...args) => {
+  if (!appDebugEnabled()) return;
+  console.log(...args);
+};
+
 function resetTabsStateFromModule() {
   void import('@/composables/useTabs').then((m) => m.resetTabsState());
 }
@@ -184,7 +198,7 @@ watch(() => route.path, async (newPath) => {
   if (authStore.isAuthenticated && appShellStore.isLoaded) {
     const detectedApp = detectActiveAppFromRoute(newPath);
     if (appShellStore.activeApp !== detectedApp) {
-      console.log(`[App] Route changed to ${newPath}, setting activeApp to ${detectedApp}`);
+      appLog(`[App] Route changed to ${newPath}, setting activeApp to ${detectedApp}`);
       appShellStore.setActiveApp(detectedApp);
     }
     // Persist last active app lens for sidebar fallback when route is ambiguous.
@@ -196,7 +210,7 @@ watch(() => route.path, async (newPath) => {
 onMounted(async () => {
   if (authStore.isAuthenticated) {
     const neededMetadata = !appShellStore.isLoaded;
-    console.log('Auto-refreshing permissions on page load...');
+    appLog('Auto-refreshing permissions on page load...');
     await Promise.all([
       authStore.refreshUser(),
       neededMetadata ? appShellStore.loadUIMetadata() : Promise.resolve()
@@ -210,7 +224,7 @@ onMounted(async () => {
     });
 
     if (neededMetadata) {
-      console.log('Initializing dynamic routes...');
+      appLog('Initializing dynamic routes...');
       if (typeof initDynamicRoutes === 'function') {
         await initDynamicRoutes();
       }
@@ -220,7 +234,7 @@ onMounted(async () => {
     // Phase 2D: Set initial activeApp based on current route
     const detectedApp = detectActiveAppFromRoute(route.path);
     if (detectedApp && appShellStore.activeApp !== detectedApp) {
-      console.log(`[App] Initial route: ${route.path}, setting activeApp to ${detectedApp}`);
+      appLog(`[App] Initial route: ${route.path}, setting activeApp to ${detectedApp}`);
       appShellStore.setActiveApp(detectedApp);
     }
 
@@ -242,10 +256,10 @@ onMounted(async () => {
 
         await nextTick();
 
-        console.log('📊 [App] After initTabs, checking tabs state...');
+        appLog('📊 [App] After initTabs, checking tabs state...');
         const { tabs: tabsRef } = useTabs();
-        console.log('📊 [App] Tabs count:', tabsRef.value.length);
-        console.log('📊 [App] Tabs:', tabsRef.value.map(t => ({ id: t.id, title: t.title, path: t.path })));
+        appLog('📊 [App] Tabs count:', tabsRef.value.length);
+        appLog('📊 [App] Tabs:', tabsRef.value.map(t => ({ id: t.id, title: t.title, path: t.path })));
 
         cleanupRouteWatcher = setupRouteWatcher(route);
       } else {
@@ -255,7 +269,7 @@ onMounted(async () => {
         });
       }
     } else {
-      console.log('📋 Audit/Portal route detected, skipping tabs initialization');
+      appLog('📋 Audit/Portal route detected, skipping tabs initialization');
     }
 
     // Note: We don't need a router.beforeEach guard here because:
@@ -271,7 +285,7 @@ onMounted(async () => {
 });
 
 watch(salesNotificationSheetOpen, (val) => {
-  console.log('[App] salesNotificationSheetOpen changed:', val);
+  appLog('[App] salesNotificationSheetOpen changed:', val);
 });
 
 onBeforeUnmount(() => {
@@ -297,7 +311,7 @@ watch(
       }
     } else if (!wasAuthed && isAuthed) {
       // User just logged in - initialize tabs (same as onMounted logic)
-      console.log('🔄 [App] User authenticated, initializing tabs...');
+      appLog('🔄 [App] User authenticated, initializing tabs...');
       const instanceId = authStore.organization?._id || authStore.organization?.instanceId;
       const userId = authStore.user?._id;
       
@@ -322,25 +336,25 @@ watch(
           await router.isReady();
           await nextTick();
 
-          console.log('📊 [App] After login - After initTabs, checking tabs state...');
+          appLog('📊 [App] After login - After initTabs, checking tabs state...');
           const { tabs: tabsRef } = useTabs();
-          console.log('📊 [App] After login - Tabs count:', tabsRef.value.length);
-          console.log('📊 [App] After login - Tabs:', tabsRef.value.map(t => ({ id: t.id, title: t.title, path: t.path })));
-          console.log('📊 [App] After login - Current route:', route.path, route.fullPath);
+          appLog('📊 [App] After login - Tabs count:', tabsRef.value.length);
+          appLog('📊 [App] After login - Tabs:', tabsRef.value.map(t => ({ id: t.id, title: t.title, path: t.path })));
+          appLog('📊 [App] After login - Current route:', route.path, route.fullPath);
 
           // Setup route watcher for browser navigation (same as onMounted)
           // Use 'route' from useRoute() just like onMounted does
           // Store cleanup function to remove popstate listener on unmount
-          console.log('🔧 [App] After login - Setting up route watcher on route:', route.path);
+          appLog('🔧 [App] After login - Setting up route watcher on route:', route.path);
           cleanupRouteWatcher = setupRouteWatcher(route);
           
           if (typeof cleanupRouteWatcher === 'function') {
-            console.log('✅ [App] After login - Route watcher successfully set up');
+            appLog('✅ [App] After login - Route watcher successfully set up');
           } else {
             console.warn('⚠️ [App] After login - setupRouteWatcher did not return cleanup function');
           }
         } else {
-          console.log('📋 [App] After login - Audit/Portal route detected, skipping tabs initialization');
+          appLog('📋 [App] After login - Audit/Portal route detected, skipping tabs initialization');
         }
       }
     }

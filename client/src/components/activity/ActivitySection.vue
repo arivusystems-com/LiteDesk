@@ -214,6 +214,7 @@
       >
         <template #commentInput="{ submit }">
           <CommentInput
+            ref="commentInputRef"
             :model-value="newCommentText"
             @update:model-value="$emit('update:newCommentText', $event)"
             :show-submit="true"
@@ -224,10 +225,16 @@
         </template>
 
         <template #event="{ event, index }">
-          <ThreadReplies
-            v-if="isThreadViewActive && index === 1 && threadReplyCount > 0"
-            :count="threadReplyCount"
-          />
+          <div v-if="isThreadViewActive && index === 1 && threadReplyCount > 0">
+            <ThreadReplies :count="threadReplyCount" />
+            <ActivityEventRenderer
+              :event="event"
+              :index="index"
+              :ui="ui"
+              :search-query="activitySearchQuery"
+              :is-thread-view-active="isThreadViewActive"
+            />
+          </div>
           <ActivityEventRenderer
             v-else
             :event="event"
@@ -291,6 +298,7 @@ const emit = defineEmits([
 
 const activitySearchInputRef = ref(null);
 const timelineRef = ref(null);
+const commentInputRef = ref(null);
 
 /** Filter events by type based on Comments / Updates / Email toggles. */
 const filteredEvents = computed(() => {
@@ -347,4 +355,12 @@ const setBothFilters = (value) => {
   emit('update:activityFilterUpdates', value);
   emit('update:activityFilterEmail', value);
 };
+
+const focusCommentInput = () => {
+  nextTick(() => {
+    commentInputRef.value?.focus?.();
+  });
+};
+
+defineExpose({ focusCommentInput });
 </script>

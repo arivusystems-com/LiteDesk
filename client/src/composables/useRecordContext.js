@@ -16,6 +16,7 @@ import { ref, computed } from 'vue';
 import apiClient from '@/utils/apiClient';
 import { useAuthStore } from '@/stores/authRegistry';
 import { fetchRecordsForDisplay } from '@/utils/recordDisplay';
+import { showGlobalNotification } from '@/composables/useNotifications';
 
 // Cache for record contexts
 const contextCache = new Map();
@@ -76,6 +77,58 @@ function buildRelationshipsFromLinks(links, appKey, moduleKey) {
     byKey.get(relKey).records.push(rec);
   }
   return Array.from(byKey.values());
+}
+
+/**
+ * Best-effort cleanup for stale relationship links.
+ * If a linked record no longer exists/is accessible, unlink the broken edge so it
+ * stops reappearing in subsequent context loads.
+ */
+async function cleanupBrokenRelationshipLink({
+  relationshipKey,
+  targetRecord,
+  existingLinks = []
+}) {
+  const targetRecordId = targetRecord?.recordId ?? targetRecord?.id ?? targetRecord?._id;
+  if (!relationshipKey || !targetRecordId) return false;
+
+  const targetAppKey = targetRecord?.appKey;
+  const targetModuleKey = targetRecord?.moduleKey;
+  if (!targetAppKey || !targetModuleKey) return false;
+  const targetIdStr = normalizeRecordId(targetRecordId);
+  const relationshipKeyLower = String(relationshipKey).toLowerCase();
+  const targetAppKeyLower = String(targetAppKey).toLowerCase();
+  const targetModuleKeyLower = String(targetModuleKey).toLowerCase();
+
+  const matchingLink = existingLinks.find((link) => {
+    const relKey = String(link?.relationshipKey || '').toLowerCase();
+    const related = link?.relatedRecord || {};
+    const relatedId = normalizeRecordId(related.recordId);
+    const relatedAppKey = String(related.appKey || '').toLowerCase();
+    const relatedModuleKey = String(related.moduleKey || '').toLowerCase();
+    return relKey === relationshipKeyLower
+      && relatedId === targetIdStr
+      && relatedAppKey === targetAppKeyLower
+      && relatedModuleKey === targetModuleKeyLower;
+  });
+  if (!matchingLink?.source || !matchingLink?.target) return false;
+
+  try {
+    const response = await apiClient.post('/relationships/unlink', {
+      relationshipKey,
+      source: matchingLink.source,
+      target: matchingLink.target
+    });
+    return Boolean(response?.success ?? true);
+  } catch (err) {
+    const status = err?.status;
+    const message = String(err?.message || '');
+    const isNotFound = status === 404 || message.toLowerCase().includes('relationship not found');
+    if (!isNotFound) {
+      console.warn('[useRecordContext] Failed to auto-clean broken relationship link:', err?.message || err);
+    }
+    return false;
+  }
 }
 
 /**
@@ -185,6 +238,9 @@ export function useRecordContext(appKey, moduleKey, recordId) {
     };
 
     context.value.relationships.forEach(rel => {
+      const linkedRecords = (rel.records || []).filter((record) => !record?._isBroken);
+      if (linkedRecords.length === 0) return;
+
       const group = {
         relationshipKey: rel.relationshipKey,
         label: rel.ui?.label || rel.label || rel.relationshipKey,
@@ -192,7 +248,7 @@ export function useRecordContext(appKey, moduleKey, recordId) {
         cardinality: rel.cardinality,
         required: rel.required || false,
         requiredSatisfied: rel.requiredSatisfied !== false,
-        linkedRecords: rel.records || [],
+        linkedRecords,
         ui: rel.ui || {}
       };
 
@@ -291,12 +347,47 @@ export function useRecordContext(appKey, moduleKey, recordId) {
           if (rel.records && rel.records.length > 0) {
             try {
               // Fetch record details in parallel
-              const enhancedRecords = await fetchRecordsForDisplay(rel.records);
+              const originalRecords = Array.isArray(rel.records) ? [...rel.records] : [];
+              const enhancedRecords = await fetchRecordsForDisplay(originalRecords);
+
+              const brokenRecords = originalRecords.filter((_, index) => !enhancedRecords[index]);
+              if (brokenRecords.length > 0) {
+                let existingLinks = [];
+                try {
+                  const linksRes = await apiClient.get('/relationships/links', {
+                    params: {
+                      appKey: appKeyValue,
+                      moduleKey: moduleKeyValue,
+                      recordId: normalizeRecordId(recordIdValue)
+                    }
+                  });
+                  existingLinks = Array.isArray(linksRes?.data) ? linksRes.data : [];
+                } catch (_linksErr) {
+                  existingLinks = [];
+                }
+
+                // Fire cleanups in parallel, but do not block rendering.
+                void Promise.allSettled(
+                  brokenRecords.map((brokenRecord) =>
+                    cleanupBrokenRelationshipLink({
+                      relationshipKey: rel.relationshipKey,
+                      targetRecord: brokenRecord,
+                      existingLinks
+                    })
+                  )
+                ).then((results) => {
+                  const cleanedCount = results.filter((r) => r.status === 'fulfilled' && r.value === true).length;
+                  if (cleanedCount > 0) {
+                    const noun = cleanedCount === 1 ? 'stale relationship link was' : 'stale relationship links were';
+                    showGlobalNotification(`${cleanedCount} ${noun} removed automatically.`, 3500);
+                  }
+                });
+              }
               
               // Phase 2E: Filter out null records (deleted or inaccessible)
               // Replace with placeholder rows for broken relationships
               rel.records = enhancedRecords.map((record, index) => {
-                const original = rel.records[index];
+                const original = originalRecords[index];
                 
                 // If record fetch failed (null), create placeholder
                 if (!record) {

@@ -940,6 +940,8 @@ const isAuditRoleLookupField = computed(() => {
   return isUserLookup && (isAuditorLabel || key === 'auditorid' || key === 'reviewerid' || key === 'correctiveownerid');
 });
 
+const isValidObjectId = (value) => typeof value === 'string' && /^[0-9a-fA-F]{24}$/.test(value);
+
 /** When Settings omits lookupSettings, map known field keys to /people or /v2/organization list APIs. */
 function inferLookupTargetFromFieldKey(fieldKey) {
   const k = String(fieldKey || '').toLowerCase();
@@ -1815,7 +1817,8 @@ const fetchUsers = async ({ autoDefault = false } = {}) => {
     const response = await apiClient.get('/users/list', params ? { params } : undefined);
     
     if (response.success && Array.isArray(response.data)) {
-      lookupOptions.value = response.data;
+      // Keep only valid user rows; this avoids showing malformed placeholder values.
+      lookupOptions.value = response.data.filter((u) => isValidObjectId(String(u?._id || '')));
       
       // Optional: auto-default convenience fields ONLY.
       // NEVER auto-default audit roles (Auditor/Reviewer/Corrective Owner) — must be explicitly assigned.
@@ -2132,6 +2135,7 @@ const handleLookupSort = (sortBy, sortOrder) => {
 const handlePopulatedValue = () => {
   if (!isLookupField.value) return;
   if (!props.value || typeof props.value !== 'object' || !props.value._id) return;
+  if (isUserLookupField.value && !isValidObjectId(String(props.value._id))) return;
   
   // Check if this populated object is already in lookupOptions
   const exists = lookupOptions.value.some(

@@ -916,6 +916,7 @@
         <!-- Activity Tab (Combined Comments + Timeline) -->
         <template #tab-activity>
           <ActivitySection
+            ref="activitySectionRef"
             :events="activityTimelineEvents"
             :ui="taskActivityUi"
             :is-thread-view-active="isThreadViewActive"
@@ -1289,20 +1290,15 @@
     <div
       v-if="showCommentReactionPicker"
       ref="commentReactionPickerRef"
-      class="fixed z-[110] rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+      class="fixed z-[110] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
       :style="commentReactionPickerStyle"
     >
-      <div class="flex items-center gap-1">
-        <button
-          v-for="emoji in commentReactionEmojiOptions"
-          :key="emoji"
-          type="button"
-          class="inline-flex h-8 w-8 items-center justify-center rounded-md text-[20px] leading-none transition-colors hover:bg-gray-100 dark:hover:bg-gray-700"
-          @mousedown.prevent="addCommentReactionFromPicker(emoji)"
-        >
-          <span aria-hidden="true">{{ emoji }}</span>
-        </button>
-      </div>
+      <emoji-picker
+        :class="['comment-reaction-emoji-picker', isDarkTheme ? 'dark' : 'light']"
+        :theme="emojiPickerTheme"
+        :style="{ colorScheme: emojiPickerColorScheme }"
+        @emoji-click="handleCommentReactionEmojiClick"
+      ></emoji-picker>
     </div>
   </Teleport>
   <Teleport to="body">
@@ -1524,6 +1520,16 @@ import { useRecordTags } from '@/components/record-page/composables/useRecordTag
 import ActivitySection from '@/components/activity/ActivitySection.vue';
 import { createActivityTimelineRefSetter } from '@/components/activity/useRecordActivityAdapter';
 import { createTaskActivityUi } from '@/components/activity/adapters/taskActivityUiAdapter';
+import { useCommentReactionPicker } from '@/components/activity/composables/useCommentReactionPicker';
+import { useCommentReactionTooltip } from '@/components/activity/composables/useCommentReactionTooltip';
+import { useCommentReactionActions } from '@/components/activity/composables/useCommentReactionActions';
+import { createCommentReactionApi } from '@/components/activity/utils/commentReactionApi';
+import {
+  buildCommentReactions,
+  isCommentReactionSelectedForUser,
+  normalizeMyReactions,
+  normalizeReactionEmoji
+} from '@/components/activity/utils/commentReactionModel';
 import { useTaskSections } from '@/components/record-page/composables/useTaskSections';
 import { useTaskSectionDataProviders } from '@/components/record-page/composables/useTaskSectionDataProviders';
 import { useRecordLoading } from '@/components/record-page/composables/useRecordLoading';
@@ -1588,6 +1594,7 @@ import {
   FlagIcon as FlagIconSolid
 } from '@heroicons/vue/24/solid';
 import Avatar from '@/components/common/Avatar.vue';
+import 'emoji-picker-element';
 import DateCell from '@/components/common/table/DateCell.vue';
 import { getKeyFields } from '@/utils/fieldDisplay';
 import { DEFAULT_CURRENCY_CODE, formatCurrencyValue } from '@/utils/currencyOptions';
@@ -1681,6 +1688,7 @@ const emailThreads = ref([]);
 const expandedTaskEmailThreads = ref(new Set());
 const customFields = ref([]);
 const users = ref([]);
+const activitySectionRef = ref(null);
 const activityTimelineRef = ref(null);
 const rightPaneRef = ref(null);
 const activityPaneReady = ref(false); // hide activity content until scrolled to bottom (avoids top flash)
@@ -1742,21 +1750,6 @@ const expandedLeftSection = ref(null);
 const DESCRIPTION_PREVIEW_LINES = 7;
 const DESCRIPTION_PREVIEW_LINE_HEIGHT_REM = 1.5;
 const DESCRIPTION_PREVIEW_CHAR_THRESHOLD = 600;
-const commentReactionEmojiOptions = ['👍', '😘', '👉', '❤️', '😂', '🙂', '🤫'];
-const commentReactionPickerRef = ref(null);
-const commentReactionPickerCommentKey = ref('');
-const commentReactionPickerPosition = ref({ top: 0, left: 0 });
-const showCommentReactionPicker = ref(false);
-const commentReactionTooltipRef = ref(null);
-const commentReactionTooltipPosition = ref({ top: 0, left: 0 });
-const commentReactionTooltipPlacement = ref('above');
-const showCommentReactionTooltip = ref(false);
-const commentReactionTooltipData = ref(null);
-const commentReactionTooltipAnchorEl = ref(null);
-const commentReactionButtonRefs = new Map();
-const COMMENT_REACTION_TOOLTIP_SHOW_DELAY_MS = 220;
-let commentReactionTooltipHideTimer = null;
-let commentReactionTooltipShowTimer = null;
 
 const showLinkRecordDrawer = ref(false);
 const allowCreateFromLinkDrawer = ref(false);
@@ -3851,6 +3844,7 @@ const openCommentThread = (event) => {
   handleHideCommentReactionTooltip();
   nextTick(() => {
     scrollActivityToTop();
+    activitySectionRef.value?.focusCommentInput?.();
   });
 };
 
@@ -3934,7 +3928,8 @@ const handleAddComment = async (payload) => {
 
 const canEditComment = (event) => {
   if (event.type !== 'comment') return false;
-  const authorId = event.author?._id || event.author?.id;
+  const author = event.author || event.actor || event.payload?.author || event.payload?.actor;
+  const authorId = author?._id || author?.id;
   return authorId && authStore.user?._id && String(authorId) === String(authStore.user._id);
 };
 
@@ -4402,238 +4397,25 @@ const downloadAttachment = (attachment) => {
   document.body.removeChild(link);
 };
 
-const commentReactionPickerStyle = computed(() => ({
-  top: `${commentReactionPickerPosition.value.top}px`,
-  left: `${commentReactionPickerPosition.value.left}px`
-}));
-
-const commentReactionTooltipStyle = computed(() => ({
-  top: `${commentReactionTooltipPosition.value.top}px`,
-  left: `${commentReactionTooltipPosition.value.left}px`
-}));
-
-const getCommentReactionKey = (event) => {
-  const key = event?.id || event?._id || event?.createdAt;
-  return key ? String(key) : '';
-};
-
-const setCommentReactionButtonRef = (event, el) => {
-  const key = getCommentReactionKey(event);
-  if (!key) return;
-  if (el) {
-    commentReactionButtonRefs.set(key, el);
-    return;
-  }
-  commentReactionButtonRefs.delete(key);
-};
-
-const updateCommentReactionPickerPosition = () => {
-  if (!showCommentReactionPicker.value || !commentReactionPickerCommentKey.value) return;
-  const anchor = commentReactionButtonRefs.get(commentReactionPickerCommentKey.value);
-  if (!anchor) return;
-
-  const rect = anchor.getBoundingClientRect();
-  const pickerWidth = commentReactionPickerRef.value?.offsetWidth || 304;
-  const pickerHeight = commentReactionPickerRef.value?.offsetHeight || 44;
-  const spaceAbove = rect.top;
-  const spaceBelow = window.innerHeight - rect.bottom;
-
-  let top;
-  if (spaceAbove >= pickerHeight + 8 || spaceAbove >= spaceBelow) {
-    top = rect.top - pickerHeight - 6;
-  } else {
-    top = rect.bottom + 6;
-  }
-  top = Math.max(8, Math.min(top, window.innerHeight - pickerHeight - 8));
-
-  let left = rect.left;
-  left = Math.max(8, Math.min(left, window.innerWidth - pickerWidth - 8));
-
-  commentReactionPickerPosition.value = { top, left };
-};
-
-const closeCommentReactionPicker = () => {
-  showCommentReactionPicker.value = false;
-  commentReactionPickerCommentKey.value = '';
-};
-
-const openCommentReactionPicker = (event) => {
-  const key = getCommentReactionKey(event);
-  if (!key) return;
-  commentReactionPickerCommentKey.value = key;
-  showCommentReactionPicker.value = true;
-  nextTick(() => {
-    updateCommentReactionPickerPosition();
-    requestAnimationFrame(() => updateCommentReactionPickerPosition());
-  });
-};
-
-const toggleCommentReactionPicker = (event) => {
-  const key = getCommentReactionKey(event);
-  if (!key) return;
-  if (showCommentReactionPicker.value && commentReactionPickerCommentKey.value === key) {
-    closeCommentReactionPicker();
-    return;
-  }
-  openCommentReactionPicker(event);
-};
-
-const normalizeReactionUser = (reactor) => {
-  if (!reactor) return null;
-  if (typeof reactor === 'string') {
-    return { id: reactor, name: reactor, avatar: '' };
-  }
-  const rawId = reactor.id || reactor._id || reactor.userId || '';
-  const rawName = reactor.name || [reactor.firstName, reactor.lastName].filter(Boolean).join(' ').trim() || reactor.username || reactor.email || '';
-  if (!rawId && !rawName) return null;
-  return {
-    id: rawId ? String(rawId) : String(rawName).toLowerCase(),
-    name: rawName || 'Unknown',
-    avatar: reactor.avatar || ''
-  };
-};
-
-const mergeReactionUsers = (existingUsers = [], incomingUsers = []) => {
-  const merged = [];
-  const seen = new Set();
-  [...existingUsers, ...incomingUsers].forEach((reactor) => {
-    const normalized = normalizeReactionUser(reactor);
-    if (!normalized) return;
-    const key = `${normalized.id}|${normalized.name}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    merged.push(normalized);
-  });
-  return merged;
-};
-
-const isCurrentReactionUser = (reactor) => {
-  const currentUserId = String(authStore.user?._id || authStore.user?.id || '');
-  if (!currentUserId) return false;
-  return String(reactor?.id || '') === currentUserId;
-};
-
-const getReactionUserDisplayName = (reactor) => {
-  if (!reactor) return 'Unknown';
-  return isCurrentReactionUser(reactor) ? 'You' : (reactor.name || 'Unknown');
-};
-
-const getReactionUserInitial = (reactor) => {
-  const name = getReactionUserDisplayName(reactor);
-  const firstChar = (name || '?').trim().charAt(0);
-  return (firstChar || '?').toUpperCase();
-};
-
-const getReactionTooltipMode = (tooltipData) => {
-  const count = Number(tooltipData?.count || 0);
-  if (count <= 1) return 'single';
-  if (count <= 7) return 'few';
-  return 'many';
-};
-
-const getReactionTooltipSingleText = (tooltipData) => {
-  if (!tooltipData) return '';
-  const firstReactor = (tooltipData.reactors || [])[0] || null;
-  const who = firstReactor ? getReactionUserDisplayName(firstReactor) : 'Someone';
-  return `${who} reacted with ${tooltipData.emoji}`;
-};
-
-const getReactionTooltipInlineText = (tooltipData) => {
-  if (!tooltipData) return '';
-  const names = (tooltipData.reactors || []).slice(0, 7).map(getReactionUserDisplayName);
-  if (!names.length) return `People reacted with ${tooltipData.emoji}`;
-  return `${names.join(', ')} reacted with ${tooltipData.emoji}`;
-};
-
-const updateCommentReactionTooltipPosition = () => {
-  if (!showCommentReactionTooltip.value || !commentReactionTooltipAnchorEl.value) return;
-  const anchorRect = commentReactionTooltipAnchorEl.value.getBoundingClientRect();
-  const mode = getReactionTooltipMode(commentReactionTooltipData.value);
-  const fallbackWidth = mode === 'single' ? 160 : 272;
-  const fallbackHeight = mode === 'single' ? 88 : (mode === 'few' ? 116 : 188);
-  const tooltipWidth = commentReactionTooltipRef.value?.offsetWidth || fallbackWidth;
-  const tooltipHeight = commentReactionTooltipRef.value?.offsetHeight || fallbackHeight;
-  const spaceAbove = anchorRect.top;
-  const spaceBelow = window.innerHeight - anchorRect.bottom;
-
-  let top = 0;
-  let placement = 'above';
-  if (spaceAbove >= tooltipHeight + 10 || spaceAbove >= spaceBelow) {
-    top = anchorRect.top - tooltipHeight - 8;
-    placement = 'above';
-  } else {
-    top = anchorRect.bottom + 8;
-    placement = 'below';
-  }
-
-  let left = anchorRect.left + (anchorRect.width / 2) - (tooltipWidth / 2);
-  left = Math.max(8, Math.min(left, window.innerWidth - tooltipWidth - 8));
-  top = Math.max(8, Math.min(top, window.innerHeight - tooltipHeight - 8));
-
-  commentReactionTooltipPlacement.value = placement;
-  commentReactionTooltipPosition.value = { top, left };
-};
-
-const cancelCommentReactionTooltipHide = () => {
-  if (!commentReactionTooltipHideTimer) return;
-  clearTimeout(commentReactionTooltipHideTimer);
-  commentReactionTooltipHideTimer = null;
-};
-
-const cancelCommentReactionTooltipShow = () => {
-  if (!commentReactionTooltipShowTimer) return;
-  clearTimeout(commentReactionTooltipShowTimer);
-  commentReactionTooltipShowTimer = null;
-};
-
-const handleShowCommentReactionTooltip = (domEvent, reaction) => {
-  cancelCommentReactionTooltipShow();
-  cancelCommentReactionTooltipHide();
-  const reactors = mergeReactionUsers([], reaction?.reactors || []);
-  const sortedReactors = reactors.sort((a, b) => {
-    const aIsMe = isCurrentReactionUser(a);
-    const bIsMe = isCurrentReactionUser(b);
-    if (aIsMe && !bIsMe) return -1;
-    if (!aIsMe && bIsMe) return 1;
-    return getReactionUserDisplayName(a).localeCompare(getReactionUserDisplayName(b));
-  });
-
-  commentReactionTooltipData.value = {
-    emoji: reaction?.emoji || '',
-    count: Number(reaction?.count || sortedReactors.length || 0),
-    reactors: sortedReactors
-  };
-  commentReactionTooltipAnchorEl.value = domEvent?.currentTarget || null;
-
-  const reveal = () => {
-    showCommentReactionTooltip.value = true;
-    nextTick(() => {
-      updateCommentReactionTooltipPosition();
-      requestAnimationFrame(() => updateCommentReactionTooltipPosition());
-    });
-  };
-
-  if (showCommentReactionTooltip.value) {
-    reveal();
-    return;
-  }
-
-  commentReactionTooltipShowTimer = setTimeout(() => {
-    commentReactionTooltipShowTimer = null;
-    reveal();
-  }, COMMENT_REACTION_TOOLTIP_SHOW_DELAY_MS);
-};
-
-const handleHideCommentReactionTooltip = () => {
-  cancelCommentReactionTooltipShow();
-  cancelCommentReactionTooltipHide();
-  commentReactionTooltipHideTimer = setTimeout(() => {
-    showCommentReactionTooltip.value = false;
-    commentReactionTooltipData.value = null;
-    commentReactionTooltipAnchorEl.value = null;
-    commentReactionTooltipHideTimer = null;
-  }, 90);
-};
+const {
+  commentReactionTooltipRef,
+  commentReactionTooltipStyle,
+  commentReactionTooltipPlacement,
+  showCommentReactionTooltip,
+  commentReactionTooltipData,
+  getReactionTooltipMode,
+  getReactionTooltipSingleText,
+  getReactionTooltipInlineText,
+  getReactionUserDisplayName,
+  getReactionUserInitial,
+  updateCommentReactionTooltipPosition,
+  cancelCommentReactionTooltipHide,
+  handleShowCommentReactionTooltip,
+  handleHideCommentReactionTooltip,
+  cleanupCommentReactionTooltip
+} = useCommentReactionTooltip({
+  getCurrentUserId: () => authStore.user?._id || authStore.user?.id || ''
+});
 
 const updateCommentEventReactions = (commentId, updatedComment) => {
   if (!commentId || !updatedComment) return;
@@ -4653,164 +4435,71 @@ const updateCommentEventReactions = (commentId, updatedComment) => {
 };
 
 const findCommentEventByKey = (commentKey) => (
-  activityEvents.value.find((event) => event.type === 'comment' && getCommentReactionKey(event) === commentKey) || null
+  activityEvents.value.find((event) => {
+    if (event?.type !== 'comment') return false;
+    const key = event?.id || event?._id || event?.createdAt;
+    return String(key || '') === String(commentKey || '');
+  }) || null
 );
 
 const getCommentMyReactions = (event) => {
-  const raw = Array.isArray(event?.myReactions) ? event.myReactions : [];
-  return raw
-    .map((value) => normalizeReactionEmoji(value) || toReactionEmoji(value))
-    .filter(Boolean);
-};
-
-const isCommentReactionSelectedByKey = (commentKey, emoji) => {
-  const event = findCommentEventByKey(commentKey);
-  if (!event) return false;
-  return getCommentMyReactions(event).includes(emoji);
+  return normalizeMyReactions(event?.myReactions || []);
 };
 
 const isCommentReactionSelected = (event, emoji) => {
-  if (!event || !emoji) return false;
-  return getCommentMyReactions(event).includes(emoji);
+  return isCommentReactionSelectedForUser({
+    event,
+    emoji,
+    currentUserId: authStore.user?._id || authStore.user?.id || '',
+    getCommentReactions
+  });
 };
 
-const toggleCommentReactionByKey = async (commentKey, emoji) => {
-  if (!commentKey || !emoji) return;
-  const event = findCommentEventByKey(commentKey);
-  if (!event) return;
-  await toggleCommentReaction(event, emoji);
-};
-
-const toggleCommentReaction = async (event, emoji) => {
-  const commentId = event?.id || event?._id;
-  const normalizedEmoji = normalizeReactionEmoji(emoji);
-  if (!task.value?._id || !commentId || !normalizedEmoji) return;
-
-  try {
-    const response = await apiClient.post(
-      `/tasks/${task.value._id}/comments/${commentId}/reactions`,
-      { emoji: normalizedEmoji }
-    );
-    if (response?.success && response.data) {
-      updateCommentEventReactions(commentId, response.data);
-    }
-  } catch (error) {
-    console.error('Error toggling comment reaction:', error);
-  }
-};
-
-const addCommentReactionFromPicker = async (emoji) => {
-  const key = commentReactionPickerCommentKey.value;
-  if (!key || !emoji) return;
-  if (!isCommentReactionSelectedByKey(key, emoji)) {
-    await toggleCommentReactionByKey(key, emoji);
-  }
-  closeCommentReactionPicker();
-};
-
-const handleCommentReactionPickerOutsideClick = (event) => {
-  if (!showCommentReactionPicker.value) return;
-  const target = event.target;
-  if (commentReactionPickerRef.value?.contains(target)) return;
-  const activeButton = commentReactionButtonRefs.get(commentReactionPickerCommentKey.value);
-  if (activeButton?.contains(target)) return;
-  closeCommentReactionPicker();
-};
-
-const REACTION_KEY_TO_EMOJI = Object.freeze({
-  like: '👍',
-  likes: '👍',
-  thumbsup: '👍',
-  thumbs_up: '👍',
-  'thumbs-up': '👍',
-  love: '❤️',
-  heart: '❤️',
-  laugh: '😂',
-  joy: '😂',
-  smile: '🙂',
-  wow: '😮',
-  celebrate: '🎉',
-  tada: '🎉',
-  rocket: '🚀',
-  clap: '👏',
-  thinking: '🤔',
-  party: '🥳',
-  fire: '🔥'
+const commentReactionApi = createCommentReactionApi({
+  type: 'task',
+  getTaskId: () => task.value?._id || ''
 });
 
-const normalizeReactionEmoji = (value) => String(value || '').trim();
-const normalizeReactionKey = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
+const { toggleCommentReaction } = useCommentReactionActions({
+  getCommentId: (event) => getCommentEventId(event),
+  normalizeEmoji: (emoji) => normalizeReactionEmoji(emoji),
+  canToggle: () => Boolean(task.value?._id),
+  requestToggle: ({ commentId, emoji }) => commentReactionApi.toggleReaction({ commentId, emoji }),
+  onSuccess: ({ response, commentId }) => {
+    if (response?.data) {
+      updateCommentEventReactions(commentId, response.data);
+    }
+  },
+  logPrefix: 'Error toggling comment reaction:'
+});
 
-const coerceReactionCount = (value) => {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (Array.isArray(value)) return value.length;
-  if (value && typeof value === 'object') {
-    if (typeof value.count === 'number' && Number.isFinite(value.count)) return value.count;
-    if (typeof value.total === 'number' && Number.isFinite(value.total)) return value.total;
-    if (Array.isArray(value.users)) return value.users.length;
-    if (Array.isArray(value.userIds)) return value.userIds.length;
-    if (Array.isArray(value.reactors)) return value.reactors.length;
-  }
-  return 0;
-};
-
-const toReactionEmoji = (value) => {
-  const key = normalizeReactionKey(value);
-  if (!key) return '';
-  if (REACTION_KEY_TO_EMOJI[key]) return REACTION_KEY_TO_EMOJI[key];
-  if (/[^\x00-\x7F]/.test(key)) return String(value);
-  return '';
-};
+const {
+  commentReactionPickerRef,
+  commentReactionPickerStyle,
+  showCommentReactionPicker,
+  isDarkTheme,
+  emojiPickerTheme,
+  emojiPickerColorScheme,
+  setCommentReactionButtonRef,
+  toggleCommentReactionPicker,
+  updateCommentReactionPickerPosition,
+  handleCommentReactionPickerOutsideClick,
+  handleCommentReactionEmojiClick,
+  closeCommentReactionPicker,
+  startEmojiThemeObserver,
+  stopEmojiThemeObserver,
+  cleanupCommentReactionPicker
+} = useCommentReactionPicker({
+  findCommentEventByKey,
+  isCommentReactionSelected,
+  toggleCommentReaction
+});
 
 const getCommentReactions = (event) => {
-  if (!event || event.type !== 'comment') return [];
-
-  const merged = new Map();
-  const upsert = (emoji, count, reactors = []) => {
-    const normalizedEmoji = normalizeReactionEmoji(emoji);
-    if (!normalizedEmoji) return;
-    const normalizedCount = Math.max(0, Number(count) || 0);
-    const existing = merged.get(normalizedEmoji) || { count: 0, reactors: [] };
-    const nextCount = existing.count + normalizedCount;
-    const nextReactors = mergeReactionUsers(existing.reactors, reactors);
-    if (!nextCount && !nextReactors.length) {
-      merged.delete(normalizedEmoji);
-      return;
-    }
-    merged.set(normalizedEmoji, {
-      count: nextCount,
-      reactors: nextReactors
-    });
-  };
-
-  const reactions = event.reactions;
-  if (Array.isArray(reactions)) {
-    reactions.forEach((reaction) => {
-      if (!reaction) return;
-      const emoji = reaction.emoji || reaction.reaction || toReactionEmoji(reaction.type || reaction.name || reaction.key);
-      const count = coerceReactionCount(reaction.count ?? reaction.total ?? reaction.users ?? reaction.userIds ?? reaction.reactors);
-      const reactors = reaction.reactors || reaction.users || [];
-      upsert(emoji, count, reactors);
-    });
-  } else if (reactions && typeof reactions === 'object') {
-    Object.entries(reactions).forEach(([key, value]) => {
-      if (!value) return;
-      const emoji = value.emoji || value.reaction || toReactionEmoji(key);
-      const count = coerceReactionCount(value);
-      const reactors = value.reactors || value.users || [];
-      upsert(emoji, count, reactors);
-    });
-  }
-
-  const likesCount = coerceReactionCount(event.likesCount ?? event.likes);
-  if (!merged.has('👍')) {
-    upsert('👍', likesCount, []);
-  }
-
-  return Array.from(merged.entries())
-    .map(([emoji, data]) => ({ emoji, count: data.count, reactors: data.reactors || [] }))
-    .filter((item) => item.count > 0)
-    .sort((a, b) => b.count - a.count);
+  return buildCommentReactions(event, {
+    includeLikesFallback: true,
+    includeOnlyComments: true
+  });
 };
 
 const hasCommentReactions = (event) => getCommentReactions(event).length > 0;
@@ -5771,6 +5460,7 @@ useRecordPageLifecycle({
     fetchTaskLifecycleFieldOptions,
     () => document.addEventListener('keydown', handleHeaderKeydown),
     () => {
+      startEmojiThemeObserver();
       window.addEventListener('scroll', updateCommentReactionPickerPosition, true);
       window.addEventListener('scroll', updateCommentReactionTooltipPosition, true);
       window.addEventListener('scroll', updateTagPopoverPosition, true);
@@ -5788,8 +5478,7 @@ useRecordPageLifecycle({
   onUnmounted: [
     () => document.removeEventListener('keydown', handleHeaderKeydown),
     () => {
-      cancelCommentReactionTooltipShow();
-      cancelCommentReactionTooltipHide();
+      cleanupCommentReactionTooltip();
       detachStickyTitle();
       window.removeEventListener('scroll', updateCommentReactionPickerPosition, true);
       window.removeEventListener('scroll', updateCommentReactionTooltipPosition, true);
@@ -5803,7 +5492,8 @@ useRecordPageLifecycle({
       document.removeEventListener('mousedown', handleTagPopoverMousedown);
       document.removeEventListener('click', handleTagPopoverOutsideClick);
       document.removeEventListener('click', handleRelatedToPopoverOutsideClick);
-      commentReactionButtonRefs.clear();
+      cleanupCommentReactionPicker();
+      stopEmojiThemeObserver();
     }
   ]
 });
@@ -5911,4 +5601,31 @@ const taskActivityUi = createTaskActivityUi({
   getTagChipClass: getTaskTagChipClass
 });
 </script>
+
+<style scoped>
+.comment-reaction-emoji-picker {
+  --input-border-color: rgb(99 102 241 / 0.45);
+  --input-border-radius: 12px;
+  --outline-color: rgb(99 102 241 / 0.2);
+  --indicator-color: rgb(99 102 241);
+  --category-font-size: 15px;
+  --button-active-background: rgb(99 102 241 / 0.16);
+}
+
+.comment-reaction-emoji-picker.light {
+  --background: #ffffff;
+  --border-color: #e5e7eb;
+  --text-color: #111827;
+  --input-background: #ffffff;
+  --input-font-color: #111827;
+}
+
+.comment-reaction-emoji-picker.dark {
+  --background: #111827;
+  --border-color: #374151;
+  --text-color: #f9fafb;
+  --input-background: #111827;
+  --input-font-color: #f9fafb;
+}
+</style>
 

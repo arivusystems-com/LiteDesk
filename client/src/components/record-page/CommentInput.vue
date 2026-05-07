@@ -117,18 +117,15 @@
             <div
               v-if="showEmojiPicker"
               ref="emojiPickerRef"
-              class="fixed z-[100] p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg grid grid-cols-8 gap-1 max-h-40 overflow-y-auto"
+              class="fixed z-[100] rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg p-1"
               :style="emojiPickerStyle"
             >
-              <button
-                v-for="(emoji, i) in emojiList"
-                :key="i"
-                type="button"
-                class="p-1 text-lg hover:bg-gray-100 dark:hover:bg-gray-700 rounded focus:outline-none"
-                @mousedown.prevent="insertEmoji(emoji)"
-              >
-                {{ emoji }}
-              </button>
+              <emoji-picker
+                :class="['comment-input-emoji-picker', isDarkTheme ? 'dark' : 'light']"
+                :theme="emojiPickerTheme"
+                :style="{ colorScheme: emojiPickerColorScheme }"
+                @emoji-click="handleEmojiPickerSelect"
+              />
             </div>
           </Teleport>
         </div>
@@ -210,8 +207,7 @@ import {
   PaperAirplaneIcon
 } from '@heroicons/vue/24/outline';
 import apiClient from '@/utils/apiClient';
-
-const EMOJI_LIST = ['😊', '😂', '👍', '❤️', '🎉', '🔥', '✨', '🙏', '😢', '🤔', '👀', '💯', '👏', '🚀', '✅', '❌', '📌', '💡', '⚠️', '📎'];
+import 'emoji-picker-element';
 
 const props = defineProps({
   modelValue: {
@@ -269,7 +265,6 @@ const localValue = ref(props.modelValue);
 const selectedFiles = ref([]);
 const existingAttachmentsState = ref(Array.isArray(props.existingAttachments) ? [...props.existingAttachments] : []);
 const showEmojiPicker = ref(false);
-const emojiList = EMOJI_LIST;
 const isInternalUpdate = ref(false);
 const isEditorFocused = ref(false);
 const showMentionDropdown = ref(false);
@@ -284,7 +279,9 @@ const groups = ref([]);
 const dropdownPosition = ref({ top: 0, left: 0 });
 const activityMaxEditorHeight = ref(240);
 let activityContainerResizeObserver = null;
+let emojiThemeObserver = null;
 const MIN_ACTIVITY_EDITOR_HEIGHT = 48;
+const isDarkTheme = ref(false);
 
 // Mention format for storage: @[Display Name](type:id)
 const toMentionString = (item) => `@[${item.name}](${item.type}:${item.id})`;
@@ -373,6 +370,8 @@ const emojiPickerStyle = computed(() => ({
   top: `${emojiPickerPosition.value.top}px`,
   left: `${emojiPickerPosition.value.left}px`
 }));
+const emojiPickerTheme = computed(() => (isDarkTheme.value ? 'dark' : 'light'));
+const emojiPickerColorScheme = computed(() => (isDarkTheme.value ? 'dark' : 'light'));
 
 const editorInlineStyle = computed(() => {
   if (!isActivityVariant.value) {
@@ -799,6 +798,11 @@ const closeEmojiPickerOnOutsideClick = (e) => {
   showEmojiPicker.value = false;
 };
 
+const syncEmojiPickerTheme = () => {
+  if (typeof document === 'undefined') return;
+  isDarkTheme.value = document.documentElement.classList.contains('dark');
+};
+
 const handleBlur = () => {
   isEditorFocused.value = false;
   setTimeout(() => {
@@ -869,14 +873,20 @@ const getAttachmentSize = (attachment) => {
 const updateEmojiPickerPosition = () => {
   if (!showEmojiPicker.value || !emojiButtonRef.value) return;
   const rect = emojiButtonRef.value.getBoundingClientRect();
-  const pickerHeight = 180;
+  const pickerWidth = emojiPickerRef.value?.offsetWidth || 352;
+  const pickerHeight = emojiPickerRef.value?.offsetHeight || 440;
   const spaceAbove = rect.top;
   const spaceBelow = window.innerHeight - rect.bottom;
+  let top = 0;
   if (spaceAbove >= pickerHeight || spaceAbove >= spaceBelow) {
-    emojiPickerPosition.value = { top: rect.top - pickerHeight - 4, left: rect.left };
+    top = rect.top - pickerHeight - 4;
   } else {
-    emojiPickerPosition.value = { top: rect.bottom + 4, left: rect.left };
+    top = rect.bottom + 4;
   }
+  let left = rect.left;
+  top = Math.max(8, Math.min(top, window.innerHeight - pickerHeight - 8));
+  left = Math.max(8, Math.min(left, window.innerWidth - pickerWidth - 8));
+  emojiPickerPosition.value = { top, left };
 };
 
 const toggleEmojiPicker = () => {
@@ -913,6 +923,13 @@ const insertEmoji = (emoji) => {
   nextTick(() => {
     resizeActivityEditor();
   });
+};
+
+const handleEmojiPickerSelect = (event) => {
+  const emoji = event?.detail?.unicode || '';
+  if (!emoji) return;
+  insertEmoji(emoji);
+  showEmojiPicker.value = false;
 };
 
 const handleSubmitClick = () => {
@@ -977,6 +994,14 @@ const getSubmitPayload = () => ({
 defineExpose({ focus, getSubmitPayload });
 
 onMounted(() => {
+  syncEmojiPickerTheme();
+  if (typeof MutationObserver !== 'undefined' && typeof document !== 'undefined') {
+    emojiThemeObserver = new MutationObserver(() => syncEmojiPickerTheme());
+    emojiThemeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+  }
   window.addEventListener('scroll', updateDropdownPosition, true);
   window.addEventListener('resize', updateDropdownPosition);
   window.addEventListener('scroll', updateEmojiPickerPosition, true);
@@ -1008,9 +1033,40 @@ onUnmounted(() => {
   window.removeEventListener('resize', updateEmojiPickerPosition);
   window.removeEventListener('resize', resizeActivityEditor);
   document.removeEventListener('click', closeEmojiPickerOnOutsideClick);
+  if (emojiThemeObserver) {
+    emojiThemeObserver.disconnect();
+    emojiThemeObserver = null;
+  }
   if (activityContainerResizeObserver) {
     activityContainerResizeObserver.disconnect();
     activityContainerResizeObserver = null;
   }
 });
 </script>
+
+<style scoped>
+.comment-input-emoji-picker {
+  --input-border-color: rgb(99 102 241 / 0.45);
+  --input-border-radius: 12px;
+  --outline-color: rgb(99 102 241 / 0.2);
+  --indicator-color: rgb(99 102 241);
+  --category-font-size: 15px;
+  --button-active-background: rgb(99 102 241 / 0.16);
+}
+
+.comment-input-emoji-picker.light {
+  --background: #ffffff;
+  --border-color: #e5e7eb;
+  --text-color: #111827;
+  --input-background: #ffffff;
+  --input-font-color: #111827;
+}
+
+.comment-input-emoji-picker.dark {
+  --background: #111827;
+  --border-color: #374151;
+  --text-color: #f9fafb;
+  --input-background: #111827;
+  --input-font-color: #f9fafb;
+}
+</style>

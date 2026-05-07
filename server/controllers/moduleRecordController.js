@@ -10,6 +10,7 @@ const TaskComment = require('../models/TaskComment');
 const RecordActivity = require('../models/RecordActivity');
 const User = require('../models/User');
 const mongoose = require('mongoose');
+const { getFileUrl } = require('../middleware/uploadMiddleware');
 
 const MODULES_WITH_NATIVE_ACTIVITY = new Set(['deals', 'tasks']);
 const MODULES_WITH_NATIVE_COMMENTS = new Set(['deals', 'tasks']);
@@ -87,6 +88,10 @@ function getRecordId(req) {
 
 function escapeRegExp(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeReactionEmoji(value) {
+  return String(value || '').trim();
 }
 
 const { getAppDisplayName } = require('../utils/personProfileComposer');
@@ -304,6 +309,7 @@ exports.getActivity = async (req, res) => {
               parentCommentId: c.parentCommentId ? c.parentCommentId.toString() : null,
               attachments: c.attachments || [],
               reactions: c.reactions || [],
+              editedAt: c.editedAt || null,
               commentId: c._id.toString()
             },
             meta: { authorId: c.author?._id?.toString() }
@@ -366,6 +372,7 @@ exports.getActivity = async (req, res) => {
               parentCommentId: c.parentCommentId ? c.parentCommentId.toString() : null,
               attachments: c.attachments || [],
               reactions: c.reactions || [],
+              editedAt: c.editedAt || null,
               commentId: c._id.toString()
             },
             meta: { authorId: c.author?._id?.toString() }
@@ -412,6 +419,7 @@ exports.getActivity = async (req, res) => {
               parentCommentId: entry.parentCommentId ? entry.parentCommentId.toString() : null,
               attachments: entry.attachments || [],
               reactions: entry.reactions || [],
+              editedAt: entry.editedAt || null,
               commentId: entry._id.toString()
             },
             meta: { authorId: entry.author?._id?.toString() }
@@ -511,6 +519,93 @@ exports.getComments = async (req, res) => {
 };
 
 /**
+ * POST /api/modules/:moduleKey/records/:recordId/comment-attachments
+ */
+exports.uploadCommentAttachment = async (req, res) => {
+  try {
+    const moduleKey = getModuleKey(req);
+    const recordId = getRecordId(req);
+    const organizationId = req.user.organizationId;
+
+    if (!moduleKey || !recordId) {
+      return res.status(400).json({ success: false, message: 'moduleKey and recordId are required' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+
+    if (MODULES_WITH_NATIVE_COMMENTS.has(moduleKey)) {
+      const fakeReq = {
+        params: { id: recordId },
+        user: req.user,
+        file: req.file
+      };
+      const fakeRes = {
+        statusCode: 200,
+        _data: null,
+        status(code) {
+          this.statusCode = code;
+          return this;
+        },
+        json(obj) {
+          this._data = obj;
+          return this;
+        }
+      };
+      if (moduleKey === 'deals') {
+        const { uploadDealCommentAttachment } = require('./dealController');
+        await uploadDealCommentAttachment(fakeReq, fakeRes);
+      } else {
+        const { uploadTaskCommentAttachment } = require('./taskController');
+        await uploadTaskCommentAttachment(fakeReq, fakeRes);
+      }
+      return res.status(fakeRes.statusCode).json(fakeRes._data);
+    }
+
+    const recordObjectId = mongoose.Types.ObjectId.isValid(recordId)
+      ? new mongoose.Types.ObjectId(recordId)
+      : null;
+    if (!recordObjectId) {
+      return res.status(400).json({ success: false, message: 'Invalid record id' });
+    }
+
+    const Model = MODEL_BY_KEY[moduleKey]?.();
+    if (!Model) {
+      return res.status(404).json({ success: false, message: `Unknown module: ${moduleKey}` });
+    }
+    const baseQuery = { _id: recordObjectId };
+    if (Model.schema?.paths?.deletedAt) {
+      baseQuery.deletedAt = null;
+    }
+    if (moduleKey === 'organizations') {
+      const tenantUsers = await User.find({ organizationId }).select('_id').lean();
+      const tenantUserIds = tenantUsers.map((user) => user._id);
+      baseQuery.isTenant = false;
+      baseQuery.createdBy = { $in: tenantUserIds };
+    } else {
+      baseQuery.organizationId = organizationId;
+    }
+    const record = await Model.findOne(baseQuery).select('_id').lean();
+    if (!record) {
+      return res.status(404).json({ success: false, message: 'Record not found' });
+    }
+
+    const fileUrl = getFileUrl(req, req.file.filename);
+    return res.json({
+      success: true,
+      url: fileUrl,
+      filename: req.file.filename,
+      originalname: req.file.originalname,
+      size: req.file.size,
+      mimetype: req.file.mimetype
+    });
+  } catch (err) {
+    console.error('uploadCommentAttachment error:', err);
+    return res.status(500).json({ success: false, message: 'Error uploading attachment', error: err.message });
+  }
+};
+
+/**
  * POST /api/modules/:moduleKey/records/:recordId/comments
  */
 exports.createComment = async (req, res) => {
@@ -518,13 +613,21 @@ exports.createComment = async (req, res) => {
     const moduleKey = getModuleKey(req);
     const recordId = getRecordId(req);
     const organizationId = req.user.organizationId;
-    const { content, parentCommentId } = req.body || {};
+    const { content, attachments, parentCommentId } = req.body || {};
 
     if (!moduleKey || !recordId) {
       return res.status(400).json({ success: false, message: 'moduleKey and recordId are required' });
     }
-    if (!content || typeof content !== 'string' || !content.trim()) {
-      return res.status(400).json({ success: false, message: 'Comment content is required' });
+    const validAttachments = Array.isArray(attachments)
+      ? attachments.filter((attachment) => (
+        attachment
+          && typeof attachment.url === 'string'
+          && typeof attachment.filename === 'string'
+      )).slice(0, 10)
+      : [];
+    const normalizedContent = typeof content === 'string' ? content.trim() : '';
+    if (!normalizedContent && validAttachments.length === 0) {
+      return res.status(400).json({ success: false, message: 'Comment content or attachment is required' });
     }
 
     if (MODULES_WITH_NATIVE_COMMENTS.has(moduleKey)) {
@@ -572,8 +675,9 @@ exports.createComment = async (req, res) => {
       moduleKey,
       recordId: new mongoose.Types.ObjectId(recordId),
       type: 'comment',
-      content: content.trim(),
+      content: normalizedContent || 'Attached file(s)',
       parentCommentId: validatedParentId,
+      attachments: validAttachments,
       author: req.user._id
     });
 
@@ -597,6 +701,269 @@ exports.createComment = async (req, res) => {
   } catch (err) {
     console.error('createComment error:', err);
     return res.status(500).json({ success: false, message: 'Error creating comment', error: err.message });
+  }
+};
+
+/**
+ * PUT /api/modules/:moduleKey/records/:recordId/comments/:commentId
+ */
+exports.updateComment = async (req, res) => {
+  try {
+    const moduleKey = getModuleKey(req);
+    const recordId = getRecordId(req);
+    const { commentId } = req.params;
+    const organizationId = req.user.organizationId;
+
+    if (!moduleKey || !recordId || !commentId) {
+      return res.status(400).json({ success: false, message: 'moduleKey, recordId, and commentId are required' });
+    }
+
+    if (MODULES_WITH_NATIVE_COMMENTS.has(moduleKey)) {
+      const fakeReq = {
+        params: { id: recordId, commentId },
+        user: req.user,
+        body: req.body,
+        appKey: req.appKey
+      };
+      const fakeRes = {
+        statusCode: 200,
+        _data: null,
+        status(code) {
+          this.statusCode = code;
+          return this;
+        },
+        json(obj) {
+          this._data = obj;
+          return this;
+        }
+      };
+
+      if (moduleKey === 'deals') {
+        const { updateDealComment } = require('./dealController');
+        await updateDealComment(fakeReq, fakeRes);
+      } else {
+        const { updateTaskComment } = require('./taskController');
+        await updateTaskComment(fakeReq, fakeRes);
+      }
+
+      return res.status(fakeRes.statusCode).json(fakeRes._data);
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(commentId)) {
+      return res.status(400).json({ success: false, message: 'Invalid commentId' });
+    }
+
+    const comment = await RecordActivity.findOne({
+      _id: commentId,
+      organizationId,
+      moduleKey,
+      recordId: new mongoose.Types.ObjectId(recordId),
+      type: 'comment'
+    });
+
+    if (!comment) {
+      return res.status(404).json({ success: false, message: 'Comment not found' });
+    }
+
+    if (String(comment.author) !== String(req.user._id)) {
+      return res.status(403).json({ success: false, message: 'You can only edit your own comments' });
+    }
+
+    const rawContent = typeof req.body?.content === 'string' ? req.body.content.trim() : '';
+    const hasAttachmentsPayload = Array.isArray(req.body?.attachments);
+    const validAttachments = hasAttachmentsPayload
+      ? req.body.attachments
+        .filter((attachment) => (
+          attachment
+          && typeof attachment.url === 'string'
+          && typeof attachment.filename === 'string'
+        ))
+        .slice(0, 10)
+      : (comment.attachments || []);
+
+    if (!rawContent && (!Array.isArray(validAttachments) || validAttachments.length === 0)) {
+      return res.status(400).json({ success: false, message: 'Comment content is required' });
+    }
+
+    comment.content = rawContent || 'Attached file(s)';
+    if (hasAttachmentsPayload) {
+      comment.attachments = validAttachments;
+    }
+    comment.editedAt = new Date();
+    await comment.save();
+
+    const populated = await RecordActivity.findById(comment._id)
+      .populate('author', 'firstName lastName email avatar username')
+      .populate('reactions.users', 'firstName lastName email avatar username')
+      .lean();
+
+    const currentUserId = String(req.user._id);
+    const data = {
+      _id: populated._id,
+      content: populated.content,
+      parentCommentId: populated.parentCommentId,
+      attachments: populated.attachments || [],
+      reactions: (populated.reactions || []).map((reaction) => ({
+        emoji: reaction.emoji,
+        users: reaction.users || [],
+        count: Array.isArray(reaction.users) ? reaction.users.length : 0,
+        reactors: (reaction.users || []).map((u) => ({
+          id: u?._id ? String(u._id) : undefined,
+          _id: u?._id,
+          name: [u?.firstName, u?.lastName].filter(Boolean).join(' ').trim() || u?.username || u?.email || 'Unknown',
+          firstName: u?.firstName,
+          lastName: u?.lastName,
+          email: u?.email,
+          username: u?.username,
+          avatar: u?.avatar || ''
+        }))
+      })),
+      myReactions: (populated.reactions || [])
+        .filter((reaction) => (reaction.users || []).some((u) => String(u?._id || u) === currentUserId))
+        .map((reaction) => reaction.emoji),
+      author: populated.author,
+      editedAt: populated.editedAt,
+      createdAt: populated.createdAt,
+      updatedAt: populated.updatedAt
+    };
+
+    return res.json({ success: true, data });
+  } catch (err) {
+    console.error('updateComment error:', err);
+    return res.status(500).json({ success: false, message: 'Error updating comment', error: err.message });
+  }
+};
+
+/**
+ * POST /api/modules/:moduleKey/records/:recordId/comments/:commentId/reactions
+ */
+exports.toggleCommentReaction = async (req, res) => {
+  try {
+    const moduleKey = getModuleKey(req);
+    const recordId = getRecordId(req);
+    const { commentId } = req.params;
+    const organizationId = req.user.organizationId;
+    const emoji = normalizeReactionEmoji(req.body?.emoji);
+
+    if (!moduleKey || !recordId || !commentId) {
+      return res.status(400).json({ success: false, message: 'moduleKey, recordId, and commentId are required' });
+    }
+    if (!emoji || emoji.length > 16) {
+      return res.status(400).json({ success: false, message: 'A valid emoji is required' });
+    }
+
+    if (MODULES_WITH_NATIVE_COMMENTS.has(moduleKey)) {
+      const fakeReq = {
+        params: { id: recordId, commentId },
+        user: req.user,
+        body: req.body
+      };
+      const fakeRes = {
+        statusCode: 200,
+        _data: null,
+        status(code) {
+          this.statusCode = code;
+          return this;
+        },
+        json(obj) {
+          this._data = obj;
+          return this;
+        }
+      };
+
+      if (moduleKey === 'deals') {
+        const { toggleDealCommentReaction } = require('./dealController');
+        await toggleDealCommentReaction(fakeReq, fakeRes);
+      } else {
+        const { toggleTaskCommentReaction } = require('./taskController');
+        await toggleTaskCommentReaction(fakeReq, fakeRes);
+      }
+
+      return res.status(fakeRes.statusCode).json(fakeRes._data);
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(commentId)) {
+      return res.status(400).json({ success: false, message: 'Invalid commentId' });
+    }
+
+    const comment = await RecordActivity.findOne({
+      _id: commentId,
+      organizationId,
+      moduleKey,
+      recordId: new mongoose.Types.ObjectId(recordId),
+      type: 'comment'
+    });
+
+    if (!comment) {
+      return res.status(404).json({ success: false, message: 'Comment not found' });
+    }
+
+    if (!Array.isArray(comment.reactions)) {
+      comment.reactions = [];
+    }
+
+    const currentUserId = String(req.user._id);
+    let reaction = comment.reactions.find((entry) => normalizeReactionEmoji(entry?.emoji) === emoji);
+
+    if (!reaction) {
+      comment.reactions.push({
+        emoji,
+        users: [req.user._id]
+      });
+    } else {
+      const userIndex = reaction.users.findIndex((userId) => String(userId) === currentUserId);
+      if (userIndex >= 0) {
+        reaction.users.splice(userIndex, 1);
+      } else {
+        reaction.users.push(req.user._id);
+      }
+
+      if (!reaction.users.length) {
+        comment.reactions = comment.reactions.filter((entry) => String(entry._id) !== String(reaction._id));
+      }
+    }
+
+    comment.markModified('reactions');
+    await comment.save();
+
+    const populated = await RecordActivity.findById(comment._id)
+      .populate('author', 'firstName lastName email avatar username')
+      .populate('reactions.users', 'firstName lastName email avatar username')
+      .lean();
+
+    const data = {
+      _id: populated._id,
+      content: populated.content,
+      parentCommentId: populated.parentCommentId,
+      attachments: populated.attachments || [],
+      reactions: (populated.reactions || []).map((r) => ({
+        emoji: r.emoji,
+        users: r.users || [],
+        count: Array.isArray(r.users) ? r.users.length : 0,
+        reactors: (r.users || []).map((u) => ({
+          id: u?._id ? String(u._id) : undefined,
+          _id: u?._id,
+          name: [u?.firstName, u?.lastName].filter(Boolean).join(' ').trim() || u?.username || u?.email || 'Unknown',
+          firstName: u?.firstName,
+          lastName: u?.lastName,
+          email: u?.email,
+          username: u?.username,
+          avatar: u?.avatar || ''
+        }))
+      })),
+      myReactions: (populated.reactions || [])
+        .filter((r) => (r.users || []).some((u) => String(u?._id || u) === currentUserId))
+        .map((r) => r.emoji),
+      author: populated.author,
+      editedAt: populated.editedAt,
+      createdAt: populated.createdAt,
+      updatedAt: populated.updatedAt
+    };
+
+    return res.json({ success: true, data });
+  } catch (err) {
+    console.error('toggleCommentReaction error:', err);
+    return res.status(500).json({ success: false, message: 'Error toggling reaction', error: err.message });
   }
 };
 
@@ -894,14 +1261,14 @@ exports.restoreDescriptionVersion = async (req, res) => {
   }
 };
 
-/** Modules that support batch fetch for related-record enrichment (deals, events, forms). */
-const BATCH_MODULES = new Set(['deals', 'events', 'forms']);
+/** Modules that support batch fetch for related-record enrichment. */
+const BATCH_MODULES = new Set(['deals', 'events', 'forms', 'people', 'cases']);
 
 /**
  * POST /api/modules/:moduleKey/records/batch
  * Body: { ids: string[] }
  * Returns { success: true, data: record[] } with only records that exist and belong to the org.
- * Used by Task record page to enrich related deals/events/forms without N GET requests or 404s.
+ * Used by relationship UIs and record pages to enrich related records without N GET requests or 404s.
  */
 exports.getRecordsBatch = async (req, res) => {
   try {
@@ -931,6 +1298,12 @@ exports.getRecordsBatch = async (req, res) => {
       query.deletedAt = null;
     } else if (moduleKey === 'forms') {
       Model = require('../models/Form');
+    } else if (moduleKey === 'people') {
+      Model = require('../models/People');
+      query.deletedAt = null;
+    } else if (moduleKey === 'cases') {
+      Model = require('../models/Case');
+      query.deletedAt = null;
     } else {
       return res.json({ success: true, data: [] });
     }

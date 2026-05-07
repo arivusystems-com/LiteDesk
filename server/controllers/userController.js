@@ -18,6 +18,11 @@ const Organization = require('../models/Organization');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const { APP_KEYS } = require('../constants/appKeys');
+const {
+    materializeEffectiveCRMEnvelopeOnUser,
+    enrichLeanUsersWithEffectiveCRMPermissions,
+    sanitizeUserResponsePayload
+} = require('../utils/rolePermissionProjection');
 const { mapLegacyRoleToCRM } = require('../constants/appRoles');
 const { 
     getDefaultRoleForApp, 
@@ -81,12 +86,14 @@ exports.getUsers = async (req, res) => {
             .skip((page - 1) * limit)
             .lean();
 
+        const usersWithEffectivePermissions = await enrichLeanUsersWithEffectiveCRMPermissions(users);
+
         // Get total count
         const total = await User.countDocuments(query);
 
         res.json({
             success: true,
-            data: users,
+            data: usersWithEffectivePermissions,
             total,
             totalPages: Math.ceil(total / limit),
             currentPage: parseInt(page)
@@ -306,9 +313,11 @@ exports.getUser = async (req, res) => {
             });
         }
 
+        await materializeEffectiveCRMEnvelopeOnUser(user);
+
         res.json({
             success: true,
-            data: user
+            data: sanitizeUserResponsePayload(user)
         });
     } catch (error) {
         console.error('Get user error:', error);
@@ -669,113 +678,7 @@ exports.inviteUser = async (req, res) => {
             allowedApps: finalAppAccess.map(a => a.appKey) // Legacy field for backward compatibility
         });
 
-        // Set permissions based on the dynamic role's permissions (if roleId provided)
-        // Map the Role permissions to User permissions structure
-        // Only set permissions if we have a roleDoc (legacy format or unified with roleId)
-        if (roleDoc) {
-            newUser.permissions = {
-            contacts: {
-                view: roleDoc.permissions.contacts.read,
-                create: roleDoc.permissions.contacts.create,
-                edit: roleDoc.permissions.contacts.update,
-                delete: roleDoc.permissions.contacts.delete,
-                viewAll: roleDoc.permissions.contacts.viewAll || false,
-                exportData: roleDoc.permissions.contacts.export || false
-            },
-            people: {
-                view: roleDoc.permissions.contacts.read,
-                create: roleDoc.permissions.contacts.create,
-                edit: roleDoc.permissions.contacts.update,
-                delete: roleDoc.permissions.contacts.delete,
-                viewAll: roleDoc.permissions.contacts.viewAll || false,
-                exportData: roleDoc.permissions.contacts.export || false
-            },
-            organizations: {
-                view: roleDoc.permissions.organizations?.read || false,
-                create: roleDoc.permissions.organizations?.create || false,
-                edit: roleDoc.permissions.organizations?.update || false,
-                delete: roleDoc.permissions.organizations?.delete || false,
-                viewAll: roleDoc.permissions.organizations?.viewAll || false,
-                exportData: roleDoc.permissions.organizations?.export || false
-            },
-            deals: {
-                view: roleDoc.permissions.deals.read,
-                create: roleDoc.permissions.deals.create,
-                edit: roleDoc.permissions.deals.update,
-                delete: roleDoc.permissions.deals.delete,
-                viewAll: roleDoc.permissions.deals.viewAll || false,
-                exportData: roleDoc.permissions.deals.export || false
-            },
-            projects: {
-                view: true,
-                create: true,
-                edit: true,
-                delete: false,
-                viewAll: false
-            },
-            tasks: {
-                view: roleDoc.permissions.tasks.read,
-                create: roleDoc.permissions.tasks.create,
-                edit: roleDoc.permissions.tasks.update,
-                delete: roleDoc.permissions.tasks.delete,
-                viewAll: roleDoc.permissions.tasks.viewAll || false
-            },
-            events: {
-                view: roleDoc.permissions.events?.read || false,
-                create: roleDoc.permissions.events?.create || false,
-                edit: roleDoc.permissions.events?.update || false,
-                delete: roleDoc.permissions.events?.delete || false,
-                viewAll: roleDoc.permissions.events?.viewAll || false
-            },
-            forms: {
-                view: roleDoc.permissions.forms?.read || false,
-                create: roleDoc.permissions.forms?.create || false,
-                edit: roleDoc.permissions.forms?.update || false,
-                delete: roleDoc.permissions.forms?.delete || false,
-                viewAll: roleDoc.permissions.forms?.viewAll || false,
-                exportData: roleDoc.permissions.forms?.export || false
-            },
-            items: {
-                view: roleDoc.permissions.items?.read || false,
-                create: roleDoc.permissions.items?.create || false,
-                edit: roleDoc.permissions.items?.update || false,
-                delete: roleDoc.permissions.items?.delete || false,
-                viewAll: roleDoc.permissions.items?.viewAll || false,
-                exportData: roleDoc.permissions.items?.export || false
-            },
-            cases: {
-                view: finalAppAccess.some((entry) => entry.appKey === APP_KEYS.HELPDESK),
-                create: finalAppAccess.some((entry) => entry.appKey === APP_KEYS.HELPDESK && entry.roleKey !== 'VIEWER'),
-                edit: finalAppAccess.some((entry) => entry.appKey === APP_KEYS.HELPDESK && entry.roleKey !== 'VIEWER'),
-                delete: finalAppAccess.some((entry) => entry.appKey === APP_KEYS.HELPDESK && entry.roleKey === 'ADMIN'),
-                viewAll: finalAppAccess.some((entry) => entry.appKey === APP_KEYS.HELPDESK && ['ADMIN', 'MANAGER', 'AGENT'].includes(entry.roleKey))
-            },
-            imports: {
-                view: true,
-                create: roleDoc.permissions.contacts.import || roleDoc.permissions.deals.import,
-                delete: false
-            },
-            settings: {
-                view: roleDoc.permissions.settings?.view || false,
-                edit: roleDoc.permissions.settings?.edit || false,
-                manageUsers: roleDoc.permissions.settings.manageUsers || false,
-                manageBilling: roleDoc.permissions.settings.manageBilling || false,
-                manageIntegrations: false,
-                customizeFields: roleDoc.permissions.settings?.edit || false
-            },
-            reports: {
-                viewStandard: roleDoc.permissions.reports.read,
-                viewCustom: roleDoc.permissions.reports.read,
-                createCustom: roleDoc.permissions.reports.create,
-                exportReports: roleDoc.permissions.reports.export || false
-            }
-        };
-        } else {
-            // Unified app access can be role-less; derive the legacy permission
-            // snapshot used by existing sidebar and route permission checks.
-            newUser.setPermissionsByAppAccess(finalAppAccess);
-        }
-        
+        await materializeEffectiveCRMEnvelopeOnUser(newUser);
         await newUser.save();
         
         // Increment seat usage for each app (atomic operations)
@@ -825,7 +728,7 @@ exports.inviteUser = async (req, res) => {
 
 // --- Update user role and permissions ---
 exports.updateUser = async (req, res) => {
-    const { role, roleId, status, permissions, firstName, lastName, phoneNumber, appAccess } = req.body;
+    const { role, roleId, status, firstName, lastName, phoneNumber, appAccess } = req.body;
 
     try {
         const user = await User.findOne({ 
@@ -838,6 +741,13 @@ exports.updateUser = async (req, res) => {
                 success: false,
                 message: 'User not found' 
             });
+        }
+
+        if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'permissions') && req.body.permissions !== undefined) {
+            console.warn(
+                '[DEPRECATED] PUT /users/:id ignores body.permissions. Edit Roles or assign appAccess.',
+                { actor: req.user?._id, target: req.params.id }
+            );
         }
 
         const requestKeys = Object.keys(req.body || {});
@@ -887,71 +797,10 @@ exports.updateUser = async (req, res) => {
                 await Role.findByIdAndUpdate(user.roleId, { $inc: { userCount: -1 } });
             }
 
-            // Update user's role
+            // Update user's role (permission snapshot rebuilt from Role below, after appAccess)
             user.roleId = roleId;
             user.role = roleDoc.name.toLowerCase(); // Update legacy role field
             user.isOwner = roleDoc.name === 'Owner';
-
-            // Update permissions from role
-            user.permissions = {
-                contacts: {
-                    view: roleDoc.permissions.contacts.read,
-                    create: roleDoc.permissions.contacts.create,
-                    edit: roleDoc.permissions.contacts.update,
-                    delete: roleDoc.permissions.contacts.delete,
-                    viewAll: roleDoc.permissions.contacts.viewAll || false,
-                    exportData: roleDoc.permissions.contacts.export || false
-                },
-                organizations: {
-                    view: roleDoc.permissions.organizations?.read || false,
-                    create: roleDoc.permissions.organizations?.create || false,
-                    edit: roleDoc.permissions.organizations?.update || false,
-                    delete: roleDoc.permissions.organizations?.delete || false,
-                    viewAll: roleDoc.permissions.organizations?.viewAll || false,
-                    exportData: roleDoc.permissions.organizations?.export || false
-                },
-                deals: {
-                    view: roleDoc.permissions.deals.read,
-                    create: roleDoc.permissions.deals.create,
-                    edit: roleDoc.permissions.deals.update,
-                    delete: roleDoc.permissions.deals.delete,
-                    viewAll: roleDoc.permissions.deals.viewAll || false,
-                    exportData: roleDoc.permissions.deals.export || false
-                },
-                projects: {
-                    view: true,
-                    create: true,
-                    edit: true,
-                    delete: false,
-                    viewAll: false
-                },
-                tasks: {
-                    view: roleDoc.permissions.tasks.read,
-                    create: roleDoc.permissions.tasks.create,
-                    edit: roleDoc.permissions.tasks.update,
-                    delete: roleDoc.permissions.tasks.delete,
-                    viewAll: roleDoc.permissions.tasks.viewAll || false
-                },
-                imports: {
-                    view: true,
-                    create: roleDoc.permissions.contacts.import || roleDoc.permissions.deals.import,
-                    delete: false
-                },
-                settings: {
-                    view: roleDoc.permissions.settings?.view || false,
-                    edit: roleDoc.permissions.settings?.edit || false,
-                    manageUsers: roleDoc.permissions.settings.manageUsers || false,
-                    manageBilling: roleDoc.permissions.settings.manageBilling || false,
-                    manageIntegrations: false,
-                    customizeFields: roleDoc.permissions.settings?.edit || false
-                },
-                reports: {
-                    viewStandard: roleDoc.permissions.reports.read,
-                    viewCustom: roleDoc.permissions.reports.read,
-                    createCustom: roleDoc.permissions.reports.create,
-                    exportReports: roleDoc.permissions.reports.export || false
-                }
-            };
 
             // Increment new role's user count
             await Role.findByIdAndUpdate(roleId, { $inc: { userCount: 1 } });
@@ -960,16 +809,6 @@ exports.updateUser = async (req, res) => {
         else if (!user.isOwner && role !== undefined && role !== user.role) {
             user.role = role;
             user.setPermissionsByRole(role);
-        }
-
-        // Allow custom permissions override (if provided)
-        if (!user.isOwner && permissions !== undefined) {
-            const normalized = { ...permissions };
-            if (normalized.people) {
-                normalized.contacts = normalized.people;
-                delete normalized.people;
-            }
-            user.permissions = { ...user.permissions, ...normalized };
         }
 
         // Update app access (seat-gated execution entitlement)
@@ -1095,25 +934,28 @@ exports.updateUser = async (req, res) => {
             }
         }
 
+        await materializeEffectiveCRMEnvelopeOnUser(user);
+
         await user.save();
 
         // Populate role details
         await user.populate('roleId', 'name description color icon level');
 
+        const updated = sanitizeUserResponsePayload(user);
         res.json({
             success: true,
             data: {
-                _id: user._id,
-                username: user.username,
-                email: user.email,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                role: user.role,
-                roleId: user.roleId,
-                status: user.status,
-                permissions: user.permissions,
-                appAccess: user.appAccess,
-                allowedApps: user.allowedApps
+                _id: updated._id,
+                username: updated.username,
+                email: updated.email,
+                firstName: updated.firstName,
+                lastName: updated.lastName,
+                role: updated.role,
+                roleId: updated.roleId,
+                status: updated.status,
+                permissions: updated.permissions,
+                appAccess: updated.appAccess,
+                allowedApps: updated.allowedApps
             },
             message: 'User updated successfully'
         });
@@ -1191,145 +1033,13 @@ exports.getProfile = async (req, res) => {
         const user = await User.findById(req.user._id)
             .select('-password')
             .populate('organizationId', 'name subscription limits enabledApps enabledModules settings')
-            .populate('roleId', 'name description color icon level permissions');
+            .populate('roleId', 'name description color icon level');
 
-        // If user has roleId, merge role permissions as baseline, overlay user's stored permissions (preserve overrides)
-        if (user.roleId && user.roleId.permissions) {
-            const rolePerms = {
-                contacts: {
-                    view: user.roleId.permissions.contacts?.read || false,
-                    create: user.roleId.permissions.contacts?.create || false,
-                    edit: user.roleId.permissions.contacts?.update || false,
-                    delete: user.roleId.permissions.contacts?.delete || false,
-                    viewAll: user.roleId.permissions.contacts?.viewAll || false,
-                    exportData: user.roleId.permissions.contacts?.export || false
-                },
-                people: {
-                    view: user.roleId.permissions.contacts?.read || false,
-                    create: user.roleId.permissions.contacts?.create || false,
-                    edit: user.roleId.permissions.contacts?.update || false,
-                    delete: user.roleId.permissions.contacts?.delete || false,
-                    viewAll: user.roleId.permissions.contacts?.viewAll || false,
-                    exportData: user.roleId.permissions.contacts?.export || false
-                },
-                organizations: {
-                    view: user.roleId.permissions.organizations?.read || false,
-                    create: user.roleId.permissions.organizations?.create || false,
-                    edit: user.roleId.permissions.organizations?.update || false,
-                    delete: user.roleId.permissions.organizations?.delete || false,
-                    viewAll: user.roleId.permissions.organizations?.viewAll || false,
-                    exportData: user.roleId.permissions.organizations?.export || false
-                },
-                deals: {
-                    view: user.roleId.permissions.deals?.read || false,
-                    create: user.roleId.permissions.deals?.create || false,
-                    edit: user.roleId.permissions.deals?.update || false,
-                    delete: user.roleId.permissions.deals?.delete || false,
-                    viewAll: user.roleId.permissions.deals?.viewAll || false,
-                    exportData: user.roleId.permissions.deals?.export || false
-                },
-                projects: {
-                    view: user.roleId.permissions.deals?.read || false,
-                    create: user.roleId.permissions.deals?.create || false,
-                    edit: user.roleId.permissions.deals?.update || false,
-                    delete: user.roleId.permissions.deals?.delete || false,
-                    viewAll: user.roleId.permissions.deals?.viewAll || false
-                },
-                tasks: {
-                    view: user.roleId.permissions.tasks?.read || false,
-                    create: user.roleId.permissions.tasks?.create || false,
-                    edit: user.roleId.permissions.tasks?.update || false,
-                    delete: user.roleId.permissions.tasks?.delete || false,
-                    viewAll: user.roleId.permissions.tasks?.viewAll || false
-                },
-                events: {
-                    view: user.roleId.permissions.events?.read || false,
-                    create: user.roleId.permissions.events?.create || false,
-                    edit: user.roleId.permissions.events?.update || false,
-                    delete: user.roleId.permissions.events?.delete || false,
-                    viewAll: user.roleId.permissions.events?.viewAll || false
-                },
-                forms: {
-                    view: user.roleId.permissions.forms?.read || false,
-                    create: user.roleId.permissions.forms?.create || false,
-                    edit: user.roleId.permissions.forms?.update || false,
-                    delete: user.roleId.permissions.forms?.delete || false,
-                    viewAll: user.roleId.permissions.forms?.viewAll || false,
-                    exportData: user.roleId.permissions.forms?.export || false
-                },
-                items: {
-                    view: user.roleId.permissions.items?.read || false,
-                    create: user.roleId.permissions.items?.create || false,
-                    edit: user.roleId.permissions.items?.update || false,
-                    delete: user.roleId.permissions.items?.delete || false,
-                    viewAll: user.roleId.permissions.items?.viewAll || false,
-                    exportData: user.roleId.permissions.items?.export || false
-                },
-                imports: {
-                    view: user.roleId.permissions.contacts?.import || user.roleId.permissions.deals?.import || false,
-                    create: user.roleId.permissions.contacts?.import || user.roleId.permissions.deals?.import || false,
-                    delete: false
-                },
-                settings: {
-                    view: user.roleId.permissions.settings?.view || false,
-                    edit: user.roleId.permissions.settings?.edit || false,
-                    manageUsers: user.roleId.permissions.settings?.manageUsers || false,
-                    manageBilling: user.roleId.permissions.settings?.manageBilling || false,
-                    manageIntegrations: false,
-                    customizeFields: user.roleId.permissions.settings?.edit || false
-                },
-                reports: {
-                    viewStandard: user.roleId.permissions.reports?.read || false,
-                    viewCustom: user.roleId.permissions.reports?.read || false,
-                    createCustom: user.roleId.permissions.reports?.create || false,
-                    exportReports: user.roleId.permissions.reports?.export || false
-                },
-                cases: {
-                    view: user.appAccess?.some((entry) => entry.appKey === APP_KEYS.HELPDESK) || false,
-                    create: user.appAccess?.some((entry) => entry.appKey === APP_KEYS.HELPDESK && entry.roleKey !== 'VIEWER') || false,
-                    edit: user.appAccess?.some((entry) => entry.appKey === APP_KEYS.HELPDESK && entry.roleKey !== 'VIEWER') || false,
-                    delete: user.appAccess?.some((entry) => entry.appKey === APP_KEYS.HELPDESK && entry.roleKey === 'ADMIN') || false,
-                    viewAll: user.appAccess?.some((entry) => entry.appKey === APP_KEYS.HELPDESK && ['ADMIN', 'MANAGER', 'AGENT'].includes(entry.roleKey)) || false
-                }
-            };
-            // Merge stored user.permissions over rolePerms
-            const merged = { ...rolePerms, ...(user.permissions || {}) };
-            // Ensure UI aliases and missing modules are present with safe defaults
-            if (merged.contacts && !merged.people) merged.people = merged.contacts;
-            const ensureModule = (key, template) => {
-                if (!merged[key]) merged[key] = { ...template };
-            };
-            ensureModule('contacts', { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false });
-            ensureModule('people', { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false });
-            ensureModule('organizations', { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false });
-            ensureModule('deals', { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false });
-            ensureModule('tasks', { view: false, create: false, edit: false, delete: false, viewAll: false });
-            ensureModule('events', { view: false, create: false, edit: false, delete: false, viewAll: false });
-            ensureModule('forms', { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false });
-            ensureModule('items', { view: false, create: false, edit: false, delete: false, viewAll: false, exportData: false });
-            ensureModule('cases', { view: false, create: false, edit: false, delete: false, viewAll: false });
-            ensureModule('imports', { view: false, create: false, delete: false });
-            ensureModule('settings', {
-                view: false,
-                edit: false,
-                manageUsers: false,
-                manageBilling: false,
-                manageIntegrations: false,
-                customizeFields: false
-            });
-            ensureModule('reports', { viewStandard: false, viewCustom: false, createCustom: false, exportReports: false });
-            user.permissions = merged;
-        } else {
-            const permissionObject = user.permissions?.toObject ? user.permissions.toObject() : user.permissions;
-            const missingCorePermissions = !permissionObject?.events || !permissionObject?.forms || !permissionObject?.items;
-            if (((!user.roleId && user.appAccess && user.appAccess.length > 0) || missingCorePermissions) && user.appAccess && user.appAccess.length > 0) {
-                user.setPermissionsByAppAccess(user.appAccess);
-            }
-        }
+        await materializeEffectiveCRMEnvelopeOnUser(user);
 
         res.json({
             success: true,
-            data: user
+            data: sanitizeUserResponsePayload(user)
         });
     } catch (error) {
         console.error('Get profile error:', error);

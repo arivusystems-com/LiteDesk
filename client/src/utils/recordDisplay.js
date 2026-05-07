@@ -18,6 +18,8 @@ import { getModuleRecordCrudPathBase } from '@/utils/moduleRecordApiPath';
 // Cache for record data (key: appKey.moduleKey.recordId)
 const recordCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const BATCH_FETCH_MODULES = new Set(['deals', 'events', 'forms', 'people', 'cases']);
+const unsupportedBatchModules = new Set();
 
 /**
  * Get endpoint for a record type.
@@ -76,7 +78,10 @@ export async function fetchRecord(appKey, moduleKey, recordId, forceRefresh = fa
   
   try {
     const endpoint = getRecordEndpoint(appKey, moduleKey);
-    const response = await apiClient.get(`${endpoint}/${recordId}`);
+    // Related links can legitimately point to deleted/forbidden records.
+    // Treat 404/403 as missing (null) instead of throwing noisy console errors.
+    const response = await apiClient.getOptional(`${endpoint}/${recordId}`);
+    if (!response) return null;
     
     if (response.success && response.data) {
       // Cache the record
@@ -143,17 +148,85 @@ export function getRecordSecondaryText(record) {
  */
 export async function fetchRecordsForDisplay(records, forceRefresh = false) {
   if (!records || records.length === 0) return [];
-  
-  // Fetch records in parallel (cache will be checked inside fetchRecord)
-  const fetchPromises = records.map(record => {
+
+  const fetchedRecords = new Array(records.length).fill(null);
+  const batchGroups = new Map(); // moduleKey -> [{ index, recordId, appKey, moduleKey }]
+
+  // First pass: resolve from cache and group batch-capable misses.
+  records.forEach((record, index) => {
     const recordId = record.recordId ?? record.id ?? record._id;
-    return fetchRecord(record.appKey, record.moduleKey, recordId, forceRefresh);
+    const moduleKey = String(record.moduleKey || '').toLowerCase();
+    const appKey = String(record.appKey || '').toUpperCase();
+    if (!recordId || !moduleKey) {
+      fetchedRecords[index] = null;
+      return;
+    }
+
+    const cacheKey = getCacheKey(appKey, moduleKey, recordId);
+    if (!forceRefresh && recordCache.has(cacheKey)) {
+      const cached = recordCache.get(cacheKey);
+      if (Date.now() - cached.timestamp < CACHE_TTL) {
+        fetchedRecords[index] = cached.data;
+        return;
+      }
+      recordCache.delete(cacheKey);
+    }
+
+    if (BATCH_FETCH_MODULES.has(moduleKey) && !unsupportedBatchModules.has(moduleKey)) {
+      if (!batchGroups.has(moduleKey)) batchGroups.set(moduleKey, []);
+      batchGroups.get(moduleKey).push({ index, recordId, appKey, moduleKey });
+      return;
+    }
+
+    // Fallback for non-batch modules.
+    fetchedRecords[index] = fetchRecord(appKey, moduleKey, recordId, forceRefresh);
   });
-  
-  const fetchedRecords = await Promise.all(fetchPromises);
-  
-  // Combine with original record data and add labels
+
+  // Resolve any fallback fetch promises.
+  const fallbackPromises = fetchedRecords.map(async (item, index) => {
+    if (item && typeof item.then === 'function') {
+      fetchedRecords[index] = await item;
+    }
+  });
+  await Promise.all(fallbackPromises);
+
+  // Batch fetch by module to avoid per-record 404 spam for stale links.
+  const batchPromises = Array.from(batchGroups.entries()).map(async ([moduleKey, entries]) => {
+    const ids = [...new Set(entries.map((e) => String(e.recordId)))];
+    if (ids.length === 0) return;
+
+    try {
+      const response = await apiClient.post(`/modules/${moduleKey}/records/batch`, { ids });
+      const rows = Array.isArray(response?.data) ? response.data : [];
+      const rowById = new Map(rows.map((row) => [String(row?._id ?? row?.id ?? ''), row]));
+
+      entries.forEach(({ index, recordId, appKey }) => {
+        const row = rowById.get(String(recordId)) || null;
+        fetchedRecords[index] = row;
+        if (row) {
+          const cacheKey = getCacheKey(appKey, moduleKey, recordId);
+          recordCache.set(cacheKey, {
+            data: row,
+            timestamp: Date.now()
+          });
+        }
+      });
+    } catch (error) {
+      const msg = String(error?.message || '').toLowerCase();
+      if (error?.status === 400 && msg.includes('batch not supported')) {
+        unsupportedBatchModules.add(moduleKey);
+      }
+      // If batch endpoint fails for any reason, fall back to per-record optional fetch.
+      await Promise.all(entries.map(async ({ index, recordId, appKey }) => {
+        fetchedRecords[index] = await fetchRecord(appKey, moduleKey, recordId, forceRefresh);
+      }));
+      console.warn(`[recordDisplay] Batch fetch fallback for module ${moduleKey}:`, error?.message || error);
+    }
+  });
+  await Promise.all(batchPromises);
+
   return fetchedRecords.map((fetched, index) => {
+    if (!fetched) return null;
     const original = records[index];
     return {
       ...original,

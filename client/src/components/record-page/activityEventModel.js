@@ -144,8 +144,18 @@ export const normalizeSystemActivityEvent = (log, options = {}) => {
   });
 };
 
+const normalizeCommentAttachments = (value) => {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === 'object') return [value];
+  return [];
+};
+
 export const normalizeCommentActivityEvent = (comment) => {
-  const attachments = Array.isArray(comment?.attachments) ? comment.attachments : [];
+  const attachments = normalizeCommentAttachments(
+    comment?.attachments
+      ?? comment?.payload?.attachments
+      ?? comment?.files
+  );
   const reactions = Array.isArray(comment?.reactions)
     ? comment.reactions
     : (comment?.reactionSummary || comment?.emojiReactions || []);
