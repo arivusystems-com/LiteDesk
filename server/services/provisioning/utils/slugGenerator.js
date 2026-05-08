@@ -1,4 +1,5 @@
 const InstanceRegistry = require('../../../models/InstanceRegistry');
+const Organization = require('../../../models/Organization');
 
 /**
  * Generate a unique subdomain slug from company name
@@ -16,13 +17,16 @@ async function generateUniqueSlug(companyName) {
   
   // Limit length
   baseSlug = baseSlug.substring(0, 30);
+  if (!baseSlug) {
+    baseSlug = 'workspace';
+  }
   
   // Check if slug exists
   let slug = baseSlug;
   let counter = 1;
   
   while (await slugExists(slug)) {
-    slug = `${baseSlug}-${counter}`;
+    slug = `${baseSlug}${counter}`;
     counter++;
     
     // Prevent infinite loop
@@ -41,8 +45,11 @@ async function generateUniqueSlug(companyName) {
  * @returns {Promise<boolean>} - True if exists, false otherwise
  */
 async function slugExists(slug) {
-  const existing = await InstanceRegistry.findOne({ subdomain: slug });
-  return !!existing;
+  const [existingInstance, existingOrganization] = await Promise.all([
+    InstanceRegistry.findOne({ subdomain: slug }).select('_id').lean(),
+    Organization.findOne({ slug }).select('_id').lean()
+  ]);
+  return !!existingInstance || !!existingOrganization;
 }
 
 /**

@@ -7,6 +7,18 @@ const ARIVU_PRODUCTION_ORIGINS = [
   'https://www.arivusystems.com',
   'https://app.arivusystems.com',
 ];
+const { isTenantSubdomainOrigin } = require('../utils/tenantDomain');
+
+function isLocalhostFamilyOrigin(origin) {
+  if (!origin) return false;
+  try {
+    const parsed = new URL(origin);
+    const hostname = parsed.hostname.toLowerCase();
+    return hostname === 'localhost' || hostname.endsWith('.localhost');
+  } catch (_error) {
+    return false;
+  }
+}
 
 function getAllowedOrigins() {
   if (process.env.CORS_ORIGINS) {
@@ -25,4 +37,4 @@ function getAllowedOrigins() {
   ];
 }
 
-module.exports = { getAllowedOrigins, ARIVU_PRODUCTION_ORIGINS };
+module.exports = { getAllowedOrigins, ARIVU_PRODUCTION_ORIGINS, isLocalhostFamilyOrigin, isTenantSubdomainOrigin };

@@ -6,6 +6,13 @@ const { mapOrganizationToSurface } = require('../utils/mappers/mapOrganizationTo
 
 const websiteHostnamePattern = /^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/;
 
+function isMasterLikeRequest(req, currentTenantOrg) {
+  const orgName = String(currentTenantOrg?.name || '').trim().toLowerCase();
+  const userEmail = String(req?.user?.email || '').trim().toLowerCase();
+  const isInternalEmail = userEmail.endsWith('@litedesk.com') || userEmail.endsWith('@litedesk.io');
+  return orgName === 'litedesk master' || orgName.includes('litedesk master') || isInternalEmail;
+}
+
 function isValidWebsite(rawValue) {
   if (!rawValue || typeof rawValue !== 'string') return true;
 
@@ -127,12 +134,21 @@ exports.list = async (req, res) => {
       .lean();
     const userIds = tenantUserIds.map(u => u._id);
 
-    // Build query: Sales organizations created by users from this tenant organization
-    let query = { 
-      isTenant: false, // Only Sales organizations
-      createdBy: { $in: userIds }, // Only Sales orgs created by users from this tenant
-      deletedAt: null
-    };
+    const currentTenantOrg = await Organization.findById(tenantOrganizationId)
+      .select('name')
+      .lean();
+    const isMasterOrganization = isMasterLikeRequest(req, currentTenantOrg);
+
+    // Build query:
+    // - Regular tenants: business orgs created by their users only.
+    // - Master org: show all organizations (business + converted tenant), regardless of createdBy.
+    let query = { deletedAt: null };
+    if (isMasterOrganization) {
+      // no createdBy/isTenant restriction
+    } else {
+      query.createdBy = { $in: userIds };
+      query.isTenant = false;
+    }
 
     // Restrict list to specific id(s), e.g. paired contact→org UI (lookup combobox shows one org)
     if (req.query.ids) {

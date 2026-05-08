@@ -3,7 +3,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const { validateEnv } = require('./config/validateEnv');
-const { getAllowedOrigins } = require('./config/corsConfig');
+const { getAllowedOrigins, isLocalhostFamilyOrigin, isTenantSubdomainOrigin } = require('./config/corsConfig');
 const { getMongoUris, connectMasterWithRetry, MASTER_DB } = require('./lib/mongoConnect');
 const { initSentryNode, installExpressSentryErrorHandler, flushSentry } = require('./lib/sentryNode');
 
@@ -92,8 +92,12 @@ app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
+
+    const isExplicitlyAllowed = allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*');
+    const isLocalSubdomainDevOrigin = !isProduction && isLocalhostFamilyOrigin(origin);
+    const isTenantProdOrigin = isProduction && isTenantSubdomainOrigin(origin);
+
+    if (isExplicitlyAllowed || isLocalSubdomainDevOrigin || isTenantProdOrigin) {
       callback(null, true);
     } else {
       console.log(`❌ CORS blocked origin: ${origin}`);
@@ -107,7 +111,7 @@ app.use((req, res, next) => {
   const origin = req.get('Origin');
   if (allowedOrigins.includes('*')) {
     res.setHeader('Timing-Allow-Origin', '*');
-  } else if (origin && allowedOrigins.includes(origin)) {
+  } else if (origin && (allowedOrigins.includes(origin) || (!isProduction && isLocalhostFamilyOrigin(origin)) || (isProduction && isTenantSubdomainOrigin(origin)))) {
     res.setHeader('Timing-Allow-Origin', origin);
   }
   next();

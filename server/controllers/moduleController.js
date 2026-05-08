@@ -2103,12 +2103,48 @@ exports.listModules = async (req, res) => {
             }
         }
         
+        const hasCanonicalOrgKey = (doc, moduleKey) => {
+            const key = String(doc?.key || '').toLowerCase().trim();
+            const mk = String(moduleKey || '').toLowerCase().trim();
+            return Boolean(key) && key === mk;
+        };
+        const hasCanonicalOrgModuleKey = (doc, moduleKey) => {
+            const key = String(doc?.moduleKey || '').toLowerCase().trim();
+            const mk = String(moduleKey || '').toLowerCase().trim();
+            return Boolean(key) && key === mk;
+        };
+        const toTimestamp = (value) => {
+            if (!value) return 0;
+            const ts = new Date(value).getTime();
+            return Number.isFinite(ts) ? ts : 0;
+        };
+        const choosePreferredOrgOverride = (current, incoming, moduleKey) => {
+            if (!current) return incoming;
+            const currentHasKey = hasCanonicalOrgKey(current, moduleKey);
+            const incomingHasKey = hasCanonicalOrgKey(incoming, moduleKey);
+            if (incomingHasKey !== currentHasKey) {
+                return incomingHasKey ? incoming : current;
+            }
+            const currentHasModuleKey = hasCanonicalOrgModuleKey(current, moduleKey);
+            const incomingHasModuleKey = hasCanonicalOrgModuleKey(incoming, moduleKey);
+            if (incomingHasModuleKey !== currentHasModuleKey) {
+                return incomingHasModuleKey ? incoming : current;
+            }
+            const currentUpdatedAt = toTimestamp(current.updatedAt) || toTimestamp(current.createdAt);
+            const incomingUpdatedAt = toTimestamp(incoming.updatedAt) || toTimestamp(incoming.createdAt);
+            if (incomingUpdatedAt !== currentUpdatedAt) {
+                return incomingUpdatedAt > currentUpdatedAt ? incoming : current;
+            }
+            return incoming;
+        };
+        
         // Then add organization-specific overrides (these take precedence over platform)
         for (const m of custom) {
             if (m.organizationId) {
                 const moduleKey = m.key || m.moduleKey;
                 if (moduleKey) {
-                    customByKey.set(moduleKey, m);
+                    const existing = customByKey.get(moduleKey);
+                    customByKey.set(moduleKey, choosePreferredOrgOverride(existing, m, moduleKey));
                 }
             }
         }
@@ -3719,8 +3755,19 @@ exports.getPeopleQuickCreate = async (req, res) => {
 exports.updateSystemModule = async (req, res) => {
     try {
         const { key } = req.params;
+        const keyLower = String(key || '').toLowerCase();
+        const mongoose = require('mongoose');
+        const orgObjectId = new mongoose.Types.ObjectId(req.user.organizationId);
+        const orgFilterMongoose = {
+            organizationId: req.user.organizationId,
+            $or: [{ key: keyLower }, { moduleKey: keyLower }]
+        };
+        const orgFilterRaw = {
+            organizationId: orgObjectId,
+            $or: [{ key: keyLower }, { moduleKey: keyLower }]
+        };
         const systemKeys = new Set(['people','organizations','deals','cases','tasks','events','forms','items','imports','reports']);
-        if (!systemKeys.has(key)) return res.status(400).json({ success: false, message: 'Invalid system module key' });
+        if (!systemKeys.has(keyLower)) return res.status(400).json({ success: false, message: 'Invalid system module key' });
         const { fields, enabled, name, relationships, quickCreate, quickCreateLayout, pipelineSettings } = req.body;
         const deprecatedEventAliasKeys = new Set(['relatedorg', 'relatedorgid', 'relatedorganization']);
         
@@ -3739,8 +3786,7 @@ exports.updateSystemModule = async (req, res) => {
         // Load existing module definition to validate field mutations
         // Use lowercase key for consistency
         const existingMod = await ModuleDefinition.findOne({
-            organizationId: req.user.organizationId,
-            key: key.toLowerCase()
+            ...orgFilterMongoose
         }).select('+quickCreate +quickCreateLayout +fields +relationships +pipelineSettings');
         
         // When user "removes" platform/app fields from config, re-add them as hidden so save succeeds (no 403)
@@ -3772,17 +3818,17 @@ exports.updateSystemModule = async (req, res) => {
         if (name !== undefined) updateObj.name = String(name).trim();
         if (enabled !== undefined) updateObj.enabled = !!enabled;
         if (Array.isArray(fieldsToSave)) {
-            let fieldsOut = (key === 'events')
+            let fieldsOut = (keyLower === 'events')
                 ? fieldsToSave.filter(f => !deprecatedEventAliasKeys.has(String(f?.key || '').toLowerCase()))
                 : fieldsToSave;
-            if (key === 'events') {
+            if (keyLower === 'events') {
                 fieldsOut = fieldsOut.map(normalizeEventFieldConfig);
             }
-            if (key === 'tasks') {
+            if (keyLower === 'tasks') {
                 fieldsOut = dedupeFieldsByKey(fieldsOut);
                 fieldsOut = normalizeTasksModuleFields(fieldsOut);
             }
-            if (key === 'people') {
+            if (keyLower === 'people') {
                 const { getPeopleTypesConfig } = require('../utils/tenantMetadata');
                 const peopleCfg = await getPeopleTypesConfig(req.user.organizationId, 'SALES');
                 fieldsOut = normalizePeopleModuleFields(fieldsOut);
@@ -3793,8 +3839,8 @@ exports.updateSystemModule = async (req, res) => {
         // Resolve and validate relationships (same as updateModule) so saved config works in Link Record drawer
         if (relationships !== undefined) {
             const newRelationships = Array.isArray(relationships) ? [...relationships] : [];
-            const sourceAppKey = (key === 'deals' ? 'sales' : key === 'cases' ? 'helpdesk' : key === 'tasks' ? 'platform' : 'platform').toString().toLowerCase();
-            const sourceModuleKey = key.toLowerCase();
+            const sourceAppKey = (keyLower === 'deals' ? 'sales' : keyLower === 'cases' ? 'helpdesk' : keyLower === 'tasks' ? 'platform' : 'platform').toString().toLowerCase();
+            const sourceModuleKey = keyLower;
             const toTargetKey = (r) => {
                 const raw = r.targetModuleKey ?? r.targetModule;
                 if (raw == null) return '';
@@ -3858,7 +3904,7 @@ exports.updateSystemModule = async (req, res) => {
         }
         if (pipelineSettings !== undefined) {
             const pipelineValue = Array.isArray(pipelineSettings) ? pipelineSettings : [];
-            updateObj.pipelineSettings = key === 'deals'
+            updateObj.pipelineSettings = keyLower === 'deals'
                 ? normalizePipelineSettings(pipelineValue)
                 : pipelineValue;
         }
@@ -3866,10 +3912,10 @@ exports.updateSystemModule = async (req, res) => {
         // Always update quickCreate if provided (even if empty array)
         if (quickCreate !== undefined) {
             let qc = Array.isArray(quickCreate) ? quickCreate : [];
-            if (key === 'events') {
+            if (keyLower === 'events') {
                 qc = qc.filter(k => !deprecatedEventAliasKeys.has(String(k || '').toLowerCase()));
             }
-            if (key === 'people') {
+            if (keyLower === 'people') {
                 qc = migratePeopleQuickCreateKeys(qc);
             }
             updateObj.quickCreate = qc;
@@ -3886,7 +3932,7 @@ exports.updateSystemModule = async (req, res) => {
             let layout = (quickCreateLayout && typeof quickCreateLayout === 'object') 
                 ? quickCreateLayout 
                 : { version: 1, rows: [] };
-            if (key === 'events' && layout && Array.isArray(layout.rows)) {
+            if (keyLower === 'events' && layout && Array.isArray(layout.rows)) {
                 layout = {
                     ...layout,
                     rows: layout.rows
@@ -3899,7 +3945,7 @@ exports.updateSystemModule = async (req, res) => {
                         .filter(r => Array.isArray(r?.cols) ? r.cols.length > 0 : true)
                 };
             }
-            if (key === 'people') {
+            if (keyLower === 'people') {
                 layout = migratePeopleQuickCreateLayoutKeys(layout);
             }
             updateObj.quickCreateLayout = layout;
@@ -3942,7 +3988,6 @@ exports.updateSystemModule = async (req, res) => {
         
         // Mongoose updateOne seems to be filtering out quickCreate and fields
         // So we'll use direct MongoDB driver for these critical fields and Mongoose for others
-        const mongoose = require('mongoose');
         const db = mongoose.connection.db;
         const collection = db.collection('moduledefinitions');
         
@@ -3969,7 +4014,8 @@ exports.updateSystemModule = async (req, res) => {
             const upsertFields = {
                 ...otherFields,
                 organizationId: req.user.organizationId,
-                key: key.toLowerCase(),
+                key: keyLower,
+                moduleKey: keyLower,
                 // Don't set moduleKey or appKey - these are for platform-level docs only
                 // Tenant overrides use organizationId + key as the unique identifier
                 label: key.charAt(0).toUpperCase() + key.slice(1),
@@ -3978,7 +4024,7 @@ exports.updateSystemModule = async (req, res) => {
                 type: 'system'
             };
             updateResult = await ModuleDefinition.updateOne(
-                { organizationId: req.user.organizationId, key: key.toLowerCase() },
+                orgFilterMongoose,
                 { $set: upsertFields },
                 { upsert: true, runValidators: false }
             );
@@ -3998,15 +4044,13 @@ exports.updateSystemModule = async (req, res) => {
             // NOTE: For tenant-specific overrides (with organizationId), we don't set appKey/moduleKey
             // to avoid conflicts with the platform-level unique index { appKey: 1, moduleKey: 1 }
             const directUpdateResult = await collection.updateOne(
-                { 
-                    organizationId: new mongoose.Types.ObjectId(req.user.organizationId), 
-                    key: key.toLowerCase()
-                },
+                orgFilterRaw,
                 { 
                     $set: {
                         ...criticalFields,
-                        organizationId: new mongoose.Types.ObjectId(req.user.organizationId),
-                        key: key.toLowerCase(),
+                        organizationId: orgObjectId,
+                        key: keyLower,
+                        moduleKey: keyLower,
                         type: 'system',
                         // Don't set moduleKey or appKey - these are for platform-level docs only
                         // Tenant overrides use organizationId + key as the unique identifier
@@ -4034,14 +4078,14 @@ exports.updateSystemModule = async (req, res) => {
             if (directUpdateResult.matchedCount === 0 && directUpdateResult.upsertedCount === 0) {
                 console.error('🚨 WARNING: Document not found and not created!', {
                     organizationId: req.user.organizationId.toString(),
-                    key: key.toLowerCase(),
+                    key: keyLower,
                     updateResult: directUpdateResult
                 });
             } else if (directUpdateResult.upsertedCount > 0) {
                 console.log('✅ Document created via upsert:', {
                     upsertedId: directUpdateResult.upsertedId,
                     organizationId: req.user.organizationId.toString(),
-                    key: key.toLowerCase()
+                    key: keyLower
                 });
             }
         }
@@ -4050,8 +4094,7 @@ exports.updateSystemModule = async (req, res) => {
         // Explicitly select fields that have select: false in schema
         // Use lowercase key to match what was saved
         const doc = await ModuleDefinition.findOne({ 
-            organizationId: req.user.organizationId, 
-            key: key.toLowerCase()
+            ...orgFilterMongoose
         }).select('+quickCreate +quickCreateLayout +fields +relationships +pipelineSettings');
         
         if (!doc) {
@@ -4086,8 +4129,7 @@ exports.updateSystemModule = async (req, res) => {
         
         // Verify what was actually saved by querying directly from MongoDB (bypass Mongoose)
         const verifiedRaw = await collection.findOne({ 
-            organizationId: new mongoose.Types.ObjectId(req.user.organizationId), 
-            key: key.toLowerCase()
+            ...orgFilterRaw
         });
         
         console.log('🔍 Raw MongoDB document keys:', verifiedRaw ? Object.keys(verifiedRaw) : 'Document not found');
@@ -4100,16 +4142,14 @@ exports.updateSystemModule = async (req, res) => {
         // Explicitly select fields that have select: false in schema
         // Use lowercase key to match what was saved
         const verified = await ModuleDefinition.findOne({ 
-            organizationId: req.user.organizationId, 
-            key: key.toLowerCase()
+            ...orgFilterMongoose
         }).select('+quickCreate +quickCreateLayout +fields +relationships +pipelineSettings').lean(); // Use lean() to get plain JavaScript object
         
         // Also get the Mongoose document to compare
         // Explicitly select fields that have select: false in schema
         // Use lowercase key to match what was saved
         const verifiedDoc = await ModuleDefinition.findOne({ 
-            organizationId: req.user.organizationId, 
-            key: key.toLowerCase()
+            ...orgFilterMongoose
         }).select('+quickCreate +quickCreateLayout +fields +relationships +pipelineSettings');
         
         console.log('🔍 After lean query (from database):', {
@@ -4337,7 +4377,7 @@ exports.updateSystemModule = async (req, res) => {
         responseData.quickCreate = finalQuickCreate;
         responseData.quickCreateLayout = finalQuickCreateLayout;
         responseData.pipelineSettings = Array.isArray(pipelineSettingsValue) ? pipelineSettingsValue : [];
-        if (key === 'deals') {
+        if (keyLower === 'deals') {
             responseData.pipelineSettings = normalizePipelineSettings(responseData.pipelineSettings);
         }
         
@@ -4372,7 +4412,7 @@ exports.updateSystemModule = async (req, res) => {
             relationships: finalRelationships,
             quickCreate: finalQuickCreate,
             quickCreateLayout: finalQuickCreateLayout,
-            pipelineSettings: key === 'deals'
+            pipelineSettings: keyLower === 'deals'
                 ? normalizePipelineSettings(responseData.pipelineSettings)
                 : (Array.isArray(responseData.pipelineSettings) ? responseData.pipelineSettings : []),
             createdAt: responseData.createdAt || doc.createdAt,
