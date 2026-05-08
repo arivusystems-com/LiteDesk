@@ -20,7 +20,29 @@
 const SECURITY_DISABLED = process.env.DISABLE_SECURITY === 'true';
 
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const User = require('../models/User');
+
+function getOrgUserModel(orgDbConnection) {
+    if (orgDbConnection.models.User) {
+        return orgDbConnection.models.User;
+    }
+    const UserModel = require('../models/User');
+    const originalSchema = UserModel.schema;
+    const UserSchema = new mongoose.Schema(originalSchema.obj, originalSchema.options);
+
+    if (originalSchema.methods) {
+        Object.keys(originalSchema.methods).forEach((methodName) => {
+            UserSchema.methods[methodName] = originalSchema.methods[methodName];
+        });
+    }
+    if (originalSchema.statics) {
+        Object.keys(originalSchema.statics).forEach((staticName) => {
+            UserSchema.statics[staticName] = originalSchema.statics[staticName];
+        });
+    }
+    return orgDbConnection.model('User', UserSchema);
+}
 
 const protect = async (req, res, next) => {
     // 🔓 BYPASS: Security disabled - create dummy user
@@ -106,7 +128,27 @@ const protect = async (req, res, next) => {
 
             // Attach user to the request object (without the password hash)
             req.user = await User.findById(decoded.id).select('-password');
-            
+
+            // If not found in master DB, try dedicated organization DB using token org context
+            if (!req.user && decoded.organizationId) {
+                try {
+                    const Organization = require('../models/Organization');
+                    const dbConnectionManager = require('../utils/databaseConnectionManager');
+                    const organization = await Organization.findById(decoded.organizationId).select('database');
+                    if (organization?.database?.name && organization.database.initialized) {
+                        const orgDbConnection = await dbConnectionManager.getOrganizationConnection(organization.database.name);
+                        const OrgUser = getOrgUserModel(orgDbConnection);
+                        const tenantUser = await OrgUser.findById(decoded.id).select('-password');
+                        if (tenantUser) {
+                            tenantUser.organizationId = decoded.organizationId;
+                            req.user = tenantUser;
+                        }
+                    }
+                } catch (orgLookupError) {
+                    console.error('[AuthMiddleware] Tenant user lookup failed:', orgLookupError.message);
+                }
+            }
+
             if (!req.user) {
                 return res.status(401).json({ message: 'User not found' });
             }

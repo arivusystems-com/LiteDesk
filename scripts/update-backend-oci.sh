@@ -64,7 +64,7 @@ git reset --hard "origin/$BRANCH"
 
 echo "==> Installing backend dependencies"
 cd "$BACKEND_DIR"
-npm ci --omit=dev --no-audit
+npm install
 
 if pm2 describe "$PM2_APP_NAME" >/dev/null 2>&1; then
   echo "==> Restarting PM2 app: $PM2_APP_NAME"

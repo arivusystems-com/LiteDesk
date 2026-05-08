@@ -20,6 +20,9 @@
 const User = require('../models/User');
 const Organization = require('../models/Organization');
 const Role = require('../models/Role');
+const UserDirectory = require('../models/UserDirectory');
+const DemoRequest = require('../models/DemoRequest');
+const InstanceRegistry = require('../models/InstanceRegistry');
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -28,14 +31,88 @@ const { materializeEffectiveCRMEnvelopeOnUser } = require('../utils/rolePermissi
 const securityLogger = require('../middleware/securityLoggingMiddleware');
 const { getDefaultRoleForApp } = require('../utils/appAccessUtils');
 
+function getOrgUserModel(orgDbConnection) {
+    if (orgDbConnection.models.User) {
+        return orgDbConnection.models.User;
+    }
+    const originalSchema = User.schema;
+    const UserSchema = new mongoose.Schema(originalSchema.obj, originalSchema.options);
+
+    if (originalSchema.methods) {
+        Object.keys(originalSchema.methods).forEach((methodName) => {
+            UserSchema.methods[methodName] = originalSchema.methods[methodName];
+        });
+    }
+    if (originalSchema.statics) {
+        Object.keys(originalSchema.statics).forEach((staticName) => {
+            UserSchema.statics[staticName] = originalSchema.statics[staticName];
+        });
+    }
+
+    return orgDbConnection.model('User', UserSchema);
+}
+
+async function resolveInstanceForLogin(organizationId, email) {
+    if (!organizationId && !email) return null;
+
+    try {
+        if (organizationId) {
+            const convertedDemo = await DemoRequest.findOne({
+                organizationId,
+                status: 'converted',
+                convertedToInstanceId: { $exists: true, $ne: null }
+            })
+                .sort({ convertedAt: -1, updatedAt: -1 })
+                .select('convertedToInstanceId')
+                .populate('convertedToInstanceId', 'subdomain urls status');
+
+            if (convertedDemo?.convertedToInstanceId) {
+                const instance = convertedDemo.convertedToInstanceId;
+                return {
+                    subdomain: instance.subdomain || null,
+                    frontendUrl: instance.urls?.frontend || null,
+                    apiUrl: instance.urls?.api || null,
+                    status: instance.status || null
+                };
+            }
+        }
+
+        if (email) {
+            const fallbackByOwnerEmail = await InstanceRegistry.findOne({
+                ownerEmail: String(email).toLowerCase().trim()
+            })
+                .sort({ updatedAt: -1 })
+                .select('subdomain urls status')
+                .lean();
+
+            if (fallbackByOwnerEmail) {
+                return {
+                    subdomain: fallbackByOwnerEmail.subdomain || null,
+                    frontendUrl: fallbackByOwnerEmail.urls?.frontend || null,
+                    apiUrl: fallbackByOwnerEmail.urls?.api || null,
+                    status: fallbackByOwnerEmail.status || null
+                };
+            }
+        }
+    } catch (instanceLookupError) {
+        console.warn('[Auth] Instance resolution failed during login:', instanceLookupError.message);
+    }
+
+    return null;
+}
+
 // --- Helper Function: Generate Token ---
-const generateToken = (id) => {
+const generateToken = (id, organizationId = null) => {
     // SECURITY: JWT_SECRET must be set - fail hard if not configured
     if (!process.env.JWT_SECRET) {
         throw new Error('CRITICAL: JWT_SECRET environment variable is not set! Server cannot generate tokens.');
     }
     
-    return jwt.sign({ id }, process.env.JWT_SECRET, {
+    const payload = { id };
+    if (organizationId) {
+        payload.organizationId = organizationId.toString();
+    }
+    return jwt.sign(payload, process.env.JWT_SECRET, {
         expiresIn: '1d',
     });
 };
@@ -177,6 +254,19 @@ exports.registerUser = async (req, res) => {
         await user.save();
         console.log('✅ Permissions set and user saved\n');
 
+        await UserDirectory.findOneAndUpdate(
+            { email: user.email.toLowerCase() },
+            {
+                $set: {
+                    organizationId: organization._id,
+                    tenantDatabaseName: organization.database?.name || null,
+                    tenantUserId: user._id,
+                    status: 'active'
+                }
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+
         // 5. Respond with Token and Organization Info
         console.log('🔍 Step 7: Preparing response...');
         const response = {
@@ -194,7 +284,7 @@ exports.registerUser = async (req, res) => {
                 enabledApps: organization.enabledApps || [APP_KEYS.SALES], // App-level enablement
                 enabledModules: organization.enabledModules // Legacy: kept for backward compatibility
             },
-            token: generateToken(user._id),
+            token: generateToken(user._id, organization._id),
         };
         
         console.log('✅ Response prepared');
@@ -235,75 +325,101 @@ exports.loginUser = async (req, res) => {
     const { email, password } = req.body;
 
     try {
+        const normalizedEmail = String(email || '').toLowerCase().trim();
         console.log('\n🔐 Login attempt for:', email);
         
         // 1. Find User by Email (check master database first)
-        const user = await User.findOne({ email: email.toLowerCase() })
+        let user = await User.findOne({ email: normalizedEmail })
             .populate('organizationId', 'name industry subscription limits enabledApps enabledModules settings isActive database')
             .populate(
                 'roleId',
                 'name description color icon level permissions canViewAllData canManageTeam canExportData isSystemRole'
             );
 
+        let organizationFromDirectory = null;
+        // Fallback: resolve organization from master user directory when user is tenant-only
         if (!user) {
-            console.log('❌ User not found');
-            // Log failed login attempt
-            securityLogger.logAuthEvent('LOGIN_FAILED', {
-                email: email.toLowerCase(),
-                reason: 'USER_NOT_FOUND',
-                ip: req.ip,
-                userAgent: req.get('user-agent')
-            });
-            return res.status(401).json({ message: 'Invalid credentials.' });
+            const directoryEntry = await UserDirectory.findOne({ email: normalizedEmail, status: 'active' })
+                .populate('organizationId', 'name industry subscription limits enabledApps enabledModules settings isActive database');
+            if (directoryEntry?.organizationId) {
+                organizationFromDirectory = directoryEntry.organizationId;
+            }
         }
-        
-        console.log('✅ User found:', user.email);
-        console.log('   Organization populated?', !!user.organizationId);
-        console.log('   Organization ID:', user.organizationId?._id || 'NOT POPULATED');
-        console.log('   Organization has dedicated DB?', !!(user.organizationId?.database?.name));
+
+        // Legacy fallback for tenants converted before directory support:
+        // search tenant databases by email and auto-heal directory entry.
+        if (!user && !organizationFromDirectory) {
+            const dbConnectionManager = require('../utils/databaseConnectionManager');
+            const tenantOrgs = await Organization.find({
+                'database.initialized': true,
+                'database.name': { $exists: true, $ne: null }
+            }).select('_id name industry subscription limits enabledApps enabledModules settings isActive database');
+
+            for (const tenantOrg of tenantOrgs) {
+                try {
+                    const orgDbConnection = await dbConnectionManager.getOrganizationConnection(tenantOrg.database.name);
+                    const OrgUser = getOrgUserModel(orgDbConnection);
+                    const discoveredUser = await OrgUser.findOne({ email: normalizedEmail }).select('_id');
+                    if (discoveredUser) {
+                        organizationFromDirectory = tenantOrg;
+                        await UserDirectory.findOneAndUpdate(
+                            { email: normalizedEmail },
+                            {
+                                $set: {
+                                    organizationId: tenantOrg._id,
+                                    tenantDatabaseName: tenantOrg.database.name,
+                                    tenantUserId: discoveredUser._id,
+                                    status: 'active'
+                                }
+                            },
+                            { upsert: true, new: true, setDefaultsOnInsert: true }
+                        );
+                        console.log('✅ Auto-healed user directory from tenant discovery:', normalizedEmail);
+                        break;
+                    }
+                } catch (discoveryError) {
+                    console.warn(`[Auth] Tenant discovery skipped for ${tenantOrg.database?.name}:`, discoveryError.message);
+                }
+            }
+        }
+
+        if (!user) {
+            if (!organizationFromDirectory) {
+                console.log('❌ User not found');
+                // Log failed login attempt
+                securityLogger.logAuthEvent('LOGIN_FAILED', {
+                    email: normalizedEmail,
+                    reason: 'USER_NOT_FOUND',
+                    ip: req.ip,
+                    userAgent: req.get('user-agent')
+                });
+                return res.status(401).json({ message: 'Invalid credentials.' });
+            }
+        }
+
+        if (user) {
+            console.log('✅ User found:', user.email);
+            console.log('   Organization populated?', !!user.organizationId);
+            console.log('   Organization ID:', user.organizationId?._id || 'NOT POPULATED');
+            console.log('   Organization has dedicated DB?', !!(user.organizationId?.database?.name));
+        } else {
+            console.log('✅ User resolved via directory:', normalizedEmail);
+            console.log('   Organization ID:', organizationFromDirectory?._id || 'NOT POPULATED');
+        }
         
         // If organization has dedicated database, get user from there
         let orgUser = user;
-        if (user.organizationId?.database?.name && user.organizationId.database.initialized) {
+        const organizationForLogin = user?.organizationId || organizationFromDirectory;
+        if (organizationForLogin?.database?.name && organizationForLogin.database.initialized) {
             try {
-                console.log('📊 Attempting to get user from organization database:', user.organizationId.database.name);
+                console.log('📊 Attempting to get user from organization database:', organizationForLogin.database.name);
                 const dbConnectionManager = require('../utils/databaseConnectionManager');
-                const orgDbConnection = await dbConnectionManager.getOrganizationConnection(user.organizationId.database.name);
+                const orgDbConnection = await dbConnectionManager.getOrganizationConnection(organizationForLogin.database.name);
                 
                 // Get or create User model for organization database
-                let OrgUser;
-                if (orgDbConnection.models.User) {
-                    OrgUser = orgDbConnection.models.User;
-                    console.log('✅ Using existing User model on organization connection');
-                } else {
-                    console.log('📋 Creating User model for organization database...');
-                    const UserModel = require('../models/User');
-                    const originalSchema = UserModel.schema;
-                    
-                    // Create a new schema instance from the schema definition
-                    const UserSchema = new mongoose.Schema(originalSchema.obj, originalSchema.options);
-                    
-                    // Copy methods and statics
-                    if (originalSchema.methods) {
-                        Object.keys(originalSchema.methods).forEach(methodName => {
-                            UserSchema.methods[methodName] = originalSchema.methods[methodName];
-                        });
-                    }
-                    if (originalSchema.statics) {
-                        Object.keys(originalSchema.statics).forEach(staticName => {
-                            UserSchema.statics[staticName] = originalSchema.statics[staticName];
-                        });
-                    }
-                    
-                    OrgUser = orgDbConnection.model('User', UserSchema);
-                    console.log('✅ Created User model on organization connection');
-                }
+                const OrgUser = getOrgUserModel(orgDbConnection);
                 
-                const orgDbUser = await OrgUser.findOne({ email: email.toLowerCase() })
-                    .populate(
-                        'roleId',
-                        'name description color icon level permissions canViewAllData canManageTeam canExportData isSystemRole'
-                    );
+                const orgDbUser = await OrgUser.findOne({ email: normalizedEmail });
                 
                 if (orgDbUser) {
                     orgUser = orgDbUser;
@@ -318,19 +434,29 @@ exports.loginUser = async (req, res) => {
                 orgUser = user;
             }
         }
+
+        if (!orgUser) {
+            securityLogger.logAuthEvent('LOGIN_FAILED', {
+                email: normalizedEmail,
+                reason: 'USER_NOT_FOUND_IN_TENANT_DB',
+                ip: req.ip,
+                userAgent: req.get('user-agent')
+            });
+            return res.status(401).json({ message: 'Invalid credentials.' });
+        }
         
         console.log('   Role populated?', !!orgUser.roleId);
         console.log('   Role:', orgUser.roleId?.name || orgUser.role);
 
         // 2. Check password (use orgUser if available, otherwise master user)
-        const passwordToCheck = orgUser.password || user.password;
+        const passwordToCheck = orgUser?.password || user?.password;
         const isPasswordMatch = await bcrypt.compare(password, passwordToCheck);
         
         if (!isPasswordMatch) {
             // Log failed login attempt (wrong password)
             securityLogger.logAuthEvent('LOGIN_FAILED', {
-                email: email.toLowerCase(),
-                userId: user._id,
+                email: normalizedEmail,
+                userId: orgUser?._id || user?._id,
                 reason: 'INVALID_PASSWORD',
                 ip: req.ip,
                 userAgent: req.get('user-agent')
@@ -349,18 +475,18 @@ exports.loginUser = async (req, res) => {
         console.log('✅ User status: active');
 
         // 4. Check if organization exists and is populated
-        if (!user.organizationId) {
+        if (!organizationForLogin) {
             console.log('❌ Organization not found for user');
             return res.status(500).json({ 
                 message: 'Organization data not found. Please contact support.',
                 code: 'ORG_NOT_FOUND'
             });
         }
-        console.log('✅ Organization found:', user.organizationId.name);
+        console.log('✅ Organization found:', organizationForLogin.name);
         
         // 5. Check if organization is active
-        if (!user.organizationId.isActive) {
-            console.log('❌ Organization not active:', user.organizationId.isActive);
+        if (!organizationForLogin.isActive) {
+            console.log('❌ Organization not active:', organizationForLogin.isActive);
             return res.status(403).json({ 
                 message: 'Your organization account is inactive. Please contact support.',
                 code: 'ORG_INACTIVE'
@@ -373,7 +499,7 @@ exports.loginUser = async (req, res) => {
         await materializeEffectiveCRMEnvelopeOnUser(orgUser);
         await orgUser.save();
 
-        if (orgUser !== user) {
+        if (user && orgUser !== user) {
             user.lastLogin = new Date();
             await user.save();
         }
@@ -382,9 +508,9 @@ exports.loginUser = async (req, res) => {
 
         // Log successful login
         securityLogger.logAuthEvent('LOGIN_SUCCESS', {
-            email: email.toLowerCase(),
+            email: normalizedEmail,
             userId: orgUser._id,
-            organizationId: user.organizationId._id,
+            organizationId: organizationForLogin._id,
             ip: req.ip,
             userAgent: req.get('user-agent'),
             success: true
@@ -404,6 +530,8 @@ exports.loginUser = async (req, res) => {
             }
         }
 
+        const instanceContext = await resolveInstanceForLogin(organizationForLogin?._id, normalizedEmail);
+
         // Respond with Token and Organization Info (use orgUser data)
         res.json({
             _id: orgUser._id,
@@ -415,20 +543,21 @@ exports.loginUser = async (req, res) => {
             allowedApps: allowedApps, // Include app access
             appAccess: orgUser.appAccess,
             organization: {
-                _id: user.organizationId._id,
-                name: user.organizationId.name,
-                industry: user.organizationId.industry,
-                subscription: user.organizationId.subscription,
-                limits: user.organizationId.limits,
-                enabledApps: user.organizationId.enabledApps || [], // App-level enablement (required for owner access check)
-                enabledModules: user.organizationId.enabledModules,
-                settings: user.organizationId.settings,
-                database: user.organizationId.database ? {
-                    name: user.organizationId.database.name,
-                    initialized: user.organizationId.database.initialized
+                _id: organizationForLogin._id,
+                name: organizationForLogin.name,
+                industry: organizationForLogin.industry,
+                subscription: organizationForLogin.subscription,
+                limits: organizationForLogin.limits,
+                enabledApps: organizationForLogin.enabledApps || [], // App-level enablement (required for owner access check)
+                enabledModules: organizationForLogin.enabledModules,
+                settings: organizationForLogin.settings,
+                database: organizationForLogin.database ? {
+                    name: organizationForLogin.database.name,
+                    initialized: organizationForLogin.database.initialized
                 } : null
             },
-            token: generateToken(orgUser._id),
+            instance: instanceContext,
+            token: generateToken(orgUser._id, organizationForLogin._id),
         });
         
     } catch (error) {

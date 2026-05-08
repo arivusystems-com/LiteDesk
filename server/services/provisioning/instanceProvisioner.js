@@ -6,6 +6,7 @@ const DemoRequest = require('../../models/DemoRequest');
 // const DNSManager = require('./managers/dnsManager');
 const { generateUniqueSlug } = require('./utils/slugGenerator');
 const { generateSecurePassword, generateJWTSecret } = require('./utils/passwordGenerator');
+const { getTenantBaseDomain, buildTenantFrontendUrl, buildTenantApiUrl } = require('../../utils/tenantDomain');
 
 class InstanceProvisioner {
   constructor() {
@@ -79,7 +80,7 @@ class InstanceProvisioner {
       // ============================================
       console.log('📝 STAGE 1: Generating subdomain...');
       const subdomain = await generateUniqueSlug(companyName);
-      console.log(`   Subdomain: ${subdomain}.litedesk.com\n`);
+      console.log(`   Subdomain: ${subdomain}.${getTenantBaseDomain()}\n`);
       
       // Create instance registry record
       instanceRegistry = await InstanceRegistry.create({
@@ -105,8 +106,8 @@ class InstanceProvisioner {
           }
         },
         urls: {
-          frontend: `https://${subdomain}.litedesk.com`,
-          api: `https://${subdomain}.litedesk.com/api`
+          frontend: buildTenantFrontendUrl(subdomain),
+          api: buildTenantApiUrl(subdomain)
         },
         demoRequestId: demoRequestId,
         createdBy: createdBy
@@ -245,7 +246,7 @@ class InstanceProvisioner {
       
       await this.dnsManager.createSubdomain(subdomain, loadBalancerDNS, 'CNAME');
       
-      console.log(`✅ DNS configured: ${subdomain}.litedesk.com\n`);
+      console.log(`✅ DNS configured: ${subdomain}.${getTenantBaseDomain()}\n`);
       
       // ============================================
       // STAGE 8: SSL Certificate (via cert-manager)
@@ -276,7 +277,7 @@ class InstanceProvisioner {
       
       console.log('\n========================================');
       console.log('🎉 PROVISIONING COMPLETE!');
-      console.log(`   Instance URL: https://${subdomain}.litedesk.com`);
+      console.log(`   Instance URL: ${buildTenantFrontendUrl(subdomain)}`);
       console.log(`   Owner: ${ownerEmail}`);
       console.log(`   Status: ${instanceRegistry.status}`);
       console.log('========================================\n');
@@ -285,7 +286,7 @@ class InstanceProvisioner {
         success: true,
         instanceId: instanceRegistry._id,
         subdomain: subdomain,
-        url: `https://${subdomain}.litedesk.com`,
+        url: buildTenantFrontendUrl(subdomain),
         ownerEmail: ownerEmail,
         status: instanceRegistry.status,
         message: 'Instance provisioned successfully'
@@ -330,7 +331,7 @@ class InstanceProvisioner {
     try {
       console.log('📝 Generating subdomain...');
       const subdomain = await generateUniqueSlug(companyName);
-      console.log(`   Subdomain: ${subdomain}.litedesk.com (SIMULATED)\n`);
+      console.log(`   Subdomain: ${subdomain}.${getTenantBaseDomain()} (SIMULATED)\n`);
       
       console.log('📦 Creating instance registry...');
       const instanceRegistry = await InstanceRegistry.create({
@@ -364,8 +365,8 @@ class InstanceProvisioner {
           }
         },
         urls: {
-          frontend: `https://${subdomain}.litedesk.com`,
-          api: `https://${subdomain}.litedesk.com/api`
+          frontend: buildTenantFrontendUrl(subdomain),
+          api: buildTenantApiUrl(subdomain)
         },
         activatedAt: new Date(),
         provisionedAt: new Date(),
@@ -382,7 +383,7 @@ class InstanceProvisioner {
       
       console.log('\n========================================');
       console.log('🎉 SIMULATED PROVISIONING COMPLETE!');
-      console.log(`   Instance URL: https://${subdomain}.litedesk.com (simulated)`);
+      console.log(`   Instance URL: ${buildTenantFrontendUrl(subdomain)} (simulated)`);
       console.log(`   Owner: ${ownerEmail}`);
       console.log(`   Status: ${instanceRegistry.status}`);
       console.log('========================================\n');
@@ -391,7 +392,7 @@ class InstanceProvisioner {
         success: true,
         instanceId: instanceRegistry._id,
         subdomain: subdomain,
-        url: `https://${subdomain}.litedesk.com`,
+        url: buildTenantFrontendUrl(subdomain),
         ownerEmail: ownerEmail,
         status: instanceRegistry.status,
         message: 'Instance simulated successfully (development mode)',

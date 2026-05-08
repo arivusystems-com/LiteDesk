@@ -14,9 +14,12 @@
  */
 
 const User = require('../models/User');
+const Role = require('../models/Role');
 const Organization = require('../models/Organization');
+const UserDirectory = require('../models/UserDirectory');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 const { APP_KEYS } = require('../constants/appKeys');
 const {
     materializeEffectiveCRMEnvelopeOnUser,
@@ -43,6 +46,70 @@ const {
     ensureOrgSubscriptionForEnabledApps
 } = require('../utils/subscriptionUtils');
 
+function getTenantModel(connection, modelName, sourceModel) {
+    if (connection.models[modelName]) {
+        return connection.models[modelName];
+    }
+    const originalSchema = sourceModel.schema;
+    const clonedSchema = new mongoose.Schema(originalSchema.obj, originalSchema.options);
+    if (originalSchema.methods) {
+        Object.keys(originalSchema.methods).forEach((methodName) => {
+            clonedSchema.methods[methodName] = originalSchema.methods[methodName];
+        });
+    }
+    if (originalSchema.statics) {
+        Object.keys(originalSchema.statics).forEach((staticName) => {
+            clonedSchema.statics[staticName] = originalSchema.statics[staticName];
+        });
+    }
+    return connection.model(modelName, clonedSchema);
+}
+
+async function getScopedUserModel(organization) {
+    if (organization?.database?.name && organization.database.initialized) {
+        const dbConnectionManager = require('../utils/databaseConnectionManager');
+        const orgDbConnection = await dbConnectionManager.getOrganizationConnection(organization.database.name);
+        return getTenantModel(orgDbConnection, 'User', User);
+    }
+    return User;
+}
+
+function buildUserScopeQuery(req, organization) {
+    // In dedicated tenant DB mode, the DB itself is already organization-scoped.
+    // Do not require organizationId match because older converted records may miss it.
+    if (organization?.database?.name && organization.database.initialized) {
+        return {};
+    }
+    return { organizationId: req.user.organizationId };
+}
+
+async function attachRoleSummaries(users = []) {
+    const list = Array.isArray(users) ? users : [];
+    if (list.length === 0) return list;
+
+    const roleIds = Array.from(new Set(
+        list
+            .map((u) => u?.roleId?._id || u?.roleId)
+            .filter((id) => id && mongoose.Types.ObjectId.isValid(id))
+            .map((id) => String(id))
+    ));
+
+    if (roleIds.length === 0) return list;
+
+    const roles = await Role.find({ _id: { $in: roleIds } })
+        .select('_id name description color icon level permissions')
+        .lean();
+    const roleMap = new Map(roles.map((r) => [String(r._id), r]));
+
+    return list.map((u) => {
+        const rid = u?.roleId?._id || u?.roleId;
+        if (!rid) return u;
+        const role = roleMap.get(String(rid));
+        if (!role) return u;
+        return { ...u, roleId: role };
+    });
+}
+
 // --- Get all users in the organization ---
 exports.getUsers = async (req, res) => {
     try {
@@ -55,8 +122,12 @@ exports.getUsers = async (req, res) => {
             roleId = ''
         } = req.query;
 
+        const organization = await Organization.findById(req.user.organizationId)
+            .select('database name');
+        const ScopedUser = await getScopedUserModel(organization);
+
         // Build query
-        const query = { organizationId: req.user.organizationId };
+        const query = buildUserScopeQuery(req, organization);
 
         // Add roleId filter if provided
         if (roleId) {
@@ -77,25 +148,70 @@ exports.getUsers = async (req, res) => {
         const sortOptions = {};
         sortOptions[sortBy] = sortOrder === 'asc' ? 1 : -1;
 
-        // Execute query with pagination
-        const users = await User.find(query)
-            .select('-password')  // Exclude password
-            .populate('roleId', 'name description color icon level')  // Populate role details
-            .sort(sortOptions)
-            .limit(limit * 1)
-            .skip((page - 1) * limit)
-            .lean();
+        const usingDedicatedTenantDb = ScopedUser !== User;
+        const listLimit = Math.max(200, Number(limit) * 5);
 
-        const usersWithEffectivePermissions = await enrichLeanUsersWithEffectiveCRMPermissions(users);
+        const [scopedUsersRaw, masterUsersRaw] = await Promise.all([
+            ScopedUser.find(query)
+                .select('-password')
+                .sort(sortOptions)
+                .limit(listLimit)
+                .lean(),
+            usingDedicatedTenantDb
+                ? User.find({ organizationId: req.user.organizationId })
+                    .select('-password')
+                    .sort(sortOptions)
+                    .limit(listLimit)
+                    .lean()
+                : Promise.resolve([])
+        ]);
 
-        // Get total count
-        const total = await User.countDocuments(query);
+        const dedupedUsers = [];
+        const seenIds = new Set();
+        [...scopedUsersRaw, ...masterUsersRaw].forEach((row) => {
+            const key = String(row?._id || '');
+            if (!key || seenIds.has(key)) return;
+            seenIds.add(key);
+            dedupedUsers.push(row);
+        });
+
+        // Safety fallback: ensure currently-authenticated user is visible in Users list.
+        // This prevents a blank Settings > Users state when legacy/migrated data has
+        // mismatched organizationId values across tenant/master databases.
+        if (dedupedUsers.length === 0) {
+            const currentUserById = await ScopedUser.findById(req.user._id)
+                .select('-password')
+                .lean();
+            const currentUserByEmail = !currentUserById && req.user?.email
+                ? await ScopedUser.findOne({ email: String(req.user.email).toLowerCase().trim() })
+                    .select('-password')
+                    .lean()
+                : null;
+            const currentUserFallback = currentUserById || currentUserByEmail;
+
+            if (currentUserFallback?._id) {
+                seenIds.add(String(currentUserFallback._id));
+                dedupedUsers.push(currentUserFallback);
+            }
+        }
+
+        const total = dedupedUsers.length;
+        const start = (Number(page) - 1) * Number(limit);
+        const end = start + Number(limit);
+        const pagedUsers = dedupedUsers.slice(start, end);
+        const usersWithRoles = await attachRoleSummaries(pagedUsers);
+        let usersWithEffectivePermissions = usersWithRoles;
+        try {
+            usersWithEffectivePermissions = await enrichLeanUsersWithEffectiveCRMPermissions(usersWithRoles);
+        } catch (permissionProjectionError) {
+            console.warn('[getUsers] Permission enrichment failed, returning raw users:', permissionProjectionError.message);
+        }
 
         res.json({
             success: true,
             data: usersWithEffectivePermissions,
             total,
-            totalPages: Math.ceil(total / limit),
+            totalPages: Math.ceil(total / Number(limit)),
             currentPage: parseInt(page)
         });
     } catch (error) {
@@ -215,6 +331,10 @@ exports.getUsersForAssignment = async (req, res) => {
             });
         }
 
+        const organization = await Organization.findById(req.user.organizationId)
+            .select('database name');
+        const ScopedUser = await getScopedUserModel(organization);
+
         const { scope = 'internal', orgId = null } = req.query;
 
         // Supported scopes:
@@ -244,9 +364,9 @@ exports.getUsersForAssignment = async (req, res) => {
         const allUsers = [];
 
         const fetchByOrg = async (organizationId) => {
-            if (!organizationId) return;
-            const list = await User.find({
-                organizationId,
+            const scopeQuery = buildUserScopeQuery({ user: { organizationId } }, organization);
+            const list = await ScopedUser.find({
+                ...scopeQuery,
                 status: 'active'
             })
                 .select('_id firstName lastName email username avatar organizationId')
@@ -299,12 +419,17 @@ exports.getUsersForAssignment = async (req, res) => {
 // --- Get single user ---
 exports.getUser = async (req, res) => {
     try {
-        const user = await User.findOne({ 
+        const organization = await Organization.findById(req.user.organizationId)
+            .select('database name');
+        const ScopedUser = await getScopedUserModel(organization);
+        const scopeQuery = buildUserScopeQuery(req, organization);
+
+        const user = await ScopedUser.findOne({
             _id: req.params.id,
-            organizationId: req.user.organizationId 
+            ...scopeQuery
         })
         .select('-password')
-        .populate('roleId', 'name description color icon level permissions');
+        .lean();
 
         if (!user) {
             return res.status(404).json({ 
@@ -313,11 +438,14 @@ exports.getUser = async (req, res) => {
             });
         }
 
-        await materializeEffectiveCRMEnvelopeOnUser(user);
+        const [userWithRole] = await attachRoleSummaries([user]);
+        const hydratedUser = new User(userWithRole);
+        hydratedUser.isNew = false;
+        await materializeEffectiveCRMEnvelopeOnUser(hydratedUser);
 
         res.json({
             success: true,
-            data: sanitizeUserResponsePayload(user)
+            data: sanitizeUserResponsePayload(hydratedUser)
         });
     } catch (error) {
         console.error('Get user error:', error);
@@ -397,8 +525,10 @@ exports.inviteUser = async (req, res) => {
         // Without this, paid-by-default orgs can show "not subscribed/suspended" in Invite flows.
         await ensureOrgSubscriptionForEnabledApps(organization);
 
+        const ScopedUser = await getScopedUserModel(organization);
+
         // Check if organization has reached user limit
-        const currentUserCount = await User.countDocuments({ 
+        const currentUserCount = await ScopedUser.countDocuments({
             organizationId: organization._id,
             status: 'active'
         });
@@ -412,7 +542,7 @@ exports.inviteUser = async (req, res) => {
         }
 
         // Check if user already exists in this organization
-        const existingUser = await User.findOne({ 
+        const existingUser = await ScopedUser.findOne({
             email: email.toLowerCase(),
             organizationId: req.user.organizationId 
         });
@@ -661,7 +791,7 @@ exports.inviteUser = async (req, res) => {
             finalLastName = nameParts.slice(1).join(' ') || '';
         }
 
-        const newUser = await User.create({
+        const newUser = await ScopedUser.create({
             organizationId: req.user.organizationId,
             username,
             email: email.toLowerCase(),
@@ -677,6 +807,19 @@ exports.inviteUser = async (req, res) => {
             appAccess: finalAppAccess,
             allowedApps: finalAppAccess.map(a => a.appKey) // Legacy field for backward compatibility
         });
+
+        await UserDirectory.findOneAndUpdate(
+            { email: newUser.email.toLowerCase() },
+            {
+                $set: {
+                    organizationId: organization._id,
+                    tenantDatabaseName: organization.database?.name || null,
+                    tenantUserId: newUser._id,
+                    status: 'active'
+                }
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
 
         await materializeEffectiveCRMEnvelopeOnUser(newUser);
         await newUser.save();
@@ -696,7 +839,13 @@ exports.inviteUser = async (req, res) => {
         // For now, we'll return it in the response (ONLY FOR DEVELOPMENT)
 
         // Populate the role details
-        await newUser.populate('roleId');
+        if (newUser.roleId) {
+            try {
+                await newUser.populate('roleId');
+            } catch (_e) {
+                // Role model may not be registered on tenant connection; response still succeeds.
+            }
+        }
 
         res.status(201).json({
             success: true,
@@ -1030,16 +1179,40 @@ exports.deleteUser = async (req, res) => {
 // --- Get current user profile ---
 exports.getProfile = async (req, res) => {
     try {
-        const user = await User.findById(req.user._id)
-            .select('-password')
-            .populate('organizationId', 'name subscription limits enabledApps enabledModules settings')
-            .populate('roleId', 'name description color icon level');
+        const organization = await Organization.findById(req.user.organizationId)
+            .select('database name subscription limits enabledApps enabledModules settings')
+            .lean();
+        const ScopedUser = await getScopedUserModel(organization);
+
+        const user = await ScopedUser.findById(req.user._id)
+            .select('-password');
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User profile not found'
+            });
+        }
 
         await materializeEffectiveCRMEnvelopeOnUser(user);
+        const sanitizedUser = sanitizeUserResponsePayload(user);
+        const [userWithRole] = await attachRoleSummaries([sanitizedUser]);
+
+        if (organization) {
+            userWithRole.organizationId = {
+                _id: organization._id,
+                name: organization.name,
+                subscription: organization.subscription,
+                limits: organization.limits,
+                enabledApps: organization.enabledApps,
+                enabledModules: organization.enabledModules,
+                settings: organization.settings
+            };
+        }
 
         res.json({
             success: true,
-            data: sanitizeUserResponsePayload(user)
+            data: userWithRole
         });
     } catch (error) {
         console.error('Get profile error:', error);

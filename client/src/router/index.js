@@ -566,6 +566,12 @@ const getDefaultRoute = (authStore) => {
 // Add debug logging and permission checks
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
+  const logoutRequested = to.name === 'login' && String(to.query?.logout || '') === '1'
+  if (logoutRequested) {
+    authStore.clearUser()
+    next({ name: 'login', query: {} })
+    return
+  }
   logNavDebug('Navigation guard:', {
     to: to.path,
     isAuthenticated: authStore.isAuthenticated,

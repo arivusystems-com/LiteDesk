@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/authRegistry';
 
@@ -7,6 +7,37 @@ const email = ref('');
 const password = ref('');
 const authStore = useAuthStore();
 const router = useRouter();
+const SESSION_TRANSFER_HASH_KEY = 'ld_session';
+
+const resolveInstanceLoginTarget = (instance) => {
+    if (!instance?.subdomain) return null;
+
+    const configuredTemplate = import.meta.env.VITE_INSTANCE_LOCAL_REDIRECT_TEMPLATE;
+    const localProtocol = window.location.protocol || 'http:';
+    const localPort = window.location.port ? `:${window.location.port}` : '';
+    const defaultLocalTarget = `${localProtocol}//${instance.subdomain}.localhost${localPort}`;
+    const fallbackTarget = instance.frontendUrl || defaultLocalTarget;
+    const template = import.meta.env.DEV ? (configuredTemplate || defaultLocalTarget) : fallbackTarget;
+
+    return String(template)
+        .replace('{subdomain}', instance.subdomain)
+        .replace('{port}', window.location.port || '');
+};
+
+const applyTransferredSessionFromHash = async () => {
+    const hash = window.location.hash.startsWith('#')
+        ? window.location.hash.slice(1)
+        : window.location.hash;
+    const hashParams = new URLSearchParams(hash);
+    const encoded = hashParams.get(SESSION_TRANSFER_HASH_KEY);
+    if (!encoded) return;
+
+    const applied = authStore.applySessionTransferPayload(encoded);
+    if (!applied) return;
+
+    window.history.replaceState({}, '', window.location.pathname + window.location.search);
+    await router.replace('/platform/home');
+};
 
 const handleLogin = async () => {
     const success = await authStore.login({
@@ -15,6 +46,26 @@ const handleLogin = async () => {
     });
 
     if (success) {
+        const instance = authStore.lastLoginResult?.instance;
+        const targetBaseUrl = resolveInstanceLoginTarget(instance);
+        if (targetBaseUrl) {
+            try {
+                const target = new URL(targetBaseUrl);
+                const isDifferentHost = target.host !== window.location.host;
+                if (isDifferentHost) {
+                    const transferPayload = authStore.buildSessionTransferPayload();
+                    if (transferPayload) {
+                        const redirectUrl = new URL('/login', target.origin);
+                        redirectUrl.hash = `${SESSION_TRANSFER_HASH_KEY}=${encodeURIComponent(transferPayload)}`;
+                        window.location.assign(redirectUrl.toString());
+                        return;
+                    }
+                }
+            } catch (_error) {
+                // Fall through to in-app redirect.
+            }
+        }
+
         // Wait a tick to ensure user data is fully set
         await new Promise(resolve => setTimeout(resolve, 100));
         
@@ -23,6 +74,10 @@ const handleLogin = async () => {
         router.push('/platform/home');
     }
 };
+
+onMounted(() => {
+    void applyTransferredSessionFromHash();
+});
 </script>
 
 <template>

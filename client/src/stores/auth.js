@@ -6,11 +6,13 @@ import { registerUseAuthStore } from './authRegistry';
 
 const PROFILE_REFRESHED_AT_KEY = 'litedesk:user-profile-refreshed-at';
 const PROFILE_REFRESH_FRESH_MS = 5 * 60 * 1000;
+const PROD_LOGOUT_REDIRECT_ORIGIN = (import.meta.env.VITE_MAIN_APP_ORIGIN || 'https://app.arivusystems.com').replace(/\/$/, '');
 
 export const useAuthStore = defineStore('auth', {
     state: () => ({
         user: JSON.parse(localStorage.getItem('user')) || null,
         organization: JSON.parse(localStorage.getItem('organization')) || null,
+        lastLoginResult: null,
         loading: false,
         error: null,
     }),
@@ -230,6 +232,7 @@ export const useAuthStore = defineStore('auth', {
             }
             this.user = null;
             this.organization = null;
+            this.lastLoginResult = null;
             localStorage.removeItem('user');
             localStorage.removeItem('organization');
             // Legacy cleanup (older builds stored auth under 'auth')
@@ -271,6 +274,47 @@ export const useAuthStore = defineStore('auth', {
             }
         },
 
+        buildSessionTransferPayload() {
+            if (!this.user?.token || !this.user?._id) return null;
+            const payload = {
+                user: this.user,
+                organization: this.organization || null,
+                transferredAt: Date.now()
+            };
+            try {
+                return btoa(encodeURIComponent(JSON.stringify(payload)));
+            } catch (_error) {
+                return null;
+            }
+        },
+
+        applySessionTransferPayload(encodedPayload) {
+            if (!encodedPayload) return false;
+            try {
+                const decoded = decodeURIComponent(atob(encodedPayload));
+                const payload = JSON.parse(decoded);
+                if (!payload?.user?.token || !payload?.user?._id) return false;
+
+                this.user = payload.user;
+                this.organization = payload.organization || null;
+                localStorage.setItem('user', JSON.stringify(this.user));
+                if (this.organization) {
+                    localStorage.setItem('organization', JSON.stringify(this.organization));
+                } else {
+                    localStorage.removeItem('organization');
+                }
+
+                identifyProductUser({
+                    _id: this.user?._id,
+                    email: this.user?.email,
+                    organizationId: this.organization?._id ? String(this.organization._id) : undefined,
+                });
+                return true;
+            } catch (_error) {
+                return false;
+            }
+        },
+
     async authenticate(endpoint, credentials) {
             this.loading = true;
             this.error = null;
@@ -300,6 +344,9 @@ export const useAuthStore = defineStore('auth', {
                 if (!response.ok) throw new Error(data.message || `HTTP ${response.status}`);
 
                 this.setUser(data);
+                if (endpoint === 'login') {
+                    this.lastLoginResult = data;
+                }
                 try {
                     captureUserLoggedIn({ method: 'password' });
                 } catch (_e) {
@@ -333,6 +380,24 @@ export const useAuthStore = defineStore('auth', {
         
         logout() {
             this.clearUser();
+            if (typeof window !== 'undefined') {
+                try {
+                    if (import.meta.env.PROD && PROD_LOGOUT_REDIRECT_ORIGIN) {
+                        window.location.replace(`${PROD_LOGOUT_REDIRECT_ORIGIN}/login?logout=1`);
+                        return;
+                    }
+                    const { protocol, hostname, port } = window.location;
+                    const isSubdomainLocalhost =
+                        hostname.endsWith('.localhost') && hostname !== 'localhost';
+                    if (isSubdomainLocalhost) {
+                        const host = port ? `localhost:${port}` : 'localhost';
+                        window.location.replace(`${protocol}//${host}/login?logout=1`);
+                        return;
+                    }
+                } catch (_error) {
+                    // Fall back to router navigation.
+                }
+            }
             import('@/router').then(({ default: router }) => {
                 if (router.currentRoute.value.name !== 'login') {
                     router.replace({ name: 'login' }).catch(() => {});

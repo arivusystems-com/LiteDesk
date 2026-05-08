@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { buildTenantFrontendUrl } = require('../utils/tenantDomain');
 
 const InstanceRegistrySchema = new mongoose.Schema({
   // Instance Identification
@@ -202,7 +203,7 @@ InstanceRegistrySchema.index({ demoRequestId: 1 });
 
 // Virtual for full URL
 InstanceRegistrySchema.virtual('fullUrl').get(function() {
-  return this.customDomain || `https://${this.subdomain}.litedesk.com`;
+  return this.customDomain || buildTenantFrontendUrl(this.subdomain);
 });
 
 // Method to check if instance is active and healthy

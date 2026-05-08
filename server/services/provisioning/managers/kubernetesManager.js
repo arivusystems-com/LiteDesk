@@ -1,4 +1,5 @@
 const k8s = require('@kubernetes/client-node');
+const { getTenantBaseDomain } = require('../../../utils/tenantDomain');
 const yaml = require('yaml');
 const fs = require('fs').promises;
 const path = require('path');
@@ -356,7 +357,7 @@ class KubernetesManager {
    * Create ingress
    */
   async createIngress(namespace, values) {
-    const host = `${values.instance.subdomain}.litedesk.com`;
+    const host = `${values.instance.subdomain}.${getTenantBaseDomain()}`;
     
     const ingress = {
       metadata: {

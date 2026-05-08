@@ -1,5 +1,6 @@
 const InstanceRegistry = require('../../models/InstanceRegistry');
 const axios = require('axios');
+const { buildTenantFrontendUrl, buildTenantApiUrl } = require('../../utils/tenantDomain');
 
 /**
  * Health Checker Service
@@ -105,8 +106,8 @@ class HealthChecker {
 
             // Define health check endpoints
             const healthEndpoints = {
-                api: `${instance.urls?.api || `https://api-${instance.subdomain}.litedesk.com`}/health`,
-                frontend: instance.urls?.frontend || `https://${instance.subdomain}.litedesk.com`
+                api: `${instance.urls?.api || buildTenantApiUrl(instance.subdomain)}/health`,
+                frontend: instance.urls?.frontend || buildTenantFrontendUrl(instance.subdomain)
             };
 
             // Check API health

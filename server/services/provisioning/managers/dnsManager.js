@@ -1,4 +1,5 @@
 const AWS = require('aws-sdk');
+const { getTenantBaseDomain } = require('../../../utils/tenantDomain');
 
 class DNSManager {
   constructor() {
@@ -11,7 +12,7 @@ class DNSManager {
     
     // Hosted Zone ID for your domain (e.g., litedesk.com)
     this.hostedZoneId = process.env.ROUTE53_HOSTED_ZONE_ID;
-    this.baseDomain = process.env.BASE_DOMAIN || 'litedesk.com';
+    this.baseDomain = getTenantBaseDomain();
   }
   
   /**

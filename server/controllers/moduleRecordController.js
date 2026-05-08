@@ -15,6 +15,13 @@ const { getFileUrl } = require('../middleware/uploadMiddleware');
 const MODULES_WITH_NATIVE_ACTIVITY = new Set(['deals', 'tasks']);
 const MODULES_WITH_NATIVE_COMMENTS = new Set(['deals', 'tasks']);
 
+function isMasterOrganizationRequest(req) {
+  const orgName = String(req?.organization?.name || '').trim().toLowerCase();
+  const userEmail = String(req?.user?.email || '').trim().toLowerCase();
+  const isInternalEmail = userEmail.endsWith('@litedesk.com') || userEmail.endsWith('@litedesk.io');
+  return orgName === 'litedesk master' || orgName.includes('litedesk master') || isInternalEmail;
+}
+
 /**
  * Default list handler: given a model and orgId, return record IDs for prev/next.
  * Used for any module that has a known model (add new modules here or via getDefaultListHandler).
@@ -580,8 +587,10 @@ exports.uploadCommentAttachment = async (req, res) => {
     if (moduleKey === 'organizations') {
       const tenantUsers = await User.find({ organizationId }).select('_id').lean();
       const tenantUserIds = tenantUsers.map((user) => user._id);
-      baseQuery.isTenant = false;
-      baseQuery.createdBy = { $in: tenantUserIds };
+      if (!isMasterOrganizationRequest(req)) {
+        baseQuery.isTenant = false;
+        baseQuery.createdBy = { $in: tenantUserIds };
+      }
     } else {
       baseQuery.organizationId = organizationId;
     }
@@ -1079,8 +1088,10 @@ exports.getDescriptionVersions = async (req, res) => {
     if (key === 'organizations') {
       const tenantUsers = await User.find({ organizationId }).select('_id').lean();
       const tenantUserIds = tenantUsers.map((u) => u._id);
-      query.isTenant = false;
-      query.createdBy = { $in: tenantUserIds };
+      if (!isMasterOrganizationRequest(req)) {
+        query.isTenant = false;
+        query.createdBy = { $in: tenantUserIds };
+      }
     } else {
       query.organizationId = organizationId;
     }
@@ -1210,8 +1221,10 @@ exports.restoreDescriptionVersion = async (req, res) => {
     if (key === 'organizations') {
       const tenantUsers = await User.find({ organizationId }).select('_id').lean();
       const tenantUserIds = tenantUsers.map((u) => u._id);
-      query.isTenant = false;
-      query.createdBy = { $in: tenantUserIds };
+      if (!isMasterOrganizationRequest(req)) {
+        query.isTenant = false;
+        query.createdBy = { $in: tenantUserIds };
+      }
     } else {
       query.organizationId = organizationId;
     }
@@ -1351,7 +1364,7 @@ exports.deleteTagFromModule = async (req, res) => {
 
     const Model = getModel();
     const query = { organizationId };
-    if (moduleKey === 'organizations') query.isTenant = false;
+    if (moduleKey === 'organizations' && !isMasterOrganizationRequest(req)) query.isTenant = false;
     if (Model.schema?.paths?.deletedAt) query.deletedAt = null;
 
     const tagRegex = new RegExp(`^${escapeRegExp(tagName)}$`, 'i');

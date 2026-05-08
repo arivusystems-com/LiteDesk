@@ -8,6 +8,104 @@ const mongoose = require('mongoose');
 const updatePeopleModuleFields = require('../scripts/updatePeopleModuleFields');
 const updateOrganizationsModuleFields = require('../scripts/updateOrganizationsModuleFields');
 const updateDealsModuleFields = require('../scripts/updateDealsModuleFields');
+const UserDirectory = require('../models/UserDirectory');
+const InstanceRegistry = require('../models/InstanceRegistry');
+const { generateUniqueSlug } = require('../services/provisioning/utils/slugGenerator');
+const { buildTenantFrontendUrl, buildTenantApiUrl } = require('../utils/tenantDomain');
+
+function getTenantModel(connection, modelName, sourceModel) {
+    if (connection.models[modelName]) {
+        return connection.models[modelName];
+    }
+    const originalSchema = sourceModel.schema;
+    const clonedSchema = new mongoose.Schema(originalSchema.obj, originalSchema.options);
+    if (originalSchema.methods) {
+        Object.keys(originalSchema.methods).forEach((methodName) => {
+            clonedSchema.methods[methodName] = originalSchema.methods[methodName];
+        });
+    }
+    if (originalSchema.statics) {
+        Object.keys(originalSchema.statics).forEach((staticName) => {
+            clonedSchema.statics[staticName] = originalSchema.statics[staticName];
+        });
+    }
+    if (originalSchema._indexes && originalSchema._indexes.length > 0) {
+        originalSchema._indexes.forEach((index) => {
+            clonedSchema.index(index[0], index[1]);
+        });
+    }
+    return connection.model(modelName, clonedSchema);
+}
+
+async function upsertMasterLeadFromDemo({
+    demoRequest,
+    masterOrganizationId,
+    actorUserId
+}) {
+    if (!demoRequest?.email || !masterOrganizationId || !actorUserId) return null;
+
+    const normalizedEmail = String(demoRequest.email).toLowerCase().trim();
+    const firstName = String(demoRequest.contactName || '').split(' ')[0] || normalizedEmail.split('@')[0] || 'Lead';
+    const lastName = String(demoRequest.contactName || '').split(' ').slice(1).join(' ') || '';
+
+    const existing = await People.findOne({
+        organizationId: masterOrganizationId,
+        email: normalizedEmail
+    });
+
+    const leadPayload = {
+        first_name: firstName,
+        last_name: lastName,
+        phone: demoRequest.phone || '',
+        source: 'Web Form',
+        organization: demoRequest.organizationId || null,
+        assignedTo: actorUserId,
+        lead_owner: actorUserId,
+        participations: {
+            SALES: {
+                role: 'Lead',
+                lead_status: 'New'
+            }
+        },
+        $addToSet: {
+            tags: { $each: ['demo-request', 'converted-demo'] }
+        }
+    };
+
+    if (existing) {
+        await People.findByIdAndUpdate(existing._id, {
+            $set: {
+                first_name: leadPayload.first_name,
+                last_name: leadPayload.last_name,
+                phone: leadPayload.phone,
+                source: leadPayload.source,
+                organization: leadPayload.organization,
+                assignedTo: leadPayload.assignedTo,
+                lead_owner: leadPayload.lead_owner,
+                participations: leadPayload.participations
+            },
+            ...leadPayload.$addToSet
+        });
+        return existing._id;
+    }
+
+    const created = await People.create({
+        organizationId: masterOrganizationId,
+        createdBy: actorUserId,
+        email: normalizedEmail,
+        first_name: leadPayload.first_name,
+        last_name: leadPayload.last_name,
+        phone: leadPayload.phone,
+        source: leadPayload.source,
+        organization: leadPayload.organization,
+        assignedTo: leadPayload.assignedTo,
+        lead_owner: leadPayload.lead_owner,
+        participations: leadPayload.participations,
+        tags: ['demo-request', 'converted-demo']
+    });
+
+    return created._id;
+}
 
 // --- Submit Demo Request (Public) ---
 exports.submitDemoRequest = async (req, res) => {
@@ -33,136 +131,8 @@ exports.submitDemoRequest = async (req, res) => {
             });
         }
         
-        // Step 1: Create Organization for the prospect company
-        // Single organization table handles both tenant and Sales fields
-        console.log('📋 Creating organization for:', companyName);
-        
-        // Generate unique slug to avoid conflicts
-        let baseSlug = companyName
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '');
-        
-        // Check if slug exists and make it unique if needed
-        let slug = baseSlug;
-        let counter = 1;
-        while (await Organization.findOne({ slug })) {
-            slug = `${baseSlug}-${counter}`;
-            counter++;
-        }
-        
-        // Create single organization with both tenant and Sales fields
-        const organization = await Organization.create({
-            name: companyName,
-            slug: slug,
-            industry: industry,
-            isActive: true,
-            
-            // Tenant fields (ready for when they convert)
-            subscription: {
-                tier: 'trial',
-                status: 'trial', // In trial until they convert
-                trialStartDate: new Date(),
-                trialEndDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000) // 15 days
-            },
-            limits: {
-                maxUsers: -1, // Unlimited - let users explore the product
-                maxContacts: -1, // Unlimited
-                maxDeals: -1, // Unlimited
-                maxStorageGB: -1 // Unlimited
-            },
-            settings: {
-                timeZone: 'UTC',
-                currency: 'USD'
-            },
-            enabledModules: ['contacts', 'deals'], // Limited modules for prospects
-            // New organizations start with Sales enabled only
-            enabledApps: [{
-                appKey: 'SALES',
-                status: 'ACTIVE',
-                enabledAt: new Date()
-            }],
-            
-            // Sales fields (for tracking as prospect)
-            types: [], // Empty types for prospects
-            customerStatus: 'Prospect', // Sales status field
-            
-            // Flag: Not a tenant yet (will be set to true on conversion)
-            isTenant: false
-        });
-        
-        console.log('✅ Organization created:', organization._id, organization.name, 'slug:', slug);
-        
-        // Step 1.5: Create Default Roles for the organization
-        console.log('🔐 Creating default roles...');
-        try {
-            const roles = await Role.createDefaultRoles(organization._id);
-            console.log('✅ Default roles created:', roles.length, 'roles');
-        } catch (roleError) {
-            console.warn('⚠️  Failed to create default roles:', roleError.message);
-            // Continue even if role creation fails
-        }
-        
-        // Step 1.6: Initialize Sales modules for the organization
-        // Using Sales app initializer to keep initialization centralized
-        console.log('🔍 Initializing Sales modules...');
-        try {
-            const salesInitializer = require('../services/salesAppInitializer');
-            const initResult = await salesInitializer.initializeSales(organization._id);
-            if (initResult.success) {
-                console.log('✅ Sales modules initialized:', initResult.initialized.join(', '));
-            } else {
-                console.warn('⚠️  Sales initialization completed with errors:', initResult.errors);
-            }
-        } catch (moduleError) {
-            console.warn('⚠️  Failed to initialize Sales modules:', moduleError.message);
-            // Continue even if module initialization fails - can be run manually later
-        }
-        
-        // Initialize Organizations module (if needed)
-        try {
-            await updateOrganizationsModuleFields(organization._id);
-            console.log('✅ Organizations module definition initialized with dependencies');
-        } catch (moduleError) {
-            console.warn('⚠️  Failed to initialize Organizations module:', moduleError.message);
-            // Continue even if module initialization fails - can be run manually later
-        }
-        
-        // Step 2: Create People for the requester
-        // Find master admin user to use as createdBy/assignedTo (required fields)
-        console.log('👤 Finding master admin user...');
-        const masterAdmin = await User.findOne({ isOwner: true })
-            .sort({ createdAt: 1 }); // Get the first owner (master admin)
-        
-        if (!masterAdmin) {
-            console.error('❌ No master admin user found! Cannot create People record.');
-            throw new Error('System configuration error: Master admin not found');
-        }
-        
-        console.log('✅ Using master admin:', masterAdmin.email);
-        
-        console.log('👤 Creating person for:', contactName);
-        // ⚠️ IMPORTANT: Person creation is identity-only and app-agnostic.
-        //    Participation fields (type, lead_score, etc.) are NOT set here.
-        //    They must be set via Attach-to-App flow.
-        const person = await People.create({
-            organizationId: organization._id,  // Organization reference
-            organization: organization._id,  // Sales organization link (same organization)
-            createdBy: masterAdmin._id,
-            assignedTo: masterAdmin._id,
-            // No type field - identity only, no Sales participation
-            first_name: contactName.split(' ')[0] || contactName,
-            last_name: contactName.split(' ').slice(1).join(' ') || '',
-            email: email.toLowerCase(),
-            phone: phone || '',
-            source: 'Web Form',
-            // No lead_score - participation field, not set on creation
-            tags: ['demo-request', industry, companySize]
-        });
-        
-        console.log('✅ People created:', person._id, person.email);
-        
-        // Step 3: Create demo request with references
+        // Step 1: Create demo request only.
+        // Organization + People are created during conversion.
         const demoRequest = await DemoRequest.create({
             companyName,
             industry,
@@ -174,13 +144,11 @@ exports.submitDemoRequest = async (req, res) => {
             message,
             status: 'pending',
             source: 'website',
-            organizationId: organization._id, // Link to organization
-            contactId: person._id // Link to people
+            organizationId: null
         });
         
         console.log('✅ Demo request created:', demoRequest._id);
-        console.log('🔗 Linked to Organization:', organization._id);
-        console.log('🔗 Linked to People:', person._id);
+        console.log('ℹ️  Organization/People will be created on conversion');
         
         // TODO: Send email notification to sales team
         // TODO: Send confirmation email to requester
@@ -188,9 +156,7 @@ exports.submitDemoRequest = async (req, res) => {
         res.status(201).json({
             success: true,
             message: 'Thank you for your interest! Our team will contact you within 24 hours.',
-            requestId: demoRequest._id,
-            organizationId: organization._id,
-            contactId: person._id
+            requestId: demoRequest._id
         });
         
     } catch (error) {
@@ -331,21 +297,93 @@ exports.convertToOrganization = async (req, res) => {
         
         console.log('🔄 Converting demo request to ORGANIZATION:', demoRequest.email);
         
-        // Get the organization
-        console.log('📋 Step 1: Fetching organization...');
-        const organization = await Organization.findById(demoRequest.organizationId);
+        // Ensure organization exists (new flow creates it at conversion time).
+        console.log('📋 Step 1: Resolving/creating organization...');
+        let organization = demoRequest.organizationId
+            ? await Organization.findById(demoRequest.organizationId)
+            : null;
+
         if (!organization) {
-            return res.status(404).json({ 
-                success: false,
-                message: 'Organization not found for this demo request' 
+            const slug = await generateUniqueSlug(demoRequest.companyName || 'workspace');
+            organization = await Organization.create({
+                name: demoRequest.companyName,
+                slug,
+                industry: demoRequest.industry || '',
+                isActive: true,
+                createdBy: req.user?._id || null,
+                assignedTo: req.user?._id || null,
+                subscription: {
+                    tier: 'trial',
+                    status: 'trial',
+                    trialStartDate: new Date(),
+                    trialEndDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000)
+                },
+                limits: {
+                    maxUsers: -1,
+                    maxContacts: -1,
+                    maxDeals: -1,
+                    maxStorageGB: -1
+                },
+                settings: {
+                    timeZone: 'UTC',
+                    currency: 'USD'
+                },
+                enabledModules: ['contacts', 'deals'],
+                enabledApps: [{
+                    appKey: 'SALES',
+                    status: 'ACTIVE',
+                    enabledAt: new Date()
+                }],
+                types: [],
+                customerStatus: 'Prospect',
+                isTenant: false
             });
+
+            demoRequest.organizationId = organization._id;
+            await demoRequest.save();
+
+            try {
+                await Role.createDefaultRoles(organization._id);
+            } catch (roleError) {
+                console.warn('⚠️  Failed to create default roles during conversion:', roleError.message);
+            }
+
+            try {
+                const salesInitializer = require('../services/salesAppInitializer');
+                await salesInitializer.initializeSales(organization._id);
+            } catch (moduleError) {
+                console.warn('⚠️  Failed to initialize Sales modules during conversion:', moduleError.message);
+            }
+
+            try {
+                await updateOrganizationsModuleFields(organization._id);
+            } catch (moduleError) {
+                console.warn('⚠️  Failed to initialize Organizations module during conversion:', moduleError.message);
+            }
+
+            console.log('✅ Organization created during conversion:', organization.name);
+        } else {
+            console.log('✅ Organization found:', organization.name);
         }
-        console.log('✅ Organization found:', organization.name);
         
         // Validate subscription tier (only 'trial' or 'paid' allowed)
         const validTiers = ['trial', 'paid'];
         const tier = validTiers.includes(subscriptionTier) ? subscriptionTier : 'trial';
         console.log('✅ Subscription tier:', tier);
+
+        const activeOrgAppKeys = Array.isArray(organization.enabledApps)
+            ? organization.enabledApps
+                .map((app) => {
+                    if (typeof app === 'string') return app.toUpperCase();
+                    if (app && typeof app === 'object') {
+                        const status = String(app.status || 'ACTIVE').toUpperCase();
+                        if (status !== 'ACTIVE') return null;
+                        return typeof app.appKey === 'string' ? app.appKey.toUpperCase() : null;
+                    }
+                    return null;
+                })
+                .filter(Boolean)
+            : [];
         
         // Generate database name from organization slug or ID
         const dbName = organization.slug 
@@ -422,6 +460,30 @@ exports.convertToOrganization = async (req, res) => {
         } catch (moduleError) {
             console.warn('⚠️  Failed to refresh Deals module during conversion:', moduleError.message);
         }
+
+        // Mirror seeded module definitions from master DB into tenant DB so
+        // module metadata is available immediately in dedicated deployments.
+        try {
+            const MasterModuleDefinition = require('../models/ModuleDefinition');
+            const TenantModuleDefinition = getTenantModel(orgDbConnection, 'ModuleDefinition', MasterModuleDefinition);
+            const seededDefinitions = await MasterModuleDefinition.find({ organizationId: organization._id }).lean();
+            if (seededDefinitions.length > 0) {
+                for (const definition of seededDefinitions) {
+                    const payload = { ...definition };
+                    delete payload._id;
+                    await TenantModuleDefinition.findOneAndUpdate(
+                        { organizationId: organization._id, moduleKey: definition.moduleKey || definition.key },
+                        { $set: payload },
+                        { upsert: true, new: true, setDefaultsOnInsert: true }
+                    );
+                }
+                console.log(`✅ Mirrored ${seededDefinitions.length} module definitions to tenant DB`);
+            } else {
+                console.warn('⚠️  No seeded module definitions found in master to mirror');
+            }
+        } catch (mirrorError) {
+            console.warn('⚠️  Failed to mirror module definitions to tenant DB:', mirrorError.message);
+        }
         
         // Create owner user in the organization's database
         console.log('👤 Step 5: Creating owner user in organization database...');
@@ -487,9 +549,31 @@ exports.convertToOrganization = async (req, res) => {
             existingUser.role = 'owner';
             existingUser.isOwner = true;
             existingUser.status = 'active';
+            existingUser.userType = 'INTERNAL';
+            existingUser.allowedApps = activeOrgAppKeys;
+            existingUser.appAccess = activeOrgAppKeys.map((appKey) => ({
+                appKey,
+                roleKey: 'ADMIN',
+                status: 'ACTIVE',
+                addedAt: new Date()
+            }));
             existingUser.setPermissionsByRole('owner');
             await existingUser.save();
             console.log('✅ Existing user updated as owner');
+
+            await UserDirectory.findOneAndUpdate(
+                { email: demoRequest.email.toLowerCase() },
+                {
+                    $set: {
+                        organizationId: demoRequest.organizationId,
+                        tenantDatabaseName: dbName,
+                        tenantUserId: existingUser._id,
+                        status: 'active'
+                    }
+                },
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+            );
+            console.log('✅ User directory updated for existing tenant user');
         } else {
             // Hash password
             const salt = await bcrypt.genSalt(10);
@@ -506,7 +590,15 @@ exports.convertToOrganization = async (req, res) => {
                 phoneNumber: demoRequest.phone || '',
                 role: 'owner',
                 isOwner: true,
-                status: 'active'
+                status: 'active',
+                userType: 'INTERNAL',
+                allowedApps: activeOrgAppKeys,
+                appAccess: activeOrgAppKeys.map((appKey) => ({
+                    appKey,
+                    roleKey: 'ADMIN',
+                    status: 'ACTIVE',
+                    addedAt: new Date()
+                }))
             });
             
             // Set owner permissions
@@ -514,37 +606,87 @@ exports.convertToOrganization = async (req, res) => {
             await ownerUser.save();
             
             console.log('✅ Owner user created in organization database:', ownerUser.email);
+
+            await UserDirectory.findOneAndUpdate(
+                { email: demoRequest.email.toLowerCase() },
+                {
+                    $set: {
+                        organizationId: demoRequest.organizationId,
+                        tenantDatabaseName: dbName,
+                        tenantUserId: ownerUser._id,
+                        status: 'active'
+                    }
+                },
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+            );
+            console.log('✅ User directory entry created for tenant owner');
         }
         
-        // Also create user in master database for login lookup (with minimal info)
-        console.log('👤 Step 6: Creating user reference in master database for login...');
-        const MasterUser = require('../models/User');
-        const masterUserExists = await MasterUser.findOne({ email: demoRequest.email.toLowerCase() });
-        
-        if (!masterUserExists) {
-            const salt = await bcrypt.genSalt(10);
-            const hashedPassword = await bcrypt.hash(password, salt);
-            
-            await MasterUser.create({
-                organizationId: demoRequest.organizationId,
-                username: demoRequest.email.split('@')[0] || 'user',
-                email: demoRequest.email.toLowerCase(),
-                password: hashedPassword,
-                firstName: firstName,
-                lastName: lastName,
-                phoneNumber: demoRequest.phone || '',
-                role: 'owner',
-                isOwner: true,
-                status: 'active'
-            });
-            console.log('✅ User reference created in master database');
-        } else {
-            console.log('⚠️  User already exists in master database');
-        }
+        // Do not create a full user in master DB for converted tenants.
+        // Tenant auth now resolves user from dedicated DB using org context.
+        console.log('👤 Step 6: Skipping master user creation for dedicated tenant database');
         
         // Update demo request
+        let instance = await InstanceRegistry.findOne({ demoRequestId: demoRequest._id });
+        if (!instance) {
+            let retries = 0;
+            while (!instance && retries < 5) {
+                const subdomain = await generateUniqueSlug(organization.name || demoRequest.companyName);
+                try {
+                    instance = await InstanceRegistry.create({
+                        instanceName: organization.name || demoRequest.companyName,
+                        subdomain,
+                        ownerEmail: demoRequest.email.toLowerCase(),
+                        ownerName: demoRequest.contactName,
+                        status: 'active',
+                        provisioningStage: 'complete',
+                        healthStatus: 'healthy',
+                        subscription: {
+                            tier: tier,
+                            status: tier === 'trial' ? 'trial' : 'active',
+                            trialStartDate: tier === 'trial' ? new Date() : undefined,
+                            trialEndDate: tier === 'trial' ? new Date(Date.now() + 15 * 24 * 60 * 60 * 1000) : undefined
+                        },
+                        databaseConnection: {
+                            database: dbName
+                        },
+                        urls: {
+                            frontend: buildTenantFrontendUrl(subdomain),
+                            api: buildTenantApiUrl(subdomain)
+                        },
+                        demoRequestId: demoRequest._id
+                    });
+                    console.log(`✅ Instance registry created for converted tenant: ${subdomain}`);
+                } catch (instanceError) {
+                    const duplicateSubdomainError = instanceError?.code === 11000
+                        && instanceError?.keyPattern
+                        && instanceError.keyPattern.subdomain;
+                    if (!duplicateSubdomainError) {
+                        throw instanceError;
+                    }
+                    retries += 1;
+                    console.warn(`⚠️  Subdomain collision detected during conversion, retrying (${retries}/5)...`);
+                }
+            }
+            if (!instance) {
+                throw new Error('Failed to allocate a unique subdomain for converted demo request');
+            }
+        }
+
         demoRequest.status = 'converted';
         demoRequest.convertedAt = new Date();
+        demoRequest.convertedToInstanceId = instance._id;
+
+        const masterLeadId = await upsertMasterLeadFromDemo({
+            demoRequest,
+            masterOrganizationId: req.user?.organizationId,
+            actorUserId: req.user?._id
+        });
+        if (masterLeadId) {
+            demoRequest.contactId = masterLeadId;
+            console.log('✅ Master lead upserted from demo conversion:', masterLeadId.toString());
+        }
+
         await demoRequest.save();
         
         // Return success response
@@ -555,6 +697,7 @@ exports.convertToOrganization = async (req, res) => {
                 demoRequestId: demoRequest._id,
                 organizationId: demoRequest.organizationId,
                 databaseName: dbName,
+                subdomain: instance?.subdomain || null,
                 status: 'converted',
                 loginCredentials: {
                     email: demoRequest.email,
