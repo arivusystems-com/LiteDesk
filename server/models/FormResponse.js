@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 const { RECORD_SOURCE_VALUES, DEFAULT_RECORD_SOURCE } = require('../constants/recordSource');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 
 // Response Detail Schema (question-level)
 const responseDetailSchema = new Schema({
@@ -620,5 +621,5 @@ FormResponseSchema.post('save', async function (doc) {
     }
 });
 
-module.exports = mongoose.model('FormResponse', FormResponseSchema);
+module.exports = wrapTenantModel(mongoose.model('FormResponse', FormResponseSchema));
 

@@ -10,6 +10,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 
 const BusinessFlowSchema = new mongoose.Schema({
   name: {
@@ -55,4 +56,4 @@ const BusinessFlowSchema = new mongoose.Schema({
 BusinessFlowSchema.index({ organizationId: 1, appKey: 1 });
 BusinessFlowSchema.index({ organizationId: 1, createdAt: -1 });
 
-module.exports = mongoose.model('BusinessFlow', BusinessFlowSchema);
+module.exports = wrapTenantModel(mongoose.model('BusinessFlow', BusinessFlowSchema));

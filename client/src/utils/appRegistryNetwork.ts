@@ -207,10 +207,16 @@ function buildRegistryFromPayload(payload: {
   return registry;
 }
 
+// UI registry endpoints can change mid-session (apps enabled/disabled, user app
+// access edits). Bypass both the apiClient metadata cache and the browser's
+// HTTP cache so a stale response (from a deploy that previously sent
+// Cache-Control: max-age=86400) cannot mask fresh entitlements.
+const NO_CACHE: RequestInit = { cache: 'no-store' };
+
 export async function fetchAppRegistryFromNetwork(): Promise<AppRegistry> {
   try {
     try {
-      const registryResponse = await apiClient('/ui/registry');
+      const registryResponse = await apiClient('/ui/registry', NO_CACHE);
       if (registryResponse.success && registryResponse.data?.apps) {
         return buildRegistryFromPayload(registryResponse.data);
       }
@@ -218,7 +224,7 @@ export async function fetchAppRegistryFromNetwork(): Promise<AppRegistry> {
       console.debug('[appRegistryNetwork] Aggregated registry endpoint not available, falling back:', error);
     }
 
-    const appsResponse = await apiClient('/ui/apps');
+    const appsResponse = await apiClient('/ui/apps', NO_CACHE);
 
     if (!appsResponse.success || !appsResponse.data) {
       console.warn('[appRegistryNetwork] Failed to fetch apps, returning empty registry');
@@ -231,7 +237,7 @@ export async function fetchAppRegistryFromNetwork(): Promise<AppRegistry> {
     await Promise.all(
       apps.map(async (app: any) => {
         try {
-          const modulesResponse = await apiClient(`/ui/apps/${app.appKey}/modules`);
+          const modulesResponse = await apiClient(`/ui/apps/${app.appKey}/modules`, NO_CACHE);
           if (modulesResponse.success && modulesResponse.data) {
             modulesByAppKey[app.appKey] = mapRawModulesToRegistryModules(app, modulesResponse.data);
           } else {
@@ -247,7 +253,7 @@ export async function fetchAppRegistryFromNetwork(): Promise<AppRegistry> {
     const registry = buildRegistryFromPayload({ apps, modulesByAppKey });
 
     try {
-      const entityModulesResponse = await apiClient('/ui/entities');
+      const entityModulesResponse = await apiClient('/ui/entities', NO_CACHE);
       if (entityModulesResponse.success && entityModulesResponse.data) {
         addPlatformModulesToRegistry(registry, entityModulesResponse.data);
       }

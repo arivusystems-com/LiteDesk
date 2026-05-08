@@ -4,6 +4,7 @@
  * Supports activity log entries and threaded comments in one collection.
  */
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const Schema = mongoose.Schema;
 
 const RecordActivitySchema = new Schema({
@@ -64,4 +65,4 @@ const RecordActivitySchema = new Schema({
 RecordActivitySchema.index({ organizationId: 1, moduleKey: 1, recordId: 1, type: 1, createdAt: 1 });
 RecordActivitySchema.index({ organizationId: 1, moduleKey: 1, recordId: 1, parentCommentId: 1, createdAt: 1 });
 
-module.exports = mongoose.model('RecordActivity', RecordActivitySchema);
+module.exports = wrapTenantModel(mongoose.model('RecordActivity', RecordActivitySchema));

@@ -14,6 +14,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 
 const LifecycleStatusMapSchema = new mongoose.Schema({
   // Lifecycle this mapping belongs to
@@ -84,4 +85,4 @@ LifecycleStatusMapSchema.index({ lifecycleKey: 1, appKey: 1, isActive: 1 });
 // Index for status field lookups
 LifecycleStatusMapSchema.index({ sourceStatusField: 1, sourceStatusValue: 1, isActive: 1 });
 
-module.exports = mongoose.model('LifecycleStatusMap', LifecycleStatusMapSchema);
+module.exports = wrapTenantModel(mongoose.model('LifecycleStatusMap', LifecycleStatusMapSchema));

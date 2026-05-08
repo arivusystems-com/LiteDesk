@@ -10,6 +10,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const Schema = mongoose.Schema;
 
 // Chart Configuration Schema
@@ -149,5 +150,5 @@ ResponseTemplateSchema.methods.duplicate = async function(newName, newOrganizati
 ResponseTemplateSchema.set('toJSON', { virtuals: true });
 ResponseTemplateSchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('ResponseTemplate', ResponseTemplateSchema);
+module.exports = wrapTenantModel(mongoose.model('ResponseTemplate', ResponseTemplateSchema));
 

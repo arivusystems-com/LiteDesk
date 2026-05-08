@@ -10,6 +10,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 
 const ProcessNodeSchema = new mongoose.Schema({
   id: {
@@ -107,4 +108,4 @@ const ProcessSchema = new mongoose.Schema({
 ProcessSchema.index({ appKey: 1, status: 1 });
 ProcessSchema.index({ 'trigger.type': 1, 'trigger.eventType': 1, status: 1 });
 
-module.exports = mongoose.model('Process', ProcessSchema);
+module.exports = wrapTenantModel(mongoose.model('Process', ProcessSchema));

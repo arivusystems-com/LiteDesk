@@ -25,6 +25,7 @@ const {
   PEOPLE_SALES_CONTACT_STATUS_PATH,
 } = require('../utils/peopleFieldRegistry');
 const { RECORD_SOURCE_VALUES, DEFAULT_RECORD_SOURCE } = require('../constants/recordSource');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 
 const PeopleSchema = new Schema({
   // Multi-tenancy
@@ -187,6 +188,6 @@ PeopleSchema.pre('save', async function(next) {
   }
 });
 
-module.exports = mongoose.model('People', PeopleSchema);
+module.exports = wrapTenantModel(mongoose.model('People', PeopleSchema));
 
 

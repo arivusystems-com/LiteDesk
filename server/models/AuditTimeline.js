@@ -23,6 +23,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const Schema = mongoose.Schema;
 
 const auditTimelineSchema = new Schema({
@@ -133,5 +134,5 @@ auditTimelineSchema.statics.findByAction = function(eventId, action) {
     .populate('actorId', 'firstName lastName email');
 };
 
-module.exports = mongoose.model('AuditTimeline', auditTimelineSchema);
+module.exports = wrapTenantModel(mongoose.model('AuditTimeline', auditTimelineSchema));
 

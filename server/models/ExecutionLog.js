@@ -16,6 +16,7 @@
 
 const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 
 const ExecutionLogSchema = new mongoose.Schema({
   // Unique execution ID (UUID)
@@ -140,5 +141,5 @@ ExecutionLogSchema.pre('save', function(next) {
   next();
 });
 
-module.exports = mongoose.model('ExecutionLog', ExecutionLogSchema);
+module.exports = wrapTenantModel(mongoose.model('ExecutionLog', ExecutionLogSchema));
 

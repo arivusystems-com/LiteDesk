@@ -22,6 +22,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 
 const RelationshipInstanceSchema = new mongoose.Schema({
   // Relationship Type (references RelationshipDefinition.relationshipKey)
@@ -153,5 +154,5 @@ RelationshipInstanceSchema.index(
   { name: 'org_target_lookup_idx' }
 );
 
-module.exports = mongoose.model('RelationshipInstance', RelationshipInstanceSchema);
+module.exports = wrapTenantModel(mongoose.model('RelationshipInstance', RelationshipInstanceSchema));
 

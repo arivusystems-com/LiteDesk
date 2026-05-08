@@ -20,6 +20,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 
 const UserSchema = new mongoose.Schema({
     // Organization Reference (Multi-tenancy)
@@ -394,4 +395,4 @@ UserSchema.methods.getFullName = function() {
     return this.username;
 };
 
-module.exports = mongoose.model('User', UserSchema);
+module.exports = wrapTenantModel(mongoose.model('User', UserSchema));

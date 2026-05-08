@@ -14,6 +14,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 
 const EntityTypeSchema = new mongoose.Schema({
   // Unique identifier for the entity type
@@ -74,4 +75,4 @@ const EntityTypeSchema = new mongoose.Schema({
 // Compound index for entity + appKey queries
 EntityTypeSchema.index({ entity: 1, appKey: 1, isActive: 1 });
 
-module.exports = mongoose.model('EntityType', EntityTypeSchema);
+module.exports = wrapTenantModel(mongoose.model('EntityType', EntityTypeSchema));

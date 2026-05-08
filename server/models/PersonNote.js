@@ -2,6 +2,7 @@
  * Person notes stored outside the People document (People schema has no embedded notes).
  */
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const { Schema } = mongoose;
 
 const PersonNoteSchema = new Schema(
@@ -19,4 +20,4 @@ const PersonNoteSchema = new Schema(
 
 PersonNoteSchema.index({ organizationId: 1, personId: 1, created_at: -1 });
 
-module.exports = mongoose.model('PersonNote', PersonNoteSchema);
+module.exports = wrapTenantModel(mongoose.model('PersonNote', PersonNoteSchema));

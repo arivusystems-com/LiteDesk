@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const { Schema } = mongoose;
 
 /**
@@ -142,5 +143,5 @@ notificationRuleSchema.pre('save', async function() {
   }
 });
 
-module.exports = mongoose.model('NotificationRule', notificationRuleSchema);
+module.exports = wrapTenantModel(mongoose.model('NotificationRule', notificationRuleSchema));
 

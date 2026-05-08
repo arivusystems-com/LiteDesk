@@ -4,6 +4,7 @@
  * Deals and tasks keep using their native descriptionVersions; other modules use this collection.
  */
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const Schema = mongoose.Schema;
 
 const DESCRIPTION_VERSION_RETENTION_DAYS = 365;
@@ -26,4 +27,4 @@ RecordDescriptionVersionSchema.index(
 
 RecordDescriptionVersionSchema.statics.RETENTION_DAYS = DESCRIPTION_VERSION_RETENTION_DAYS;
 
-module.exports = mongoose.model('RecordDescriptionVersion', RecordDescriptionVersionSchema);
+module.exports = wrapTenantModel(mongoose.model('RecordDescriptionVersion', RecordDescriptionVersionSchema));

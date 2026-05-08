@@ -51,71 +51,64 @@ export const useAuthStore = defineStore('auth', {
                     typeof app === 'string' ? app.toUpperCase() : app
                 );
                 const hasExplicitUserAccess = allowedApps.includes(appKeyUpper);
-                
-                // For owners: check if app is enabled for the organization
-                // This aligns with unified access resolution where owners have access to all enabled apps
-                // (especially for internal instances where owners can access and execute all apps)
-                if (state.user?.isOwner) {
-                    // If explicit user app access exists, honor that first instead of broadening
-                    // access to all org-enabled apps.
+
+                const normalizeOrgEnabledKeys = (enabledApps) => {
+                    if (!enabledApps?.length) return [];
+                    return enabledApps
+                        .map((app) => {
+                            if (typeof app === 'string') return app.toUpperCase();
+                            if (app && typeof app === 'object') {
+                                const key = app.appKey || app;
+                                if (app.status && app.status !== 'ACTIVE') return null;
+                                return typeof key === 'string' ? key.toUpperCase() : null;
+                            }
+                            return null;
+                        })
+                        .filter((k) => k !== null);
+                };
+
+                const isOwnerLike =
+                    state.user?.isOwner === true ||
+                    String(state.user?.role || '').toLowerCase() === 'owner';
+
+                // Mirrors server uiCompositionService.getUIAppsForTenant: owners see every ACTIVE
+                // org-enabled app in the shell (seat / role enforcement happens inside each app).
+                // IMPORTANT: do not prefer User.allowedApps over organization.enabledApps — that
+                // caused the sidebar registry to keep only legacy defaults (e.g. SALES) and hide
+                // the app switcher even after enabling HELPDESK/AUDIT on the org.
+                if (isOwnerLike) {
+                    const orgKeys = normalizeOrgEnabledKeys(state.organization?.enabledApps);
+                    if (orgKeys.length > 0) {
+                        const ok = orgKeys.includes(appKeyUpper);
+                        logAuthAccessDebug(`[hasAppAccess] Owner-like org-enabled check for ${appKeyUpper}:`, {
+                            orgKeys,
+                            ok
+                        });
+                        return ok;
+                    }
+
                     if (allowedApps.length > 0) {
-                        logAuthAccessDebug(`[hasAppAccess] Owner explicit app access check for ${appKeyUpper}:`, {
+                        logAuthAccessDebug(`[hasAppAccess] Owner-like explicit allowedApps (no org keys):`, {
                             allowedApps,
+                            appKeyUpper,
                             hasAccess: hasExplicitUserAccess
                         });
                         return hasExplicitUserAccess;
                     }
 
-                    if (state.organization?.enabledApps) {
-                        const enabledApps = state.organization.enabledApps;
-                        // Handle both array of strings and array of objects with appKey property
-                        const appKeys = enabledApps.map(app => {
-                            if (typeof app === 'string') {
-                                return app.toUpperCase();
-                            }
-                            // Handle object format: { appKey: 'SALES', status: 'ACTIVE' }
-                            if (app && typeof app === 'object') {
-                                const key = app.appKey || app;
-                                // Only include if status is ACTIVE (if status field exists)
-                                if (app.status && app.status !== 'ACTIVE') {
-                                    return null;
-                                }
-                                return typeof key === 'string' ? key.toUpperCase() : key;
-                            }
-                            return null;
-                        }).filter(key => key !== null);
-                        
-                        if (appKeys.includes(appKeyUpper)) {
-                            logAuthAccessDebug(`[hasAppAccess] Owner access granted via enabledApps: ${appKeyUpper}`, {
-                                enabledAppKeys: appKeys,
-                                checking: appKeyUpper
-                            });
-                            return true;
-                        } else {
-                            warnAuthAccessDebug(`[hasAppAccess] Owner but app ${appKeyUpper} not in enabledApps:`, {
-                                enabledAppKeys: appKeys,
-                                checking: appKeyUpper,
-                                enabledApps: enabledApps
-                            });
-                        }
-                    } else {
-                        warnAuthAccessDebug(`[hasAppAccess] Owner but no enabledApps in organization:`, {
-                            hasOrganization: !!state.organization,
-                            organization: state.organization
-                        });
-                    }
+                    warnAuthAccessDebug(`[hasAppAccess] Owner-like but no org enabledApps and empty allowedApps`, {
+                        appKeyUpper
+                    });
+                    return false;
                 }
-                
-                // For non-owners or if owner check didn't match: check explicit appAccess/allowedApps
-                const hasAccess = hasExplicitUserAccess;
-                
+
                 logAuthAccessDebug(`[hasAppAccess] Final check for ${appKeyUpper}:`, {
                     isOwner: state.user?.isOwner,
-                    allowedApps: allowedApps,
-                    hasAccess: hasAccess
+                    allowedApps,
+                    hasAccess: hasExplicitUserAccess
                 });
-                
-                return hasAccess;
+
+                return hasExplicitUserAccess;
             };
         },
     },

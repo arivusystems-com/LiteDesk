@@ -23,6 +23,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const Schema = mongoose.Schema;
 
 const auditAssignmentSchema = new Schema({
@@ -147,5 +148,5 @@ auditAssignmentSchema.statics.findByEvent = function(eventId) {
   return this.findOne({ eventId });
 };
 
-module.exports = mongoose.model('AuditAssignment', auditAssignmentSchema);
+module.exports = wrapTenantModel(mongoose.model('AuditAssignment', auditAssignmentSchema));
 

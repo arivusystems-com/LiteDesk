@@ -24,6 +24,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const Schema = mongoose.Schema;
 
 const auditExecutionContextSchema = new Schema({
@@ -173,5 +174,5 @@ auditExecutionContextSchema.statics.findByEvent = function(eventId) {
   return this.find({ eventId }).sort({ createdAt: -1 });
 };
 
-module.exports = mongoose.model('AuditExecutionContext', auditExecutionContextSchema);
+module.exports = wrapTenantModel(mongoose.model('AuditExecutionContext', auditExecutionContextSchema));
 

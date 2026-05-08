@@ -10,6 +10,7 @@
 // - Form Settings owns configuration only (behavior, lifecycle, access, outcomes)
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const Schema = mongoose.Schema;
 
 // Question Schema (nested in subsections and sections)
@@ -559,5 +560,5 @@ FormSchema.methods.validateStructure = function() {
 FormSchema.set('toJSON', { virtuals: true });
 FormSchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('Form', FormSchema);
+module.exports = wrapTenantModel(mongoose.model('Form', FormSchema));
 

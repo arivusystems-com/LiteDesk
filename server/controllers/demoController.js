@@ -11,6 +11,7 @@ const updateDealsModuleFields = require('../scripts/updateDealsModuleFields');
 const UserDirectory = require('../models/UserDirectory');
 const InstanceRegistry = require('../models/InstanceRegistry');
 const { generateUniqueSlug } = require('../services/provisioning/utils/slugGenerator');
+const { seedTenantDatabase } = require('../services/provisioning/tenantSeeder');
 const { buildTenantFrontendUrl, buildTenantApiUrl } = require('../utils/tenantDomain');
 
 function getTenantModel(connection, modelName, sourceModel) {
@@ -459,6 +460,17 @@ exports.convertToOrganization = async (req, res) => {
             console.log('✅ Deals module definition refreshed after conversion');
         } catch (moduleError) {
             console.warn('⚠️  Failed to refresh Deals module during conversion:', moduleError.message);
+        }
+
+        // Seed the tenant DB with the same baseline that litedesk_master holds
+        // (apps, platform module definitions, relationships, default roles, and
+        // tenant app/module configurations). Idempotent — re-running is safe.
+        try {
+            const updatedOrg = await Organization.findById(demoRequest.organizationId).lean();
+            await seedTenantDatabase(orgDbConnection, updatedOrg || organization);
+        } catch (seedError) {
+            console.warn('⚠️  Failed to seed tenant DB baseline:', seedError.message);
+            console.warn(seedError.stack);
         }
 
         // Mirror seeded module definitions from master DB into tenant DB so

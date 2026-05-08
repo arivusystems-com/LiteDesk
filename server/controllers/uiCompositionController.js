@@ -65,7 +65,9 @@ exports.getRegistry = async (req, res) => {
 
     const registry = await uiCompositionService.getAppRegistryDefinition(organizationId, req.user);
 
-    res.set('Cache-Control', 'private, max-age=86400');
+    // Permissions can change mid-session (app enable/disable, user app access edits).
+    // Avoid long-lived caching so the sidebar/app switcher reflects updates immediately.
+    res.set('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
     res.json({
       success: true,
       data: registry
@@ -97,9 +99,9 @@ exports.getSidebar = async (req, res) => {
 
     const sidebar = await uiCompositionService.getSidebarDefinition(organizationId, req.user);
 
-    // Cache sidebar definition in browser for 24 hours (user-specific, private)
-    // Safe: changes are infrequent; sidebar is org+user scoped; users can force refresh if needed
-    res.set('Cache-Control', 'private, max-age=86400');
+    // Permissions can change mid-session (app enable/disable, user app access edits).
+    // A 24h browser cache made app switcher updates invisible until cache eviction.
+    res.set('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
     res.json({
       success: true,
       data: sidebar
@@ -131,9 +133,7 @@ exports.getRoutes = async (req, res) => {
 
     const routes = await uiCompositionService.getRouteDefinitions(organizationId, req.user);
 
-    // Cache route definitions in browser for 24 hours (user-specific, private)
-    // Safe: changes are infrequent; routes are org+user scoped; users can force refresh if needed
-    res.set('Cache-Control', 'private, max-age=86400');
+    res.set('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
     res.json({
       success: true,
       data: routes

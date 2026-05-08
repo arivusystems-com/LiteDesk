@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 const { RECORD_SOURCE_VALUES, DEFAULT_RECORD_SOURCE } = require('../constants/recordSource');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 
 // Item Schema Definition
 const ItemSchema = new Schema({
@@ -338,5 +339,5 @@ ItemSchema.statics.getItemStatistics = async function(organizationId) {
 ItemSchema.set('toJSON', { virtuals: true });
 ItemSchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('Item', ItemSchema);
+module.exports = wrapTenantModel(mongoose.model('Item', ItemSchema));
 

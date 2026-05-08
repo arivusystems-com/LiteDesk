@@ -25,6 +25,51 @@
 const SECURITY_DISABLED = process.env.DISABLE_SECURITY === 'true';
 
 const Organization = require('../models/Organization');
+const dbConnectionManager = require('../utils/databaseConnectionManager');
+const { enterTenantContext } = require('../utils/tenantContext');
+
+/**
+ * Open the tenant database connection (if the org has a dedicated DB) and
+ * run the rest of the middleware chain inside that tenant's AsyncLocalStorage
+ * context so tenant-scoped models route to the right database.
+ *
+ * For organizations without `database.name` / `database.initialized`, this is
+ * a no-op pass-through and tenant models continue to fall back to master.
+ */
+async function continueWithTenantContext(req, res, next, organization) {
+    const dbName = organization?.database?.name;
+    const initialized = organization?.database?.initialized;
+
+    if (!dbName || !initialized) {
+        return next();
+    }
+
+    let connection;
+    try {
+        connection = await dbConnectionManager.getOrganizationConnection(dbName);
+        if (connection.readyState !== 1 && typeof connection.asPromise === 'function') {
+            await connection.asPromise();
+        }
+    } catch (err) {
+        console.error('[organizationIsolation] Failed to open tenant DB connection:', err.message);
+        return res.status(500).json({
+            message: 'Failed to open tenant database connection',
+            code: 'TENANT_DB_UNAVAILABLE'
+        });
+    }
+
+    req.tenantConnection = connection;
+    req.tenantDatabaseName = dbName;
+
+    return enterTenantContext(
+        {
+            organizationId: organization._id,
+            connection,
+            databaseName: dbName
+        },
+        next
+    );
+}
 
 /**
  * Middleware to ensure organization isolation
@@ -58,7 +103,7 @@ const organizationIsolation = async (req, res, next) => {
                     orgName: org.name,
                     userEmail: req.user?.email
                 });
-                return next();
+                return continueWithTenantContext(req, res, next, org);
             } else {
                 console.error('[OrganizationIsolation] Organization not found:', {
                     orgId: userOrgId,
@@ -91,7 +136,7 @@ const organizationIsolation = async (req, res, next) => {
                     code: 'ORG_INACTIVE'
                 });
             }
-            return next();
+            return continueWithTenantContext(req, res, next, req.organization);
         }
 
         // Get organization from user (fresh from database to ensure latest state)
@@ -123,7 +168,7 @@ const organizationIsolation = async (req, res, next) => {
         // Attach organization to request
         req.organization = organization;
         
-        next();
+        return continueWithTenantContext(req, res, next, organization);
     } catch (error) {
         console.error('Organization isolation error:', error);
         res.status(500).json({ message: 'Server error during organization verification' });

@@ -2,6 +2,7 @@
  * Person file attachments stored outside the People document (People schema has no embedded attachments).
  */
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const { Schema } = mongoose;
 
 const PersonFileAttachmentSchema = new Schema(
@@ -21,4 +22,4 @@ const PersonFileAttachmentSchema = new Schema(
 
 PersonFileAttachmentSchema.index({ organizationId: 1, personId: 1, created_at: -1 });
 
-module.exports = mongoose.model('PersonFileAttachment', PersonFileAttachmentSchema);
+module.exports = wrapTenantModel(mongoose.model('PersonFileAttachment', PersonFileAttachmentSchema));

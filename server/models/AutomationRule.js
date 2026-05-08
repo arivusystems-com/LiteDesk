@@ -15,6 +15,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 
 const AutomationRuleSchema = new mongoose.Schema({
   name: {
@@ -86,4 +87,4 @@ const AutomationRuleSchema = new mongoose.Schema({
 AutomationRuleSchema.index({ appKey: 1, enabled: 1, 'trigger.eventType': 1 });
 AutomationRuleSchema.index({ organizationId: 1, appKey: 1, enabled: 1 });
 
-module.exports = mongoose.model('AutomationRule', AutomationRuleSchema);
+module.exports = wrapTenantModel(mongoose.model('AutomationRule', AutomationRuleSchema));

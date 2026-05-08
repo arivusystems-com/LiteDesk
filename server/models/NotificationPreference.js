@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const { Schema } = mongoose;
 
 /**
@@ -45,5 +46,5 @@ const notificationPreferenceSchema = new Schema({
 
 notificationPreferenceSchema.index({ userId: 1, appKey: 1 }, { unique: true });
 
-module.exports = mongoose.model('NotificationPreference', notificationPreferenceSchema);
+module.exports = wrapTenantModel(mongoose.model('NotificationPreference', notificationPreferenceSchema));
 

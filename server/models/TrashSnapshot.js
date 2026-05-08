@@ -14,6 +14,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const Schema = mongoose.Schema;
 
 const TrashSnapshotSchema = new Schema({
@@ -103,4 +104,4 @@ TrashSnapshotSchema.index(
   { unique: true }
 );
 
-module.exports = mongoose.model('TrashSnapshot', TrashSnapshotSchema);
+module.exports = wrapTenantModel(mongoose.model('TrashSnapshot', TrashSnapshotSchema));

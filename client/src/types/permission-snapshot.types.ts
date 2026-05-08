@@ -84,7 +84,8 @@ export function createPermissionSnapshot(user: {
   }
   
   // If user is owner, grant all permissions
-  if (user.isOwner) {
+  const roleLower = String(user.role || '').toLowerCase();
+  if (user.isOwner || roleLower === 'owner') {
     // Add common owner permissions
     permissions['*'] = true;
   }

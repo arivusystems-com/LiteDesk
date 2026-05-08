@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const Schema = mongoose.Schema;
 
 const GroupSchema = new Schema({
@@ -134,5 +135,5 @@ GroupSchema.methods.addActivityLog = function(user, userId, action, details) {
     });
 };
 
-module.exports = mongoose.model('Group', GroupSchema);
+module.exports = wrapTenantModel(mongoose.model('Group', GroupSchema));
 

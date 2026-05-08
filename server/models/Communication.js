@@ -10,6 +10,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const Schema = mongoose.Schema;
 
 // Attachment size limits (plan: 10MB per file, 25MB total)
@@ -75,6 +76,6 @@ CommunicationSchema.index({ parentCommunicationId: 1 });
 
 const Communication = mongoose.model('Communication', CommunicationSchema);
 
-module.exports = Communication;
+module.exports = wrapTenantModel(Communication);
 module.exports.MAX_ATTACHMENT_SIZE_BYTES = MAX_ATTACHMENT_SIZE_BYTES;
 module.exports.MAX_TOTAL_ATTACHMENTS_BYTES = MAX_TOTAL_ATTACHMENTS_BYTES;
