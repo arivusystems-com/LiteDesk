@@ -1,7 +1,19 @@
+const DEFAULT_TENANT_BASE_DOMAINS = [
+  'app.arivusystems.com',
+  'litedesk.com',
+];
+
+function getTenantBaseDomains() {
+  const raw = process.env.TENANT_BASE_DOMAIN || process.env.BASE_DOMAIN;
+  if (!raw) return DEFAULT_TENANT_BASE_DOMAINS;
+  return String(raw)
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 function getTenantBaseDomain() {
-  return (process.env.TENANT_BASE_DOMAIN || process.env.BASE_DOMAIN || 'litedesk.com')
-    .trim()
-    .toLowerCase();
+  return getTenantBaseDomains()[0];
 }
 
 function buildTenantFrontendUrl(subdomain) {
@@ -18,8 +30,14 @@ function isTenantSubdomainOrigin(origin) {
   try {
     const parsed = new URL(origin);
     const hostname = parsed.hostname.toLowerCase();
-    const domain = getTenantBaseDomain();
-    return hostname === domain || hostname.endsWith(`.${domain}`);
+
+    // Always allow tenant hosts in the form: <slug>.app.arivusystems.com
+    if (/^[a-z0-9-]+\.app\.arivusystems\.com$/.test(hostname)) {
+      return true;
+    }
+
+    const domains = getTenantBaseDomains();
+    return domains.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
   } catch (_error) {
     return false;
   }
