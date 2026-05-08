@@ -880,9 +880,20 @@ exports.updateUser = async (req, res) => {
     const { role, roleId, status, firstName, lastName, phoneNumber, appAccess } = req.body;
 
     try {
-        const user = await User.findOne({ 
+        const organization = req.organization || await Organization.findById(req.user.organizationId);
+        if (!organization) {
+            return res.status(404).json({
+                success: false,
+                message: 'Organization not found'
+            });
+        }
+
+        const ScopedUser = await getScopedUserModel(organization);
+        const scopeQuery = buildUserScopeQuery(req, organization);
+
+        const user = await ScopedUser.findOne({
             _id: req.params.id,
-            organizationId: req.user.organizationId 
+            ...scopeQuery
         });
 
         if (!user) {
@@ -910,14 +921,6 @@ exports.updateUser = async (req, res) => {
                 success: false,
                 message: 'Cannot modify the organization owner',
                 code: 'CANNOT_MODIFY_OWNER'
-            });
-        }
-
-        const organization = await Organization.findById(req.user.organizationId);
-        if (!organization) {
-            return res.status(404).json({
-                success: false,
-                message: 'Organization not found'
             });
         }
 
@@ -1073,12 +1076,12 @@ exports.updateUser = async (req, res) => {
             // Keep seat counters in sync.
             for (const appKey of previousActiveApps) {
                 if (!nextActiveApps.has(appKey)) {
-                    await decrementSeat(user.organizationId, appKey);
+                    await decrementSeat(organization._id, appKey);
                 }
             }
             for (const appKey of nextActiveApps) {
                 if (!previousActiveApps.has(appKey)) {
-                    await incrementSeat(user.organizationId, appKey);
+                    await incrementSeat(organization._id, appKey);
                 }
             }
         }
@@ -1087,8 +1090,12 @@ exports.updateUser = async (req, res) => {
 
         await user.save();
 
-        // Populate role details
-        await user.populate('roleId', 'name description color icon level');
+        // Populate role details (Role model may not be registered on tenant connection)
+        try {
+            await user.populate('roleId', 'name description color icon level');
+        } catch (_e) {
+            // Tenant DB connection may not have Role registered; response still succeeds.
+        }
 
         const updated = sanitizeUserResponsePayload(user);
         res.json({
@@ -1121,9 +1128,20 @@ exports.updateUser = async (req, res) => {
 // --- Delete/Deactivate user ---
 exports.deleteUser = async (req, res) => {
     try {
-        const user = await User.findOne({ 
+        const organization = req.organization || await Organization.findById(req.user.organizationId);
+        if (!organization) {
+            return res.status(404).json({
+                success: false,
+                message: 'Organization not found'
+            });
+        }
+
+        const ScopedUser = await getScopedUserModel(organization);
+        const scopeQuery = buildUserScopeQuery(req, organization);
+
+        const user = await ScopedUser.findOne({
             _id: req.params.id,
-            organizationId: req.user.organizationId 
+            ...scopeQuery
         });
 
         if (!user) {
@@ -1146,7 +1164,7 @@ exports.deleteUser = async (req, res) => {
         const appAccess = user.appAccess || [];
         for (const appAccessEntry of appAccess) {
             if (appAccessEntry.status === 'ACTIVE') {
-                await decrementSeat(user.organizationId, appAccessEntry.appKey);
+                await decrementSeat(organization._id, appAccessEntry.appKey);
             }
         }
 
@@ -1228,7 +1246,16 @@ exports.updateProfile = async (req, res) => {
     const { firstName, lastName, phoneNumber, avatar } = req.body;
 
     try {
-        const user = await User.findById(req.user._id);
+        const organization = req.organization || await Organization.findById(req.user.organizationId);
+        const ScopedUser = await getScopedUserModel(organization);
+        const user = await ScopedUser.findById(req.user._id);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
 
         if (firstName !== undefined) user.firstName = firstName;
         if (lastName !== undefined) user.lastName = lastName;
@@ -1272,7 +1299,16 @@ exports.changePassword = async (req, res) => {
             });
         }
 
-        const user = await User.findById(req.user._id);
+        const organization = req.organization || await Organization.findById(req.user.organizationId);
+        const ScopedUser = await getScopedUserModel(organization);
+        const user = await ScopedUser.findById(req.user._id);
+
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
 
         // Verify current password
         const isMatch = await bcrypt.compare(currentPassword, user.password);
@@ -1305,9 +1341,20 @@ exports.changePassword = async (req, res) => {
 // --- Reset user password (Admin only) ---
 exports.resetUserPassword = async (req, res) => {
     try {
-        const user = await User.findOne({ 
+        const organization = req.organization || await Organization.findById(req.user.organizationId);
+        if (!organization) {
+            return res.status(404).json({
+                success: false,
+                message: 'Organization not found'
+            });
+        }
+
+        const ScopedUser = await getScopedUserModel(organization);
+        const scopeQuery = buildUserScopeQuery(req, organization);
+
+        const user = await ScopedUser.findOne({
             _id: req.params.id,
-            organizationId: req.user.organizationId 
+            ...scopeQuery
         });
 
         if (!user) {
