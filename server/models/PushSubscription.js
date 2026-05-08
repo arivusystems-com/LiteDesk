@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const { Schema } = mongoose;
 
 /**
@@ -58,5 +59,5 @@ pushSubscriptionSchema.index({ organizationId: 1, appKey: 1 });
 // Unique constraint: one subscription per endpoint
 pushSubscriptionSchema.index({ endpoint: 1 }, { unique: true });
 
-module.exports = mongoose.model('PushSubscription', pushSubscriptionSchema);
+module.exports = wrapTenantModel(mongoose.model('PushSubscription', pushSubscriptionSchema));
 

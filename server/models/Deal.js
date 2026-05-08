@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 const { RECORD_SOURCE_VALUES, DEFAULT_RECORD_SOURCE } = require('../constants/recordSource');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 
 // Deal Schema Definition
 const DealSchema = new Schema({
@@ -359,5 +360,5 @@ DealSchema.statics.getPipelineSummary = async function(organizationId) {
 DealSchema.set('toJSON', { virtuals: true });
 DealSchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('Deal', DealSchema);
+module.exports = wrapTenantModel(mongoose.model('Deal', DealSchema));
 

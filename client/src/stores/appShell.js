@@ -133,8 +133,8 @@ export const useAppShellStore = defineStore('appShell', {
         }
 
         const [sidebarResponse, routesResponse] = await Promise.all([
-          fetch('/api/ui/sidebar', { headers }),
-          fetch('/api/ui/routes', { headers })
+          fetch('/api/ui/sidebar', { headers, cache: 'no-store' }),
+          fetch('/api/ui/routes', { headers, cache: 'no-store' })
         ]);
 
         if (!sidebarResponse.ok) {
@@ -339,6 +339,22 @@ export const useAppShellStore = defineStore('appShell', {
       this.appRegistrySessionKey = null;
       this._appRegistryPromise = null;
       this._loadUIMetadataPromise = null;
+
+      // sessionStorage entries persist across logout when the tab stays open.
+      // Drop every cached UI metadata blob so the next login fetches fresh data
+      // for whichever user/tenant signs in next.
+      try {
+        const keysToRemove = [];
+        for (let i = 0; i < sessionStorage.length; i++) {
+          const key = sessionStorage.key(i);
+          if (key && key.startsWith('ui-metadata:')) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach((k) => sessionStorage.removeItem(k));
+      } catch (e) {
+        console.warn('[AppShell] Failed to clear cached UI metadata on logout:', e);
+      }
     },
 
     /**

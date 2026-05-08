@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const Schema = mongoose.Schema;
 
 const ImportHistorySchema = new Schema({
@@ -83,5 +84,5 @@ ImportHistorySchema.virtual('successRate').get(function() {
 ImportHistorySchema.set('toJSON', { virtuals: true });
 ImportHistorySchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('ImportHistory', ImportHistorySchema);
+module.exports = wrapTenantModel(mongoose.model('ImportHistory', ImportHistorySchema));
 

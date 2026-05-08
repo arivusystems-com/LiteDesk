@@ -15,6 +15,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const Schema = mongoose.Schema;
 
 const CorrectiveActionEvidenceSchema = new Schema({
@@ -82,5 +83,5 @@ CorrectiveActionEvidenceSchema.pre('findOneAndDelete', function() {
     throw new Error('Evidence records cannot be deleted');
 });
 
-module.exports = mongoose.model('CorrectiveActionEvidence', CorrectiveActionEvidenceSchema);
+module.exports = wrapTenantModel(mongoose.model('CorrectiveActionEvidence', CorrectiveActionEvidenceSchema));
 

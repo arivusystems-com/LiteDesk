@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 
 const WidgetLayoutSchema = new mongoose.Schema({
     type: {
@@ -73,5 +74,5 @@ const UserPreferencesSchema = new mongoose.Schema({
 // Compound index for organization + user (unique)
 UserPreferencesSchema.index({ organizationId: 1, userId: 1 }, { unique: true });
 
-module.exports = mongoose.model('UserPreferences', UserPreferencesSchema);
+module.exports = wrapTenantModel(mongoose.model('UserPreferences', UserPreferencesSchema));
 

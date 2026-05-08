@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const Schema = mongoose.Schema;
 
 // Question-level KPI Schema
@@ -256,5 +257,5 @@ FormKPISchema.methods.updateOrganizationKPIs = function(organizationId, stats) {
 FormKPISchema.set('toJSON', { virtuals: true });
 FormKPISchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('FormKPIs', FormKPISchema);
+module.exports = wrapTenantModel(mongoose.model('FormKPIs', FormKPISchema));
 

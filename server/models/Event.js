@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 const { v4: uuidv4 } = require('uuid');
 const { RECORD_SOURCE_VALUES, DEFAULT_RECORD_SOURCE } = require('../constants/recordSource');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 
 // Audit history entry schema
 const auditHistoryEntrySchema = new Schema({
@@ -674,4 +675,4 @@ eventSchema.post('save', async function (doc) {
     }
 });
 
-module.exports = mongoose.model('Event', eventSchema);
+module.exports = wrapTenantModel(mongoose.model('Event', eventSchema));

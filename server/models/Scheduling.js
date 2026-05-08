@@ -16,6 +16,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const Schema = mongoose.Schema;
 
 const SchedulingSchema = new Schema({
@@ -139,5 +140,5 @@ SchedulingSchema.pre('save', function(next) {
 SchedulingSchema.set('toJSON', { virtuals: true });
 SchedulingSchema.set('toObject', { virtuals: true });
 
-module.exports = mongoose.model('Scheduling', SchedulingSchema);
+module.exports = wrapTenantModel(mongoose.model('Scheduling', SchedulingSchema));
 

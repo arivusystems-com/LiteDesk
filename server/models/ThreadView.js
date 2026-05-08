@@ -12,6 +12,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const Schema = mongoose.Schema;
 
 const ThreadViewSchema = new Schema({
@@ -27,4 +28,4 @@ ThreadViewSchema.index({ userId: 1, organizationId: 1, threadId: 1 }, { unique: 
 
 const ThreadView = mongoose.model('ThreadView', ThreadViewSchema);
 
-module.exports = ThreadView;
+module.exports = wrapTenantModel(ThreadView);

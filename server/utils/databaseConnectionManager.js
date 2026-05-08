@@ -292,7 +292,17 @@ class DatabaseConnectionManager {
       console.log(`    ✅ Groups indexes created`);
       
       // ===== MODULE DEFINITIONS INDEXES =====
-      await db.collection('moduledefinitions').createIndex({ organizationId: 1, key: 1 }, { unique: true });
+      // Platform-level docs (organizationId = null) are unique on (appKey, moduleKey).
+      // Tenant overrides (organizationId set) are unique on (organizationId, appKey, moduleKey).
+      // These match the schema-level indexes in models/ModuleDefinition.js.
+      await db.collection('moduledefinitions').createIndex(
+        { appKey: 1, moduleKey: 1 },
+        { unique: true, partialFilterExpression: { organizationId: null } }
+      );
+      await db.collection('moduledefinitions').createIndex(
+        { organizationId: 1, appKey: 1, moduleKey: 1 },
+        { unique: true, partialFilterExpression: { organizationId: { $type: 'objectId' } } }
+      );
       await db.collection('moduledefinitions').createIndex({ organizationId: 1 });
       await db.collection('moduledefinitions').createIndex({ type: 1 });
       console.log(`    ✅ Module Definitions indexes created`);

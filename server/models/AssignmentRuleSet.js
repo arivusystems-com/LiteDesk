@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const {
   ASSIGNMENT_TRIGGER_TYPES,
   ASSIGNMENT_DISTRIBUTION_MODES,
@@ -167,4 +168,4 @@ AssignmentRuleSetSchema.index(
   { unique: true }
 );
 
-module.exports = mongoose.model('AssignmentRuleSet', AssignmentRuleSetSchema);
+module.exports = wrapTenantModel(mongoose.model('AssignmentRuleSet', AssignmentRuleSetSchema));

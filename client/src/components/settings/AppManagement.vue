@@ -152,8 +152,27 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
+import { useAuthStore } from '@/stores/authRegistry';
+import { useAppShellStore } from '@/stores/appShell';
+import { invalidateTenantSchemaCaches } from '@/utils/tenantSchemaApiCache';
 
 const router = useRouter();
+const authStore = useAuthStore();
+const appShellStore = useAppShellStore();
+
+// After enabling/disabling an app the organization.enabledApps snapshot held in
+// authStore is stale, the cached app registry response is stale, and the
+// browser may have a previous /ui/registry response in disk cache. Without a
+// hard refresh of all three, the App Switcher fails to reflect changes.
+async function syncAppEntitlementCaches() {
+  try {
+    appShellStore.invalidateAppRegistryCache();
+    invalidateTenantSchemaCaches();
+    await authStore.refreshUser({ force: true });
+  } catch (err) {
+    console.warn('[AppManagement] Failed to refresh entitlement caches:', err);
+  }
+}
 
 const loading = ref(true);
 const error = ref('');
@@ -295,6 +314,7 @@ const handleEnable = async (app) => {
       await fetchOrganization();
       // Refresh capabilities to get updated seat info
       await fetchCapabilities();
+      await syncAppEntitlementCaches();
     } else {
       error.value = response.message || 'Failed to enable app';
     }
@@ -327,6 +347,7 @@ const handleDisable = async (app) => {
       await fetchOrganization();
       // Refresh capabilities to get updated seat info
       await fetchCapabilities();
+      await syncAppEntitlementCaches();
     } else {
       error.value = response.message || 'Failed to disable app';
     }

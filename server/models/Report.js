@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const Schema = mongoose.Schema;
 
 const ReportSchema = new Schema({
@@ -126,5 +127,5 @@ ReportSchema.index({ organizationId: 1, createdAt: -1 });
 ReportSchema.index({ organizationId: 1, createdBy: 1 });
 ReportSchema.index({ organizationId: 1, reportType: 1 });
 
-module.exports = mongoose.model('Report', ReportSchema);
+module.exports = wrapTenantModel(mongoose.model('Report', ReportSchema));
 

@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { RECORD_SOURCE_VALUES, DEFAULT_RECORD_SOURCE } = require('../constants/recordSource');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const {
   CASE_TYPES,
   CASE_PRIORITIES,
@@ -193,4 +194,4 @@ CaseSchema.statics.CASE_PRIORITIES = CASE_PRIORITIES;
 CaseSchema.statics.CASE_STATUSES = CASE_STATUSES;
 CaseSchema.statics.CASE_CHANNELS = CASE_CHANNELS;
 
-module.exports = mongoose.model('Case', CaseSchema);
+module.exports = wrapTenantModel(mongoose.model('Case', CaseSchema));

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const { Schema } = mongoose;
 
 /**
@@ -90,5 +91,5 @@ notificationSchema.index({ organizationId: 1, createdAt: -1 }); // For time-rang
 notificationSchema.index({ organizationId: 1, channel: 1, createdAt: -1 }); // For channel health
 notificationSchema.index({ organizationId: 1, eventType: 1, createdAt: -1 }); // For event statistics
 
-module.exports = mongoose.model('Notification', notificationSchema);
+module.exports = wrapTenantModel(mongoose.model('Notification', notificationSchema));
 

@@ -14,6 +14,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 
 const LifecycleSchema = new mongoose.Schema({
   // Unique identifier for the lifecycle
@@ -77,4 +78,4 @@ const LifecycleSchema = new mongoose.Schema({
 // Compound index for entityTypeKey + appKey queries
 LifecycleSchema.index({ entityTypeKey: 1, appKey: 1, isActive: 1, order: 1 });
 
-module.exports = mongoose.model('Lifecycle', LifecycleSchema);
+module.exports = wrapTenantModel(mongoose.model('Lifecycle', LifecycleSchema));

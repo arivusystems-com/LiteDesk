@@ -10,6 +10,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 
 const ApprovalInstanceSchema = new mongoose.Schema({
   approvalId: {
@@ -101,4 +102,4 @@ const ApprovalInstanceSchema = new mongoose.Schema({
 ApprovalInstanceSchema.index({ processExecutionId: 1, nodeId: 1 }, { unique: true });
 ApprovalInstanceSchema.index({ status: 1, timeoutAt: 1 });
 
-module.exports = mongoose.model('ApprovalInstance', ApprovalInstanceSchema);
+module.exports = wrapTenantModel(mongoose.model('ApprovalInstance', ApprovalInstanceSchema));

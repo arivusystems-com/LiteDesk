@@ -21,6 +21,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 
 const OrganizationSubscriptionSchema = new mongoose.Schema({
     organizationId: {
@@ -87,5 +88,5 @@ OrganizationSubscriptionSchema.index({ 'apps.appKey': 1 });
 
 const OrganizationSubscription = mongoose.model('OrganizationSubscription', OrganizationSubscriptionSchema);
 
-module.exports = OrganizationSubscription;
+module.exports = wrapTenantModel(OrganizationSubscription);
 

@@ -10,6 +10,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 
 const AutomationExecutionSchema = new mongoose.Schema({
   eventId: {
@@ -58,4 +59,4 @@ const AutomationExecutionSchema = new mongoose.Schema({
 
 AutomationExecutionSchema.index({ eventId: 1, ruleId: 1, actionIndex: 1 }, { unique: true });
 
-module.exports = mongoose.model('AutomationExecution', AutomationExecutionSchema);
+module.exports = wrapTenantModel(mongoose.model('AutomationExecution', AutomationExecutionSchema));

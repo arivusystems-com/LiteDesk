@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 
 const { Schema } = mongoose;
 
@@ -37,4 +38,4 @@ const AssignmentExecutionLogSchema = new Schema(
 
 AssignmentExecutionLogSchema.index({ organizationId: 1, appKey: 1, moduleKey: 1, createdAt: -1 });
 
-module.exports = mongoose.model('AssignmentExecutionLog', AssignmentExecutionLogSchema);
+module.exports = wrapTenantModel(mongoose.model('AssignmentExecutionLog', AssignmentExecutionLogSchema));

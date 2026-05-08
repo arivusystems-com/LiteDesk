@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 const Schema = mongoose.Schema;
 
 const TaskCommentSchema = new Schema({
@@ -68,4 +69,4 @@ const TaskCommentSchema = new Schema({
 TaskCommentSchema.index({ taskId: 1, createdAt: 1 });
 TaskCommentSchema.index({ taskId: 1, parentCommentId: 1, createdAt: 1 });
 
-module.exports = mongoose.model('TaskComment', TaskCommentSchema);
+module.exports = wrapTenantModel(mongoose.model('TaskComment', TaskCommentSchema));

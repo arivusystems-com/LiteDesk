@@ -22,6 +22,7 @@
  */
 
 const mongoose = require('mongoose');
+const { wrapTenantModel } = require('../utils/tenantModelProxy');
 
 const roleSchema = new mongoose.Schema({
     organizationId: {
@@ -425,5 +426,5 @@ roleSchema.statics.createDefaultRoles = async function(organizationId) {
 
 const Role = mongoose.model('Role', roleSchema);
 
-module.exports = Role;
+module.exports = wrapTenantModel(Role);
 

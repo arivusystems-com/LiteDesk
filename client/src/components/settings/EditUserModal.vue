@@ -235,6 +235,12 @@
 import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, watch, computed } from 'vue';
 import apiClient from '@/utils/apiClient';
+import { useAuthStore } from '@/stores/authRegistry';
+import { useAppShellStore } from '@/stores/appShell';
+import { invalidateTenantSchemaCaches } from '@/utils/tenantSchemaApiCache';
+
+const authStore = useAuthStore();
+const appShellStore = useAppShellStore();
 
 const props = defineProps({
   isOpen: Boolean,
@@ -286,6 +292,30 @@ const availableApps = computed(() => {
 
 const selectedApps = computed(() => Object.keys(selectedAppRoles.value));
 
+const resolveRoleIdFromUser = (candidateUser) => {
+  if (!candidateUser) return '';
+
+  const rawRoleId = candidateUser.roleId;
+
+  // Handle populated role docs and mixed payloads from different settings views.
+  if (rawRoleId && typeof rawRoleId === 'object') {
+    if (rawRoleId._id) return String(rawRoleId._id);
+    if (rawRoleId.id) return String(rawRoleId.id);
+  }
+
+  if (typeof rawRoleId === 'string' && rawRoleId.trim()) {
+    return rawRoleId.trim();
+  }
+
+  const legacyRoleName = String(candidateUser.role || '').trim().toLowerCase();
+  if (!legacyRoleName) return '';
+
+  const match = availableRoles.value.find(
+    (role) => String(role.name || '').trim().toLowerCase() === legacyRoleName
+  );
+  return match?._id ? String(match._id) : '';
+};
+
 const fetchRoles = async () => {
   try {
     const response = await apiClient.get('/roles');
@@ -332,7 +362,7 @@ watch(() => props.isOpen, (newVal) => {
     fetchCapabilities();
     // Initialize form when modal opens
     if (props.user) {
-      const roleIdValue = props.user.roleId?._id || props.user.roleId || props.user.role || '';
+      const roleIdValue = resolveRoleIdFromUser(props.user);
       console.log('Setting form.roleId to:', roleIdValue, 'from user:', props.user);
       form.value = {
         roleId: roleIdValue,
@@ -345,8 +375,7 @@ watch(() => props.isOpen, (newVal) => {
 
 watch(() => props.user, (newUser) => {
   if (newUser && props.isOpen) {
-    // Extract roleId._id if roleId is populated, otherwise use roleId directly
-    const roleIdValue = newUser.roleId?._id || newUser.roleId || newUser.role || '';
+    const roleIdValue = resolveRoleIdFromUser(newUser);
     console.log('User changed, updating form.roleId to:', roleIdValue);
     
     form.value = {
@@ -354,6 +383,16 @@ watch(() => props.user, (newUser) => {
       status: newUser.status || 'active'
     };
     initSelectedAppRoles();
+  }
+});
+
+watch(availableRoles, (roles) => {
+  if (!props.isOpen || !props.user || !Array.isArray(roles) || roles.length === 0) return;
+  if (form.value.roleId) return;
+
+  const resolvedRoleId = resolveRoleIdFromUser(props.user);
+  if (resolvedRoleId) {
+    form.value.roleId = resolvedRoleId;
   }
 });
 
@@ -435,7 +474,23 @@ const handleSubmit = async () => {
       if (roleChanged) {
         console.log('User role updated. Changes will be reflected on their next page refresh or within 2 minutes.');
       }
-      
+
+      // If the editor is editing themselves (e.g. an Owner toggling their own
+      // app access), the auth store still holds the pre-edit allowedApps until
+      // we re-fetch. Force a profile refresh + drop registry/sidebar caches so
+      // the App Switcher reflects the new entitlements without a logout.
+      const editingSelf =
+        authStore.user?._id && String(authStore.user._id) === String(props.user?._id);
+      if (editingSelf) {
+        try {
+          appShellStore.invalidateAppRegistryCache();
+          invalidateTenantSchemaCaches();
+          await authStore.refreshUser({ force: true });
+        } catch (refreshErr) {
+          console.warn('[EditUserModal] Self-edit refresh failed:', refreshErr);
+        }
+      }
+
       emit('user-updated');
     } else {
       error.value = response.message || 'Failed to update user';

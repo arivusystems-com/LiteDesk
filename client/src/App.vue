@@ -211,8 +211,12 @@ onMounted(async () => {
   if (authStore.isAuthenticated) {
     const neededMetadata = !appShellStore.isLoaded;
     appLog('Auto-refreshing permissions on page load...');
+    // Always force a profile re-fetch on mount. The 5-min freshness throttle
+    // hides legitimate entitlement changes (app enable/disable, role edits)
+    // when the user lands on the page right after the change.
+    appShellStore.invalidateAppRegistryCache();
     await Promise.all([
-      authStore.refreshUser(),
+      authStore.refreshUser({ force: true }),
       neededMetadata ? appShellStore.loadUIMetadata() : Promise.resolve()
     ]);
     identifyProductUser({
