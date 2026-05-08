@@ -37,4 +37,53 @@ function getAllowedOrigins() {
   ];
 }
 
-module.exports = { getAllowedOrigins, ARIVU_PRODUCTION_ORIGINS, isLocalhostFamilyOrigin, isTenantSubdomainOrigin };
+function originMatchesAllowedPattern(origin, allowedOrigin) {
+  if (!origin || !allowedOrigin) return false;
+  if (allowedOrigin === '*') return true;
+  if (!allowedOrigin.includes('*')) return origin === allowedOrigin;
+
+  try {
+    const parsedOrigin = new URL(origin);
+    const parsedAllowed = new URL(allowedOrigin);
+
+    if (parsedAllowed.protocol !== parsedOrigin.protocol) return false;
+    if (parsedAllowed.port && parsedAllowed.port !== parsedOrigin.port) return false;
+
+    const allowedHost = parsedAllowed.hostname.toLowerCase();
+    const originHost = parsedOrigin.hostname.toLowerCase();
+
+    if (!allowedHost.startsWith('*.')) return false;
+
+    const baseHost = allowedHost.slice(2);
+    return originHost !== baseHost && originHost.endsWith(`.${baseHost}`);
+  } catch (_error) {
+    return false;
+  }
+}
+
+function isAllowedCorsOrigin(origin, { allowLocalhost = false, allowTenantSubdomains = false } = {}) {
+  const allowedOrigins = getAllowedOrigins();
+
+  if (allowedOrigins.some((allowedOrigin) => originMatchesAllowedPattern(origin, allowedOrigin))) {
+    return true;
+  }
+
+  if (allowLocalhost && isLocalhostFamilyOrigin(origin)) {
+    return true;
+  }
+
+  if (allowTenantSubdomains && isTenantSubdomainOrigin(origin)) {
+    return true;
+  }
+
+  return false;
+}
+
+module.exports = {
+  getAllowedOrigins,
+  ARIVU_PRODUCTION_ORIGINS,
+  isLocalhostFamilyOrigin,
+  isTenantSubdomainOrigin,
+  originMatchesAllowedPattern,
+  isAllowedCorsOrigin
+};
