@@ -33,6 +33,17 @@ export function installFetchApiBase() {
     }
     return orig(input, init)
   }
+
+  if (navigator.sendBeacon) {
+    const origSendBeacon = navigator.sendBeacon.bind(navigator)
+    navigator.sendBeacon = (url: string | URL, data?: BodyInit | null) => {
+      const urlStr = typeof url === 'string' ? url : url.toString()
+      if (shouldRewrite(urlStr)) {
+        return origSendBeacon(base + urlStr, data)
+      }
+      return origSendBeacon(url, data)
+    }
+  }
 }
 
 /**
