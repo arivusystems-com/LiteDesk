@@ -1,9 +1,27 @@
+function getTenantApiOriginFromLocation(): string {
+  if (typeof window === 'undefined') return ''
+
+  const hostname = window.location.hostname.toLowerCase()
+  const match = hostname.match(/^([a-z0-9-]+)\.app\.(.+)$/)
+  if (!match) return ''
+
+  const [, slug, baseDomain] = match
+  if (!slug || !baseDomain) return ''
+
+  return `${window.location.protocol}//${slug}.api.${baseDomain}`
+}
+
 /**
  * Public API / backend origin for production (optional).
+ * - Tenant app hosts (`https://<slug>.app.example.com`) resolve to
+ *   `https://<slug>.api.example.com`.
  * - Empty: same-origin requests (Vercel rewrites to Railway, or local Vite proxy).
  * - Set VITE_API_ORIGIN to your API base (e.g. https://api.arivusystems.com) when the SPA and API are on different origins.
  */
 export function getApiOrigin(): string {
+  const tenantApiOrigin = getTenantApiOriginFromLocation()
+  if (tenantApiOrigin) return tenantApiOrigin
+
   const explicitOrigin = (import.meta.env.VITE_API_ORIGIN as string | undefined)?.replace(/\/$/, '')
   if (explicitOrigin) return explicitOrigin
 
