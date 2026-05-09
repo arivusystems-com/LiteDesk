@@ -11,6 +11,9 @@ router.use(organizationIsolation);
 router.post('/email', controller.sendEmail);
 router.get('/pipeline-metrics', controller.getPipelineMetrics);
 router.get('/pipeline-diagnostics', controller.getPipelineDiagnostics);
+router.get('/inbound/diagnostics', controller.getInboundDiagnostics);
+router.get('/inbound/dead-letter', controller.listInboundDeadLetters);
+router.post('/inbound/dead-letter/:id/replay', controller.replayInboundDeadLetter);
 router.get('/suppressions/stats', controller.getSuppressionStats);
 router.get('/suppressions', controller.getSuppressions);
 router.delete('/suppressions/:email', controller.removeSuppression);
@@ -19,7 +22,11 @@ router.post('/webhook-test/simulate', controller.simulateWebhookEvent);
 router.get('/threads', controller.getThreads);
 router.get('/templates', controller.getTemplates);
 router.patch('/threads/:threadId/view', controller.markThreadViewed);
+router.patch('/threads/:threadId/done', controller.markThreadDone);
+router.patch('/threads/:threadId/assign', controller.assignThreadOwner);
+router.patch('/threads/:threadId/tags', controller.updateThreadTags);
 router.post('/:communicationId/create-task', controller.createTaskFromEmail);
+router.post('/:communicationId/create-case', controller.createCaseFromEmail);
 
 router.post('/upload', uploadSingle('file'), (req, res) => {
   try {

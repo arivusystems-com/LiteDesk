@@ -928,6 +928,10 @@
             :activity-filter-comments="activityFilterComments"
             :activity-filter-updates="activityFilterUpdates"
             :activity-filter-email="activityFilterEmail"
+            :activity-filter-done-threads="activityFilterDoneThreads"
+            :activity-filter-assigned-to-me="activityFilterAssignedToMe"
+            :activity-filter-tagged="activityFilterTagged"
+            :activity-filter-untagged="activityFilterUntagged"
             :new-comment-text="newCommentText"
             :notification-count="task?.notificationCount || 0"
             :show-notifications="true"
@@ -939,6 +943,10 @@
             @update:activityFilterComments="activityFilterComments = $event"
             @update:activityFilterUpdates="activityFilterUpdates = $event"
             @update:activityFilterEmail="activityFilterEmail = $event"
+            @update:activityFilterDoneThreads="activityFilterDoneThreads = $event"
+            @update:activityFilterAssignedToMe="activityFilterAssignedToMe = $event"
+            @update:activityFilterTagged="activityFilterTagged = $event"
+            @update:activityFilterUntagged="activityFilterUntagged = $event"
             @update:newCommentText="newCommentText = $event"
           />
         </template>
@@ -1462,7 +1470,8 @@
     :is-open="showEmailModal"
     :related-to="{ moduleKey: 'tasks', recordId: String(task._id) }"
     :initial-to="assigneeEmail || ''"
-    @close="showEmailModal = false"
+    :initial-draft="emailComposeDraft"
+    @close="showEmailModal = false; emailComposeDraft = null"
     @submit="handleEmailSubmit"
   />
 
@@ -1602,6 +1611,7 @@ import apiClient from '@/utils/apiClient';
 import { openDatePicker } from '@/utils/dateUtils';
 import { useAuthStore } from '@/stores/authRegistry';
 import { useTabs } from '@/composables/useTabs';
+import { useNotifications } from '@/composables/useNotifications';
 import { 
   TASK_FIELD_METADATA, 
   getCoreTaskFields,
@@ -1611,6 +1621,7 @@ import {
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+const notifications = useNotifications();
 const { openTab, replaceActiveTab, activeTabId, updateTabTitle, findTabById } = useTabs();
 const recordLayoutIsMobile = inject('recordLayoutIsMobile', ref(false));
 const quickPreviewNav = inject('quickPreviewNav', null);
@@ -1642,6 +1653,7 @@ const taskNavigationIds = ref([]);
 const { loading, error, runWithLoading } = useRecordLoading();
 const showEditDrawer = ref(false);
 const showEmailModal = ref(false);
+const emailComposeDraft = ref(null);
 const taskEvents = ref([]);
 const taskDeals = ref([]);
 const taskForms = ref([]);
@@ -1722,17 +1734,25 @@ function loadActivityFilter() {
         return {
           comments: parsed.comments,
           updates: parsed.updates,
-          email: typeof parsed?.email === 'boolean' ? parsed.email : true
+          email: typeof parsed?.email === 'boolean' ? parsed.email : true,
+          doneThreads: typeof parsed?.doneThreads === 'boolean' ? parsed.doneThreads : false,
+          assignedToMe: typeof parsed?.assignedToMe === 'boolean' ? parsed.assignedToMe : false,
+          tagged: typeof parsed?.tagged === 'boolean' ? parsed.tagged : false,
+          untagged: typeof parsed?.untagged === 'boolean' ? parsed.untagged : false
         };
       }
     }
   } catch (_) {}
-  return { comments: true, updates: true, email: true };
+  return { comments: true, updates: true, email: true, doneThreads: false, assignedToMe: false, tagged: false, untagged: false };
 }
 const savedFilter = loadActivityFilter();
 const activityFilterComments = ref(savedFilter.comments);
 const activityFilterUpdates = ref(savedFilter.updates);
 const activityFilterEmail = ref(savedFilter.email);
+const activityFilterDoneThreads = ref(savedFilter.doneThreads);
+const activityFilterAssignedToMe = ref(savedFilter.assignedToMe);
+const activityFilterTagged = ref(savedFilter.tagged);
+const activityFilterUntagged = ref(savedFilter.untagged);
 const newCommentText = ref('');
 const activeThreadRootCommentId = ref(null);
 const editingCommentId = ref(null);
@@ -2857,18 +2877,24 @@ const enrichRelatedRecords = async (moduleKey, rows) => {
 // Combined activity events (comments + timeline + email threads) sorted chronologically (oldest first, newest at bottom)
 const combinedActivityEvents = computed(() => {
   const allEvents = [];
-  const emailSentIds = new Set(); // communicationIds we'll replace with thread entries
+  const threadedCommunicationIds = new Set(
+    (emailThreads.value || [])
+      .flatMap((thread) => (thread.messages || []).map((msg) => String(msg?._id || '')))
+      .filter(Boolean)
+  );
 
   for (const ev of activityEvents.value) {
     if (ev.type === 'system' && ev.action === 'email_sent' && ev.details?.communicationId) {
-      emailSentIds.add(String(ev.details.communicationId));
-      continue; // Skip standalone email_sent; we show threads instead
+      const commId = String(ev.details.communicationId || '');
+      if (commId && threadedCommunicationIds.has(commId)) {
+        continue; // Skip when this message is represented by a thread entry
+      }
     }
     allEvents.push(ev);
   }
 
   // Add email thread entries
-  for (const thread of emailThreads.value || []) {
+  for (const thread of (emailThreads.value || [])) {
     allEvents.push(normalizeEmailThreadActivityEvent({
       ...thread,
       recordRef: {
@@ -3022,9 +3048,9 @@ const activityTimelineEvents = computed(() => {
 });
 
 // Persist activity filter so it survives reload
-watch([activityFilterComments, activityFilterUpdates, activityFilterEmail], ([comments, updates, email]) => {
+watch([activityFilterComments, activityFilterUpdates, activityFilterEmail, activityFilterDoneThreads, activityFilterAssignedToMe, activityFilterTagged, activityFilterUntagged], ([comments, updates, email, doneThreads, assignedToMe, tagged, untagged]) => {
   try {
-    localStorage.setItem(ACTIVITY_FILTER_STORAGE_KEY, JSON.stringify({ comments, updates, email }));
+    localStorage.setItem(ACTIVITY_FILTER_STORAGE_KEY, JSON.stringify({ comments, updates, email, doneThreads, assignedToMe, tagged, untagged }));
   } catch (_) {}
 });
 
@@ -3450,7 +3476,7 @@ const fetchActivityEvents = async () => {
   // Fetch email threads for this task
   try {
     const threadsRes = await apiClient.get('/communications/threads', {
-      params: { moduleKey: 'tasks', recordId: task.value._id }
+      params: { moduleKey: 'tasks', recordId: task.value._id, includeDone: true }
     });
     if (threadsRes?.success && threadsRes.data?.threads?.length) {
       emailThreads.value = threadsRes.data.threads;
@@ -5366,6 +5392,7 @@ const handleTaskEditSaved = async () => {
 
 const handleEmailSubmit = async (payload) => {
   showEmailModal.value = false;
+  emailComposeDraft.value = null;
   try {
     const res = await apiClient.post('/communications/email', payload);
     if (res.success) {
@@ -5376,6 +5403,27 @@ const handleEmailSubmit = async (payload) => {
   } catch (err) {
     const msg = err.response?.data?.error || err.response?.data?.message || err.message;
     alert(msg || 'Failed to send email');
+  }
+};
+
+const handleReplyToEmailMessage = (payload) => {
+  emailComposeDraft.value = payload && typeof payload === 'object' ? payload : null;
+  showEmailModal.value = true;
+};
+
+const handleToggleThreadDone = async ({ threadId, done }) => {
+  if (!threadId) return;
+  try {
+    const res = await apiClient.patch(`/communications/threads/${encodeURIComponent(threadId)}/done`, { done });
+    const doneValue = done !== false && Boolean(res?.data?.done ?? done);
+    emailThreads.value = (emailThreads.value || []).map((thread) =>
+      thread.threadId === threadId
+        ? { ...thread, done: doneValue, doneAt: doneValue ? (res?.data?.doneAt || new Date().toISOString()) : null, unread: doneValue ? false : thread.unread }
+        : thread
+    );
+    notifications.success(doneValue ? 'Thread marked done' : 'Thread reopened');
+  } catch (err) {
+    notifications.error(err?.response?.data?.message || err?.message || 'Failed to update thread status');
   }
 };
 
@@ -5413,7 +5461,90 @@ const createTaskFromEmailMessage = async (msg) => {
       window.open(`/tasks/${res.data.taskId}`, '_blank');
     }
   } catch (err) {
-    alert(err.response?.data?.message || err.message || 'Failed to create task');
+    notifications.error(err.response?.data?.message || err.message || 'Failed to create task');
+  }
+};
+
+const createCaseFromEmailMessage = async (msg) => {
+  if (!msg?._id) return;
+  try {
+    const res = await apiClient.post(`/communications/${msg._id}/create-case`, {});
+    if (res?.success && res?.data?.caseRecordId) {
+      window.open(`/helpdesk/cases/${res.data.caseRecordId}`, '_blank');
+    }
+  } catch (err) {
+    notifications.error(err.response?.data?.message || err.message || 'Failed to create case');
+  }
+};
+
+const assignEmailThread = async ({ threadId, assignedToUserId }) => {
+  if (!threadId) return;
+  try {
+    const res = await apiClient.patch(`/communications/threads/${encodeURIComponent(threadId)}/assign`, {
+      assignedToUserId: assignedToUserId || null
+    });
+    const nextAssignee = res?.data?.data?.assignedToUserId ?? assignedToUserId ?? null;
+    const meId = authStore.user?._id || authStore.user?.id;
+    const meLabel = `${authStore.user?.firstName || ''} ${authStore.user?.lastName || ''}`.trim() || authStore.user?.username || authStore.user?.email || null;
+    emailThreads.value = (emailThreads.value || []).map((thread) => {
+      if (thread.threadId !== threadId) return thread;
+      const isMe = nextAssignee && meId && String(nextAssignee) === String(meId);
+      return { ...thread, assignedToUserId: nextAssignee, assignedToDisplay: isMe ? meLabel : (thread.assignedToDisplay || null) };
+    });
+    notifications.success(nextAssignee ? 'Thread assigned' : 'Thread unassigned');
+  } catch (err) {
+    notifications.error(err.response?.data?.message || err.message || 'Failed to assign thread');
+  }
+};
+
+const unassignEmailThread = async ({ threadId }) => {
+  if (!threadId) return;
+  try {
+    const res = await apiClient.patch(`/communications/threads/${encodeURIComponent(threadId)}/assign`, {
+      assignedToUserId: null
+    });
+    const nextAssignee = res?.data?.data?.assignedToUserId ?? null;
+    emailThreads.value = (emailThreads.value || []).map((thread) => (
+      thread.threadId === threadId ? { ...thread, assignedToUserId: nextAssignee, assignedToDisplay: null } : thread
+    ));
+    notifications.success('Thread unassigned');
+  } catch (err) {
+    notifications.error(err.response?.data?.message || err.message || 'Failed to unassign thread');
+  }
+};
+
+const addTagToEmailThread = async ({ threadId, tag }) => {
+  if (!threadId) return;
+  if (!tag || !String(tag).trim()) return;
+  try {
+    const res = await apiClient.patch(`/communications/threads/${encodeURIComponent(threadId)}/tags`, {
+      action: 'add',
+      tag
+    });
+    const nextTags = Array.isArray(res?.data?.data?.tags) ? res.data.data.tags : [];
+    emailThreads.value = (emailThreads.value || []).map((thread) => (
+      thread.threadId === threadId ? { ...thread, tags: nextTags } : thread
+    ));
+    notifications.success('Tag added');
+  } catch (err) {
+    notifications.error(err.response?.data?.message || err.message || 'Failed to add tag');
+  }
+};
+
+const removeTagFromEmailThread = async ({ threadId, tag }) => {
+  if (!threadId || !tag) return;
+  try {
+    const res = await apiClient.patch(`/communications/threads/${encodeURIComponent(threadId)}/tags`, {
+      action: 'remove',
+      tag
+    });
+    const nextTags = Array.isArray(res?.data?.data?.tags) ? res.data.data.tags : [];
+    emailThreads.value = (emailThreads.value || []).map((thread) => (
+      thread.threadId === threadId ? { ...thread, tags: nextTags } : thread
+    ));
+    notifications.success('Tag removed');
+  } catch (err) {
+    notifications.error(err.response?.data?.message || err.message || 'Failed to remove tag');
   }
 };
 
@@ -5598,6 +5729,13 @@ const taskActivityUi = createTaskActivityUi({
   handleShowMore,
   toggleTaskEmailThread,
   createTaskFromEmailMessage,
+  createCaseFromEmailMessage,
+  assignEmailThread,
+  unassignEmailThread,
+  addTagToEmailThread,
+  removeTagFromEmailThread,
+  handleReplyToEmailMessage,
+  handleToggleThreadDone,
   getTagChipClass: getTaskTagChipClass
 });
 </script>

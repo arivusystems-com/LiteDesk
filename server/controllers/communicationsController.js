@@ -14,6 +14,7 @@ const path = require('path');
 const fs = require('fs');
 const Communication = require('../models/Communication');
 const CommunicationEvent = require('../models/CommunicationEvent');
+const CommunicationThreadMeta = require('../models/CommunicationThreadMeta');
 const { uploadsDir } = require('../middleware/uploadMiddleware');
 const ThreadView = require('../models/ThreadView');
 const People = require('../models/People');
@@ -24,6 +25,9 @@ const Case = require('../models/Case');
 const User = require('../models/User');
 const replyToTokenService = require('../services/replyToTokenService');
 const { MAX_ATTACHMENT_SIZE_BYTES, MAX_TOTAL_ATTACHMENTS_BYTES } = require('../models/Communication');
+const { createInitialSlaCycle } = require('../services/caseLifecycleService');
+const { applySlaTargetsToCycle } = require('../services/helpdeskSlaService');
+const caseExecutionService = require('../services/caseExecutionService');
 const communicationPlatformService = require('../platform/communication/api/communicationPlatformService');
 const emailProviderGateway = require('../platform/communication/providers/emailProviderGateway');
 const emailQueueService = require('../services/emailQueueService');
@@ -34,6 +38,8 @@ const {
   unsuppressAddress,
   getSuppressionStats
 } = require('../services/emailSuppressionService');
+const inboundEmailQueueService = require('../services/inboundEmailQueueService');
+const InboundDeadLetter = require('../models/InboundDeadLetter');
 const { getCommunicationConfigForOrganization } = require('../platform/communication/config/communicationConfigService');
 const { classifyCommunicationFailure } = require('../platform/communication/domain/failureTaxonomy');
 const {
@@ -77,6 +83,81 @@ function resolveSafeReplyToAddress(value) {
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailPattern.test(raw)) return undefined;
   return raw;
+}
+
+function normalizeThreadTag(value) {
+  const tag = String(value || '').trim().toLowerCase();
+  if (!tag) return '';
+  return tag.replace(/\s+/g, '-').slice(0, 40);
+}
+
+async function appendThreadAuditLog({ organizationId, user, action, details }) {
+  try {
+    const organization = await Organization.findById(organizationId);
+    if (!organization) return;
+    const entry = {
+      user: user?.username || user?.email || 'Unknown',
+      userId: user?._id || null,
+      action,
+      details: details || {},
+      timestamp: new Date()
+    };
+    if (!Array.isArray(organization.activityLogs)) {
+      organization.activityLogs = [];
+    }
+    organization.activityLogs.push(entry);
+    organization.markModified('activityLogs');
+    await organization.save();
+  } catch (err) {
+    console.error('[communicationsController] appendThreadAuditLog error:', err.message);
+  }
+}
+
+function computeThreadTriageHints(sortedMessages, { unread }) {
+  const nowMs = Date.now();
+  const inbound = sortedMessages.filter((m) => m.direction === 'inbound');
+  const lastInbound = inbound.length > 0 ? inbound[inbound.length - 1] : null;
+  const lastInboundAtRaw = lastInbound?.receivedAt || lastInbound?.createdAt || null;
+  const lastInboundAt = lastInboundAtRaw ? new Date(lastInboundAtRaw) : null;
+  const ageHours = lastInboundAt ? (nowMs - lastInboundAt.getTime()) / (1000 * 60 * 60) : null;
+
+  const hasBounce = sortedMessages.some((m) => String(m.status || '').toLowerCase() === 'bounced');
+  const hasComplaint = sortedMessages.some((m) => String(m.status || '').toLowerCase() === 'complained');
+  const latestOutbound = [...sortedMessages].reverse().find((m) => m.direction === 'outbound');
+  const latestOutboundStatus = String(latestOutbound?.status || '').toLowerCase();
+  const hasUnresolvedSendFailure = latestOutbound && ['failed', 'undelivered'].includes(latestOutboundStatus);
+
+  const riskFlags = [];
+  if (hasBounce) riskFlags.push('has_bounce');
+  if (hasComplaint) riskFlags.push('has_complaint');
+  if (hasUnresolvedSendFailure) riskFlags.push('send_failure');
+
+  let priorityHint = 'low';
+  let slaHint = 'on_track';
+  if (unread && ageHours != null && ageHours >= 24) {
+    priorityHint = 'high';
+    slaHint = 'overdue';
+  } else if (unread && ageHours != null && ageHours >= 8) {
+    priorityHint = 'medium';
+    slaHint = 'reply_due_soon';
+  } else if (unread && ageHours != null && ageHours >= 2) {
+    priorityHint = 'medium';
+    slaHint = 'on_track';
+  }
+
+  if (hasBounce || hasComplaint) {
+    priorityHint = 'high';
+    if (slaHint === 'on_track') slaHint = 'reply_due_soon';
+  } else if (hasUnresolvedSendFailure && priorityHint === 'low') {
+    priorityHint = 'medium';
+  }
+
+  return {
+    priorityHint,
+    slaHint,
+    riskFlags,
+    lastInboundAt: lastInboundAt || null
+  };
 }
 
 /**
@@ -502,6 +583,7 @@ exports.sendEmail = async (req, res) => {
 exports.getThreads = async (req, res) => {
   try {
     const { moduleKey, recordId } = req.query;
+    const includeDone = String(req.query.includeDone || '').toLowerCase() === 'true';
     const orgId = req.user.organizationId;
 
     if (!moduleKey || !recordId) {
@@ -567,14 +649,49 @@ exports.getThreads = async (req, res) => {
 
     const threadIds = Array.from(byThread.keys());
     const viewMap = new Map();
+    const metaMap = new Map();
+    const assigneeMap = new Map();
     if (threadIds.length > 0) {
-      const views = await ThreadView.find({
-        userId: req.user._id,
-        organizationId: orgId,
-        threadId: { $in: threadIds }
-      }).lean();
+      const [views, metas] = await Promise.all([
+        ThreadView.find({
+          userId: req.user._id,
+          organizationId: orgId,
+          threadId: { $in: threadIds }
+        }).lean(),
+        CommunicationThreadMeta.find({
+          organizationId: orgId,
+          threadId: { $in: threadIds }
+        }).select('threadId assignedToUserId tags').lean()
+      ]);
       for (const v of views) {
-        viewMap.set(String(v.threadId), v.lastViewedAt);
+        viewMap.set(String(v.threadId), {
+          lastViewedAt: v.lastViewedAt,
+          doneAt: v.doneAt || null
+        });
+      }
+      for (const m of metas) {
+        metaMap.set(String(m.threadId), {
+          assignedToUserId: m.assignedToUserId || null,
+          tags: Array.isArray(m.tags) ? m.tags : []
+        });
+      }
+      const assigneeIds = [...new Set(
+        metas
+          .map((m) => (m?.assignedToUserId ? String(m.assignedToUserId) : ''))
+          .filter(Boolean)
+      )];
+      if (assigneeIds.length > 0) {
+        const assignees = await User.find({
+          _id: { $in: assigneeIds },
+          organizationId: orgId
+        }).select('_id firstName lastName username email').lean();
+        for (const user of assignees) {
+          const display = [user.firstName, user.lastName].filter(Boolean).join(' ').trim()
+            || user.username
+            || user.email
+            || 'Unknown';
+          assigneeMap.set(String(user._id), display);
+        }
       }
     }
 
@@ -613,10 +730,17 @@ exports.getThreads = async (req, res) => {
             ? `${otherLabel} ↔ You`
             : `You ↔ ${otherLabel}`;
 
-      const lastViewedAt = viewMap.get(threadId) ? new Date(viewMap.get(threadId)) : null;
-      const unread = lastDir === 'inbound' && lastViewedAt === null
-        ? true
-        : lastDir === 'inbound' && lastViewedAt && new Date(lastActivityAt) > lastViewedAt;
+      const threadState = viewMap.get(threadId) || null;
+      const lastViewedAt = threadState?.lastViewedAt ? new Date(threadState.lastViewedAt) : null;
+      const doneAt = threadState?.doneAt ? new Date(threadState.doneAt) : null;
+      const done = Boolean(doneAt);
+      const unread = done
+        ? false
+        : (lastDir === 'inbound' && lastViewedAt === null
+          ? true
+          : lastDir === 'inbound' && lastViewedAt && new Date(lastActivityAt) > lastViewedAt);
+      const triage = computeThreadTriageHints(sorted, { unread });
+      const threadMeta = metaMap.get(threadId) || { assignedToUserId: null, tags: [] };
 
       return {
         threadId,
@@ -627,7 +751,15 @@ exports.getThreads = async (req, res) => {
         firstActivityAt,
         lastActivityAt,
         lastViewedAt: lastViewedAt || null,
+        done,
+        doneAt: doneAt || null,
         unread,
+        triage,
+        assignedToUserId: threadMeta.assignedToUserId,
+        assignedToDisplay: threadMeta.assignedToUserId
+          ? assigneeMap.get(String(threadMeta.assignedToUserId)) || null
+          : null,
+        tags: threadMeta.tags,
         messages: sorted.map((m) => ({
           _id: m._id,
           direction: m.direction,
@@ -643,17 +775,180 @@ exports.getThreads = async (req, res) => {
       };
     });
 
-    threads.sort((a, b) => new Date(b.lastActivityAt || b.firstActivityAt) - new Date(a.lastActivityAt || a.firstActivityAt));
+    const visibleThreads = includeDone ? threads : threads.filter((t) => !t.done);
+    visibleThreads.sort((a, b) => new Date(b.lastActivityAt || b.firstActivityAt) - new Date(a.lastActivityAt || a.firstActivityAt));
 
     return res.json({
       success: true,
-      data: { threads }
+      data: { threads: visibleThreads }
     });
   } catch (err) {
     console.error('[communicationsController] getThreads error:', err);
     return res.status(500).json({
       success: false,
       message: 'Failed to load threads',
+      error: err.message
+    });
+  }
+};
+
+/**
+ * PATCH /api/communications/threads/:threadId/assign
+ * Assign or unassign thread owner.
+ */
+exports.assignThreadOwner = async (req, res) => {
+  try {
+    const { threadId } = req.params;
+    const orgId = req.user.organizationId;
+    const rawAssignee = req.body?.assignedToUserId;
+    const assignedToUserId = rawAssignee === null || rawAssignee === ''
+      ? null
+      : (rawAssignee || req.user._id);
+
+    if (!threadId) {
+      return res.status(400).json({ success: false, message: 'threadId is required' });
+    }
+
+    if (assignedToUserId) {
+      const exists = await User.findOne({ _id: assignedToUserId, organizationId: orgId }).select('_id').lean();
+      if (!exists) {
+        return res.status(400).json({ success: false, message: 'Invalid assignee for this workspace' });
+      }
+    }
+
+    const meta = await CommunicationThreadMeta.findOneAndUpdate(
+      { organizationId: orgId, threadId },
+      { $set: { assignedToUserId: assignedToUserId || null, updatedBy: req.user._id } },
+      { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+    ).lean();
+
+    await appendThreadAuditLog({
+      organizationId: orgId,
+      user: req.user,
+      action: 'communication_thread_assigned',
+      details: {
+        threadId,
+        assignedToUserId: meta?.assignedToUserId || null
+      }
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        threadId,
+        assignedToUserId: meta?.assignedToUserId || null
+      }
+    });
+  } catch (err) {
+    console.error('[communicationsController] assignThreadOwner error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to assign thread owner',
+      error: err.message
+    });
+  }
+};
+
+/**
+ * PATCH /api/communications/threads/:threadId/tags
+ * Add or remove thread tags.
+ */
+exports.updateThreadTags = async (req, res) => {
+  try {
+    const { threadId } = req.params;
+    const orgId = req.user.organizationId;
+    const action = String(req.body?.action || 'add').toLowerCase();
+    const normalizedTag = normalizeThreadTag(req.body?.tag);
+
+    if (!threadId) {
+      return res.status(400).json({ success: false, message: 'threadId is required' });
+    }
+    if (!normalizedTag) {
+      return res.status(400).json({ success: false, message: 'Valid tag is required' });
+    }
+    if (!['add', 'remove'].includes(action)) {
+      return res.status(400).json({ success: false, message: 'action must be add or remove' });
+    }
+
+    const update = action === 'remove'
+      ? { $pull: { tags: normalizedTag }, $set: { updatedBy: req.user._id } }
+      : { $addToSet: { tags: normalizedTag }, $set: { updatedBy: req.user._id } };
+
+    const meta = await CommunicationThreadMeta.findOneAndUpdate(
+      { organizationId: orgId, threadId },
+      update,
+      { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+    ).lean();
+
+    await appendThreadAuditLog({
+      organizationId: orgId,
+      user: req.user,
+      action: action === 'remove' ? 'communication_thread_tag_removed' : 'communication_thread_tag_added',
+      details: {
+        threadId,
+        tag: normalizedTag
+      }
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        threadId,
+        tags: Array.isArray(meta?.tags) ? meta.tags : []
+      }
+    });
+  } catch (err) {
+    console.error('[communicationsController] updateThreadTags error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update thread tags',
+      error: err.message
+    });
+  }
+};
+
+/**
+ * PATCH /api/communications/threads/:threadId/done
+ * Marks a thread as done/undone for current user.
+ */
+exports.markThreadDone = async (req, res) => {
+  try {
+    const { threadId } = req.params;
+    const orgId = req.user.organizationId;
+    const done = req.body?.done !== false;
+
+    if (!threadId) {
+      return res.status(400).json({ success: false, message: 'threadId is required' });
+    }
+
+    const now = new Date();
+    const update = done
+      ? { $set: { doneAt: now, lastViewedAt: now } }
+      : { $set: { doneAt: null } };
+
+    const threadView = await ThreadView.findOneAndUpdate(
+      {
+        userId: req.user._id,
+        organizationId: orgId,
+        threadId
+      },
+      update,
+      { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+    ).lean();
+
+    return res.json({
+      success: true,
+      data: {
+        threadId,
+        done: Boolean(threadView?.doneAt),
+        doneAt: threadView?.doneAt || null
+      }
+    });
+  } catch (err) {
+    console.error('[communicationsController] markThreadDone error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update thread status',
       error: err.message
     });
   }
@@ -791,6 +1086,102 @@ exports.createTaskFromEmail = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to create task',
+      error: err.message
+    });
+  }
+};
+
+/**
+ * POST /api/communications/:communicationId/create-case
+ * Create a helpdesk case from an email.
+ */
+exports.createCaseFromEmail = async (req, res) => {
+  try {
+    const { communicationId } = req.params;
+    const orgId = req.user.organizationId;
+
+    const comm = await Communication.findOne({
+      _id: communicationId,
+      organizationId: orgId
+    }).lean();
+
+    if (!comm) {
+      return res.status(404).json({ success: false, message: 'Communication not found' });
+    }
+
+    const title = (comm.subject || 'Email support case').trim().slice(0, 240);
+    const body = (comm.body || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const notes = body
+      ? `Created from email:\n\nFrom: ${comm.fromAddress || ''}\nTo: ${(comm.toAddresses || []).join(', ')}\n\n${body}`
+      : `Created from email: ${comm.subject || ''}`;
+    const now = new Date();
+    const actorName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.email || 'System';
+
+    const cycle = createInitialSlaCycle(1, now);
+    const slaCycle = await applySlaTargetsToCycle({
+      organizationId: orgId,
+      cycle,
+      context: {
+        caseType: 'Support Ticket',
+        priority: 'Medium',
+        channel: 'Email'
+      },
+      startedAt: cycle.startedAt
+    });
+
+    const caseId = `CAS-${now.getUTCFullYear()}-${String(Date.now()).slice(-6)}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const payload = {
+      organizationId: orgId,
+      caseId,
+      title: title ? `Email: ${title}` : 'Email support case',
+      caseType: 'Support Ticket',
+      priority: 'Medium',
+      status: 'New',
+      channel: 'Email',
+      caseNotes: notes,
+      caseOwnerId: req.user._id,
+      currentSlaCycle: slaCycle,
+      activities: [
+        {
+          activityType: 'case_created',
+          message: 'Case created from email',
+          internal: true,
+          metadata: { sourceCommunicationId: comm._id },
+          actorId: req.user._id,
+          actorName,
+          createdAt: now
+        }
+      ],
+      createdBy: req.user._id,
+      updatedBy: req.user._id
+    };
+    if (comm.relatedTo?.moduleKey === 'people') {
+      payload.contactId = comm.relatedTo.recordId;
+    } else if (comm.relatedTo?.moduleKey === 'organizations') {
+      payload.organizationRefId = comm.relatedTo.recordId;
+    }
+
+    const { assignResolvedSource } = require('../services/sourceResolver');
+    assignResolvedSource(payload, 'email');
+    const createdCase = await Case.create(payload);
+    await caseExecutionService.onCaseCreated({
+      caseRecord: createdCase,
+      actorId: req.user._id
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        caseId: createdCase.caseId,
+        caseRecordId: createdCase._id,
+        case: createdCase
+      }
+    });
+  } catch (err) {
+    console.error('[communicationsController] createCaseFromEmail error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to create case',
       error: err.message
     });
   }
@@ -1203,6 +1594,214 @@ exports.removeSuppression = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to remove suppression',
+      error: error.message
+    });
+  }
+};
+
+const INBOUND_LIFECYCLE_EVENTS = [
+  'inbound_received',
+  'inbound_queued',
+  'inbound_parsed',
+  'inbound_threaded',
+  'inbound_routed',
+  'inbound_failed',
+  'inbound_replayed'
+];
+
+/**
+ * GET /api/communications/inbound/diagnostics
+ * Phase 3 inbound observability: queue stats, recent lifecycle events,
+ * thread-strategy breakdown, dead-letter counts.
+ */
+exports.getInboundDiagnostics = async (req, res) => {
+  try {
+    const organizationId = req.user.organizationId;
+    const limitRaw = Number(req.query.limit);
+    const limit = Number.isFinite(limitRaw) ? Math.min(100, Math.max(10, Math.floor(limitRaw))) : 30;
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const [queueStats, recentEvents, strategyBreakdown, deadLetterCount, recentDeadLetters] = await Promise.all([
+      inboundEmailQueueService.getQueueStats(),
+      CommunicationEvent.find({
+        organizationId,
+        eventType: { $in: INBOUND_LIFECYCLE_EVENTS },
+        createdAt: { $gte: since }
+      })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .select('communicationId eventType source payload createdAt')
+        .lean(),
+      CommunicationEvent.aggregate([
+        {
+          $match: {
+            organizationId,
+            eventType: 'inbound_threaded',
+            createdAt: { $gte: since }
+          }
+        },
+        {
+          $group: {
+            _id: { $ifNull: ['$payload.strategy', 'unknown'] },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { count: -1 } }
+      ]),
+      InboundDeadLetter.countDocuments({
+        organizationId,
+        resolvedAt: null
+      }),
+      InboundDeadLetter.find({ organizationId, resolvedAt: null })
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .select('stage reason error parsedSummary replayCount lastReplayAt createdAt')
+        .lean()
+    ]);
+
+    return res.json({
+      success: true,
+      data: {
+        window: '24h',
+        queue: {
+          ...queueStats,
+          retryProfile: inboundEmailQueueService.COMMUNICATION_INBOUND_RETRY_PROFILES.EMAIL_INBOUND
+        },
+        recentEvents,
+        threadStrategyBreakdown: strategyBreakdown.map((row) => ({
+          strategy: row._id,
+          count: row.count
+        })),
+        deadLetter: {
+          openCount: deadLetterCount,
+          recent: recentDeadLetters
+        }
+      }
+    });
+  } catch (error) {
+    console.error('[communicationsController] getInboundDiagnostics error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch inbound diagnostics',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * GET /api/communications/inbound/dead-letter
+ * List dead-letter inbound jobs (open by default).
+ */
+exports.listInboundDeadLetters = async (req, res) => {
+  try {
+    const organizationId = req.user.organizationId;
+    const limitRaw = Number(req.query.limit);
+    const limit = Number.isFinite(limitRaw) ? Math.min(200, Math.max(1, Math.floor(limitRaw))) : 50;
+    const includeResolved = String(req.query.includeResolved || 'false').toLowerCase() === 'true';
+
+    const filter = { organizationId };
+    if (!includeResolved) filter.resolvedAt = null;
+
+    const items = await InboundDeadLetter.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .select('stage reason error parsedSummary replayCount lastReplayAt resolvedAt createdAt rawSizeBytes')
+      .lean();
+
+    return res.json({
+      success: true,
+      data: { items, count: items.length }
+    });
+  } catch (error) {
+    console.error('[communicationsController] listInboundDeadLetters error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to list inbound dead-letters',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * POST /api/communications/inbound/dead-letter/:id/replay
+ * Owner-only: replays a dead-letter inbound message through the dispatcher.
+ * Marks the dead-letter as resolved on success and bumps the replay counter
+ * on failure (keeping it open for inspection).
+ */
+exports.replayInboundDeadLetter = async (req, res) => {
+  try {
+    const isOwnerLike = req.user?.isOwner === true || String(req.user?.role || '').toLowerCase() === 'owner';
+    if (!isOwnerLike) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only workspace owner can replay inbound dead-letters'
+      });
+    }
+
+    const organizationId = req.user.organizationId;
+    const deadLetter = await InboundDeadLetter.findOne({
+      _id: req.params.id,
+      organizationId
+    });
+    if (!deadLetter) {
+      return res.status(404).json({
+        success: false,
+        message: 'Dead-letter not found'
+      });
+    }
+
+    if (!deadLetter.rawMimeBase64) {
+      return res.status(400).json({
+        success: false,
+        message: 'Dead-letter has no stored raw MIME (too large at capture time); cannot replay automatically.'
+      });
+    }
+
+    deadLetter.replayCount = (deadLetter.replayCount || 0) + 1;
+    deadLetter.lastReplayAt = new Date();
+    await deadLetter.save();
+
+    try {
+      const result = await inboundEmailQueueService.processInboundJob({
+        rawMimeBase64: deadLetter.rawMimeBase64,
+        headerOrganizationId: organizationId,
+        source: 'inbound-replay'
+      });
+      deadLetter.resolvedAt = new Date();
+      await deadLetter.save();
+
+      await appendCommunicationEvent({
+        organizationId,
+        communicationId: result.communicationId || null,
+        eventType: 'inbound_replayed',
+        source: 'inbound-replay',
+        payload: {
+          deadLetterId: deadLetter._id,
+          threadStrategy: result.threadStrategy
+        }
+      });
+
+      return res.json({
+        success: true,
+        data: {
+          replayed: true,
+          communicationId: result.communicationId,
+          threadStrategy: result.threadStrategy
+        }
+      });
+    } catch (replayErr) {
+      return res.status(422).json({
+        success: false,
+        message: 'Replay failed; dead-letter remains open',
+        error: replayErr.message,
+        replayCount: deadLetter.replayCount
+      });
+    }
+  } catch (error) {
+    console.error('[communicationsController] replayInboundDeadLetter error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to replay inbound dead-letter',
       error: error.message
     });
   }

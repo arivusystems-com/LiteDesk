@@ -126,6 +126,38 @@ function getFromAddress() {
   return name ? `"${name}" <${from}>` : from;
 }
 
+function isResendRuntime(runtimeConfig) {
+  const provider = String(runtimeConfig.provider || '').toLowerCase();
+  const host = String(runtimeConfig.smtpHost || '').toLowerCase();
+  const user = String(runtimeConfig.smtpUser || '').toLowerCase();
+  return provider.includes('resend') || host.includes('resend.com') || user === 'resend';
+}
+
+async function sendViaResendApi(runtimeConfig, payload) {
+  const apiKey = String(runtimeConfig.smtpPass || process.env.RESEND_API_KEY || '').trim();
+  if (!apiKey) {
+    return { success: false, error: 'Resend API key missing for fallback send' };
+  }
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const detail = data?.message || data?.error || `HTTP ${response.status}`;
+      return { success: false, error: `Resend API send failed: ${detail}` };
+    }
+    return { success: true, messageId: data?.id || data?.data?.id, provider: 'resend-api' };
+  } catch (err) {
+    return { success: false, error: `Resend API send failed: ${err.message}` };
+  }
+}
+
 /**
  * Send an email.
  * @param {Object} opts - { to, subject, text, html?, replyTo?, attachments? [{ filename, content }] }
@@ -214,6 +246,22 @@ async function sendEmail(opts) {
       return { success: true, messageId: info.messageId, provider: 'smtp' };
     } catch (err) {
       console.error('[emailService] SMTP send failed:', err.message);
+      const isDnsLookupError = /ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(String(err?.message || ''));
+      if (!hasAttachments && isDnsLookupError && isResendRuntime(runtimeConfig)) {
+        const fallback = await sendViaResendApi(runtimeConfig, {
+          from,
+          to: toList,
+          subject,
+          html: html || undefined,
+          text: text || (html ? html.replace(/<[^>]+>/g, '') : ''),
+          reply_to: replyToAddr
+        });
+        if (fallback.success) {
+          console.warn('[emailService] SMTP DNS lookup failed; sent via Resend API fallback');
+          return fallback;
+        }
+        console.error('[emailService] Resend API fallback failed:', fallback.error);
+      }
       return { success: false, error: err.message };
     }
   }
