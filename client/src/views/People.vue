@@ -50,9 +50,11 @@
             }"
             size="md"
           />
-          <div class="min-w-0">
-            <div class="flex items-center gap-2">
-              <span class="font-semibold text-gray-900 dark:text-white truncate">
+          <div class="min-w-0 flex-1">
+            <div class="flex min-w-0 items-center gap-2">
+              <span
+                class="min-w-0 flex-1 font-semibold text-gray-900 dark:text-white whitespace-nowrap group-hover:truncate"
+              >
                 {{ row.first_name }} {{ row.last_name }}
               </span>
               <span
@@ -66,7 +68,10 @@
                 />
               </span>
             </div>
-            <div v-if="row.email" class="text-sm text-gray-500 dark:text-gray-400 truncate">
+            <div
+              v-if="row.email"
+              class="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap group-hover:truncate"
+            >
               {{ row.email }}
             </div>
           </div>
@@ -90,7 +95,11 @@
 
       <!-- Custom Email Cell -->
       <template #cell-email="{ value }">
-        <a :href="`mailto:${value}`" class="text-indigo-600 dark:text-indigo-400 hover:underline" @click.stop>
+        <a
+          :href="`mailto:${value}`"
+          class="block min-w-0 truncate text-indigo-600 dark:text-indigo-400 hover:underline"
+          @click.stop
+        >
           {{ value }}
         </a>
       </template>

@@ -74,6 +74,47 @@ function debugPeopleList(message, payload) {
   }
 }
 
+/** Combine list filter with an extra predicate ($and) for facet counts */
+function peopleQueryAnd(baseQuery, clause) {
+  if (!baseQuery || Object.keys(baseQuery).length === 0) {
+    return clause;
+  }
+  return { $and: [baseQuery, clause] };
+}
+
+/**
+ * Full-result stats for list UI cards (same Mongo filter as the list query).
+ * Matches client registry keys: totalPeople, assignedToMe, unassigned, withOrganization, withoutOrganization.
+ */
+async function computePeopleListStatistics(query, userId) {
+  const uid =
+    mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
+
+  const [assignedToMe, unassigned, withOrganization, withoutOrganization] = await Promise.all([
+    People.countDocuments(peopleQueryAnd(query, { assignedTo: uid })),
+    People.countDocuments(
+      peopleQueryAnd(query, {
+        $or: [{ assignedTo: null }, { assignedTo: { $exists: false } }]
+      })
+    ),
+    People.countDocuments(
+      peopleQueryAnd(query, { organization: { $exists: true, $ne: null } })
+    ),
+    People.countDocuments(
+      peopleQueryAnd(query, {
+        $or: [{ organization: null }, { organization: { $exists: false } }]
+      })
+    )
+  ]);
+
+  return {
+    assignedToMe,
+    unassigned,
+    withOrganization,
+    withoutOrganization
+  };
+}
+
 /**
  * Get list of Sales participation fields that should not be set during Person creation
  * These fields are set via Attach-to-App, not during identity creation
@@ -488,11 +529,15 @@ exports.list = async (req, res) => {
     const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
     // List UI column "name" is computed (first_name + last_name); there is no DB field "name".
     // Sort by given name then family name to match "First Last" display order.
+    // Tie-break with _id so skip/limit pagination is stable (otherwise duplicate createdAt
+    // timestamps cause overlapping or gap pages → fewer rows loaded than totalRecords).
     let sortOptions;
     if (sortBy === 'name') {
-      sortOptions = { first_name: sortOrder, last_name: sortOrder };
+      sortOptions = { first_name: sortOrder, last_name: sortOrder, _id: sortOrder };
+    } else if (sortBy === '_id') {
+      sortOptions = { _id: sortOrder };
     } else {
-      sortOptions = { [sortBy]: sortOrder };
+      sortOptions = { [sortBy]: sortOrder, _id: sortOrder };
     }
 
     const User = require('../models/User');
@@ -556,7 +601,9 @@ exports.list = async (req, res) => {
       }
     ]);
 
-    const [data, total, statistics, newThisWeek, newCustomers] = await Promise.all([
+    const listStatisticsPromise = computePeopleListStatistics(query, req.user._id);
+
+    const [data, total, statistics, newThisWeek, newCustomers, listCardBreakdown] = await Promise.all([
       dataQuery,
       People.countDocuments(query),
       statisticsQuery,
@@ -568,7 +615,8 @@ exports.list = async (req, res) => {
         ...query,
         [getPeopleFieldQueryPath('sales_type')]: 'Contact',
         createdAt: { $gte: oneWeekAgo }
-      })
+      }),
+      listStatisticsPromise
     ]);
 
     // Log types distribution (from participations.SALES.role)
@@ -685,6 +733,11 @@ exports.list = async (req, res) => {
         newThisWeek: newThisWeek,
         newCustomers: newCustomers,
         conversionRate: conversionRate
+      },
+      /** Registry-aligned stats for ModuleList / ListView cards (full query, not current page) */
+      listStatistics: {
+        totalPeople: total,
+        ...listCardBreakdown
       }
     });
   } catch (error) {

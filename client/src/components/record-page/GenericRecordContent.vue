@@ -984,6 +984,7 @@ import {
 import Avatar from '@/components/common/Avatar.vue';
 import BadgeCell from '@/components/common/table/BadgeCell.vue';
 import DOMPurify from 'dompurify';
+import { sanitizeRichDescriptionHtml } from '@/utils/richDescriptionHtml';
 import { resolveFieldContext } from '@/utils/fieldContextFilter';
 import { getParticipation } from '@/utils/getParticipation';
 import { getAppLabel } from '@/utils/getRoleDisplay';
@@ -1604,8 +1605,6 @@ const rightPaneTabs = computed(() => [
   { id: 'integrations', name: 'Integrations' }
 ]);
 
-const ALLOWED_DESCRIPTION_TAGS = ['p', 'br', 'strong', 'em', 's', 'u', 'a', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'blockquote'];
-
 const descriptionHistoryList = computed(() => {
   const rec = record.value;
   const data = descriptionVersionsData.value;
@@ -1691,7 +1690,7 @@ const descriptionHistorySelectedContent = computed(() => {
   const selected = descriptionHistoryList.value[selectedDescriptionVersionIndex.value];
   const raw = String(selected?.content || '');
   if (!raw.trim()) return '';
-  return DOMPurify.sanitize(raw, { ALLOWED_TAGS: ALLOWED_DESCRIPTION_TAGS });
+  return sanitizeRichDescriptionHtml(raw);
 });
 
 const descriptionHistoryShowDiff = computed(

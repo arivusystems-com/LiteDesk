@@ -25,6 +25,11 @@ export interface DefaultColumnConfig {
   lockedColumn?: string;
 }
 
+/** Passed from ModuleList after fetch — use totalRecords for headline counts when the list is paged */
+export interface ModuleListStatisticsContext {
+  totalRecords?: number;
+}
+
 export interface StatisticsConfig {
   /** Statistics to display */
   stats: Array<{
@@ -32,8 +37,12 @@ export interface StatisticsConfig {
     key: string;
     formatter?: 'number' | 'currency' | 'percentage';
   }>;
-  /** Function to compute statistics from data */
-  computeFunction: (data: any[], currentUserId?: string) => Record<string, number>;
+  /** Function to compute statistics from currently loaded rows; pass totalRecords for full-query totals */
+  computeFunction: (
+    data: any[],
+    currentUserId?: string,
+    context?: ModuleListStatisticsContext
+  ) => Record<string, number>;
 }
 
 export interface SystemView {
@@ -133,9 +142,13 @@ export function buildDefaultColumns(
 /**
  * Compute People statistics
  */
-function computePeopleStatistics(data: any[], currentUserId?: string): Record<string, number> {
+function computePeopleStatistics(
+  data: any[],
+  currentUserId?: string,
+  context?: ModuleListStatisticsContext
+): Record<string, number> {
   const stats = {
-    totalPeople: data.length,
+    totalPeople: context?.totalRecords ?? data.length,
     assignedToMe: 0,
     unassigned: 0,
     withOrganization: 0,
@@ -170,9 +183,13 @@ function computePeopleStatistics(data: any[], currentUserId?: string): Record<st
 /**
  * Compute Organizations statistics
  */
-function computeOrganizationsStatistics(data: any[], currentUserId?: string): Record<string, number> {
+function computeOrganizationsStatistics(
+  data: any[],
+  currentUserId?: string,
+  context?: ModuleListStatisticsContext
+): Record<string, number> {
   const stats = {
-    totalOrganizations: data.length,
+    totalOrganizations: context?.totalRecords ?? data.length,
     assignedToMe: 0,
     unassigned: 0,
     activeOrganizations: 0,
@@ -415,9 +432,13 @@ function normalizeTasksViewFilters(filters: Record<string, any>, currentUserId?:
 /**
  * Compute Tasks statistics
  */
-function computeTasksStatistics(data: any[], currentUserId?: string): Record<string, number> {
+function computeTasksStatistics(
+  data: any[],
+  currentUserId?: string,
+  context?: ModuleListStatisticsContext
+): Record<string, number> {
   const stats = {
-    totalTasks: data.length,
+    totalTasks: context?.totalRecords ?? data.length,
     assignedToMe: 0,
     completed: 0,
     overdue: 0
@@ -451,9 +472,13 @@ function computeTasksStatistics(data: any[], currentUserId?: string): Record<str
 /**
  * Compute Events statistics
  */
-function computeEventsStatistics(data: any[], currentUserId?: string): Record<string, number> {
+function computeEventsStatistics(
+  data: any[],
+  currentUserId?: string,
+  context?: ModuleListStatisticsContext
+): Record<string, number> {
   const stats = {
-    totalEvents: data.length,
+    totalEvents: context?.totalRecords ?? data.length,
     upcoming: 0,
     past: 0,
     myEvents: 0,
@@ -572,13 +597,17 @@ function normalizeEventsViewFilters(filters: Record<string, any>, currentUserId?
 /**
  * Compute Deals statistics (from list data; server may also return stats)
  */
-function computeDealsStatistics(data: any[], currentUserId?: string): Record<string, number> {
+function computeDealsStatistics(
+  data: any[],
+  currentUserId?: string,
+  context?: ModuleListStatisticsContext
+): Record<string, number> {
   const stats = {
     pipelineValue: 0,
     activeDeals: 0,
     wonValue: 0,
     winRate: 0,
-    totalDeals: data.length,
+    totalDeals: context?.totalRecords ?? data.length,
     myDeals: 0
   };
 
@@ -649,9 +678,13 @@ function normalizeDealsViewFilters(filters: Record<string, any>, currentUserId?:
 /**
  * Compute Items statistics
  */
-function computeItemsStatistics(data: any[], _currentUserId?: string): Record<string, number> {
+function computeItemsStatistics(
+  data: any[],
+  _currentUserId?: string,
+  context?: ModuleListStatisticsContext
+): Record<string, number> {
   const stats = {
-    totalItems: data.length,
+    totalItems: context?.totalRecords ?? data.length,
     activeItems: 0,
     inactiveItems: 0,
     products: 0,

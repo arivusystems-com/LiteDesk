@@ -292,7 +292,7 @@ export const useAppShellStore = defineStore('appShell', {
       }
       
       // Verify user has access to this app
-      if (!authStore.hasAppAccess(appKey)) {
+      if (!authStore.hasAssignedAppAccess(appKey)) {
         console.warn(`[AppShell] User does not have access to app: ${appKey}`);
         return;
       }

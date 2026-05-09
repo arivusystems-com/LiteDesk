@@ -17,7 +17,7 @@ const API_CACHE_NAME = 'audit-api-v1';
 const STATIC_ASSETS = [
   '/',
   '/audit/dashboard',
-  '/favicon.ico'
+  '/assets/logo/Logo_light.svg'
 ];
 
 // Install event - cache static assets

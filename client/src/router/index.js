@@ -10,6 +10,7 @@ import auditRoutes from './audit.routes'
 import portalRoutes from './portal.routes'
 import { loadAndRegisterRoutes } from '@/utils/dynamicRouteLoader'
 import { logNavDebug } from '@/config/arivuDebug.js'
+import { buildAppAccessProfile, getSalesDashboardRedirect, getSalesModuleRedirect } from '@/router/appAccessGuards'
 
 const routes = [
   {
@@ -698,28 +699,17 @@ router.beforeEach(async (to, from, next) => {
   
   // Block audit-only and portal-only users from accessing Sales module routes
   if (to.meta.requiresAuth && !to.meta.requiresAuditApp && !to.meta.requiresPortalApp && to.meta.requiresPermission) {
-    // Use hasAppAccess getter which checks enabledApps for owners
-    const hasSalesAccess = authStore.hasAppAccess('SALES');
-    const hasAuditAccess = authStore.hasAppAccess('AUDIT');
-    const hasPortalAccess = authStore.hasAppAccess('PORTAL');
-    const hasOnlyAuditAccess = hasAuditAccess && !hasSalesAccess;
-    const hasOnlyPortalAccess = hasPortalAccess && !hasSalesAccess && !hasAuditAccess;
-    
-    // Sales modules that should be blocked for audit-only and portal-only users
-    const salesModules = ['people', 'contacts', 'deals', 'tasks', 'events', 'forms', 'items', 'organizations', 'imports'];
+    const profile = buildAppAccessProfile(authStore.hasAssignedAppAccess);
     const { module } = to.meta.requiresPermission;
-    const normalizedModule = module === 'people' ? 'contacts' : module;
-    
-    // If user only has AUDIT access, block Sales module routes
-    if (hasOnlyAuditAccess && salesModules.includes(normalizedModule)) {
+    const salesModuleRedirect = getSalesModuleRedirect(profile, module);
+
+    if (salesModuleRedirect === 'audit-dashboard') {
       logNavDebug('Blocked: Sales route accessed by audit-only user', { route: to.path, module })
       alert('You do not have access to Sales features. Redirecting to Audit App.')
       next({ name: 'audit-dashboard' })
       return
     }
-    
-    // If user only has PORTAL access, block Sales module routes
-    if (hasOnlyPortalAccess && salesModules.includes(normalizedModule)) {
+    if (salesModuleRedirect === 'portal-dashboard') {
       logNavDebug('Blocked: Sales route accessed by portal-only user', { route: to.path, module })
       alert('You do not have access to Sales features. Redirecting to Portal.')
       next({ name: 'portal-dashboard' })
@@ -729,20 +719,15 @@ router.beforeEach(async (to, from, next) => {
   
   // Also block direct access to Sales dashboard for audit-only and portal-only users
   if (to.name === 'sales-dashboard' || to.name === 'dashboard') {
-    // Use hasAppAccess getter which checks enabledApps for owners
-    const hasSalesAccess = authStore.hasAppAccess('SALES');
-    const hasAuditAccess = authStore.hasAppAccess('AUDIT');
-    const hasPortalAccess = authStore.hasAppAccess('PORTAL');
-    const hasOnlyAuditAccess = hasAuditAccess && !hasSalesAccess;
-    const hasOnlyPortalAccess = hasPortalAccess && !hasSalesAccess && !hasAuditAccess;
-    
-    if (hasOnlyAuditAccess) {
+    const profile = buildAppAccessProfile(authStore.hasAssignedAppAccess);
+    const salesDashboardRedirect = getSalesDashboardRedirect(profile);
+
+    if (salesDashboardRedirect === 'audit-dashboard') {
       logNavDebug('Blocked: Sales dashboard accessed by audit-only user')
       next({ name: 'audit-dashboard' })
       return
     }
-    
-    if (hasOnlyPortalAccess) {
+    if (salesDashboardRedirect === 'portal-dashboard') {
       logNavDebug('Blocked: Sales dashboard accessed by portal-only user')
       next({ name: 'portal-dashboard' })
       return
@@ -775,7 +760,7 @@ router.beforeEach(async (to, from, next) => {
   
   // Check audit app access if required
   if (to.meta.requiresAuditApp) {
-    const hasAuditAccess = authStore.hasAppAccess('AUDIT');
+    const hasAuditAccess = authStore.hasAssignedAppAccess('AUDIT');
     
     logNavDebug('Audit app access check:', {
       hasAuditAccess,
@@ -796,7 +781,7 @@ router.beforeEach(async (to, from, next) => {
   
   // Check portal app access if required
   if (to.meta.requiresPortalApp) {
-    const hasPortalAccess = authStore.hasAppAccess('PORTAL');
+    const hasPortalAccess = authStore.hasAssignedAppAccess('PORTAL');
     
     logNavDebug('Portal app access check:', {
       hasPortalAccess,

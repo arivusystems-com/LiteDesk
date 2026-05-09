@@ -84,7 +84,7 @@
           type="button"
           :class="['p-2 rounded text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700', editor.isActive('link') ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white' : '']"
           title="Link"
-          @click="linkUrl = editor.getAttributes('link')?.href || 'https://'"
+          @click="handleLinkButtonClick"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -92,15 +92,15 @@
         </PopoverButton>
         <PopoverPanel
           class="absolute left-0 top-full mt-1 w-72 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg p-3 z-50 focus:outline-none"
-          @mousedown.prevent
         >
           <div class="space-y-2">
             <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">URL</label>
             <input
+              ref="linkInputRef"
               v-model="linkUrl"
               type="url"
               placeholder="https://"
-              class="w-full px-3 py-2 text-sm rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              class="block w-full rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
               @keydown.enter.prevent="applyLink(close)"
               @keydown.escape="close"
             />
@@ -114,7 +114,8 @@
               </button>
               <button
                 type="button"
-                class="px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md"
+                :disabled="!canApplyLink"
+                class="px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                 @click="applyLink(close)"
               >
                 Apply
@@ -141,6 +142,47 @@
       :editor="editor"
       class="[&_.tiptap]:min-h-[120px] [&_.tiptap]:text-md [&_.tiptap]:leading-[1.75] [&_.tiptap_p]:mb-2 [&_.tiptap_p:last-child]:mb-0 [&_.tiptap_p]:leading-[1.75] [&_.tiptap_h1]:text-2xl [&_.tiptap_h1]:font-bold [&_.tiptap_h1]:my-4 [&_.tiptap_h1]:mb-2 [&_.tiptap_h2]:text-xl [&_.tiptap_h2]:font-semibold [&_.tiptap_h2]:my-4 [&_.tiptap_h2]:mb-2 [&_.tiptap_h3]:text-lg [&_.tiptap_h3]:font-semibold [&_.tiptap_h3]:my-4 [&_.tiptap_h3]:mb-2 [&_.tiptap_ul]:pl-6 [&_.tiptap_ol]:pl-6 [&_.tiptap_ul]:list-disc [&_.tiptap_ol]:list-decimal [&_.tiptap_a]:text-indigo-600 [&_.tiptap_a]:underline dark:[&_.tiptap_a]:text-indigo-400 [&_.tiptap_blockquote]:border-l-4 [&_.tiptap_blockquote]:border-gray-300 [&_.tiptap_blockquote]:bg-gray-50 [&_.tiptap_blockquote]:px-3 [&_.tiptap_blockquote]:py-2 [&_.tiptap_blockquote]:my-2 dark:[&_.tiptap_blockquote]:border-gray-600 dark:[&_.tiptap_blockquote]:bg-gray-800/60"
     />
+    <!-- Cmd/Ctrl+K: BubbleMenu/Tippy prevents reliable programmatic Popover open; use a body Teleport -->
+    <Teleport to="body">
+      <div
+        v-if="shortcutLinkPanelOpen"
+        class="task-description-link-shortcut w-72 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg p-3 z-[12000]"
+        :style="shortcutLinkPanelStyle"
+        role="dialog"
+        aria-label="Insert link"
+        @mousedown.prevent
+      >
+        <div class="space-y-2">
+          <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">URL</label>
+          <input
+            ref="shortcutLinkInputRef"
+            v-model="linkUrl"
+            type="url"
+            placeholder="https://"
+            class="block w-full rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+            @keydown.enter.prevent="applyShortcutLink"
+            @keydown.escape.prevent="closeShortcutLinkPanel"
+          />
+          <div class="flex gap-2 justify-end">
+            <button
+              type="button"
+              class="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+              @click="closeShortcutLinkPanel"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              :disabled="!canApplyLink"
+              class="px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+              @click="applyShortcutLink"
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -153,7 +195,7 @@ import Heading from '@tiptap/extension-heading';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import { SlashCommands } from './slashCommands.js';
-import { ref, watch, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onBeforeUnmount, nextTick } from 'vue';
 
 const props = defineProps({
   modelValue: {
@@ -169,6 +211,45 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'blur', 'cancel']);
 
 const linkUrl = ref('https://');
+
+/** True once the field has real URL content (not empty / not only scheme prefix). */
+const canApplyLink = computed(() => {
+  const t = (linkUrl.value || '').trim();
+  if (!t) return false;
+  const lower = t.toLowerCase();
+  if (lower === 'https://' || lower === 'http://') return false;
+  return true;
+});
+
+const linkInputRef = ref(null);
+const shortcutLinkPanelOpen = ref(false);
+const shortcutLinkPanelStyle = ref({});
+const shortcutLinkInputRef = ref(null);
+
+function closeShortcutLinkPanel() {
+  shortcutLinkPanelOpen.value = false;
+}
+
+function computeShortcutPanelPosition(ed) {
+  if (!ed?.view) return {};
+  const { from, to } = ed.state.selection;
+  if (from === to) return {};
+  const view = ed.view;
+  const start = view.coordsAtPos(from);
+  const end = view.coordsAtPos(to);
+  const leftEdge = Math.min(start.left, end.left, start.right, end.right);
+  const bottomEdge = Math.max(start.bottom, end.bottom);
+  const panelW = 288;
+  const margin = 8;
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 800;
+  const clampedLeft = Math.min(Math.max(leftEdge, margin), vw - panelW - margin);
+  return {
+    position: 'fixed',
+    left: `${clampedLeft}px`,
+    top: `${bottomEdge + 4}px`,
+    zIndex: 12000
+  };
+}
 
 const ReplyQuoteBlockquote = Blockquote.extend({
   addAttributes() {
@@ -206,7 +287,9 @@ const editor = useEditor({
     Link.configure({
       openOnClick: false,
       HTMLAttributes: {
-        class: 'text-indigo-600 dark:text-indigo-400 underline hover:no-underline'
+        class: 'text-indigo-600 dark:text-indigo-400 underline hover:no-underline',
+        target: '_blank',
+        rel: 'noopener noreferrer'
       }
     }),
     Placeholder.configure({
@@ -219,6 +302,19 @@ const editor = useEditor({
       class: 'rte-content min-h-[120px] px-6 py-4 text-md text-gray-900 dark:text-white focus:outline-none'
     },
     handleKeyDown: (view, event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        const { empty } = view.state.selection;
+        // Keep global Cmd/Ctrl+K behavior unless there's an active text selection in this editor.
+        if (empty) return false;
+        event.preventDefault();
+        openLinkEditorFromShortcut();
+        return true;
+      }
+      if (shortcutLinkPanelOpen.value && event.key === 'Escape') {
+        event.preventDefault();
+        closeShortcutLinkPanel();
+        return true;
+      }
       if (event.key === 'Escape') {
         emit('cancel');
         return true;
@@ -254,7 +350,7 @@ const editor = useEditor({
       if (!editor.value?.isFocused) {
         const target = event?.relatedTarget;
         const isInteractiveMenu = target && typeof target.closest === 'function' &&
-          (target.closest('.slash-command-list') || target.closest('.tippy-box'));
+          (target.closest('.slash-command-list') || target.closest('.tippy-box') || target.closest('.task-description-link-shortcut'));
         if (!isInteractiveMenu) {
           emit('blur');
         }
@@ -279,12 +375,47 @@ watch(
   { immediate: false }
 );
 
+const syncLinkUrlFromSelection = () => {
+  linkUrl.value = editor.value?.getAttributes('link')?.href || 'https://';
+};
+
+const focusLinkInput = () => {
+  window.setTimeout(() => {
+    linkInputRef.value?.focus();
+    linkInputRef.value?.select();
+  }, 0);
+};
+
+const handleLinkButtonClick = () => {
+  closeShortcutLinkPanel();
+  syncLinkUrlFromSelection();
+  nextTick(() => focusLinkInput());
+};
+
+function openLinkEditorFromShortcut() {
+  const ed = editor.value;
+  if (!ed || ed.state.selection.empty) return;
+  syncLinkUrlFromSelection();
+  shortcutLinkPanelStyle.value = computeShortcutPanelPosition(ed);
+  shortcutLinkPanelOpen.value = true;
+  nextTick(() => {
+    shortcutLinkInputRef.value?.focus();
+    shortcutLinkInputRef.value?.select();
+  });
+}
+
+function applyShortcutLink() {
+  if (!canApplyLink.value) return;
+  const url = linkUrl.value.trim();
+  editor.value?.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+  closeShortcutLinkPanel();
+}
+
 const applyLink = (close) => {
-  const url = linkUrl.value?.trim();
-  if (url) {
-    editor.value?.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-  }
-  close();
+  if (!canApplyLink.value) return;
+  const url = linkUrl.value.trim();
+  editor.value?.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+  close?.();
 };
 
 const focus = () => {

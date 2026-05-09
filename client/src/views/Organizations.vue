@@ -22,11 +22,16 @@
             }"
             size="md"
           />
-          <div class="min-w-0">
-            <div class="font-semibold text-gray-900 dark:text-white truncate">
+          <div class="min-w-0 flex-1">
+            <div
+              class="min-w-0 font-semibold text-gray-900 dark:text-white whitespace-nowrap group-hover:truncate"
+            >
               {{ row.name }}
             </div>
-            <div v-if="row.domain" class="text-sm text-gray-500 dark:text-gray-400 truncate">
+            <div
+              v-if="row.domain"
+              class="min-w-0 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap group-hover:truncate"
+            >
               {{ row.domain }}
             </div>
           </div>

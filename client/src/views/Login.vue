@@ -1,8 +1,22 @@
 <script setup>
+import { computed } from 'vue';
 import { useColorMode } from '@/composables/useColorMode';
 import LoginForm from '@/components/LoginForm.vue';
 
-const { colorMode, toggleColorMode } = useColorMode();
+const { colorMode } = useColorMode();
+
+/** Matches Tailwind dark mode: explicit dark, or system when OS prefers dark */
+const isDarkUi = computed(
+  () =>
+    colorMode.value === 'dark' ||
+    (colorMode.value === 'system' &&
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches),
+);
+
+const brandLogoSrc = computed(() =>
+  isDarkUi.value ? '/assets/logo/Logo_word_light.svg' : '/assets/logo/Logo_word_dark.svg',
+);
 </script>
 
 <template>
@@ -19,8 +33,10 @@ const { colorMode, toggleColorMode } = useColorMode();
         <div class="flex min-h-full flex-1 flex-col justify-center py-12 sm:px-6 lg:px-8">
           <div class="sm:mx-auto sm:w-full sm:max-w-sm">
             <img
-              :src="colorMode === 'dark' || colorMode === 'system' ? '/assets/nurtura_logo_white.svg' : '/assets/nurtura_logo_plain.svg'"
-              alt="Nurtura Logo" class="mx-auto h-10 w-auto brightness-0 dark:brightness-100" />
+              :src="brandLogoSrc"
+              alt="Arivu"
+              class="mx-auto h-10 w-auto"
+            />
 
             <h2 class="mt-6 text-center text-2xl/9 font-bold tracking-tight text-gray-900 dark:text-white">Sign in to
               your account</h2>

@@ -1562,6 +1562,7 @@ import TaskRelatedToField from '@/components/tasks/TaskRelatedToField.vue';
 import DeleteConfirmationModal from '@/components/common/DeleteConfirmationModal.vue';
 import EmailComposeDrawer from '@/components/communications/EmailComposeDrawer.vue';
 import DOMPurify from 'dompurify';
+import { sanitizeRichDescriptionHtml } from '@/utils/richDescriptionHtml';
 import {
   ChatBubbleLeftRightIcon,
   ClockIcon,
@@ -2239,13 +2240,7 @@ const shouldShowDescriptionViewMore = computed(() => {
   return plainText.length > DESCRIPTION_PREVIEW_CHAR_THRESHOLD;
 });
 
-const ALLOWED_DESCRIPTION_TAGS = ['p', 'br', 'strong', 'em', 's', 'u', 'a', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'blockquote'];
-
-const sanitizedDescription = computed(() => {
-  const raw = task.value?.description || '';
-  if (!raw) return '';
-  return DOMPurify.sanitize(raw, { ALLOWED_TAGS: ALLOWED_DESCRIPTION_TAGS });
-});
+const sanitizedDescription = computed(() => sanitizeRichDescriptionHtml(task.value?.description || ''));
 
 // In version history view, show the selected version's content (not always current)
 const descriptionHistorySelectedContent = computed(() => {
@@ -2255,7 +2250,7 @@ const descriptionHistorySelectedContent = computed(() => {
   if (!ver || ver.content == null) return '';
   const raw = String(ver.content);
   if (!raw.trim()) return '';
-  return DOMPurify.sanitize(raw, { ALLOWED_TAGS: ALLOWED_DESCRIPTION_TAGS });
+  return sanitizeRichDescriptionHtml(raw);
 });
 
 // Show diff for every version when we have at least two to compare (current vs previous, or selected past vs current)
