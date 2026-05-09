@@ -29,9 +29,9 @@ async function removeOldSalesCoreEntities() {
     console.log('🚀 Removing old core entity modules from sales app...\n');
 
     const masterUri = getMasterDatabaseUri();
-    console.log('🔗 Connecting to MongoDB master database (litedesk_master)...');
+    console.log('🔗 Connecting to MongoDB master database (arivu_master)...');
     await mongoose.connect(masterUri);
-    console.log('✅ Connected to MongoDB master database (litedesk_master)\n');
+    console.log('✅ Connected to MongoDB master database (arivu_master)\n');
 
     let removedCount = 0;
 

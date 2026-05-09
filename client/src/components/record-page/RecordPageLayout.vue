@@ -103,7 +103,7 @@ function applyLayout() {
   let sidebarWidth = 0;
   let leftOffset = 0;
   if (!isMobileView && typeof localStorage !== 'undefined') {
-    const collapsed = localStorage.getItem('litedesk-sidebar-collapsed') === 'true';
+    const collapsed = localStorage.getItem('arivu-sidebar-collapsed') === 'true';
     sidebarWidth = collapsed ? 64 : 256;
     leftOffset = sidebarWidth;
   }

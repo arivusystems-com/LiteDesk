@@ -150,7 +150,7 @@ User collapses sidebar ↓
 
 ### Test the Fix:
 
-1. **Log in** to your LiteDesk CRM
+1. **Log in** to your Arivu CRM
 2. **Click the collapse button** (← chevron) in sidebar
 3. **Observe:** 
    - Sidebar shrinks to 80px ✅

@@ -23,7 +23,7 @@ cat << "EOF"
 EOF
 echo -e "${NC}"
 
-cd /Users/Prabhu/Documents/GitHub/LiteDesk
+cd /Users/Prabhu/Documents/GitHub/Arivu
 
 # Create scripts archive directory
 mkdir -p scripts/archive

@@ -99,7 +99,7 @@ curl -X POST http://localhost:5000/api/forms \
 Before running tests, verify:
 
 - [ ] Server is running (`curl http://localhost:5000/health`)
-- [ ] User account exists (`admin@litedesk.com`)
+- [ ] User account exists (`admin@arivu.com`)
 - [ ] Rate limit has not been exceeded
 - [ ] Forms module is enabled in organization
 - [ ] Database connection is working

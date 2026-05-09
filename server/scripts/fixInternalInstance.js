@@ -4,7 +4,7 @@
  * Fix Internal Instance Setup
  * 
  * This script:
- * 1. Finds the owner user (admin@litedesk.com or first owner)
+ * 1. Finds the owner user (DEFAULT_ADMIN_EMAIL or first owner)
  * 2. Ensures their organization has all apps enabled
  * 3. Creates/updates Instance record with isInternal: true
  * 
@@ -18,16 +18,16 @@ const Organization = require('../models/Organization');
 const Instance = require('../models/Instance');
 const { APP_KEYS } = require('../constants/appKeys');
 const getMasterDatabaseUri = require('../utils/getMasterDatabaseUri');
-const userEmail = process.argv[2] || 'admin@litedesk.com';
+const userEmail = process.argv[2] || process.env.DEFAULT_ADMIN_EMAIL || 'admin@arivusystems.com';
 
 async function fixInternalInstance() {
     try {
         console.log('🔗 Connecting to MongoDB...');
         
-        // Connect to master database (litedesk_master)
+        // Connect to master database (arivu_master)
         const masterUri = getMasterDatabaseUri();
         await mongoose.connect(masterUri);
-        console.log('✅ Connected to MongoDB master database: litedesk_master\n');
+        console.log('✅ Connected to MongoDB master database: arivu_master\n');
 
         // Find user - try exact match first, then case-insensitive, then search by owner
         let user = await User.findOne({ email: userEmail })

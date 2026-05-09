@@ -55,7 +55,7 @@ import UserManagement from './UserManagement.vue';
 import RolesPermissions from './RolesPermissions.vue';
 import GroupsSettings from './GroupsSettings.vue';
 
-const USERS_ACCESS_TAB_KEY = 'litedesk-users-access-tab';
+const USERS_ACCESS_TAB_KEY = 'arivu-users-access-tab';
 const activeTab = ref(localStorage.getItem(USERS_ACCESS_TAB_KEY) || 'users');
 
 const tabs = [

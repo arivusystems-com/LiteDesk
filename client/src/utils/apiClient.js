@@ -95,7 +95,7 @@ function isPersistentShortCacheGet(pathWithSearch) {
 }
 
 function persistentCacheKey(requestKey) {
-    return `litedesk:api-cache:${requestKey}`;
+    return `arivu:api-cache:${requestKey}`;
 }
 
 function readPersistentCache(requestKey) {
@@ -125,7 +125,7 @@ function writePersistentCache(requestKey, data, ttlMs) {
 
 function clearPersistentShortCache() {
     try {
-        const prefix = 'litedesk:api-cache:';
+        const prefix = 'arivu:api-cache:';
         for (let i = localStorage.length - 1; i >= 0; i -= 1) {
             const key = localStorage.key(i);
             if (!key || !key.startsWith(prefix)) continue;

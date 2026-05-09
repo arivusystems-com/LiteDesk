@@ -1,6 +1,6 @@
 # 🚀 Developer Setup Guide
 
-Welcome to LiteDesk! This guide will help you get the application running on your local machine.
+Welcome to Arivu! This guide will help you get the application running on your local machine.
 
 ---
 
@@ -20,8 +20,8 @@ Before you begin, ensure you have the following installed:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/LiteDesk.git
-cd LiteDesk
+git clone https://github.com/YOUR_USERNAME/Arivu.git
+cd Arivu
 ```
 
 ### 2. Install Dependencies
@@ -72,7 +72,7 @@ cp .env.example .env
 PORT=3000
 
 # Database
-MONGO_URI=mongodb://localhost:27017/litedesk
+MONGO_URI=mongodb://localhost:27017/arivu
 
 # JWT Secrets (change these!)
 JWT_SECRET=your-super-secret-jwt-key-change-me
@@ -110,7 +110,7 @@ You'll see:
 
 📝 LOGIN CREDENTIALS:
 
-   Email:    admin@litedesk.com
+   Email:    admin@arivu.com
    Password: Admin@123
 
 ⚠️  SECURITY WARNING:
@@ -151,7 +151,7 @@ npm run dev
 1. Open browser: `http://localhost:5173`
 2. Click **"Admin Login"** tab
 3. Login with:
-   - **Email:** `admin@litedesk.com`
+   - **Email:** `admin@arivu.com`
    - **Password:** `Admin@123`
 4. 🎉 You're in!
 
@@ -219,7 +219,7 @@ npm run preview
 ## 📁 Project Structure
 
 ```
-LiteDesk/
+Arivu/
 ├── client/              # Vue.js frontend
 │   ├── src/
 │   │   ├── components/  # Reusable components
@@ -251,7 +251,7 @@ LiteDesk/
 **Solution:**
 - For local development, remove auth from `MONGO_URI`:
   ```env
-  MONGO_URI=mongodb://localhost:27017/litedesk
+  MONGO_URI=mongodb://localhost:27017/arivu
   ```
 
 ### Issue: Port Already in Use
@@ -275,7 +275,7 @@ PORT=3001
    cd server
    node scripts/createDefaultAdmin.js
    ```
-2. Use correct credentials: `admin@litedesk.com` / `Admin@123`
+2. Use correct credentials: `admin@arivu.com` / `Admin@123`
 3. Check backend is running (Terminal 1)
 4. Clear browser cache and try again
 
@@ -302,7 +302,7 @@ After running `createDefaultAdmin.js`, you'll have:
 
 | Email | Password | Role | Organization |
 |-------|----------|------|--------------|
-| admin@litedesk.com | Admin@123 | Owner | LiteDesk Master |
+| admin@arivu.com | Admin@123 | Owner | Arivu Master |
 
 **⚠️ IMPORTANT:** Change this password immediately after first login!
 

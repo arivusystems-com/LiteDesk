@@ -898,7 +898,7 @@ onBeforeMount(() => {
     ]);
     
     // Clear ListView column settings (uses module-key "forms")
-    const listViewKey = 'litedesk-listview-forms-columns';
+    const listViewKey = 'arivu-listview-forms-columns';
     const savedListView = localStorage.getItem(listViewKey);
     let shouldReset = false;
     

@@ -30,16 +30,17 @@ const { resolveAccessFeedback } = require('../utils/executionFeedbackResolver');
 const ACCESS_DEBUG = process.env.ACCESS_DEBUG === 'true';
 
 /**
- * Check if user email is a LiteDesk internal email
+ * Check if user email is a Arivu internal email
  * @param {string} email - User email
  * @returns {boolean} - True if internal email
  */
-function isLiteDeskInternalEmail(email) {
+function isArivuInternalEmail(email) {
     if (!email) return false;
     const internalDomains = [
-        'litedesk.com',
-        'litedesk.io',
-        '@litedesk' // Allow any @litedesk domain
+        'arivusystems.com',
+        'arivu.com',
+        'arivu.io',
+        '@arivu', // legacy @arivu* patterns
     ];
     const emailLower = email.toLowerCase();
     return internalDomains.some(domain => emailLower.includes(domain));
@@ -162,7 +163,7 @@ async function resolveAppAccess({ user, organization, appKey, intent }) {
     if (appKey.toUpperCase() === 'CONTROL_PLANE') {
         // Check if user is platform admin
         const isPlatformAdmin = user.isPlatformAdmin === true || 
-                               isLiteDeskInternalEmail(user.email);
+                               isArivuInternalEmail(user.email);
         
         if (!isPlatformAdmin) {
             result.reason = 'CONTROL_PLANE_ACCESS_DENIED';
@@ -321,7 +322,7 @@ async function resolveAppAccess({ user, organization, appKey, intent }) {
     /**
      * INTERNAL INSTANCE OVERRIDE
      * --------------------------
-     * LiteDesk-owned instances must never be blocked by:
+     * Arivu-owned instances must never be blocked by:
      * - trial expiration
      * - subscription enforcement
      * - seat limits

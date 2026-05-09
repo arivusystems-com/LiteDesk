@@ -5,7 +5,7 @@ metadata:
   name: {{ .Values.instance.name }}-ingress
   namespace: {{ .Values.instance.name }}
   labels:
-    app: litedesk
+    app: arivu
     instance: {{ .Values.instance.subdomain }}
   annotations:
     {{- toYaml .Values.ingress.annotations | nindent 4 }}

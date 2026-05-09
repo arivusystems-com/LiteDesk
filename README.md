@@ -1,8 +1,8 @@
-# 🚀 LiteDesk - Multi-Instance CRM Platform
+# 🚀 Arivu - Multi-Instance CRM Platform
 
 > **Enterprise-grade, white-label CRM with automated multi-instance architecture**
 
-LiteDesk is a modern CRM platform built on a unique multi-instance architecture where each customer gets their own isolated application instance with dedicated database, subdomain, and independent scaling.
+Arivu is a modern CRM platform built on a unique multi-instance architecture where each customer gets their own isolated application instance with dedicated database, subdomain, and independent scaling.
 
 ## 🔒 Security-First Development
 
@@ -21,7 +21,7 @@ LiteDesk is a modern CRM platform built on a unique multi-instance architecture 
 ### 🏢 Multi-Instance Architecture
 - **Complete Isolation:** Each customer gets a dedicated application instance
 - **Dedicated Database:** Separate MongoDB database per customer
-- **Custom Subdomains:** Automatic subdomain provisioning (e.g., `acme.litedesk.com`)
+- **Custom Subdomains:** Automatic subdomain provisioning (e.g., `acme.arivu.com`)
 - **Independent Scaling:** Scale each customer instance independently
 - **White-Label Ready:** Full customization per instance
 
@@ -80,7 +80,7 @@ LiteDesk is a modern CRM platform built on a unique multi-instance architecture 
         │  │  - Frontend (Nginx)         │    │
         │  │  - Backend (Node.js)        │    │
         │  │  - MongoDB                  │    │
-        │  │  - acme.litedesk.com        │    │
+        │  │  - acme.arivu.com        │    │
         │  └─────────────────────────────┘    │
         │                                      │
         │  ┌─────────────────────────────┐    │
@@ -88,7 +88,7 @@ LiteDesk is a modern CRM platform built on a unique multi-instance architecture 
         │  │  - Frontend (Nginx)         │    │
         │  │  - Backend (Node.js)        │    │
         │  │  - MongoDB                  │    │
-        │  │  - corp.litedesk.com        │    │
+        │  │  - corp.arivu.com        │    │
         │  └─────────────────────────────┘    │
         └──────────────────────────────────────┘
 ```
@@ -110,8 +110,8 @@ LiteDesk is a modern CRM platform built on a unique multi-instance architecture 
 
 ```bash
 # 1. Clone
-git clone https://github.com/yourusername/litedesk.git
-cd litedesk
+git clone https://github.com/yourusername/arivu.git
+cd arivu
 
 # 2. Install
 cd server && npm install
@@ -130,7 +130,7 @@ node scripts/createDefaultAdmin.js
 # Terminal 2: cd client && npm run dev
 
 # 6. Login at http://localhost:5173
-# Email: admin@litedesk.com
+# Email: admin@arivu.com
 # Password: Admin@123
 ```
 
@@ -270,7 +270,7 @@ REFRESH_TOKEN_SECRET=your_refresh_token_secret
 AWS_ACCESS_KEY_ID=your_aws_access_key
 AWS_SECRET_ACCESS_KEY=your_aws_secret_key
 ROUTE53_HOSTED_ZONE_ID=your_hosted_zone_id
-BASE_DOMAIN=litedesk.com
+BASE_DOMAIN=arivu.com
 
 # Kubernetes
 KUBECONFIG_PATH=/path/to/kubeconfig
@@ -286,7 +286,7 @@ ENABLE_METRICS_COLLECTOR=true
 ## 📊 Project Structure
 
 ```
-litedesk/
+arivu/
 ├── server/                          # Backend Node.js application
 │   ├── models/                      # Mongoose models
 │   │   ├── User.js
@@ -316,7 +316,7 @@ litedesk/
 │   │   └── utils/                   # Utilities
 │   └── vite.config.js
 ├── helm/                            # Kubernetes Helm charts
-│   └── litedesk/
+│   └── arivu/
 │       ├── Chart.yaml
 │       ├── values.yaml
 │       └── templates/               # K8s resource templates
@@ -350,7 +350,7 @@ npm test
 docker-compose up --build
 
 # Test Kubernetes deployment (local)
-helm install litedesk-test ./helm/litedesk --dry-run --debug
+helm install arivu-test ./helm/arivu --dry-run --debug
 ```
 
 ---
@@ -370,10 +370,10 @@ helm install litedesk-test ./helm/litedesk --dry-run --debug
 ### Logs
 ```bash
 # Master control plane logs
-kubectl logs -n litedesk-master -l app=litedesk-backend -f
+kubectl logs -n arivu-master -l app=arivu-backend -f
 
 # Customer instance logs
-kubectl logs -n litedesk-{customer-slug} -l app=litedesk-backend -f
+kubectl logs -n arivu-{customer-slug} -l app=arivu-backend -f
 ```
 
 ---
@@ -404,10 +404,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🆘 Support
 
-- **Documentation:** [docs.litedesk.com](https://docs.litedesk.com)
-- **Issues:** [GitHub Issues](https://github.com/yourusername/litedesk/issues)
-- **Email:** support@litedesk.com
-- **Community:** [Discord](https://discord.gg/litedesk)
+- **Documentation:** [docs.arivu.com](https://docs.arivu.com)
+- **Issues:** [GitHub Issues](https://github.com/yourusername/arivu/issues)
+- **Email:** support@arivu.com
+- **Community:** [Discord](https://discord.gg/arivu)
 
 ---
 
@@ -453,9 +453,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Contact
 
 **Project Maintainer:** Your Name
-- Website: [litedesk.com](https://litedesk.com)
-- Email: hello@litedesk.com
-- Twitter: [@litedesk](https://twitter.com/litedesk)
+- Website: [arivu.com](https://arivu.com)
+- Email: hello@arivu.com
+- Twitter: [@arivu](https://twitter.com/arivu)
 
 ---
 

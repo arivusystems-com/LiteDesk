@@ -5,7 +5,7 @@ const getMasterDatabaseUri = require('./utils/getMasterDatabaseUri');
 
 const masterUri = getMasterDatabaseUri();
 
-console.log('Testing MongoDB connection to master database (litedesk_master)...');
+console.log('Testing MongoDB connection to master database (arivu_master)...');
 console.log('Connection string:', masterUri.replace(/:[^:@]+@/, ':****@')); // Hide password
 console.log('');
 
@@ -13,10 +13,10 @@ mongoose.connect(masterUri)
   .then(() => {
     console.log('✅ MongoDB connected successfully!');
     console.log('Database name:', mongoose.connection.db.databaseName);
-    console.log('Expected database: litedesk_master');
+    console.log('Expected database: arivu_master');
     console.log('Connection state:', mongoose.connection.readyState); // 1 = connected
-    if (mongoose.connection.db.databaseName !== 'litedesk_master') {
-      console.warn('⚠️  WARNING: Connected to wrong database! Expected litedesk_master');
+    if (mongoose.connection.db.databaseName !== 'arivu_master') {
+      console.warn('⚠️  WARNING: Connected to wrong database! Expected arivu_master');
     }
     process.exit(0);
   })

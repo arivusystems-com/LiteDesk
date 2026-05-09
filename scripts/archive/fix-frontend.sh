@@ -72,7 +72,7 @@ echo
 
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo -e "${BLUE}🧹 Cleaning frontend dependencies...${NC}"
-    cd /Users/Prabhu/Documents/GitHub/LiteDesk/client
+    cd /Users/Prabhu/Documents/GitHub/Arivu/client
     
     echo "   Removing node_modules..."
     rm -rf node_modules
@@ -91,7 +91,7 @@ echo ""
 # Start Frontend
 # =============================================================================
 echo -e "${BLUE}🚀 Starting Frontend...${NC}"
-cd /Users/Prabhu/Documents/GitHub/LiteDesk/client
+cd /Users/Prabhu/Documents/GitHub/Arivu/client
 
 # Kill any background processes
 pkill -f "vite" 2>/dev/null || true

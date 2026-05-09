@@ -26,7 +26,7 @@ async function connectMaster() {
   const [mongoUriWithoutQuery, mongoUriQueryPart] = MONGO_URI.split('?');
   const mongoQueryString = mongoUriQueryPart ? `?${mongoUriQueryPart}` : '';
   const baseUri = mongoUriWithoutQuery.split('/').slice(0, -1).join('/');
-  const masterDbName = 'litedesk_master';
+  const masterDbName = 'arivu_master';
   const masterUri = `${baseUri}/${masterDbName}${mongoQueryString}`;
 
   await mongoose.connect(masterUri);

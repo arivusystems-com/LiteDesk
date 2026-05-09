@@ -2,7 +2,7 @@
 
 ## All Components Successfully Integrated with Internal Tabs
 
-Every existing component in LiteDesk now uses the internal tabs navigation system. Your users can navigate between modules and records without page refreshes!
+Every existing component in Arivu now uses the internal tabs navigation system. Your users can navigate between modules and records without page refreshes!
 
 ---
 

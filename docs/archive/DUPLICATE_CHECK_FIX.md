@@ -113,11 +113,11 @@ kill -9 <PID>
 
 ```bash
 # Terminal 1: Backend
-cd /Users/Prabhu/Documents/GitHub/LiteDesk/server
+cd /Users/Prabhu/Documents/GitHub/Arivu/server
 npm start
 
 # Terminal 2: Frontend (if needed)
-cd /Users/Prabhu/Documents/GitHub/LiteDesk/client
+cd /Users/Prabhu/Documents/GitHub/Arivu/client
 npm run dev
 ```
 

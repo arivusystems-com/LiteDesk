@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-This document defines the Audit Scheduling Surface as the **exclusive creation path** for audit events in the LiteDesk platform. Audit Scheduling instantiates audit workflows by creating properly configured audit event instances. This specification establishes guardrails that prevent audit events from being created through generic event creation interfaces, ensuring compliance-grade audit workflows.
+This document defines the Audit Scheduling Surface as the **exclusive creation path** for audit events in the Arivu platform. Audit Scheduling instantiates audit workflows by creating properly configured audit event instances. This specification establishes guardrails that prevent audit events from being created through generic event creation interfaces, ensuring compliance-grade audit workflows.
 
 **Surface Location:** `/audit/audits` (Audit App)  
 **Related Documents:** `event-settings.md`, `docs/architecture/event-settings.md`  

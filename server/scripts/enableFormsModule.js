@@ -25,7 +25,7 @@ async function enableFormsModule() {
         const [uriWithoutQuery, queryPart] = MONGO_URI.split('?');
         const connectionQuery = queryPart ? `?${queryPart}` : '';
         const baseUri = uriWithoutQuery.split('/').slice(0, -1).join('/');
-        const masterDbName = 'litedesk_master';
+        const masterDbName = 'arivu_master';
         const masterUri = `${baseUri}/${masterDbName}${connectionQuery}`;
         
         await mongoose.connect(masterUri);

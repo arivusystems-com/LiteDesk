@@ -24,7 +24,7 @@ cat << "EOF"
 EOF
 echo -e "${NC}"
 
-cd /Users/Prabhu/Documents/GitHub/LiteDesk
+cd /Users/Prabhu/Documents/GitHub/Arivu
 
 echo -e "${BLUE}Step 1: Moving images to public folder...${NC}"
 echo ""
@@ -91,7 +91,7 @@ else
     echo "  ./deploy-local-build.sh"
     echo ""
     echo -e "${BLUE}Or upload just the images:${NC}"
-    echo "  scp -i ~/key.pem -r client/dist/images ubuntu@13.203.208.47:/home/ubuntu/LiteDesk/client/dist/"
+    echo "  scp -i ~/key.pem -r client/dist/images ubuntu@13.203.208.47:/home/ubuntu/Arivu/client/dist/"
 fi
 
 echo ""

@@ -49,7 +49,11 @@ function encodeToken(payload) {
  */
 function buildReplyToAddress(payload) {
   const localPart = encodeToken(payload);
-  const domain = process.env.EMAIL_INBOUND_ADDRESS?.split('@')[1] || process.env.EMAIL_REPLY_TO_DOMAIN || 'litedesk.local';
+  const domain =
+    process.env.EMAIL_INBOUND_ADDRESS?.split('@')[1]
+    || process.env.EMAIL_REPLY_TO_DOMAIN
+    || process.env.BASE_DOMAIN
+    || 'arivusystems.com';
   return `${localPart}@${domain}`;
 }
 

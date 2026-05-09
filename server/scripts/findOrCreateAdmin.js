@@ -4,7 +4,7 @@
  * Find or Create Admin User and Fix Internal Instance
  * 
  * This script:
- * 1. Finds or creates admin@litedesk.com user
+ * 1. Finds or creates DEFAULT_ADMIN_EMAIL user (default admin@arivusystems.com)
  * 2. Ensures their organization has all apps enabled
  * 3. Creates/updates Instance record with isInternal: true
  * 
@@ -20,30 +20,32 @@ const { APP_KEYS } = require('../constants/appKeys');
 const bcrypt = require('bcrypt');
 const getMasterDatabaseUri = require('../utils/getMasterDatabaseUri');
 
+const ADMIN_EMAIL = process.env.DEFAULT_ADMIN_EMAIL || 'admin@arivusystems.com';
+
 async function findOrCreateAdmin() {
     try {
         console.log('🔗 Connecting to MongoDB...');
         
-        // Connect to master database (litedesk_master)
+        // Connect to master database (arivu_master)
         const masterUri = getMasterDatabaseUri();
         await mongoose.connect(masterUri);
-        console.log('✅ Connected to MongoDB master database: litedesk_master\n');
+        console.log('✅ Connected to MongoDB master database: arivu_master\n');
 
         // Find admin user
-        let user = await User.findOne({ email: 'admin@litedesk.com' })
+        let user = await User.findOne({ email: ADMIN_EMAIL })
             .populate('organizationId')
             .lean();
         
         let organization;
         
         if (!user) {
-            console.log('⚠️  admin@litedesk.com not found. Creating...\n');
+            console.log(`⚠️  ${ADMIN_EMAIL} not found. Creating...\n`);
             
             // Find or create organization
-            organization = await Organization.findOne({ name: 'LiteDesk Internal' });
+            organization = await Organization.findOne({ name: 'Arivu Internal' });
             if (!organization) {
                 organization = await Organization.create({
-                    name: 'LiteDesk Internal',
+                    name: 'Arivu Internal',
                     enabledApps: [
                         { appKey: APP_KEYS.SALES, status: 'ACTIVE', enabledAt: new Date() },
                         { appKey: APP_KEYS.AUDIT, status: 'ACTIVE', enabledAt: new Date() },
@@ -53,7 +55,7 @@ async function findOrCreateAdmin() {
                         status: 'active'
                     }
                 });
-                console.log('✅ Created organization: LiteDesk Internal');
+                console.log('✅ Created organization: Arivu Internal');
             } else {
                 // Ensure all apps are enabled
                 const currentAppKeys = (organization.enabledApps || []).map(app => 
@@ -74,13 +76,13 @@ async function findOrCreateAdmin() {
                     }
                 }
                 await organization.save();
-                console.log('✅ Updated organization: LiteDesk Internal');
+                console.log('✅ Updated organization: Arivu Internal');
             }
             
             // Create admin user
             const hashedPassword = await bcrypt.hash('admin123', 10);
             user = await User.create({
-                email: 'admin@litedesk.com',
+                email: ADMIN_EMAIL,
                 username: 'admin',
                 password: hashedPassword,
                 isOwner: true,
@@ -91,9 +93,9 @@ async function findOrCreateAdmin() {
                     { appKey: APP_KEYS.SALES, roleKey: 'ADMIN', status: 'ACTIVE', addedAt: new Date() }
                 ]
             });
-            console.log('✅ Created admin user: admin@litedesk.com\n');
+            console.log(`✅ Created admin user: ${ADMIN_EMAIL}\n`);
         } else {
-            console.log('✅ Found admin user: admin@litedesk.com');
+            console.log(`✅ Found admin user: ${ADMIN_EMAIL}`);
             organization = await Organization.findById(user.organizationId._id || user.organizationId);
             console.log('');
         }
@@ -192,10 +194,10 @@ async function findOrCreateAdmin() {
         console.log('\n' + '='.repeat(80));
         console.log('\n✅ Setup complete!');
         console.log('\n📧 Login credentials:');
-        console.log(`   Email: admin@litedesk.com`);
+        console.log(`   Email: ${ADMIN_EMAIL}`);
         console.log(`   Password: admin123`);
         console.log('\n💡 Next steps:');
-        console.log('   1. Log in with admin@litedesk.com');
+        console.log(`   1. Log in with ${ADMIN_EMAIL}`);
         console.log('   2. Try switching to Portal/Audit apps in the app switcher');
         console.log('');
 

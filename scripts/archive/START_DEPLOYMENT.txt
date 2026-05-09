@@ -1,5 +1,5 @@
 ═══════════════════════════════════════════════════════════════
-            🚀 DEPLOY LITEDESK TO AWS - START HERE 🚀
+            🚀 DEPLOY ARIVU TO AWS - START HERE 🚀
 ═══════════════════════════════════════════════════════════════
 
 ✅ EVERYTHING IS PRE-CONFIGURED AND READY!
@@ -7,7 +7,7 @@
 Your Details:
   EC2 IP:      43.204.144.169
   Database:    MongoDB Atlas (connected)
-  Repository:  https://github.com/Prabhubalu/LiteDesk.git
+  Repository:  https://github.com/Prabhubalu/Arivu.git
 
 ═══════════════════════════════════════════════════════════════
 
@@ -28,7 +28,7 @@ Step 2: Run deployment script
 Step 3: Access your app
 ────────────────────────
   Open: http://43.204.144.169
-  Login: admin@litedesk.com / Admin@123456
+  Login: admin@arivu.com / Admin@123456
 
 ═══════════════════════════════════════════════════════════════
 
@@ -51,8 +51,8 @@ Option A: Deploy from Mac (EASIEST)
 
 Option B: Deploy directly on EC2
   ssh -i ~/key.pem ubuntu@43.204.144.169
-  git clone https://github.com/Prabhubalu/LiteDesk.git
-  cd LiteDesk
+  git clone https://github.com/Prabhubalu/Arivu.git
+  cd Arivu
   ./deploy-aws-quick.sh
 
 ═══════════════════════════════════════════════════════════════

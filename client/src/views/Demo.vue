@@ -90,12 +90,12 @@ const { colorMode, toggleColorMode } = useColorMode();
           <div class="bg-gradient-to-br from-indigo-500 to-indigo-600 p-3 rounded-2xl shadow-lg mb-4">
             <img 
               :src="colorMode === 'dark' || colorMode === 'system' ? '/assets/nurtura_logo_dark.svg' : '/assets/nurtura_logo_light.svg'" 
-              alt="LiteDesk Logo" 
+              alt="Arivu Logo" 
               class="h-10 w-auto brightness-0 invert" 
             />  
           </div>
           <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Request a Demo</h1>
-          <p class="text-gray-600 dark:text-gray-400 mt-1 text-center">See how LiteDesk can transform your business</p>
+          <p class="text-gray-600 dark:text-gray-400 mt-1 text-center">See how Arivu can transform your business</p>
         </div>
 
 
@@ -116,7 +116,7 @@ const { colorMode, toggleColorMode } = useColorMode();
 
 
       <div class="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
-        <p>© 2025 LiteDesk. All rights reserved.</p>
+        <p>© 2025 Arivu. All rights reserved.</p>
       </div>
     </div>
   </div> -->

@@ -9,8 +9,11 @@ const websiteHostnamePattern = /^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$/;
 function isMasterLikeRequest(req, currentTenantOrg) {
   const orgName = String(currentTenantOrg?.name || '').trim().toLowerCase();
   const userEmail = String(req?.user?.email || '').trim().toLowerCase();
-  const isInternalEmail = userEmail.endsWith('@litedesk.com') || userEmail.endsWith('@litedesk.io');
-  return orgName === 'litedesk master' || orgName.includes('litedesk master') || isInternalEmail;
+  const isInternalEmail =
+    userEmail.endsWith('@arivusystems.com')
+    || userEmail.endsWith('@arivu.com')
+    || userEmail.endsWith('@arivu.io');
+  return orgName === 'arivu master' || orgName.includes('arivu master') || isInternalEmail;
 }
 
 function isValidWebsite(rawValue) {

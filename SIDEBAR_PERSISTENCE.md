@@ -32,12 +32,12 @@ import { watch } from 'vue';
 
 // Load saved state from localStorage on mount
 const sidebarCollapsed = ref(
-  localStorage.getItem('litedesk-sidebar-collapsed') === 'true'
+  localStorage.getItem('arivu-sidebar-collapsed') === 'true'
 );
 
 // Save state to localStorage whenever it changes
 watch(sidebarCollapsed, (newValue) => {
-  localStorage.setItem('litedesk-sidebar-collapsed', newValue.toString());
+  localStorage.setItem('arivu-sidebar-collapsed', newValue.toString());
 });
 ```
 
@@ -49,7 +49,7 @@ watch(sidebarCollapsed, (newValue) => {
 ```
 1. App.vue initializes
    ↓
-2. Check localStorage for 'litedesk-sidebar-collapsed'
+2. Check localStorage for 'arivu-sidebar-collapsed'
    ↓
 3. If found: Use saved value (true/false)
    ↓
@@ -85,7 +85,7 @@ watch(sidebarCollapsed, (newValue) => {
 
 ### Storage Key:
 ```
-'litedesk-sidebar-collapsed'
+'arivu-sidebar-collapsed'
 ```
 
 ### Stored Values:
@@ -104,14 +104,14 @@ You can inspect the stored value:
 2. Go to Application/Storage tab
 3. Expand "Local Storage"
 4. Click on your domain
-5. Look for `litedesk-sidebar-collapsed`
+5. Look for `arivu-sidebar-collapsed`
 
 ---
 
 ## 🧪 Testing
 
 ### Test Scenario 1: Collapse & Refresh
-1. Log in to LiteDesk
+1. Log in to Arivu
 2. Sidebar is expanded (256px) by default
 3. Click collapse button (←)
 4. Sidebar collapses to 80px
@@ -133,7 +133,7 @@ You can inspect the stored value:
 ### Test Scenario 4: Close & Reopen Browser
 1. Collapse sidebar
 2. Close entire browser
-3. Reopen browser and go to LiteDesk
+3. Reopen browser and go to Arivu
 4. **Result:** Sidebar is still collapsed ✅
 
 ### Test Scenario 5: Different Users
@@ -173,7 +173,7 @@ You can inspect the stored value:
 - ✅ Can't be used for tracking
 
 ### localStorage Scope:
-- Per domain (e.g., `litedesk.com`)
+- Per domain (e.g., `arivu.com`)
 - Per browser (Chrome vs Firefox have separate storage)
 - Accessible only to same-origin scripts
 - Not sent to server
@@ -228,11 +228,11 @@ const uiPreferences = ref({
 
 // Save all preferences
 watch(uiPreferences, (newValue) => {
-  localStorage.setItem('litedesk-ui-prefs', JSON.stringify(newValue));
+  localStorage.setItem('arivu-ui-prefs', JSON.stringify(newValue));
 }, { deep: true });
 
 // Load all preferences
-const stored = localStorage.getItem('litedesk-ui-prefs');
+const stored = localStorage.getItem('arivu-ui-prefs');
 if (stored) {
   uiPreferences.value = JSON.parse(stored);
 }
@@ -250,7 +250,7 @@ const { width } = useWindowSize();
 const defaultCollapsed = computed(() => width.value < 1280);
 
 const sidebarCollapsed = ref(
-  localStorage.getItem('litedesk-sidebar-collapsed') === 'true' 
+  localStorage.getItem('arivu-sidebar-collapsed') === 'true' 
   || defaultCollapsed.value
 );
 ```
@@ -262,7 +262,7 @@ const sidebarCollapsed = ref(
 ### 1. First Visit (No localStorage)
 ```javascript
 // Returns null if not found
-localStorage.getItem('litedesk-sidebar-collapsed')
+localStorage.getItem('arivu-sidebar-collapsed')
 // null === 'true' → false
 // So defaults to expanded ✅
 ```
@@ -282,7 +282,7 @@ Current implementation doesn't handle this, but could add:
 ```javascript
 function getSavedState() {
   try {
-    return localStorage.getItem('litedesk-sidebar-collapsed') === 'true';
+    return localStorage.getItem('arivu-sidebar-collapsed') === 'true';
   } catch (e) {
     console.warn('localStorage not available:', e);
     return false; // Default to expanded
@@ -294,7 +294,7 @@ const sidebarCollapsed = ref(getSavedState());
 // Save with error handling
 watch(sidebarCollapsed, (newValue) => {
   try {
-    localStorage.setItem('litedesk-sidebar-collapsed', newValue.toString());
+    localStorage.setItem('arivu-sidebar-collapsed', newValue.toString());
   } catch (e) {
     console.warn('Could not save to localStorage:', e);
   }
@@ -377,7 +377,7 @@ Users can now:
 
 *Feature Added: October 26, 2025*  
 *Storage: localStorage*  
-*Key: 'litedesk-sidebar-collapsed'*  
+*Key: 'arivu-sidebar-collapsed'*  
 *UX Improvement: High*  
 *Complexity: Low*  
 *Status: ✅ Complete*

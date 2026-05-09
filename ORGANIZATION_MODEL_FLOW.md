@@ -3,7 +3,7 @@
 ## 📋 Overview
 
 The application now uses a **single unified `Organization` model** that handles both:
-1. **Tenant Organizations** (`isTenant: true`) - Your SaaS customers who pay for LiteDesk
+1. **Tenant Organizations** (`isTenant: true`) - Your SaaS customers who pay for Arivu
 2. **CRM Organizations** (`isTenant: false`) - Customer/Partner records that users manage in their CRM
 
 ---
@@ -185,7 +185,7 @@ Define fields: name, types, assignedTo, createdBy, ...
 - **Fields**: `subscription`, `limits`, `enabledModules`, `settings`, `slug`
 - **Users belong to**: Users have `organizationId` pointing here
 - **Usage**: Controls billing, limits, feature access
-- **Example**: "Acme Corp" is a LiteDesk customer
+- **Example**: "Acme Corp" is a Arivu customer
 
 ### CRM Organization (`isTenant: false`)
 - **Purpose**: CRM record - a customer/partner the user manages
@@ -199,7 +199,7 @@ Define fields: name, types, assignedTo, createdBy, ...
 
 ## 📊 Example Scenario
 
-### Scenario: Acme Corp uses LiteDesk
+### Scenario: Acme Corp uses Arivu
 
 1. **Registration**:
    ```

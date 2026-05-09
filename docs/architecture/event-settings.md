@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-This document defines the Event Settings module for the LiteDesk platform. Event Settings configure the structure, constraints, and eligibility of event records across the platform. This specification aligns with the Module Settings Doctrine and uses People Settings as the canonical reference implementation.
+This document defines the Event Settings module for the Arivu platform. Event Settings configure the structure, constraints, and eligibility of event records across the platform. This specification aligns with the Module Settings Doctrine and uses People Settings as the canonical reference implementation.
 
 **Canonical Reference:** People Settings (`/settings?tab=core-modules&moduleKey=people`)  
 **Settings Location:** `/settings?tab=core-modules&moduleKey=events`  

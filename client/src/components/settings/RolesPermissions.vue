@@ -283,7 +283,7 @@ import OrganizationHierarchy from './OrganizationHierarchy.vue';
 import RoleUsersModal from './RoleUsersModal.vue';
 import EditUserModal from './EditUserModal.vue';
 
-const ROLES_PERMS_TAB_KEY = 'litedesk-settings-rolesperms-tab';
+const ROLES_PERMS_TAB_KEY = 'arivu-settings-rolesperms-tab';
 const activeTab = ref(localStorage.getItem(ROLES_PERMS_TAB_KEY) || 'roles');
 const roles = ref([]);
 const loading = ref(false);

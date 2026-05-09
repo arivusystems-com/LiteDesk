@@ -4,18 +4,18 @@ metadata:
   name: {{ .Values.instance.name }}-frontend
   namespace: {{ .Values.instance.name }}
   labels:
-    app: litedesk-frontend
+    app: arivu-frontend
     instance: {{ .Values.instance.subdomain }}
 spec:
   replicas: {{ .Values.frontend.replicaCount }}
   selector:
     matchLabels:
-      app: litedesk-frontend
+      app: arivu-frontend
       instance: {{ .Values.instance.subdomain }}
   template:
     metadata:
       labels:
-        app: litedesk-frontend
+        app: arivu-frontend
         instance: {{ .Values.instance.subdomain }}
     spec:
       securityContext:

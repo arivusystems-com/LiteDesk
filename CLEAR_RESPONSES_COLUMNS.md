@@ -12,11 +12,11 @@ Open your browser's developer console (F12) and run:
 ```javascript
 // Clear all Responses column settings
 const keys = [
-  'litedesk-listview-forms-columns',
+  'arivu-listview-forms-columns',
   'datatable-responses-table-hidden',
   'datatable-responses-table-order',
   'datatable-responses-table-frozen',
-  'litedesk-responses-columns-v2-migrated'
+  'arivu-responses-columns-v2-migrated'
 ];
 keys.forEach(key => {
   localStorage.removeItem(key);
@@ -32,11 +32,11 @@ location.reload();
 2. Go to Application/Storage tab
 3. Find Local Storage
 4. Delete these keys:
-   - `litedesk-listview-forms-columns`
+   - `arivu-listview-forms-columns`
    - `datatable-responses-table-hidden`
    - `datatable-responses-table-order`
    - `datatable-responses-table-frozen`
-   - `litedesk-responses-columns-v2-migrated`
+   - `arivu-responses-columns-v2-migrated`
 5. Refresh the page
 
 ## Expected Columns After Clear

@@ -20,7 +20,7 @@ class DatabaseConnectionManager {
     
     // Base MongoDB URI (without database name)
     this.baseMongoUri = null;
-    this.masterDbName = 'litedesk_master';
+    this.masterDbName = process.env.MASTER_DB_NAME || 'arivu_master';
     this.connectionQuery = '';
   }
   
@@ -75,7 +75,7 @@ class DatabaseConnectionManager {
   
   /**
    * Get or create connection to organization's database
-   * @param {string} databaseName - Organization database name (e.g., 'litedesk_acme')
+   * @param {string} databaseName - Organization database name (e.g., 'arivu_acme')
    * @returns {Promise<mongoose.Connection>} - Mongoose connection to organization database
    */
   async getOrganizationConnection(databaseName) {

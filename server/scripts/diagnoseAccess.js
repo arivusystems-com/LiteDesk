@@ -20,10 +20,10 @@ async function diagnoseAccess() {
     try {
         console.log('🔗 Connecting to MongoDB...');
         
-        // Connect to master database (litedesk_master)
+        // Connect to master database (arivu_master)
         const masterUri = getMasterDatabaseUri();
         await mongoose.connect(masterUri);
-        console.log('✅ Connected to MongoDB master database: litedesk_master\n');
+        console.log('✅ Connected to MongoDB master database: arivu_master\n');
 
         // Find user
         let user;

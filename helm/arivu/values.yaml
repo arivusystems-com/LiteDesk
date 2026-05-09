@@ -1,4 +1,4 @@
-# Default values for LiteDesk instance deployment
+# Default values for Arivu instance deployment
 # This file will be customized per instance
 
 # Instance specific values (will be overridden during provisioning)
@@ -9,13 +9,13 @@ instance:
 
 # Image configuration
 image:
-  repository: litedesk/crm
+  repository: arivu/crm
   pullPolicy: IfNotPresent
   tag: "latest"
 
 frontend:
   image:
-    repository: litedesk/crm-frontend
+    repository: arivu/crm-frontend
     tag: "latest"
   replicaCount: 2
   resources:
@@ -28,7 +28,7 @@ frontend:
 
 backend:
   image:
-    repository: litedesk/crm-backend
+    repository: arivu/crm-backend
     tag: "latest"
   replicaCount: 2
   resources:
@@ -49,9 +49,9 @@ backend:
 mongodb:
   enabled: true
   auth:
-    username: litedesk
+    username: arivu
     password: "" # Will be generated
-    database: litedesk
+    database: arivu
   persistence:
     enabled: true
     size: 10Gi
@@ -83,7 +83,7 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
   hosts:
-    - host: "" # Will be set dynamically (subdomain.litedesk.com)
+    - host: "" # Will be set dynamically (e.g. tenant.app.arivusystems.com)
       paths:
         - path: /
           pathType: Prefix

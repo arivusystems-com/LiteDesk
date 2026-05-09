@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const MASTER_DB = 'litedesk_master';
+const MASTER_DB = process.env.MASTER_DB_NAME || 'arivu_master';
 const MAX_ATTEMPTS = Number(process.env.MONGO_CONNECT_RETRIES) || 5;
 const DELAY_MS = Number(process.env.MONGO_CONNECT_RETRY_DELAY_MS) || 3000;
 

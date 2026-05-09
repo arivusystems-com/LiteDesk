@@ -357,7 +357,7 @@ const draftSaveInProgress = ref(false);
 const isInternalNavigation = ref(false);
 const getSidebarOffset = () => {
   if (typeof localStorage === 'undefined') return 256;
-  return localStorage.getItem('litedesk-sidebar-collapsed') === 'true' ? 64 : 256;
+  return localStorage.getItem('arivu-sidebar-collapsed') === 'true' ? 64 : 256;
 };
 const sidebarOffset = ref(getSidebarOffset());
 const refreshSidebarOffset = () => {

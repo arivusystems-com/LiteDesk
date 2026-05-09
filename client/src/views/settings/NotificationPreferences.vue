@@ -249,7 +249,7 @@
                       v-if="event.isUnknown"
                       class="mt-1 text-[11px] uppercase tracking-wide text-amber-600 dark:text-amber-400 font-semibold"
                     >
-                      System event (managed by LiteDesk)
+                      System event (managed by Arivu)
                     </p>
                   </div>
 
@@ -1032,12 +1032,12 @@ function eventTypeToDescription(eventType, appKey) {
 
   // Fallback description with app context
   if (appKey === 'PORTAL') {
-    return 'Portal notification managed by LiteDesk.';
+    return 'Portal notification managed by Arivu.';
   }
   if (appKey === 'AUDIT') {
-    return 'Audit notification managed by LiteDesk.';
+    return 'Audit notification managed by Arivu.';
   }
-  return 'Notification managed by LiteDesk.';
+  return 'Notification managed by Arivu.';
 }
 
 // Phase 14: Push notification state

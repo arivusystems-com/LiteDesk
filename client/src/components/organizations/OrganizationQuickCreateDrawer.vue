@@ -765,10 +765,10 @@ const handleSubmit = async () => {
             
             // Emit refresh events
             if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('litedesk:refresh-person', {
+              window.dispatchEvent(new CustomEvent('arivu:refresh-person', {
                 detail: { personId }
               }));
-              window.dispatchEvent(new CustomEvent('litedesk:refresh-organization', {
+              window.dispatchEvent(new CustomEvent('arivu:refresh-organization', {
                 detail: { organizationId: createdOrg._id || createdOrg.id }
               }));
             }
@@ -789,7 +789,7 @@ const handleSubmit = async () => {
       
       // Dispatch global event to refresh list views
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('litedesk:record-created', {
+        window.dispatchEvent(new CustomEvent('arivu:record-created', {
           detail: { moduleKey: 'organizations', record: createdOrg }
         }));
       }

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =============================================================================
-# LiteDesk - Start All Services (Development Mode)
+# Arivu - Start All Services (Development Mode)
 # =============================================================================
 # This script starts MongoDB, Backend, and Frontend for local development
 # Usage: ./start.sh
@@ -22,7 +22,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo ""
 echo "╔════════════════════════════════════════════════════════════╗"
-echo "║                    🚀 LiteDesk CRM                        ║"
+echo "║                    🚀 Arivu CRM                        ║"
 echo "║           Starting Development Environment...              ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
@@ -263,7 +263,7 @@ echo -e "${GREEN}🚀 Backend:${NC}   http://localhost:$BACKEND_PORT"
 echo -e "${GREEN}💚 Health:${NC}    http://localhost:$BACKEND_PORT/health"
 
 if [ "$USING_LOCAL_MONGO" = true ]; then
-    echo -e "${GREEN}🗄️  MongoDB:${NC}  mongodb://localhost:27017/litedesk"
+    echo -e "${GREEN}🗄️  MongoDB:${NC}  mongodb://localhost:27017/arivu"
 else
     echo -e "${PURPLE}🗄️  MongoDB:${NC}  MongoDB Atlas (Cloud)"
 fi
@@ -284,7 +284,7 @@ echo -e "${YELLOW}🛑 To stop all services:${NC}"
 echo "   ./stop.sh"
 echo ""
 echo -e "${BLUE}📚 Credentials:${NC}"
-echo "   • Email:    admin@litedesk.com"
+echo "   • Email:    admin@arivu.com"
 echo "   • Password: Admin@123456"
 echo "   • (Change password after first login)"
 echo ""
@@ -303,7 +303,7 @@ elif command -v xdg-open &> /dev/null; then
 fi
 
 echo ""
-echo -e "${GREEN}✨ LiteDesk is ready! Happy coding! 🚀${NC}"
+echo -e "${GREEN}✨ Arivu is ready! Happy coding! 🚀${NC}"
 echo ""
 echo -e "${YELLOW}💡 Tips:${NC}"
 echo "   • Backend logs show detailed environment info"

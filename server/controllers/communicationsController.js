@@ -38,7 +38,7 @@ async function getTenantUserIds(organizationId) {
  */
 function generateMessageId() {
   const uuid = crypto.randomUUID();
-  const domain = process.env.EMAIL_REPLY_TO_DOMAIN || 'litedesk.local';
+  const domain = process.env.EMAIL_REPLY_TO_DOMAIN || 'arivu.local';
   return `<${uuid}@${domain}>`;
 }
 

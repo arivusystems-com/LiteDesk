@@ -63,7 +63,7 @@ Your `start.sh` and `stop.sh` scripts have been updated to work with the new sma
 🌐 Frontend:  http://localhost:5173
 🚀 Backend:   http://localhost:5000
 💚 Health:    http://localhost:5000/health
-🗄️  MongoDB:  mongodb://localhost:27017/litedesk
+🗄️  MongoDB:  mongodb://localhost:27017/arivu
 ```
 
 ---
@@ -106,7 +106,7 @@ The scripts automatically detect your MongoDB setup:
 
 ### Local MongoDB
 ```env
-MONGO_URI=mongodb://localhost:27017/litedesk
+MONGO_URI=mongodb://localhost:27017/arivu
 ```
 **Script behavior:**
 - ✅ Tries to start local MongoDB
@@ -115,7 +115,7 @@ MONGO_URI=mongodb://localhost:27017/litedesk
 
 ### MongoDB Atlas
 ```env
-MONGO_URI=mongodb+srv://litedeskadmin:...
+MONGO_URI=mongodb+srv://arivuadmin:...
 ```
 **Script behavior:**
 - ✅ Skips local MongoDB setup

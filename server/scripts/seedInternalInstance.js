@@ -5,16 +5,16 @@
  * Phase 0J.1: Seed Internal Instance Flag
  * ============================================================================
  * 
- * This script marks LiteDesk's internal instance(s) with isInternal=true.
+ * This script marks Arivu's internal instance(s) with isInternal=true.
  * 
  * Behavior:
- * - Locate LiteDesk instance (by known organizationId / owner email / organization name)
+ * - Locate Arivu instance (by known organizationId / owner email / organization name)
  * - Set isInternal = true
  * 
  * Constraints:
  * - Idempotent (safe to re-run)
  * - No side effects on other instances
- * - Only marks instances owned by LiteDesk
+ * - Only marks instances owned by Arivu
  * 
  * Usage: node server/scripts/seedInternalInstance.js
  * 
@@ -32,30 +32,32 @@ const User = require('../models/User');
 const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || process.env.MONGO_URI_LOCAL;
 
 /**
- * Check if email is a LiteDesk internal email
+ * Check if email is a Arivu internal email
  */
-function isLiteDeskInternalEmail(email) {
+function isArivuInternalEmail(email) {
     if (!email) return false;
     const internalDomains = [
-        'litedesk.com',
-        'litedesk.io',
-        '@litedesk' // Allow any @litedesk domain
+        'arivusystems.com',
+        'arivu.com',
+        'arivu.io',
+        '@arivu',
     ];
     const emailLower = email.toLowerCase();
     return internalDomains.some(domain => emailLower.includes(domain));
 }
 
 /**
- * Check if organization name suggests it's LiteDesk internal
+ * Check if organization name suggests it's Arivu internal
  */
-function isLiteDeskInternalOrg(orgName) {
+function isArivuInternalOrg(orgName) {
     if (!orgName) return false;
     const nameLower = orgName.toLowerCase();
     const internalNames = [
-        'litedesk',
-        'litedesk internal',
-        'litedesk platform',
-        'litedesk ops'
+        'arivu',
+        'arivu systems',
+        'arivu internal',
+        'arivu platform',
+        'arivu ops'
     ];
     return internalNames.some(name => nameLower.includes(name));
 }
@@ -74,11 +76,11 @@ async function seedInternalInstance() {
         await mongoose.connect(MONGO_URI);
         console.log('✅ Connected to MongoDB\n');
 
-        // Find LiteDesk internal organizations
+        // Find Arivu internal organizations
         // Strategy: Look for organizations where:
-        // 1. Owner email contains @litedesk domain
-        // 2. Organization name contains "LiteDesk"
-        console.log('📋 Finding LiteDesk internal organizations...');
+        // 1. Owner email contains @arivu domain
+        // 2. Organization name contains "Arivu"
+        console.log('📋 Finding Arivu internal organizations...');
         
         // Get all organizations
         const allOrgs = await Organization.find({});
@@ -88,7 +90,7 @@ async function seedInternalInstance() {
         const internalOrgIds = [];
         for (const org of allOrgs) {
             // Check organization name
-            if (isLiteDeskInternalOrg(org.name)) {
+            if (isArivuInternalOrg(org.name)) {
                 console.log(`   ✓ Found internal org by name: ${org.name} (ID: ${org._id})`);
                 internalOrgIds.push(org._id);
                 continue;
@@ -100,7 +102,7 @@ async function seedInternalInstance() {
                 isOwner: true
             });
 
-            if (owner && isLiteDeskInternalEmail(owner.email)) {
+            if (owner && isArivuInternalEmail(owner.email)) {
                 console.log(`   ✓ Found internal org by owner email: ${org.name} (Owner: ${owner.email}, ID: ${org._id})`);
                 internalOrgIds.push(org._id);
                 continue;
@@ -108,8 +110,8 @@ async function seedInternalInstance() {
         }
 
         if (internalOrgIds.length === 0) {
-            console.log('⚠️  No LiteDesk internal organizations found.\n');
-            console.log('   Tip: Create an organization with owner email containing @litedesk.com\n');
+            console.log('⚠️  No Arivu internal organizations found.\n');
+            console.log('   Tip: Create an organization with owner email containing @arivusystems.com\n');
             await mongoose.connection.close();
             process.exit(0);
         }

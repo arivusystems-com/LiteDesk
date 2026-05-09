@@ -12,7 +12,7 @@ async function run() {
   await mongoose.connect(MONGO_URI);
   console.log('Connected. Seeding sample People and linking CRM organization primary contact...');
 
-  const admin = await User.findOne({ email: process.env.DEFAULT_ADMIN_EMAIL || 'admin@litedesk.com' });
+  const admin = await User.findOne({ email: process.env.DEFAULT_ADMIN_EMAIL || 'admin@arivusystems.com' });
   if (!admin) throw new Error('Default admin user not found. Run createDefaultAdmin.js first.');
 
   const org = await Organization.findById(admin.organizationId);

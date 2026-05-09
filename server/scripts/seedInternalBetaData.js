@@ -132,7 +132,7 @@ async function createOrLoadTenant() {
     throw new Error(`Organization with slug ${BETA_SLUG} not found. Run without --skip-org first.`);
   }
 
-  const dbName = `litedesk_${BETA_SLUG.replace(/-/g, '_')}`;
+  const dbName = `arivu_${BETA_SLUG.replace(/-/g, '_')}`;
   const dbm = require('../utils/databaseConnectionManager');
   const uriCfg = getMongoUris();
   dbm.baseMongoUri = uriCfg.baseUri;

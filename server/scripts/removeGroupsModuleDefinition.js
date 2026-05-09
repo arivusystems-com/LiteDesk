@@ -7,7 +7,7 @@ async function removeGroupsModuleDefinition() {
     console.log('🔄 Removing Groups module definition...\n');
 
     // Connect to MongoDB
-    const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/litedesk';
+    const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/arivu';
     await mongoose.connect(mongoUri);
     console.log('✅ Connected to MongoDB\n');
 

@@ -175,7 +175,7 @@ const sidebarCollapsed = ref(false);
 
 Now when you test:
 
-1. **Log in** to LiteDesk
+1. **Log in** to Arivu
 2. **Click collapse button** (←)
 3. **You should see:**
    - ✅ Sidebar smoothly shrinks to 80px

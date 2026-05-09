@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-This document defines what "Module Settings" mean across the LiteDesk platform. Module Settings are configuration interfaces that control how modules behave, not interfaces for browsing or manipulating data. This doctrine establishes clear boundaries between Settings, Surfaces, and Work to prevent scope creep and maintain architectural integrity.
+This document defines what "Module Settings" mean across the Arivu platform. Module Settings are configuration interfaces that control how modules behave, not interfaces for browsing or manipulating data. This doctrine establishes clear boundaries between Settings, Surfaces, and Work to prevent scope creep and maintain architectural integrity.
 
 **Canonical Implementation:** People Settings (`/settings?tab=core-modules&moduleKey=people`)  
 **Reference:** All future module settings implementations must align with this doctrine.

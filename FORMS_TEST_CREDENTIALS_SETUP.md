@@ -4,7 +4,7 @@
 
 ### Step 1: Determine Your Admin Password
 
-The admin user exists (`admin@litedesk.com`), but the password may have been changed from the default.
+The admin user exists (`admin@arivu.com`), but the password may have been changed from the default.
 
 **Option A: Reset Password to Known Value**
 
@@ -22,14 +22,14 @@ If you know the current password, skip to Step 2.
 ### Step 2: Set Environment Variables
 
 ```bash
-export TEST_EMAIL=admin@litedesk.com
+export TEST_EMAIL=admin@arivu.com
 export TEST_PASSWORD=Admin@123  # Or your actual password
 ```
 
 ### Step 3: Run Tests
 
 ```bash
-cd /Users/darshan/sideline/LiteDesk
+cd /Users/darshan/sideline/Arivu
 node server/scripts/testFormsAPI.js
 ```
 
@@ -65,7 +65,7 @@ After setting credentials, verify they work:
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
   -H "X-Bypass-Rate-Limit: true" \
-  -d '{"email":"admin@litedesk.com","password":"Admin@123"}'
+  -d '{"email":"admin@arivu.com","password":"Admin@123"}'
 ```
 
 Should return a token (200 OK) instead of 401 Unauthorized.

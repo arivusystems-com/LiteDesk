@@ -1,4 +1,4 @@
-# 🚀 Deploy LiteDesk to AWS - Quick Start
+# 🚀 Deploy Arivu to AWS - Quick Start
 
 Your deployment is pre-configured and ready to go!
 
@@ -52,8 +52,8 @@ ssh -i ~/path/to/your-key.pem ubuntu@43.204.144.169
 
 ```bash
 # If your code is on GitHub (recommended):
-git clone https://github.com/YOUR_USERNAME/LiteDesk.git
-cd LiteDesk
+git clone https://github.com/YOUR_USERNAME/Arivu.git
+cd Arivu
 chmod +x deploy-aws-quick.sh
 ./deploy-aws-quick.sh
 ```
@@ -77,7 +77,7 @@ chmod +x deploy-aws-quick.sh
 The script automatically:
 
 - ✅ **Installs:** Node.js 20, Nginx, PM2, Git
-- ✅ **Clones:** Your LiteDesk repository
+- ✅ **Clones:** Your Arivu repository
 - ✅ **Configures:** MongoDB connection to Atlas
 - ✅ **Generates:** Secure JWT secrets automatically
 - ✅ **Builds:** Frontend (Vue.js)
@@ -96,7 +96,7 @@ The script automatically:
 **URL:** http://43.204.144.169
 
 **Login Credentials:**
-- **Email:** admin@litedesk.com
+- **Email:** admin@arivu.com
 - **Password:** Admin@123456
 
 ⚠️ **IMPORTANT:** Change the admin password immediately after first login!
@@ -115,7 +115,7 @@ ssh -i ~/path/to/your-key.pem ubuntu@43.204.144.169
 pm2 status
 
 # View backend logs
-pm2 logs litedesk-api
+pm2 logs arivu-api
 
 # Check Nginx status
 sudo systemctl status nginx
@@ -126,7 +126,7 @@ curl http://localhost:5000/api/health
 
 ### Expected Outputs:
 
-✅ PM2 should show `litedesk-api` with status `online`  
+✅ PM2 should show `arivu-api` with status `online`  
 ✅ Nginx should be `active (running)`  
 ✅ Health check should return: `{"status":"OK"}`
 
@@ -138,13 +138,13 @@ curl http://localhost:5000/api/health
 
 ```bash
 # View logs (live)
-pm2 logs litedesk-api
+pm2 logs arivu-api
 
 # Restart backend
-pm2 restart litedesk-api
+pm2 restart arivu-api
 
 # Stop backend
-pm2 stop litedesk-api
+pm2 stop arivu-api
 
 # Monitor resources
 pm2 monit
@@ -173,13 +173,13 @@ sudo nginx -t
 
 ```bash
 # Update to latest code
-cd /home/ubuntu/LiteDesk
+cd /home/ubuntu/Arivu
 git pull
 
 # Update backend
 cd server
 npm install
-pm2 restart litedesk-api
+pm2 restart arivu-api
 
 # Update frontend
 cd ../client
@@ -217,13 +217,13 @@ sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d yourdomain.com
 
 # 5. Update backend .env
-cd /home/ubuntu/LiteDesk/server
+cd /home/ubuntu/Arivu/server
 nano .env
 # Change CLIENT_URL to: https://yourdomain.com
 # Change CORS_ORIGINS to: https://yourdomain.com
 
 # 6. Restart backend
-pm2 restart litedesk-api
+pm2 restart arivu-api
 ```
 
 Now access via: **https://yourdomain.com** 🎉
@@ -236,10 +236,10 @@ Now access via: **https://yourdomain.com** 🎉
 
 ```bash
 # Check MongoDB connection string in .env
-cat /home/ubuntu/LiteDesk/server/.env | grep MONGODB_URI
+cat /home/ubuntu/Arivu/server/.env | grep MONGODB_URI
 
 # Test connection
-cd /home/ubuntu/LiteDesk/server
+cd /home/ubuntu/Arivu/server
 node -e "require('dotenv').config(); const mongoose = require('mongoose'); mongoose.connect(process.env.MONGODB_URI).then(() => console.log('✓ Connected')).catch(err => console.log('✗ Error:', err.message))"
 ```
 
@@ -247,7 +247,7 @@ node -e "require('dotenv').config(); const mongoose = require('mongoose'); mongo
 
 ```bash
 # Backend is not running
-pm2 restart litedesk-api
+pm2 restart arivu-api
 
 # Check if backend is listening on port 5000
 curl http://localhost:5000/api/health
@@ -257,10 +257,10 @@ curl http://localhost:5000/api/health
 
 ```bash
 # Check if dist folder exists
-ls -la /home/ubuntu/LiteDesk/client/dist
+ls -la /home/ubuntu/Arivu/client/dist
 
 # Rebuild frontend
-cd /home/ubuntu/LiteDesk/client
+cd /home/ubuntu/Arivu/client
 npm run build
 
 # Check Nginx logs
@@ -291,7 +291,7 @@ Your deployment comes with:
 | **MongoDB** | MongoDB Atlas (pre-configured) |
 | **Backend Port** | 5000 |
 | **Frontend** | Served by Nginx on port 80 |
-| **Admin Email** | admin@litedesk.com |
+| **Admin Email** | admin@arivu.com |
 | **Admin Password** | Admin@123456 (change this!) |
 | **Node.js** | Version 20.x |
 | **JWT Secrets** | Auto-generated (secure) |
@@ -317,10 +317,10 @@ After successful deployment:
 
 ## 💡 Quick Tips
 
-- **Forgot admin password?** Run: `cd /home/ubuntu/LiteDesk/server && node scripts/createDefaultAdmin.js`
-- **Need to see what's happening?** Run: `pm2 logs litedesk-api --lines 100`
-- **Application not responding?** Run: `pm2 restart litedesk-api && sudo systemctl restart nginx`
-- **Want to start fresh?** Delete `/home/ubuntu/LiteDesk` and run deployment again
+- **Forgot admin password?** Run: `cd /home/ubuntu/Arivu/server && node scripts/createDefaultAdmin.js`
+- **Need to see what's happening?** Run: `pm2 logs arivu-api --lines 100`
+- **Application not responding?** Run: `pm2 restart arivu-api && sudo systemctl restart nginx`
+- **Want to start fresh?** Delete `/home/ubuntu/Arivu` and run deployment again
 
 ---
 
@@ -329,7 +329,7 @@ After successful deployment:
 If you encounter issues:
 
 1. Check the troubleshooting section above
-2. Review logs: `pm2 logs litedesk-api`
+2. Review logs: `pm2 logs arivu-api`
 3. Check Nginx logs: `sudo tail -f /var/log/nginx/error.log`
 4. Verify MongoDB Atlas connection in Atlas dashboard
 
@@ -337,10 +337,10 @@ If you encounter issues:
 
 ## ✨ You're All Set!
 
-Your LiteDesk CRM is now deployed and ready to use!
+Your Arivu CRM is now deployed and ready to use!
 
 **Access:** http://43.204.144.169  
-**Login:** admin@litedesk.com / Admin@123456
+**Login:** admin@arivu.com / Admin@123456
 
 🎉 Enjoy your new CRM system! 🎉
 

@@ -584,11 +584,11 @@ async function seedPlatformDefinitionsWithUI(useExistingConnection = false) {
 
     // Connect to database if not using existing connection
     if (!useExistingConnection) {
-      // Get master database URI (always uses litedesk_master)
+      // Get master database URI (always uses arivu_master)
       const masterUri = getMasterDatabaseUri();
-      console.log('🔗 Connecting to MongoDB master database (litedesk_master)...');
+      console.log('🔗 Connecting to MongoDB master database (arivu_master)...');
       await mongoose.connect(masterUri);
-      console.log('✅ Connected to MongoDB master database (litedesk_master)\n');
+      console.log('✅ Connected to MongoDB master database (arivu_master)\n');
     }
 
     // Seed Apps

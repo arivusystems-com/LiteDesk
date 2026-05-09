@@ -16,7 +16,7 @@ const {
 router.post('/request', submitDemoRequest);
 
 // --- Protected Routes (Master Organization Only) ---
-// Only application owner (LiteDesk Master organization) can access these
+// Only application owner (Arivu Master organization) can access these
 router.get('/requests', protect, requireAdmin(), requireMasterOrganization(), getDemoRequests);
 router.get('/requests/stats', protect, requireAdmin(), requireMasterOrganization(), getStats);
 router.get('/requests/:id', protect, requireAdmin(), requireMasterOrganization(), getDemoRequest);

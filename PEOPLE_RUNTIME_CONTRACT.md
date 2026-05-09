@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-This document defines the **explicit, deterministic runtime contract** for the People core entity across the LiteDesk multi-application platform. The contract ensures that:
+This document defines the **explicit, deterministic runtime contract** for the People core entity across the Arivu multi-application platform. The contract ensures that:
 
 - ✅ Every People action executes with a resolved app context
 - ✅ People types are declared by apps, never configured globally

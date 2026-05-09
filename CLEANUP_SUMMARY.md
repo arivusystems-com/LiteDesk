@@ -2,7 +2,7 @@
 
 ## ✅ Cleanup Complete!
 
-Your LiteDesk repository has been cleaned and organized for production readiness.
+Your Arivu repository has been cleaned and organized for production readiness.
 
 ---
 
@@ -156,7 +156,7 @@ ls -la docs/*.md
 ## 📂 Directory Tree
 
 ```
-LiteDesk/
+Arivu/
 ├── README.md                           ⭐ Start here
 ├── DEPLOYMENT_SUMMARY.md               🚀 Deploy guide
 ├── GETTING_STARTED.md                  📖 Quick start

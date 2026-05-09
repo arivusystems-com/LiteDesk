@@ -1,6 +1,6 @@
-# 🚀 Getting Started with LiteDesk
+# 🚀 Getting Started with Arivu
 
-Welcome to LiteDesk! This guide will help you get your multi-instance CRM platform up and running.
+Welcome to Arivu! This guide will help you get your multi-instance CRM platform up and running.
 
 ---
 
@@ -28,7 +28,7 @@ You now have a complete, production-ready multi-instance CRM platform with:
 
 ```bash
 # 1. Start everything with Docker Compose
-cd /Users/Prabhu/Documents/GitHub/LiteDesk
+cd /Users/Prabhu/Documents/GitHub/Arivu
 docker-compose up -d
 
 # 2. Access the application
@@ -59,7 +59,7 @@ Follow these steps in order:
 #### Step 1: Install Dependencies (10 minutes)
 
 ```bash
-cd /Users/Prabhu/Documents/GitHub/LiteDesk/server
+cd /Users/Prabhu/Documents/GitHub/Arivu/server
 npm install @kubernetes/client-node aws-sdk bull redis yaml axios
 ```
 
@@ -86,7 +86,7 @@ nano .env  # Update with your values
 - `MONGO_URI` - Your MongoDB connection string
 - `AWS_ACCESS_KEY_ID` & `AWS_SECRET_ACCESS_KEY`
 - `ROUTE53_HOSTED_ZONE_ID`
-- `BASE_DOMAIN` (e.g., `litedesk.com`)
+- `BASE_DOMAIN` (e.g., `arivu.com`)
 - `JWT_SECRET` & `REFRESH_TOKEN_SECRET`
 
 #### Step 4: Test Instance Provisioning (30 minutes)
@@ -131,22 +131,22 @@ npm run dev
 ### Build Docker Images
 ```bash
 # Backend
-docker build -f Dockerfile.backend -t litedesk-backend:latest .
+docker build -f Dockerfile.backend -t arivu-backend:latest .
 
 # Frontend
-docker build -f Dockerfile.frontend -t litedesk-frontend:latest .
+docker build -f Dockerfile.frontend -t arivu-frontend:latest .
 ```
 
 ### Test Kubernetes Deployment (Local)
 ```bash
 # Validate Helm chart
-helm lint ./helm/litedesk
+helm lint ./helm/arivu
 
 # Dry run
-helm install litedesk-test ./helm/litedesk --dry-run --debug
+helm install arivu-test ./helm/arivu --dry-run --debug
 
 # Deploy to local Kubernetes
-helm install litedesk-local ./helm/litedesk
+helm install arivu-local ./helm/arivu
 ```
 
 ### View Logs
@@ -155,7 +155,7 @@ helm install litedesk-local ./helm/litedesk
 docker-compose logs -f
 
 # Kubernetes
-kubectl logs -n litedesk-master -l app=litedesk-backend -f
+kubectl logs -n arivu-master -l app=arivu-backend -f
 ```
 
 ---
@@ -176,7 +176,7 @@ Expected response:
 {
   "status": "healthy",
   "timestamp": "2025-10-22T...",
-  "service": "LiteDesk Master Control Plane",
+  "service": "Arivu Master Control Plane",
   "database": {
     "connected": true,
     "state": "connected"
@@ -259,13 +259,13 @@ curl http://localhost:3000/health
 ### Issue: Kubernetes deployment fails
 ```bash
 # Check pod status
-kubectl get pods -n litedesk-master
+kubectl get pods -n arivu-master
 
 # View pod logs
-kubectl logs <pod-name> -n litedesk-master
+kubectl logs <pod-name> -n arivu-master
 
 # Describe pod for events
-kubectl describe pod <pod-name> -n litedesk-master
+kubectl describe pod <pod-name> -n arivu-master
 ```
 
 ---
@@ -347,7 +347,7 @@ You have everything you need to:
 - 📖 Check the documentation files
 - 🐛 Create an issue on GitHub
 - 💬 Join our Discord community
-- ✉️ Email: support@litedesk.com
+- ✉️ Email: support@arivu.com
 
 ---
 

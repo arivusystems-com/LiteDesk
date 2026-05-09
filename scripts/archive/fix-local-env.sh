@@ -22,7 +22,7 @@ cat << "EOF"
 EOF
 echo -e "${NC}"
 
-cd /Users/Prabhu/Documents/GitHub/LiteDesk/server
+cd /Users/Prabhu/Documents/GitHub/Arivu/server
 
 # Backup current .env
 cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
@@ -31,7 +31,7 @@ echo -e "${YELLOW}📋 Backed up current .env${NC}"
 # Create clean .env for LOCAL development
 cat > .env << 'EOF'
 # =============================================================================
-# LiteDesk CRM - Environment Configuration (LOCAL DEVELOPMENT)
+# Arivu CRM - Environment Configuration (LOCAL DEVELOPMENT)
 # =============================================================================
 
 # ENVIRONMENT MODE - Set to 'development' for local, 'production' for EC2
@@ -42,14 +42,14 @@ PORT=5000
 # DATABASE CONFIGURATION
 # -----------------------------------------------------------------------------
 # Local MongoDB (for development on your Mac)
-MONGO_URI_LOCAL=mongodb://localhost:27017/litedesk
+MONGO_URI_LOCAL=mongodb://localhost:27017/arivu
 
 # Production MongoDB Atlas (for AWS EC2 deployment)
-MONGO_URI_PRODUCTION=mongodb+srv://litedeskadmin:TKvtQbKGOWdfP5C1@litedeskdb.qzw4euo.mongodb.net/litedesk?retryWrites=true&w=majority&appName=litedeskdb
+MONGO_URI_PRODUCTION=mongodb+srv://arivuadmin:TKvtQbKGOWdfP5C1@arivudb.qzw4euo.mongodb.net/arivu?retryWrites=true&w=majority&appName=arivudb
 
 # Active MongoDB URI (for local development)
-MONGO_URI=mongodb://localhost:27017/litedesk
-MONGODB_URI=mongodb://localhost:27017/litedesk
+MONGO_URI=mongodb://localhost:27017/arivu
+MONGODB_URI=mongodb://localhost:27017/arivu
 
 # -----------------------------------------------------------------------------
 # AUTHENTICATION & SECURITY
@@ -82,7 +82,7 @@ CORS_ORIGINS=http://localhost:5173,http://localhost:5175,http://localhost:3000
 # -----------------------------------------------------------------------------
 # ADMIN DEFAULTS
 # -----------------------------------------------------------------------------
-DEFAULT_ADMIN_EMAIL=admin@litedesk.com
+DEFAULT_ADMIN_EMAIL=admin@arivu.com
 DEFAULT_ADMIN_PASSWORD=Admin@123456
 
 # -----------------------------------------------------------------------------
@@ -96,7 +96,7 @@ METRICS_COLLECTION_INTERVAL=900000
 # -----------------------------------------------------------------------------
 # MULTI-INSTANCE ARCHITECTURE
 # -----------------------------------------------------------------------------
-BASE_DOMAIN=litedesk.local
+BASE_DOMAIN=arivu.local
 
 # -----------------------------------------------------------------------------
 # FEATURE FLAGS
@@ -127,7 +127,7 @@ echo ""
 
 echo -e "${BLUE}📊 Key settings for local development:${NC}"
 echo "  NODE_ENV: development"
-echo "  MONGO_URI: mongodb://localhost:27017/litedesk"
+echo "  MONGO_URI: mongodb://localhost:27017/arivu"
 echo "  CORS_ORIGINS: localhost:5173, localhost:5175"
 echo "  PORT: 5000"
 echo ""

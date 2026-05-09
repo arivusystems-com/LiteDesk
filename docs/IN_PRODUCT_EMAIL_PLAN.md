@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-LiteDesk currently sends **notification emails** (alerts, digests) via `emailService` + `emailChannel`. This plan extends that foundation to support **in-product email**—sending and receiving emails from within the app, tied to records (People, Organizations, Deals, Tasks, etc.).
+Arivu currently sends **notification emails** (alerts, digests) via `emailService` + `emailChannel`. This plan extends that foundation to support **in-product email**—sending and receiving emails from within the app, tied to records (People, Organizations, Deals, Tasks, etc.).
 
 **Scope:**
 - **Send**: Compose and send emails from record context; log them as activity
@@ -132,7 +132,7 @@ POST /api/communications/email
 
 | # | Story |
 |---|-------|
-| R1 | When someone replies to an email I sent from LiteDesk, the reply appears in the record’s activity |
+| R1 | When someone replies to an email I sent from Arivu, the reply appears in the record’s activity |
 | R2 | I can see an email thread (sent + received) in chronological order |
 | R3 | Inbound emails can create or update records (e.g. auto-create Person from new sender) — future |
 
@@ -140,8 +140,8 @@ POST /api/communications/email
 
 | Approach | Pros | Cons |
 |----------|------|------|
-| **A. Unique address per record** (`deals-{id}@inbound.litedesk.com`) | Direct association | Many addresses, DNS/SES config |
-| **B. Single address + token in subject** (`inbound@litedesk.com` + `Re: [LD:people:abc123] Original subject`) | One address | Visible token, subject parsing |
+| **A. Unique address per record** (`deals-{id}@inbound.arivu.com`) | Direct association | Many addresses, DNS/SES config |
+| **B. Single address + token in subject** (`inbound@arivu.com` + `Re: [LD:people:abc123] Original subject`) | One address | Visible token, subject parsing |
 | **C. Single address + opaque Reply-To token** (HMAC-signed payload) | One address, clean subject, no enumeration | Token encode/decode logic |
 | **D. Shared address + ML/header parsing** | Flexible | Complex, less reliable |
 

@@ -1,4 +1,4 @@
-# 🚀 LiteDesk Scripts Guide
+# 🚀 Arivu Scripts Guide
 
 Three simple scripts to manage your local development environment!
 
@@ -19,7 +19,7 @@ Stops and starts all services.
 
 ## 🎯 Quick Start (Easiest Way!)
 
-### Start LiteDesk
+### Start Arivu
 
 ```bash
 ./start.sh
@@ -39,7 +39,7 @@ That's it! ✨
 **Expected output:**
 ```
 ╔════════════════════════════════════════════════════════════╗
-║                    🚀 LiteDesk CRM                        ║
+║                    🚀 Arivu CRM                        ║
 ║              Starting All Services...                     ║
 ╚════════════════════════════════════════════════════════════╝
 
@@ -66,7 +66,7 @@ That's it! ✨
 
 ---
 
-### Stop LiteDesk
+### Stop Arivu
 
 ```bash
 ./stop.sh
@@ -95,7 +95,7 @@ That's it! ✨
 
 ---
 
-### Restart LiteDesk
+### Restart Arivu
 
 ```bash
 ./restart.sh
@@ -114,12 +114,12 @@ Perfect for when you change server code!
 
 ```
 ┌─────────────────────────────────────────────┐
-│     LiteDesk Local Environment              │
+│     Arivu Local Environment              │
 ├─────────────────────────────────────────────┤
 │                                             │
 │  🗄️  MongoDB (Docker)                       │
 │  → Port: 27017                              │
-│  → Container: litedesk-mongo                │
+│  → Container: arivu-mongo                │
 │  → Credentials: admin/password123           │
 │  → Status: Runs in background               │
 │                                             │
@@ -155,7 +155,7 @@ tail -f backend.log
 tail -f frontend.log
 
 # MongoDB logs
-docker logs -f litedesk-mongo
+docker logs -f arivu-mongo
 ```
 
 ### View Last 50 Lines
@@ -217,8 +217,8 @@ lsof -ti :5173 | xargs kill -9
 **Solution:**
 ```bash
 # Remove old container
-docker stop litedesk-mongo 2>/dev/null
-docker rm litedesk-mongo 2>/dev/null
+docker stop arivu-mongo 2>/dev/null
+docker rm arivu-mongo 2>/dev/null
 
 # Start fresh
 ./start.sh
@@ -250,13 +250,13 @@ npm run dev
 **Solution:**
 ```bash
 # Check if MongoDB is running
-docker ps | grep litedesk-mongo
+docker ps | grep arivu-mongo
 
 # Check .env file
 cat server/.env | grep MONGO_URI
 
 # Should be:
-# MONGO_URI=mongodb://admin:password123@localhost:27017/litedesk?authSource=admin
+# MONGO_URI=mongodb://admin:password123@localhost:27017/arivu?authSource=admin
 
 # Restart everything
 ./restart.sh
@@ -269,7 +269,7 @@ cat server/.env | grep MONGO_URI
 The scripts create these temporary files:
 
 ```
-/Users/Prabhu/Documents/GitHub/LiteDesk/
+/Users/Prabhu/Documents/GitHub/Arivu/
 ├── backend.log           # Backend server logs
 ├── frontend.log          # Frontend server logs
 ├── .backend.pid          # Backend process ID
@@ -403,7 +403,7 @@ Want to start with a fresh database?
 
 4. **Quick database check:**
    ```bash
-   docker exec -it litedesk-mongo mongosh \
+   docker exec -it arivu-mongo mongosh \
      -u admin -p password123 \
      --authenticationDatabase admin
    ```

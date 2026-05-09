@@ -48,15 +48,15 @@ ssh -i ~/path/to/key.pem ubuntu@13.203.208.47
 # Check PM2 status
 pm2 status
 
-# Should see litedesk-api process. If not running:
-pm2 restart litedesk-api
+# Should see arivu-api process. If not running:
+pm2 restart arivu-api
 
 # If process doesn't exist, start it:
-cd /home/ubuntu/LiteDesk/server
-pm2 start server.js --name litedesk-api
+cd /home/ubuntu/Arivu/server
+pm2 start server.js --name arivu-api
 
 # Check logs for errors
-pm2 logs litedesk-api
+pm2 logs arivu-api
 
 # Test backend directly
 curl http://localhost:5000/api/health
@@ -73,10 +73,10 @@ To see what went wrong:
 ssh -i ~/key.pem ubuntu@13.203.208.47
 
 # View last 50 lines of logs
-pm2 logs litedesk-api --lines 50
+pm2 logs arivu-api --lines 50
 
 # Or watch logs in real-time
-pm2 logs litedesk-api
+pm2 logs arivu-api
 ```
 
 Common errors in logs:
@@ -85,7 +85,7 @@ Common errors in logs:
 **Fix:** Check MongoDB Atlas connection string in `.env`
 
 ```bash
-cat /home/ubuntu/LiteDesk/server/.env | grep MONGODB_URI
+cat /home/ubuntu/Arivu/server/.env | grep MONGODB_URI
 ```
 
 Should have your correct connection string.
@@ -95,16 +95,16 @@ Should have your correct connection string.
 
 ```bash
 sudo lsof -ti:5000 | xargs kill -9
-pm2 restart litedesk-api
+pm2 restart arivu-api
 ```
 
 ### Error: "Cannot find module"
 **Fix:** Install dependencies
 
 ```bash
-cd /home/ubuntu/LiteDesk/server
+cd /home/ubuntu/Arivu/server
 npm install --production
-pm2 restart litedesk-api
+pm2 restart arivu-api
 ```
 
 ---
@@ -118,7 +118,7 @@ ssh -i ~/key.pem ubuntu@13.203.208.47
 
 # Test 1: Is PM2 process running?
 pm2 status
-# Should show: litedesk-api | online
+# Should show: arivu-api | online
 
 # Test 2: Is backend responding?
 curl http://localhost:5000/api/health
@@ -129,7 +129,7 @@ sudo netstat -tulpn | grep 5000
 # Should show: node listening on 0.0.0.0:5000
 
 # Test 4: Check recent logs
-pm2 logs litedesk-api --lines 10
+pm2 logs arivu-api --lines 10
 # Should show no errors
 ```
 
@@ -144,7 +144,7 @@ After backend is fixed:
 1. Open: **http://13.203.208.47**
 2. Should see login page
 3. Enter credentials:
-   - Email: admin@litedesk.com
+   - Email: admin@arivu.com
    - Password: Admin@123456
 4. Click Login
 
@@ -158,11 +158,11 @@ Should work! ✅
 
 ```bash
 # Symptoms
-pm2 status  # Shows no litedesk-api process
+pm2 status  # Shows no arivu-api process
 
 # Fix
-cd /home/ubuntu/LiteDesk/server
-pm2 start server.js --name litedesk-api
+cd /home/ubuntu/Arivu/server
+pm2 start server.js --name arivu-api
 pm2 save
 ```
 
@@ -170,11 +170,11 @@ pm2 save
 
 ```bash
 # Symptoms
-pm2 status  # Shows litedesk-api as "errored" or "stopped"
+pm2 status  # Shows arivu-api as "errored" or "stopped"
 
 # Fix
-pm2 logs litedesk-api --lines 50  # Check what error
-pm2 restart litedesk-api
+pm2 logs arivu-api --lines 50  # Check what error
+pm2 restart arivu-api
 ```
 
 ### Scenario 3: MongoDB connection issue
@@ -184,9 +184,9 @@ pm2 restart litedesk-api
 pm2 logs shows: "MongooseError: Could not connect"
 
 # Fix
-nano /home/ubuntu/LiteDesk/server/.env
+nano /home/ubuntu/Arivu/server/.env
 # Update MONGODB_URI with correct connection string
-pm2 restart litedesk-api
+pm2 restart arivu-api
 ```
 
 ### Scenario 4: Missing dependencies
@@ -196,9 +196,9 @@ pm2 restart litedesk-api
 pm2 logs shows: "Cannot find module 'express'"
 
 # Fix
-cd /home/ubuntu/LiteDesk/server
+cd /home/ubuntu/Arivu/server
 npm install --production
-pm2 restart litedesk-api
+pm2 restart arivu-api
 ```
 
 ---
@@ -212,13 +212,13 @@ Keep these handy:
 pm2 status
 
 # View logs (live)
-pm2 logs litedesk-api
+pm2 logs arivu-api
 
 # Restart backend
-pm2 restart litedesk-api
+pm2 restart arivu-api
 
 # Stop backend
-pm2 stop litedesk-api
+pm2 stop arivu-api
 
 # Monitor resources (CPU, memory)
 pm2 monit
@@ -263,12 +263,12 @@ ssh -i ~/key.pem ubuntu@13.203.208.47
 pm2 kill
 
 # Reinstall dependencies
-cd /home/ubuntu/LiteDesk/server
+cd /home/ubuntu/Arivu/server
 rm -rf node_modules
 npm install --production
 
 # Start fresh
-pm2 start server.js --name litedesk-api
+pm2 start server.js --name arivu-api
 pm2 save
 pm2 startup
 ```
@@ -280,7 +280,7 @@ pm2 startup
 Make sure .env has all required variables:
 
 ```bash
-cat /home/ubuntu/LiteDesk/server/.env
+cat /home/ubuntu/Arivu/server/.env
 ```
 
 Should include:
@@ -296,7 +296,7 @@ Should include:
 Verify Nginx is pointing to correct port:
 
 ```bash
-cat /etc/nginx/sites-available/litedesk | grep proxy_pass
+cat /etc/nginx/sites-available/arivu | grep proxy_pass
 ```
 
 Should show: `proxy_pass http://localhost:5000;`
@@ -321,7 +321,7 @@ which pm2
 pm2 status
 
 # 5. Are there errors in logs?
-pm2 logs litedesk-api --lines 20
+pm2 logs arivu-api --lines 20
 
 # 6. Is backend listening on port 5000?
 sudo netstat -tulpn | grep 5000
@@ -369,7 +369,7 @@ Backend is working when:
 To avoid this in future:
 
 1. **Monitor backend:** `pm2 monit`
-2. **Check logs regularly:** `pm2 logs litedesk-api`
+2. **Check logs regularly:** `pm2 logs arivu-api`
 3. **Setup startup:** `pm2 startup` (auto-restart on reboot)
 4. **Save config:** `pm2 save` (persist processes)
 
@@ -379,9 +379,9 @@ To avoid this in future:
 
 **Problem:** 502 Bad Gateway (Backend not responding)  
 **Quick Fix:** `./fix-backend.sh`  
-**Manual Fix:** `pm2 restart litedesk-api`  
+**Manual Fix:** `pm2 restart arivu-api`  
 **Check Status:** `pm2 status`  
-**View Logs:** `pm2 logs litedesk-api`  
+**View Logs:** `pm2 logs arivu-api`  
 
 🎯 **Run the fix script and you'll be up in 30 seconds!**
 

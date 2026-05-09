@@ -1741,7 +1741,7 @@ const isDesktop = computed(() => windowWidth.value >= 768); // md breakpoint
 // Load from localStorage if available, otherwise use default based on screen size
 const getDefaultShowStats = () => {
   if (typeof window === 'undefined') return true;
-  const saved = localStorage.getItem(`litedesk-stats-visible-${props.moduleKey}`);
+  const saved = localStorage.getItem(`arivu-stats-visible-${props.moduleKey}`);
   if (saved !== null) {
     return saved === 'true';
   }
@@ -1753,7 +1753,7 @@ const showStats = ref(getDefaultShowStats());
 // Save stats visibility preference to localStorage
 const saveStatsPreference = () => {
   if (typeof window !== 'undefined') {
-    localStorage.setItem(`litedesk-stats-visible-${props.moduleKey}`, showStats.value.toString());
+    localStorage.setItem(`arivu-stats-visible-${props.moduleKey}`, showStats.value.toString());
   }
 };
 
@@ -2562,13 +2562,13 @@ const headerLeft = computed(() => {
   }
   
   // On desktop (≥ 1024px), position based on sidebar state
-  const sidebarCollapsed = localStorage.getItem('litedesk-sidebar-collapsed') === 'true';
+  const sidebarCollapsed = localStorage.getItem('arivu-sidebar-collapsed') === 'true';
   return sidebarCollapsed ? '64px' : '256px';
 });
 
 // Filters
 const filters = reactive({});
-const STORAGE_PREFIX = 'litedesk-listview';
+const STORAGE_PREFIX = 'arivu-listview';
 const filterStorageKey = computed(() => `${STORAGE_PREFIX}-${props.moduleKey}-filters`);
 const searchStorageKey = computed(() => `${STORAGE_PREFIX}-${props.moduleKey}-search`);
 const sortStorageKey = computed(() => `${STORAGE_PREFIX}-${props.moduleKey}-sort`);

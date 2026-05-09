@@ -18,8 +18,11 @@ const MODULES_WITH_NATIVE_COMMENTS = new Set(['deals', 'tasks']);
 function isMasterOrganizationRequest(req) {
   const orgName = String(req?.organization?.name || '').trim().toLowerCase();
   const userEmail = String(req?.user?.email || '').trim().toLowerCase();
-  const isInternalEmail = userEmail.endsWith('@litedesk.com') || userEmail.endsWith('@litedesk.io');
-  return orgName === 'litedesk master' || orgName.includes('litedesk master') || isInternalEmail;
+  const isInternalEmail =
+    userEmail.endsWith('@arivusystems.com')
+    || userEmail.endsWith('@arivu.com')
+    || userEmail.endsWith('@arivu.io');
+  return orgName === 'arivu master' || orgName.includes('arivu master') || isInternalEmail;
 }
 
 /**

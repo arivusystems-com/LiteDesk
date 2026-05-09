@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ###############################################################################
-# LiteDesk CRM - Local Build + EC2 Deploy (FREE TIER OPTIMIZED)
+# Arivu CRM - Local Build + EC2 Deploy (FREE TIER OPTIMIZED)
 ###############################################################################
 # This script builds frontend LOCALLY (your Mac) and deploys to EC2
 # Perfect for t2.micro (1GB RAM) - avoids memory issues!
@@ -20,8 +20,8 @@ NC='\033[0m'
 # Configuration
 EC2_IP="13.203.208.47"
 EC2_USER="ubuntu"
-MONGODB_URI="mongodb+srv://litedeskadmin:TKvtQbKGOWdfP5C1@litedeskdb.qzw4euo.mongodb.net/litedesk?retryWrites=true&w=majority&appName=litedeskdb"
-ADMIN_EMAIL="admin@litedesk.com"
+MONGODB_URI="mongodb+srv://arivuadmin:TKvtQbKGOWdfP5C1@arivudb.qzw4euo.mongodb.net/arivu?retryWrites=true&w=majority&appName=arivudb"
+ADMIN_EMAIL="admin@arivu.com"
 ADMIN_PASSWORD="Admin@123456"
 KEY_FILE=""
 
@@ -29,7 +29,7 @@ echo -e "${BLUE}"
 cat << "EOF"
 ╔═══════════════════════════════════════════════════════════════╗
 ║                                                               ║
-║    🚀 LiteDesk CRM - Free Tier Optimized Deployment         ║
+║    🚀 Arivu CRM - Free Tier Optimized Deployment         ║
 ║         Build Locally → Deploy to EC2 (1GB RAM OK!)          ║
 ║                                                               ║
 ╚═══════════════════════════════════════════════════════════════╝
@@ -41,10 +41,10 @@ echo -e "${YELLOW}📦 Builds frontend on your Mac (avoids EC2 memory issues)${N
 echo -e "${PURPLE}🚀 Deploys only the built files to EC2${NC}"
 echo ""
 
-# Check if we're in the LiteDesk directory
+# Check if we're in the Arivu directory
 if [ ! -d "client" ] || [ ! -d "server" ]; then
-    echo -e "${RED}❌ Error: Must run from LiteDesk directory${NC}"
-    echo -e "${YELLOW}Please run: cd /Users/Prabhu/Documents/GitHub/LiteDesk${NC}"
+    echo -e "${RED}❌ Error: Must run from Arivu directory${NC}"
+    echo -e "${YELLOW}Please run: cd /Users/Prabhu/Documents/GitHub/Arivu${NC}"
     exit 1
 fi
 
@@ -183,7 +183,7 @@ echo -e "${BLUE}╚════════════════════�
 echo ""
 
 # Create app directory on EC2
-ssh -i "$KEY_FILE" -o StrictHostKeyChecking=no "$EC2_USER@$EC2_IP" "mkdir -p /home/ubuntu/LiteDesk"
+ssh -i "$KEY_FILE" -o StrictHostKeyChecking=no "$EC2_USER@$EC2_IP" "mkdir -p /home/ubuntu/Arivu"
 
 echo -e "${YELLOW}📤 Uploading backend files...${NC}"
 echo -e "${BLUE}ℹ️  Excluding .env (will be created on EC2 with production settings)${NC}"
@@ -193,12 +193,12 @@ rsync -avz --progress -e "ssh -i $KEY_FILE -o StrictHostKeyChecking=no" \
     --exclude '.git' \
     --exclude '.env' \
     --exclude '.env.*' \
-    ./server/ "$EC2_USER@$EC2_IP:/home/ubuntu/LiteDesk/server/"
+    ./server/ "$EC2_USER@$EC2_IP:/home/ubuntu/Arivu/server/"
 
 echo -e "${YELLOW}📤 Uploading frontend build...${NC}"
 # Upload frontend build
 rsync -avz --progress -e "ssh -i $KEY_FILE -o StrictHostKeyChecking=no" \
-    ./client/dist/ "$EC2_USER@$EC2_IP:/home/ubuntu/LiteDesk/client/dist/"
+    ./client/dist/ "$EC2_USER@$EC2_IP:/home/ubuntu/Arivu/client/dist/"
 
 echo -e "${GREEN}✓ Files uploaded${NC}"
 echo ""
@@ -217,7 +217,7 @@ echo -e "${YELLOW}(This is lightweight - only backend packages)${NC}"
 # Create production .env on EC2
 echo -e "${BLUE}📝 Creating production .env on EC2...${NC}"
 ssh -i "$KEY_FILE" -o StrictHostKeyChecking=no "$EC2_USER@$EC2_IP" << ENVSETUP
-cd /home/ubuntu/LiteDesk/server
+cd /home/ubuntu/Arivu/server
 
 # Backup existing .env if it exists
 if [ -f .env ]; then
@@ -228,7 +228,7 @@ fi
 # Create production .env
 cat > .env << 'PRODENV'
 # =============================================================================
-# LiteDesk CRM - Production Configuration (AWS EC2)
+# Arivu CRM - Production Configuration (AWS EC2)
 # =============================================================================
 
 NODE_ENV=production
@@ -299,7 +299,7 @@ echo -e "${GREEN}✓ Production environment configured on EC2${NC}"
 
 # Install dependencies and start backend
 ssh -i "$KEY_FILE" -o StrictHostKeyChecking=no "$EC2_USER@$EC2_IP" << 'REMOTE'
-cd /home/ubuntu/LiteDesk/server
+cd /home/ubuntu/Arivu/server
 npm install --production --no-audit
 
 # Create default admin if script exists
@@ -309,10 +309,10 @@ if [ -f "scripts/createDefaultAdmin.js" ]; then
 fi
 
 # Stop existing PM2 process
-pm2 delete litedesk-api 2>/dev/null || true
+pm2 delete arivu-api 2>/dev/null || true
 
 # Start backend
-pm2 start server.js --name litedesk-api --time
+pm2 start server.js --name arivu-api --time
 pm2 save
 
 # Setup startup
@@ -333,14 +333,14 @@ echo -e "${BLUE}╚════════════════════�
 echo ""
 
 # Create Nginx config
-cat > /tmp/nginx-litedesk << NGINXCONF
+cat > /tmp/nginx-arivu << NGINXCONF
 server {
     listen 80;
     server_name $EC2_IP;
 
     # Frontend - Serve built files
     location / {
-        root /home/ubuntu/LiteDesk/client/dist;
+        root /home/ubuntu/Arivu/client/dist;
         try_files \$uri \$uri/ /index.html;
         
         # Cache static assets
@@ -375,18 +375,18 @@ server {
 NGINXCONF
 
 # Upload and configure Nginx
-scp -i "$KEY_FILE" -o StrictHostKeyChecking=no /tmp/nginx-litedesk "$EC2_USER@$EC2_IP:/tmp/"
+scp -i "$KEY_FILE" -o StrictHostKeyChecking=no /tmp/nginx-arivu "$EC2_USER@$EC2_IP:/tmp/"
 
 ssh -i "$KEY_FILE" -o StrictHostKeyChecking=no "$EC2_USER@$EC2_IP" << 'REMOTE'
-sudo mv /tmp/nginx-litedesk /etc/nginx/sites-available/litedesk
-sudo ln -sf /etc/nginx/sites-available/litedesk /etc/nginx/sites-enabled/
+sudo mv /tmp/nginx-arivu /etc/nginx/sites-available/arivu
+sudo ln -sf /etc/nginx/sites-available/arivu /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 
 # Fix permissions for Nginx to access files
 chmod 755 /home/ubuntu
-chmod 755 /home/ubuntu/LiteDesk
-chmod 755 /home/ubuntu/LiteDesk/client
-chmod -R 755 /home/ubuntu/LiteDesk/client/dist
+chmod 755 /home/ubuntu/Arivu
+chmod 755 /home/ubuntu/Arivu/client
+chmod -R 755 /home/ubuntu/Arivu/client/dist
 
 # Test and reload Nginx
 sudo nginx -t && sudo systemctl reload nginx
@@ -460,8 +460,8 @@ echo ""
 echo -e "${BLUE}📝 Useful Commands (SSH into EC2):${NC}"
 echo -e "   ${PURPLE}ssh -i $KEY_FILE ubuntu@$EC2_IP${NC}"
 echo -e ""
-echo -e "   pm2 logs litedesk-api       # View logs"
-echo -e "   pm2 restart litedesk-api    # Restart backend"
+echo -e "   pm2 logs arivu-api       # View logs"
+echo -e "   pm2 restart arivu-api    # Restart backend"
 echo -e "   pm2 monit                   # Monitor resources"
 echo ""
 
@@ -482,7 +482,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
 fi
 
 # Cleanup temp files
-rm -f /tmp/ec2-setup.sh /tmp/nginx-litedesk
+rm -f /tmp/ec2-setup.sh /tmp/nginx-arivu
 
 echo -e "${PURPLE}🎊 Deployment complete! Your CRM is ready to use! 🎊${NC}"
 

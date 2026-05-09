@@ -21,7 +21,7 @@ if (!MONGO_URI) {
 const [mongoUriWithoutQuery, mongoUriQueryPart] = MONGO_URI.split('?');
 const mongoQueryString = mongoUriQueryPart ? `?${mongoUriQueryPart}` : '';
 const baseUri = mongoUriWithoutQuery.split('/').slice(0, -1).join('/');
-const masterDbName = 'litedesk_master';
+const masterDbName = 'arivu_master';
 const MONGODB_URI = `${baseUri}/${masterDbName}${mongoQueryString}`;
 
 const ModuleDefinition = require('../models/ModuleDefinition');

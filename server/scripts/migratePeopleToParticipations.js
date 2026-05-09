@@ -18,7 +18,7 @@
  *   - Idempotent: skips when participations.SALES already exists
  *   - No data loss: only adds to participations, does not remove legacy fields
  *
- * Usage (legacy): this script only touched `litedesk_master`. Prefer:
+ * Usage (legacy): this script only touched `arivu_master`. Prefer:
  *   npm run migrate:people-legacy              # dry-run all DBs
  *   npm run migrate:people-legacy:apply      # apply
  *
@@ -52,7 +52,7 @@ function resolveMasterUri() {
   const [mongoUriWithoutQuery, mongoUriQueryPart] = MONGO_URI.split('?');
   const mongoQueryString = mongoUriQueryPart ? `?${mongoUriQueryPart}` : '';
   const baseUri = mongoUriWithoutQuery.split('/').slice(0, -1).join('/');
-  const masterDbName = 'litedesk_master';
+  const masterDbName = 'arivu_master';
   return `${baseUri}/${masterDbName}${mongoQueryString}`;
 }
 

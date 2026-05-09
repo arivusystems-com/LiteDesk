@@ -249,7 +249,7 @@ const OrganizationSchema = new mongoose.Schema({
     database: {
         name: {
             type: String,
-            // Format: litedesk_{slug} or litedesk_{organizationId}
+            // Format: arivu_{slug} or arivu_{organizationId}
         },
         connectionString: {
             type: String,

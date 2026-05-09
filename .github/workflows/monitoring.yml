@@ -8,7 +8,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  EKS_CLUSTER_NAME: litedesk-production
+  EKS_CLUSTER_NAME: arivu-production
 
 jobs:
   health-check:

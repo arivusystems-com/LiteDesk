@@ -30,10 +30,10 @@ This means:
 
 ### Option 1: Use Correct Credentials
 
-If you know the correct password for `admin@litedesk.com`, set it:
+If you know the correct password for `admin@arivu.com`, set it:
 
 ```bash
-export TEST_EMAIL=admin@litedesk.com
+export TEST_EMAIL=admin@arivu.com
 export TEST_PASSWORD=your-actual-password
 node server/scripts/testFormsAPI.js
 ```
@@ -45,7 +45,7 @@ To reset the admin password, you can:
 1. **Delete and recreate admin:**
    ```bash
    # In MongoDB or MongoDB Compass
-   db.users.deleteOne({email: "admin@litedesk.com"})
+   db.users.deleteOne({email: "admin@arivu.com"})
    
    # Then recreate
    cd server
@@ -74,14 +74,14 @@ curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
   -H "X-Bypass-Rate-Limit: true" \
   -H "X-Test-Mode: true" \
-  -d '{"email":"admin@litedesk.com","password":"Admin@123"}'
+  -d '{"email":"admin@arivu.com","password":"Admin@123"}'
 
 # Should return 401 (invalid credentials) not 403 (rate limited)
 ```
 
 ## Next Steps
 
-1. **Verify/update credentials** for `admin@litedesk.com`
+1. **Verify/update credentials** for `admin@arivu.com`
 2. **Run test script again** once credentials are correct
 3. **All tests should pass** once authentication succeeds
 

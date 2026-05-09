@@ -664,7 +664,7 @@ const handleSubmit = async () => {
         
         // Dispatch global event to refresh list views
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('litedesk:record-created', {
+          window.dispatchEvent(new CustomEvent('arivu:record-created', {
             detail: { moduleKey: 'people', record: createdPerson }
           }));
         }

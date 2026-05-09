@@ -10,7 +10,7 @@
 
 ### Security Team
 - **Primary Contact**: [TO BE CONFIGURED]
-- **Email**: security@litedesk.com
+- **Email**: security@arivu.com
 - **Phone**: [TO BE CONFIGURED]
 
 ### Escalation Chain

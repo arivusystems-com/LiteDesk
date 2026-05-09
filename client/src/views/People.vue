@@ -739,7 +739,7 @@ onMounted(async () => {
   
   // Listen for record creation events
   if (typeof window !== 'undefined') {
-    window.addEventListener('litedesk:record-created', handleRecordCreated);
+    window.addEventListener('arivu:record-created', handleRecordCreated);
   }
 });
 
@@ -751,7 +751,7 @@ onActivated(() => {
 onUnmounted(() => {
   // Clean up event listeners
   if (typeof window !== 'undefined') {
-    window.removeEventListener('litedesk:record-created', handleRecordCreated);
+    window.removeEventListener('arivu:record-created', handleRecordCreated);
   }
 });
 </script>

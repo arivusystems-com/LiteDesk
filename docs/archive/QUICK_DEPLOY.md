@@ -1,6 +1,6 @@
 # ⚡ Quick Deploy Guide - Get Live in 30 Minutes
 
-The fastest way to get LiteDesk CRM running on AWS for testing.
+The fastest way to get Arivu CRM running on AWS for testing.
 
 ---
 
@@ -37,7 +37,7 @@ The fastest way to get LiteDesk CRM running on AWS for testing.
 1. Go to [AWS Console](https://console.aws.amazon.com/)
 2. EC2 → Launch Instance
 3. Settings:
-   - Name: `litedesk-server`
+   - Name: `arivu-server`
    - OS: Ubuntu 22.04
    - Type: t2.micro (FREE)
    - Create key pair → Download `.pem` file
@@ -54,10 +54,10 @@ The fastest way to get LiteDesk CRM running on AWS for testing.
 
 ```bash
 # Make key secure
-chmod 400 ~/Downloads/litedesk-key.pem
+chmod 400 ~/Downloads/arivu-key.pem
 
 # Connect
-ssh -i ~/Downloads/litedesk-key.pem ubuntu@YOUR_EC2_IP
+ssh -i ~/Downloads/arivu-key.pem ubuntu@YOUR_EC2_IP
 ```
 
 Type `yes` when prompted.
@@ -72,7 +72,7 @@ Type `yes` when prompted.
 
 ```bash
 # Download deployment script
-wget https://raw.githubusercontent.com/YOUR_USERNAME/LiteDesk/main/deploy-to-aws.sh
+wget https://raw.githubusercontent.com/YOUR_USERNAME/Arivu/main/deploy-to-aws.sh
 
 # Make executable
 chmod +x deploy-to-aws.sh
@@ -107,7 +107,7 @@ If script doesn't work, follow: [DEPLOYMENT_GUIDE_AWS.md](./DEPLOYMENT_GUIDE_AWS
 1. Open browser: `http://YOUR_EC2_IP`
 2. You should see login page
 3. Login:
-   - Email: `admin@litedesk.com`
+   - Email: `admin@arivu.com`
    - Password: `Admin@123456`
 4. You're in! 🎉
 
@@ -117,12 +117,12 @@ If script doesn't work, follow: [DEPLOYMENT_GUIDE_AWS.md](./DEPLOYMENT_GUIDE_AWS
 
 Send them:
 ```
-🚀 LiteDesk CRM Testing
+🚀 Arivu CRM Testing
 
 URL: http://YOUR_EC2_IP
 
 Test Accounts:
-- Admin: admin@litedesk.com / Admin@123456
+- Admin: admin@arivu.com / Admin@123456
 
 Try:
 ✅ Create contacts
@@ -146,7 +146,7 @@ pm2 status
 sudo systemctl status nginx
 
 # Check logs
-pm2 logs litedesk-api
+pm2 logs arivu-api
 sudo tail -f /var/log/nginx/error.log
 ```
 
@@ -154,19 +154,19 @@ sudo tail -f /var/log/nginx/error.log
 
 ```bash
 # Check MongoDB connection
-cd /home/ubuntu/LiteDesk/server
+cd /home/ubuntu/Arivu/server
 cat .env  # Verify MONGODB_URI is correct
 
 # Restart
-pm2 restart litedesk-api
-pm2 logs litedesk-api
+pm2 restart arivu-api
+pm2 logs arivu-api
 ```
 
 ### Frontend shows blank page?
 
 ```bash
 # Rebuild
-cd /home/ubuntu/LiteDesk/client
+cd /home/ubuntu/Arivu/client
 npm run build
 sudo systemctl restart nginx
 ```
@@ -182,7 +182,7 @@ After it's working:
 3. **Import sample data** (CSV import)
 4. **Test permissions** (Manager vs User vs Viewer)
 5. **Collect feedback** from friends
-6. **Monitor logs**: `pm2 logs litedesk-api`
+6. **Monitor logs**: `pm2 logs arivu-api`
 
 ---
 
@@ -210,12 +210,12 @@ sudo apt install certbot python3-certbot-nginx -y
 sudo certbot --nginx -d yourdomain.com
 
 # Update backend .env
-cd /home/ubuntu/LiteDesk/server
+cd /home/ubuntu/Arivu/server
 nano .env
 # Change CLIENT_URL to https://yourdomain.com
 
 # Restart
-pm2 restart litedesk-api
+pm2 restart arivu-api
 ```
 
 Now access via: `https://yourdomain.com` ✅
@@ -254,13 +254,13 @@ Your CRM is live in 30 minutes:
 |---------|----------|
 | Can't SSH | Check security group allows your IP on port 22 |
 | "Connection refused" | Backend not started: `pm2 start server.js` |
-| "502 Bad Gateway" | Backend crashed: `pm2 logs litedesk-api` |
+| "502 Bad Gateway" | Backend crashed: `pm2 logs arivu-api` |
 | CORS errors | Update CORS_ORIGINS in server/.env |
 | Blank page | Rebuild frontend: `cd client && npm run build` |
 
 **Check logs**:
 ```bash
-pm2 logs litedesk-api --lines 50
+pm2 logs arivu-api --lines 50
 sudo tail -f /var/log/nginx/error.log
 ```
 

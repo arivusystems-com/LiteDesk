@@ -1454,7 +1454,7 @@ const hasRecordTags = computed(() => Array.isArray(record.value?.tags) && record
 
 const tagStorageKey = computed(() => {
   const organizationId = authStore.user?.organizationId || authStore.organization?._id || 'default-org';
-  return `litedesk-${moduleKeyLower.value || 'record'}-tag-definitions-${organizationId}`;
+  return `arivu-${moduleKeyLower.value || 'record'}-tag-definitions-${organizationId}`;
 });
 
 const persistRecordTags = async (cleaned) => {

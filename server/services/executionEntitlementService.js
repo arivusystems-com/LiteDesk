@@ -17,7 +17,7 @@
  * - Subscription governs execution after trial
  * - Owner is billable if executing post-trial
  * - No free plan
- * - Platform admins (LiteDesk) are never billable
+ * - Platform admins (Arivu) are never billable
  * 
  * ============================================================================
  */
@@ -26,16 +26,17 @@ const Instance = require('../models/Instance');
 const { INSTANCE_STATUS } = require('../constants/instanceLifecycle');
 
 /**
- * Check if user email is a LiteDesk internal email
+ * Check if user email is a Arivu internal email
  * @param {string} email - User email
  * @returns {boolean} - True if internal email
  */
-function isLiteDeskInternalEmail(email) {
+function isArivuInternalEmail(email) {
     if (!email) return false;
     const internalDomains = [
-        'litedesk.com',
-        'litedesk.io',
-        '@litedesk' // Allow any @litedesk domain
+        'arivusystems.com',
+        'arivu.com',
+        'arivu.io',
+        '@arivu',
     ];
     const emailLower = email.toLowerCase();
     return internalDomains.some(domain => emailLower.includes(domain));
@@ -66,12 +67,12 @@ function resolveExecutionEntitlement({ user, organization, instance, appKey, int
     };
 
     // ============================================================================
-    // A. Platform Admin (LiteDesk internal)
+    // A. Platform Admin (Arivu internal)
     // ============================================================================
     // Platform admins are never billable and can always access (for VIEW/CONFIGURE)
     // For EXECUTE, they still need seats (future: platform admin override)
     const isPlatformAdmin = user.isPlatformAdmin === true || 
-                           isLiteDeskInternalEmail(user.email);
+                           isArivuInternalEmail(user.email);
 
     if (isPlatformAdmin) {
         // Platform admins can VIEW and CONFIGURE without restrictions

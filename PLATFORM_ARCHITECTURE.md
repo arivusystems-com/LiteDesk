@@ -1,4 +1,4 @@
-# LiteDesk Platform Architecture
+# Arivu Platform Architecture
 
 **Version:** 2.0  
 **Date:** January 2025  
@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-LiteDesk has evolved from a single-tenant CRM application into a **multi-application platform** that supports multiple distinct applications (CRM, Audit, Portal, LMS) running on a unified infrastructure. The platform architecture follows a **Platform Core + Apps** pattern where shared infrastructure is app-agnostic, and each application maintains clear boundaries.
+Arivu has evolved from a single-tenant CRM application into a **multi-application platform** that supports multiple distinct applications (CRM, Audit, Portal, LMS) running on a unified infrastructure. The platform architecture follows a **Platform Core + Apps** pattern where shared infrastructure is app-agnostic, and each application maintains clear boundaries.
 
 ### Key Architectural Principles
 
@@ -25,7 +25,7 @@ LiteDesk has evolved from a single-tenant CRM application into a **multi-applica
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                      LiteDesk Platform Core                         │
+│                      Arivu Platform Core                         │
 │  ┌──────────────────────────────────────────────────────────────┐  │
 │  │  Authentication & Identity                                    │  │
 │  │  - User Registration & Login (JWT)                           │  │
@@ -605,7 +605,7 @@ Business Action (e.g., Deal Stage Changed)
 - Dedicated Database (MongoDB)
 - Dedicated Application Server (Node.js)
 - Dedicated Frontend (Vue.js)
-- Unique Subdomain (e.g., `acme.litedesk.com`)
+- Unique Subdomain (e.g., `acme.arivu.com`)
 - Isolated Resources (CPU, Memory, Storage)
 
 **Provisioning Flow:**
@@ -887,7 +887,7 @@ router.get('/new-app/endpoint', requireAppEntitlement('NEW_APP'), controller);
 
 ## Summary
 
-The LiteDesk Platform Architecture successfully:
+The Arivu Platform Architecture successfully:
 
 ✅ **Supports Multiple Applications** on unified infrastructure  
 ✅ **Maintains App Isolation** with clear boundaries  

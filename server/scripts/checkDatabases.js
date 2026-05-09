@@ -12,7 +12,7 @@ async function checkDatabases() {
         const connectionQuery = queryPart ? `?${queryPart}` : '';
         const baseUri = uriWithoutQuery.split('/').slice(0, -1).join('/');
         
-        const databases = ['litedesk', 'litedesk_master'];
+        const databases = ['arivu', 'arivu_master'];
         
         for (const dbName of databases) {
             console.log(`\n📊 Checking database: ${dbName}`);

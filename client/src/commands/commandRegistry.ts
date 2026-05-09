@@ -175,7 +175,7 @@ function createGlobalCommands(nav: NavigationUtilities): CommandPaletteItem[] {
       handler: () => {
         // Open drawer in same tab, not navigating
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('litedesk:open-people-quick-create'));
+          window.dispatchEvent(new CustomEvent('arivu:open-people-quick-create'));
         }
       }
     },
@@ -192,7 +192,7 @@ function createGlobalCommands(nav: NavigationUtilities): CommandPaletteItem[] {
       // Post-creation: Opens OrganizationSurface for the new org
       handler: () => {
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('litedesk:open-organization-quick-create', {
+          window.dispatchEvent(new CustomEvent('arivu:open-organization-quick-create', {
             detail: {
               initialData: {},
               autoLinkContext: null
@@ -236,7 +236,7 @@ function createGlobalCommands(nav: NavigationUtilities): CommandPaletteItem[] {
         }
         
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('litedesk:open-create-drawer', {
+          window.dispatchEvent(new CustomEvent('arivu:open-create-drawer', {
             detail: {
               moduleKey: 'tasks',
               initialData,
@@ -262,7 +262,7 @@ function createGlobalCommands(nav: NavigationUtilities): CommandPaletteItem[] {
       handler: () => {
         // Open drawer in same tab, not navigating
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('litedesk:open-event-quick-create'));
+          window.dispatchEvent(new CustomEvent('arivu:open-event-quick-create'));
         }
       }
     },
@@ -318,7 +318,7 @@ function createInboxContextCommands(nav: NavigationUtilities): CommandPaletteIte
         const initialData: Record<string, any> = {};
         
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('litedesk:open-create-drawer', {
+          window.dispatchEvent(new CustomEvent('arivu:open-create-drawer', {
             detail: {
               moduleKey: 'tasks',
               initialData,
@@ -366,7 +366,7 @@ function createPeopleContextCommands(nav: NavigationUtilities): CommandPaletteIt
             personId: personId
           };
           
-          window.dispatchEvent(new CustomEvent('litedesk:open-create-drawer', {
+          window.dispatchEvent(new CustomEvent('arivu:open-create-drawer', {
             detail: {
               moduleKey: 'tasks',
               initialData,
@@ -399,7 +399,7 @@ function createPeopleContextCommands(nav: NavigationUtilities): CommandPaletteIt
         if (personId && typeof window !== 'undefined') {
           // Dispatch event to open link drawer in GlobalSearch component
           // Allow create from link drawer
-          window.dispatchEvent(new CustomEvent('litedesk:open-link-drawer', {
+          window.dispatchEvent(new CustomEvent('arivu:open-link-drawer', {
             detail: {
               moduleKey: 'organizations',
               title: 'Link Organization',
@@ -433,7 +433,7 @@ function createPeopleContextCommands(nav: NavigationUtilities): CommandPaletteIt
         
         if (personId && typeof window !== 'undefined') {
           // Dispatch event to open Organization Quick Create drawer with auto-link context
-          window.dispatchEvent(new CustomEvent('litedesk:open-organization-quick-create', {
+          window.dispatchEvent(new CustomEvent('arivu:open-organization-quick-create', {
             detail: {
               initialData: {},
               autoLinkContext: { contactId: personId, personId: personId } // Context for auto-linking after creation
@@ -474,7 +474,7 @@ function createOrganizationContextCommands(nav: NavigationUtilities): CommandPal
         
         if (orgId && typeof window !== 'undefined') {
           // Dispatch event to open link drawer in GlobalSearch component
-          window.dispatchEvent(new CustomEvent('litedesk:open-link-drawer', {
+          window.dispatchEvent(new CustomEvent('arivu:open-link-drawer', {
             detail: {
               moduleKey: 'people',
               title: 'Link Contacts',
@@ -509,7 +509,7 @@ function createOrganizationContextCommands(nav: NavigationUtilities): CommandPal
             accountId: orgId
           };
           
-          window.dispatchEvent(new CustomEvent('litedesk:open-create-drawer', {
+          window.dispatchEvent(new CustomEvent('arivu:open-create-drawer', {
             detail: {
               moduleKey: 'deals',
               initialData,

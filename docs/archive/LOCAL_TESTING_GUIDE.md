@@ -1,6 +1,6 @@
 # 🧪 Local Testing Guide
 
-This guide will walk you through testing the LiteDesk multi-instance CRM locally.
+This guide will walk you through testing the Arivu multi-instance CRM locally.
 
 ---
 
@@ -30,7 +30,7 @@ This guide will walk you through testing the LiteDesk multi-instance CRM locally
 
 ```bash
 # From project root
-cd /Users/Prabhu/Documents/GitHub/LiteDesk
+cd /Users/Prabhu/Documents/GitHub/Arivu
 
 # Start all services (MongoDB, Backend, Frontend, Redis)
 docker-compose up -d
@@ -44,17 +44,17 @@ docker-compose logs -f
 
 **Expected output:**
 ```
-✅ litedesk-mongo    - Up
-✅ litedesk-backend  - Up
-✅ litedesk-frontend - Up
-✅ litedesk-redis    - Up
+✅ arivu-mongo    - Up
+✅ arivu-backend  - Up
+✅ arivu-frontend - Up
+✅ arivu-redis    - Up
 ```
 
 ### Option B: Manual Start (Backend only)
 
 ```bash
 # Terminal 1: Start MongoDB
-docker run -d --name litedesk-mongo \
+docker run -d --name arivu-mongo \
   -p 27017:27017 \
   -e MONGO_INITDB_ROOT_USERNAME=admin \
   -e MONGO_INITDB_ROOT_PASSWORD=password123 \
@@ -83,7 +83,7 @@ curl http://localhost:3000/health
 {
   "status": "healthy",
   "timestamp": "2025-10-22T...",
-  "service": "LiteDesk Master Control Plane",
+  "service": "Arivu Master Control Plane",
   "database": {
     "connected": true,
     "state": "connected"
@@ -99,7 +99,7 @@ curl http://localhost:3000/health/status
 ### Access Frontend
 Open browser: **http://localhost:5173**
 
-You should see the LiteDesk landing page! 🎉
+You should see the Arivu landing page! 🎉
 
 ---
 
@@ -236,7 +236,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 ### Connect to MongoDB
 ```bash
 # Using Docker exec
-docker exec -it litedesk-mongo mongosh \
+docker exec -it arivu-mongo mongosh \
   -u admin -p password123 --authenticationDatabase admin
 
 # Or using MongoDB Compass
@@ -246,7 +246,7 @@ docker exec -it litedesk-mongo mongosh \
 ### Check Collections
 ```javascript
 // In mongosh
-use litedesk
+use arivu
 
 // See all collections
 show collections

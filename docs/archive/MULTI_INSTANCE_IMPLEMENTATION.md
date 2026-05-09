@@ -1,4 +1,4 @@
-# LiteDesk Multi-Instance Architecture - Implementation Guide
+# Arivu Multi-Instance Architecture - Implementation Guide
 
 ## 🚨 CRITICAL: Architecture Change
 
@@ -17,9 +17,9 @@ Data isolated by organizationId field
 
 ### Multi-Instance (What you're building)
 ```
-Organization A → Dedicated Database + Dedicated App + acme.litedesk.com
-Organization B → Dedicated Database + Dedicated App + beta.litedesk.com
-Organization C → Dedicated Database + Dedicated App + gamma.litedesk.com
+Organization A → Dedicated Database + Dedicated App + acme.arivu.com
+Organization B → Dedicated Database + Dedicated App + beta.arivu.com
+Organization C → Dedicated Database + Dedicated App + gamma.arivu.com
 ```
 
 ---
@@ -40,9 +40,9 @@ Organization C → Dedicated Database + Dedicated App + gamma.litedesk.com
 
 **Deliverables:**
 - [x] Kubernetes cluster on AWS EKS
-- [x] Helm charts for LiteDesk application
+- [x] Helm charts for Arivu application
 - [x] MongoDB provisioning automation
-- [x] DNS wildcard configuration (*.litedesk.com)
+- [x] DNS wildcard configuration (*.arivu.com)
 - [x] SSL automation setup
 
 **Estimated Effort:** 80-120 hours (2-3 weeks for 1 person)
@@ -97,7 +97,7 @@ Organization C → Dedicated Database + Dedicated App + gamma.litedesk.com
   success: true,
   instanceId: ObjectId,
   subdomain: 'acme',
-  url: 'https://acme.litedesk.com',
+  url: 'https://acme.arivu.com',
   status: 'provisioning',
   estimatedTime: '5-10 minutes'
 }

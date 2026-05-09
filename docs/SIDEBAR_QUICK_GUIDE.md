@@ -276,7 +276,7 @@ A: See `SIDEBAR_IMPLEMENTATION.md` section "How to Add New Menu Items".
 
 ## 🚀 Start Using It!
 
-1. **Log in** to your LiteDesk CRM
+1. **Log in** to your Arivu CRM
 2. **See** the new sidebar on the left
 3. **Try** collapsing and expanding it
 4. **Navigate** to different sections
@@ -304,6 +304,6 @@ You now have a **modern, responsive sidebar** that makes navigation:
 
 ---
 
-*Quick Guide - LiteDesk CRM*  
+*Quick Guide - Arivu CRM*  
 *Sidebar v1.0 - October 2025*
 

@@ -5998,7 +5998,7 @@ function setActiveTopTab(id) {
   // a route change (which can cause re-renders and the "two clicks / random tab" bug)
   router.replace({ query: { ...route.query, module: mod.key, field: editFields.value[selectedFieldIdx.value]?.key || '', mode: id, subtab: activeSubTab.value } });
   try {
-    localStorage.setItem(`litedesk-modfields-tab-${mod.key}`, id);
+    localStorage.setItem(`arivu-modfields-tab-${mod.key}`, id);
   } catch (e) {}
 }
 
@@ -7797,7 +7797,7 @@ function navigateToPeopleTypes(appKey = 'SALES') {
     }
   });
   try {
-    localStorage.setItem(`litedesk-modfields-tab-${mod.key}`, 'people-types');
+    localStorage.setItem(`arivu-modfields-tab-${mod.key}`, 'people-types');
   } catch (e) {}
 }
 
@@ -8844,7 +8844,7 @@ const fetchModules = async (apiGetOptions = {}) => {
           console.log('Restoring tab from URL:', tabToSet);
         } else {
           // If no mode in URL, check localStorage for this module
-          const storedMode = localStorage.getItem(`litedesk-modfields-tab-${initialMod.key}`);
+          const storedMode = localStorage.getItem(`arivu-modfields-tab-${initialMod.key}`);
           if (storedMode && allowedTabs.includes(storedMode)) {
             tabToSet = storedMode;
             console.log('Restoring tab from localStorage:', tabToSet, 'for module:', initialMod.key);
@@ -8959,7 +8959,7 @@ const fetchModules = async (apiGetOptions = {}) => {
         // fallback to locally stored quick selection if server returns empty (for other modules)
         if (!layoutKeysInit.length && !quickKeysInit.length) {
           try {
-            const cached = JSON.parse(localStorage.getItem(`litedesk-modfields-quick-${initialMod.key}`) || '[]');
+            const cached = JSON.parse(localStorage.getItem(`arivu-modfields-quick-${initialMod.key}`) || '[]');
             if (Array.isArray(cached) && cached.length) {
               let cachedKeys = cached;
               // For People module, filter cached keys too
@@ -9178,7 +9178,7 @@ const fetchModules = async (apiGetOptions = {}) => {
       }
       // If no module from URL, use last persisted selection (only if that module is visible in current context)
       if (!initialMod) {
-        const storedModuleKey = localStorage.getItem('litedesk-modfields-module') || null;
+        const storedModuleKey = localStorage.getItem('arivu-modfields-module') || null;
         if (storedModuleKey) {
           const storedMod = modules.value.find(m => m.key === storedModuleKey) || null;
           // When startWithModuleList or when using a moduleFilter, only restore if the stored module is in the current list (e.g. Sales Schema only shows Deals + custom; don't restore People from Core Entities)
@@ -9252,12 +9252,12 @@ const fetchModules = async (apiGetOptions = {}) => {
             
             editFields.value = normalizedFields;
             // try stored field
-            const storedFieldKey = localStorage.getItem('litedesk-modfields-field') || '';
+            const storedFieldKey = localStorage.getItem('arivu-modfields-field') || '';
             const sidx = storedFieldKey ? editFields.value.findIndex(f => f.key === storedFieldKey) : 0;
             selectedFieldIdx.value = Math.max(0, sidx);
             syncOptionsBuffer();
             // Restore tab from localStorage for this module
-            const storedTab = localStorage.getItem(`litedesk-modfields-tab-${storedMod.key}`);
+            const storedTab = localStorage.getItem(`arivu-modfields-tab-${storedMod.key}`);
             if (storedTab && ['details', 'fields', 'relationships', 'quick'].includes(storedTab)) {
               activeTopTab.value = storedTab;
             }
@@ -9471,7 +9471,7 @@ const selectModule = (mod, preferFieldKey = null) => {
   syncOptionsBuffer();
   // Restore tab from localStorage when selecting module (before updating URL)
   const allowedTabs = getAllowedTopTabs(mod.key);
-  const storedTab = localStorage.getItem(`litedesk-modfields-tab-${mod.key}`);
+  const storedTab = localStorage.getItem(`arivu-modfields-tab-${mod.key}`);
   if (storedTab && allowedTabs.includes(storedTab)) {
     console.log('Restoring tab from localStorage when selecting module:', storedTab, 'for module:', mod.key);
     activeTopTab.value = storedTab;
@@ -9508,8 +9508,8 @@ const selectModule = (mod, preferFieldKey = null) => {
     });
   }
   // persist selection
-  try { localStorage.setItem('litedesk-modfields-module', mod.key); } catch (e) {}
-  try { if (selKey) localStorage.setItem('litedesk-modfields-field', selKey); } catch (e) {}
+  try { localStorage.setItem('arivu-modfields-module', mod.key); } catch (e) {}
+  try { if (selKey) localStorage.setItem('arivu-modfields-field', selKey); } catch (e) {}
   moduleNameEdit.value = mod.name || '';
   moduleEnabled.value = mod.enabled !== false;
   relationships.value = JSON.parse(JSON.stringify(mod.relationships || []));
@@ -9539,7 +9539,7 @@ const selectModule = (mod, preferFieldKey = null) => {
   // Fallback to locally stored quick selection if server returns empty (for other modules)
   if (!layoutKeys.length && !quickKeys.length) {
     try {
-      const cached = JSON.parse(localStorage.getItem(`litedesk-modfields-quick-${mod.key}`) || '[]');
+      const cached = JSON.parse(localStorage.getItem(`arivu-modfields-quick-${mod.key}`) || '[]');
       if (Array.isArray(cached) && cached.length) quickKeys = cached;
     } catch (e) {}
   }
@@ -9673,7 +9673,7 @@ const handleModuleSaved = async (savedModule) => {
   await fetchModules({ cache: 'no-store' });
   // Refresh sidebar so new custom module appears in app nav
   if (savedModule?.type === 'custom') {
-    try { window.dispatchEvent(new CustomEvent('litedesk:core-modules-updated')); } catch (e) {}
+    try { window.dispatchEvent(new CustomEvent('arivu:core-modules-updated')); } catch (e) {}
   }
   // Find the module from the refreshed list and select it
   const module = modules.value.find(m => m._id === savedModule._id);
@@ -9999,7 +9999,7 @@ const saveModule = async () => {
     originalSnapshot.value = getSnapshot();
     quickOriginalSnapshot.value = getQuickSnapshot();
     // Notify sidebar and other consumers to refresh (e.g. display name change)
-    window.dispatchEvent(new CustomEvent('litedesk:core-modules-updated'));
+    window.dispatchEvent(new CustomEvent('arivu:core-modules-updated'));
     console.log('Module saved successfully, relationships updated');
   } catch (e) {
     console.error('Save module failed', e);
@@ -10018,7 +10018,7 @@ const selectField = (idx) => {
   const mod = selectedModule.value;
   if (mod) {
     router.replace({ query: { ...route.query, module: mod.key, field: editFields.value[selectedFieldIdx.value]?.key || '', mode: activeTopTab.value, subtab: activeSubTab.value } });
-    try { if (editFields.value[selectedFieldIdx.value]?.key) localStorage.setItem('litedesk-modfields-field', editFields.value[selectedFieldIdx.value].key); } catch (e) {}
+    try { if (editFields.value[selectedFieldIdx.value]?.key) localStorage.setItem('arivu-modfields-field', editFields.value[selectedFieldIdx.value].key); } catch (e) {}
   }
   
   // Keep the selected field row visible (prevents scroll jump when right panel focuses an input and scrolls the page)
@@ -10578,7 +10578,7 @@ const clearSelection = () => {
   delete q.module;
   delete q.field;
   router.replace({ query: q });
-  try { localStorage.removeItem('litedesk-modfields-module'); localStorage.removeItem('litedesk-modfields-field'); } catch (e) {}
+  try { localStorage.removeItem('arivu-modfields-module'); localStorage.removeItem('arivu-modfields-field'); } catch (e) {}
 };
 
 function addRelationship() {
@@ -11995,7 +11995,7 @@ async function saveQuickCreate() {
     });
     // cache selection locally for resilience
     try {
-      localStorage.setItem(`litedesk-modfields-quick-${mod.key}`, JSON.stringify(payload.quickCreate));
+      localStorage.setItem(`arivu-modfields-quick-${mod.key}`, JSON.stringify(payload.quickCreate));
     } catch (e) {}
     
     invalidateTenantSchemaCaches();
@@ -12039,7 +12039,7 @@ async function saveQuickCreate() {
       console.error('❌ Updated module not found after refresh');
     }
     quickOriginalSnapshot.value = getQuickSnapshot();
-    try { window.dispatchEvent(new CustomEvent('litedesk:core-modules-updated')); } catch (e) {}
+    try { window.dispatchEvent(new CustomEvent('arivu:core-modules-updated')); } catch (e) {}
   } catch (e) {
     console.error('Save quick create failed', e);
     alert('Failed to save quick create settings');
@@ -13333,7 +13333,7 @@ watch(activeTopTab, (v, oldValue) => {
   }
   if (v !== oldValue && oldValue !== undefined) {
     try {
-      localStorage.setItem(`litedesk-modfields-tab-${mod.key}`, v);
+      localStorage.setItem(`arivu-modfields-tab-${mod.key}`, v);
     } catch (e) {}
   }
 }, { immediate: false });

@@ -36,7 +36,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue']);
 
-const initDynamicRoutes = inject('litedeskInitializeDynamicRoutes');
+const initDynamicRoutes = inject('arivuInitializeDynamicRoutes');
 const router = useRouter();
 const route = useRoute();
 const { openTab } = useTabs();
@@ -195,7 +195,7 @@ watch(
 // ============================================================================
 
 // ARCHITECTURE NOTE: GlobalSearch is now handled by GlobalSurfacesProvider in App.vue
-// This component can dispatch 'litedesk:open-global-search' event to open search if needed
+// This component can dispatch 'arivu:open-global-search' event to open search if needed
 
 // Build sidebar from registry
 const buildSidebar = async () => {
@@ -281,13 +281,13 @@ const handleNotificationClick = () => {
 };
 
 onMounted(() => {
-  window.addEventListener('litedesk:core-modules-updated', onCoreModulesUpdated);
-  window.addEventListener('litedesk:open-notifications-panel', handleNotificationClick);
+  window.addEventListener('arivu:core-modules-updated', onCoreModulesUpdated);
+  window.addEventListener('arivu:open-notifications-panel', handleNotificationClick);
 });
 
 onUnmounted(() => {
-  window.removeEventListener('litedesk:core-modules-updated', onCoreModulesUpdated);
-  window.removeEventListener('litedesk:open-notifications-panel', handleNotificationClick);
+  window.removeEventListener('arivu:core-modules-updated', onCoreModulesUpdated);
+  window.removeEventListener('arivu:open-notifications-panel', handleNotificationClick);
 });
 
 // User info and handlers (avatar + menu parity with TabBar)

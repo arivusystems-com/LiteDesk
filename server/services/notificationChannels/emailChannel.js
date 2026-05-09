@@ -109,7 +109,7 @@ function renderDigestEmail(notification, user) {
   const subject = notification.title || `Your ${period} summary`;
   
   // Simple text-based email (no branding yet)
-  const text = `Hi ${userName},\n\n${notification.body}\n\nOpen LiteDesk to review.\n\n${getAppDeepLink(notification.appKey)}`;
+  const text = `Hi ${userName},\n\n${notification.body}\n\nOpen Arivu to review.\n\n${getAppDeepLink(notification.appKey)}`;
   
   const html = `
     <!DOCTYPE html>
@@ -123,7 +123,7 @@ function renderDigestEmail(notification, user) {
       <p>Hi ${userName},</p>
       <p>${notification.body}</p>
       <p style="margin-top: 30px;">
-        <a href="${getAppDeepLink(notification.appKey)}" style="background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Open LiteDesk</a>
+        <a href="${getAppDeepLink(notification.appKey)}" style="background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Open Arivu</a>
       </p>
     </body>
     </html>
@@ -137,7 +137,7 @@ function renderDigestEmail(notification, user) {
  */
 function renderRegularEmail(notification, user) {
   const userName = user.firstName || user.email.split('@')[0];
-  const subject = notification.title || 'Notification from LiteDesk';
+  const subject = notification.title || 'Notification from Arivu';
   
   const text = `Hi ${userName},\n\n${notification.body}\n\n${getAppDeepLink(notification.appKey)}`;
   
@@ -153,7 +153,7 @@ function renderRegularEmail(notification, user) {
       <p>Hi ${userName},</p>
       <p>${notification.body}</p>
       <p style="margin-top: 30px;">
-        <a href="${getAppDeepLink(notification.appKey)}" style="background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View in LiteDesk</a>
+        <a href="${getAppDeepLink(notification.appKey)}" style="background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View in Arivu</a>
       </p>
     </body>
     </html>

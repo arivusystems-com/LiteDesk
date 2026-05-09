@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-This document defines the Task Settings module for the LiteDesk platform. Task Settings configure the structure and behavior of task records across the platform. This specification aligns with the Module Settings Doctrine and uses People Settings as the canonical reference implementation.
+This document defines the Task Settings module for the Arivu platform. Task Settings configure the structure and behavior of task records across the platform. This specification aligns with the Module Settings Doctrine and uses People Settings as the canonical reference implementation.
 
 **Canonical Reference:** People Settings (`/settings?tab=core-modules&moduleKey=people`)  
 **Settings Location:** `/settings?tab=core-modules&moduleKey=tasks`  

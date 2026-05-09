@@ -109,7 +109,7 @@ AWS_SES_REGION=us-east-1
 AWS_SES_ACCESS_KEY_ID=...
 AWS_SES_SECRET_ACCESS_KEY=...
 EMAIL_FROM=noreply@yourdomain.com
-EMAIL_FROM_NAME=LiteDesk CRM
+EMAIL_FROM_NAME=Arivu CRM
 EMAIL_REPLY_TO=support@yourdomain.com
 
 # Optional: SMTP fallback

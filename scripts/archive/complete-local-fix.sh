@@ -48,7 +48,7 @@ echo ""
 echo -e "${BLUE}Step 2: Creating clean .env file...${NC}"
 echo ""
 
-cd /Users/Prabhu/Documents/GitHub/LiteDesk/server
+cd /Users/Prabhu/Documents/GitHub/Arivu/server
 
 # Backup
 cp .env .env.backup.corrupted.$(date +%Y%m%d_%H%M%S)
@@ -57,7 +57,7 @@ echo -e "${YELLOW}📋 Backed up corrupted .env${NC}"
 # Create CLEAN .env
 cat > .env << 'ENVEOF'
 # =============================================================================
-# LiteDesk CRM - Local Development Configuration
+# Arivu CRM - Local Development Configuration
 # =============================================================================
 
 NODE_ENV=development
@@ -66,8 +66,8 @@ PORT=5000
 # -----------------------------------------------------------------------------
 # DATABASE (MongoDB Atlas)
 # -----------------------------------------------------------------------------
-MONGO_URI=mongodb+srv://litedeskadmin:TKvtQbKGOWdfP5C1@litedeskdb.qzw4euo.mongodb.net/litedesk?retryWrites=true&w=majority&appName=litedeskdb
-MONGODB_URI=mongodb+srv://litedeskadmin:TKvtQbKGOWdfP5C1@litedeskdb.qzw4euo.mongodb.net/litedesk?retryWrites=true&w=majority&appName=litedeskdb
+MONGO_URI=mongodb+srv://arivuadmin:TKvtQbKGOWdfP5C1@arivudb.qzw4euo.mongodb.net/arivu?retryWrites=true&w=majority&appName=arivudb
+MONGODB_URI=mongodb+srv://arivuadmin:TKvtQbKGOWdfP5C1@arivudb.qzw4euo.mongodb.net/arivu?retryWrites=true&w=majority&appName=arivudb
 
 # -----------------------------------------------------------------------------
 # SECURITY
@@ -87,7 +87,7 @@ CORS_ORIGINS=http://localhost:5173,http://localhost:5175,http://localhost:3000,h
 # -----------------------------------------------------------------------------
 # ADMIN
 # -----------------------------------------------------------------------------
-DEFAULT_ADMIN_EMAIL=admin@litedesk.com
+DEFAULT_ADMIN_EMAIL=admin@arivu.com
 DEFAULT_ADMIN_PASSWORD=Admin@123456
 
 # -----------------------------------------------------------------------------
@@ -105,7 +105,7 @@ ENABLE_EMAIL_NOTIFICATIONS=false
 ENABLE_STRIPE_INTEGRATION=false
 
 LOG_LEVEL=info
-BASE_DOMAIN=litedesk.local
+BASE_DOMAIN=arivu.local
 ENVEOF
 
 echo -e "${GREEN}✅ Clean .env created${NC}"
@@ -116,7 +116,7 @@ echo -e "${BLUE}Step 3: Starting backend server...${NC}"
 echo ""
 
 # Make sure we're in server directory
-cd /Users/Prabhu/Documents/GitHub/LiteDesk/server
+cd /Users/Prabhu/Documents/GitHub/Arivu/server
 
 # Check dependencies
 if [ ! -d "node_modules" ]; then
@@ -126,11 +126,11 @@ fi
 
 # Start backend in background
 echo "Starting backend on port 5000..."
-nohup node server.js > /Users/Prabhu/Documents/GitHub/LiteDesk/backend.log 2>&1 &
+nohup node server.js > /Users/Prabhu/Documents/GitHub/Arivu/backend.log 2>&1 &
 BACKEND_PID=$!
 
 # Save PID
-echo $BACKEND_PID > /Users/Prabhu/Documents/GitHub/LiteDesk/.backend.pid
+echo $BACKEND_PID > /Users/Prabhu/Documents/GitHub/Arivu/.backend.pid
 
 # Wait for backend
 echo "Waiting for backend to start..."
@@ -144,7 +144,7 @@ until curl -s http://localhost:5000/health > /dev/null 2>&1 || curl -s http://lo
         echo -e "${RED}❌ Backend failed to start${NC}"
         echo ""
         echo "Last 20 lines of backend log:"
-        tail -20 /Users/Prabhu/Documents/GitHub/LiteDesk/backend.log
+        tail -20 /Users/Prabhu/Documents/GitHub/Arivu/backend.log
         exit 1
     fi
     sleep 1

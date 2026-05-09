@@ -213,7 +213,7 @@ const AssignmentRulesSettings = defineAsyncComponent(() => import('@/components/
 const authStore = useAuthStore();
 const { colorMode, toggleColorMode } = useColorMode();
 
-const SETTINGS_TAB_KEY = 'litedesk-settings-active-tab';
+const SETTINGS_TAB_KEY = 'arivu-settings-active-tab';
 const route = useRoute();
 const router = useRouter();
 const activeTab = ref(route.query.tab || null);
@@ -234,7 +234,7 @@ const goBack = () => {
 };
 
 // Collapsible left rail behavior (mirrors main nav)
-const isCollapsed = ref(localStorage.getItem('litedesk-settings-collapsed') === 'true');
+const isCollapsed = ref(localStorage.getItem('arivu-settings-collapsed') === 'true');
 const isHovering = ref(false);
 const shouldShowExpanded = computed(() => !isCollapsed.value || isHovering.value);
 const toggleSidebar = () => {
@@ -242,7 +242,7 @@ const toggleSidebar = () => {
 };
 const handleMouseEnter = () => { if (isCollapsed.value) isHovering.value = true; };
 const handleMouseLeave = () => { isHovering.value = false; };
-watch(isCollapsed, (v) => localStorage.setItem('litedesk-settings-collapsed', v.toString()));
+watch(isCollapsed, (v) => localStorage.setItem('arivu-settings-collapsed', v.toString()));
 
 // Icon components as functions
 const UsersIcon = () => h('svg', {

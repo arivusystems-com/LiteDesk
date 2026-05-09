@@ -93,7 +93,7 @@ const tabBarNotificationConnectStream = computed(() => {
 });
 
 function openNotificationsPanel() {
-  window.dispatchEvent(new CustomEvent('litedesk:open-notifications-panel'));
+  window.dispatchEvent(new CustomEvent('arivu:open-notifications-panel'));
 }
 
 const vClickOutside = clickOutside;
@@ -122,7 +122,7 @@ const tabBarWidth = computed(() => {
   
   // On desktop, we need to check sidebar state
   // Read from localStorage since sidebar state is stored there
-  const sidebarCollapsed = localStorage.getItem('litedesk-sidebar-collapsed') === 'true';
+  const sidebarCollapsed = localStorage.getItem('arivu-sidebar-collapsed') === 'true';
   const sidebarWidth = sidebarCollapsed ? 64 : 256;
   const calculatedWidth = viewportWidth.value - sidebarWidth;
   
@@ -145,7 +145,7 @@ const tabBarLeft = computed(() => {
   }
   
   // On desktop, position based on sidebar state
-  const sidebarCollapsed = localStorage.getItem('litedesk-sidebar-collapsed') === 'true';
+  const sidebarCollapsed = localStorage.getItem('arivu-sidebar-collapsed') === 'true';
   return sidebarCollapsed ? '64px' : '256px';
 });
 

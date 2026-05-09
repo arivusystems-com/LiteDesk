@@ -21,7 +21,7 @@ const BASE_URL = process.env.API_BASE_URL || process.env.SERVER_URL || 'http://l
 const API_BASE = `${BASE_URL}/api`;
 
 // Test credentials (update these or pass as env vars)
-const TEST_EMAIL = process.env.TEST_EMAIL || 'admin@litedesk.com';
+const TEST_EMAIL = process.env.TEST_EMAIL || 'admin@arivusystems.com';
 const TEST_PASSWORD = process.env.TEST_PASSWORD || 'Admin@123';
 
 // Test data storage
@@ -140,7 +140,7 @@ async function testAuthentication() {
             logInfo(`Response: ${JSON.stringify(result.fullError.data)}`);
         }
         logInfo(`\n💡 Tip: Check if user exists and credentials are correct.`);
-        logInfo(`   Default: admin@litedesk.com / Admin@123456`);
+        logInfo(`   Default: admin@arivusystems.com / Admin@123456`);
         logInfo(`   Or set: TEST_EMAIL and TEST_PASSWORD environment variables`);
         return false;
     }

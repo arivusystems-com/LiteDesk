@@ -1760,9 +1760,9 @@ exports.testIntegration = async (req, res) => {
 
         const result = await emailService.sendEmail({
             to: userEmail,
-            subject: 'LiteDesk – Test Email',
-            text: 'This is a test email from LiteDesk. If you received this, your email integration is working.',
-            html: '<p>This is a test email from LiteDesk.</p><p>If you received this, your email integration is working.</p>'
+            subject: 'Arivu – Test Email',
+            text: 'This is a test email from Arivu. If you received this, your email integration is working.',
+            html: '<p>This is a test email from Arivu.</p><p>If you received this, your email integration is working.</p>'
         });
 
         if (!result.success) {

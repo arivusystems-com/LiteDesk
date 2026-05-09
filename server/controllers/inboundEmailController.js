@@ -89,7 +89,7 @@ exports.handleInbound = async (req, res) => {
     const allRecipients = [...toAddresses, ...ccAddresses, ...bccAddresses];
 
     const tokenPayload = replyToTokenService.extractFromAddresses(allRecipients);
-    const orgHeaderId = req.headers['x-litedesk-organization-id'] || req.headers['x-organization-id'];
+    const orgHeaderId = req.headers['x-arivu-organization-id'] || req.headers['x-organization-id'];
 
     if (!tokenPayload && !orgHeaderId) {
       return res.status(400).json({

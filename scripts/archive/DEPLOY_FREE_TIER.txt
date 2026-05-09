@@ -54,7 +54,7 @@ That's it! This script:
 
 🚀 QUICK START:
 
-  cd /Users/Prabhu/Documents/GitHub/LiteDesk
+  cd /Users/Prabhu/Documents/GitHub/Arivu
   ./deploy-local-build.sh
 
   (Script will ask for your SSH key path)
@@ -64,7 +64,7 @@ That's it! This script:
 📱 AFTER DEPLOYMENT:
 
   URL:      http://43.204.144.169
-  Email:    admin@litedesk.com
+  Email:    admin@arivu.com
   Password: Admin@123456
 
   ⚠️  Change password after first login!

@@ -23,7 +23,7 @@ import { identifyProductUser } from '@/config/posthogUser';
 const appDebugEnabled = () => {
   if (!import.meta.env.DEV) return false;
   try {
-    return localStorage.getItem('litedesk:debug:app') === '1';
+    return localStorage.getItem('arivu:debug:app') === '1';
   } catch (_e) {
     return false;
   }
@@ -38,7 +38,7 @@ function resetTabsStateFromModule() {
   void import('@/composables/useTabs').then((m) => m.resetTabsState());
 }
 
-const initDynamicRoutes = inject('litedeskInitializeDynamicRoutes');
+const initDynamicRoutes = inject('arivuInitializeDynamicRoutes');
 const authStore = useAuthStore();
 const appShellStore = useAppShellStore();
 const router = useRouter();
@@ -99,12 +99,12 @@ const handleSalesOpenNotifications = () => {
 
 // Sidebar collapsed state - Load from localStorage, default to false
 const sidebarCollapsed = ref(
-  localStorage.getItem('litedesk-sidebar-collapsed') === 'true'
+  localStorage.getItem('arivu-sidebar-collapsed') === 'true'
 );
 
 // Save sidebar state to localStorage whenever it changes
 watch(sidebarCollapsed, (newValue) => {
-  localStorage.setItem('litedesk-sidebar-collapsed', newValue.toString());
+  localStorage.setItem('arivu-sidebar-collapsed', newValue.toString());
   queueContentOffsetUpdate();
 });
 

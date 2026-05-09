@@ -1,4 +1,4 @@
-# Email Service Comparison for LiteDesk CRM
+# Email Service Comparison for Arivu CRM
 
 ## TL;DR - Which Email Service Should You Use?
 
@@ -205,7 +205,7 @@ You might want a different service if:
 
 ---
 
-## ✅ Final Recommendation for LiteDesk
+## ✅ Final Recommendation for Arivu
 
 **Use AWS SES** because:
 

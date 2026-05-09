@@ -350,7 +350,7 @@ The Responses Module successfully provides:
 - ✅ Permission-based access control
 - ✅ Responsive and accessible UI
 
-The module is **production-ready** and fully integrated with the LiteDesk CRM system.
+The module is **production-ready** and fully integrated with the Arivu CRM system.
 
 ---
 

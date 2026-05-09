@@ -124,14 +124,14 @@ onMounted(() => {
   window.addEventListener('keydown', handleKeydown);
   
   // Custom events
-  window.addEventListener('litedesk:open-global-search', handleOpenGlobalSearchEvent);
-  window.addEventListener('litedesk:open-command-palette', handleOpenCommandPaletteEvent);
+  window.addEventListener('arivu:open-global-search', handleOpenGlobalSearchEvent);
+  window.addEventListener('arivu:open-command-palette', handleOpenCommandPaletteEvent);
 });
 
 // Cleanup event listeners on unmount
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown);
-  window.removeEventListener('litedesk:open-global-search', handleOpenGlobalSearchEvent);
-  window.removeEventListener('litedesk:open-command-palette', handleOpenCommandPaletteEvent);
+  window.removeEventListener('arivu:open-global-search', handleOpenGlobalSearchEvent);
+  window.removeEventListener('arivu:open-command-palette', handleOpenCommandPaletteEvent);
 });
 </script>

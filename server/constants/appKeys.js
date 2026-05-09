@@ -3,7 +3,7 @@
  * App Context: Application Keys
  * ============================================================================
  * 
- * Defines the available application contexts in the LiteDesk platform.
+ * Defines the available application contexts in the Arivu platform.
  * Each appKey represents a distinct application that can run on the platform.
  * 
  * Usage:

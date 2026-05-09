@@ -217,7 +217,7 @@ const requireMasterOrganization = () => {
             }
 
             // Check if this is the master organization
-            const isMasterOrg = organization.name === 'LiteDesk Master';
+            const isMasterOrg = organization.name === 'Arivu Master';
             
             if (!isMasterOrg) {
                 return res.status(403).json({ 

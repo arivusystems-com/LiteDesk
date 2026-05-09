@@ -18,7 +18,7 @@ const shouldEnableVerboseConsole = () => {
   }
   if (import.meta.env.DEV) {
     try {
-      return typeof localStorage !== 'undefined' && localStorage.getItem('litedesk:debug:global') === '1'
+      return typeof localStorage !== 'undefined' && localStorage.getItem('arivu:debug:global') === '1'
     } catch (_e) {
       return false
     }
@@ -38,7 +38,7 @@ if (!shouldEnableVerboseConsole()) {
 installFetchApiBase()
 
 const app = createApp(App)
-app.provide('litedeskInitializeDynamicRoutes', initializeDynamicRoutes)
+app.provide('arivuInitializeDynamicRoutes', initializeDynamicRoutes)
 app.use(createPinia())
 app.use(router)
 app.component('HeadlessCheckbox', HeadlessCheckbox)

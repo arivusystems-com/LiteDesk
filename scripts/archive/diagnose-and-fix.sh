@@ -15,7 +15,7 @@ PURPLE='\033[0;35m'
 NC='\033[0m'
 
 EC2_IP="13.203.208.47"
-MONGODB_URI="mongodb+srv://litedeskadmin:TKvtQbKGOWdfP5C1@litedeskdb.qzw4euo.mongodb.net/litedesk?retryWrites=true&w=majority&appName=litedeskdb"
+MONGODB_URI="mongodb+srv://arivuadmin:TKvtQbKGOWdfP5C1@arivudb.qzw4euo.mongodb.net/arivu?retryWrites=true&w=majority&appName=arivudb"
 KEY_FILE=""
 
 echo -e "${BLUE}"
@@ -51,11 +51,11 @@ echo "🔍 STEP 1: CHECKING SYSTEM STATUS"
 echo "════════════════════════════════════════════════════════"
 echo ""
 
-# Check if LiteDesk directory exists
-if [ -d "/home/ubuntu/LiteDesk" ]; then
-    echo "✅ LiteDesk directory exists"
+# Check if Arivu directory exists
+if [ -d "/home/ubuntu/Arivu" ]; then
+    echo "✅ Arivu directory exists"
 else
-    echo "❌ LiteDesk directory not found!"
+    echo "❌ Arivu directory not found!"
     exit 1
 fi
 
@@ -65,7 +65,7 @@ echo "🔍 STEP 2: CHECKING BACKEND FILES"
 echo "════════════════════════════════════════════════════════"
 echo ""
 
-cd /home/ubuntu/LiteDesk/server
+cd /home/ubuntu/Arivu/server
 
 # Check server.js
 if [ -f "server.js" ]; then
@@ -115,13 +115,13 @@ echo "🔍 STEP 4: CHECKING BACKEND LOGS"
 echo "════════════════════════════════════════════════════════"
 echo ""
 
-if pm2 list | grep -q "litedesk-api"; then
+if pm2 list | grep -q "arivu-api"; then
     echo "📝 Last 30 lines of backend logs:"
     echo "----------------------------------------"
-    pm2 logs litedesk-api --lines 30 --nostream
+    pm2 logs arivu-api --lines 30 --nostream
     echo "----------------------------------------"
 else
-    echo "⚠️  litedesk-api process not found in PM2"
+    echo "⚠️  arivu-api process not found in PM2"
 fi
 
 echo ""
@@ -130,7 +130,7 @@ echo "🔧 STEP 5: FIXING ISSUES"
 echo "════════════════════════════════════════════════════════"
 echo ""
 
-cd /home/ubuntu/LiteDesk/server
+cd /home/ubuntu/Arivu/server
 
 # Create/Update .env file
 echo "📝 Creating proper .env file..."
@@ -141,8 +141,8 @@ NODE_ENV=production
 PORT=5000
 
 # MongoDB Atlas
-MONGODB_URI=mongodb+srv://litedeskadmin:TKvtQbKGOWdfP5C1@litedeskdb.qzw4euo.mongodb.net/litedesk?retryWrites=true&w=majority&appName=litedeskdb
-MONGO_URI=mongodb+srv://litedeskadmin:TKvtQbKGOWdfP5C1@litedeskdb.qzw4euo.mongodb.net/litedesk?retryWrites=true&w=majority&appName=litedeskdb
+MONGODB_URI=mongodb+srv://arivuadmin:TKvtQbKGOWdfP5C1@arivudb.qzw4euo.mongodb.net/arivu?retryWrites=true&w=majority&appName=arivudb
+MONGO_URI=mongodb+srv://arivuadmin:TKvtQbKGOWdfP5C1@arivudb.qzw4euo.mongodb.net/arivu?retryWrites=true&w=majority&appName=arivudb
 
 # JWT Secrets
 JWT_SECRET=6.6731011Kgnm2!
@@ -154,7 +154,7 @@ CLIENT_URL=http://13.203.208.47
 CORS_ORIGINS=http://13.203.208.47,https://13.203.208.47
 
 # Admin Defaults
-DEFAULT_ADMIN_EMAIL=admin@litedesk.com
+DEFAULT_ADMIN_EMAIL=admin@arivu.com
 DEFAULT_ADMIN_PASSWORD=Admin@123456
 
 # Monitoring
@@ -181,11 +181,11 @@ npm install --production
 
 echo ""
 echo "🔄 Stopping old backend process..."
-pm2 delete litedesk-api 2>/dev/null || echo "No existing process to stop"
+pm2 delete arivu-api 2>/dev/null || echo "No existing process to stop"
 
 echo ""
 echo "🚀 Starting backend..."
-pm2 start server.js --name litedesk-api --time
+pm2 start server.js --name arivu-api --time
 
 echo ""
 echo "💾 Saving PM2 configuration..."
@@ -213,7 +213,7 @@ else
     echo "Response: $HEALTH_RESPONSE"
     echo ""
     echo "📝 Checking logs..."
-    pm2 logs litedesk-api --lines 20 --nostream
+    pm2 logs arivu-api --lines 20 --nostream
 fi
 
 echo ""
@@ -242,7 +242,7 @@ EOF
     echo -e "   ${YELLOW}http://13.203.208.47${NC}"
     echo ""
     echo -e "${GREEN}👤 Login with:${NC}"
-    echo -e "   Email:    admin@litedesk.com"
+    echo -e "   Email:    admin@arivu.com"
     echo -e "   Password: Admin@123456"
     echo ""
     echo -e "${PURPLE}🔍 If still not working, the logs above show the issue${NC}"

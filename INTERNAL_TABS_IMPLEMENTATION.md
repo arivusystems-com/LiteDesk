@@ -1,7 +1,7 @@
 # Internal Tabs Navigation System
 
 ## Overview
-LiteDesk now features an internal tabs system that allows users to navigate between modules and records without refreshing the browser or opening new windows. This provides a modern, multi-tasking experience similar to browser tabs or VS Code's editor tabs.
+Arivu now features an internal tabs system that allows users to navigate between modules and records without refreshing the browser or opening new windows. This provides a modern, multi-tasking experience similar to browser tabs or VS Code's editor tabs.
 
 ## Features Implemented
 
@@ -304,7 +304,7 @@ User Click on Sidebar Item
 
 ```javascript
 {
-  "litedesk-tabs": {
+  "arivu-tabs": {
     "tabs": [
       {
         "id": "dashboard",
@@ -487,7 +487,7 @@ const openContactTab = (contact) => {
 
 ## Conclusion
 
-The Internal Tabs system provides a modern, efficient way to navigate within LiteDesk. It improves user experience by:
+The Internal Tabs system provides a modern, efficient way to navigate within Arivu. It improves user experience by:
 - Reducing page loads and refreshes
 - Allowing easy multi-tasking between different records
 - Maintaining context across navigation

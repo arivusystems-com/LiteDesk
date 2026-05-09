@@ -9,7 +9,7 @@
 
 ## Purpose of the Event Domain
 
-The Event domain represents scheduled, executable work items in the LiteDesk platform. Events are the primary mechanism for organizing time-bound activities, whether they are meetings, audits, sales beats, or other scheduled work. The Event domain provides a unified model for execution, tracking, and completion of work across different event types while maintaining strict boundaries between creation, execution, and configuration.
+The Event domain represents scheduled, executable work items in the Arivu platform. Events are the primary mechanism for organizing time-bound activities, whether they are meetings, audits, sales beats, or other scheduled work. The Event domain provides a unified model for execution, tracking, and completion of work across different event types while maintaining strict boundaries between creation, execution, and configuration.
 
 **This domain is contract-locked.** All changes must align with this contract. See "Change Policy" below.
 

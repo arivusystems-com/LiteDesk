@@ -25,7 +25,7 @@ curl -X POST http://localhost:5000/api/auth/login \
   -H "Content-Type: application/json" \
   -H "X-Bypass-Rate-Limit: true" \
   -H "X-Test-Mode: true" \
-  -d '{"email":"admin@litedesk.com","password":"Admin@123"}'
+  -d '{"email":"admin@arivu.com","password":"Admin@123"}'
 ```
 
 ## ⚠️ Important: Server Restart Required
@@ -111,7 +111,7 @@ You should see:
 curl -v -X POST http://localhost:5000/api/auth/login \
   -H "Content-Type: application/json" \
   -H "X-Bypass-Rate-Limit: true" \
-  -d '{"email":"admin@litedesk.com","password":"Admin@123"}' \
+  -d '{"email":"admin@arivu.com","password":"Admin@123"}' \
   2>&1 | grep -E "(X-Bypass|HTTP|error)"
 ```
 

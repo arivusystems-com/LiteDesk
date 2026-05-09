@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-Event Settings is the **SINGLE SOURCE OF TRUTH** for event type structure, configuration, and eligibility across the LiteDesk platform. This doctrine defines the architectural principles, invariants, and boundaries that govern Event Settings.
+Event Settings is the **SINGLE SOURCE OF TRUTH** for event type structure, configuration, and eligibility across the Arivu platform. This doctrine defines the architectural principles, invariants, and boundaries that govern Event Settings.
 
 **Key Principle:** Event Settings configure **structure only**. They do not manage scheduling, execution, workflows, or permissions.
 
