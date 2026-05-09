@@ -18,12 +18,42 @@
  * ============================================================================
  */
 
+const crypto = require('crypto');
 const inboundEmailQueueService = require('../services/inboundEmailQueueService');
 const inboundProcessingQueue = require('../platform/communication/queues/inboundProcessingQueue');
 const { appendCommunicationEvent } = require('../services/communicationEventWriter');
 const {
   InboundDispatchError
 } = require('../platform/communication/inbound/inboundDispatcher');
+
+/**
+ * Optional shared-secret gate for POST /api/webhooks/email/inbound.
+ * Omit EMAIL_INBOUND_WEBHOOK_SECRET to keep legacy open receiver behavior (e.g. local dev).
+ */
+function inboundWebhookSecretMatches(req) {
+  const secret = String(process.env.EMAIL_INBOUND_WEBHOOK_SECRET || '').trim();
+  if (!secret) return true;
+
+  let provided = '';
+  const authHeader = req.headers.authorization;
+  if (typeof authHeader === 'string') {
+    const m = authHeader.match(/^\s*Bearer\s+(\S+)/i);
+    if (m) provided = String(m[1] || '').trim();
+  }
+  if (!provided) {
+    provided = String(req.headers['x-email-inbound-webhook-token'] || '').trim();
+  }
+  if (!provided) return false;
+
+  try {
+    const a = Buffer.from(secret, 'utf8');
+    const b = Buffer.from(provided, 'utf8');
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+  } catch (_e) {
+    return false;
+  }
+}
 
 function extractRawMimeBuffer(req) {
   if (Buffer.isBuffer(req.body)) {
@@ -43,6 +73,13 @@ function extractRawMimeBuffer(req) {
  * Body: raw MIME (Content-Type: message/rfc822) or JSON { rawMime: "<base64>" }
  */
 exports.handleInbound = async (req, res) => {
+  if (!inboundWebhookSecretMatches(req)) {
+    return res.status(401).json({
+      success: false,
+      message: 'Inbound webhook authentication failed'
+    });
+  }
+
   let rawBuffer;
   try {
     rawBuffer = extractRawMimeBuffer(req);

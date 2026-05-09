@@ -486,6 +486,7 @@ import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
 import apiClient from '@/utils/apiClient';
+import { useNotifications } from '@/composables/useNotifications';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import EmailComposeDrawer from '@/components/communications/EmailComposeDrawer.vue';
 import RelatedEventsWidget from '@/components/events/RelatedEventsWidget.vue';
@@ -495,6 +496,7 @@ import Avatar from '@/components/common/Avatar.vue';
 
 const route = useRoute();
 const router = useRouter();
+const notifications = useNotifications();
 
 // Use tabs composable
 const { openTab } = useTabs();
@@ -681,13 +683,14 @@ const handleEmailSubmit = async (payload) => {
   try {
     const res = await apiClient.post('/communications/email', payload);
     if (res.success) {
+      notifications.success('Email sent');
       fetchDeal();
     } else {
-      alert(res.message || 'Failed to send email');
+      notifications.error(res.message || 'Failed to send email');
     }
   } catch (err) {
     const msg = err.response?.data?.error || err.response?.data?.message || err.message;
-    alert(msg || 'Failed to send email');
+    notifications.error(msg || 'Failed to send email');
   }
 };
 

@@ -144,3 +144,146 @@ test('updateThreadTags removes normalized tag', async (t) => {
     $set: { updatedBy: 'user-1' }
   });
 });
+
+test('assignThreadOwner returns 400 when threadId is missing', async (t) => {
+  mockAuditLogSink(t);
+  let metaCalled = false;
+  patchMethod(CommunicationThreadMeta, 'findOneAndUpdate', () => {
+    metaCalled = true;
+    return { lean: async () => ({}) };
+  }, t);
+
+  const req = {
+    params: { threadId: '' },
+    body: {},
+    user: { _id: 'user-1', organizationId: 'org-1', email: 'owner@test.dev' }
+  };
+  const res = createRes();
+
+  await controller.assignThreadOwner(req, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body?.success, false);
+  assert.match(String(res.body?.message || ''), /threadId is required/i);
+  assert.equal(metaCalled, false);
+});
+
+test('assignThreadOwner unassign skips assignee lookup and clears owner', async (t) => {
+  mockAuditLogSink(t);
+  let userFindCalled = false;
+  patchMethod(User, 'findOne', () => {
+    userFindCalled = true;
+    return { select: () => ({ lean: async () => null }) };
+  }, t);
+
+  patchMethod(CommunicationThreadMeta, 'findOneAndUpdate', () => ({
+    lean: async () => ({ assignedToUserId: null })
+  }), t);
+
+  const req = {
+    params: { threadId: 'thread-clear' },
+    body: { assignedToUserId: null },
+    user: { _id: 'user-1', organizationId: 'org-9', email: 'u@test.dev' }
+  };
+  const res = createRes();
+
+  await controller.assignThreadOwner(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body?.success, true);
+  assert.equal(res.body?.data?.assignedToUserId, null);
+  assert.equal(userFindCalled, false);
+});
+
+test('updateThreadTags returns 400 when threadId is missing', async (t) => {
+  mockAuditLogSink(t);
+  let metaCalled = false;
+  patchMethod(CommunicationThreadMeta, 'findOneAndUpdate', () => {
+    metaCalled = true;
+    return { lean: async () => ({ tags: [] }) };
+  }, t);
+
+  const req = {
+    params: { threadId: '' },
+    body: { action: 'add', tag: 'ok' },
+    user: { _id: 'user-1', organizationId: 'org-1', email: 'owner@test.dev' }
+  };
+  const res = createRes();
+
+  await controller.updateThreadTags(req, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.match(String(res.body?.message || ''), /threadId is required/i);
+  assert.equal(metaCalled, false);
+});
+
+test('updateThreadTags returns 400 when tag is empty after normalization', async (t) => {
+  mockAuditLogSink(t);
+  let metaCalled = false;
+  patchMethod(CommunicationThreadMeta, 'findOneAndUpdate', () => {
+    metaCalled = true;
+    return { lean: async () => ({ tags: [] }) };
+  }, t);
+
+  const req = {
+    params: { threadId: 't1' },
+    body: { action: 'add', tag: '   ' },
+    user: { _id: 'user-1', organizationId: 'org-1', email: 'owner@test.dev' }
+  };
+  const res = createRes();
+
+  await controller.updateThreadTags(req, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.match(String(res.body?.message || ''), /valid tag/i);
+  assert.equal(metaCalled, false);
+});
+
+test('updateThreadTags returns 400 when action is invalid', async (t) => {
+  mockAuditLogSink(t);
+  let metaCalled = false;
+  patchMethod(CommunicationThreadMeta, 'findOneAndUpdate', () => {
+    metaCalled = true;
+    return { lean: async () => ({ tags: ['x'] }) };
+  }, t);
+
+  const req = {
+    params: { threadId: 't1' },
+    body: { action: 'merge', tag: 'valid-tag' },
+    user: { _id: 'user-1', organizationId: 'org-1', email: 'owner@test.dev' }
+  };
+  const res = createRes();
+
+  await controller.updateThreadTags(req, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.match(String(res.body?.message || ''), /action must be add or remove/i);
+  assert.equal(metaCalled, false);
+});
+
+test('assignThreadOwner scopes CommunicationThreadMeta update to request organization', async (t) => {
+  mockAuditLogSink(t);
+  patchMethod(User, 'findOne', () => ({
+    select: () => ({ lean: async () => ({ _id: 'user-other' }) })
+  }), t);
+
+  let filter = null;
+  patchMethod(CommunicationThreadMeta, 'findOneAndUpdate', (match) => {
+    filter = match;
+    return {
+      lean: async () => ({ assignedToUserId: 'user-other' })
+    };
+  }, t);
+
+  const req = {
+    params: { threadId: 'thread-x' },
+    body: { assignedToUserId: 'user-other' },
+    user: { _id: 'actor-1', organizationId: 'org-tenant-a', email: 'a@test.dev' }
+  };
+  const res = createRes();
+
+  await controller.assignThreadOwner(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(filter, { organizationId: 'org-tenant-a', threadId: 'thread-x' });
+});
