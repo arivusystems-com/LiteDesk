@@ -1145,6 +1145,7 @@ import { ref, computed, watch, inject, nextTick, onMounted, onBeforeUnmount } fr
 import { useRoute, useRouter } from 'vue-router';
 import { Menu, MenuButton, MenuItem, MenuItems, Listbox, ListboxButton, ListboxOption, ListboxOptions } from '@headlessui/vue';
 import DOMPurify from 'dompurify';
+import { sanitizeRichDescriptionHtml } from '@/utils/richDescriptionHtml';
 import {
   RecordPageShell,
   RecordHeader,
@@ -1485,7 +1486,6 @@ const closeExpandedLeftSection = () => {
 const selectedDescriptionVersionIndex = ref(0);
 const descriptionVersionsLoading = ref(false);
 const descriptionRestoreLoading = ref(false);
-const ALLOWED_DESCRIPTION_TAGS = ['p', 'br', 'strong', 'em', 's', 'u', 'a', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'blockquote'];
 const descriptionVersionsData = ref({ currentDescription: '', versions: [] });
 
 const descriptionHistoryList = computed(() => {
@@ -1577,7 +1577,7 @@ const descriptionHistorySelectedContent = computed(() => {
   const selected = descriptionHistoryList.value[selectedDescriptionVersionIndex.value];
   const raw = String(selected?.content || '');
   if (!raw.trim()) return '';
-  return DOMPurify.sanitize(raw, { ALLOWED_TAGS: ALLOWED_DESCRIPTION_TAGS });
+  return sanitizeRichDescriptionHtml(raw);
 });
 
 const descriptionHistoryShowDiff = computed(() => descriptionHistoryList.value.length > 1 && selectedDescriptionVersionIndex.value > 0);

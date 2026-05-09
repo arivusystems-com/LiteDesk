@@ -42,7 +42,7 @@
             }"
             size="md"
           />
-          <div class="min-w-0">
+          <div class="min-w-0 flex-1">
             <div class="font-semibold text-gray-900 dark:text-white truncate">
               {{ row.first_name }} {{ row.last_name }}
             </div>
@@ -70,7 +70,11 @@
 
       <!-- Custom Email Cell -->
       <template #cell-email="{ value }">
-        <a :href="`mailto:${value}`" class="text-indigo-600 dark:text-indigo-400 hover:underline" @click.stop>
+        <a
+          :href="`mailto:${value}`"
+          class="block min-w-0 truncate text-indigo-600 dark:text-indigo-400 hover:underline"
+          @click.stop
+        >
           {{ value }}
         </a>
       </template>

@@ -39,6 +39,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue';
 import DOMPurify from 'dompurify';
+import { withLinksOpenInNewTab } from '@/utils/richDescriptionHtml';
 import TaskDescriptionEditor from '@/components/record-page/TaskDescriptionEditor.vue';
 
 const props = defineProps({
@@ -52,7 +53,9 @@ const props = defineProps({
 
 const title = computed(() => props.adapter?.getDescriptionTitle?.(props.record, props.context) || 'Description');
 const description = computed(() => props.adapter?.getDescription?.(props.record, props.context) || '');
-const sanitizedDescription = computed(() => DOMPurify.sanitize(String(description.value || '')));
+const sanitizedDescription = computed(() =>
+  withLinksOpenInNewTab(DOMPurify.sanitize(String(description.value || '')))
+);
 const hasDescription = computed(() => Boolean(String(description.value || '').trim()));
 const canEdit = computed(() => props.adapter?.canEditDescription?.(props.record, props.context) === true);
 const hideHeader = computed(() => props.context?.hideHeader === true);

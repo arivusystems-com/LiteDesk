@@ -29,7 +29,8 @@ export const SlashCommands = Extension.create({
         editor: this.editor,
         pluginKey: SlashCommandPluginKey,
         char: '/',
-        startOfLine: true,
+        // Allow slash menu from any cursor position, not only line start.
+        startOfLine: false,
         allowedPrefixes: null,
         items: ({ query }) => {
           const q = query.toLowerCase();
@@ -44,6 +45,8 @@ export const SlashCommands = Extension.create({
           let list = null;
           let selectedIndex = 0;
           let currentProps = null;
+          let viewportListenerBound = false;
+          let outsidePointerListenerBound = false;
 
           return {
             onStart: (props) => {
@@ -53,6 +56,7 @@ export const SlashCommands = Extension.create({
               selectedIndex = 0;
               updateList(props);
               positionList(props);
+              bindGlobalListeners();
             },
             onUpdate: (props) => {
               currentProps = props;
@@ -84,6 +88,7 @@ export const SlashCommands = Extension.create({
               return false;
             },
             onExit: () => {
+              unbindGlobalListeners();
               list?.remove();
               list = null;
               currentProps = null;
@@ -120,7 +125,48 @@ export const SlashCommands = Extension.create({
             list.style.position = 'fixed';
             list.style.left = `${rect.left}px`;
             list.style.top = `${rect.bottom + 4}px`;
-            list.style.zIndex = '9999';
+            // Drawer dialogs render at z-10000; keep slash menu above them.
+            list.style.zIndex = '11000';
+          }
+
+          function handleViewportChange() {
+            if (!currentProps) return;
+            positionList(currentProps);
+          }
+
+          function handleOutsidePointerDown(event) {
+            if (!list || !currentProps?.editor?.view?.dom) return;
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const clickedInsideMenu = list.contains(target);
+            const clickedInsideEditor = currentProps.editor.view.dom.contains(target);
+            if (!clickedInsideMenu && !clickedInsideEditor) {
+              currentProps.editor.commands.blur();
+            }
+          }
+
+          function bindGlobalListeners() {
+            if (!viewportListenerBound) {
+              window.addEventListener('scroll', handleViewportChange, true);
+              window.addEventListener('resize', handleViewportChange);
+              viewportListenerBound = true;
+            }
+            if (!outsidePointerListenerBound) {
+              document.addEventListener('pointerdown', handleOutsidePointerDown, true);
+              outsidePointerListenerBound = true;
+            }
+          }
+
+          function unbindGlobalListeners() {
+            if (viewportListenerBound) {
+              window.removeEventListener('scroll', handleViewportChange, true);
+              window.removeEventListener('resize', handleViewportChange);
+              viewportListenerBound = false;
+            }
+            if (outsidePointerListenerBound) {
+              document.removeEventListener('pointerdown', handleOutsidePointerDown, true);
+              outsidePointerListenerBound = false;
+            }
           }
         },
       }),

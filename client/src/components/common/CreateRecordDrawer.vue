@@ -167,6 +167,7 @@ import { useTabs } from '@/composables/useTabs';
 import { getTaskSystemFields } from '@/platform/fields/taskFieldModel';
 import { getCaseSystemFields } from '@/platform/fields/caseFieldModel';
 import { getGlobalSystemFieldKeys, normalizeFieldKeyForSystemMatch } from '@/platform/fields/fieldCapabilityEngine';
+import { shouldFilterPayloadByQuickCreate } from '@/utils/quickCreatePayloadFilter';
 import { useCreationContext } from '@/utils/creationContext';
 import { getParticipationFields, getCoreIdentityFields, mergePeopleVirtualFieldDefinitions } from '@/platform/fields/peopleFieldModel';
 import { getFormFieldValue, syncPeopleVirtualFieldKeys, applyVirtualFieldDefault } from '@/utils/getFieldValue';
@@ -1063,7 +1064,7 @@ const handleSubmit = async () => {
     let submitData = { ...formData.value };
     
     const qcList = moduleDefinition.value?.quickCreate;
-    if (effectiveQuickCreateMode.value && Array.isArray(qcList) && qcList.length > 0) {
+    if (shouldFilterPayloadByQuickCreate(effectiveQuickCreateMode.value, fullMode.value, qcList)) {
       const quickCreateKeys = new Set(
         qcList.map(k => k?.toLowerCase().trim()).filter(Boolean)
       );

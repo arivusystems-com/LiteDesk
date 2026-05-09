@@ -21,15 +21,17 @@
           <table
             ref="tableRef"
             class="divide-y divide-gray-200 text-sm text-gray-900 dark:divide-white/15 dark:text-gray-200"
-            :style="{ width: tableMinWidth, minWidth: tableMinWidth, display: 'table', tableLayout: 'fixed' }"
+            :style="{ width: '100%', minWidth: tableMinWidth, display: 'table', tableLayout: 'fixed' }"
           >
             <colgroup>
-              <col v-if="selectable" style="width: 48px" />
+              <col v-if="selectable" :style="{ width: selectionColumnWidthPx }" />
               <col
                 v-for="column in displayColumns"
                 :key="`${columnKey(column)}-col`"
                 :style="columnColStyle(column)"
               />
+              <!-- Absorbs slack when table is wider than sum(columns); keeps data cols fixed-width, row lines full-width -->
+              <col v-if="hasFlexFillColumn" style="min-width: 0; width: auto" />
             </colgroup>
             <thead class="bg-white dark:bg-gray-900">
               <tr>
@@ -37,12 +39,17 @@
                   v-if="selectable"
                   scope="col"
                   :class="[
-                    'relative px-7 sm:w-12 sm:px-6 sticky border-b border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-gray-200 after:content-[\'\'] dark:after:bg-gray-700',
+                    'relative box-border sticky border-b border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-gray-200 after:content-[\'\'] dark:after:bg-gray-700',
+                    selectionColumnVariant === 'numbered-hover' ? 'px-1' : 'px-7 sm:w-12 sm:px-6',
                     leftEdgeColumnIndex === 0 ? 'rounded-tl-xl' : '',
                     'hover:bg-gray-50 dark:hover:bg-gray-800'
                   ]"
-                  :style="{ top: headerTop, left: '0px', zIndex: '25' }"
+                  :style="selectionHeaderCellStyle"
                 >
+                  <span
+                    v-if="selectionColumnVariant === 'numbered-hover'"
+                    class="sr-only"
+                  >Row number and select rows</span>
                   <div class="absolute top-1/2 left-4 -mt-2">
                     <HeadlessCheckbox
                       :checked="allSelected"
@@ -169,6 +176,13 @@
                     <!-- <span class="pointer-events-none absolute right-[-2px] top-0 bottom-0 w-1.5 bg-indigo-500 opacity-0 transition-opacity group-hover/resize:opacity-100" /> -->
                   </span>
                 </th>
+                <th
+                  v-if="hasFlexFillColumn"
+                  scope="col"
+                  aria-hidden="true"
+                  class="relative sticky z-10 border-b border-gray-200 bg-white p-0 dark:border-gray-700 dark:bg-gray-900 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-gray-200 after:content-[\'\'] dark:after:bg-gray-700"
+                  :style="{ top: headerTop }"
+                />
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
@@ -176,15 +190,22 @@
                 <tr
                   v-for="rowIndex in skeletonRowTotal"
                   :key="`skeleton-row-${rowIndex}`"
-                  class="bg-white/60 pointer-events-none dark:bg-gray-900/60"
+                  class="pointer-events-none bg-gray-50/80 dark:bg-gray-950/40"
                 >
                   <td
                     v-if="selectable"
-                    class="px-5 py-4 align-middle sticky z-20 bg-white dark:bg-gray-900"
-                    :style="{ width: '48px', minWidth: '48px', left: '0px' }"
+                    class="box-border py-4 align-middle sticky z-20 bg-gray-50/90 dark:bg-gray-950/90 px-1"
+                    :style="selectionColumnCellStyle"
                   >
                     <div class="flex items-center justify-center">
-                      <div class="h-4 w-4 rounded border border-gray-300 bg-gray-200/80 animate-pulse dark:border-gray-600 dark:bg-gray-700/70"></div>
+                      <div
+                        v-if="selectionColumnVariant === 'numbered-hover'"
+                        class="tv-sk-bar h-3 w-5 rounded"
+                      />
+                      <div
+                        v-else
+                        class="tv-sk-bar h-4 w-4 rounded border-0"
+                      />
                     </div>
                   </td>
                   <td
@@ -192,55 +213,63 @@
                     :key="`skeleton-cell-${rowIndex}-${columnKey(column)}`"
                     :class="[
                       'px-5 py-4 align-middle',
-                      columnIndex === 0 ? 'sticky z-20 bg-white dark:bg-gray-900 group-hover:bg-gray-100 dark:group-hover:bg-gray-800 transition-colors sticky-column-border' : ''
+                      columnIndex === 0 ? 'sticky z-20 bg-gray-50/90 dark:bg-gray-950/90 sticky-column-border' : ''
                     ]"
                     :style="columnCellStyle(column)"
                   >
-                    <!-- First column: Show content and actions skeleton side by side -->
-                    <div v-if="columnIndex === 0 && hasActions" class="flex items-center justify-between gap-3">
-                      <div class="flex items-center gap-3 flex-1 min-w-0">
+                    <!-- First column: skeleton fills width; action placeholders overlay (no flex reserve) -->
+                    <div v-if="columnIndex === 0 && hasActions" class="relative flex items-center">
+                      <div class="flex min-w-0 flex-1 items-center gap-3">
                         <div
-                          class="h-8 w-8 flex-shrink-0 rounded-full bg-gray-200/80 animate-pulse dark:bg-gray-700/70"
+                          class="tv-sk-bar h-8 w-8 flex-shrink-0 rounded-full"
                           :style="skeletonPulseDelay(rowIndex - 1, columnIndex)"
                         ></div>
-                        <div class="flex-1 space-y-2">
+                        <div class="min-w-0 flex-1 space-y-2">
                           <div
-                            class="h-3 rounded-md bg-gray-200 animate-pulse dark:bg-gray-700"
+                            class="tv-sk-bar h-3 rounded-md"
                             :style="skeletonStyleForCell(rowIndex - 1, columnIndex)"
                           ></div>
                           <div
                             v-if="shouldRenderSecondarySkeleton(columnIndex)"
-                            class="h-2 rounded-md bg-gray-200/80 animate-pulse dark:bg-gray-700/70"
+                            class="tv-sk-bar h-2 rounded-md opacity-90"
                             :style="skeletonStyleForCell(rowIndex - 1, columnIndex, 1)"
                           ></div>
                         </div>
                       </div>
-                      <div class="flex-shrink-0 flex items-center gap-1">
-                        <div class="h-8 w-8 rounded-lg bg-gray-200/80 animate-pulse dark:bg-gray-700/70"></div>
-                        <div class="h-8 w-8 rounded-lg bg-gray-200/80 animate-pulse dark:bg-gray-700/70"></div>
-                        <div class="h-8 w-8 rounded-lg bg-gray-200/80 animate-pulse dark:bg-gray-700/70"></div>
+                      <div
+                        class="pointer-events-none absolute inset-y-0 right-0 flex items-center gap-1 opacity-0"
+                        aria-hidden="true"
+                      >
+                        <div class="tv-sk-bar h-8 w-8 rounded-lg opacity-80"></div>
+                        <div class="tv-sk-bar h-8 w-8 rounded-lg opacity-80"></div>
+                        <div class="tv-sk-bar h-8 w-8 rounded-lg opacity-80"></div>
                       </div>
                     </div>
                     <!-- Other columns: Normal skeleton rendering -->
                     <div v-else class="flex items-center gap-3">
                       <div
                         v-if="columnIndex === 0"
-                        class="h-8 w-8 flex-shrink-0 rounded-full bg-gray-200/80 animate-pulse dark:bg-gray-700/70"
+                        class="tv-sk-bar h-8 w-8 flex-shrink-0 rounded-full"
                         :style="skeletonPulseDelay(rowIndex - 1, columnIndex)"
                       ></div>
                       <div class="flex-1 space-y-2">
                         <div
-                          class="h-3 rounded-md bg-gray-200 animate-pulse dark:bg-gray-700"
+                          class="tv-sk-bar h-3 rounded-md"
                           :style="skeletonStyleForCell(rowIndex - 1, columnIndex)"
                         ></div>
                         <div
                           v-if="shouldRenderSecondarySkeleton(columnIndex)"
-                          class="h-2 rounded-md bg-gray-200/80 animate-pulse dark:bg-gray-700/70"
+                          class="tv-sk-bar h-2 rounded-md opacity-90"
                           :style="skeletonStyleForCell(rowIndex - 1, columnIndex, 1)"
                         ></div>
                       </div>
                     </div>
                   </td>
+                  <td
+                    v-if="hasFlexFillColumn"
+                    aria-hidden="true"
+                    class="border-0 bg-gray-50/80 p-0 dark:bg-gray-950/40"
+                  />
                 </tr>
               </template>
               <template v-else>
@@ -249,25 +278,43 @@
                     v-for="(row, rowIndex) in displayRows"
                     :key="rowIdentifier(row, rowIndex)"
                     :class="[
-                      'group transition-colors cursor-pointer',
-                      isRowSelected(row) 
-                        ? 'bg-gray-50 dark:bg-indigo-950' 
-                        : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                      'group cursor-pointer',
+                      isRowSelected(row) ? 'bg-gray-50 dark:bg-indigo-950' : ''
                     ]"
                     @click="handleRowClick(row, $event)"
                   >
                     <td
                       v-if="selectable"
                       :class="[
-                        'relative px-7 sm:w-12 sm:px-6 sticky z-20 transition-colors',
+                        'relative box-border sticky z-20 transition-colors duration-75',
+                        selectionColumnVariant === 'numbered-hover'
+                          ? 'px-1 tv-num-when-hover'
+                          : 'px-7 sm:w-12 sm:px-6',
                         rowHeightClass,
                         isRowSelected(row) ? 'bg-gray-50 dark:bg-indigo-950' : 'bg-white dark:bg-gray-900',
                         isRowSelected(row) ? '' : 'group-hover:bg-gray-100 dark:group-hover:bg-gray-800'
                       ]"
-                      :style="{ left: '0px' }"
+                      :style="selectionColumnCellStyle"
                     >
                       <div v-if="isRowSelected(row)" class="hidden group-has-checked:block absolute inset-y-0 left-0 w-0.5 bg-indigo-600"></div>
-                      <div class="absolute top-1/2 left-4 -mt-2">
+                      <template v-if="selectionColumnVariant === 'numbered-hover'">
+                        <span
+                          class="tv-row-index pointer-events-none absolute inset-0 flex items-center justify-center text-xs font-medium tabular-nums text-gray-500 transition-opacity duration-150 dark:text-gray-400"
+                          :class="isRowSelected(row) ? 'opacity-0' : ''"
+                          aria-hidden="true"
+                        >{{ rowNumberOffset + rowIndex + 1 }}</span>
+                        <div
+                          class="tv-row-checkbox absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center transition-opacity duration-150"
+                          :class="isRowSelected(row) ? 'tv-row-checkbox--visible' : 'opacity-0'"
+                        >
+                          <HeadlessCheckbox
+                            :checked="isRowSelected(row)"
+                            @change.stop="toggleRowSelection(row)"
+                            @click.stop
+                          />
+                        </div>
+                      </template>
+                      <div v-else class="absolute top-1/2 left-4 -mt-2">
                         <HeadlessCheckbox
                           :checked="isRowSelected(row)"
                           @change.stop="toggleRowSelection(row)"
@@ -282,17 +329,23 @@
                         'px-5 text-sm text-gray-700 align-middle dark:text-gray-200',
                         rowHeightClass,
                         columnIndex === 0 ? [
-                          'title-column-cell sticky z-20 transition-colors sticky-column-border',
+                          'title-column-cell sticky z-20 transition-colors duration-75 sticky-column-border',
                           isRowSelected(row) ? 'bg-gray-50 dark:bg-indigo-950' : 'bg-white dark:bg-gray-900',
                           isRowSelected(row) ? '' : 'group-hover:bg-gray-100 dark:group-hover:bg-gray-800',
                           isScrolledHorizontally ? 'sticky-column-scrolled' : ''
-                        ].join(' ') : 'whitespace-nowrap'
+                        ].join(' ') : [
+                          'transition-colors duration-75 whitespace-nowrap',
+                          isRowSelected(row) ? 'bg-gray-50 dark:bg-indigo-950' : 'bg-white dark:bg-gray-900',
+                          isRowSelected(row) ? '' : 'group-hover:bg-gray-100 dark:group-hover:bg-gray-800'
+                        ].join(' ')
                       ]"
                       :style="columnCellStyle(column)"
                     >
-                      <!-- First column: Show content and actions side by side -->
-                      <div v-if="columnIndex === 0 && hasActions" class="flex items-center justify-between gap-3">
-                        <div class="flex-1 min-w-0 truncate">
+                      <!-- First column: actions overlay on hover — no layout reserve while hidden (see slot padding) -->
+                      <div v-if="columnIndex === 0 && hasActions" class="relative flex items-center">
+                        <div
+                          class="min-w-0 flex-1 pr-0 transition-[padding-right] duration-150 ease-out group-hover:pr-28 group-focus-within:pr-28"
+                        >
                           <slot
                             :name="`cell-${columnKey(column)}`"
                             :column="column"
@@ -304,8 +357,8 @@
                             </slot>
                           </slot>
                         </div>
-                        <div 
-                          class="flex-shrink-0 transition-opacity duration-200 opacity-0 group-hover:opacity-100" 
+                        <div
+                          class="pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center gap-0.5 pl-3 opacity-0 transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
                           @click.stop
                         >
                           <slot name="actions" :row="row" />
@@ -325,23 +378,55 @@
                             </slot>
                           </slot>
                         </div>
-                        <slot
-                          v-else
-                          :name="`cell-${columnKey(column)}`"
-                          :column="column"
-                          :row="row"
-                          :value="resolveValue(row, column)"
-                        >
-                          <slot name="cell" :column="column" :row="row" :value="resolveValue(row, column)">
-                            {{ resolveValue(row, column) }}
+                        <div v-else class="min-w-0 truncate">
+                          <slot
+                            :name="`cell-${columnKey(column)}`"
+                            :column="column"
+                            :row="row"
+                            :value="resolveValue(row, column)"
+                          >
+                            <slot name="cell" :column="column" :row="row" :value="resolveValue(row, column)">
+                              {{ resolveValue(row, column) }}
+                            </slot>
                           </slot>
-                        </slot>
+                        </div>
                       </template>
+                    </td>
+                    <td
+                      v-if="hasFlexFillColumn"
+                      aria-hidden="true"
+                      :class="[
+                        'border-0 p-0 align-middle transition-colors duration-75',
+                        rowHeightClass,
+                        isRowSelected(row) ? 'bg-gray-50 dark:bg-indigo-950' : 'bg-white dark:bg-gray-900',
+                        isRowSelected(row) ? '' : 'group-hover:bg-gray-100 dark:group-hover:bg-gray-800'
+                      ]"
+                    />
+                  </tr>
+                  <tr
+                    v-if="loadMoreEnabled && hasMore"
+                    class="border-0"
+                  >
+                    <td
+                      :colspan="tableBodyColspan"
+                      class="p-0 border-0"
+                    >
+                      <div
+                        ref="loadMoreSentinelRef"
+                        class="h-px w-full"
+                        aria-hidden="true"
+                      />
+                      <div
+                        v-if="loadingMore"
+                        class="flex justify-center py-4 text-gray-500 dark:text-gray-400"
+                      >
+                        <span class="inline-flex h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      </div>
                     </td>
                   </tr>
                 </template>
                 <tr v-else>
-                  <td :colspan="selectable ? displayColumns.length + 1 : displayColumns.length" class="px-5 py-10 text-center">
+                  <td :colspan="tableBodyColspan" class="px-5 py-10 text-center">
                     <slot name="empty">
                       <div class="flex flex-col items-center justify-center py-8">
                         <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">{{ emptyTitle || 'No data available' }}</h3>
@@ -405,6 +490,7 @@ const emit = defineEmits<{
   (e: 'sort', payload: { key: string; order: SortState }): void
   (e: 'select', selectedRows: RowData[]): void
   (e: 'bulk-action', payload: { action: string; selectedRows: RowData[] }): void
+  (e: 'load-more'): void
 }>()
 
 const props = withDefaults(
@@ -430,6 +516,13 @@ const props = withDefaults(
     hasActions?: boolean
     emptyTitle?: string
     emptyMessage?: string
+    loadMoreEnabled?: boolean
+    hasMore?: boolean
+    loadingMore?: boolean
+    /** 'checkbox' = always show box; 'numbered-hover' = row index, swap to checkbox on hover (see styles) */
+    selectionColumnVariant?: 'checkbox' | 'numbered-hover'
+    /** 1-based row display: first row = rowNumberOffset + 1 (e.g. paged lists) */
+    rowNumberOffset?: number
   }>(),
   {
     columns: () => [],
@@ -445,11 +538,16 @@ const props = withDefaults(
     resizableColumns: true,
     loading: false,
     skeletonRowCount: undefined,
-    rowHeight: 'medium',
+    rowHeight: 'small',
     selectable: false,
     massActions: () => [],
     clearSelectionTrigger: 0,
-    hasActions: false
+    hasActions: false,
+    loadMoreEnabled: false,
+    hasMore: false,
+    loadingMore: false,
+    selectionColumnVariant: 'numbered-hover',
+    rowNumberOffset: 0
   }
 )
 
@@ -465,6 +563,8 @@ const resizeGuideBounds = ref<{ top: number; bottom: number } | null>(null)
 let saveTimeout: ReturnType<typeof setTimeout> | undefined
 const tableRef = ref<HTMLTableElement | null>(null)
 const scrollContainerRef = ref<HTMLDivElement | null>(null)
+const loadMoreSentinelRef = ref<HTMLDivElement | null>(null)
+let loadMoreObserver: IntersectionObserver | null = null
 const leftEdgeColumnIndex = ref<number | null>(null)
 const rightEdgeColumnIndex = ref<number | null>(null)
 const isScrolledHorizontally = ref(false)
@@ -501,12 +601,26 @@ const tableMinWidth = computed(() => {
   }
 
   // Table width = exact sum of column widths so only the resized column changes
-  let total = props.selectable ? 48 : 0
+  let total = props.selectable
+    ? props.selectionColumnVariant === 'numbered-hover'
+      ? 44
+      : 48
+    : 0
   displayColumns.value.forEach(column => {
     total += getColumnWidth(column)
   })
 
   return `${total}px`
+})
+
+/** Extra column so the table can stay width:100% while fixed-width cols stay left; slack lives here (full-width row dividers). */
+const hasFlexFillColumn = computed(() => displayColumns.value.length > 0)
+
+const tableBodyColspan = computed(() => {
+  let n = displayColumns.value.length
+  if (props.selectable) n += 1
+  if (hasFlexFillColumn.value) n += 1
+  return Math.max(1, n)
 })
 
 const columnKey = (column: ColumnDef) => {
@@ -617,7 +731,7 @@ const rowHeightClasses = {
   huge: 'py-8'
 }
 
-const rowHeightClass = computed(() => rowHeightClasses[props.rowHeight] || rowHeightClasses.medium)
+const rowHeightClass = computed(() => rowHeightClasses[props.rowHeight] || rowHeightClasses.small)
 
 const columnCellStyle = (column: ColumnDef) => {
   const width = getColumnWidth(column)
@@ -630,7 +744,8 @@ const columnCellStyle = (column: ColumnDef) => {
   }
   const maxW = getColumnMaxWidth(column)
   if (maxW !== undefined) style.maxWidth = `${maxW}px`
-  if (isFirstCol) style.overflow = 'hidden'
+  // Clip all cells to fixed column width so long links/text cannot paint over the next column
+  style.overflow = 'hidden'
 
   // Make first data column sticky horizontally
   // Cells use z-20 (set via class), so don't override z-index here
@@ -880,6 +995,30 @@ const parseOffsetToCss = (offset: string | number | undefined): string => {
 const stickyTop = computed(() => parseOffsetToCss(props.stickyOffset))
 const headerTop = computed(() => (props.internalScroll ? '0px' : stickyTop.value))
 
+/** Keeps the selection column from stretching to full table width when data columns are not mounted yet */
+const selectionColumnWidthPx = computed(() =>
+  props.selectionColumnVariant === 'numbered-hover' ? '44px' : '48px'
+)
+
+const selectionColumnCellStyle = computed(() => {
+  const w = selectionColumnWidthPx.value
+  return {
+    width: w,
+    minWidth: w,
+    maxWidth: w,
+    left: '0px'
+  }
+})
+
+const selectionHeaderCellStyle = computed(() => ({
+  top: headerTop.value,
+  left: '0px',
+  zIndex: '25',
+  width: selectionColumnWidthPx.value,
+  minWidth: selectionColumnWidthPx.value,
+  maxWidth: selectionColumnWidthPx.value
+}))
+
 const enableInternalScroll = computed(() => props.internalScroll)
 
 const maxHeightStyle = computed(() => {
@@ -907,6 +1046,50 @@ const scrollContainerStyles = computed(() => {
   
   return styles
 })
+
+const teardownLoadMoreObserver = () => {
+  if (loadMoreObserver) {
+    loadMoreObserver.disconnect()
+    loadMoreObserver = null
+  }
+}
+
+const setupLoadMoreObserver = () => {
+  teardownLoadMoreObserver()
+  if (!props.loadMoreEnabled || !props.hasMore) return
+
+  const target = loadMoreSentinelRef.value
+  if (!target) return
+
+  const root = enableInternalScroll.value ? scrollContainerRef.value : null
+
+  loadMoreObserver = new IntersectionObserver(
+    (entries) => {
+      const hit = entries.some((e) => e.isIntersecting)
+      if (!hit || props.loadingMore) return
+      emit('load-more')
+    },
+    { root, rootMargin: '120px', threshold: 0 }
+  )
+  loadMoreObserver.observe(target)
+}
+
+watch(
+  [
+    () => props.loadMoreEnabled,
+    () => props.hasMore,
+    () => props.loadingMore,
+    () => displayRows.value.length,
+    () => enableInternalScroll.value,
+    () => scrollContainerRef.value
+  ],
+  () => {
+    nextTick(() => {
+      setupLoadMoreObserver()
+    })
+  },
+  { flush: 'post' }
+)
 
 let scrollBoundsHandler: (() => void) | null = null
 
@@ -1023,6 +1206,7 @@ const startColumnResize = (column: ColumnDef, event: MouseEvent) => {
 }
 
 onBeforeUnmount(() => {
+  teardownLoadMoreObserver()
   stopColumnResize()
   flushColumnWidths()
   window.removeEventListener('beforeunload', handleBeforeUnload)
@@ -1046,7 +1230,14 @@ const handleRowClick = (row: RowData, event: MouseEvent) => {
   emit('row-click', row, event)
 }
 
-const isLoading = computed(() => Boolean(props.loading) && displayRows.value.length === 0)
+const isLoading = computed(() => {
+  const awaitingColumns =
+    Boolean(props.tableId) &&
+    displayColumns.value.length === 0 &&
+    (Boolean(props.loading) || displayRows.value.length > 0)
+  if (awaitingColumns) return true
+  return Boolean(props.loading) && displayRows.value.length === 0
+})
 
 const skeletonRowTotal = computed(() => {
   if (props.skeletonRowCount && props.skeletonRowCount > 0) {
@@ -1274,6 +1465,67 @@ watch(() => props.clearSelectionTrigger, (newVal) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Selection column: row numbers ↔ checkbox (Notion-style); fine pointer uses hover/focus */
+@media (hover: hover) and (pointer: fine) {
+  .table-scroll-container tbody tr.group .tv-num-when-hover .tv-row-index:not(.opacity-0) {
+    opacity: 1;
+  }
+  .table-scroll-container tbody tr.group:hover .tv-num-when-hover .tv-row-index,
+  .table-scroll-container tbody tr.group:focus-within .tv-num-when-hover .tv-row-index {
+    opacity: 0 !important;
+  }
+  .table-scroll-container tbody tr.group .tv-num-when-hover .tv-row-checkbox:not(.tv-row-checkbox--visible) {
+    opacity: 0;
+  }
+  .table-scroll-container tbody tr.group:hover .tv-num-when-hover .tv-row-checkbox,
+  .table-scroll-container tbody tr.group:focus-within .tv-num-when-hover .tv-row-checkbox,
+  .table-scroll-container tbody tr.group .tv-num-when-hover .tv-row-checkbox--visible {
+    opacity: 1 !important;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .table-scroll-container tbody tr.group .tv-num-when-hover .tv-row-index {
+    display: none !important;
+  }
+  .table-scroll-container tbody tr.group .tv-num-when-hover .tv-row-checkbox {
+    opacity: 1 !important;
+  }
+}
+
+/* Table loading skeleton — shimmer bars */
+@keyframes tv-sk-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.tv-sk-bar {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(
+    90deg,
+    rgb(229 231 235) 0%,
+    rgb(243 244 246) 42%,
+    rgb(229 231 235) 100%
+  );
+  background-size: 200% 100%;
+  animation: tv-sk-shimmer 1.35s ease-in-out infinite;
+}
+
+:global(.dark) .tv-sk-bar {
+  background: linear-gradient(
+    90deg,
+    rgb(55 65 81) 0%,
+    rgb(75 85 99) 42%,
+    rgb(55 65 81) 100%
+  );
+  background-size: 200% 100%;
 }
 
 </style>

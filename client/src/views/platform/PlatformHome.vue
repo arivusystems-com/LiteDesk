@@ -223,7 +223,7 @@ const loadQuickAccessApps = async () => {
     const appsWithAccess = availableApps
       .filter(app => {
         const appKeyUpper = app.appKey?.toUpperCase();
-        return appKeyUpper !== 'CONTROL_PLANE' && authStore.hasAppAccess(app.appKey);
+        return appKeyUpper !== 'CONTROL_PLANE' && authStore.hasAssignedAppAccess(app.appKey);
       })
       .slice(0, 6) // Limit to 6 apps
       .map(app => {

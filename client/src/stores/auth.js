@@ -111,6 +111,56 @@ export const useAuthStore = defineStore('auth', {
                 return hasExplicitUserAccess;
             };
         },
+        hasAssignedAppAccess: (state) => {
+            return (appKey) => {
+                const appKeyUpper = String(appKey || '').toUpperCase();
+                if (!appKeyUpper) return false;
+
+                const allowedApps = Array.isArray(state.user?.allowedApps) ? state.user.allowedApps : [];
+                const hasAllowedApps = allowedApps.length > 0;
+                const normalizedAllowed = allowedApps
+                    .map((app) => (typeof app === 'string' ? app.toUpperCase() : null))
+                    .filter(Boolean);
+
+                const appAccess = Array.isArray(state.user?.appAccess) ? state.user.appAccess : [];
+                const hasAppAccessRows = appAccess.length > 0;
+                const normalizedFromAccess = appAccess
+                    .filter((entry) => entry && typeof entry === 'object')
+                    .filter((entry) => String(entry.status || 'ACTIVE').toUpperCase() === 'ACTIVE')
+                    .map((entry) => (typeof entry.appKey === 'string' ? entry.appKey.toUpperCase() : null))
+                    .filter(Boolean);
+
+                const hasExplicitUserAppAccessData = hasAllowedApps || hasAppAccessRows;
+                if (hasExplicitUserAppAccessData) {
+                    const assigned = new Set([...normalizedAllowed, ...normalizedFromAccess]);
+                    return assigned.has(appKeyUpper);
+                }
+
+                // Legacy fallback for older session payloads.
+                const normalizeOrgEnabledKeys = (enabledApps) => {
+                    if (!enabledApps?.length) return [];
+                    return enabledApps
+                        .map((app) => {
+                            if (typeof app === 'string') return app.toUpperCase();
+                            if (app && typeof app === 'object') {
+                                const key = app.appKey || app;
+                                if (app.status && app.status !== 'ACTIVE') return null;
+                                return typeof key === 'string' ? key.toUpperCase() : null;
+                            }
+                            return null;
+                        })
+                        .filter((k) => k !== null);
+                };
+                const isOwnerLike =
+                    state.user?.isOwner === true ||
+                    String(state.user?.role || '').toLowerCase() === 'owner';
+                if (isOwnerLike) {
+                    const orgKeys = normalizeOrgEnabledKeys(state.organization?.enabledApps);
+                    if (orgKeys.length > 0) return orgKeys.includes(appKeyUpper);
+                }
+                return normalizedAllowed.includes(appKeyUpper);
+            };
+        },
     },
     actions: {
         resolveAllowedApps(userData = {}, options = {}) {

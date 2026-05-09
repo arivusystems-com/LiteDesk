@@ -86,13 +86,39 @@ const closeCommandPalette = () => {
   showCommandPalette.value = false;
 };
 
+/**
+ * When focus is inside a rich text editor (TipTap / ProseMirror) and the user has text selected,
+ * Cmd/Ctrl+K should run the editor’s “insert link” behavior — not global search.
+ * ProseMirror usually calls preventDefault(); we also check DOM selection + target as a fallback.
+ */
+function shouldDeferModKToRichText(event) {
+  if (event.defaultPrevented) return true;
+  const rawTarget = event.target;
+  if (!(rawTarget instanceof Element)) return false;
+  const target = rawTarget.nodeType === Node.TEXT_NODE ? rawTarget.parentElement : rawTarget;
+  if (!target?.closest) return false;
+  const inRichText =
+    target.closest('[contenteditable="true"]') ||
+    target.closest('.ProseMirror') ||
+    target.closest('.tiptap');
+  if (!inRichText) return false;
+  try {
+    const sel = document.getSelection?.();
+    if (!sel || sel.rangeCount === 0) return false;
+    return !sel.isCollapsed;
+  } catch {
+    return false;
+  }
+}
+
 // Keyboard shortcut handlers
 const handleGlobalSearchKeydown = (event) => {
-  // Cmd/Ctrl + K to open global search
-  if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
-    event.preventDefault();
-    openGlobalSearch();
-  }
+  const isModK =
+    (event.metaKey || event.ctrlKey) && String(event.key || '').toLowerCase() === 'k';
+  if (!isModK) return;
+  if (shouldDeferModKToRichText(event)) return;
+  event.preventDefault();
+  openGlobalSearch();
 };
 
 const handleCommandPaletteKeydown = (event) => {

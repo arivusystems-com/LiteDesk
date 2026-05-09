@@ -1,8 +1,21 @@
 <script setup>
+import { computed } from 'vue';
 import { useColorMode } from '@/composables/useColorMode';
 import DemoRequestForm from '@/components/DemoRequestForm.vue';
 
-const { colorMode, toggleColorMode } = useColorMode();
+const { colorMode } = useColorMode();
+
+const isDarkUi = computed(
+  () =>
+    colorMode.value === 'dark' ||
+    (colorMode.value === 'system' &&
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches),
+);
+
+const brandLogoSrc = computed(() =>
+  isDarkUi.value ? '/assets/logo/Logo_word_light.svg' : '/assets/logo/Logo_word_dark.svg',
+);
 </script>
 
 <template>
@@ -18,8 +31,10 @@ const { colorMode, toggleColorMode } = useColorMode();
         <div class="flex min-h-full flex-1 flex-col justify-center py-12 sm:px-6 lg:px-8">
           <div class="sm:mx-auto sm:w-full sm:max-w-sm">
             <img
-              :src="colorMode === 'dark' || colorMode === 'system' ? '/assets/nurtura_logo_white.svg' : '/assets/nurtura_logo_plain.svg'"
-              alt="Nurtura Logo" class="mx-auto h-10 w-auto brightness-0 dark:brightness-100" />
+              :src="brandLogoSrc"
+              alt="Arivu"
+              class="mx-auto h-10 w-auto"
+            />
 
             <h2 class="mt-6 text-center text-2xl/9 font-bold tracking-tight text-gray-900 dark:text-white">Get a demo</h2>
             <p class="text-center text-gray-600 dark:text-gray-400 mt-1 text-center">We’re here to answer all your questions!</p>

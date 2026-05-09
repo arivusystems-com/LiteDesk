@@ -250,7 +250,11 @@ const apiClient = async (url, options = {}) => {
         }
     }
     
-    if (method === 'GET' && _inFlightRequests.has(requestKey)) {
+    // Do not dedupe cancellable GETs: callers using AbortSignal rely on distinct promises;
+    // sharing one promise would tie unrelated sequential requests to an aborted fetch.
+    const skipGetDedupe = method === 'GET' && options.signal != null;
+
+    if (method === 'GET' && !skipGetDedupe && _inFlightRequests.has(requestKey)) {
         console.log(`[apiClient] Returning cached in-flight request: ${requestKey}`);
         return _inFlightRequests.get(requestKey);
     }

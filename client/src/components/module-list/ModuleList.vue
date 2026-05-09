@@ -1,9 +1,6 @@
 <template>
-  <div v-if="loading" class="flex items-center justify-center min-h-screen">
-    <div class="text-center">
-      <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-      <p class="text-gray-600 dark:text-gray-400 mt-4">Loading list...</p>
-    </div>
+  <div v-if="loading">
+    <ListPageSkeleton :body-rows="12" />
   </div>
 
   <div v-else-if="listDefinition">
@@ -38,6 +35,9 @@
       :data="data"
       :columns="adaptedColumns"
       :loading="dataLoading"
+      :loading-more="loadingMore"
+      infinite-scroll
+      :selection-column-variant="selectionColumnVariant"
       :statistics="statistics"
       :stats-config="statsConfig"
       :saved-views="savedViews"
@@ -65,6 +65,7 @@
       @stat-click="handleStatClick"
       @filter-opened="handleFilterOpened"
       @fetch="fetchData"
+      @load-more="handleLoadMore"
       @row-click="handleRowClick"
       @edit="handleEdit"
       @delete="handleDelete"
@@ -92,6 +93,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, useAttrs } from 'vue';
+import ListPageSkeleton from '@/components/common/ListPageSkeleton.vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/authRegistry';
 import { useTabs } from '@/composables/useTabs';
@@ -144,6 +146,12 @@ const props = defineProps({
     type: String,
     default: 'ALL',
     validator: (v) => !v || v === 'ALL' || v === 'SALES' || v === 'HELPDESK'
+  },
+  /** Passed to ListView/TableView: 'numbered-hover' shows row # until hover (desktop); 'checkbox' always shows boxes */
+  selectionColumnVariant: {
+    type: String,
+    default: 'numbered-hover',
+    validator: (v) => !v || v === 'checkbox' || v === 'numbered-hover'
   }
 });
 
@@ -176,6 +184,14 @@ const pagination = ref({
   totalRecords: 0,
   limit: 25
 });
+const loadingMore = ref(false);
+/** Bumped on every replace fetch so in-flight appends can detect stale results */
+const listDataEpoch = ref(0);
+let replaceSeq = 0;
+let appendSeq = 0;
+let replaceAbortController = null;
+let appendAbortController = null;
+
 const filters = ref({});
 const searchQuery = ref('');
 
@@ -879,265 +895,357 @@ const shouldShowEmptyState = computed(() => {
   return false;
 });
 
-// Fetch data from API
-const fetchData = async () => {
-  if (!listDefinition.value) return;
-  
-  dataLoading.value = true;
-  try {
-    const params = {
-      page: pagination.value.currentPage,
-      limit: pagination.value.limit,
-      sortBy: normalizePeopleListSortField(sortField.value) || 'createdAt',
-      // Default to 'desc' (newest first) if no sort field is set
-      // This ensures new records appear on page 1 by default
-      sortOrder: sortField.value ? (sortOrder.value || 'desc') : 'desc'
-    };
+function stableListRowId(row) {
+  if (!row || typeof row !== 'object') return null;
+  const id = row._id;
+  if (id == null || id === '') return null;
+  return String(id);
+}
 
-    // Normalize filters using registry function if available
-    const moduleConfig = getModuleListConfig(props.moduleKey);
-    let normalizedFilters = { ...filters.value };
-    
-    if (moduleConfig?.normalizeFilters) {
-      normalizedFilters = moduleConfig.normalizeFilters(normalizedFilters, authStore.user?._id);
+function mergeAppendRowsById(existing, incoming) {
+  const seen = new Set(
+    existing.map(stableListRowId).filter(Boolean)
+  );
+  const merged = [...existing];
+  for (const row of incoming) {
+    const id = stableListRowId(row);
+    if (id != null) {
+      if (seen.has(id)) continue;
+      seen.add(id);
     }
-    
-    // Copy normalized filters to params, excluding client-side only filters
-    Object.keys(normalizedFilters).forEach(key => {
-      // Skip participation filters (client-side only for People)
-      if (key === 'participation' || key === 'participationApp' || key === 'participationRole') {
-        return;
-      }
-      // People role filters are applied client-side (PLATFORM appKey intentionally bypasses role filters server-side)
-      if (props.moduleKey === 'people' && (key === 'sales_type' || key === 'helpdesk_role' || key === 'type')) {
-        return;
-      }
-      
-      const value = normalizedFilters[key];
-      // Only include defined, non-empty values (except null which is valid for unassigned)
-      if (value !== undefined && value !== '') {
-        params[key] = value;
-      } else if (value === null) {
-        // null is a valid filter value (e.g., assignedTo: null for unassigned)
-        params[key] = null;
-      }
-    });
+    merged.push(row);
+  }
+  return merged;
+}
 
-    // Pass appKey as query parameter for backend filtering
-    // For People module, always use PLATFORM appKey to fetch ALL people (identity + participation)
-    // Participation filtering happens client-side using state fields
-    // This ensures we get all people records regardless of participation status
-    if (props.moduleKey === 'people') {
-      // Always use PLATFORM for People list to see all identities
-      // Client-side filters (participation, assignedTo, etc.) handle filtering
-      params.appKey = 'PLATFORM';
-    } else if (props.appKey) {
-      params.appKey = props.appKey;
+/** Shared GET params + endpoint for both replace and append (requestedPage differs). */
+function buildListFetchContext(requestedPage) {
+  const params = {
+    page: requestedPage,
+    limit: pagination.value.limit,
+    sortBy: normalizePeopleListSortField(sortField.value) || 'createdAt',
+    sortOrder: sortField.value ? (sortOrder.value || 'desc') : 'desc'
+  };
+
+  const moduleConfig = getModuleListConfig(props.moduleKey);
+  let normalizedFilters = { ...filters.value };
+
+  if (moduleConfig?.normalizeFilters) {
+    normalizedFilters = moduleConfig.normalizeFilters(normalizedFilters, authStore.user?._id);
+  }
+
+  Object.keys(normalizedFilters).forEach((key) => {
+    if (key === 'participation' || key === 'participationApp' || key === 'participationRole') {
+      return;
+    }
+    if (props.moduleKey === 'people' && (key === 'sales_type' || key === 'helpdesk_role' || key === 'type')) {
+      return;
     }
 
-    if (searchQuery.value && searchQuery.value.trim()) {
-      params.search = searchQuery.value.trim();
+    const value = normalizedFilters[key];
+    if (value !== undefined && value !== '') {
+      params[key] = value;
+    } else if (value === null) {
+      params[key] = null;
     }
+  });
 
-    // Clean up params - remove null/undefined/empty values (except when explicitly needed)
-    // assignedTo: null is valid when filtering for 'unassigned' or null (from saved views)
-    // Only remove if it's not explicitly set in filters
-    if (params.assignedTo === null && filters.value.assignedTo === undefined) {
-      delete params.assignedTo;
+  if (props.moduleKey === 'people') {
+    params.appKey = 'PLATFORM';
+  } else if (props.appKey) {
+    params.appKey = props.appKey;
+  }
+
+  if (searchQuery.value && searchQuery.value.trim()) {
+    params.search = searchQuery.value.trim();
+  }
+
+  if (params.assignedTo === null && filters.value.assignedTo === undefined) {
+    delete params.assignedTo;
+  }
+
+  if (params.organization === null && filters.value.organization !== null && filters.value.organization !== undefined) {
+    if (filters.value.organization === undefined) {
+      delete params.organization;
     }
-    
-    // Remove other null/undefined/empty filter params
-    if (params.organization === null && filters.value.organization !== null && filters.value.organization !== undefined) {
-      // Only keep organization: null if it was explicitly set in filters
-      // If filters.value.organization is undefined, don't send the param
-      if (filters.value.organization === undefined) {
-        delete params.organization;
-      }
-    }
-    
-    // Use API endpoint from registry, or default to /{moduleKey}
-    // Audit "Finding" currently maps to moduleKey=cases, but backend list data
-    // is served by the tasks endpoint under AUDIT app context.
-    const isAuditFindingModule =
-      String(props.moduleKey || '').toLowerCase() === 'cases' &&
-      String(props.appKey || '').toUpperCase() === 'AUDIT';
-    const isHelpdeskCasesModule =
-      String(props.moduleKey || '').toLowerCase() === 'cases' &&
-      String(props.appKey || '').toUpperCase() === 'HELPDESK';
-    const endpoint = isAuditFindingModule
-      ? '/audit/findings'
-      : isHelpdeskCasesModule
-        ? '/helpdesk/cases'
+  }
+
+  const isAuditFindingModule =
+    String(props.moduleKey || '').toLowerCase() === 'cases' &&
+    String(props.appKey || '').toUpperCase() === 'AUDIT';
+  const isHelpdeskCasesModule =
+    String(props.moduleKey || '').toLowerCase() === 'cases' &&
+    String(props.appKey || '').toUpperCase() === 'HELPDESK';
+  const endpoint = isAuditFindingModule
+    ? '/audit/findings'
+    : isHelpdeskCasesModule
+      ? '/helpdesk/cases'
       : moduleConfig?.apiEndpoint
         ? moduleConfig.apiEndpoint.startsWith('/')
           ? moduleConfig.apiEndpoint
           : `/${moduleConfig.apiEndpoint}`
         : `/${props.moduleKey}`;
-    
-    const response = await apiClient.get(endpoint, { params });
+
+  return {
+    params,
+    endpoint,
+    moduleConfig,
+    isAuditFindingModule,
+    normalizedFilters
+  };
+}
+
+function applyClientSideListTransforms(rawRows, ctx) {
+  const { isAuditFindingModule, normalizedFilters } = ctx;
+  let fetchedData = rawRows || [];
+
+  if (isAuditFindingModule && Array.isArray(fetchedData)) {
+    fetchedData = fetchedData.map((row) => {
+      if (!row || typeof row !== 'object') return row;
+      return {
+        ...row,
+        subject: row.subject || row.title || ''
+      };
+    });
+  }
+
+  if (props.moduleKey === 'people' && props.peopleContext && props.peopleContext !== 'ALL') {
+    const ctxApp = props.peopleContext;
+    fetchedData = fetchedData.filter((person) => getParticipation(person, ctxApp) != null);
+  }
+
+  if (props.moduleKey === 'people') {
+    const salesTypeValues = coerceFilterValuesToArray(normalizedFilters.sales_type ?? normalizedFilters.type);
+    const helpdeskRoleValues = coerceFilterValuesToArray(normalizedFilters.helpdesk_role);
+
+    const legacyTypeOnHelpdesk =
+      props.peopleContext === 'HELPDESK' && helpdeskRoleValues.length === 0 ? salesTypeValues : [];
+
+    fetchedData = fetchedData.filter((person) => {
+      const salesRole = getParticipation(person, 'SALES')?.role ?? '';
+      const helpdeskRole = getParticipation(person, 'HELPDESK')?.role ?? '';
+
+      const matchesSales = includesRoleMatch(salesTypeValues, salesRole);
+      const matchesHelpdesk = includesRoleMatch(helpdeskRoleValues, helpdeskRole);
+      const matchesLegacyHelpdesk = includesRoleMatch(legacyTypeOnHelpdesk, helpdeskRole);
+
+      if (props.peopleContext === 'HELPDESK') {
+        return matchesHelpdesk && matchesLegacyHelpdesk;
+      }
+      if (props.peopleContext === 'SALES') {
+        return matchesSales;
+      }
+
+      return matchesSales && matchesHelpdesk;
+    });
+  }
+
+  if (props.moduleKey === 'people' && filters.value.participation) {
+    const participationValue = filters.value.participation;
+    const participationValues = Array.isArray(participationValue)
+      ? participationValue
+      : [participationValue];
+
+    if (participationValues.length > 0) {
+      const participationFilters = participationValues.map((val) => {
+        const [appKey, role] = String(val).split(':');
+        return { appKey, role: role || '*' };
+      });
+
+      fetchedData = fetchedData.filter((person) =>
+        participationFilters.some((filter) => {
+          const { appKey, role } = filter;
+
+          const participatesInAppKey = participatesInApp(person, appKey);
+          if (!participatesInAppKey) {
+            return false;
+          }
+
+          if (role === '*') {
+            return true;
+          }
+
+          if (appKey === 'SALES' && (role === 'Lead' || role === 'Contact')) {
+            return getParticipation(person, appKey)?.role === role;
+          }
+
+          return true;
+        })
+      );
+    }
+  }
+
+  return fetchedData;
+}
+
+function applyPaginationFromResponse(response, fetchedRowCountForTotal) {
+  if (response.pagination) {
+    pagination.value = {
+      currentPage: response.pagination.currentPage || pagination.value.currentPage,
+      totalPages: response.pagination.totalPages || 1,
+      totalRecords:
+        props.moduleKey === 'people' && filters.value.participationApp
+          ? fetchedRowCountForTotal
+          : response.pagination.totalRecords ||
+            response.pagination[`total${props.moduleKey.charAt(0).toUpperCase() + props.moduleKey.slice(1)}`] ||
+            0,
+      limit: pagination.value.limit
+    };
+  } else if (response.meta) {
+    pagination.value = {
+      currentPage: response.meta.page || pagination.value.currentPage,
+      totalPages: Math.ceil((response.meta.total || 0) / (response.meta.limit || pagination.value.limit)),
+      totalRecords: response.meta.total || 0,
+      limit: response.meta.limit || pagination.value.limit
+    };
+  }
+}
+
+async function fetchListReplace() {
+  if (!listDefinition.value) return;
+
+  listDataEpoch.value += 1;
+  const epochForThisReplace = listDataEpoch.value;
+
+  const myReplaceSeq = ++replaceSeq;
+  replaceAbortController?.abort();
+  appendAbortController?.abort();
+  appendAbortController = null;
+
+  replaceAbortController = new AbortController();
+  const signal = replaceAbortController.signal;
+
+  dataLoading.value = true;
+  data.value = [];
+
+  try {
+    const ctx = buildListFetchContext(pagination.value.currentPage);
+    const response = await apiClient.get(ctx.endpoint, {
+      params: ctx.params,
+      signal
+    });
+
+    if (listDataEpoch.value !== epochForThisReplace) return;
+    if (signal.aborted) return;
 
     if (response.success) {
-      let fetchedData = response.data || [];
-
-      // Audit Findings currently source rows from task-shaped records.
-      // Provide compatibility aliases expected by the "cases" module schema.
-      if (isAuditFindingModule && Array.isArray(fetchedData)) {
-        fetchedData = fetchedData.map((row) => {
-          if (!row || typeof row !== 'object') return row;
-          return {
-            ...row,
-            subject: row.subject || row.title || '',
-          };
-        });
-      }
-
-      // Apply people context filter client-side (People module only)
-      if (props.moduleKey === 'people' && props.peopleContext && props.peopleContext !== 'ALL') {
-        const ctx = props.peopleContext;
-        fetchedData = fetchedData.filter(person => getParticipation(person, ctx) != null);
-      }
-
-      // Apply People role filters client-side to support PLATFORM appKey listing.
-      // Legacy `type` maps to the active app context (HELPDESK tab -> helpdesk_role, otherwise SALES role).
-      if (props.moduleKey === 'people') {
-        const salesTypeValues = coerceFilterValuesToArray(normalizedFilters.sales_type ?? normalizedFilters.type);
-        const helpdeskRoleValues = coerceFilterValuesToArray(normalizedFilters.helpdesk_role);
-
-        // If legacy "type" is used on HELPDESK tab, treat it as a HELPDESK role filter.
-        const legacyTypeOnHelpdesk = props.peopleContext === 'HELPDESK' && helpdeskRoleValues.length === 0
-          ? salesTypeValues
-          : [];
-
-        fetchedData = fetchedData.filter((person) => {
-          const salesRole = getParticipation(person, 'SALES')?.role ?? '';
-          const helpdeskRole = getParticipation(person, 'HELPDESK')?.role ?? '';
-
-          const matchesSales = includesRoleMatch(salesTypeValues, salesRole);
-          const matchesHelpdesk = includesRoleMatch(helpdeskRoleValues, helpdeskRole);
-          const matchesLegacyHelpdesk = includesRoleMatch(legacyTypeOnHelpdesk, helpdeskRole);
-
-          if (props.peopleContext === 'HELPDESK') {
-            // In HELPDESK tab, prioritize helpdesk_role semantics for type filtering.
-            return matchesHelpdesk && matchesLegacyHelpdesk;
-          }
-          if (props.peopleContext === 'SALES') {
-            return matchesSales;
-          }
-
-          // ALL apps: require both filters when both are present.
-          return matchesSales && matchesHelpdesk;
-        });
-      }
-
-      // Apply participation filtering client-side (People module only)
-      // Participation filter format: "SALES:Lead", "SALES:Contact", "HELPDESK:Contact", etc.
-      // Or "SALES:*" for any participation in an app
-      if (props.moduleKey === 'people' && filters.value.participation) {
-        const participationValue = filters.value.participation;
-        const participationValues = Array.isArray(participationValue) 
-          ? participationValue 
-          : [participationValue];
-        
-        if (participationValues.length > 0) {
-          // Parse participation filters: "APPKEY:ROLE" or "APPKEY:*"
-          const participationFilters = participationValues.map(val => {
-            const [appKey, role] = String(val).split(':');
-            return { appKey, role: role || '*' };
-          });
-          
-          // Filter data to only include people matching the participation filter
-          fetchedData = fetchedData.filter(person => {
-            return participationFilters.some(filter => {
-              const { appKey, role } = filter;
-              
-              // First check if person participates in the app
-              const participatesInAppKey = participatesInApp(person, appKey);
-              if (!participatesInAppKey) {
-                return false;
-              }
-              
-              // If role is "*", match any participation in the app
-              if (role === '*') {
-                return true;
-              }
-              
-              // For specific roles, use getParticipation abstraction
-              // For SALES: Lead/Contact maps to role from participation
-              if (appKey === 'SALES' && (role === 'Lead' || role === 'Contact')) {
-                return getParticipation(person, appKey)?.role === role;
-              }
-              
-              // For other apps/roles, default to matching participation
-              return true;
-            });
-          });
-        }
-      }
-      
-      // Force reactivity by creating a new array reference
-      // This ensures Vue detects the change even if the array contents are similar
+      let fetchedData = applyClientSideListTransforms(response.data || [], ctx);
       data.value = [...fetchedData];
 
-      // Handle pagination from response (check both pagination and meta objects)
-      if (response.pagination) {
-        pagination.value = {
-          currentPage: response.pagination.currentPage || pagination.value.currentPage,
-          totalPages: response.pagination.totalPages || 1,
-          // For participation-filtered results, update totalRecords to reflect filtered count
-          // But preserve original total for stats calculation
-          totalRecords: props.moduleKey === 'people' && filters.value.participationApp 
-            ? fetchedData.length 
-            : (response.pagination.totalRecords || response.pagination[`total${props.moduleKey.charAt(0).toUpperCase() + props.moduleKey.slice(1)}`] || 0),
-          limit: pagination.value.limit
-        };
-      } else if (response.meta) {
-        // Fallback to meta object if pagination is not present
-        pagination.value = {
-          currentPage: response.meta.page || pagination.value.currentPage,
-          totalPages: Math.ceil((response.meta.total || 0) / (response.meta.limit || pagination.value.limit)),
-          totalRecords: response.meta.total || 0,
-          limit: response.meta.limit || pagination.value.limit
-        };
-      }
+      applyPaginationFromResponse(response, fetchedData.length);
 
-      // Compute statistics using registry function if available
-      if (moduleConfig?.statistics?.computeFunction) {
-        await nextTick();
-        const computedStats = moduleConfig.statistics.computeFunction(data.value, authStore.user?._id);
-        statistics.value = computedStats;
+      const totalRecords = Number(
+        response.pagination?.totalRecords ?? response.meta?.total ?? pagination.value.totalRecords ?? 0
+      ) || 0;
+
+      await nextTick();
+      if (listDataEpoch.value !== epochForThisReplace) return;
+
+      // Prefer server aggregates when present (correct for full result set + paged/infinite scroll)
+      if (response.listStatistics && typeof response.listStatistics === 'object') {
+        statistics.value = {
+          ...response.listStatistics,
+          totalPeople: response.listStatistics.totalPeople ?? totalRecords
+        };
+      } else if (ctx.moduleConfig?.statistics?.computeFunction) {
+        statistics.value = ctx.moduleConfig.statistics.computeFunction(data.value, authStore.user?._id, {
+          totalRecords
+        });
       } else if (response.statistics) {
-        // For other modules, use API-provided statistics if available
         statistics.value = response.statistics;
       }
     } else {
-      // Response was not successful
       console.warn('[ModuleList] API response not successful:', {
         success: response.success,
         response: response
       });
       data.value = [];
-      // Reset statistics on error using registry
-      const moduleConfig = getModuleListConfig(props.moduleKey);
-      if (moduleConfig?.statistics?.computeFunction) {
-        statistics.value = moduleConfig.statistics.computeFunction([], authStore.user?._id);
+      const mc = getModuleListConfig(props.moduleKey);
+      if (mc?.statistics?.computeFunction) {
+        statistics.value = mc.statistics.computeFunction([], authStore.user?._id, { totalRecords: 0 });
       } else {
         statistics.value = {};
       }
     }
   } catch (error) {
+    if (signal.aborted) return;
+    if (listDataEpoch.value !== epochForThisReplace) return;
     console.error('[ModuleList] Error fetching data:', error);
     data.value = [];
-    
-    // Reset statistics on error using registry
-    const moduleConfig = getModuleListConfig(props.moduleKey);
-    if (moduleConfig?.statistics?.computeFunction) {
-      statistics.value = moduleConfig.statistics.computeFunction([], authStore.user?._id);
+    const moduleConfigErr = getModuleListConfig(props.moduleKey);
+    if (moduleConfigErr?.statistics?.computeFunction) {
+      statistics.value = moduleConfigErr.statistics.computeFunction([], authStore.user?._id, {
+        totalRecords: 0
+      });
     } else {
       statistics.value = {};
     }
   } finally {
-    dataLoading.value = false;
+    if (myReplaceSeq === replaceSeq) {
+      dataLoading.value = false;
+    }
   }
+}
+
+async function fetchListAppend() {
+  if (!listDefinition.value) return;
+
+  if (loadingMore.value || dataLoading.value) return;
+  if (pagination.value.currentPage >= pagination.value.totalPages && pagination.value.totalPages >= 1) {
+    return;
+  }
+
+  const parentEpoch = listDataEpoch.value;
+  const myAppendSeq = ++appendSeq;
+
+  appendAbortController?.abort();
+  appendAbortController = new AbortController();
+  const signal = appendAbortController.signal;
+
+  loadingMore.value = true;
+
+  const requestedPage = pagination.value.currentPage + 1;
+
+  try {
+    const ctx = buildListFetchContext(requestedPage);
+    const response = await apiClient.get(ctx.endpoint, {
+      params: ctx.params,
+      signal
+    });
+
+    if (listDataEpoch.value !== parentEpoch) return;
+    if (signal.aborted) return;
+
+    if (response.success) {
+      const fetchedData = applyClientSideListTransforms(response.data || [], ctx);
+      data.value = mergeAppendRowsById(data.value, fetchedData);
+
+      applyPaginationFromResponse(response, fetchedData.length);
+
+      // Do not replace card statistics here: API `statistics` uses different keys than ListView
+      // (e.g. totalContacts vs totalPeople), which zeroed the UI. Counts are for the full query
+      // and stay valid from the initial replace fetch.
+    }
+  } catch (error) {
+    if (signal.aborted) return;
+    if (listDataEpoch.value !== parentEpoch) return;
+    console.error('[ModuleList] Error loading more:', error);
+  } finally {
+    if (myAppendSeq === appendSeq) {
+      loadingMore.value = false;
+    }
+  }
+}
+
+const fetchData = async (opts = {}) => {
+  if (opts.append === true) {
+    return fetchListAppend();
+  }
+  return fetchListReplace();
+};
+
+const handleLoadMore = () => {
+  fetchData({ append: true });
 };
 
 // Handle actions
@@ -1589,6 +1697,7 @@ const handleSetDefaultView = (viewId) => {
 const handleSortUpdate = ({ sortField: key, sortOrder: order }) => {
   sortField.value = normalizePeopleListSortField(key);
   sortOrder.value = order;
+  pagination.value.currentPage = 1;
   fetchData();
 };
 

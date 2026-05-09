@@ -175,10 +175,31 @@
 
     <!-- Statistics Cards -->
     <div v-if="statsConfig && statsConfig.length > 0 && showStats" class="mb-8">
-      <dl :class="[
-        'grid grid-cols-1 divide-gray-200 dark:divide-gray-700 overflow-hidden rounded-lg bg-white dark:bg-gray-800 shadow-sm md:divide-x md:divide-y-0',
-        statsGridColsClass
-      ]">
+      <!-- Skeleton while list rows load (avoids flashing zeros) -->
+      <div
+        v-if="statsBarSkeleton"
+        :class="[
+          'grid grid-cols-1 gap-3 divide-gray-200 overflow-hidden rounded-lg bg-white dark:bg-gray-800 shadow-sm md:divide-y-0 md:gap-0 md:divide-x dark:divide-gray-700',
+          statsGridColsClass
+        ]"
+        aria-hidden="true"
+      >
+        <div
+          v-for="n in statsConfig.length"
+          :key="`stat-sk-${n}`"
+          class="px-4 py-5 sm:p-6"
+        >
+          <div class="list-sk-bar mb-3 h-4 w-28 rounded" />
+          <div class="list-sk-bar h-8 w-20 rounded-md" />
+        </div>
+      </div>
+      <dl
+        v-else
+        :class="[
+          'grid grid-cols-1 divide-gray-200 dark:divide-gray-700 overflow-hidden rounded-lg bg-white dark:bg-gray-800 shadow-sm md:divide-x md:divide-y-0',
+          statsGridColsClass
+        ]"
+      >
         <div 
           v-for="item in computedStats" 
           :key="item.name" 
@@ -562,8 +583,9 @@
     </div>
 
     <div class="mt-4 px-4 sm:px-6 lg:px-8" style="isolation: auto;">
+      <!-- Key must not include row count: infinite append changes length and would remount TableView and reset scroll. -->
       <TableView
-          :key="`table-${moduleKey}-${dataLength}-${dataHash}`"
+          :key="`table-${tableId}-${dataHash}`"
           internal-scroll
           :data="data"
           :columns="computedColumns"
@@ -582,12 +604,18 @@
           :row-height="rowHeight"
           :reset-widths="resetWidthsTrigger"
           :clear-selection-trigger="clearSelectionTrigger"
+          :load-more-enabled="infiniteScroll"
+          :has-more="hasMorePages"
+          :loading-more="loadingMore"
+          :selection-column-variant="selectionColumnVariant"
+          :row-number-offset="effectiveRowNumberOffset"
           @row-click="handleRowClick"
           @edit="handleEdit"
           @delete="handleDelete"
           @sort="handleSort"
           @select="handleSelect"
           @bulk-action="handleBulkAction"
+          @load-more="emit('load-more')"
         >
           <!-- Forward all provided slots to the inner TableView -->
           <template v-for="(_, slotName) in $slots" #[slotName]="slotProps">
@@ -1535,6 +1563,21 @@ const props = defineProps({
   viewMode: {
     type: String,
     default: null
+  },
+  /** Infinite scroll: load next server page when the table sentinel enters the scroll area */
+  infiniteScroll: {
+    type: Boolean,
+    default: false
+  },
+  loadingMore: {
+    type: Boolean,
+    default: false
+  },
+  /** Table selection gutter: 'numbered-hover' shows row index until hover/focus (see TableView) */
+  selectionColumnVariant: {
+    type: String,
+    default: 'numbered-hover',
+    validator: (v) => !v || v === 'checkbox' || v === 'numbered-hover'
   }
 });
 
@@ -1559,7 +1602,8 @@ const emit = defineEmits([
   'stat-click',
   'saved-views-updated',
   'kanban-settings-changed',
-  'stats-visibility-changed'
+  'stats-visibility-changed',
+  'load-more'
 ]);
 
 // Use bulk actions composable
@@ -1711,12 +1755,14 @@ const handleCustomizeClick = () => {
 
 // Row height - load from localStorage
 const rowHeightStorageKey = computed(() => `${STORAGE_PREFIX}-${props.moduleKey}-row-height`);
+const DEFAULT_ROW_HEIGHT = 'small';
+
 const getDefaultRowHeight = () => {
-  if (typeof window === 'undefined') return 'medium';
+  if (typeof window === 'undefined') return DEFAULT_ROW_HEIGHT;
   const saved = localStorage.getItem(rowHeightStorageKey.value);
-  return (saved && ['small', 'medium', 'large', 'huge'].includes(saved)) ? saved : 'medium';
+  return (saved && ['small', 'medium', 'large', 'huge'].includes(saved)) ? saved : DEFAULT_ROW_HEIGHT;
 };
-const rowHeight = ref('medium'); // Initialize with default, will be set on mount
+const rowHeight = ref(DEFAULT_ROW_HEIGHT); // Initialize with default, will be set on mount
 
 // Watch row height and save to localStorage
 watch(rowHeight, (value) => {
@@ -2600,6 +2646,27 @@ const hasActiveFilters = computed(() => {
 });
 
 const dataLength = computed(() => (Array.isArray(props.data) ? props.data.length : 0));
+
+const hasMorePages = computed(() => {
+  if (!props.infiniteScroll) return false;
+  const p = props.pagination;
+  if (!p) return false;
+  const cur = Number(p.currentPage);
+  const total = Number(p.totalPages);
+  if (!Number.isFinite(cur) || !Number.isFinite(total)) return false;
+  return cur < total;
+});
+
+/** For numbered selection gutter: continuous 1…n when infinite scroll; paged offset otherwise */
+const effectiveRowNumberOffset = computed(() => {
+  if (props.selectionColumnVariant !== 'numbered-hover') return 0;
+  if (props.infiniteScroll) return 0;
+  const p = props.pagination;
+  const cur = Number(p?.currentPage);
+  const lim = Number(p?.limit);
+  if (!Number.isFinite(cur) || !Number.isFinite(lim) || cur < 1 || lim < 1) return 0;
+  return (cur - 1) * lim;
+});
 // Create a hash of the first few item IDs to detect data changes
 const dataHash = computed(() => {
   if (!Array.isArray(props.data) || props.data.length === 0) return 'empty';
@@ -2621,6 +2688,14 @@ const tableLoading = computed(() => {
   }
   return false;
 });
+
+/** Stats strip shimmer while table data is loading (same phase as table skeleton) */
+const statsBarSkeleton = computed(
+  () =>
+    Boolean(props.statsConfig?.length) &&
+    props.loading &&
+    dataLength.value === 0
+);
 const skeletonRowCount = computed(() => {
   const limit = Number(props.pagination?.limit);
   if (Number.isFinite(limit) && limit > 0) {
@@ -3183,7 +3258,7 @@ const resetColumnSettings = async () => {
       if (props.tableId) {
         localStorage.removeItem(`table-column-widths-${props.tableId}`);
       }
-      rowHeight.value = 'medium';
+      rowHeight.value = DEFAULT_ROW_HEIGHT;
       resetWidthsTrigger.value++;
       return;
     }
@@ -3198,7 +3273,7 @@ const resetColumnSettings = async () => {
   }));
   saveColumnSettings();
   
-  rowHeight.value = 'medium';
+  rowHeight.value = DEFAULT_ROW_HEIGHT;
   
   // Clear saved settings (after applying new defaults)
   if (typeof window !== 'undefined') {
@@ -4140,4 +4215,36 @@ const handleSetDefaultView = (view) => {
 };
 </script>
 
+<style scoped>
+@keyframes list-sk-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
 
+.list-sk-bar {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(
+    90deg,
+    rgb(229 231 235) 0%,
+    rgb(243 244 246) 42%,
+    rgb(229 231 235) 100%
+  );
+  background-size: 200% 100%;
+  animation: list-sk-shimmer 1.35s ease-in-out infinite;
+}
+
+:global(.dark) .list-sk-bar {
+  background: linear-gradient(
+    90deg,
+    rgb(55 65 81) 0%,
+    rgb(75 85 99) 42%,
+    rgb(55 65 81) 100%
+  );
+  background-size: 200% 100%;
+}
+</style>
