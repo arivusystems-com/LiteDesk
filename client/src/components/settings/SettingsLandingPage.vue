@@ -4,7 +4,7 @@
     <div>
       <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Settings</h2>
       <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-        Manage your organization settings and platform configuration
+        Manage your company settings and platform configuration
       </p>
     </div>
 
@@ -182,8 +182,8 @@ const sections = computed(() => {
   const all = [
     {
       id: 'organization',
-      name: 'Organization',
-      description: 'Manage your company information, branding, and organization-wide preferences',
+      name: 'Company Details',
+      description: 'Manage your company information, branding, and company-wide preferences',
       icon: OrganizationIcon,
       route: '/settings?tab=organization',
     },

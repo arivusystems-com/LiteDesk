@@ -176,6 +176,7 @@ const masterUri = `${baseUri}/${masterDbName}${connectionQuery}`;
             organizationId: organization._id,
             role: 'owner',
             isOwner: true,
+            isPlatformAdmin: true,
             status: 'active',
             userType: 'INTERNAL',
             appAccess: [{

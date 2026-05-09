@@ -2,9 +2,9 @@
   <div class="space-y-6">
     <!-- Header -->
     <div>
-      <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Organization</h2>
+      <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Company Details</h2>
       <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-        Manage your organization's identity and global settings that apply across the platform
+        Manage your company identity and global settings that apply across the platform
       </p>
     </div>
 
@@ -15,9 +15,9 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <div>
-          <h3 class="text-sm font-semibold text-blue-800 dark:text-blue-300">Organization Identity</h3>
+          <h3 class="text-sm font-semibold text-blue-800 dark:text-blue-300">Company Identity</h3>
           <p class="text-sm text-blue-700 dark:text-blue-400 mt-1">
-            These settings define your organization's identity and defaults. Changes here affect display and defaults across all applications, but do not modify application logic or permissions.
+            These settings define your company's identity and defaults. Changes here affect display and defaults across all applications, but do not modify application logic or permissions.
           </p>
         </div>
       </div>
@@ -42,7 +42,7 @@
 
     <!-- Settings Form -->
     <form v-else @submit.prevent="handleSubmit" class="space-y-6">
-      <!-- Organization Name -->
+      <!-- Company Name -->
       <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
         <div class="flex items-center gap-3 mb-4">
           <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
@@ -51,8 +51,8 @@
             </svg>
           </div>
           <div>
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Organization Name</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400">Your organization's display name</p>
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Company Name</h3>
+            <p class="text-sm text-gray-600 dark:text-gray-400">Your company display name</p>
           </div>
         </div>
         <div>
@@ -61,7 +61,7 @@
             type="text"
             required
             class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
-            placeholder="Enter organization name"
+            placeholder="Enter company name"
           />
         </div>
       </div>
@@ -76,7 +76,7 @@
           </div>
           <div>
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Logo / Brand Image</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400">Your organization's logo URL</p>
+            <p class="text-sm text-gray-600 dark:text-gray-400">Your company logo URL</p>
           </div>
         </div>
         <div class="space-y-4">
@@ -91,7 +91,7 @@
           <div v-if="form.logoUrl" class="flex items-center gap-4">
             <img
               :src="form.logoUrl"
-              alt="Organization logo"
+              alt="Company logo"
               class="w-20 h-20 object-contain rounded-lg border border-gray-200 dark:border-gray-700"
               @error="handleImageError"
             />
@@ -116,7 +116,7 @@
           </div>
           <div>
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Timezone</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400">Your organization's default timezone</p>
+            <p class="text-sm text-gray-600 dark:text-gray-400">Your company default timezone</p>
           </div>
         </div>
         <div>
@@ -200,7 +200,7 @@
           </div>
           <div>
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Data Region</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400">Your organization's data storage region</p>
+            <p class="text-sm text-gray-600 dark:text-gray-400">Your company data storage region</p>
           </div>
         </div>
         <div>
@@ -210,7 +210,7 @@
             disabled
             class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed"
           />
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Data region is set during organization creation and cannot be changed.</p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Data region is set during company setup and cannot be changed.</p>
         </div>
       </div>
 
@@ -384,7 +384,7 @@ const handleSubmit = async () => {
       showTimezoneWarning.value = false;
       
       // Show success message (you could use a toast notification here)
-      alert('Organization settings updated successfully');
+      alert('Company details updated successfully');
     } else {
       error.value = new Error(data.message || 'Failed to update organization settings');
     }

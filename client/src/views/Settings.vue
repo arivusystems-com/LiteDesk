@@ -16,7 +16,7 @@
           </button> -->
           <div>
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Settings</h1>
-            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">Manage your account and organization settings</p>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">Manage your account and company settings</p>
           </div>
         </div>
         <!-- User Menu (mode + sign out) -->
@@ -371,7 +371,7 @@ const settingsAccessCtx = computed(() => ({
 
 const tabs = computed(() => {
   const all = [
-    { id: 'organization', name: 'Organization', icon: PlatformIcon, component: OrganizationSettings },
+    { id: 'organization', name: 'Company Details', icon: PlatformIcon, component: OrganizationSettings },
     { id: 'users-access', name: 'Users & Access', icon: UsersIcon, component: UsersAccessSettings },
     { id: 'core-modules', name: 'Core Modules', icon: CoreModulesIcon, component: CoreModulesList },
     { id: 'applications', name: 'Applications', icon: AppsIcon, component: ApplicationsList },
