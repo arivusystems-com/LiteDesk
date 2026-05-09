@@ -322,6 +322,52 @@
             v-if="selectedIntegration.key === 'email-provider'"
             class="rounded-lg p-4 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40"
           >
+            <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Webhook Simulator</h4>
+            <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
+              Trigger delivery lifecycle events without waiting for provider callbacks.
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <label class="text-sm">
+                <span class="block mb-1 text-gray-700 dark:text-gray-300">Event Type</span>
+                <select
+                  v-model="webhookSim.eventType"
+                  class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2"
+                >
+                  <option v-for="evt in webhookTemplates.supportedEventTypes" :key="`sim-${evt}`" :value="evt">{{ evt }}</option>
+                </select>
+              </label>
+              <label class="text-sm">
+                <span class="block mb-1 text-gray-700 dark:text-gray-300">Provider Label</span>
+                <input
+                  v-model="webhookSim.provider"
+                  type="text"
+                  class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2"
+                  placeholder="simulator"
+                />
+              </label>
+              <div class="text-sm">
+                <span class="block mb-1 text-gray-700 dark:text-gray-300">Target Message</span>
+                <p class="text-xs text-gray-600 dark:text-gray-400 break-all">
+                  {{ webhookTemplates.latestExternalMessageId || 'No sent message yet' }}
+                </p>
+              </div>
+            </div>
+            <div class="mt-3">
+              <button
+                type="button"
+                @click="runWebhookSimulation"
+                :disabled="simulatingWebhook || (!webhookTemplates.latestCommunicationId && !webhookTemplates.latestExternalMessageId)"
+                class="px-4 py-2 text-sm font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {{ simulatingWebhook ? 'Simulating...' : 'Simulate Webhook Event' }}
+              </button>
+            </div>
+          </div>
+
+          <div
+            v-if="selectedIntegration.key === 'email-provider'"
+            class="rounded-lg p-4 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40"
+          >
             <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Communication Policy</h4>
             <p
               v-if="communicationPolicyLocked"
@@ -369,6 +415,30 @@
                       :disabled="communicationPolicyLocked"
                     />
                     {{ moduleKey }}
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <span class="block mb-1 text-sm text-gray-700 dark:text-gray-300">Suppression policy</span>
+                <div class="flex flex-col gap-2">
+                  <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <input
+                      v-model="communicationPolicy.outboundEmail.suppression.autoSuppressOnBounce"
+                      type="checkbox"
+                      class="rounded border-gray-300 dark:border-gray-600"
+                      :disabled="communicationPolicyLocked"
+                    />
+                    Auto-suppress recipients on bounce events
+                  </label>
+                  <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <input
+                      v-model="communicationPolicy.outboundEmail.suppression.autoSuppressOnComplaint"
+                      type="checkbox"
+                      class="rounded border-gray-300 dark:border-gray-600"
+                      :disabled="communicationPolicyLocked"
+                    />
+                    Auto-suppress recipients on complaint events
                   </label>
                 </div>
               </div>
@@ -437,6 +507,149 @@
             </div>
           </div>
 
+          <div
+            v-if="selectedIntegration.key === 'email-provider'"
+            class="rounded-lg p-4 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40"
+          >
+            <div class="flex items-center justify-between gap-3 mb-3">
+              <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Delivery Diagnostics (24h)</h4>
+              <button
+                type="button"
+                @click="loadPipelineDiagnostics"
+                :disabled="loadingDiagnostics"
+                class="px-3 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {{ loadingDiagnostics ? 'Refreshing...' : 'Refresh' }}
+              </button>
+            </div>
+
+            <div class="mb-4">
+              <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">Failure categories</p>
+              <div v-if="diagnostics.failureBreakdown.length > 0" class="flex flex-wrap gap-2">
+                <span
+                  v-for="row in diagnostics.failureBreakdown"
+                  :key="`failure-${row.category}`"
+                  :class="['inline-flex items-center px-2 py-1 rounded-full text-[11px] font-medium', failureCategoryClass(row.category)]"
+                >
+                  {{ row.category }}: {{ row.count }}
+                </span>
+              </div>
+              <p v-else class="text-xs text-gray-500 dark:text-gray-400">No failures recorded in the last 24h.</p>
+            </div>
+
+            <div>
+              <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">Recent lifecycle events</p>
+              <div v-if="diagnostics.recentEvents.length > 0" class="space-y-2 max-h-56 overflow-auto pr-1">
+                <div
+                  v-for="evt in diagnostics.recentEvents"
+                  :key="`evt-${evt._id}`"
+                  class="rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 px-3 py-2"
+                >
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-xs font-semibold text-gray-900 dark:text-white">{{ evt.eventType }}</span>
+                    <span class="text-[11px] text-gray-500 dark:text-gray-400">{{ formatCheckedAt(evt.createdAt) }}</span>
+                  </div>
+                  <p class="text-[11px] text-gray-600 dark:text-gray-300 mt-1">
+                    source: {{ evt.source }}<span v-if="evt.payload?.failureCategory"> | failure: {{ evt.payload.failureCategory }}</span>
+                  </p>
+                  <p v-if="evt.payload?.error" class="text-[11px] text-red-700 dark:text-red-300 mt-1 break-words">
+                    error: {{ evt.payload.error }}
+                  </p>
+                </div>
+              </div>
+              <p v-else class="text-xs text-gray-500 dark:text-gray-400">No communication events found for this window.</p>
+            </div>
+          </div>
+
+          <div
+            v-if="selectedIntegration.key === 'email-provider'"
+            class="rounded-lg p-4 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40"
+          >
+            <div class="flex items-center justify-between gap-3 mb-3">
+              <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Suppressed Recipients</h4>
+              <button
+                type="button"
+                @click="loadSuppressions"
+                :disabled="loadingSuppressions"
+                class="px-3 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {{ loadingSuppressions ? 'Refreshing...' : 'Refresh' }}
+              </button>
+            </div>
+            <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
+              Recipients are auto-suppressed when delivery events report bounce or complaint.
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+              <div class="rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 px-3 py-2">
+                <p class="text-[11px] text-gray-500 dark:text-gray-400">Active total</p>
+                <p class="text-sm font-semibold text-gray-900 dark:text-white">{{ suppressionStats.activeTotal }}</p>
+              </div>
+              <div class="rounded-md border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-2">
+                <p class="text-[11px] text-amber-800 dark:text-amber-300">Bounced</p>
+                <p class="text-sm font-semibold text-amber-900 dark:text-amber-200">{{ suppressionStats.byReason.bounced }}</p>
+              </div>
+              <div class="rounded-md border border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/20 px-3 py-2">
+                <p class="text-[11px] text-red-800 dark:text-red-300">Complained</p>
+                <p class="text-sm font-semibold text-red-900 dark:text-red-200">{{ suppressionStats.byReason.complained }}</p>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+              <label class="text-xs">
+                <span class="block mb-1 text-gray-700 dark:text-gray-300">Search email</span>
+                <input
+                  v-model.trim="suppressionSearch"
+                  type="text"
+                  placeholder="name@example.com"
+                  class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2.5 py-1.5"
+                />
+              </label>
+              <label class="text-xs">
+                <span class="block mb-1 text-gray-700 dark:text-gray-300">Reason filter</span>
+                <select
+                  v-model="suppressionReasonFilter"
+                  class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2.5 py-1.5"
+                >
+                  <option value="all">all</option>
+                  <option value="bounced">bounced</option>
+                  <option value="complained">complained</option>
+                </select>
+              </label>
+              <div class="text-xs text-gray-600 dark:text-gray-400 flex items-end">
+                Showing {{ filteredSuppressionRows.length }} of {{ suppressionRows.length }}
+              </div>
+            </div>
+            <div v-if="filteredSuppressionRows.length > 0" class="space-y-2 max-h-56 overflow-auto pr-1">
+              <div
+                v-for="row in filteredSuppressionRows"
+                :key="`sup-${row.email}`"
+                class="rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 px-3 py-2 flex items-center justify-between gap-3"
+              >
+                <div class="min-w-0">
+                  <p class="text-xs font-semibold text-gray-900 dark:text-white break-all">{{ row.email }}</p>
+                  <p class="text-[11px] text-gray-600 dark:text-gray-300 mt-1">
+                    reason:
+                    <span :class="['inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ml-1', suppressionReasonClass(row.reason)]">
+                      {{ row.reason }}
+                    </span>
+                    <span class="ml-2">last event: {{ formatCheckedAt(row.lastEventAt) }}</span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  @click="removeSuppressedRecipient(row.email)"
+                  :disabled="!isOwnerLike || removingSuppressionEmail === row.email"
+                  class="shrink-0 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700 hover:bg-red-100 dark:hover:bg-red-900/30"
+                >
+                  {{ removingSuppressionEmail === row.email ? 'Removing...' : 'Remove' }}
+                </button>
+              </div>
+            </div>
+            <p v-else class="text-xs text-gray-500 dark:text-gray-400">No suppressed recipients match the current filter.</p>
+            <p v-if="!isOwnerLike" class="mt-2 text-[11px] text-amber-700 dark:text-amber-300">
+              Only workspace owner can remove suppression entries.
+            </p>
+          </div>
+
           <!-- Data Sharing -->
           <div class="bg-white dark:bg-gray-900/40 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
             <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">What data is shared</h4>
@@ -469,6 +682,30 @@ const actionLoading = ref(false);
 const testEmailLoading = ref(false);
 const savingConfig = ref(false);
 const checkingDomainStatus = ref(false);
+const loadingDiagnostics = ref(false);
+const diagnostics = ref({
+  failureBreakdown: [],
+  recentEvents: []
+});
+const webhookTemplates = ref({
+  latestCommunicationId: '',
+  latestExternalMessageId: '',
+  supportedEventTypes: ['delivered', 'opened', 'bounced', 'complained']
+});
+const webhookSim = ref({
+  eventType: 'delivered',
+  provider: 'simulator'
+});
+const simulatingWebhook = ref(false);
+const loadingSuppressions = ref(false);
+const removingSuppressionEmail = ref('');
+const suppressionRows = ref([]);
+const suppressionSearch = ref('');
+const suppressionReasonFilter = ref('all');
+const suppressionStats = ref({
+  activeTotal: 0,
+  byReason: { bounced: 0, complained: 0 }
+});
 const emailConfig = ref({
   provider: 'resend',
   fromEmail: '',
@@ -486,7 +723,11 @@ const communicationPolicy = ref({
   outboundEmail: {
     enabled: true,
     maxRecipientsPerMessage: 50,
-    allowedModuleKeys: ['people', 'organizations', 'deals', 'tasks', 'cases']
+    allowedModuleKeys: ['people', 'organizations', 'deals', 'tasks', 'cases'],
+    suppression: {
+      autoSuppressOnBounce: true,
+      autoSuppressOnComplaint: true
+    }
   },
   supportedModuleKeys: ['people', 'organizations', 'deals', 'tasks', 'cases']
 });
@@ -515,6 +756,168 @@ const checkEmailDomainStatus = async () => {
     alert('Failed to refresh sender domain verification status');
   } finally {
     checkingDomainStatus.value = false;
+  }
+};
+
+const failureCategoryClass = (category) => {
+  const value = String(category || '').toLowerCase();
+  if (value === 'auth_error' || value === 'config_error') {
+    return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300';
+  }
+  if (value === 'network_error' || value === 'provider_rejected' || value === 'attachment_error') {
+    return 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300';
+  }
+  return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+};
+
+const suppressionReasonClass = (reason) => {
+  const value = String(reason || '').toLowerCase();
+  if (value === 'complained') {
+    return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300';
+  }
+  if (value === 'bounced') {
+    return 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300';
+  }
+  return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+};
+
+const filteredSuppressionRows = computed(() => {
+  const query = String(suppressionSearch.value || '').trim().toLowerCase();
+  const reason = String(suppressionReasonFilter.value || 'all').toLowerCase();
+  return suppressionRows.value.filter((row) => {
+    const rowEmail = String(row?.email || '').toLowerCase();
+    const rowReason = String(row?.reason || '').toLowerCase();
+    const matchesQuery = !query || rowEmail.includes(query);
+    const matchesReason = reason === 'all' || rowReason === reason;
+    return matchesQuery && matchesReason;
+  });
+});
+
+const loadSuppressionStats = async () => {
+  if (!selectedIntegration.value || selectedIntegration.value.key !== 'email-provider') return;
+  try {
+    const data = await apiClient('/communications/suppressions/stats', { method: 'GET' });
+    suppressionStats.value = {
+      activeTotal: Number(data?.data?.activeTotal) || 0,
+      byReason: {
+        bounced: Number(data?.data?.byReason?.bounced) || 0,
+        complained: Number(data?.data?.byReason?.complained) || 0
+      }
+    };
+  } catch (err) {
+    console.error('Failed to load suppression stats:', err);
+    suppressionStats.value = {
+      activeTotal: 0,
+      byReason: { bounced: 0, complained: 0 }
+    };
+  }
+};
+
+const loadSuppressions = async () => {
+  if (!selectedIntegration.value || selectedIntegration.value.key !== 'email-provider') return;
+  loadingSuppressions.value = true;
+  try {
+    const data = await apiClient('/communications/suppressions', { method: 'GET' });
+    suppressionRows.value = Array.isArray(data?.data?.suppressions) ? data.data.suppressions : [];
+  } catch (err) {
+    console.error('Failed to load suppression list:', err);
+    suppressionRows.value = [];
+  } finally {
+    loadingSuppressions.value = false;
+  }
+  await loadSuppressionStats();
+};
+
+const removeSuppressedRecipient = async (email) => {
+  if (!email) return;
+  if (!isOwnerLike.value) {
+    alert('Only workspace owner can remove suppression entries');
+    return;
+  }
+  const ok = confirm(`Remove "${email}" from suppression list?`);
+  if (!ok) return;
+  removingSuppressionEmail.value = email;
+  try {
+    const data = await apiClient(`/communications/suppressions/${encodeURIComponent(email)}`, {
+      method: 'DELETE'
+    });
+    if (data?.success) {
+      suppressionRows.value = suppressionRows.value.filter((row) => row.email !== email);
+      await loadSuppressionStats();
+    } else {
+      alert(data?.message || 'Failed to remove suppression entry');
+    }
+  } catch (err) {
+    console.error('Failed to remove suppression entry:', err);
+    alert(err?.response?.data?.message || err?.message || 'Failed to remove suppression entry');
+  } finally {
+    removingSuppressionEmail.value = '';
+  }
+};
+
+const loadPipelineDiagnostics = async () => {
+  if (!selectedIntegration.value || selectedIntegration.value.key !== 'email-provider') return;
+  loadingDiagnostics.value = true;
+  try {
+    const data = await apiClient('/communications/pipeline-diagnostics', { method: 'GET' });
+    diagnostics.value = {
+      failureBreakdown: data?.data?.failureBreakdown || [],
+      recentEvents: data?.data?.recentEvents || []
+    };
+  } catch (err) {
+    console.error('Failed to load communication diagnostics:', err);
+    diagnostics.value = { failureBreakdown: [], recentEvents: [] };
+  } finally {
+    loadingDiagnostics.value = false;
+  }
+};
+
+const loadWebhookTemplates = async () => {
+  if (!selectedIntegration.value || selectedIntegration.value.key !== 'email-provider') return;
+  try {
+    const data = await apiClient('/communications/webhook-test/templates', { method: 'GET' });
+    webhookTemplates.value = {
+      latestCommunicationId: data?.data?.latestCommunicationId || '',
+      latestExternalMessageId: data?.data?.latestExternalMessageId || '',
+      supportedEventTypes: data?.data?.supportedEventTypes || ['delivered', 'opened', 'bounced', 'complained']
+    };
+    if (!webhookTemplates.value.supportedEventTypes.includes(webhookSim.value.eventType)) {
+      webhookSim.value.eventType = webhookTemplates.value.supportedEventTypes[0] || 'delivered';
+    }
+  } catch (err) {
+    console.error('Failed to load webhook templates:', err);
+  }
+};
+
+const runWebhookSimulation = async () => {
+  if (!selectedIntegration.value || selectedIntegration.value.key !== 'email-provider') return;
+  if (!webhookTemplates.value.latestCommunicationId && !webhookTemplates.value.latestExternalMessageId) {
+    alert('No eligible outbound communication found yet. Send at least one email first.');
+    return;
+  }
+  simulatingWebhook.value = true;
+  try {
+    const payload = {
+      communicationId: webhookTemplates.value.latestCommunicationId || undefined,
+      externalMessageId: webhookTemplates.value.latestExternalMessageId || undefined,
+      eventType: webhookSim.value.eventType,
+      provider: webhookSim.value.provider || 'simulator'
+    };
+    const data = await apiClient('/communications/webhook-test/simulate', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    if (data?.success) {
+      await loadPipelineDiagnostics();
+      alert(`Simulated webhook event: ${webhookSim.value.eventType}`);
+    } else {
+      alert(data?.message || 'Webhook simulation failed');
+    }
+  } catch (err) {
+    console.error('Webhook simulation failed:', err);
+    alert(err?.response?.data?.message || err?.message || 'Webhook simulation failed');
+  } finally {
+    simulatingWebhook.value = false;
   }
 };
 
@@ -586,12 +989,19 @@ const fetchIntegrationDetail = async (key, options = {}) => {
             maxRecipientsPerMessage: Number(policy.outboundEmail?.maxRecipientsPerMessage) || 50,
             allowedModuleKeys: Array.isArray(policy.outboundEmail?.allowedModuleKeys) && policy.outboundEmail.allowedModuleKeys.length > 0
               ? policy.outboundEmail.allowedModuleKeys
-              : ['people', 'organizations', 'deals', 'tasks', 'cases']
+              : ['people', 'organizations', 'deals', 'tasks', 'cases'],
+            suppression: {
+              autoSuppressOnBounce: policy.outboundEmail?.suppression?.autoSuppressOnBounce !== false,
+              autoSuppressOnComplaint: policy.outboundEmail?.suppression?.autoSuppressOnComplaint !== false
+            }
           },
           supportedModuleKeys: Array.isArray(policy.supportedModuleKeys) && policy.supportedModuleKeys.length > 0
             ? policy.supportedModuleKeys
             : ['people', 'organizations', 'deals', 'tasks', 'cases']
         };
+        await loadWebhookTemplates();
+        await loadPipelineDiagnostics();
+        await loadSuppressions();
       }
       // Update list entry to keep states in sync
       const idx = integrations.value.findIndex((i) => i.key === key);
@@ -626,7 +1036,11 @@ const saveEmailConfig = async () => {
         outboundEmail: {
           enabled: communicationPolicy.value.outboundEmail.enabled !== false,
           maxRecipientsPerMessage: Number(communicationPolicy.value.outboundEmail.maxRecipientsPerMessage) || 50,
-          allowedModuleKeys: communicationPolicy.value.outboundEmail.allowedModuleKeys
+          allowedModuleKeys: communicationPolicy.value.outboundEmail.allowedModuleKeys,
+          suppression: {
+            autoSuppressOnBounce: communicationPolicy.value.outboundEmail.suppression?.autoSuppressOnBounce !== false,
+            autoSuppressOnComplaint: communicationPolicy.value.outboundEmail.suppression?.autoSuppressOnComplaint !== false
+          }
         }
       }
     };

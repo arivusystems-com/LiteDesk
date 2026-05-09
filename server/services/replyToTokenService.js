@@ -49,11 +49,25 @@ function encodeToken(payload) {
  */
 function buildReplyToAddress(payload) {
   const localPart = encodeToken(payload);
-  const domain =
-    process.env.EMAIL_INBOUND_ADDRESS?.split('@')[1]
-    || process.env.EMAIL_REPLY_TO_DOMAIN
-    || process.env.BASE_DOMAIN
-    || 'arivusystems.com';
+  // RFC local-part practical limit guard (many providers enforce 64 chars strictly).
+  if (localPart.length > 64) {
+    throw new Error('Generated reply-to local part exceeds 64 characters');
+  }
+  const inboundAddress = String(process.env.EMAIL_INBOUND_ADDRESS || '').trim();
+  const inboundDomain = inboundAddress.includes('@') ? inboundAddress.split('@')[1] : '';
+  const rawDomain =
+    inboundDomain ||
+    process.env.EMAIL_REPLY_TO_DOMAIN ||
+    process.env.BASE_DOMAIN ||
+    'arivusystems.com';
+  const domain = String(rawDomain)
+    .replace(/^https?:\/\//i, '')
+    .split('/')[0]
+    .split(':')[0]
+    .trim();
+  if (!domain || domain.includes(' ')) {
+    throw new Error('Invalid reply-to domain configuration');
+  }
   return `${localPart}@${domain}`;
 }
 

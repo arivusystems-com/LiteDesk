@@ -30,6 +30,17 @@ function resolveRuntimeConfig(config = {}) {
   };
 }
 
+function resolveSafeReplyToAddress(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return undefined;
+  const plainEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const namedEmailPattern = /^[^<>]+<[^<>\s@]+@[^<>\s@]+\.[^<>]+>$/;
+  if (plainEmailPattern.test(raw) || namedEmailPattern.test(raw)) {
+    return raw;
+  }
+  return undefined;
+}
+
 function createSesClient(runtimeConfig) {
   if (!runtimeConfig.awsRegion || !runtimeConfig.awsAccessKeyId || !runtimeConfig.awsSecretAccessKey) {
     return null;
@@ -136,7 +147,7 @@ async function sendEmail(opts) {
   const from = runtimeConfig.fromName
     ? `"${runtimeConfig.fromName}" <${runtimeConfig.fromEmail || 'noreply@arivusystems.com'}>`
     : (runtimeConfig.fromEmail || getFromAddress());
-  const replyToAddr = replyTo || runtimeConfig.replyTo || undefined;
+  const replyToAddr = resolveSafeReplyToAddress(replyTo || runtimeConfig.replyTo);
 
   const hasAttachments = attachments && attachments.length > 0;
 

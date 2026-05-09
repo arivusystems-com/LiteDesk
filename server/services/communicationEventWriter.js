@@ -5,6 +5,7 @@ async function appendCommunicationEvent({
   communicationId = null,
   eventType,
   source = 'communications-api',
+  webhookEventId = '',
   idempotencyKeyHash = '',
   payload = {}
 }) {
@@ -15,6 +16,7 @@ async function appendCommunicationEvent({
       communicationId,
       eventType,
       source,
+      webhookEventId: webhookEventId || undefined,
       idempotencyKeyHash: idempotencyKeyHash || undefined,
       payload
     });

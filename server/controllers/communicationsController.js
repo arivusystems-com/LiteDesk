@@ -13,6 +13,7 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const Communication = require('../models/Communication');
+const CommunicationEvent = require('../models/CommunicationEvent');
 const { uploadsDir } = require('../middleware/uploadMiddleware');
 const ThreadView = require('../models/ThreadView');
 const People = require('../models/People');
@@ -25,11 +26,21 @@ const replyToTokenService = require('../services/replyToTokenService');
 const { MAX_ATTACHMENT_SIZE_BYTES, MAX_TOTAL_ATTACHMENTS_BYTES } = require('../models/Communication');
 const communicationPlatformService = require('../platform/communication/api/communicationPlatformService');
 const emailProviderGateway = require('../platform/communication/providers/emailProviderGateway');
+const emailQueueService = require('../services/emailQueueService');
 const { appendCommunicationEvent } = require('../services/communicationEventWriter');
+const {
+  findSuppressedAddresses,
+  listSuppressedAddresses,
+  unsuppressAddress,
+  getSuppressionStats
+} = require('../services/emailSuppressionService');
 const { getCommunicationConfigForOrganization } = require('../platform/communication/config/communicationConfigService');
+const { classifyCommunicationFailure } = require('../platform/communication/domain/failureTaxonomy');
 const {
   SUPPORTED_MODULES
 } = require('../platform/communication/domain/sendEmailContract');
+
+const WEBHOOK_TEST_EVENT_TYPES = ['delivered', 'opened', 'bounced', 'complained'];
 
 async function getTenantUserIds(organizationId) {
   const users = await User.find({ organizationId }).select('_id').lean();
@@ -58,6 +69,14 @@ function hashIdempotencyKey({ organizationId, userId, key }) {
     .createHash('sha256')
     .update(`${organizationId}:${userId}:${key}`)
     .digest('hex');
+}
+
+function resolveSafeReplyToAddress(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return undefined;
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailPattern.test(raw)) return undefined;
+  return raw;
 }
 
 /**
@@ -125,6 +144,25 @@ exports.sendEmail = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: `Recipient count exceeds tenant policy limit (${outboundPolicy.maxRecipientsPerMessage}).`
+      });
+    }
+    const suppressed = await findSuppressedAddresses({
+      organizationId: orgId,
+      addresses: [
+        ...(Array.isArray(toList) ? toList : []),
+        ...(Array.isArray(cc) ? cc : []),
+        ...(Array.isArray(bcc) ? bcc : [])
+      ]
+    });
+    if (suppressed.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'One or more recipients are suppressed due to bounce/complaint history.',
+        suppressedRecipients: suppressed.map((s) => ({
+          email: s.email,
+          reason: s.reason,
+          lastEventAt: s.lastEventAt
+        }))
       });
     }
 
@@ -313,6 +351,7 @@ exports.sendEmail = async (req, res) => {
     } catch {
       replyToAddr = process.env.EMAIL_REPLY_TO;
     }
+    replyToAddr = resolveSafeReplyToAddress(replyToAddr);
 
     const emailAttachments = [];
     if (attachments && attachments.length > 0) {
@@ -339,6 +378,7 @@ exports.sendEmail = async (req, res) => {
             source: 'communications-api',
             idempotencyKeyHash,
             payload: {
+              failureCategory: 'attachment_error',
               reason: 'attachment_read_failed',
               attachment: att.fileName || storagePath
             }
@@ -377,7 +417,8 @@ exports.sendEmail = async (req, res) => {
     payload: {
       provider: result.provider || null,
       externalMessageId: result.messageId || null,
-      error: result.success ? null : (result.error || 'send_failed')
+      error: result.success ? null : (result.error || 'send_failed'),
+      failureCategory: result.success ? null : classifyCommunicationFailure(result.error)
     }
   });
 
@@ -751,6 +792,418 @@ exports.createTaskFromEmail = async (req, res) => {
       success: false,
       message: 'Failed to create task',
       error: err.message
+    });
+  }
+};
+
+/**
+ * GET /api/communications/pipeline-metrics
+ * Minimal Phase 1 observability for sending pipeline.
+ */
+exports.getPipelineMetrics = async (req, res) => {
+  try {
+    const organizationId = req.user.organizationId;
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const [successCount, failedCount, avgLatencyResult, queueStats] = await Promise.all([
+      Communication.countDocuments({
+        organizationId,
+        kind: 'email',
+        direction: 'outbound',
+        status: 'sent',
+        createdAt: { $gte: since }
+      }),
+      Communication.countDocuments({
+        organizationId,
+        kind: 'email',
+        direction: 'outbound',
+        status: 'failed',
+        createdAt: { $gte: since }
+      }),
+      Communication.aggregate([
+        {
+          $match: {
+            organizationId,
+            kind: 'email',
+            direction: 'outbound',
+            status: 'sent',
+            createdAt: { $gte: since },
+            sentAt: { $type: 'date' }
+          }
+        },
+        {
+          $project: {
+            latencyMs: { $subtract: ['$sentAt', '$createdAt'] }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            avgLatencyMs: { $avg: '$latencyMs' }
+          }
+        }
+      ]),
+      emailQueueService.getQueueStats()
+    ]);
+
+    const total = successCount + failedCount;
+    const successRate = total > 0 ? Number(((successCount / total) * 100).toFixed(2)) : 0;
+    const avgLatencyMs = avgLatencyResult?.[0]?.avgLatencyMs
+      ? Math.round(avgLatencyResult[0].avgLatencyMs)
+      : 0;
+
+    return res.json({
+      success: true,
+      data: {
+        window: '24h',
+        outbound: {
+          total,
+          successCount,
+          failedCount,
+          successRate,
+          avgLatencyMs
+        },
+        queue: {
+          ...queueStats,
+          retryProfile: emailQueueService.COMMUNICATION_RETRY_PROFILES.EMAIL_SEND
+        }
+      }
+    });
+  } catch (error) {
+    console.error('[communicationsController] getPipelineMetrics error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch pipeline metrics',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * GET /api/communications/pipeline-diagnostics
+ * Recent communication events + failure category breakdown.
+ */
+exports.getPipelineDiagnostics = async (req, res) => {
+  try {
+    const organizationId = req.user.organizationId;
+    const limitRaw = Number(req.query.limit);
+    const limit = Number.isFinite(limitRaw) ? Math.min(100, Math.max(10, Math.floor(limitRaw))) : 30;
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const [recentEvents, failureBreakdown] = await Promise.all([
+      CommunicationEvent.find({
+        organizationId,
+        createdAt: { $gte: since }
+      })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .select('communicationId eventType source payload createdAt')
+        .lean(),
+      CommunicationEvent.aggregate([
+        {
+          $match: {
+            organizationId,
+            eventType: 'failed',
+            createdAt: { $gte: since }
+          }
+        },
+        {
+          $project: {
+            failureCategory: {
+              $ifNull: ['$payload.failureCategory', 'unknown_error']
+            }
+          }
+        },
+        {
+          $group: {
+            _id: '$failureCategory',
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { count: -1 } }
+      ])
+    ]);
+
+    return res.json({
+      success: true,
+      data: {
+        window: '24h',
+        recentEvents,
+        failureBreakdown: failureBreakdown.map((row) => ({
+          category: row._id,
+          count: row.count
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('[communicationsController] getPipelineDiagnostics error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch pipeline diagnostics',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * GET /api/communications/webhook-test/templates
+ * Returns sample payloads for webhook simulation/testing.
+ */
+exports.getWebhookTestTemplates = async (req, res) => {
+  try {
+    const communication = await Communication.findOne({
+      organizationId: req.user.organizationId,
+      direction: 'outbound',
+      kind: 'email',
+      externalMessageId: { $exists: true, $ne: null }
+    })
+      .sort({ createdAt: -1 })
+      .select('_id externalMessageId')
+      .lean();
+
+    const messageId = communication?.externalMessageId || 'provider-message-id';
+    const communicationId = communication?._id || null;
+
+    return res.json({
+      success: true,
+      data: {
+        supportedEventTypes: WEBHOOK_TEST_EVENT_TYPES,
+        latestCommunicationId: communicationId,
+        latestExternalMessageId: messageId,
+        genericTemplate: {
+          provider: 'generic',
+          eventType: 'delivered',
+          messageId,
+          eventId: `evt_${Date.now()}`
+        },
+        sesTemplate: {
+          Type: 'Notification',
+          MessageId: `sns-${Date.now()}`,
+          Message: JSON.stringify({
+            notificationType: 'Delivery',
+            mail: { messageId }
+          })
+        }
+      }
+    });
+  } catch (error) {
+    console.error('[communicationsController] getWebhookTestTemplates error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to get webhook templates',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * POST /api/communications/webhook-test/simulate
+ * Simulates a provider event against an outbound communication.
+ */
+exports.simulateWebhookEvent = async (req, res) => {
+  try {
+    const isOwnerLike = req.user?.isOwner === true || String(req.user?.role || '').toLowerCase() === 'owner';
+    if (!isOwnerLike) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only workspace owner can run webhook simulation'
+      });
+    }
+
+    const {
+      communicationId,
+      externalMessageId,
+      eventType = 'delivered',
+      provider = 'simulator'
+    } = req.body || {};
+    const normalizedEventType = String(eventType || '').toLowerCase();
+    if (!WEBHOOK_TEST_EVENT_TYPES.includes(normalizedEventType)) {
+      return res.status(400).json({
+        success: false,
+        message: `Unsupported eventType. Allowed: ${WEBHOOK_TEST_EVENT_TYPES.join(', ')}`
+      });
+    }
+
+    const query = { organizationId: req.user.organizationId, direction: 'outbound', kind: 'email' };
+    if (communicationId) query._id = communicationId;
+    if (externalMessageId) query.externalMessageId = externalMessageId;
+    if (!communicationId && !externalMessageId) {
+      return res.status(400).json({
+        success: false,
+        message: 'communicationId or externalMessageId is required'
+      });
+    }
+
+    const updated = await Communication.findOneAndUpdate(
+      query,
+      {
+        $set: {
+          status: normalizedEventType,
+          'metadata.webhook': {
+            provider: String(provider || 'simulator').toLowerCase(),
+            eventType: normalizedEventType,
+            receivedAt: new Date().toISOString(),
+            simulated: true
+          }
+        }
+      },
+      { new: true }
+    ).lean();
+
+    if (!updated) {
+      return res.status(404).json({
+        success: false,
+        message: 'Communication not found for simulation'
+      });
+    }
+
+    await appendCommunicationEvent({
+      organizationId: updated.organizationId,
+      communicationId: updated._id,
+      eventType: normalizedEventType,
+      source: `webhook:${String(provider || 'simulator').toLowerCase()}`,
+      webhookEventId: `sim-${updated._id}-${normalizedEventType}-${Date.now()}`,
+      payload: {
+        simulated: true,
+        mappedStatus: normalizedEventType,
+        externalMessageId: updated.externalMessageId || null
+      }
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        communicationId: updated._id,
+        status: updated.status
+      }
+    });
+  } catch (error) {
+    console.error('[communicationsController] simulateWebhookEvent error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to simulate webhook event',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * GET /api/communications/suppressions
+ * List active suppressed recipients for current tenant.
+ */
+exports.getSuppressions = async (req, res) => {
+  try {
+    const limitRaw = Number(req.query.limit);
+    const limit = Number.isFinite(limitRaw) ? Math.min(500, Math.max(1, Math.floor(limitRaw))) : 100;
+    const suppressions = await listSuppressedAddresses({
+      organizationId: req.user.organizationId,
+      limit
+    });
+    return res.json({
+      success: true,
+      data: {
+        suppressions
+      }
+    });
+  } catch (error) {
+    console.error('[communicationsController] getSuppressions error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch suppression list',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * GET /api/communications/suppressions/stats
+ * Returns suppression counters for dashboard/quick cards.
+ */
+exports.getSuppressionStats = async (req, res) => {
+  try {
+    const stats = await getSuppressionStats({
+      organizationId: req.user.organizationId
+    });
+    return res.json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    console.error('[communicationsController] getSuppressionStats error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch suppression stats',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * DELETE /api/communications/suppressions/:email
+ * Remove an address from suppression list (owner-only).
+ */
+exports.removeSuppression = async (req, res) => {
+  try {
+    const isOwnerLike = req.user?.isOwner === true || String(req.user?.role || '').toLowerCase() === 'owner';
+    if (!isOwnerLike) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only workspace owner can remove suppressed recipients'
+      });
+    }
+
+    const email = decodeURIComponent(String(req.params.email || '')).trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid email is required'
+      });
+    }
+
+    const { updated } = await unsuppressAddress({
+      organizationId: req.user.organizationId,
+      email
+    });
+
+    if (!updated) {
+      return res.status(404).json({
+        success: false,
+        message: 'Suppressed recipient not found'
+      });
+    }
+
+    try {
+      const organization = await Organization.findById(req.user.organizationId);
+      if (organization) {
+        const userLabel = req.user?.username || req.user?.email || 'Unknown';
+        const auditEntry = {
+          user: userLabel,
+          userId: req.user?._id || null,
+          action: 'communication_suppression_removed',
+          details: { email },
+          timestamp: new Date()
+        };
+        if (!Array.isArray(organization.activityLogs)) {
+          organization.activityLogs = [];
+        }
+        organization.activityLogs.push(auditEntry);
+        organization.markModified('activityLogs');
+        await organization.save();
+      }
+    } catch (auditErr) {
+      console.error('[communicationsController] removeSuppression audit error:', auditErr.message);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Recipient removed from suppression list'
+    });
+  } catch (error) {
+    console.error('[communicationsController] removeSuppression error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to remove suppression',
+      error: error.message
     });
   }
 };

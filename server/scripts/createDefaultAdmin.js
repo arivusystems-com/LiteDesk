@@ -16,6 +16,7 @@ const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const Organization = require('../models/Organization');
 const Role = require('../models/Role');
+const { ensureDefaultCommunicationSettingsForOrganization } = require('../services/communicationDefaultsSeeder');
 
 // Support both MONGODB_URI and MONGO_URI
 const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || process.env.MONGO_URI_LOCAL;
@@ -116,6 +117,7 @@ const masterUri = `${baseUri}/${masterDbName}${connectionQuery}`;
         });
 
         await organization.save();
+        await ensureDefaultCommunicationSettingsForOrganization(organization._id);
         console.log('✅ Master Organization created');
         console.log(`   Name: ${organization.name}`);
         console.log(`   ID: ${organization._id}`);

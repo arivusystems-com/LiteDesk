@@ -47,3 +47,35 @@ Planned next implementation:
 - Persist send request lifecycle events (`accepted`, `queued`, `sent`, `failed`).
 - Add first-class communication worker queue names and retry profiles.
 - Add minimal observability counters (queue depth, send success/failure, latency).
+
+Status: Completed
+
+Completed in this iteration:
+
+- Added queue/retry profile constants and queue depth stats for communication send worker.
+- Added pipeline metrics endpoint (`/api/communications/pipeline-metrics`).
+- Added diagnostics endpoint (`/api/communications/pipeline-diagnostics`) and settings UI panel for event/failure visibility.
+- Added explicit worker lifecycle event (`processing`) and richer failure taxonomy.
+
+## Phase 2 - Delivery & Webhook Intelligence
+
+Status: In progress
+
+Completed in this iteration:
+
+- Extended SES webhook handling to update communication status and append normalized communication events.
+- Added generic provider webhook endpoint (`POST /api/webhooks/email/events`) for provider-agnostic event ingestion.
+- Added webhook metadata persistence on communication records for traceability.
+- Added webhook replay protection (duplicate provider event IDs are ignored).
+- Added optional webhook token auth gate for generic provider events (`EMAIL_EVENTS_WEBHOOK_TOKEN`).
+- Hardened inbound reply correlation with normalized `In-Reply-To`/`References` parsing and fallback matching to recent outbound thread context.
+- Added tenant-aware email suppression model for bounced/complained recipients.
+- Wired SES + generic webhook handlers to automatically upsert suppression entries on bounce/complaint events.
+- Enforced suppression at send-time in communications API to prevent delivery attempts to suppressed recipients.
+- Added suppression management APIs (`GET /api/communications/suppressions`, `DELETE /api/communications/suppressions/:email`).
+- Added settings UI panel to inspect and remove suppressed recipients (owner-only remove).
+- Added tenant-level suppression policy controls (`autoSuppressOnBounce`, `autoSuppressOnComplaint`) in communication config.
+- Updated SES and generic webhook processors to enforce suppression policy before creating suppression entries.
+- Added suppression stats endpoint (`GET /api/communications/suppressions/stats`) for dashboard cards.
+- Added organization activity audit log on manual unsuppress actions.
+- Enhanced suppression settings UI with search, reason filter, and quick stats cards.

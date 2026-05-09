@@ -18,6 +18,7 @@ const express = require('express');
 const router = express.Router();
 const inboundController = require('../controllers/inboundEmailController');
 const sesWebhookController = require('../controllers/sesWebhookController');
+const emailEventWebhookController = require('../controllers/emailEventWebhookController');
 
 // For message/rfc822: parse raw body. For application/json: body already parsed by app-level middleware
 const rawParser = express.raw({ type: ['message/rfc822', 'text/plain'], limit: '10mb' });
@@ -31,5 +32,6 @@ router.post('/inbound', (req, res, next) => {
 }, inboundController.handleInbound);
 
 router.post('/ses-events', sesWebhookController.handleSesEvents);
+router.post('/events', emailEventWebhookController.handleProviderEvents);
 
 module.exports = router;

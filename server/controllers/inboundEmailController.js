@@ -47,9 +47,15 @@ function collectAddresses(val) {
  */
 async function resolveParent(organizationId, inReplyTo, references) {
   const ids = [];
-  if (inReplyTo) ids.push(inReplyTo.replace(/^<|>$/g, '').trim());
+  if (inReplyTo) {
+    const replyId = String(inReplyTo).replace(/^<|>$/g, '').trim();
+    if (replyId) ids.push(replyId);
+  }
   if (references) {
-    const refs = references.split(/\s+/).map((r) => r.replace(/^<|>$/g, '').trim()).filter(Boolean);
+    const refs = String(references)
+      .split(/[\s,]+/)
+      .map((r) => r.replace(/^<|>$/g, '').trim())
+      .filter(Boolean);
     ids.push(...refs);
   }
   if (ids.length === 0) return null;
@@ -61,8 +67,23 @@ async function resolveParent(organizationId, inReplyTo, references) {
       { messageId: { $in: ids } },
       { externalMessageId: { $in: ids } }
     ]
-  }).lean();
+  })
+    .sort({ createdAt: -1 })
+    .lean();
   return parent;
+}
+
+async function resolveRecentRelatedParent(organizationId, relatedTo, fromAddress) {
+  if (!organizationId || !relatedTo?.moduleKey || !relatedTo?.recordId) return null;
+  return Communication.findOne({
+    organizationId,
+    direction: 'outbound',
+    'relatedTo.moduleKey': relatedTo.moduleKey,
+    'relatedTo.recordId': relatedTo.recordId,
+    toAddresses: { $in: [String(fromAddress || '').trim().toLowerCase()] }
+  })
+    .sort({ createdAt: -1 })
+    .lean();
 }
 
 /**
@@ -161,7 +182,10 @@ exports.handleInbound = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Unsupported moduleKey for inbound' });
     }
 
-    const parent = await resolveParent(orgId, parsed.inReplyTo, parsed.references);
+    let parent = await resolveParent(orgId, parsed.inReplyTo, parsed.references);
+    if (!parent) {
+      parent = await resolveRecentRelatedParent(orgId, relatedTo, fromAddr);
+    }
     const threadId = parent ? (parent.threadId || parent._id) : null;
 
     const body = parsed.html || parsed.text || '';

@@ -16,7 +16,11 @@ const CommunicationConfigSchema = new Schema(
       enabled: { type: Boolean, default: true },
       requireIdempotencyKey: { type: Boolean, default: false },
       maxRecipientsPerMessage: { type: Number, default: 50, min: 1, max: 1000 },
-      allowedModuleKeys: [{ type: String, trim: true }]
+      allowedModuleKeys: [{ type: String, trim: true }],
+      suppression: {
+        autoSuppressOnBounce: { type: Boolean, default: true },
+        autoSuppressOnComplaint: { type: Boolean, default: true }
+      }
     }
   },
   { timestamps: true }
