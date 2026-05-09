@@ -14,6 +14,7 @@ validateEnv();
 initSentryNode();
 
 const emailQueueService = require('./services/emailQueueService');
+const inboundEmailQueueService = require('./services/inboundEmailQueueService');
 const dbConnectionManager = require('./utils/databaseConnectionManager');
 
 let exiting = false;
@@ -45,6 +46,9 @@ async function run() {
 
   emailQueueService.startWorker();
   console.log(`[worker] Email queue worker is running (Bull: ${emailQueueService.COMMUNICATION_QUEUE_NAMES.EMAIL_SEND})`);
+
+  inboundEmailQueueService.startWorker();
+  console.log(`[worker] Inbound email worker is running (Bull: ${inboundEmailQueueService.COMMUNICATION_INBOUND_QUEUE_NAMES.EMAIL_INBOUND})`);
 }
 
 async function stop(signal) {
@@ -54,7 +58,12 @@ async function stop(signal) {
   try {
     await emailQueueService.closeQueue();
   } catch (e) {
-    console.error('[worker] queue close', e.message);
+    console.error('[worker] outbound queue close', e.message);
+  }
+  try {
+    await inboundEmailQueueService.closeQueue();
+  } catch (e) {
+    console.error('[worker] inbound queue close', e.message);
   }
   try {
     await mongoose.connection.close();

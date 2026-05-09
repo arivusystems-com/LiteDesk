@@ -278,7 +278,11 @@ const props = defineProps({
     type: Object,
     default: null
   },
-  initialTo: { type: String, default: '' }
+  initialTo: { type: String, default: '' },
+  initialDraft: {
+    type: Object,
+    default: null
+  }
 });
 
 const emit = defineEmits(['close', 'sent', 'submit']);
@@ -330,15 +334,15 @@ function handleTemplateChange(v) {
 
 watch(() => props.isOpen, (open) => {
   if (open) {
-    form.value.to = props.initialTo || '';
-    form.value.cc = '';
-    form.value.bcc = '';
-    form.value.subject = '';
-    form.value.body = '';
+    form.value.to = props.initialDraft?.to || props.initialTo || '';
+    form.value.cc = props.initialDraft?.cc || '';
+    form.value.bcc = props.initialDraft?.bcc || '';
+    form.value.subject = props.initialDraft?.subject || '';
+    form.value.body = props.initialDraft?.body || '';
     error.value = null;
     attachments.value = [];
-    showCc.value = false;
-    showBcc.value = false;
+    showCc.value = Boolean((props.initialDraft?.cc || '').trim());
+    showBcc.value = Boolean((props.initialDraft?.bcc || '').trim());
     selectedTemplateId.value = '';
     loadTemplates();
   }
@@ -427,7 +431,10 @@ function handleSend() {
     bcc: parseEmails(form.value.bcc),
     subject: form.value.subject.trim(),
     body: form.value.body,
-    attachments: attachments.value.length ? attachments.value : []
+    attachments: attachments.value.length ? attachments.value : [],
+    ...(props.initialDraft?.parentCommunicationId
+      ? { parentCommunicationId: props.initialDraft.parentCommunicationId }
+      : {})
   };
 
   emit('submit', payload);

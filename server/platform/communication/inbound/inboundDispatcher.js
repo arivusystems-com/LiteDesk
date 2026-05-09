@@ -1,0 +1,358 @@
+/**
+ * Inbound dispatcher (Phase 3).
+ *
+ * Takes a parsed inbound message (or raw MIME) and runs the full
+ * platform pipeline:
+ *   parse -> identify tenant -> resolve record -> resolve thread ->
+ *   normalize body -> persist communication -> activity log -> lifecycle events.
+ *
+ * Used by:
+ *   - inbound webhook controller (sync fallback when Redis is down)
+ *   - inbound queue worker (normal async path)
+ *   - dead-letter replay endpoint
+ */
+
+const path = require('path');
+const fs = require('fs');
+
+const Communication = require('../../../models/Communication');
+const People = require('../../../models/People');
+const User = require('../../../models/User');
+const replyToTokenService = require('../../../services/replyToTokenService');
+const { handleInboundEmailForHelpdesk } = require('../../../services/helpdeskChannelIngestionService');
+const { uploadsDir } = require('../../../middleware/uploadMiddleware');
+const { MAX_ATTACHMENT_SIZE_BYTES } = require('../../../models/Communication');
+const { appendCommunicationEvent } = require('../../../services/communicationEventWriter');
+
+const { parseRawMime } = require('./inboundParser');
+const { resolveThread } = require('./threadResolver');
+const { normalizeReplyBody } = require('./replyContentNormalizer');
+
+class InboundDispatchError extends Error {
+  constructor(message, { stage = 'unknown', cause = null } = {}) {
+    super(message);
+    this.name = 'InboundDispatchError';
+    this.stage = stage;
+    if (cause) this.cause = cause;
+  }
+}
+
+function ensureBuffer(rawMimeInput) {
+  if (Buffer.isBuffer(rawMimeInput)) return rawMimeInput;
+  if (typeof rawMimeInput === 'string') {
+    try {
+      return Buffer.from(rawMimeInput, 'base64');
+    } catch (err) {
+      throw new InboundDispatchError(`base64_decode_failed: ${err.message}`, { stage: 'parse', cause: err });
+    }
+  }
+  throw new InboundDispatchError('missing_raw_mime', { stage: 'parse' });
+}
+
+async function autoCreatePersonForSender({ organizationId, parsedMessage }) {
+  const fromEmail = (parsedMessage.fromAddress || '').toLowerCase().trim();
+  if (!fromEmail) return;
+  const existing = await People.findOne({
+    organizationId,
+    email: fromEmail,
+    deletedAt: null
+  }).lean();
+  if (existing) return;
+  const orgUser = await User.findOne({ organizationId, status: { $ne: 'inactive' } }).select('_id').lean();
+  if (!orgUser) return;
+  const displayName = parsedMessage.fromDisplayName || parsedMessage.fromAddress || '';
+  const nameParts = displayName ? displayName.split(/\s+/) : [];
+  const firstName = nameParts[0] || fromEmail.split('@')[0] || 'Inbound';
+  const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+  const { assignResolvedSource } = require('../../../services/sourceResolver');
+  const personPayload = {
+    organizationId,
+    createdBy: orgUser._id,
+    first_name: firstName,
+    last_name: lastName || firstName,
+    email: fromEmail
+  };
+  assignResolvedSource(personPayload, 'email');
+  await People.create(personPayload);
+}
+
+async function resolveTenantContext({ parsedMessage, headerOrganizationId }) {
+  const tokenPayload = replyToTokenService.extractFromAddresses(parsedMessage.allRecipients);
+  const orgId = tokenPayload?.orgId || headerOrganizationId || null;
+  const moduleKey = tokenPayload?.moduleKey || (orgId ? 'cases' : null);
+  const recordId = tokenPayload?.recordId || null;
+  if (!orgId) {
+    throw new InboundDispatchError('No valid Reply-To token or organization header found', { stage: 'route' });
+  }
+  return { orgId, moduleKey, recordId, tokenPayload };
+}
+
+async function resolveTargetRecord({ orgId, moduleKey, recordId, parsedMessage }) {
+  if (moduleKey === 'people') {
+    const person = await People.findOne({
+      _id: recordId,
+      organizationId: orgId,
+      deletedAt: null
+    }).lean();
+    if (!person) {
+      throw new InboundDispatchError('Record not found or access denied', { stage: 'route' });
+    }
+    return {
+      relatedTo: { moduleKey, recordId },
+      helpdeskCaseResult: null
+    };
+  }
+
+  if (moduleKey === 'cases') {
+    const helpdeskCaseResult = await handleInboundEmailForHelpdesk({
+      organizationId: orgId,
+      explicitCaseId: recordId,
+      parsedEmail: {
+        fromAddress: parsedMessage.fromAddress,
+        subject: parsedMessage.subject,
+        body: parsedMessage.body
+      },
+      communicationDraft: {}
+    });
+    return {
+      relatedTo: { moduleKey: 'cases', recordId: helpdeskCaseResult.caseRecord._id },
+      helpdeskCaseResult
+    };
+  }
+
+  throw new InboundDispatchError(`Unsupported moduleKey for inbound: ${moduleKey}`, { stage: 'route' });
+}
+
+function persistAttachments({ orgId, parsedMessage }) {
+  const inboundAttachments = [];
+  if (!Array.isArray(parsedMessage.attachments) || parsedMessage.attachments.length === 0) {
+    return inboundAttachments;
+  }
+  const safeOrgId = String(orgId).replace(/[^a-zA-Z0-9_-]/g, '_');
+  const orgDir = path.join(uploadsDir, safeOrgId);
+  try {
+    if (!fs.existsSync(orgDir)) {
+      fs.mkdirSync(orgDir, { recursive: true });
+    }
+  } catch (mkdirErr) {
+    console.error('[inboundDispatcher] mkdir failed:', mkdirErr.message);
+    return inboundAttachments;
+  }
+
+  for (const att of parsedMessage.attachments) {
+    if (!att.content || !Buffer.isBuffer(att.content)) continue;
+    if (att.content.length > MAX_ATTACHMENT_SIZE_BYTES) continue;
+    const baseName = (att.filename || 'attachment').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const ext = path.extname(baseName) || '';
+    const name = path.basename(baseName, ext) || 'attachment';
+    const storedName = `${name}-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    const storagePath = `${safeOrgId}/${storedName}`;
+    const fullPath = path.join(uploadsDir, storagePath);
+    try {
+      fs.writeFileSync(fullPath, att.content);
+      inboundAttachments.push({
+        fileName: att.filename || storedName,
+        fileType: att.contentType || 'application/octet-stream',
+        fileSize: att.content.length,
+        storagePath
+      });
+    } catch (writeErr) {
+      console.error('[inboundDispatcher] attachment write failed:', writeErr.message);
+    }
+  }
+  return inboundAttachments;
+}
+
+async function appendActivityLogForPerson({ orgId, recordId, communicationDoc, parsedMessage }) {
+  const newLog = {
+    user: parsedMessage.fromAddress || 'Unknown',
+    userId: null,
+    action: 'email_received',
+    details: {
+      communicationId: communicationDoc._id,
+      subject: communicationDoc.subject,
+      from: parsedMessage.fromAddress,
+      status: 'delivered'
+    },
+    timestamp: new Date()
+  };
+  const personForUpdate = await People.findOne(
+    { _id: recordId, organizationId: orgId, deletedAt: null }
+  ).select('activityLogs').lean();
+  if (!personForUpdate) return;
+  if (!Array.isArray(personForUpdate.activityLogs)) {
+    await People.findOneAndUpdate(
+      { _id: recordId, organizationId: orgId, deletedAt: null },
+      { $set: { activityLogs: [newLog] } },
+      { runValidators: false }
+    );
+  } else {
+    await People.findOneAndUpdate(
+      { _id: recordId, organizationId: orgId, deletedAt: null },
+      { $push: { activityLogs: newLog } },
+      { runValidators: false }
+    );
+  }
+}
+
+/**
+ * Run the full inbound pipeline against a raw MIME buffer.
+ *
+ * @param {object} args
+ * @param {Buffer | string} args.rawMime           Raw MIME buffer or base64 string.
+ * @param {string} [args.headerOrganizationId]     Optional explicit org id from a trusted header.
+ * @param {string} [args.source]                   Source label for lifecycle events.
+ * @returns {Promise<object>}                      Result summary (communicationId, threadId, strategy, ...).
+ * @throws {InboundDispatchError}                  When a stage fails. The caller decides whether to dead-letter.
+ */
+async function processRawInbound({ rawMime, headerOrganizationId = null, source = 'inbound-webhook' }) {
+  const rawBuffer = ensureBuffer(rawMime);
+
+  const parseResult = await parseRawMime(rawBuffer);
+  if (!parseResult.ok) {
+    throw new InboundDispatchError(parseResult.error || 'parse_failed', { stage: 'parse' });
+  }
+  const parsedMessage = parseResult.value;
+
+  const { orgId, moduleKey, recordId } = await resolveTenantContext({
+    parsedMessage,
+    headerOrganizationId
+  });
+
+  await appendCommunicationEvent({
+    organizationId: orgId,
+    eventType: 'inbound_parsed',
+    source,
+    payload: {
+      messageId: parsedMessage.messageId || null,
+      fromAddress: parsedMessage.fromAddress,
+      subject: parsedMessage.subject,
+      attachmentCount: parsedMessage.attachments.length,
+      rawSize: parsedMessage.rawSize
+    }
+  });
+
+  await autoCreatePersonForSender({ organizationId: orgId, parsedMessage });
+
+  const { relatedTo, helpdeskCaseResult } = await resolveTargetRecord({
+    orgId,
+    moduleKey,
+    recordId,
+    parsedMessage
+  });
+
+  const threadResolution = await resolveThread({
+    organizationId: orgId,
+    inReplyTo: parsedMessage.inReplyTo,
+    references: parsedMessage.references,
+    relatedTo,
+    fromAddress: parsedMessage.fromAddress,
+    subject: parsedMessage.subject
+  });
+
+  const normalizedReply = normalizeReplyBody({
+    html: parsedMessage.html,
+    text: parsedMessage.text
+  });
+
+  await appendCommunicationEvent({
+    organizationId: orgId,
+    communicationId: threadResolution.parent?._id || null,
+    eventType: 'inbound_threaded',
+    source,
+    payload: {
+      strategy: threadResolution.strategy,
+      threadId: threadResolution.threadId || null,
+      hadQuotedContent: normalizedReply.hadQuotedContent,
+      hadSignature: normalizedReply.hadSignature
+    }
+  });
+
+  const inboundAttachments = persistAttachments({ orgId, parsedMessage });
+
+  let doc;
+  try {
+    doc = new Communication({
+      organizationId: orgId,
+      kind: 'email',
+      direction: 'inbound',
+      threadId: threadResolution.threadId || null,
+      parentCommunicationId: threadResolution.parent?._id || null,
+      subject: parsedMessage.subject,
+      body: normalizedReply.displayBody || parsedMessage.body,
+      fromAddress: parsedMessage.fromAddress,
+      toAddresses: parsedMessage.toAddresses,
+      ccAddresses: parsedMessage.ccAddresses,
+      bccAddresses: parsedMessage.bccAddresses,
+      messageId: parsedMessage.messageId,
+      inReplyTo: parsedMessage.inReplyTo,
+      references: parsedMessage.references.length > 0 ? parsedMessage.references.join(' ') : null,
+      receivedAt: parsedMessage.receivedAt,
+      status: 'delivered',
+      relatedTo,
+      sentByUserId: null,
+      attachments: inboundAttachments,
+      metadata: {
+        inbound: {
+          threadStrategy: threadResolution.strategy,
+          hadQuotedContent: normalizedReply.hadQuotedContent,
+          hadSignature: normalizedReply.hadSignature,
+          originalBodyTruncated: normalizedReply.originalBody !== (normalizedReply.displayBody || parsedMessage.body)
+        }
+      }
+    });
+    await doc.save();
+  } catch (persistErr) {
+    throw new InboundDispatchError(`persist_failed: ${persistErr.message}`, {
+      stage: 'persist',
+      cause: persistErr
+    });
+  }
+
+  if (!doc.threadId) {
+    await Communication.findByIdAndUpdate(doc._id, { threadId: doc._id });
+  }
+
+  if (relatedTo.moduleKey === 'people') {
+    await appendActivityLogForPerson({
+      orgId,
+      recordId: relatedTo.recordId,
+      communicationDoc: doc,
+      parsedMessage
+    });
+  }
+
+  await appendCommunicationEvent({
+    organizationId: orgId,
+    communicationId: doc._id,
+    eventType: 'inbound_routed',
+    source,
+    payload: {
+      relatedTo,
+      threadStrategy: threadResolution.strategy,
+      ...(helpdeskCaseResult && {
+        helpdesk: {
+          caseId: helpdeskCaseResult.caseRecord._id,
+          action: helpdeskCaseResult.action
+        }
+      })
+    }
+  });
+
+  return {
+    communicationId: doc._id,
+    threadId: doc.threadId || doc._id,
+    relatedTo,
+    threadStrategy: threadResolution.strategy,
+    hadQuotedContent: normalizedReply.hadQuotedContent,
+    hadSignature: normalizedReply.hadSignature,
+    helpdesk: helpdeskCaseResult
+      ? { caseId: helpdeskCaseResult.caseRecord._id, action: helpdeskCaseResult.action }
+      : null
+  };
+}
+
+module.exports = {
+  processRawInbound,
+  InboundDispatchError
+};

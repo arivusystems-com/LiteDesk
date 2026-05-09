@@ -52,7 +52,14 @@ export const ACTIVITY_UI_HANDLER_KEYS = [
   'getSystemEventMessage',
   'handleShowMore',
   'toggleTaskEmailThread',
-  'createTaskFromEmailMessage'
+  'createTaskFromEmailMessage',
+  'createCaseFromEmailMessage',
+  'assignEmailThread',
+  'unassignEmailThread',
+  'addTagToEmailThread',
+  'removeTagFromEmailThread',
+  'handleReplyToEmailMessage',
+  'handleToggleThreadDone'
 ];
 
 /**

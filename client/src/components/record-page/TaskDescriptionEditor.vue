@@ -139,7 +139,7 @@
     <!-- Editor content -->
     <EditorContent
       :editor="editor"
-      class="[&_.tiptap]:min-h-[120px] [&_.tiptap]:text-md [&_.tiptap]:leading-[1.75] [&_.tiptap_p]:mb-2 [&_.tiptap_p:last-child]:mb-0 [&_.tiptap_p]:leading-[1.75] [&_.tiptap_h1]:text-2xl [&_.tiptap_h1]:font-bold [&_.tiptap_h1]:my-4 [&_.tiptap_h1]:mb-2 [&_.tiptap_h2]:text-xl [&_.tiptap_h2]:font-semibold [&_.tiptap_h2]:my-4 [&_.tiptap_h2]:mb-2 [&_.tiptap_h3]:text-lg [&_.tiptap_h3]:font-semibold [&_.tiptap_h3]:my-4 [&_.tiptap_h3]:mb-2 [&_.tiptap_ul]:pl-6 [&_.tiptap_ol]:pl-6 [&_.tiptap_ul]:list-disc [&_.tiptap_ol]:list-decimal [&_.tiptap_a]:text-indigo-600 [&_.tiptap_a]:underline dark:[&_.tiptap_a]:text-indigo-400"
+      class="[&_.tiptap]:min-h-[120px] [&_.tiptap]:text-md [&_.tiptap]:leading-[1.75] [&_.tiptap_p]:mb-2 [&_.tiptap_p:last-child]:mb-0 [&_.tiptap_p]:leading-[1.75] [&_.tiptap_h1]:text-2xl [&_.tiptap_h1]:font-bold [&_.tiptap_h1]:my-4 [&_.tiptap_h1]:mb-2 [&_.tiptap_h2]:text-xl [&_.tiptap_h2]:font-semibold [&_.tiptap_h2]:my-4 [&_.tiptap_h2]:mb-2 [&_.tiptap_h3]:text-lg [&_.tiptap_h3]:font-semibold [&_.tiptap_h3]:my-4 [&_.tiptap_h3]:mb-2 [&_.tiptap_ul]:pl-6 [&_.tiptap_ol]:pl-6 [&_.tiptap_ul]:list-disc [&_.tiptap_ol]:list-decimal [&_.tiptap_a]:text-indigo-600 [&_.tiptap_a]:underline dark:[&_.tiptap_a]:text-indigo-400 [&_.tiptap_blockquote]:border-l-4 [&_.tiptap_blockquote]:border-gray-300 [&_.tiptap_blockquote]:bg-gray-50 [&_.tiptap_blockquote]:px-3 [&_.tiptap_blockquote]:py-2 [&_.tiptap_blockquote]:my-2 dark:[&_.tiptap_blockquote]:border-gray-600 dark:[&_.tiptap_blockquote]:bg-gray-800/60"
     />
   </div>
 </template>
@@ -148,6 +148,7 @@
 import { useEditor, EditorContent, BubbleMenu } from '@tiptap/vue-3';
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/vue';
 import StarterKit from '@tiptap/starter-kit';
+import Blockquote from '@tiptap/extension-blockquote';
 import Heading from '@tiptap/extension-heading';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -169,12 +170,36 @@ const emit = defineEmits(['update:modelValue', 'blur', 'cancel']);
 
 const linkUrl = ref('https://');
 
+const ReplyQuoteBlockquote = Blockquote.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      replyQuote: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-reply-quote'),
+        renderHTML: (attributes) => (
+          attributes.replyQuote ? { 'data-reply-quote': String(attributes.replyQuote) } : {}
+        )
+      },
+      collapsed: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-collapsed'),
+        renderHTML: (attributes) => (
+          attributes.collapsed ? { 'data-collapsed': String(attributes.collapsed) } : {}
+        )
+      }
+    };
+  }
+});
+
 const editor = useEditor({
   content: props.modelValue || '',
   extensions: [
     StarterKit.configure({
-      heading: false
+      heading: false,
+      blockquote: false
     }),
+    ReplyQuoteBlockquote,
     Heading.configure({
       levels: [1, 2, 3]
     }),
@@ -196,6 +221,28 @@ const editor = useEditor({
     handleKeyDown: (view, event) => {
       if (event.key === 'Escape') {
         emit('cancel');
+        return true;
+      }
+      return false;
+    },
+    handleClick: (view, pos, event) => {
+      const target = event?.target;
+      if (!(target instanceof Element)) return false;
+      const quoteEl = target.closest('blockquote[data-reply-quote]');
+      if (!quoteEl) return false;
+      const quotePos = view.posAtDOM(quoteEl, 0);
+      const $pos = view.state.doc.resolve(Math.max(0, quotePos));
+      for (let depth = $pos.depth; depth > 0; depth -= 1) {
+        const node = $pos.node(depth);
+        if (node.type.name !== 'blockquote') continue;
+        const nodePos = $pos.before(depth);
+        const isCollapsed = String(node.attrs?.collapsed || '').toLowerCase() === 'true';
+        const tr = view.state.tr.setNodeMarkup(nodePos, undefined, {
+          ...node.attrs,
+          replyQuote: 'true',
+          collapsed: isCollapsed ? 'false' : 'true'
+        });
+        view.dispatch(tr);
         return true;
       }
       return false;
@@ -265,5 +312,36 @@ onBeforeUnmount(() => {
 /* Stabilize last line: prevent empty trailing block from collapsing and causing jitter */
 .task-description-editor :deep(.tiptap p:last-child) {
   min-height: 1.75em;
+}
+
+/* Gmail-like collapsed quoted history in replies */
+.task-description-editor :deep(.tiptap blockquote[data-reply-quote]) {
+  border-left: 3px solid #d1d5db;
+  background: #f9fafb;
+  border-radius: 0.25rem;
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+}
+
+.task-description-editor :deep(.tiptap blockquote[data-reply-quote][data-collapsed="true"]) {
+  cursor: pointer;
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+}
+
+.task-description-editor :deep(.tiptap blockquote[data-reply-quote][data-collapsed="true"] > *) {
+  display: none;
+}
+
+.task-description-editor :deep(.tiptap blockquote[data-reply-quote][data-collapsed="true"]::before) {
+  content: "...";
+  color: #6b7280;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.task-description-editor :deep(.dark .tiptap blockquote[data-reply-quote]) {
+  border-left-color: #4b5563;
+  background: rgba(31, 41, 55, 0.6);
 }
 </style>

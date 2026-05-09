@@ -51,6 +51,13 @@ export const createDealActivityUi = ({
   handleShowMore,
   toggleTaskEmailThread,
   createTaskFromEmailMessage,
+  createCaseFromEmailMessage,
+  assignEmailThread,
+  unassignEmailThread,
+  addTagToEmailThread,
+  removeTagFromEmailThread,
+  handleReplyToEmailMessage,
+  handleToggleThreadDone,
   getTagChipClass
 }) => computed(() => buildRecordActivityUi({
   currentUser: authStore.user || null,
@@ -110,5 +117,12 @@ export const createDealActivityUi = ({
 
   toggleTaskEmailThread,
   createTaskFromEmailMessage,
+  createCaseFromEmailMessage,
+  assignEmailThread,
+  unassignEmailThread,
+  addTagToEmailThread,
+  removeTagFromEmailThread,
+  handleReplyToEmailMessage,
+  handleToggleThreadDone,
   getTagChipClass
 }));

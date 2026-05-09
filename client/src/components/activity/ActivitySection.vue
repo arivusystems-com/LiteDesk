@@ -60,7 +60,7 @@
                 <div class="flex items-center justify-between">
                   <span class="text-sm font-semibold text-gray-900 dark:text-white">Activities</span>
                   <button
-                    v-if="activityFilterComments && activityFilterUpdates && activityFilterEmail"
+                    v-if="activityFilterComments && activityFilterUpdates && activityFilterEmail && activityFilterDoneThreads && activityFilterAssignedToMe && activityFilterTagged && activityFilterUntagged"
                     type="button"
                     class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
                     @click="setBothFilters(false)"
@@ -105,6 +105,46 @@
                 >
                   <span>Updates</span>
                   <CheckIcon v-if="activityFilterUpdates" class="w-5 h-5 text-indigo-600 dark:text-indigo-400 ml-auto flex-shrink-0" />
+                </button>
+              </MenuItem>
+              <MenuItem v-slot="{ active }">
+                <button
+                  type="button"
+                  :class="[active ? 'bg-gray-50 dark:bg-gray-700/50' : '', 'flex w-full items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300']"
+                  @click="toggleDoneThreadsFilter"
+                >
+                  <span>Done threads</span>
+                  <CheckIcon v-if="activityFilterDoneThreads" class="w-5 h-5 text-indigo-600 dark:text-indigo-400 ml-auto flex-shrink-0" />
+                </button>
+              </MenuItem>
+              <MenuItem v-slot="{ active }">
+                <button
+                  type="button"
+                  :class="[active ? 'bg-gray-50 dark:bg-gray-700/50' : '', 'flex w-full items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300']"
+                  @click="toggleAssignedToMeFilter"
+                >
+                  <span>Assigned to me</span>
+                  <CheckIcon v-if="activityFilterAssignedToMe" class="w-5 h-5 text-indigo-600 dark:text-indigo-400 ml-auto flex-shrink-0" />
+                </button>
+              </MenuItem>
+              <MenuItem v-slot="{ active }">
+                <button
+                  type="button"
+                  :class="[active ? 'bg-gray-50 dark:bg-gray-700/50' : '', 'flex w-full items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300']"
+                  @click="toggleTaggedFilter"
+                >
+                  <span>Tagged threads</span>
+                  <CheckIcon v-if="activityFilterTagged" class="w-5 h-5 text-indigo-600 dark:text-indigo-400 ml-auto flex-shrink-0" />
+                </button>
+              </MenuItem>
+              <MenuItem v-slot="{ active }">
+                <button
+                  type="button"
+                  :class="[active ? 'bg-gray-50 dark:bg-gray-700/50' : '', 'flex w-full items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300']"
+                  @click="toggleUntaggedFilter"
+                >
+                  <span>Untagged threads</span>
+                  <CheckIcon v-if="activityFilterUntagged" class="w-5 h-5 text-indigo-600 dark:text-indigo-400 ml-auto flex-shrink-0" />
                 </button>
               </MenuItem>
             </MenuItems>
@@ -175,10 +215,10 @@
 
     <div
       class="flex-1 min-h-0 flex flex-col transition-opacity duration-200 ease-out"
-      :style="(activityPaneReady || (!activityFilterComments && !activityFilterUpdates && !activityFilterEmail)) ? undefined : { opacity: 0, visibility: 'hidden', pointerEvents: 'none' }"
+      :style="(activityPaneReady || (!activityFilterComments && !activityFilterUpdates && !activityFilterEmail && !activityFilterDoneThreads && !activityFilterAssignedToMe && !activityFilterTagged && !activityFilterUntagged)) ? undefined : { opacity: 0, visibility: 'hidden', pointerEvents: 'none' }"
     >
       <div
-        v-if="!isThreadViewActive && !activityFilterComments && !activityFilterUpdates && !activityFilterEmail"
+        v-if="!isThreadViewActive && !activityFilterComments && !activityFilterUpdates && !activityFilterEmail && !activityFilterDoneThreads && !activityFilterAssignedToMe && !activityFilterTagged && !activityFilterUntagged"
         class="flex-1 min-h-0 flex flex-col items-center justify-center p-8 text-center"
       >
         <div class="relative w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
@@ -279,6 +319,10 @@ const props = defineProps({
   activityFilterComments: { type: Boolean, default: true },
   activityFilterUpdates: { type: Boolean, default: true },
   activityFilterEmail: { type: Boolean, default: true },
+  activityFilterDoneThreads: { type: Boolean, default: false },
+  activityFilterAssignedToMe: { type: Boolean, default: false },
+  activityFilterTagged: { type: Boolean, default: false },
+  activityFilterUntagged: { type: Boolean, default: false },
   newCommentText: { type: String, default: '' },
   notificationCount: { type: Number, default: 0 },
   showNotifications: { type: Boolean, default: false },
@@ -293,6 +337,10 @@ const emit = defineEmits([
   'update:activityFilterComments',
   'update:activityFilterUpdates',
   'update:activityFilterEmail',
+  'update:activityFilterDoneThreads',
+  'update:activityFilterAssignedToMe',
+  'update:activityFilterTagged',
+  'update:activityFilterUntagged',
   'update:newCommentText'
 ]);
 
@@ -306,11 +354,25 @@ const filteredEvents = computed(() => {
   const showComments = props.activityFilterComments;
   const showUpdates = props.activityFilterUpdates;
   const showEmail = props.activityFilterEmail;
+  const showDoneThreads = props.activityFilterDoneThreads;
   return list.filter((e) => {
     const type = String(e?.type || '').trim();
     if (type === 'comment') return showComments;
     if (type === 'system') return showUpdates;
-    if (type === 'email_thread') return showEmail;
+    if (type === 'email_thread') {
+      if (!showEmail) return false;
+      if (showDoneThreads) return true;
+      if (e?.thread?.done === true) return false;
+      const thread = e?.thread || {};
+      const currentUserId = props.ui?.currentUser?._id || props.ui?.currentUser?.id || null;
+      if (props.activityFilterAssignedToMe) {
+        if (!currentUserId || String(thread.assignedToUserId || '') !== String(currentUserId)) return false;
+      }
+      const hasTags = Array.isArray(thread.tags) && thread.tags.length > 0;
+      if (props.activityFilterTagged && !hasTags) return false;
+      if (props.activityFilterUntagged && hasTags) return false;
+      return true;
+    }
     return false;
   });
 });
@@ -350,10 +412,30 @@ const toggleEmailFilter = () => {
   emit('update:activityFilterEmail', !props.activityFilterEmail);
 };
 
+const toggleDoneThreadsFilter = () => {
+  emit('update:activityFilterDoneThreads', !props.activityFilterDoneThreads);
+};
+
+const toggleAssignedToMeFilter = () => {
+  emit('update:activityFilterAssignedToMe', !props.activityFilterAssignedToMe);
+};
+
+const toggleTaggedFilter = () => {
+  emit('update:activityFilterTagged', !props.activityFilterTagged);
+};
+
+const toggleUntaggedFilter = () => {
+  emit('update:activityFilterUntagged', !props.activityFilterUntagged);
+};
+
 const setBothFilters = (value) => {
   emit('update:activityFilterComments', value);
   emit('update:activityFilterUpdates', value);
   emit('update:activityFilterEmail', value);
+  emit('update:activityFilterDoneThreads', value);
+  emit('update:activityFilterAssignedToMe', value);
+  emit('update:activityFilterTagged', value);
+  emit('update:activityFilterUntagged', value);
 };
 
 const focusCommentInput = () => {
