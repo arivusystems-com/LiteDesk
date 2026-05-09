@@ -6,7 +6,11 @@ const DEFAULT_CONFIG = Object.freeze({
     enabled: true,
     requireIdempotencyKey: false,
     maxRecipientsPerMessage: 50,
-    allowedModuleKeys: Array.from(SUPPORTED_MODULES)
+    allowedModuleKeys: Array.from(SUPPORTED_MODULES),
+    suppression: {
+      autoSuppressOnBounce: true,
+      autoSuppressOnComplaint: true
+    }
   }
 });
 
@@ -18,6 +22,13 @@ function normalizeAllowedModules(modules) {
     .map((m) => String(m || '').trim().toLowerCase())
     .filter((m) => SUPPORTED_MODULES.has(m));
   return normalized.length > 0 ? Array.from(new Set(normalized)) : Array.from(SUPPORTED_MODULES);
+}
+
+function normalizeSuppressionConfig(input = {}) {
+  return {
+    autoSuppressOnBounce: input.autoSuppressOnBounce !== false,
+    autoSuppressOnComplaint: input.autoSuppressOnComplaint !== false
+  };
 }
 
 async function getCommunicationConfigForOrganization(organizationId) {
@@ -35,7 +46,8 @@ async function getCommunicationConfigForOrganization(organizationId) {
       enabled: configDoc?.outboundEmail?.enabled !== false,
       requireIdempotencyKey: configDoc?.outboundEmail?.requireIdempotencyKey === true,
       maxRecipientsPerMessage,
-      allowedModuleKeys: normalizeAllowedModules(configDoc?.outboundEmail?.allowedModuleKeys)
+      allowedModuleKeys: normalizeAllowedModules(configDoc?.outboundEmail?.allowedModuleKeys),
+      suppression: normalizeSuppressionConfig(configDoc?.outboundEmail?.suppression || {})
     }
   };
 }
@@ -53,7 +65,8 @@ async function upsertCommunicationConfigForOrganization(organizationId, policyIn
       enabled: outboundInput.enabled !== false,
       requireIdempotencyKey: outboundInput.requireIdempotencyKey === true,
       maxRecipientsPerMessage,
-      allowedModuleKeys: normalizeAllowedModules(outboundInput.allowedModuleKeys)
+      allowedModuleKeys: normalizeAllowedModules(outboundInput.allowedModuleKeys),
+      suppression: normalizeSuppressionConfig(outboundInput.suppression || {})
     }
   };
 

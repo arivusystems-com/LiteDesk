@@ -44,7 +44,7 @@ async function run() {
   await dbConnectionManager.initializeMasterConnection();
 
   emailQueueService.startWorker();
-  console.log('[worker] Email queue worker is running (Bull: email-send)');
+  console.log(`[worker] Email queue worker is running (Bull: ${emailQueueService.COMMUNICATION_QUEUE_NAMES.EMAIL_SEND})`);
 }
 
 async function stop(signal) {

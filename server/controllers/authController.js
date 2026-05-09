@@ -30,6 +30,7 @@ const { APP_KEYS } = require('../constants/appKeys');
 const { materializeEffectiveCRMEnvelopeOnUser } = require('../utils/rolePermissionProjection');
 const securityLogger = require('../middleware/securityLoggingMiddleware');
 const { getDefaultRoleForApp } = require('../utils/appAccessUtils');
+const { ensureDefaultCommunicationSettingsForOrganization } = require('../services/communicationDefaultsSeeder');
 
 function getOrgUserModel(orgDbConnection) {
     if (orgDbConnection.models.User) {
@@ -186,6 +187,7 @@ exports.registerUser = async (req, res) => {
                 enabledAt: new Date()
             }]
         });
+        await ensureDefaultCommunicationSettingsForOrganization(organization._id);
         console.log('✅ ✅ ✅ ORGANIZATION CREATED SUCCESSFULLY! ✅ ✅ ✅');
         console.log('   ID:', organization._id);
         console.log('   Name:', organization.name);

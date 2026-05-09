@@ -15,11 +15,16 @@
 
 const https = require('https');
 const Communication = require('../models/Communication');
+const CommunicationEvent = require('../models/CommunicationEvent');
+const { appendCommunicationEvent } = require('../services/communicationEventWriter');
+const { suppressAddress } = require('../services/emailSuppressionService');
+const { getCommunicationConfigForOrganization } = require('../platform/communication/config/communicationConfigService');
 
 const STATUS_MAP = {
   Bounce: 'bounced',
   Complaint: 'complained',
-  Delivery: 'delivered'
+  Delivery: 'delivered',
+  Open: 'opened'
 };
 
 /**
@@ -73,15 +78,84 @@ exports.handleSesEvents = async (req, res) => {
         return res.status(200).json({ success: true, message: `Ignored notificationType: ${notificationType}` });
       }
 
+      const webhookEventId = String(
+        body.MessageId ||
+        body.messageId ||
+        `${mail.messageId}:${notificationType}:${sesEvent?.mail?.timestamp || ''}`
+      );
+      const existing = await CommunicationEvent.findOne({
+        source: 'webhook:ses',
+        webhookEventId
+      }).select('_id').lean();
+      if (existing) {
+        return res.status(200).json({ success: true, message: 'Duplicate SES webhook ignored' });
+      }
+
       const result = await Communication.findOneAndUpdate(
         { externalMessageId: mail.messageId },
-        { $set: { status: newStatus } },
+        {
+          $set: {
+            status: newStatus,
+            'metadata.webhook': {
+              provider: 'ses',
+              eventType: notificationType,
+              receivedAt: new Date().toISOString()
+            }
+          }
+        },
         { new: true }
       );
 
       if (!result) {
         console.warn('[sesWebhook] No Communication found for externalMessageId:', mail.messageId);
         return res.status(200).json({ success: true, message: 'No matching Communication (may be from different source)' });
+      }
+
+      await appendCommunicationEvent({
+        organizationId: result.organizationId,
+        communicationId: result._id,
+        eventType: newStatus,
+        source: 'webhook:ses',
+        webhookEventId,
+        payload: {
+          messageId: mail.messageId,
+          notificationType
+        }
+      });
+
+      if (newStatus === 'bounced' || newStatus === 'complained') {
+        const communicationConfig = await getCommunicationConfigForOrganization(result.organizationId);
+        const suppressionPolicy = communicationConfig?.outboundEmail?.suppression || {};
+        const shouldSuppress =
+          (newStatus === 'bounced' && suppressionPolicy.autoSuppressOnBounce !== false) ||
+          (newStatus === 'complained' && suppressionPolicy.autoSuppressOnComplaint !== false);
+        if (!shouldSuppress) {
+          return res.json({ success: true, updated: result._id, status: newStatus });
+        }
+
+        const bounced = Array.isArray(sesEvent?.bounce?.bouncedRecipients)
+          ? sesEvent.bounce.bouncedRecipients
+          : [];
+        const complained = Array.isArray(sesEvent?.complaint?.complainedRecipients)
+          ? sesEvent.complaint.complainedRecipients
+          : [];
+        const recipients = [...bounced, ...complained]
+          .map((r) => String(r?.emailAddress || '').trim().toLowerCase())
+          .filter(Boolean);
+
+        for (const email of recipients) {
+          await suppressAddress({
+            organizationId: result.organizationId,
+            email,
+            reason: newStatus,
+            source: 'webhook:ses',
+            metadata: {
+              messageId: mail.messageId,
+              notificationType
+            },
+            eventAt: new Date(mail?.timestamp || Date.now())
+          });
+        }
       }
 
       return res.json({ success: true, updated: result._id, status: newStatus });

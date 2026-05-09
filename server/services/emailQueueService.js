@@ -5,7 +5,29 @@
 
 const path = require('path');
 const fs = require('fs');
+const { classifyCommunicationFailure } = require('../platform/communication/domain/failureTaxonomy');
 let emailQueue = null;
+
+function resolveSafeReplyToAddress(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return undefined;
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailPattern.test(raw)) return undefined;
+  return raw;
+}
+
+const COMMUNICATION_QUEUE_NAMES = Object.freeze({
+  EMAIL_SEND: 'communication:email:send'
+});
+
+const COMMUNICATION_RETRY_PROFILES = Object.freeze({
+  EMAIL_SEND: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 2000 },
+    removeOnComplete: 100,
+    removeOnFail: 200
+  }
+});
 
 function getLegacyRedisUrl() {
   const host = process.env.REDIS_HOST || 'localhost';
@@ -40,9 +62,7 @@ function initQueue() {
      */
     const opts = {
       defaultJobOptions: {
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 2000 },
-        removeOnComplete: 100,
+        ...COMMUNICATION_RETRY_PROFILES.EMAIL_SEND
       },
     };
     if (isTls) {
@@ -57,7 +77,7 @@ function initQueue() {
         enableReadyCheck: false,
       };
     }
-    emailQueue = new Bull('email-send', redisUrl, opts);
+    emailQueue = new Bull(COMMUNICATION_QUEUE_NAMES.EMAIL_SEND, redisUrl, opts);
     emailQueue.on('error', (err) => console.error('[emailQueue] Redis error:', err.message));
     return emailQueue;
   } catch (err) {
@@ -74,11 +94,57 @@ function enqueueSend(communicationId) {
   const queue = initQueue();
   if (!queue) return false;
   try {
-    queue.add({ communicationId }, { jobId: `email-${communicationId}` });
+    queue.add(
+      { communicationId },
+      {
+        jobId: `email-${communicationId}`,
+        ...COMMUNICATION_RETRY_PROFILES.EMAIL_SEND
+      }
+    );
     return true;
   } catch (err) {
     console.error('[emailQueue] Enqueue failed:', err.message);
     return false;
+  }
+}
+
+async function getQueueStats() {
+  const queue = initQueue();
+  if (!queue) {
+    return {
+      queueAvailable: false,
+      queueName: COMMUNICATION_QUEUE_NAMES.EMAIL_SEND,
+      waiting: 0,
+      active: 0,
+      delayed: 0,
+      failed: 0
+    };
+  }
+  try {
+    const [waiting, active, delayed, failed] = await Promise.all([
+      queue.getWaitingCount(),
+      queue.getActiveCount(),
+      queue.getDelayedCount(),
+      queue.getFailedCount()
+    ]);
+    return {
+      queueAvailable: true,
+      queueName: COMMUNICATION_QUEUE_NAMES.EMAIL_SEND,
+      waiting,
+      active,
+      delayed,
+      failed
+    };
+  } catch (error) {
+    return {
+      queueAvailable: true,
+      queueName: COMMUNICATION_QUEUE_NAMES.EMAIL_SEND,
+      waiting: 0,
+      active: 0,
+      delayed: 0,
+      failed: 0,
+      error: error.message
+    };
   }
 }
 
@@ -104,6 +170,17 @@ async function processSendJob(communicationId) {
   const { organizationId, relatedTo, toAddresses, ccAddresses, bccAddresses, subject, body, attachments } = doc;
   const moduleKey = relatedTo?.moduleKey;
   const recordId = relatedTo?.recordId;
+  await appendCommunicationEvent({
+    organizationId,
+    communicationId: doc._id,
+    eventType: 'processing',
+    source: 'email-worker',
+    idempotencyKeyHash: doc.idempotencyKeyHash || '',
+    payload: {
+      queue: COMMUNICATION_QUEUE_NAMES.EMAIL_SEND,
+      retryProfile: COMMUNICATION_RETRY_PROFILES.EMAIL_SEND
+    }
+  });
 
   let replyToAddr;
   try {
@@ -111,6 +188,7 @@ async function processSendJob(communicationId) {
   } catch {
     replyToAddr = process.env.EMAIL_REPLY_TO;
   }
+  replyToAddr = resolveSafeReplyToAddress(replyToAddr);
 
   const emailAttachments = [];
   if (attachments && attachments.length > 0) {
@@ -157,7 +235,8 @@ async function processSendJob(communicationId) {
     payload: {
       provider: result.provider || null,
       externalMessageId: result.messageId || null,
-      error: result.success ? null : (result.error || 'send_failed')
+      error: result.success ? null : (result.error || 'send_failed'),
+      failureCategory: result.success ? null : classifyCommunicationFailure(result.error)
     }
   });
 
@@ -234,10 +313,13 @@ async function closeQueue() {
 }
 
 module.exports = {
+  COMMUNICATION_QUEUE_NAMES,
+  COMMUNICATION_RETRY_PROFILES,
   initQueue,
   enqueueSend,
   processSendJob,
   startWorker,
+  getQueueStats,
   isQueueAvailable: () => !!initQueue(),
   closeQueue,
 };

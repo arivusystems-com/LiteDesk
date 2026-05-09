@@ -9,6 +9,13 @@ router.use(protect);
 router.use(organizationIsolation);
 
 router.post('/email', controller.sendEmail);
+router.get('/pipeline-metrics', controller.getPipelineMetrics);
+router.get('/pipeline-diagnostics', controller.getPipelineDiagnostics);
+router.get('/suppressions/stats', controller.getSuppressionStats);
+router.get('/suppressions', controller.getSuppressions);
+router.delete('/suppressions/:email', controller.removeSuppression);
+router.get('/webhook-test/templates', controller.getWebhookTestTemplates);
+router.post('/webhook-test/simulate', controller.simulateWebhookEvent);
 router.get('/threads', controller.getThreads);
 router.get('/templates', controller.getTemplates);
 router.patch('/threads/:threadId/view', controller.markThreadViewed);

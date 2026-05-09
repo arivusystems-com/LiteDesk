@@ -9,6 +9,7 @@ const updatePeopleModuleFields = require('../scripts/updatePeopleModuleFields');
 const updateOrganizationsModuleFields = require('../scripts/updateOrganizationsModuleFields');
 const updateDealsModuleFields = require('../scripts/updateDealsModuleFields');
 const UserDirectory = require('../models/UserDirectory');
+const { ensureDefaultCommunicationSettingsForOrganization } = require('../services/communicationDefaultsSeeder');
 const InstanceRegistry = require('../models/InstanceRegistry');
 const { generateUniqueSlug } = require('../services/provisioning/utils/slugGenerator');
 const { seedTenantDatabase } = require('../services/provisioning/tenantSeeder');
@@ -413,6 +414,7 @@ exports.convertToOrganization = async (req, res) => {
         } else {
             console.log('✅ Tenant workspace organization found:', tenantOrganization.name);
         }
+        await ensureDefaultCommunicationSettingsForOrganization(tenantOrganization._id);
         
         // Validate subscription tier (only 'trial' or 'paid' allowed)
         const validTiers = ['trial', 'paid'];

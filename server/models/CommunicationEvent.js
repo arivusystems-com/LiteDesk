@@ -10,9 +10,21 @@ const CommunicationEventSchema = new Schema(
     eventType: {
       type: String,
       required: true,
-      enum: ['accepted', 'queued', 'sent', 'failed', 'idempotency_replay']
+      enum: [
+        'accepted',
+        'queued',
+        'processing',
+        'sent',
+        'failed',
+        'idempotency_replay',
+        'delivered',
+        'opened',
+        'bounced',
+        'complained'
+      ]
     },
     source: { type: String, default: 'communications-api' },
+    webhookEventId: { type: String, index: true },
     idempotencyKeyHash: { type: String, index: true },
     payload: { type: Schema.Types.Mixed, default: {} }
   },
@@ -23,6 +35,10 @@ const CommunicationEventSchema = new Schema(
 
 CommunicationEventSchema.index({ organizationId: 1, communicationId: 1, createdAt: -1 });
 CommunicationEventSchema.index({ organizationId: 1, eventType: 1, createdAt: -1 });
+CommunicationEventSchema.index(
+  { source: 1, webhookEventId: 1 },
+  { unique: true, partialFilterExpression: { webhookEventId: { $exists: true, $type: 'string' } } }
+);
 
 const CommunicationEvent = mongoose.model('CommunicationEvent', CommunicationEventSchema);
 
