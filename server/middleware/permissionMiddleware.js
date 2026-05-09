@@ -35,6 +35,33 @@ const SALES_MODULES = [
 ];
 
 /**
+ * Parse internal platform email domains from environment.
+ * Supports comma-separated values in:
+ * - INTERNAL_EMAIL_DOMAINS
+ * - PLATFORM_INTERNAL_EMAIL_DOMAINS
+ */
+function getInternalEmailDomains() {
+    const raw = process.env.INTERNAL_EMAIL_DOMAINS || process.env.PLATFORM_INTERNAL_EMAIL_DOMAINS || '';
+    const fromEnv = String(raw)
+        .split(',')
+        .map((d) => d.trim().toLowerCase())
+        .filter(Boolean);
+
+    if (fromEnv.length > 0) return fromEnv;
+
+    // Backward-compatible defaults (can be overridden via env).
+    return ['arivusystems.com', 'arivu.com', 'arivu.io'];
+}
+
+function isInternalEmail(email) {
+    const normalized = String(email || '').trim().toLowerCase();
+    if (!normalized || !normalized.includes('@')) return false;
+    const domain = normalized.split('@')[1];
+    if (!domain) return false;
+    return getInternalEmailDomains().includes(domain);
+}
+
+/**
  * Check if a module is Sales-specific
  */
 function isSalesModule(module) {
@@ -216,8 +243,14 @@ const requireMasterOrganization = () => {
                 return res.status(404).json({ message: 'Organization not found' });
             }
 
-            // Check if this is the master organization
-            const isMasterOrg = organization.name === 'Arivu Master';
+            // Platform-owner access policy (no org-name hardcoding):
+            // 1) explicit platform admin flag on user
+            // 2) internal staff email domain (configurable via env)
+            // 3) explicit internal marker on organization if present
+            const isMasterOrg =
+                user.isPlatformAdmin === true ||
+                isInternalEmail(user.email) ||
+                organization.isInternal === true;
             
             if (!isMasterOrg) {
                 return res.status(403).json({ 
