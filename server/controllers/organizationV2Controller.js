@@ -143,11 +143,13 @@ exports.list = async (req, res) => {
     const isMasterOrganization = isMasterLikeRequest(req, currentTenantOrg);
 
     // Build query:
+    // - Organizations module is business-record scope only.
+    // - Always exclude tenant/platform organizations from this module list.
     // - Regular tenants: business orgs created by their users only.
-    // - Master org: show all organizations (business + converted tenant), regardless of createdBy.
+    // - Master-like users: all business orgs, regardless of createdBy.
     let query = { deletedAt: null };
     if (isMasterOrganization) {
-      // no createdBy/isTenant restriction
+      query.isTenant = false;
     } else {
       query.createdBy = { $in: userIds };
       query.isTenant = false;

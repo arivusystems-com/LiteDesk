@@ -39,9 +39,9 @@ export const useAuthStore = defineStore('auth', {
         isPlatformAdmin: (state) => {
             // Check if user is platform admin (Phase 0H)
             if (state.user?.isPlatformAdmin === true) return true;
-            // Check if user has Arivu internal email
+            // Check if user has internal staff email
             const email = state.user?.email || '';
-            const internalDomains = ['arivu.com', 'arivu.io'];
+            const internalDomains = ['arivusystems.com', 'arivu.com', 'arivu.io'];
             return internalDomains.some(domain => email.toLowerCase().includes(`@${domain}`));
         },
         hasAppAccess: (state) => {
