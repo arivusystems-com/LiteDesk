@@ -41,13 +41,6 @@ Completed in this iteration:
 
 ## Phase 1 - Core Sending Pipeline
 
-Planned next implementation:
-
-- Introduce request-level idempotency key (`X-Idempotency-Key`) for `/api/communications/email`.
-- Persist send request lifecycle events (`accepted`, `queued`, `sent`, `failed`).
-- Add first-class communication worker queue names and retry profiles.
-- Add minimal observability counters (queue depth, send success/failure, latency).
-
 Status: Completed
 
 Completed in this iteration:
@@ -136,18 +129,14 @@ Completed in this iteration:
 - Updated `worker.js` to start the inbound worker alongside the outbound
   worker and to close both queues on shutdown.
 
-Remaining for this phase:
+Follow-ups (optional, not blocking core platform):
 
-- Settings UI panel for inbound diagnostics + dead-letter inspector
-  (mirrors the existing outbound pipeline diagnostics panel).
-- Backfill / migration considerations for historical inbound records
-  (existing inbound rows pre-date the lifecycle events; not blocking).
-- Optional: signed webhook verification for inbound (out of scope here,
-  candidate for the webhook-hardening track).
+- **Historical inbound**: records created before lifecycle events lack `CommunicationEvent` rows; a dedicated backfill script can be added if analytics need it.
+- **Stronger webhook auth**: Phase 4 added optional shared secret (`EMAIL_INBOUND_WEBHOOK_SECRET`) on `POST /api/webhooks/email/inbound`. Provider-specific HMAC verification remains a separate hardening track if required.
 
 ## Phase 3 - Inbox & Reply Productivity
 
-Status: In progress
+Status: Completed
 
 Completed in this iteration:
 
@@ -172,13 +161,50 @@ Completed in this iteration:
 - Replaced blocking `alert()` usage with non-blocking toast notifications for thread actions (assign/unassign, tag add/remove, done/reopen) across generic, deal, and task record surfaces.
 - Added controller-level API tests for thread ownership/tag actions (`assignThreadOwner`, `updateThreadTags`) in `server/tests/communicationsThreadActions.controller.test.js`.
 
+### Phase 3 manual regression checklist (CRM activity / email threads)
+
+Quick pass after changes to communications UI or adapters:
+
+1. **Reply** — From a multi-message thread and a single-message email: composer opens with correct To and quoted history; send succeeds when policy allows.
+2. **Reply all** — Shown only when extra recipients exist; Cc prefilled appropriately.
+3. **Quoted collapse** — In thread body and composer, blockquotes toggle with ellipsis / Show–Hide quoted text tooltips where implemented.
+4. **Done / reopen** — Toggle persists; filter “Done threads” shows or hides accordingly.
+5. **Assign / unassign** — Assignee chip updates without full page reload; toast on error.
+6. **Tags** — Add/remove via popover; tag chips visible; Esc closes popover; filters “Tagged” / “Untagged” behave.
+7. **Create task / case** — Actions open correct destination when wired on that record surface.
+
 ## Phase 4 - Inbox Operations & Reliability UX
 
-Status: Next
+Status: Completed (current tranche)
 
-Planned next implementation:
+Completed in this iteration:
 
-- Add an inbound diagnostics panel in settings to surface queue health, recent inbound lifecycle events, and dead-letter counts.
-- Add a dead-letter inspector UI with replay action (owner-only), including event context and error stage details.
-- Add API tests for negative paths on thread actions (missing threadId, invalid tag/action, workspace-boundary validation).
-- Add a lightweight Phase 3 regression checklist in docs for reply, threading actions, chip visibility, and done/reopen filters.
+- Added inbound diagnostics + dead-letter inspector under Settings → Integrations → Email Provider (queue snapshot, threading strategy breakdown, recent inbound lifecycle events, dead-letter list with owner-only replay).
+- Replaced blocking `alert()` calls in integrations email settings with toast notifications; dead-letter replay shows compact **replay ok** / **replay failed** badges (error detail in tooltip).
+- Expanded controller tests for thread assign/tags: missing `threadId`, empty tag, invalid `action`, unassign path, tenant-scoped meta filter.
+- Controller tests for `markThreadDone` (missing `threadId`, scoped upsert, reopen) and `replayInboundDeadLetter` (403 non-owner, 404, 400 no MIME, 422 replay failure, 200 success). Run `npm run test:communications-threads` in `server/` (runs both communications test files).
+- Documented Phase 3 manual regression checklist (reply, quoted collapse, done, assign/tag chips, task/case) in this plan.
+- Dead-letter UX: jump from inbound diagnostics (open count card, recent open list + Focus) to inspector with scroll + temporary row highlight; **Export CSV** for the current inspector list.
+- Optional HTTP integration tests for communications routes (see below).
+- Optional **inbound webhook shared secret**: when `EMAIL_INBOUND_WEBHOOK_SECRET` is set, `POST /api/webhooks/email/inbound` requires `Authorization: Bearer …` or `X-Email-Inbound-Webhook-Token` with a constant-time match; omit in dev for an open receiver. Documented in `docs/PHASE2_INBOUND_SETUP.md`; operator hint in Email Provider integrations UI.
+- **Inbound MIME webhook** panel in Email Provider settings: copies full POST URL (`origin + /api/webhooks/email/inbound`) and a sample curl (JSON body + placeholder auth/org headers).
+- Initial **send email** flow from record surfaces (`GenericRecordContent`, task/deal record pages, `DealDetail`, `OrganizationSurface`) uses toast success/error instead of blocking `alert()`.
+
+HTTP integration tests (communications):
+
+- File: `server/tests/communications.http.integration.test.js` — native `http` + minimal Express app mounting `/api/communications`, real JWT (`protect` + `organizationIsolation`) and MongoDB.
+- Run from `server/` (no `sudo` needed): `COMMUNICATIONS_HTTP_INTEGRATION=1 npm run test:communications-http-integration`. **`sudo npm run …` removes `COMMUNICATIONS_HTTP_INTEGRATION`**, so use your normal user, or preserve env (e.g. `sudo -E env COMMUNICATIONS_HTTP_INTEGRATION=1 npm run …`).
+- Requires `JWT_SECRET` and a Mongo connection string: `MONGODB_URI`, `MONGO_URI`, or `MONGO_URI_LOCAL` (normally via `server/.env`). With the flag unset, the file runs one skipped-style smoke test so default CI does not need a DB.
+- The suite creates a disposable tenant org + owner user, exercises assign / tags / done / dead-letter list, then deletes thread-related rows and those fixtures.
+
+## Suggested next
+
+- Product: dedicated **communications inbox** surface, bulk triage, or snooze (beyond record timelines).
+- Data: optional **backfill script** for `CommunicationEvent` on legacy inbound communications.
+- Security: provider-specific **HMAC/signature** verification for inbound if the relay supports it beyond the shared Bearer token.
+
+---
+
+## Phase 5+ (placeholder)
+
+Use this heading for the next roadmap tranche once scope is chosen (inbox product, analytics, or multi-provider inbound).

@@ -3202,13 +3202,14 @@ async function handleEmailSubmit(payload) {
   try {
     const res = await apiClient.post('/communications/email', payload);
     if (res?.success) {
+      notifications.success('Email sent');
       await fetchRecord();
     } else {
-      alert(res?.message || 'Failed to send email');
+      notifications.error(res?.message || 'Failed to send email');
     }
   } catch (err) {
     const msg = err?.response?.data?.error || err?.response?.data?.message || err?.message;
-    alert(msg || 'Failed to send email');
+    notifications.error(msg || 'Failed to send email');
   }
 }
 

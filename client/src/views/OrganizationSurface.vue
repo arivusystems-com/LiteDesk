@@ -519,6 +519,7 @@ import EmailComposeDrawer from '@/components/communications/EmailComposeDrawer.v
 import ActivityTimeline from '@/components/ActivityTimeline.vue';
 import AutomationContext from '@/components/automation/AutomationContext.vue';
 import apiClient from '@/utils/apiClient';
+import { useNotifications } from '@/composables/useNotifications';
 import { DEFAULT_CURRENCY_CODE, formatCurrencyValue } from '@/utils/currencyOptions';
 // CONTRACT-LOCKED:
 // See docs/architecture/platform-permission-contract.md
@@ -530,6 +531,7 @@ import {
 const route = useRoute();
 const { openTab } = useTabs();
 const authStore = useAuthStore();
+const notifications = useNotifications();
 
 // State
 const loading = ref(true);
@@ -613,14 +615,15 @@ const handleEmailSubmit = async (payload) => {
   try {
     const res = await apiClient.post('/communications/email', payload);
     if (res.success) {
+      notifications.success('Email sent');
       activityRefreshKey.value += 1;
       fetchOrganization();
     } else {
-      alert(res.message || 'Failed to send email');
+      notifications.error(res.message || 'Failed to send email');
     }
   } catch (err) {
     const msg = err.response?.data?.error || err.response?.data?.message || err.message;
-    alert(msg || 'Failed to send email');
+    notifications.error(msg || 'Failed to send email');
   }
 };
 

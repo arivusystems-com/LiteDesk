@@ -565,6 +565,249 @@
             v-if="selectedIntegration.key === 'email-provider'"
             class="rounded-lg p-4 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40"
           >
+            <div class="flex flex-wrap items-start justify-between gap-3 mb-2">
+              <div>
+                <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Inbound MIME webhook</h4>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1 max-w-xl">
+                  Point SES, Lambda, Mailgun-style relays, etc. here. Raw <code class="rounded bg-gray-200 dark:bg-gray-700 px-1">message/rfc822</code> body or JSON <code class="rounded bg-gray-200 dark:bg-gray-700 px-1">&#123; rawMime &#125;</code>.
+                  Tenant routing uses the Reply-To token in the message. Optional headers:
+                  <code class="rounded bg-gray-200 dark:bg-gray-700 px-1">X-Organization-Id</code> (or <code class="rounded bg-gray-200 dark:bg-gray-700 px-1">X-Arivu-Organization-Id</code>) for inbound lifecycle stamps;
+                  Bearer or <code class="rounded bg-gray-200 dark:bg-gray-700 px-1">X-Email-Inbound-Webhook-Token</code> when server env <code class="rounded bg-gray-200 dark:bg-gray-700 px-1">EMAIL_INBOUND_WEBHOOK_SECRET</code> is set.
+                </p>
+              </div>
+              <div class="flex flex-wrap gap-2 shrink-0">
+                <button
+                  type="button"
+                  class="px-3 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
+                  @click="copyInboundWebhookUrl"
+                >
+                  Copy URL
+                </button>
+                <button
+                  type="button"
+                  class="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  @click="copyInboundWebhookCurlExample"
+                >
+                  Copy curl (JSON + secret)
+                </button>
+              </div>
+            </div>
+            <p class="text-[11px] font-mono text-gray-700 dark:text-gray-300 break-all bg-white dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700 rounded-md px-2.5 py-2">
+              {{ inboundMimeWebhookUrl }}
+            </p>
+          </div>
+
+          <div
+            v-if="selectedIntegration.key === 'email-provider'"
+            class="rounded-lg p-4 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40"
+          >
+            <div class="flex items-center justify-between gap-3 mb-3">
+              <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Inbound Diagnostics (24h)</h4>
+              <button
+                type="button"
+                @click="loadInboundDiagnostics"
+                :disabled="loadingInboundDiagnostics"
+                class="px-3 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {{ loadingInboundDiagnostics ? 'Refreshing...' : 'Refresh' }}
+              </button>
+            </div>
+            <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-3">
+              Webhook URL, headers, and a sample curl are in the “Inbound MIME webhook” section above.
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+              <div class="rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 px-3 py-2">
+                <p class="text-[11px] text-gray-500 dark:text-gray-400">Queue waiting</p>
+                <p class="text-sm font-semibold text-gray-900 dark:text-white">{{ Number(inboundDiagnostics.queue?.waiting || 0) }}</p>
+              </div>
+              <div class="rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 px-3 py-2">
+                <p class="text-[11px] text-gray-500 dark:text-gray-400">Queue active</p>
+                <p class="text-sm font-semibold text-gray-900 dark:text-white">{{ Number(inboundDiagnostics.queue?.active || 0) }}</p>
+              </div>
+              <button
+                type="button"
+                class="rounded-md border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-left w-full hover:bg-amber-100/80 dark:hover:bg-amber-900/30 transition-colors disabled:opacity-50"
+                :disabled="Number(inboundDiagnostics.deadLetter?.openCount || 0) === 0"
+                @click="scrollToDeadLetterInspector()"
+              >
+                <p class="text-[11px] text-amber-800 dark:text-amber-300">Open dead-letters</p>
+                <p class="text-sm font-semibold text-amber-900 dark:text-amber-200">{{ Number(inboundDiagnostics.deadLetter?.openCount || 0) }}</p>
+                <p class="text-[10px] text-amber-700/80 dark:text-amber-400 mt-0.5">Click to open inspector</p>
+              </button>
+            </div>
+
+            <div v-if="(inboundDiagnostics.deadLetter?.recent || []).length > 0" class="mb-4">
+              <div class="flex items-center justify-between gap-2 mb-2">
+                <p class="text-xs text-gray-600 dark:text-gray-400">Recent open dead-letters</p>
+                <button
+                  type="button"
+                  class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+                  @click="scrollToDeadLetterInspector()"
+                >
+                  Open inspector
+                </button>
+              </div>
+              <div class="space-y-2 max-h-40 overflow-auto pr-1">
+                <div
+                  v-for="dl in inboundDiagnostics.deadLetter.recent"
+                  :key="`diag-dl-${dl._id}`"
+                  class="rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 px-3 py-2 flex items-start justify-between gap-2"
+                >
+                  <div class="min-w-0">
+                    <p class="text-[11px] font-semibold text-gray-900 dark:text-white">{{ dl.stage || '—' }}</p>
+                    <p class="text-[10px] text-gray-600 dark:text-gray-300 mt-0.5 break-words line-clamp-2">{{ dl.reason || dl.error || '—' }}</p>
+                    <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">{{ formatCheckedAt(dl.createdAt) }}</p>
+                  </div>
+                  <button
+                    type="button"
+                    class="shrink-0 text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+                    @click="scrollToDeadLetterInspector(dl._id)"
+                  >
+                    Focus
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">Thread strategy breakdown</p>
+              <div v-if="inboundDiagnostics.threadStrategyBreakdown.length > 0" class="flex flex-wrap gap-2">
+                <span
+                  v-for="row in inboundDiagnostics.threadStrategyBreakdown"
+                  :key="`inbound-strategy-${row.strategy}`"
+                  class="inline-flex items-center px-2 py-1 rounded-full text-[11px] font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300"
+                >
+                  {{ row.strategy }}: {{ row.count }}
+                </span>
+              </div>
+              <p v-else class="text-xs text-gray-500 dark:text-gray-400">No inbound threading activity found for this window.</p>
+            </div>
+
+            <div>
+              <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">Recent inbound lifecycle events</p>
+              <div v-if="inboundDiagnostics.recentEvents.length > 0" class="space-y-2 max-h-56 overflow-auto pr-1">
+                <div
+                  v-for="evt in inboundDiagnostics.recentEvents"
+                  :key="`inbound-evt-${evt._id}`"
+                  class="rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 px-3 py-2"
+                >
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-xs font-semibold text-gray-900 dark:text-white">{{ evt.eventType }}</span>
+                    <span class="text-[11px] text-gray-500 dark:text-gray-400">{{ formatCheckedAt(evt.createdAt) }}</span>
+                  </div>
+                  <p class="text-[11px] text-gray-600 dark:text-gray-300 mt-1">
+                    source: {{ evt.source }}<span v-if="evt.payload?.strategy"> | strategy: {{ evt.payload.strategy }}</span>
+                  </p>
+                  <p v-if="evt.payload?.error" class="text-[11px] text-red-700 dark:text-red-300 mt-1 break-words">
+                    error: {{ evt.payload.error }}
+                  </p>
+                </div>
+              </div>
+              <p v-else class="text-xs text-gray-500 dark:text-gray-400">No inbound lifecycle events found for this window.</p>
+            </div>
+          </div>
+
+          <div
+            v-if="selectedIntegration.key === 'email-provider'"
+            id="inbound-dead-letter-inspector"
+            ref="deadLetterInspectorRef"
+            class="rounded-lg p-4 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 scroll-mt-4"
+          >
+            <div class="flex items-center justify-between gap-3 mb-3">
+              <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Inbound Dead-Letter Inspector</h4>
+              <div class="flex flex-wrap items-center justify-end gap-2">
+                <label class="inline-flex items-center gap-1.5 text-[11px] text-gray-600 dark:text-gray-300">
+                  <input v-model="inboundIncludeResolved" type="checkbox" class="rounded border-gray-300 dark:border-gray-600" />
+                  Include resolved
+                </label>
+                <button
+                  type="button"
+                  @click="exportInboundDeadLettersCsv"
+                  :disabled="inboundDeadLetters.length === 0"
+                  class="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Export CSV
+                </button>
+                <button
+                  type="button"
+                  @click="loadInboundDeadLetters"
+                  :disabled="loadingInboundDeadLetters"
+                  class="px-3 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {{ loadingInboundDeadLetters ? 'Refreshing...' : 'Refresh' }}
+                </button>
+              </div>
+            </div>
+            <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">
+              Review failed inbound jobs and replay recoverable ones.
+            </p>
+            <div v-if="inboundDeadLetters.length > 0" class="space-y-2 max-h-72 overflow-auto pr-1">
+              <div
+                v-for="item in inboundDeadLetters"
+                :key="`dead-letter-${item._id}`"
+                :class="[
+                  'rounded border px-3 py-2 flex items-start justify-between gap-3 transition-shadow',
+                  String(item._id) === highlightedDeadLetterId
+                    ? 'border-indigo-500 ring-2 ring-indigo-400/50 dark:ring-indigo-500/40 bg-indigo-50/50 dark:bg-indigo-950/20'
+                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40'
+                ]"
+              >
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-xs font-semibold text-gray-900 dark:text-white">{{ item.stage || 'unknown_stage' }}</span>
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">
+                      replay: {{ Number(item.replayCount || 0) }}
+                    </span>
+                    <span
+                      v-if="item.resolvedAt"
+                      class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300"
+                    >
+                      resolved
+                    </span>
+                    <span
+                      v-if="deadLetterReplayOutcomeFor(item)?.outcome === 'success'"
+                      class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300"
+                      title="Last replay succeeded"
+                    >
+                      replay ok
+                    </span>
+                    <span
+                      v-else-if="deadLetterReplayOutcomeFor(item)?.outcome === 'error'"
+                      class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 max-w-[200px] truncate"
+                      :title="deadLetterReplayOutcomeFor(item)?.message || 'Replay failed'"
+                    >
+                      replay failed
+                    </span>
+                  </div>
+                  <p class="text-[11px] text-gray-600 dark:text-gray-300 mt-1 break-words">
+                    {{ item.reason || item.error || 'No reason provided' }}
+                  </p>
+                  <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                    created: {{ formatCheckedAt(item.createdAt) }}
+                    <span v-if="item.lastReplayAt"> | last replay: {{ formatCheckedAt(item.lastReplayAt) }}</span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  @click="replayInboundDeadLetter(item)"
+                  :disabled="!isOwnerLike || replayingDeadLetterId === item._id || item.resolvedAt"
+                  class="shrink-0 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/30"
+                >
+                  {{ replayingDeadLetterId === item._id ? 'Replaying...' : 'Replay' }}
+                </button>
+              </div>
+            </div>
+            <p v-else class="text-xs text-gray-500 dark:text-gray-400">No inbound dead-letter entries found.</p>
+            <p v-if="!isOwnerLike" class="mt-2 text-[11px] text-amber-700 dark:text-amber-300">
+              Only workspace owner can replay dead-letter entries.
+            </p>
+          </div>
+
+          <div
+            v-if="selectedIntegration.key === 'email-provider'"
+            class="rounded-lg p-4 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40"
+          >
             <div class="flex items-center justify-between gap-3 mb-3">
               <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Suppressed Recipients</h4>
               <button
@@ -667,11 +910,13 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import apiClient from '@/utils/apiClient';
 import { useAuthStore } from '@/stores/auth';
+import { useNotifications } from '@/composables/useNotifications';
 
 const authStore = useAuthStore();
+const notifications = useNotifications();
 const isOwnerLike = computed(() => authStore.isOwner || String(authStore.userRole || '').toLowerCase() === 'owner');
 
 const integrations = ref([]);
@@ -687,6 +932,26 @@ const diagnostics = ref({
   failureBreakdown: [],
   recentEvents: []
 });
+const loadingInboundDiagnostics = ref(false);
+const inboundDiagnostics = ref({
+  queue: null,
+  recentEvents: [],
+  threadStrategyBreakdown: [],
+  deadLetter: {
+    openCount: 0,
+    recent: []
+  }
+});
+const loadingInboundDeadLetters = ref(false);
+const replayingDeadLetterId = ref('');
+/** @type {import('vue').Ref<Record<string, { outcome: 'success'|'error', message?: string }>>} */
+const deadLetterReplayOutcomes = ref({});
+const inboundDeadLetters = ref([]);
+const inboundIncludeResolved = ref(false);
+const deadLetterInspectorRef = ref(null);
+/** Highlight a row in the inspector after jumping from diagnostics (`id` string). */
+const highlightedDeadLetterId = ref(null);
+let deadLetterHighlightClearTimer = null;
 const webhookTemplates = ref({
   latestCommunicationId: '',
   latestExternalMessageId: '',
@@ -734,6 +999,42 @@ const communicationPolicy = ref({
 const emailCriticalFieldsLocked = computed(() => !isOwnerLike.value);
 const communicationPolicyLocked = computed(() => !isOwnerLike.value);
 
+const inboundMimeWebhookUrl = computed(() => {
+  if (typeof window === 'undefined') return '/api/webhooks/email/inbound';
+  return `${window.location.origin}/api/webhooks/email/inbound`;
+});
+
+const copyInboundWebhookUrl = async () => {
+  const url = inboundMimeWebhookUrl.value;
+  try {
+    await navigator.clipboard.writeText(url);
+    notifications.success('Inbound webhook URL copied');
+  } catch (err) {
+    console.error(err);
+    notifications.error('Unable to copy URL');
+  }
+};
+
+const copyInboundWebhookCurlExample = async () => {
+  const url = inboundMimeWebhookUrl.value;
+  const lines = [
+    `curl -X POST '${url}' \\`,
+    `  -H 'Content-Type: application/json' \\`,
+    `  -H 'Authorization: Bearer YOUR_EMAIL_INBOUND_WEBHOOK_SECRET' \\`,
+    `  -H 'X-Organization-Id: YOUR_WORKSPACE_ORG_ID' \\`,
+    `  -d '{"rawMime":"<paste base64-encoded .eml>"}'`,
+    '',
+    '# Omit Authorization when EMAIL_INBOUND_WEBHOOK_SECRET is unset on the server.'
+  ];
+  try {
+    await navigator.clipboard.writeText(lines.join('\n'));
+    notifications.success('Sample curl copied — replace placeholders');
+  } catch (err) {
+    console.error(err);
+    notifications.error('Unable to copy curl example');
+  }
+};
+
 const verificationStatusClass = (status) => {
   const value = String(status || '').toLowerCase();
   if (value === 'configured') return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300';
@@ -753,7 +1054,7 @@ const checkEmailDomainStatus = async () => {
     await fetchIntegrationDetail('email-provider', { forceRefresh: true });
   } catch (err) {
     console.error('Failed to refresh email domain verification status:', err);
-    alert('Failed to refresh sender domain verification status');
+    notifications.error('Failed to refresh sender domain verification status');
   } finally {
     checkingDomainStatus.value = false;
   }
@@ -831,7 +1132,7 @@ const loadSuppressions = async () => {
 const removeSuppressedRecipient = async (email) => {
   if (!email) return;
   if (!isOwnerLike.value) {
-    alert('Only workspace owner can remove suppression entries');
+    notifications.error('Only workspace owner can remove suppression entries');
     return;
   }
   const ok = confirm(`Remove "${email}" from suppression list?`);
@@ -844,12 +1145,13 @@ const removeSuppressedRecipient = async (email) => {
     if (data?.success) {
       suppressionRows.value = suppressionRows.value.filter((row) => row.email !== email);
       await loadSuppressionStats();
+      notifications.success('Suppression removed');
     } else {
-      alert(data?.message || 'Failed to remove suppression entry');
+      notifications.error(data?.message || 'Failed to remove suppression entry');
     }
   } catch (err) {
     console.error('Failed to remove suppression entry:', err);
-    alert(err?.response?.data?.message || err?.message || 'Failed to remove suppression entry');
+    notifications.error(err?.response?.data?.message || err?.message || 'Failed to remove suppression entry');
   } finally {
     removingSuppressionEmail.value = '';
   }
@@ -869,6 +1171,166 @@ const loadPipelineDiagnostics = async () => {
     diagnostics.value = { failureBreakdown: [], recentEvents: [] };
   } finally {
     loadingDiagnostics.value = false;
+  }
+};
+
+const loadInboundDiagnostics = async () => {
+  if (!selectedIntegration.value || selectedIntegration.value.key !== 'email-provider') return;
+  loadingInboundDiagnostics.value = true;
+  try {
+    const data = await apiClient('/communications/inbound/diagnostics', { method: 'GET' });
+    inboundDiagnostics.value = {
+      queue: data?.data?.queue || null,
+      recentEvents: Array.isArray(data?.data?.recentEvents) ? data.data.recentEvents : [],
+      threadStrategyBreakdown: Array.isArray(data?.data?.threadStrategyBreakdown) ? data.data.threadStrategyBreakdown : [],
+      deadLetter: {
+        openCount: Number(data?.data?.deadLetter?.openCount) || 0,
+        recent: Array.isArray(data?.data?.deadLetter?.recent) ? data.data.deadLetter.recent : []
+      }
+    };
+  } catch (err) {
+    console.error('Failed to load inbound diagnostics:', err);
+    inboundDiagnostics.value = {
+      queue: null,
+      recentEvents: [],
+      threadStrategyBreakdown: [],
+      deadLetter: { openCount: 0, recent: [] }
+    };
+  } finally {
+    loadingInboundDiagnostics.value = false;
+  }
+};
+
+const loadInboundDeadLetters = async () => {
+  if (!selectedIntegration.value || selectedIntegration.value.key !== 'email-provider') return;
+  loadingInboundDeadLetters.value = true;
+  try {
+    const data = await apiClient('/communications/inbound/dead-letter', {
+      method: 'GET',
+      params: {
+        includeResolved: inboundIncludeResolved.value ? 'true' : 'false',
+        limit: 50
+      }
+    });
+    inboundDeadLetters.value = Array.isArray(data?.data?.items) ? data.data.items : [];
+    pruneDeadLetterReplayOutcomes();
+  } catch (err) {
+    console.error('Failed to load inbound dead letters:', err);
+    inboundDeadLetters.value = [];
+  } finally {
+    loadingInboundDeadLetters.value = false;
+  }
+};
+
+async function scrollToDeadLetterInspector(focusRawId = null) {
+  if (deadLetterHighlightClearTimer) {
+    clearTimeout(deadLetterHighlightClearTimer);
+    deadLetterHighlightClearTimer = null;
+  }
+  highlightedDeadLetterId.value = focusRawId != null ? String(focusRawId) : null;
+  await loadInboundDeadLetters();
+  await nextTick();
+  deadLetterInspectorRef.value?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  if (highlightedDeadLetterId.value) {
+    deadLetterHighlightClearTimer = setTimeout(() => {
+      highlightedDeadLetterId.value = null;
+      deadLetterHighlightClearTimer = null;
+    }, 6000);
+  }
+}
+
+function csvEscapeCell(value) {
+  const t = String(value ?? '');
+  if (/[",\n\r]/.test(t)) return `"${t.replace(/"/g, '""')}"`;
+  return t;
+}
+
+function exportInboundDeadLettersCsv() {
+  const rows = inboundDeadLetters.value || [];
+  if (!rows.length) {
+    notifications.warning('No dead-letter rows to export. Refresh the list first.');
+    return;
+  }
+  const headers = ['id', 'stage', 'reason', 'error', 'replayCount', 'resolvedAt', 'createdAt', 'lastReplayAt', 'rawSizeBytes'];
+  const lines = [headers.join(',')];
+  for (const row of rows) {
+    const picked = headers.map((h) => {
+      const v = row[h];
+      if (v === undefined || v === null) return '';
+      if (typeof v === 'object' && v !== null && typeof v.toISOString === 'function') return v.toISOString();
+      return v;
+    });
+    lines.push(picked.map(csvEscapeCell).join(','));
+  }
+  const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `inbound-dead-letters-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  notifications.success('Exported dead-letter list');
+}
+
+function pruneDeadLetterReplayOutcomes() {
+  const ids = new Set((inboundDeadLetters.value || []).map((row) => deadLetterOutcomeKey(row?._id)).filter(Boolean));
+  const prev = deadLetterReplayOutcomes.value;
+  let next = prev;
+  for (const key of Object.keys(prev)) {
+    if (!ids.has(key)) {
+      if (next === prev) next = { ...prev };
+      delete next[key];
+    }
+  }
+  deadLetterReplayOutcomes.value = next;
+}
+
+function deadLetterOutcomeKey(rawId) {
+  return rawId != null ? String(rawId) : '';
+}
+
+function deadLetterReplayOutcomeFor(row) {
+  const key = deadLetterOutcomeKey(row?._id);
+  return key ? deadLetterReplayOutcomes.value[key] : null;
+}
+
+function setDeadLetterReplayOutcome(deadLetterId, outcome, message = '') {
+  const id = deadLetterOutcomeKey(deadLetterId);
+  if (!id) return;
+  deadLetterReplayOutcomes.value = {
+    ...deadLetterReplayOutcomes.value,
+    [id]: { outcome, message: String(message || '').trim() }
+  };
+}
+
+const replayInboundDeadLetter = async (item) => {
+  const id = item?._id;
+  if (!id) return;
+  if (!isOwnerLike.value) {
+    notifications.error('Only workspace owner can replay inbound dead-letters');
+    return;
+  }
+  replayingDeadLetterId.value = id;
+  try {
+    const data = await apiClient(`/communications/inbound/dead-letter/${encodeURIComponent(id)}/replay`, {
+      method: 'POST'
+    });
+    if (data?.success) {
+      notifications.success('Dead-letter replayed successfully');
+      setDeadLetterReplayOutcome(id, 'success', '');
+      await Promise.all([loadInboundDiagnostics(), loadInboundDeadLetters()]);
+    } else {
+      const msg = data?.message || 'Replay failed';
+      notifications.error(msg);
+      setDeadLetterReplayOutcome(id, 'error', msg);
+    }
+  } catch (err) {
+    console.error('Failed to replay dead letter:', err);
+    const msg = err?.response?.data?.message || err?.message || 'Replay failed';
+    notifications.error(msg);
+    setDeadLetterReplayOutcome(id, 'error', msg);
+  } finally {
+    replayingDeadLetterId.value = '';
   }
 };
 
@@ -892,7 +1354,7 @@ const loadWebhookTemplates = async () => {
 const runWebhookSimulation = async () => {
   if (!selectedIntegration.value || selectedIntegration.value.key !== 'email-provider') return;
   if (!webhookTemplates.value.latestCommunicationId && !webhookTemplates.value.latestExternalMessageId) {
-    alert('No eligible outbound communication found yet. Send at least one email first.');
+    notifications.warning('No eligible outbound communication found yet. Send at least one email first.');
     return;
   }
   simulatingWebhook.value = true;
@@ -909,13 +1371,13 @@ const runWebhookSimulation = async () => {
     });
     if (data?.success) {
       await loadPipelineDiagnostics();
-      alert(`Simulated webhook event: ${webhookSim.value.eventType}`);
+      notifications.success(`Simulated webhook event: ${webhookSim.value.eventType}`);
     } else {
-      alert(data?.message || 'Webhook simulation failed');
+      notifications.error(data?.message || 'Webhook simulation failed');
     }
   } catch (err) {
     console.error('Webhook simulation failed:', err);
-    alert(err?.response?.data?.message || err?.message || 'Webhook simulation failed');
+    notifications.error(err?.response?.data?.message || err?.message || 'Webhook simulation failed');
   } finally {
     simulatingWebhook.value = false;
   }
@@ -1001,6 +1463,8 @@ const fetchIntegrationDetail = async (key, options = {}) => {
         };
         await loadWebhookTemplates();
         await loadPipelineDiagnostics();
+        await loadInboundDiagnostics();
+        await loadInboundDeadLetters();
         await loadSuppressions();
       }
       // Update list entry to keep states in sync
@@ -1051,16 +1515,16 @@ const saveEmailConfig = async () => {
     });
 
     if (data?.success) {
-      alert('Email provider settings saved');
+      notifications.success('Email provider settings saved');
       emailConfig.value.smtpPass = '';
       await fetchIntegrationDetail('email-provider');
       await fetchIntegrations();
     } else {
-      alert(data?.message || 'Failed to save email settings');
+      notifications.error(data?.message || 'Failed to save email settings');
     }
   } catch (err) {
     console.error('Failed to save email config:', err);
-    alert(err?.response?.data?.message || err?.message || 'Failed to save email settings');
+    notifications.error(err?.response?.data?.message || err?.message || 'Failed to save email settings');
   } finally {
     savingConfig.value = false;
   }
@@ -1097,11 +1561,11 @@ const enableIntegration = async (key) => {
       await fetchIntegrations();
       await fetchIntegrationDetail(key);
     } else {
-      alert(data.message || 'Failed to enable integration');
+      notifications.error(data.message || 'Failed to enable integration');
     }
   } catch (err) {
     console.error('Failed to enable integration:', err);
-    alert('Failed to enable integration');
+    notifications.error(err?.response?.data?.message || err?.message || 'Failed to enable integration');
   } finally {
     actionLoading.value = false;
   }
@@ -1115,11 +1579,11 @@ const disableIntegration = async (key) => {
       await fetchIntegrations();
       await fetchIntegrationDetail(key);
     } else {
-      alert(data.message || 'Failed to disable integration');
+      notifications.error(data.message || 'Failed to disable integration');
     }
   } catch (err) {
     console.error('Failed to disable integration:', err);
-    alert('Failed to disable integration');
+    notifications.error(err?.response?.data?.message || err?.message || 'Failed to disable integration');
   } finally {
     actionLoading.value = false;
   }
@@ -1131,13 +1595,13 @@ const sendTestEmail = async () => {
   try {
     const data = await apiClient(`/settings/integrations/email-provider/test`, { method: 'POST' });
     if (data && data.success) {
-      alert(data.message || 'Test email sent. Check your inbox (or Mailtrap in dev).');
+      notifications.success(data.message || 'Test email sent. Check your inbox (or Mailtrap in dev).');
     } else {
-      alert(data.message || data.error || 'Failed to send test email');
+      notifications.error(data.message || data.error || 'Failed to send test email');
     }
   } catch (err) {
     console.error('Failed to send test email:', err);
-    alert(err?.response?.data?.message || err?.message || 'Failed to send test email');
+    notifications.error(err?.response?.data?.message || err?.message || 'Failed to send test email');
   } finally {
     testEmailLoading.value = false;
   }
@@ -1145,5 +1609,14 @@ const sendTestEmail = async () => {
 
 onMounted(() => {
   fetchIntegrations();
+});
+
+onBeforeUnmount(() => {
+  if (deadLetterHighlightClearTimer) clearTimeout(deadLetterHighlightClearTimer);
+});
+
+watch(inboundIncludeResolved, () => {
+  if (selectedIntegration.value?.key !== 'email-provider') return;
+  loadInboundDeadLetters();
 });
 </script>

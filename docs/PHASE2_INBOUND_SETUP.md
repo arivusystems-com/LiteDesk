@@ -22,13 +22,29 @@ Add to `.env`:
 EMAIL_REPLY_TO_DOMAIN=arivu.local          # Domain for Reply-To (e.g. replies+token@arivu.local)
 EMAIL_INBOUND_ADDRESS=replies@arivu.local  # Inbound receiving address
 EMAIL_REPLY_TOKEN_SECRET=<generate with: openssl rand -hex 32>
+
+# Phase 4 (optional): require shared secret on POST /api/webhooks/email/inbound
+EMAIL_INBOUND_WEBHOOK_SECRET=<generate with: openssl rand -hex 32>
 ```
 
 Without `EMAIL_REPLY_TOKEN_SECRET`, outbound still works but Reply-To falls back to `EMAIL_REPLY_TO`.
 
+When `EMAIL_INBOUND_WEBHOOK_SECRET` is set, every inbound webhook request must send the same value as `Authorization: Bearer <secret>` or header `X-Email-Inbound-Webhook-Token: <secret>` (comparison uses constant-time equality). Leave unset for an open webhook (common in local development).
+
 ## Testing the Webhook Locally
 
 ### Option 1: Raw MIME (message/rfc822)
+
+```bash
+curl -X POST http://localhost:3000/api/webhooks/email/inbound \
+  -H "Content-Type: message/rfc822" \
+  -H "Authorization: Bearer YOUR_EMAIL_INBOUND_WEBHOOK_SECRET" \
+  --data-binary @test-email.eml
+```
+
+(Unset `EMAIL_INBOUND_WEBHOOK_SECRET` on the server during local testing, or include the matching header.)
+
+### Option 1b (curl, no Bearer — open webhook)
 
 ```bash
 curl -X POST http://localhost:3000/api/webhooks/email/inbound \
@@ -44,8 +60,10 @@ RAW=$(base64 -i test-email.eml)
 
 curl -X POST http://localhost:3000/api/webhooks/email/inbound \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_EMAIL_INBOUND_WEBHOOK_SECRET" \
   -d "{\"rawMime\": \"$RAW\"}"
 ```
+(Add the Bearer line only when `EMAIL_INBOUND_WEBHOOK_SECRET` is configured.)
 
 ### Test Email Requirements
 
