@@ -4,7 +4,8 @@
  * ============================================================================
  *
  * POST /api/webhooks/email/inbound
- * - No auth middleware (webhook uses token-in-address verification)
+ * - No JWT auth; optional shared secret EMAIL_INBOUND_WEBHOOK_SECRET (Bearer or X-Email-Inbound-Webhook-Token).
+ * - Tenant routing continues to use reply-To token verification inside the MIME.
  * - Accepts raw MIME (Content-Type: message/rfc822) or JSON { rawMime: "<base64>" }
  *
  * POST /api/webhooks/email/ses-events

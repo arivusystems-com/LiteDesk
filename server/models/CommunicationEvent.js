@@ -20,7 +20,14 @@ const CommunicationEventSchema = new Schema(
         'delivered',
         'opened',
         'bounced',
-        'complained'
+        'complained',
+        'inbound_received',
+        'inbound_queued',
+        'inbound_parsed',
+        'inbound_threaded',
+        'inbound_routed',
+        'inbound_failed',
+        'inbound_replayed'
       ]
     },
     source: { type: String, default: 'communications-api' },

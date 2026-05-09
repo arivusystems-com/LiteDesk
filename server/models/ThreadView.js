@@ -19,7 +19,8 @@ const ThreadViewSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
   threadId: { type: String, required: true, index: true },
-  lastViewedAt: { type: Date, required: true }
+  lastViewedAt: { type: Date, required: true },
+  doneAt: { type: Date, default: null }
 }, {
   timestamps: true
 });

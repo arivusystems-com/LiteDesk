@@ -10,6 +10,13 @@
     :on-timestamp-pointer-up="ui.handleTimestampPointerUp"
     @toggle="ui.toggleTaskEmailThread(event.thread.threadId)"
     @create-task="ui.createTaskFromEmailMessage"
+    @create-case="ui.createCaseFromEmailMessage"
+    @assign-thread="ui.assignEmailThread"
+    @unassign-thread="ui.unassignEmailThread"
+    @add-tag="ui.addTagToEmailThread"
+    @remove-tag="ui.removeTagFromEmailThread"
+    @reply="ui.handleReplyToEmailMessage"
+    @toggle-done="ui.handleToggleThreadDone"
   />
 </template>
 

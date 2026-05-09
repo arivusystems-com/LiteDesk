@@ -63,6 +63,12 @@
             :compact="true"
             @toggle="toggleThread(activity.thread.threadId)"
             @create-task="createTaskFromMessage"
+            @create-case="createCaseFromMessage"
+            @assign-thread="assignThread"
+            @unassign-thread="unassignThread"
+            @add-tag="addTagToThread"
+            @remove-tag="removeTagFromThread"
+            @toggle-done="toggleThreadDone"
           />
         </div>
 
@@ -159,6 +165,85 @@ const createTaskFromMessage = async (msg) => {
   }
 };
 
+const createCaseFromMessage = async (msg) => {
+  if (!msg?._id) return;
+  try {
+    const res = await apiClient.post(`/communications/${msg._id}/create-case`, {});
+    if (res?.success && res?.data?.caseRecordId) {
+      window.open(`/helpdesk/cases/${res.data.caseRecordId}`, '_blank');
+    }
+  } catch (err) {
+    error.value = err.response?.data?.message || err.message || 'Failed to create case';
+  }
+};
+
+const assignThread = async ({ threadId, assignedToUserId }) => {
+  if (!threadId) return;
+  try {
+    const res = await apiClient.patch(`/communications/threads/${encodeURIComponent(threadId)}/assign`, {
+      assignedToUserId: assignedToUserId || authStore.user?._id || null
+    });
+    const nextAssignee = res?.data?.data?.assignedToUserId ?? assignedToUserId ?? authStore.user?._id ?? null;
+    const meId = authStore.user?._id || authStore.user?.id;
+    const meLabel = `${authStore.user?.firstName || ''} ${authStore.user?.lastName || ''}`.trim() || authStore.user?.username || authStore.user?.email || null;
+    threads.value = (threads.value || []).map((thread) => {
+      if (thread.threadId !== threadId) return thread;
+      const isMe = nextAssignee && meId && String(nextAssignee) === String(meId);
+      return { ...thread, assignedToUserId: nextAssignee, assignedToDisplay: isMe ? meLabel : (thread.assignedToDisplay || null) };
+    });
+  } catch (err) {
+    error.value = err.response?.data?.message || err.message || 'Failed to assign thread';
+  }
+};
+
+const unassignThread = async ({ threadId }) => {
+  if (!threadId) return;
+  try {
+    const res = await apiClient.patch(`/communications/threads/${encodeURIComponent(threadId)}/assign`, {
+      assignedToUserId: null
+    });
+    const nextAssignee = res?.data?.data?.assignedToUserId ?? null;
+    threads.value = (threads.value || []).map((thread) => (
+      thread.threadId === threadId ? { ...thread, assignedToUserId: nextAssignee, assignedToDisplay: null } : thread
+    ));
+  } catch (err) {
+    error.value = err.response?.data?.message || err.message || 'Failed to unassign thread';
+  }
+};
+
+const addTagToThread = async ({ threadId, tag }) => {
+  if (!threadId) return;
+  if (!tag || !String(tag).trim()) return;
+  try {
+    const res = await apiClient.patch(`/communications/threads/${encodeURIComponent(threadId)}/tags`, {
+      action: 'add',
+      tag
+    });
+    const nextTags = Array.isArray(res?.data?.data?.tags) ? res.data.data.tags : [];
+    threads.value = (threads.value || []).map((thread) => (
+      thread.threadId === threadId ? { ...thread, tags: nextTags } : thread
+    ));
+  } catch (err) {
+    error.value = err.response?.data?.message || err.message || 'Failed to add thread tag';
+  }
+};
+
+const removeTagFromThread = async ({ threadId, tag }) => {
+  if (!threadId || !tag) return;
+  try {
+    const res = await apiClient.patch(`/communications/threads/${encodeURIComponent(threadId)}/tags`, {
+      action: 'remove',
+      tag
+    });
+    const nextTags = Array.isArray(res?.data?.data?.tags) ? res.data.data.tags : [];
+    threads.value = (threads.value || []).map((thread) => (
+      thread.threadId === threadId ? { ...thread, tags: nextTags } : thread
+    ));
+  } catch (err) {
+    error.value = err.response?.data?.message || err.message || 'Failed to remove thread tag';
+  }
+};
+
 const toggleThread = async (threadId) => {
   const next = new Set(expandedThreads.value);
   if (next.has(threadId)) {
@@ -178,6 +263,21 @@ const toggleThread = async (threadId) => {
     }
   }
   expandedThreads.value = next;
+};
+
+const toggleThreadDone = async ({ threadId, done }) => {
+  if (!threadId) return;
+  try {
+    const res = await apiClient.patch(`/communications/threads/${encodeURIComponent(threadId)}/done`, { done });
+    const doneValue = done !== false && Boolean(res?.data?.done ?? done);
+    threads.value = (threads.value || []).map((thread) =>
+      thread.threadId === threadId
+        ? { ...thread, done: doneValue, doneAt: doneValue ? (res?.data?.doneAt || new Date().toISOString()) : null, unread: doneValue ? false : thread.unread }
+        : thread
+    );
+  } catch (err) {
+    error.value = err?.response?.data?.message || err?.message || 'Failed to update thread status';
+  }
 };
 
 const error = ref(null);
@@ -289,10 +389,10 @@ const loadActivities = async () => {
       (() => {
         const et = (props.entityType || '').toLowerCase();
         if (et === 'person') {
-          return apiClient.get('/communications/threads', { params: { moduleKey: 'people', recordId: props.entityId } }).catch(() => ({ success: false, data: { threads: [] } }));
+          return apiClient.get('/communications/threads', { params: { moduleKey: 'people', recordId: props.entityId, includeDone: true } }).catch(() => ({ success: false, data: { threads: [] } }));
         }
         if (et === 'organization') {
-          return apiClient.get('/communications/threads', { params: { moduleKey: 'organizations', recordId: props.entityId } }).catch(() => ({ success: false, data: { threads: [] } }));
+          return apiClient.get('/communications/threads', { params: { moduleKey: 'organizations', recordId: props.entityId, includeDone: true } }).catch(() => ({ success: false, data: { threads: [] } }));
         }
         return Promise.resolve({ success: true, data: { threads: [] } });
       })()

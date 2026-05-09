@@ -605,6 +605,10 @@
               :activity-filter-comments="activityFilterComments"
               :activity-filter-updates="activityFilterUpdates"
               :activity-filter-email="activityFilterEmail"
+              :activity-filter-done-threads="activityFilterDoneThreads"
+              :activity-filter-assigned-to-me="activityFilterAssignedToMe"
+              :activity-filter-tagged="activityFilterTagged"
+              :activity-filter-untagged="activityFilterUntagged"
               :new-comment-text="newCommentText"
               :show-notifications="false"
               @comment="handleAddComment"
@@ -614,6 +618,10 @@
               @update:activityFilterComments="activityFilterComments = $event"
               @update:activityFilterUpdates="activityFilterUpdates = $event"
               @update:activityFilterEmail="activityFilterEmail = $event"
+              @update:activityFilterDoneThreads="activityFilterDoneThreads = $event"
+              @update:activityFilterAssignedToMe="activityFilterAssignedToMe = $event"
+              @update:activityFilterTagged="activityFilterTagged = $event"
+              @update:activityFilterUntagged="activityFilterUntagged = $event"
               @update:newCommentText="newCommentText = $event"
             />
           </template>
@@ -789,7 +797,8 @@
       :is-open="showEmailModal"
       :related-to="record?._id ? { moduleKey, recordId: String(record._id) } : null"
       :initial-to="emailComposeInitialTo"
-      @close="showEmailModal = false"
+      :initial-draft="emailComposeDraft"
+      @close="showEmailModal = false; emailComposeDraft = null"
       @submit="handleEmailSubmit"
     />
 
@@ -947,6 +956,7 @@ import {
   sortActivityEventsByDate
 } from '@/components/record-page/activityEventModel';
 import { normalizeActivityUiContract } from '@/components/activity/activityUiContract';
+import { useNotifications } from '@/composables/useNotifications';
 import dateUtils from '@/utils/dateUtils';
 import {
   PencilSquareIcon,
@@ -1008,6 +1018,7 @@ const emit = defineEmits(['close']);
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+const notifications = useNotifications();
 const { openTab, activeTabId, findTabById, updateTabTitle, replaceActiveTab } = useTabs();
 const recordLayoutIsMobile = inject('recordLayoutIsMobile', ref(false));
 const quickPreviewNav = inject('quickPreviewNav', null);
@@ -1037,12 +1048,17 @@ const activityRaw = ref([]);
   const activityFilterComments = ref(true);
   const activityFilterUpdates = ref(true);
   const activityFilterEmail = ref(true);
+  const activityFilterDoneThreads = ref(false);
+  const activityFilterAssignedToMe = ref(false);
+  const activityFilterTagged = ref(false);
+  const activityFilterUntagged = ref(false);
   const detailsTabSearchQuery = ref('');
   const detailsShowEmptyFields = ref(true);
   const expandedTaskEmailThreads = ref(new Set());
   const showDeleteModal = ref(false);
 const showEditModal = ref(false);
 const showEmailModal = ref(false);
+const emailComposeDraft = ref(null);
 const showLinkRecordDrawer = ref(false);
 const activeThreadRootCommentId = ref(null);
 const showCommentReactionPicker = ref(false);
@@ -2224,7 +2240,107 @@ const activityUi = computed(() => {
       else next.add(threadId);
       expandedTaskEmailThreads.value = next;
     },
-    createTaskFromEmailMessage: () => {}
+    createTaskFromEmailMessage: () => {},
+    createCaseFromEmailMessage: () => {},
+    assignEmailThread: async ({ threadId, assignedToUserId }) => {
+      if (!threadId) return;
+      try {
+        const res = await apiClient.patch(`/communications/threads/${encodeURIComponent(threadId)}/assign`, {
+          assignedToUserId: assignedToUserId || null
+        });
+        const apiData = res?.data?.data ?? res?.data ?? {};
+        const nextAssignee = apiData?.assignedToUserId ?? assignedToUserId ?? null;
+        const meId = authStore.user?._id || authStore.user?.id;
+        const meLabel = `${authStore.user?.firstName || ''} ${authStore.user?.lastName || ''}`.trim()
+          || authStore.user?.username
+          || authStore.user?.email
+          || null;
+        emailThreads.value = (emailThreads.value || []).map((thread) => {
+          if (thread.threadId !== threadId) return thread;
+          const isMe = nextAssignee && meId && String(nextAssignee) === String(meId);
+          return { ...thread, assignedToUserId: nextAssignee, assignedToDisplay: isMe ? meLabel : (thread.assignedToDisplay || null) };
+        });
+        notifications.success(nextAssignee ? 'Thread assigned' : 'Thread unassigned');
+      } catch (err) {
+        notifications.error(err?.response?.data?.message || err?.message || 'Failed to assign thread');
+      }
+    },
+    unassignEmailThread: async ({ threadId }) => {
+      if (!threadId) return;
+      try {
+        const res = await apiClient.patch(`/communications/threads/${encodeURIComponent(threadId)}/assign`, {
+          assignedToUserId: null
+        });
+        const apiData = res?.data?.data ?? res?.data ?? {};
+        const nextAssignee = apiData?.assignedToUserId ?? null;
+        emailThreads.value = (emailThreads.value || []).map((thread) =>
+          thread.threadId === threadId ? { ...thread, assignedToUserId: nextAssignee, assignedToDisplay: null } : thread
+        );
+        notifications.success('Thread unassigned');
+      } catch (err) {
+        notifications.error(err?.response?.data?.message || err?.message || 'Failed to unassign thread');
+      }
+    },
+    addTagToEmailThread: async ({ threadId, tag }) => {
+      if (!threadId || !tag) return;
+      try {
+        const res = await apiClient.patch(`/communications/threads/${encodeURIComponent(threadId)}/tags`, {
+          action: 'add',
+          tag
+        });
+        const apiData = res?.data?.data ?? res?.data ?? {};
+        const tagValue = String(tag || '').trim();
+        const currentTags = (emailThreads.value || []).find((thread) => thread.threadId === threadId)?.tags || [];
+        const optimisticNext = Array.from(new Set([...currentTags, tagValue].filter(Boolean)));
+        const nextTags = Array.isArray(apiData?.tags) ? apiData.tags : optimisticNext;
+        emailThreads.value = (emailThreads.value || []).map((thread) =>
+          thread.threadId === threadId ? { ...thread, tags: nextTags } : thread
+        );
+        notifications.success('Tag added');
+      } catch (err) {
+        notifications.error(err?.response?.data?.message || err?.message || 'Failed to add tag');
+      }
+    },
+    removeTagFromEmailThread: async ({ threadId, tag }) => {
+      if (!threadId || !tag) return;
+      try {
+        const res = await apiClient.patch(`/communications/threads/${encodeURIComponent(threadId)}/tags`, {
+          action: 'remove',
+          tag
+        });
+        const apiData = res?.data?.data ?? res?.data ?? {};
+        const normalizedTag = String(tag || '').trim().toLowerCase();
+        const currentTags = (emailThreads.value || []).find((thread) => thread.threadId === threadId)?.tags || [];
+        const optimisticNext = currentTags.filter((value) => String(value || '').trim().toLowerCase() !== normalizedTag);
+        const nextTags = Array.isArray(apiData?.tags) ? apiData.tags : optimisticNext;
+        emailThreads.value = (emailThreads.value || []).map((thread) =>
+          thread.threadId === threadId ? { ...thread, tags: nextTags } : thread
+        );
+        notifications.success('Tag removed');
+      } catch (err) {
+        notifications.error(err?.response?.data?.message || err?.message || 'Failed to remove tag');
+      }
+    },
+    handleReplyToEmailMessage: (payload) => {
+      if (!supportsEmail.value) return;
+      emailComposeDraft.value = payload && typeof payload === 'object' ? payload : null;
+      showEmailModal.value = true;
+    },
+    handleToggleThreadDone: async ({ threadId, done }) => {
+      if (!threadId) return;
+      try {
+        const res = await apiClient.patch(`/communications/threads/${encodeURIComponent(threadId)}/done`, { done });
+        const doneValue = done !== false && Boolean(res?.data?.done ?? done);
+        emailThreads.value = (emailThreads.value || []).map((thread) =>
+          thread.threadId === threadId
+            ? { ...thread, done: doneValue, doneAt: doneValue ? (res?.data?.doneAt || new Date().toISOString()) : null, unread: doneValue ? false : thread.unread }
+            : thread
+        );
+        notifications.success(doneValue ? 'Thread marked done' : 'Thread reopened');
+      } catch (err) {
+        notifications.error(err?.response?.data?.message || err?.message || 'Failed to update thread status');
+      }
+    }
   };
   return normalizeActivityUiContract(moduleUi);
 });
@@ -2327,22 +2443,31 @@ const commentReactionPickerStyle = computed(() => ({
 /** Combined activity (logs + comments + email threads) for modules that support email. */
 const combinedActivityEvents = computed(() => {
   const recordRef = { module: props.moduleKey, id: String(props.recordId) };
+  const threadedCommunicationIds = new Set(
+    (emailThreads.value || [])
+      .flatMap((thread) => (thread.messages || []).map((msg) => String(msg?._id || '')))
+      .filter(Boolean)
+  );
   const base = (activityEvents.value || []).filter((ev) => {
     if (ev?.type === 'system' && ev?.payload?.action === 'email_sent' && ev?.payload?.details?.communicationId) {
-      return false;
+      const commId = String(ev.payload.details.communicationId || '');
+      if (commId && threadedCommunicationIds.has(commId)) {
+        return false;
+      }
     }
     return true;
   });
   if (!MODULES_WITH_EMAIL.has((props.moduleKey || '').toLowerCase())) {
     return base;
   }
-  const threadEvents = (emailThreads.value || []).map((thread) =>
-    normalizeEmailThreadActivityEvent({
-      ...thread,
-      recordRef,
-      source: 'integration'
-    })
-  );
+  const threadEvents = (emailThreads.value || [])
+    .map((thread) =>
+      normalizeEmailThreadActivityEvent({
+        ...thread,
+        recordRef,
+        source: 'integration'
+      })
+    );
   return sortActivityEventsByDate([...base, ...threadEvents]);
 });
 
@@ -2494,7 +2619,7 @@ async function loadEmailThreadsForRecord(loadedRecord, isCurrentRun) {
 
   try {
     const threadsRes = await apiClient.get('/communications/threads', {
-      params: { moduleKey: props.moduleKey, recordId: loadedRecord._id }
+      params: { moduleKey: props.moduleKey, recordId: loadedRecord._id, includeDone: true }
     });
     if (!isCurrentRun()) return;
     emailThreads.value = threadsRes?.success && Array.isArray(threadsRes?.data?.threads)
@@ -3072,16 +3197,18 @@ function handleExport() {
 
 async function handleEmailSubmit(payload) {
   showEmailModal.value = false;
+  emailComposeDraft.value = null;
   try {
     const res = await apiClient.post('/communications/email', payload);
     if (res?.success) {
+      notifications.success('Email sent');
       await fetchRecord();
     } else {
-      alert(res?.message || 'Failed to send email');
+      notifications.error(res?.message || 'Failed to send email');
     }
   } catch (err) {
     const msg = err?.response?.data?.error || err?.response?.data?.message || err?.message;
-    alert(msg || 'Failed to send email');
+    notifications.error(msg || 'Failed to send email');
   }
 }
 
