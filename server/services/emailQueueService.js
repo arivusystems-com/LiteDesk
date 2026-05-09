@@ -91,8 +91,9 @@ async function processSendJob(communicationId) {
   const Organization = require('../models/Organization');
   const Case = require('../models/Case');
   const User = require('../models/User');
-  const emailService = require('./emailService');
+  const emailProviderGateway = require('../platform/communication/providers/emailProviderGateway');
   const replyToTokenService = require('./replyToTokenService');
+  const { appendCommunicationEvent } = require('./communicationEventWriter');
   const { uploadsDir } = require('../middleware/uploadMiddleware');
 
   const doc = await Communication.findById(communicationId).lean();
@@ -130,7 +131,8 @@ async function processSendJob(communicationId) {
   }
 
   const textBody = (body || '').replace(/<[^>]+>/g, '');
-  const result = await emailService.sendEmail({
+  const result = await emailProviderGateway.sendEmail({
+    organizationId,
     to: toAddresses,
     subject: subject || '',
     text: textBody || undefined,
@@ -144,7 +146,19 @@ async function processSendJob(communicationId) {
     status: finalStatus,
     sentAt: new Date(),
     ...(result.messageId && { externalMessageId: result.messageId }),
-    ...(result.success && { 'metadata.provider': 'smtp' })
+    ...(result.success && { 'metadata.provider': result.provider || 'unknown' })
+  });
+  await appendCommunicationEvent({
+    organizationId,
+    communicationId: doc._id,
+    eventType: finalStatus,
+    source: 'email-worker',
+    idempotencyKeyHash: doc.idempotencyKeyHash || '',
+    payload: {
+      provider: result.provider || null,
+      externalMessageId: result.messageId || null,
+      error: result.success ? null : (result.error || 'send_failed')
+    }
   });
 
   const user = await User.findById(doc.sentByUserId).select('firstName lastName email').lean();

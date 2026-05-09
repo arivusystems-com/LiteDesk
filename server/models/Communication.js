@@ -63,7 +63,10 @@ const CommunicationSchema = new Schema({
 
   metadata: {
     provider: { type: String }
-  }
+  },
+
+  idempotencyKey: { type: String, trim: true },
+  idempotencyKeyHash: { type: String, trim: true, index: true }
 }, {
   timestamps: true
 });
@@ -73,6 +76,10 @@ CommunicationSchema.index({ organizationId: 1, 'relatedTo.moduleKey': 1, 'relate
 CommunicationSchema.index({ externalMessageId: 1 });
 CommunicationSchema.index({ messageId: 1 });
 CommunicationSchema.index({ parentCommunicationId: 1 });
+CommunicationSchema.index(
+  { organizationId: 1, idempotencyKeyHash: 1 },
+  { unique: true, partialFilterExpression: { idempotencyKeyHash: { $exists: true, $type: 'string' } } }
+);
 
 const Communication = mongoose.model('Communication', CommunicationSchema);
 

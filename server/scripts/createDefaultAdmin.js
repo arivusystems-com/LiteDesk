@@ -22,11 +22,11 @@ const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || process.en
 
 // Default Admin Credentials (use environment variables or defaults)
 const DEFAULT_ADMIN = {
-    email: process.env.DEFAULT_ADMIN_EMAIL || 'admin@arivusystems.com',
+    email: process.env.DEFAULT_ADMIN_EMAIL || 'hello@arivusystems.com',
     password: process.env.DEFAULT_ADMIN_PASSWORD || 'Admin@123',
-    username: 'Admin User',
-    firstName: 'Admin',
-    lastName: 'User',
+    username: 'Arivu Admin',
+    firstName: 'Arivu',
+    lastName: 'Admin',
     organizationName: 'Arivu Systems',
     industry: 'Technology'
 };

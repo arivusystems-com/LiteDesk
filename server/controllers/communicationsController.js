@@ -14,7 +14,6 @@ const path = require('path');
 const fs = require('fs');
 const Communication = require('../models/Communication');
 const { uploadsDir } = require('../middleware/uploadMiddleware');
-const emailQueueService = require('../services/emailQueueService');
 const ThreadView = require('../models/ThreadView');
 const People = require('../models/People');
 const Task = require('../models/Task');
@@ -22,11 +21,15 @@ const Organization = require('../models/Organization');
 const Deal = require('../models/Deal');
 const Case = require('../models/Case');
 const User = require('../models/User');
-const emailService = require('../services/emailService');
 const replyToTokenService = require('../services/replyToTokenService');
 const { MAX_ATTACHMENT_SIZE_BYTES, MAX_TOTAL_ATTACHMENTS_BYTES } = require('../models/Communication');
-
-const SUPPORTED_MODULES = new Set(['people', 'organizations', 'deals', 'tasks', 'cases']);
+const communicationPlatformService = require('../platform/communication/api/communicationPlatformService');
+const emailProviderGateway = require('../platform/communication/providers/emailProviderGateway');
+const { appendCommunicationEvent } = require('../services/communicationEventWriter');
+const { getCommunicationConfigForOrganization } = require('../platform/communication/config/communicationConfigService');
+const {
+  SUPPORTED_MODULES
+} = require('../platform/communication/domain/sendEmailContract');
 
 async function getTenantUserIds(organizationId) {
   const users = await User.find({ organizationId }).select('_id').lean();
@@ -42,44 +45,116 @@ function generateMessageId() {
   return `<${uuid}@${domain}>`;
 }
 
+function normalizeIdempotencyKey(value) {
+  if (!value) return '';
+  const normalized = String(value).trim();
+  if (!normalized) return '';
+  return normalized.slice(0, 200);
+}
+
+function hashIdempotencyKey({ organizationId, userId, key }) {
+  if (!key) return '';
+  return crypto
+    .createHash('sha256')
+    .update(`${organizationId}:${userId}:${key}`)
+    .digest('hex');
+}
+
 /**
  * POST /api/communications/email
  * Send email from record context. Insert → Send → Update flow.
  */
 exports.sendEmail = async (req, res) => {
   try {
-    const { relatedTo, to, cc = [], bcc = [], subject, body, attachments = [], parentCommunicationId } = req.body;
-
-    if (!relatedTo || !relatedTo.moduleKey || !relatedTo.recordId) {
+    const validation = communicationPlatformService.validateOutboundEmailPayload(req.body);
+    if (!validation.ok) {
       return res.status(400).json({
         success: false,
-        message: 'relatedTo.moduleKey and relatedTo.recordId are required'
+        message: validation.errors[0] || 'Invalid email payload',
+        errors: validation.errors
       });
     }
-
-    if (!to || (Array.isArray(to) && to.length === 0) || (!Array.isArray(to) && !to.trim())) {
-      return res.status(400).json({
-        success: false,
-        message: 'At least one recipient (to) is required'
-      });
-    }
-
-    if (!subject || !subject.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Subject is required'
-      });
-    }
+    const {
+      relatedTo,
+      to: toList,
+      cc,
+      bcc,
+      subject,
+      body,
+      attachments,
+      parentCommunicationId
+    } = validation.value;
 
     const orgId = req.user.organizationId;
     const moduleKey = relatedTo.moduleKey;
     const recordId = relatedTo.recordId;
-    const toList = Array.isArray(to) ? to.map(e => (typeof e === 'string' ? e.trim() : e)).filter(Boolean) : [String(to).trim()];
+    const runtimeConfig = await getCommunicationConfigForOrganization(orgId);
+    const outboundPolicy = runtimeConfig.outboundEmail || {};
+    const idempotencyKey = normalizeIdempotencyKey(
+      req.headers['x-idempotency-key'] || req.body?.idempotencyKey
+    );
+    const idempotencyKeyHash = hashIdempotencyKey({
+      organizationId: String(orgId),
+      userId: String(req.user._id),
+      key: idempotencyKey
+    });
 
-    if (toList.length === 0) {
-      return res.status(400).json({ success: false, message: 'Valid to address required' });
+    if (outboundPolicy.enabled === false) {
+      return res.status(403).json({
+        success: false,
+        message: 'Outbound email is disabled by communication policy for this tenant.'
+      });
+    }
+    if (outboundPolicy.requireIdempotencyKey && !idempotencyKey) {
+      return res.status(400).json({
+        success: false,
+        message: 'X-Idempotency-Key header is required by communication policy.'
+      });
+    }
+    if (Array.isArray(outboundPolicy.allowedModuleKeys) && !outboundPolicy.allowedModuleKeys.includes(moduleKey)) {
+      return res.status(403).json({
+        success: false,
+        message: `Module "${moduleKey}" is not allowed by tenant communication policy.`
+      });
+    }
+    const totalRecipients =
+      (Array.isArray(toList) ? toList.length : 0) +
+      (Array.isArray(cc) ? cc.length : 0) +
+      (Array.isArray(bcc) ? bcc.length : 0);
+    if (totalRecipients > (Number(outboundPolicy.maxRecipientsPerMessage) || 50)) {
+      return res.status(400).json({
+        success: false,
+        message: `Recipient count exceeds tenant policy limit (${outboundPolicy.maxRecipientsPerMessage}).`
+      });
     }
 
+    if (idempotencyKeyHash) {
+      const existing = await Communication.findOne({
+        organizationId: orgId,
+        direction: 'outbound',
+        kind: 'email',
+        idempotencyKeyHash
+      }).lean();
+      if (existing) {
+        await appendCommunicationEvent({
+          organizationId: orgId,
+          communicationId: existing._id,
+          eventType: 'idempotency_replay',
+          source: 'communications-api',
+          idempotencyKeyHash,
+          payload: {
+            relatedTo: { moduleKey, recordId },
+            reason: 'existing_communication_reused'
+          }
+        });
+        return res.status(200).json({
+          success: true,
+          data: existing,
+          queued: existing.status === 'sending',
+          idempotencyReplay: true
+        });
+      }
+    }
     // Attachment size guardrail
     if (attachments && attachments.length > 0) {
       let totalSize = 0;
@@ -99,13 +174,6 @@ exports.sendEmail = async (req, res) => {
           message: `Total attachment size exceeds ${MAX_TOTAL_ATTACHMENTS_BYTES / 1024 / 1024}MB limit`
         });
       }
-    }
-
-    if (!SUPPORTED_MODULES.has(moduleKey)) {
-      return res.status(400).json({
-        success: false,
-        message: `Unsupported moduleKey. Supported: people, organizations, deals, tasks, cases`
-      });
     }
 
     let record = null;
@@ -134,7 +202,7 @@ exports.sendEmail = async (req, res) => {
       });
     }
 
-    if (!emailService.isConfigured()) {
+    if (!(await communicationPlatformService.canSendEmailNow({ organizationId: orgId }))) {
       return res.status(503).json({
         success: false,
         message: 'Email service is not configured. Configure AWS SES or SMTP in environment.'
@@ -178,10 +246,45 @@ exports.sendEmail = async (req, res) => {
       status: 'sending',
       relatedTo: { moduleKey, recordId },
       sentByUserId: req.user._id,
-      attachments: attachments || []
+      attachments: attachments || [],
+      idempotencyKey: idempotencyKey || undefined,
+      idempotencyKeyHash: idempotencyKeyHash || undefined
     });
 
-    await doc.save();
+    try {
+      await doc.save();
+    } catch (saveErr) {
+      if (saveErr?.code === 11000 && idempotencyKeyHash) {
+        const existing = await Communication.findOne({
+          organizationId: orgId,
+          direction: 'outbound',
+          kind: 'email',
+          idempotencyKeyHash
+        }).lean();
+        if (existing) {
+          return res.status(200).json({
+            success: true,
+            data: existing,
+            queued: existing.status === 'sending',
+            idempotencyReplay: true
+          });
+        }
+      }
+      throw saveErr;
+    }
+    await appendCommunicationEvent({
+      organizationId: orgId,
+      communicationId: doc._id,
+      eventType: 'accepted',
+      source: 'communications-api',
+      idempotencyKeyHash,
+      payload: {
+        relatedTo: { moduleKey, recordId },
+        toCount: toList.length,
+        ccCount: Array.isArray(cc) ? cc.length : 0,
+        bccCount: Array.isArray(bcc) ? bcc.length : 0
+      }
+    });
 
     // Set threadId for first in thread
     if (!threadId) {
@@ -189,7 +292,15 @@ exports.sendEmail = async (req, res) => {
     }
 
     // Step 2: Send — use queue when Redis available, else sync
-    if (emailQueueService.enqueueSend(doc._id.toString())) {
+    if (communicationPlatformService.enqueueOutboundEmail(doc._id.toString())) {
+      await appendCommunicationEvent({
+        organizationId: orgId,
+        communicationId: doc._id,
+        eventType: 'queued',
+        source: 'communications-api',
+        idempotencyKeyHash,
+        payload: { queue: 'email-send' }
+      });
       const updated = await Communication.findById(doc._id).lean();
       return res.status(200).json({ success: true, data: updated, queued: true });
     }
@@ -217,6 +328,21 @@ exports.sendEmail = async (req, res) => {
           });
         } catch (readErr) {
           console.error('[communicationsController] Failed to read attachment:', storagePath, readErr.message);
+          await Communication.findByIdAndUpdate(doc._id, {
+            status: 'failed',
+            sentAt: new Date()
+          });
+          await appendCommunicationEvent({
+            organizationId: orgId,
+            communicationId: doc._id,
+            eventType: 'failed',
+            source: 'communications-api',
+            idempotencyKeyHash,
+            payload: {
+              reason: 'attachment_read_failed',
+              attachment: att.fileName || storagePath
+            }
+          });
           return res.status(400).json({
             success: false,
             message: `Could not read attachment "${att.fileName || storagePath}"`
@@ -225,7 +351,8 @@ exports.sendEmail = async (req, res) => {
       }
     }
 
-    const result = await emailService.sendEmail({
+    const result = await emailProviderGateway.sendEmail({
+      organizationId: orgId,
       to: toList,
       subject: subject.trim(),
       text: textBody || undefined,
@@ -239,8 +366,20 @@ exports.sendEmail = async (req, res) => {
       status: finalStatus,
       sentAt: new Date(),
       ...(result.messageId && { externalMessageId: result.messageId }),
-      ...(result.success && { 'metadata.provider': 'smtp' })
+      ...(result.success && { 'metadata.provider': result.provider || 'unknown' })
     });
+  await appendCommunicationEvent({
+    organizationId: orgId,
+    communicationId: doc._id,
+    eventType: finalStatus,
+    source: 'communications-api',
+    idempotencyKeyHash,
+    payload: {
+      provider: result.provider || null,
+      externalMessageId: result.messageId || null,
+      error: result.success ? null : (result.error || 'send_failed')
+    }
+  });
 
     const user = await User.findById(req.user._id).select('firstName lastName email').lean();
     const userName = String(user?.firstName || user?.lastName || user?.email || 'User');

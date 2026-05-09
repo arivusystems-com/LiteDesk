@@ -45,6 +45,13 @@ const routes = [
     name: 'demo',
     component: () => import('@/views/Demo.vue')
   },
+  {
+    path: '/tools/email-smoke-test',
+    name: 'email-smoke-test',
+    component: () => import('@/views/EmailSmokeTest.vue'),
+    alias: ['/email-smoke-test'],
+    meta: { requiresAuth: true }
+  },
   // Phase 1B: Generic App Dashboard (registry-driven)
   // Note: More specific route (/dashboard/:appKey) must come BEFORE less specific (/dashboard)
   // to ensure proper route matching

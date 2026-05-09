@@ -1,66 +1,86 @@
 /**
  * Email service - sends transactional and notification emails.
- * Supports AWS SES (primary) and SMTP (fallback) via environment configuration.
+ * Supports provider-agnostic delivery via environment configuration.
+ * Common setup: Resend over SMTP.
+ * Optional: AWS SES when configured.
  * Never throws; returns { success, messageId?, error? } for all operations.
  */
 
 const EMAIL_PROVIDER_KEY = 'email-provider';
 
-let sesClient = null;
-let nodemailerTransport = null;
+function isTruthy(value) {
+  return String(value || '').toLowerCase() === 'true';
+}
 
-/**
- * Initialize AWS SES client if credentials are present.
- */
-function getSesClient() {
-  if (sesClient) return sesClient;
-  const region = process.env.AWS_SES_REGION;
-  const accessKey = process.env.AWS_SES_ACCESS_KEY_ID;
-  const secretKey = process.env.AWS_SES_SECRET_ACCESS_KEY;
-  if (!region || !accessKey || !secretKey) return null;
+function resolveRuntimeConfig(config = {}) {
+  const smtpPort = parseInt(config.smtpPort || process.env.SMTP_PORT || '0', 10);
+  return {
+    provider: config.provider || process.env.EMAIL_PROVIDER || '',
+    fromEmail: config.fromEmail || process.env.EMAIL_FROM || '',
+    fromName: config.fromName || process.env.EMAIL_FROM_NAME || 'Arivu Systems',
+    replyTo: config.replyTo || process.env.EMAIL_REPLY_TO || '',
+    smtpHost: config.smtpHost || process.env.SMTP_HOST || '',
+    smtpPort: Number.isNaN(smtpPort) ? 0 : smtpPort,
+    smtpUser: config.smtpUser || process.env.SMTP_USER || '',
+    smtpPass: config.smtpPass || process.env.SMTP_PASS || '',
+    smtpSecure: config.smtpSecure === true || isTruthy(config.smtpSecure) || smtpPort === 465,
+    awsRegion: config.awsRegion || process.env.AWS_SES_REGION || '',
+    awsAccessKeyId: config.awsAccessKeyId || process.env.AWS_SES_ACCESS_KEY_ID || '',
+    awsSecretAccessKey: config.awsSecretAccessKey || process.env.AWS_SES_SECRET_ACCESS_KEY || '',
+  };
+}
+
+function createSesClient(runtimeConfig) {
+  if (!runtimeConfig.awsRegion || !runtimeConfig.awsAccessKeyId || !runtimeConfig.awsSecretAccessKey) {
+    return null;
+  }
   try {
     const { SESClient } = require('@aws-sdk/client-ses');
-    sesClient = new SESClient({
-      region,
-      credentials: { accessKeyId: accessKey, secretAccessKey: secretKey }
+    return new SESClient({
+      region: runtimeConfig.awsRegion,
+      credentials: {
+        accessKeyId: runtimeConfig.awsAccessKeyId,
+        secretAccessKey: runtimeConfig.awsSecretAccessKey
+      }
     });
-    return sesClient;
   } catch (err) {
     console.error('[emailService] Failed to create SES client:', err.message);
     return null;
   }
 }
 
-/**
- * Initialize nodemailer transport if SMTP env vars are present.
- */
-function getNodemailerTransport() {
-  if (nodemailerTransport !== null) return nodemailerTransport;
-  const host = process.env.SMTP_HOST;
-  const port = process.env.SMTP_PORT;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!host || !port) {
-    nodemailerTransport = false;
-    return false;
-  }
+function createSmtpTransport(runtimeConfig) {
+  if (!runtimeConfig.smtpHost || !runtimeConfig.smtpPort) return null;
   try {
     const nodemailer = require('nodemailer');
-    const portNum = parseInt(port, 10);
-    nodemailerTransport = nodemailer.createTransport({
-      host,
-      port: portNum,
-      secure: portNum === 465,
-      auth: user && pass ? { user, pass } : undefined,
+    return nodemailer.createTransport({
+      host: runtimeConfig.smtpHost,
+      port: runtimeConfig.smtpPort,
+      secure: runtimeConfig.smtpSecure,
+      auth: runtimeConfig.smtpUser && runtimeConfig.smtpPass
+        ? { user: runtimeConfig.smtpUser, pass: runtimeConfig.smtpPass }
+        : undefined,
       pool: true,
       maxConnections: 5,
       maxMessages: 100
     });
-    return nodemailerTransport;
   } catch (err) {
     console.error('[emailService] Failed to create SMTP transport:', err.message);
-    nodemailerTransport = false;
-    return false;
+    return null;
+  }
+}
+
+async function getOrganizationEmailConfig(organizationId) {
+  if (!organizationId) return null;
+  try {
+    const Organization = require('../models/Organization');
+    const org = await Organization.findById(organizationId).select('integrations').lean();
+    const config = org?.integrations?.[EMAIL_PROVIDER_KEY]?.config;
+    if (!config || typeof config !== 'object') return null;
+    return config;
+  } catch (err) {
+    console.error('[emailService] Failed to resolve organization email config:', err.message);
+    return null;
   }
 }
 
@@ -71,10 +91,19 @@ function getNodemailerTransport() {
  */
 function isConfigured() {
   if (process.env.ENABLE_EMAIL_NOTIFICATIONS === 'false') return false;
-  if (!process.env.EMAIL_FROM) return false;
-  if (getSesClient()) return true;
-  const transport = getNodemailerTransport();
-  return !!transport;
+  const runtimeConfig = resolveRuntimeConfig();
+  if (!runtimeConfig.fromEmail) return false;
+  if (createSesClient(runtimeConfig)) return true;
+  return !!createSmtpTransport(runtimeConfig);
+}
+
+async function isConfiguredForOrganization(organizationId) {
+  if (process.env.ENABLE_EMAIL_NOTIFICATIONS === 'false') return false;
+  const orgConfig = await getOrganizationEmailConfig(organizationId);
+  const runtimeConfig = resolveRuntimeConfig(orgConfig || {});
+  if (!runtimeConfig.fromEmail) return false;
+  if (createSesClient(runtimeConfig)) return true;
+  return !!createSmtpTransport(runtimeConfig);
 }
 
 /**
@@ -92,7 +121,7 @@ function getFromAddress() {
  * @returns {Promise<{ success: boolean, messageId?: string, error?: string }>}
  */
 async function sendEmail(opts) {
-  const { to, subject, text, html, replyTo, attachments = [] } = opts || {};
+  const { to, subject, text, html, replyTo, attachments = [], organizationId } = opts || {};
   if (!to || !subject) {
     return { success: false, error: 'Missing to or subject' };
   }
@@ -102,13 +131,17 @@ async function sendEmail(opts) {
     return { success: false, error: 'Missing to address' };
   }
 
-  const from = getFromAddress();
-  const replyToAddr = replyTo || process.env.EMAIL_REPLY_TO || undefined;
+  const orgConfig = await getOrganizationEmailConfig(organizationId);
+  const runtimeConfig = resolveRuntimeConfig(orgConfig || {});
+  const from = runtimeConfig.fromName
+    ? `"${runtimeConfig.fromName}" <${runtimeConfig.fromEmail || 'noreply@arivusystems.com'}>`
+    : (runtimeConfig.fromEmail || getFromAddress());
+  const replyToAddr = replyTo || runtimeConfig.replyTo || undefined;
 
   const hasAttachments = attachments && attachments.length > 0;
 
   if (hasAttachments) {
-    const transport = getNodemailerTransport();
+    const transport = createSmtpTransport(runtimeConfig);
     if (!transport) {
       return { success: false, error: 'Attachments require SMTP. Configure SMTP (e.g. Mailtrap) for attachment support.' };
     }
@@ -125,14 +158,14 @@ async function sendEmail(opts) {
           content: a.content
         }))
       });
-      return { success: true, messageId: info.messageId };
+      return { success: true, messageId: info.messageId, provider: 'smtp' };
     } catch (err) {
       console.error('[emailService] SMTP send failed:', err.message);
       return { success: false, error: err.message };
     }
   }
 
-  const client = getSesClient();
+  const client = createSesClient(runtimeConfig);
   if (client) {
     try {
       const { SendEmailCommand } = require('@aws-sdk/client-ses');
@@ -149,14 +182,14 @@ async function sendEmail(opts) {
         ReplyToAddresses: replyToAddr ? [replyToAddr] : undefined
       });
       const result = await client.send(command);
-      return { success: true, messageId: result.MessageId };
+      return { success: true, messageId: result.MessageId, provider: 'aws-ses' };
     } catch (err) {
       console.error('[emailService] SES send failed:', err.message);
       return { success: false, error: err.message };
     }
   }
 
-  const transport = getNodemailerTransport();
+  const transport = createSmtpTransport(runtimeConfig);
   if (transport) {
     try {
       const info = await transport.sendMail({
@@ -167,7 +200,7 @@ async function sendEmail(opts) {
         html: html || undefined,
         replyTo: replyToAddr
       });
-      return { success: true, messageId: info.messageId };
+      return { success: true, messageId: info.messageId, provider: 'smtp' };
     } catch (err) {
       console.error('[emailService] SMTP send failed:', err.message);
       return { success: false, error: err.message };
@@ -180,5 +213,7 @@ async function sendEmail(opts) {
 module.exports = {
   EMAIL_PROVIDER_KEY,
   isConfigured,
+  isConfiguredForOrganization,
+  getOrganizationEmailConfig,
   sendEmail
 };

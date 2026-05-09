@@ -68,5 +68,6 @@ router.get('/integrations/:key', controller.getIntegration);
 router.post('/integrations/:key/enable', controller.enableIntegration);
 router.post('/integrations/:key/disable', controller.disableIntegration);
 router.post('/integrations/:key/test', controller.testIntegration);
+router.put('/integrations/:key/config', controller.updateIntegrationConfig);
 
 module.exports = router;
