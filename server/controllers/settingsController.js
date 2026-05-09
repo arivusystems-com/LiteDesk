@@ -17,6 +17,7 @@
  */
 
 const mongoose = require('mongoose');
+const dns = require('node:dns').promises;
 const ModuleDefinition = require('../models/ModuleDefinition');
 const Organization = require('../models/Organization');
 const User = require('../models/User');
@@ -24,6 +25,161 @@ const People = require('../models/People');
 const TenantModuleConfiguration = require('../models/TenantModuleConfiguration');
 const integrationRegistry = require('../constants/integrationRegistry');
 const emailService = require('../services/emailService');
+const communicationPlatformService = require('../platform/communication/api/communicationPlatformService');
+const {
+    getCommunicationConfigForOrganization,
+    upsertCommunicationConfigForOrganization
+} = require('../platform/communication/config/communicationConfigService');
+
+function maskSecret(value) {
+    if (!value) return '';
+    const raw = String(value);
+    if (raw.length <= 8) return '********';
+    return `${raw.slice(0, 4)}****${raw.slice(-2)}`;
+}
+
+function sanitizeEmailConfigForResponse(config = {}) {
+    return {
+        provider: config.provider || '',
+        fromEmail: config.fromEmail || '',
+        fromName: config.fromName || '',
+        replyTo: config.replyTo || '',
+        smtpHost: config.smtpHost || '',
+        smtpPort: config.smtpPort || '',
+        smtpUser: config.smtpUser || '',
+        smtpSecure: config.smtpSecure === true,
+        smtpPassMasked: config.smtpPass ? maskSecret(config.smtpPass) : '',
+        hasSmtpPass: !!config.smtpPass
+    };
+}
+
+function getEnvEmailConfigFallback() {
+    return {
+        provider: process.env.EMAIL_PROVIDER || '',
+        fromEmail: process.env.EMAIL_FROM || '',
+        fromName: process.env.EMAIL_FROM_NAME || '',
+        replyTo: process.env.EMAIL_REPLY_TO || '',
+        smtpHost: process.env.SMTP_HOST || '',
+        smtpPort: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) || process.env.SMTP_PORT : '',
+        smtpUser: process.env.SMTP_USER || '',
+        smtpSecure: String(process.env.SMTP_PORT || '') === '465',
+        smtpPass: process.env.SMTP_PASS || ''
+    };
+}
+
+function toComparable(value) {
+    if (value === undefined || value === null) return '';
+    return String(value).trim();
+}
+
+function classifyDnsError(error) {
+    const code = String(error?.code || '');
+    if (code === 'ENOTFOUND' || code === 'ENODATA') return 'no_record';
+    if (code === 'ETIMEOUT' || code === 'ESERVFAIL' || code === 'EAI_AGAIN') return 'dns_unreachable';
+    return 'lookup_error';
+}
+
+async function resolveTxtRecords(hostname) {
+    try {
+        const records = await dns.resolveTxt(hostname);
+        const flattened = (records || []).map((parts) => parts.join('')).filter(Boolean);
+        return { ok: true, records: flattened };
+    } catch (error) {
+        return { ok: false, error };
+    }
+}
+
+async function deriveEmailDomainVerification(config = {}) {
+    const email = String(config.fromEmail || '').trim().toLowerCase();
+    const domain = email.includes('@') ? email.split('@')[1] : '';
+    if (!domain) {
+        return {
+            domain: '',
+            checkedAt: new Date().toISOString(),
+            senderIdentity: {
+                status: 'missing_sender',
+                note: 'Set a valid From Email to evaluate sender domain.'
+            },
+            spf: { status: 'missing_sender', note: 'No sender domain available.' },
+            dkim: { status: 'missing_sender', note: 'No sender domain available.' },
+            dmarc: { status: 'missing_sender', note: 'No sender domain available.' }
+        };
+    }
+
+    const [rootTxt, dmarcTxt, selector1Txt, selector2Txt, resendDkimTxt] = await Promise.all([
+        resolveTxtRecords(domain),
+        resolveTxtRecords(`_dmarc.${domain}`),
+        resolveTxtRecords(`selector1._domainkey.${domain}`),
+        resolveTxtRecords(`selector2._domainkey.${domain}`),
+        resolveTxtRecords(`resend._domainkey.${domain}`)
+    ]);
+
+    const rootRecords = rootTxt.ok ? rootTxt.records : [];
+    const hasSpf = rootRecords.some((line) => /^v=spf1\b/i.test(line));
+    const dmarcRecords = dmarcTxt.ok ? dmarcTxt.records : [];
+    const hasDmarc = dmarcRecords.some((line) => /^v=dmarc1\b/i.test(line));
+
+    const dkimSources = [selector1Txt, selector2Txt, resendDkimTxt];
+    const dkimRecords = dkimSources
+        .filter((result) => result.ok)
+        .flatMap((result) => result.records);
+    const hasDkim = dkimRecords.some((line) => /v=dkim1|k=rsa|p=/i.test(line));
+
+    const senderIdentityStatus = hasSpf || hasDmarc || hasDkim ? 'configured' : 'unverified';
+
+    return {
+        domain,
+        checkedAt: new Date().toISOString(),
+        senderIdentity: {
+            status: senderIdentityStatus,
+            note: senderIdentityStatus === 'configured'
+                ? 'At least one sender-auth DNS signal is present.'
+                : 'No SPF, DKIM, or DMARC records detected yet.'
+        },
+        spf: {
+            status: hasSpf ? 'configured' : (rootTxt.ok ? 'missing' : classifyDnsError(rootTxt.error)),
+            note: hasSpf
+                ? 'SPF TXT record found on root domain.'
+                : (rootTxt.ok ? 'No SPF TXT record found on root domain.' : `DNS lookup failed: ${rootTxt.error?.code || 'unknown'}`)
+        },
+        dkim: {
+            status: hasDkim
+                ? 'configured'
+                : (dkimSources.some((result) => result.ok)
+                    ? 'missing'
+                    : classifyDnsError(dkimSources.find((result) => !result.ok)?.error)),
+            note: hasDkim
+                ? 'DKIM TXT record found for common selectors.'
+                : 'No DKIM TXT record found for selector1/selector2/resend selectors.'
+        },
+        dmarc: {
+            status: hasDmarc ? 'configured' : (dmarcTxt.ok ? 'missing' : classifyDnsError(dmarcTxt.error)),
+            note: hasDmarc
+                ? 'DMARC TXT record found at _dmarc subdomain.'
+                : (dmarcTxt.ok ? 'No DMARC TXT record found at _dmarc subdomain.' : `DNS lookup failed: ${dmarcTxt.error?.code || 'unknown'}`)
+        }
+    };
+}
+
+async function writeIntegrationAuditLog(organization, req, event, details) {
+    try {
+        const userLabel = req.user?.username || req.user?.email || 'Unknown';
+        const auditEntry = {
+            user: userLabel,
+            userId: req.user?._id || null,
+            action: event,
+            details,
+            timestamp: new Date()
+        };
+        if (!Array.isArray(organization.activityLogs)) {
+            organization.activityLogs = [];
+        }
+        organization.activityLogs.push(auditEntry);
+        organization.markModified('activityLogs');
+    } catch (err) {
+        console.error('[settings] Failed to append integration audit log:', err.message);
+    }
+}
 
 /**
  * Get all core modules with their application usage
@@ -1650,7 +1806,20 @@ exports.getIntegration = async (req, res) => {
         };
 
         if (integration.key === emailService.EMAIL_PROVIDER_KEY) {
-            payload.configStatus = emailService.isConfigured() ? 'configured' : 'not_configured';
+            const tenantConfig = await emailService.getOrganizationEmailConfig(req.user.organizationId);
+            const resolvedConfig = tenantConfig && Object.keys(tenantConfig).length > 0
+                ? tenantConfig
+                : getEnvEmailConfigFallback();
+            payload.configStatus = (await emailService.isConfiguredForOrganization(req.user.organizationId))
+                ? 'configured'
+                : 'not_configured';
+            payload.emailConfig = sanitizeEmailConfigForResponse(resolvedConfig);
+            payload.emailDomainVerification = await deriveEmailDomainVerification(resolvedConfig);
+            const communicationConfig = await getCommunicationConfigForOrganization(req.user.organizationId);
+            payload.communicationPolicy = {
+                outboundEmail: communicationConfig.outboundEmail,
+                supportedModuleKeys: communicationPlatformService.getSupportedModules()
+            };
         }
 
         res.json({
@@ -1662,6 +1831,137 @@ exports.getIntegration = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to fetch integration',
+            error: error.message
+        });
+    }
+};
+
+exports.updateIntegrationConfig = async (req, res) => {
+    try {
+        const { key } = req.params;
+        if (key !== emailService.EMAIL_PROVIDER_KEY) {
+            return res.status(400).json({
+                success: false,
+                message: 'Config update not supported for this integration'
+            });
+        }
+
+        const organization = await Organization.findById(req.user.organizationId);
+        if (!organization) {
+            return res.status(404).json({
+                success: false,
+                message: 'Organization not found'
+            });
+        }
+
+        const {
+            provider,
+            fromEmail,
+            fromName,
+            replyTo,
+            smtpHost,
+            smtpPort,
+            smtpUser,
+            smtpPass,
+            smtpSecure,
+            communicationPolicy
+        } = req.body || {};
+        const isOwnerLike = req.user?.isOwner === true || String(req.user?.role || '').toLowerCase() === 'owner';
+
+        if (!fromEmail || !String(fromEmail).includes('@')) {
+            return res.status(400).json({
+                success: false,
+                message: 'Valid fromEmail is required'
+            });
+        }
+        if (!smtpHost || !smtpPort || !smtpUser) {
+            return res.status(400).json({
+                success: false,
+                message: 'smtpHost, smtpPort, and smtpUser are required'
+            });
+        }
+
+        const current = organization.integrations || {};
+        const prev = current[key] || {};
+        const prevConfig = prev.config || {};
+        const baselineConfig = Object.keys(prevConfig).length > 0
+            ? prevConfig
+            : getEnvEmailConfigFallback();
+        const nextConfig = {
+            provider: String(provider || 'resend').trim().toLowerCase(),
+            fromEmail: String(fromEmail || '').trim(),
+            fromName: String(fromName || '').trim(),
+            replyTo: String(replyTo || '').trim(),
+            smtpHost: String(smtpHost || '').trim(),
+            smtpPort: Number(smtpPort) || 587,
+            smtpUser: String(smtpUser || '').trim(),
+            smtpSecure: smtpSecure === true || String(smtpSecure).toLowerCase() === 'true',
+            smtpPass: (smtpPass !== undefined && String(smtpPass).trim() !== '')
+                ? String(smtpPass)
+                : (prevConfig.smtpPass || '')
+        };
+
+        const criticalFields = ['provider', 'fromEmail', 'smtpHost', 'smtpPort', 'smtpUser', 'smtpPass'];
+        const changedCriticalFields = criticalFields.filter((fieldKey) => {
+            if (fieldKey === 'smtpPass') {
+                if (smtpPass === undefined || String(smtpPass).trim() === '') return false;
+                return true;
+            }
+            return toComparable(nextConfig[fieldKey]) !== toComparable(baselineConfig[fieldKey]);
+        });
+        if (!isOwnerLike && changedCriticalFields.length > 0) {
+            return res.status(403).json({
+                success: false,
+                message: `Only workspace owner can modify critical email fields: ${changedCriticalFields.join(', ')}`,
+                code: 'EMAIL_CONFIG_OWNER_ONLY'
+            });
+        }
+        const hasPolicyUpdate = communicationPolicy && typeof communicationPolicy === 'object';
+        if (hasPolicyUpdate && !isOwnerLike) {
+            return res.status(403).json({
+                success: false,
+                message: 'Only workspace owner can modify communication policy',
+                code: 'COMMUNICATION_POLICY_OWNER_ONLY'
+            });
+        }
+
+        const nextState = {
+            ...prev,
+            config: nextConfig,
+            updatedAt: new Date()
+        };
+
+        organization.integrations = {
+            ...current,
+            [key]: nextState
+        };
+        await writeIntegrationAuditLog(organization, req, 'integration_email_config_updated', {
+            integrationKey: key,
+            changedCriticalFields,
+            changedNonCriticalFields: ['fromName', 'replyTo', 'smtpSecure'].filter(
+                (fieldKey) => toComparable(nextConfig[fieldKey]) !== toComparable(baselineConfig[fieldKey])
+            )
+        });
+        if (hasPolicyUpdate) {
+            await upsertCommunicationConfigForOrganization(req.user.organizationId, communicationPolicy);
+            await writeIntegrationAuditLog(organization, req, 'integration_communication_policy_updated', {
+                integrationKey: key,
+                outboundEmail: communicationPolicy.outboundEmail || {}
+            });
+        }
+        organization.markModified('integrations');
+        await organization.save();
+
+        return res.json({
+            success: true,
+            message: 'Email provider settings saved successfully',
+            data: sanitizeEmailConfigForResponse(nextConfig)
+        });
+    } catch (error) {
+        console.error('Update integration config error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to update integration config',
             error: error.message
         });
     }
@@ -1751,14 +2051,15 @@ exports.testIntegration = async (req, res) => {
             });
         }
 
-        if (!emailService.isConfigured()) {
+        if (!(await emailService.isConfiguredForOrganization(req.user.organizationId))) {
             return res.status(400).json({
                 success: false,
-                message: 'Email service is not configured. Add SMTP or AWS SES credentials to your environment.'
+                message: 'Email service is not configured. Save SMTP credentials in Settings > Integrations > Email Provider.'
             });
         }
 
         const result = await emailService.sendEmail({
+            organizationId: req.user.organizationId,
             to: userEmail,
             subject: 'Arivu – Test Email',
             text: 'This is a test email from Arivu. If you received this, your email integration is working.',

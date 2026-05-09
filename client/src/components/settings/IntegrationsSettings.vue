@@ -225,6 +225,218 @@
             </button>
           </div>
 
+          <div
+            v-if="selectedIntegration.key === 'email-provider'"
+            class="rounded-lg p-4 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40"
+          >
+            <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Email Provider Configuration</h4>
+            <p
+              v-if="emailCriticalFieldsLocked"
+              class="mb-3 text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2"
+            >
+              Critical provider fields are owner-only. You can update non-critical fields like From Name, Reply-To, and SMTP secure mode.
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label class="text-sm">
+                <span class="block mb-1 text-gray-700 dark:text-gray-300">
+                  Provider
+                  <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">(owner-only)</span>
+                </span>
+                <select v-model="emailConfig.provider" :disabled="emailCriticalFieldsLocked" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                  <option value="resend">resend</option>
+                  <option value="smtp">smtp</option>
+                  <option value="aws-ses">aws-ses</option>
+                </select>
+              </label>
+
+              <label class="text-sm">
+                <span class="block mb-1 text-gray-700 dark:text-gray-300">
+                  From Email
+                  <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">(owner-only)</span>
+                </span>
+                <input v-model="emailConfig.fromEmail" :disabled="emailCriticalFieldsLocked" type="email" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed" placeholder="hello@yourdomain.com" />
+              </label>
+
+              <label class="text-sm">
+                <span class="block mb-1 text-gray-700 dark:text-gray-300">From Name</span>
+                <input v-model="emailConfig.fromName" type="text" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2" placeholder="Your Company" />
+              </label>
+
+              <label class="text-sm">
+                <span class="block mb-1 text-gray-700 dark:text-gray-300">Reply-To</span>
+                <input v-model="emailConfig.replyTo" type="email" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2" placeholder="support@yourdomain.com" />
+              </label>
+
+              <label class="text-sm">
+                <span class="block mb-1 text-gray-700 dark:text-gray-300">
+                  SMTP Host
+                  <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">(owner-only)</span>
+                </span>
+                <input v-model="emailConfig.smtpHost" :disabled="emailCriticalFieldsLocked" type="text" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed" placeholder="smtp.resend.com" />
+              </label>
+
+              <label class="text-sm">
+                <span class="block mb-1 text-gray-700 dark:text-gray-300">
+                  SMTP Port
+                  <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">(owner-only)</span>
+                </span>
+                <input v-model="emailConfig.smtpPort" :disabled="emailCriticalFieldsLocked" type="number" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed" placeholder="587" />
+              </label>
+
+              <label class="text-sm">
+                <span class="block mb-1 text-gray-700 dark:text-gray-300">
+                  SMTP User
+                  <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">(owner-only)</span>
+                </span>
+                <input v-model="emailConfig.smtpUser" :disabled="emailCriticalFieldsLocked" type="text" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed" placeholder="resend" />
+              </label>
+
+              <label class="text-sm">
+                <span class="block mb-1 text-gray-700 dark:text-gray-300">
+                  SMTP Password / API Key
+                  <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">(owner-only)</span>
+                  <span v-if="emailConfig.hasSmtpPass" class="text-xs text-gray-500 dark:text-gray-400">({{ emailConfig.smtpPassMasked || 'saved' }})</span>
+                </span>
+                <input v-model="emailConfig.smtpPass" :disabled="emailCriticalFieldsLocked" type="password" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed" placeholder="Leave blank to keep existing secret" />
+              </label>
+            </div>
+
+            <label class="mt-3 inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <input v-model="emailConfig.smtpSecure" type="checkbox" class="rounded border-gray-300 dark:border-gray-600" />
+              Use secure SMTP (TLS)
+            </label>
+
+            <div class="mt-4">
+              <button
+                type="button"
+                @click="saveEmailConfig"
+                :disabled="savingConfig"
+                class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {{ savingConfig ? 'Saving...' : 'Save Email Settings' }}
+              </button>
+            </div>
+          </div>
+
+          <div
+            v-if="selectedIntegration.key === 'email-provider'"
+            class="rounded-lg p-4 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40"
+          >
+            <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Communication Policy</h4>
+            <p
+              v-if="communicationPolicyLocked"
+              class="mb-3 text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2"
+            >
+              Communication policy is owner-only.
+            </p>
+
+            <div class="space-y-3">
+              <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input
+                  v-model="communicationPolicy.outboundEmail.enabled"
+                  type="checkbox"
+                  class="rounded border-gray-300 dark:border-gray-600"
+                  :disabled="communicationPolicyLocked"
+                />
+                Enable outbound email from Communication API
+              </label>
+
+              <label class="text-sm block">
+                <span class="block mb-1 text-gray-700 dark:text-gray-300">Max recipients per message</span>
+                <input
+                  v-model.number="communicationPolicy.outboundEmail.maxRecipientsPerMessage"
+                  type="number"
+                  min="1"
+                  max="1000"
+                  class="w-full md:w-64 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                  :disabled="communicationPolicyLocked"
+                />
+              </label>
+
+              <div>
+                <span class="block mb-1 text-sm text-gray-700 dark:text-gray-300">Allowed modules for outbound emails</span>
+                <div class="flex flex-wrap gap-2">
+                  <label
+                    v-for="moduleKey in communicationPolicy.supportedModuleKeys"
+                    :key="`policy-${moduleKey}`"
+                    class="inline-flex items-center gap-1.5 px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-xs text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900"
+                  >
+                    <input
+                      :value="moduleKey"
+                      v-model="communicationPolicy.outboundEmail.allowedModuleKeys"
+                      type="checkbox"
+                      class="rounded border-gray-300 dark:border-gray-600"
+                      :disabled="communicationPolicyLocked"
+                    />
+                    {{ moduleKey }}
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div
+            v-if="selectedIntegration.key === 'email-provider' && selectedIntegration.emailDomainVerification"
+            class="rounded-lg p-4 border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20"
+          >
+            <div class="flex items-center justify-between gap-3 mb-1">
+              <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Sender Domain Verification</h4>
+              <button
+                type="button"
+                @click="checkEmailDomainStatus"
+                :disabled="checkingDomainStatus"
+                class="px-3 py-1.5 text-xs font-medium text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {{ checkingDomainStatus ? 'Checking...' : 'Check Status' }}
+              </button>
+            </div>
+            <p class="text-xs text-blue-800 dark:text-blue-300 mb-3">Live DNS check for sender domain authentication records.</p>
+            <p class="text-xs text-gray-600 dark:text-gray-300 mb-3">
+              Domain: <span class="font-medium">{{ selectedIntegration.emailDomainVerification.domain || 'Not set' }}</span>
+            </p>
+            <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-3" v-if="selectedIntegration.emailDomainVerification.checkedAt">
+              Last checked: {{ formatCheckedAt(selectedIntegration.emailDomainVerification.checkedAt) }}
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div class="rounded-md border border-blue-200 dark:border-blue-700 px-3 py-2 bg-white dark:bg-gray-900/30">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-xs font-semibold text-gray-900 dark:text-white">Sender Identity</p>
+                  <span :class="['inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium', verificationStatusClass(selectedIntegration.emailDomainVerification.senderIdentity?.status)]">
+                    {{ selectedIntegration.emailDomainVerification.senderIdentity?.status || 'not_checked' }}
+                  </span>
+                </div>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">{{ selectedIntegration.emailDomainVerification.senderIdentity?.note }}</p>
+              </div>
+              <div class="rounded-md border border-blue-200 dark:border-blue-700 px-3 py-2 bg-white dark:bg-gray-900/30">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-xs font-semibold text-gray-900 dark:text-white">SPF</p>
+                  <span :class="['inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium', verificationStatusClass(selectedIntegration.emailDomainVerification.spf?.status)]">
+                    {{ selectedIntegration.emailDomainVerification.spf?.status || 'not_checked' }}
+                  </span>
+                </div>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">{{ selectedIntegration.emailDomainVerification.spf?.note }}</p>
+              </div>
+              <div class="rounded-md border border-blue-200 dark:border-blue-700 px-3 py-2 bg-white dark:bg-gray-900/30">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-xs font-semibold text-gray-900 dark:text-white">DKIM</p>
+                  <span :class="['inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium', verificationStatusClass(selectedIntegration.emailDomainVerification.dkim?.status)]">
+                    {{ selectedIntegration.emailDomainVerification.dkim?.status || 'not_checked' }}
+                  </span>
+                </div>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">{{ selectedIntegration.emailDomainVerification.dkim?.note }}</p>
+              </div>
+              <div class="rounded-md border border-blue-200 dark:border-blue-700 px-3 py-2 bg-white dark:bg-gray-900/30">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-xs font-semibold text-gray-900 dark:text-white">DMARC</p>
+                  <span :class="['inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium', verificationStatusClass(selectedIntegration.emailDomainVerification.dmarc?.status)]">
+                    {{ selectedIntegration.emailDomainVerification.dmarc?.status || 'not_checked' }}
+                  </span>
+                </div>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">{{ selectedIntegration.emailDomainVerification.dmarc?.note }}</p>
+              </div>
+            </div>
+          </div>
+
           <!-- Data Sharing -->
           <div class="bg-white dark:bg-gray-900/40 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
             <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">What data is shared</h4>
@@ -242,8 +454,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import apiClient from '@/utils/apiClient';
+import { useAuthStore } from '@/stores/auth';
+
+const authStore = useAuthStore();
+const isOwnerLike = computed(() => authStore.isOwner || String(authStore.userRole || '').toLowerCase() === 'owner');
 
 const integrations = ref([]);
 const selectedIntegration = ref(null);
@@ -251,6 +467,70 @@ const loading = ref(true);
 const error = ref(null);
 const actionLoading = ref(false);
 const testEmailLoading = ref(false);
+const savingConfig = ref(false);
+const checkingDomainStatus = ref(false);
+const emailConfig = ref({
+  provider: 'resend',
+  fromEmail: '',
+  fromName: '',
+  replyTo: '',
+  smtpHost: '',
+  smtpPort: 587,
+  smtpUser: '',
+  smtpPass: '',
+  smtpSecure: false,
+  smtpPassMasked: '',
+  hasSmtpPass: false
+});
+const communicationPolicy = ref({
+  outboundEmail: {
+    enabled: true,
+    maxRecipientsPerMessage: 50,
+    allowedModuleKeys: ['people', 'organizations', 'deals', 'tasks', 'cases']
+  },
+  supportedModuleKeys: ['people', 'organizations', 'deals', 'tasks', 'cases']
+});
+const emailCriticalFieldsLocked = computed(() => !isOwnerLike.value);
+const communicationPolicyLocked = computed(() => !isOwnerLike.value);
+
+const verificationStatusClass = (status) => {
+  const value = String(status || '').toLowerCase();
+  if (value === 'configured') return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300';
+  if (value === 'missing' || value === 'no_record' || value === 'missing_sender' || value === 'unverified') {
+    return 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300';
+  }
+  if (value === 'dns_unreachable' || value === 'lookup_error') {
+    return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300';
+  }
+  return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+};
+
+const checkEmailDomainStatus = async () => {
+  if (!selectedIntegration.value || selectedIntegration.value.key !== 'email-provider') return;
+  checkingDomainStatus.value = true;
+  try {
+    await fetchIntegrationDetail('email-provider', { forceRefresh: true });
+  } catch (err) {
+    console.error('Failed to refresh email domain verification status:', err);
+    alert('Failed to refresh sender domain verification status');
+  } finally {
+    checkingDomainStatus.value = false;
+  }
+};
+
+const formatCheckedAt = (value) => {
+  if (!value) return '';
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return '';
+  return dt.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+};
 
 const fetchIntegrations = async () => {
   loading.value = true;
@@ -274,11 +554,45 @@ const fetchIntegrations = async () => {
   }
 };
 
-const fetchIntegrationDetail = async (key) => {
+const fetchIntegrationDetail = async (key, options = {}) => {
   try {
-    const data = await apiClient(`/settings/integrations/${key}`, { method: 'GET' });
+    const forceRefresh = options.forceRefresh === true;
+    const data = await apiClient(`/settings/integrations/${key}`, {
+      method: 'GET',
+      cache: forceRefresh ? 'no-store' : undefined,
+      params: forceRefresh ? { _t: Date.now() } : undefined
+    });
     if (data && data.success && data.integration) {
       selectedIntegration.value = data.integration;
+      if (data.integration.key === 'email-provider') {
+        const cfg = data.integration.emailConfig || {};
+        emailConfig.value = {
+          provider: cfg.provider || 'resend',
+          fromEmail: cfg.fromEmail || '',
+          fromName: cfg.fromName || '',
+          replyTo: cfg.replyTo || '',
+          smtpHost: cfg.smtpHost || '',
+          smtpPort: cfg.smtpPort || 587,
+          smtpUser: cfg.smtpUser || '',
+          smtpPass: '',
+          smtpSecure: cfg.smtpSecure === true,
+          smtpPassMasked: cfg.smtpPassMasked || '',
+          hasSmtpPass: cfg.hasSmtpPass === true
+        };
+        const policy = data.integration.communicationPolicy || {};
+        communicationPolicy.value = {
+          outboundEmail: {
+            enabled: policy.outboundEmail?.enabled !== false,
+            maxRecipientsPerMessage: Number(policy.outboundEmail?.maxRecipientsPerMessage) || 50,
+            allowedModuleKeys: Array.isArray(policy.outboundEmail?.allowedModuleKeys) && policy.outboundEmail.allowedModuleKeys.length > 0
+              ? policy.outboundEmail.allowedModuleKeys
+              : ['people', 'organizations', 'deals', 'tasks', 'cases']
+          },
+          supportedModuleKeys: Array.isArray(policy.supportedModuleKeys) && policy.supportedModuleKeys.length > 0
+            ? policy.supportedModuleKeys
+            : ['people', 'organizations', 'deals', 'tasks', 'cases']
+        };
+      }
       // Update list entry to keep states in sync
       const idx = integrations.value.findIndex((i) => i.key === key);
       if (idx !== -1) {
@@ -291,6 +605,50 @@ const fetchIntegrationDetail = async (key) => {
     }
   } catch (err) {
     console.error('Failed to fetch integration detail:', err);
+  }
+};
+
+const saveEmailConfig = async () => {
+  if (!selectedIntegration.value || selectedIntegration.value.key !== 'email-provider') return;
+  savingConfig.value = true;
+  try {
+    const payload = {
+      provider: emailConfig.value.provider,
+      fromEmail: emailConfig.value.fromEmail,
+      fromName: emailConfig.value.fromName,
+      replyTo: emailConfig.value.replyTo,
+      smtpHost: emailConfig.value.smtpHost,
+      smtpPort: Number(emailConfig.value.smtpPort) || 587,
+      smtpUser: emailConfig.value.smtpUser,
+      smtpPass: emailConfig.value.smtpPass,
+      smtpSecure: !!emailConfig.value.smtpSecure,
+      communicationPolicy: {
+        outboundEmail: {
+          enabled: communicationPolicy.value.outboundEmail.enabled !== false,
+          maxRecipientsPerMessage: Number(communicationPolicy.value.outboundEmail.maxRecipientsPerMessage) || 50,
+          allowedModuleKeys: communicationPolicy.value.outboundEmail.allowedModuleKeys
+        }
+      }
+    };
+
+    const data = await apiClient('/settings/integrations/email-provider/config', {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+
+    if (data?.success) {
+      alert('Email provider settings saved');
+      emailConfig.value.smtpPass = '';
+      await fetchIntegrationDetail('email-provider');
+      await fetchIntegrations();
+    } else {
+      alert(data?.message || 'Failed to save email settings');
+    }
+  } catch (err) {
+    console.error('Failed to save email config:', err);
+    alert(err?.response?.data?.message || err?.message || 'Failed to save email settings');
+  } finally {
+    savingConfig.value = false;
   }
 };
 

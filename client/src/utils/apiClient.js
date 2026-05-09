@@ -4,10 +4,12 @@ import { useAuthStore } from '@/stores/authRegistry';
 // Request deduplication: map of in-flight requests by URL+method
 const _inFlightRequests = new Map();
 const _metadataResponseCache = new Map();
+const _idempotencyKeyCache = new Map();
 
 const METADATA_CACHE_TTL_MS = 5 * 60 * 1000;
 const PEOPLE_LIST_CACHE_TTL_MS = 30 * 1000;
 const RECORD_CONTEXT_CACHE_TTL_MS = 30 * 1000;
+const IDEMPOTENCY_KEY_TTL_MS = 30 * 1000;
 const CACHEABLE_GET_PATHS = [
     /^\/modules(?:$|\?)/,
     /^\/settings\/core-modules(?:$|\/|\?)/,
@@ -157,6 +159,41 @@ function clearMetadataResponseCache() {
     clearPersistentShortCache();
 }
 
+function shouldAutoIdempotencyHeader(method, pathWithSearch) {
+    return String(method || '').toUpperCase() === 'POST' && /^\/communications\/email(?:$|\?)/.test(pathWithSearch);
+}
+
+function getStableBodyFingerprint(body) {
+    if (!body) return '';
+    if (typeof body === 'string') return body;
+    try {
+        return JSON.stringify(body);
+    } catch {
+        return String(body);
+    }
+}
+
+function getOrCreateIdempotencyKey(cacheKey) {
+    const now = Date.now();
+    const existing = _idempotencyKeyCache.get(cacheKey);
+    if (existing && existing.expiresAt > now) {
+        return existing.key;
+    }
+    const key =
+        (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+            ? crypto.randomUUID()
+            : `${now}-${Math.random().toString(16).slice(2)}`;
+    _idempotencyKeyCache.set(cacheKey, { key, expiresAt: now + IDEMPOTENCY_KEY_TTL_MS });
+
+    // Opportunistic cleanup.
+    if (Math.random() < 0.02) {
+        for (const [k, v] of _idempotencyKeyCache.entries()) {
+            if (!v || v.expiresAt <= now) _idempotencyKeyCache.delete(k);
+        }
+    }
+    return key;
+}
+
 const apiClient = async (url, options = {}) => {
     const authStore = useAuthStore();
     const token = authStore.user?.token; // Get token from Pinia store
@@ -184,6 +221,11 @@ const apiClient = async (url, options = {}) => {
     // Request deduplication: only dedupe GET requests (safe idempotent operations)
     const method = options.method || 'GET';
     const pathWithSearch = getPathWithSearch(fullUrl);
+    if (shouldAutoIdempotencyHeader(method, pathWithSearch) && !headers['X-Idempotency-Key']) {
+        const fingerprint = getStableBodyFingerprint(options.body);
+        const idempotencyCacheKey = `${sessionKey}:${method}:${pathWithSearch}:${fingerprint}`;
+        headers['X-Idempotency-Key'] = getOrCreateIdempotencyKey(idempotencyCacheKey);
+    }
     const cacheableMetadataGet = method === 'GET' && isCacheableMetadataGet(pathWithSearch) && options.cache !== 'no-store';
     const requestKey = `${sessionKey}:${method}:${fullUrl}`;
     

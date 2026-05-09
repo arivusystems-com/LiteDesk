@@ -1,7 +1,7 @@
 const User = require('../../models/User');
 const Organization = require('../../models/Organization');
 const domainEvents = require('../../constants/domainEvents');
-const emailService = require('../emailService');
+const emailProviderGateway = require('../../platform/communication/providers/emailProviderGateway');
 
 const NOTIFICATION_DEBUG = process.env.NOTIFICATION_DEBUG === 'true';
 
@@ -17,7 +17,7 @@ function debugLog(event, data) {
 async function isEmailIntegrationEnabled(organizationId) {
   if (!organizationId) return false;
   const org = await Organization.findById(organizationId).select('integrations').lean();
-  const state = (org?.integrations || {})[emailService.EMAIL_PROVIDER_KEY];
+  const state = (org?.integrations || {})[emailProviderGateway.EMAIL_PROVIDER_KEY];
   return state?.enabled === true;
 }
 
@@ -42,7 +42,7 @@ async function send({ notification }) {
     }
 
     // Email service must be configured (SES or SMTP)
-    if (!emailService.isConfigured()) {
+    if (!(await emailProviderGateway.isConfigured({ organizationId: orgId }))) {
       debugLog('Skipped', { reason: 'not_configured' });
       return { success: false, skipped: true, reason: 'not_configured' };
     }
@@ -72,7 +72,8 @@ async function send({ notification }) {
       html = regularContent.html;
     }
 
-    const result = await emailService.sendEmail({
+    const result = await emailProviderGateway.sendEmail({
+      organizationId: orgId,
       to: user.email,
       subject,
       text,
