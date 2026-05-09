@@ -298,8 +298,8 @@ exports.convertToOrganization = async (req, res) => {
         
         console.log('🔄 Converting demo request to ORGANIZATION:', demoRequest.email);
         
-        // Ensure organization exists (new flow creates it at conversion time).
-        console.log('📋 Step 1: Resolving/creating organization...');
+        // Ensure SALES/business organization exists (kept visible in Organizations module).
+        console.log('📋 Step 1: Resolving/creating sales organization...');
         let organization = demoRequest.organizationId
             ? await Organization.findById(demoRequest.organizationId)
             : null;
@@ -362,9 +362,56 @@ exports.convertToOrganization = async (req, res) => {
                 console.warn('⚠️  Failed to initialize Organizations module during conversion:', moduleError.message);
             }
 
-            console.log('✅ Organization created during conversion:', organization.name);
+            console.log('✅ Sales organization created during conversion:', organization.name);
         } else {
-            console.log('✅ Organization found:', organization.name);
+            console.log('✅ Sales organization found:', organization.name);
+        }
+
+        // Ensure tenant workspace organization exists separately from SALES organization.
+        console.log('📋 Step 1.1: Resolving/creating tenant workspace organization...');
+        let tenantOrganization = await Organization.findOne({
+            legacyOrganizationId: organization._id,
+            isTenant: true
+        });
+
+        if (!tenantOrganization) {
+            const tenantSlug = await generateUniqueSlug(organization.name || demoRequest.companyName || 'workspace');
+            tenantOrganization = await Organization.create({
+                name: organization.name || demoRequest.companyName,
+                slug: tenantSlug,
+                industry: organization.industry || demoRequest.industry || '',
+                isActive: true,
+                isTenant: true,
+                legacyOrganizationId: organization._id,
+                createdBy: req.user?._id || null,
+                assignedTo: req.user?._id || null,
+                subscription: {
+                    tier: 'trial',
+                    status: 'trial',
+                    trialStartDate: new Date(),
+                    trialEndDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000)
+                },
+                limits: {
+                    maxUsers: -1,
+                    maxContacts: -1,
+                    maxDeals: -1,
+                    maxStorageGB: -1
+                },
+                settings: {
+                    timeZone: 'UTC',
+                    currency: 'USD'
+                },
+                enabledModules: ['contacts', 'deals'],
+                enabledApps: [{
+                    appKey: 'SALES',
+                    status: 'ACTIVE',
+                    enabledAt: new Date()
+                }],
+                types: []
+            });
+            console.log('✅ Tenant workspace organization created:', tenantOrganization.name);
+        } else {
+            console.log('✅ Tenant workspace organization found:', tenantOrganization.name);
         }
         
         // Validate subscription tier (only 'trial' or 'paid' allowed)
@@ -372,8 +419,8 @@ exports.convertToOrganization = async (req, res) => {
         const tier = validTiers.includes(subscriptionTier) ? subscriptionTier : 'trial';
         console.log('✅ Subscription tier:', tier);
 
-        const activeOrgAppKeys = Array.isArray(organization.enabledApps)
-            ? organization.enabledApps
+        const activeOrgAppKeys = Array.isArray(tenantOrganization.enabledApps)
+            ? tenantOrganization.enabledApps
                 .map((app) => {
                     if (typeof app === 'string') return app.toUpperCase();
                     if (app && typeof app === 'object') {
@@ -387,9 +434,9 @@ exports.convertToOrganization = async (req, res) => {
             : [];
         
         // Generate database name from organization slug or ID
-        const dbName = organization.slug 
-            ? `arivu_${organization.slug.replace(/-/g, '_')}`
-            : `arivu_${organization._id.toString().replace(/[^a-zA-Z0-9]/g, '_')}`;
+        const dbName = tenantOrganization.slug 
+            ? `arivu_${tenantOrganization.slug.replace(/-/g, '_')}`
+            : `arivu_${tenantOrganization._id.toString().replace(/[^a-zA-Z0-9]/g, '_')}`;
         
         console.log('📦 Step 2: Creating dedicated database:', dbName);
         
@@ -423,23 +470,19 @@ exports.convertToOrganization = async (req, res) => {
         const connectionString = `${baseUri}/${dbName}`;
         console.log('✅ Connection string built:', connectionString);
         
-        console.log('📦 Step 4: Updating organization with database info...');
+        console.log('📦 Step 4: Updating tenant workspace with database info...');
         
         // Get modules for the subscription tier (exclude admin-only modules)
-        const OrganizationModel = require('../models/Organization');
-        const tempOrg = new OrganizationModel();
-        const tierModules = tempOrg.getModulesForTier(tier);
+        const tierModules = tenantOrganization.getModulesForTier(tier);
         
         // Remove admin-only modules (demo_requests, instances, etc.)
         const adminModules = ['demo_requests', 'instances', 'users', 'settings'];
         const allowedModules = tierModules.filter(module => !adminModules.includes(module));
         
-        // Update organization with database info and mark as tenant
+        // Update tenant workspace with database info
         await Organization.findByIdAndUpdate(
-            demoRequest.organizationId,
+            tenantOrganization._id,
             {
-                isTenant: true, // Mark as tenant organization
-                customerStatus: 'Active', // Update Sales status
                 // Update subscription tier and status
                 'subscription.tier': tier,
                 'subscription.status': tier === 'trial' ? 'trial' : 'active',
@@ -452,7 +495,7 @@ exports.convertToOrganization = async (req, res) => {
                 enabledModules: allowedModules
             }
         );
-        console.log('✅ Organization marked as tenant with database:', dbName);
+        console.log('✅ Tenant workspace updated with database:', dbName);
         console.log('✅ Enabled modules:', allowedModules.join(', '));
 
         try {
@@ -466,7 +509,7 @@ exports.convertToOrganization = async (req, res) => {
         // (apps, platform module definitions, relationships, default roles, and
         // tenant app/module configurations). Idempotent — re-running is safe.
         try {
-            const updatedOrg = await Organization.findById(demoRequest.organizationId).lean();
+            const updatedOrg = await Organization.findById(tenantOrganization._id).lean();
             await seedTenantDatabase(orgDbConnection, updatedOrg || organization);
         } catch (seedError) {
             console.warn('⚠️  Failed to seed tenant DB baseline:', seedError.message);
@@ -478,13 +521,13 @@ exports.convertToOrganization = async (req, res) => {
         try {
             const MasterModuleDefinition = require('../models/ModuleDefinition');
             const TenantModuleDefinition = getTenantModel(orgDbConnection, 'ModuleDefinition', MasterModuleDefinition);
-            const seededDefinitions = await MasterModuleDefinition.find({ organizationId: organization._id }).lean();
+            const seededDefinitions = await MasterModuleDefinition.find({ organizationId: tenantOrganization._id }).lean();
             if (seededDefinitions.length > 0) {
                 for (const definition of seededDefinitions) {
                     const payload = { ...definition };
                     delete payload._id;
                     await TenantModuleDefinition.findOneAndUpdate(
-                        { organizationId: organization._id, moduleKey: definition.moduleKey || definition.key },
+                        { organizationId: tenantOrganization._id, moduleKey: definition.moduleKey || definition.key },
                         { $set: payload },
                         { upsert: true, new: true, setDefaultsOnInsert: true }
                     );
@@ -557,7 +600,7 @@ exports.convertToOrganization = async (req, res) => {
         if (existingUser) {
             console.log('⚠️  User already exists in organization database');
             // Update existing user
-            existingUser.organizationId = demoRequest.organizationId;
+            existingUser.organizationId = tenantOrganization._id;
             existingUser.role = 'owner';
             existingUser.isOwner = true;
             existingUser.status = 'active';
@@ -577,7 +620,7 @@ exports.convertToOrganization = async (req, res) => {
                 { email: demoRequest.email.toLowerCase() },
                 {
                     $set: {
-                        organizationId: demoRequest.organizationId,
+                        organizationId: tenantOrganization._id,
                         tenantDatabaseName: dbName,
                         tenantUserId: existingUser._id,
                         status: 'active'
@@ -593,7 +636,7 @@ exports.convertToOrganization = async (req, res) => {
             
             // Create owner user in organization database
             const ownerUser = await OrgUser.create({
-                organizationId: demoRequest.organizationId,
+                organizationId: tenantOrganization._id,
                 username: demoRequest.email.split('@')[0] || demoRequest.contactName?.toLowerCase().replace(/\s+/g, '') || 'user',
                 email: demoRequest.email.toLowerCase(),
                 password: hashedPassword,
@@ -623,7 +666,7 @@ exports.convertToOrganization = async (req, res) => {
                 { email: demoRequest.email.toLowerCase() },
                 {
                     $set: {
-                        organizationId: demoRequest.organizationId,
+                        organizationId: tenantOrganization._id,
                         tenantDatabaseName: dbName,
                         tenantUserId: ownerUser._id,
                         status: 'active'
@@ -643,10 +686,10 @@ exports.convertToOrganization = async (req, res) => {
         if (!instance) {
             let retries = 0;
             while (!instance && retries < 5) {
-                const subdomain = await generateUniqueSlug(organization.name || demoRequest.companyName);
+                const subdomain = await generateUniqueSlug(tenantOrganization.name || demoRequest.companyName);
                 try {
                     instance = await InstanceRegistry.create({
-                        instanceName: organization.name || demoRequest.companyName,
+                        instanceName: tenantOrganization.name || demoRequest.companyName,
                         subdomain,
                         ownerEmail: demoRequest.email.toLowerCase(),
                         ownerName: demoRequest.contactName,
@@ -708,6 +751,7 @@ exports.convertToOrganization = async (req, res) => {
             data: {
                 demoRequestId: demoRequest._id,
                 organizationId: demoRequest.organizationId,
+                tenantOrganizationId: tenantOrganization._id,
                 databaseName: dbName,
                 subdomain: instance?.subdomain || null,
                 status: 'converted',
