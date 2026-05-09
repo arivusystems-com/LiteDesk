@@ -33,7 +33,7 @@ Add these to `server/.env`:
 # Generate VAPID keys: npx web-push generate-vapid-keys
 VAPID_PUBLIC_KEY=your_public_key_here
 VAPID_PRIVATE_KEY=your_private_key_here
-VAPID_SUBJECT=mailto:admin@litedesk.com
+VAPID_SUBJECT=mailto:admin@arivu.com
 
 # WhatsApp Notifications (Transactional - Audit & Portal only)
 ENABLE_WHATSAPP_NOTIFICATIONS=false

@@ -15,7 +15,7 @@ const bcrypt = require('bcrypt');
 const User = require('../models/User');
 
 const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || process.env.MONGO_URI_LOCAL;
-const ADMIN_EMAIL = process.env.DEFAULT_ADMIN_EMAIL || 'admin@litedesk.com';
+const ADMIN_EMAIL = process.env.DEFAULT_ADMIN_EMAIL || 'admin@arivusystems.com';
 const NEW_PASSWORD = process.argv[2] || process.env.DEFAULT_ADMIN_PASSWORD || 'Admin@123';
 
 async function resetAdminPassword() {
@@ -33,7 +33,7 @@ async function resetAdminPassword() {
         const [uriWithoutQuery, queryPart] = MONGO_URI.split('?');
         const connectionQuery = queryPart ? `?${queryPart}` : '';
         const baseUri = uriWithoutQuery.split('/').slice(0, -1).join('/');
-        const masterDbName = 'litedesk_master';
+        const masterDbName = 'arivu_master';
         const masterUri = `${baseUri}/${masterDbName}${connectionQuery}`;
         
         await mongoose.connect(masterUri);

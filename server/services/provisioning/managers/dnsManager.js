@@ -10,7 +10,7 @@ class DNSManager {
       region: process.env.AWS_REGION || 'us-east-1'
     });
     
-    // Hosted Zone ID for your domain (e.g., litedesk.com)
+    // Hosted Zone ID for your domain (e.g., arivusystems.com)
     this.hostedZoneId = process.env.ROUTE53_HOSTED_ZONE_ID;
     this.baseDomain = getTenantBaseDomain();
   }
@@ -31,7 +31,7 @@ class DNSManager {
       const params = {
         HostedZoneId: this.hostedZoneId,
         ChangeBatch: {
-          Comment: `LiteDesk instance: ${subdomain}`,
+          Comment: `Arivu instance: ${subdomain}`,
           Changes: [{
             Action: 'UPSERT', // Create or update
             ResourceRecordSet: {
@@ -124,7 +124,7 @@ class DNSManager {
       const params = {
         HostedZoneId: this.hostedZoneId,
         ChangeBatch: {
-          Comment: `Delete LiteDesk instance: ${subdomain}`,
+          Comment: `Delete Arivu instance: ${subdomain}`,
           Changes: [{
             Action: 'DELETE',
             ResourceRecordSet: {
@@ -236,7 +236,7 @@ class DNSManager {
     // kubectl get service ingress-nginx-controller -n ingress-nginx
     
     // For now, return from environment variable
-    return process.env.INGRESS_LOADBALANCER_DNS || 'ingress.litedesk.com';
+    return process.env.INGRESS_LOADBALANCER_DNS || 'ingress.arivusystems.com';
   }
   
   /**
@@ -269,7 +269,7 @@ class DNSManager {
   }
   
   /**
-   * List all LiteDesk subdomains
+   * List all Arivu subdomains
    * @returns {Promise<Array>} - List of subdomains
    */
   async listAllSubdomains() {

@@ -108,7 +108,7 @@ server/logs/
 server/tmp/
 
 # Helm
-helm/litedesk/charts/
+helm/arivu/charts/
 *.tgz
 
 # Test coverage

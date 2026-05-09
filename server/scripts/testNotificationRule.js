@@ -12,7 +12,7 @@ const domainEvents = require('../constants/domainEvents');
 
 async function testRule() {
   try {
-    const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017/litedesk';
+    const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017/arivu';
     console.log('🔌 Connecting to MongoDB...');
     await mongoose.connect(mongoUri);
     console.log('✅ Connected\n');

@@ -1,4 +1,4 @@
-# 🚀 LiteDesk Multi-Instance Architecture - Build Summary
+# 🚀 Arivu Multi-Instance Architecture - Build Summary
 
 ## 📊 What Was Built
 
@@ -30,7 +30,7 @@
    - Local development environment
    - Backend, Frontend, MongoDB services
 
-7. **Helm Chart Templates** (8 files in `/helm/litedesk/`)
+7. **Helm Chart Templates** (8 files in `/helm/arivu/`)
    - `Chart.yaml` - Helm chart metadata
    - `values.yaml` - Default configuration
    - `templates/namespace.yaml` - Kubernetes namespace
@@ -275,7 +275,7 @@
         │  │  - Frontend (Nginx)         │    │
         │  │  - Backend (Node.js)        │    │
         │  │  - MongoDB                  │    │
-        │  │  - Subdomain: acme.litedesk.com │
+        │  │  - Subdomain: acme.arivu.com │
         │  └─────────────────────────────┘    │
         │                                      │
         │  ┌─────────────────────────────┐    │
@@ -283,7 +283,7 @@
         │  │  - Frontend (Nginx)         │    │
         │  │  - Backend (Node.js)        │    │
         │  │  - MongoDB                  │    │
-        │  │  - Subdomain: corp.litedesk.com │
+        │  │  - Subdomain: corp.arivu.com │
         │  └─────────────────────────────┘    │
         │                                      │
         └──────────────────────────────────────┘
@@ -302,7 +302,7 @@
 6. **Manage instances** → Update subscription, suspend, terminate
 
 ### For Customer (After Conversion):
-1. **Receive email** with instance URL (e.g., `https://acme.litedesk.com`)
+1. **Receive email** with instance URL (e.g., `https://acme.arivu.com`)
 2. **Login** with credentials
 3. **Access dedicated instance** (fully isolated)
 4. **Use CRM features** (contacts, deals, etc.)
@@ -430,7 +430,7 @@ Follow the **DEPLOYMENT_GUIDE.md** for complete instructions.
 5. **Enterprise-Grade:** Built with production best practices
 
 ### Compared to Traditional SaaS:
-| Feature | Traditional SaaS | LiteDesk Multi-Instance |
+| Feature | Traditional SaaS | Arivu Multi-Instance |
 |---------|------------------|-------------------------|
 | Data Isolation | Row-level | Database-level |
 | Customization | Limited | Full control |

@@ -1,11 +1,11 @@
-# 🚀 Deploy Your LiteDesk CRM to AWS - READY TO GO!
+# 🚀 Deploy Your Arivu CRM to AWS - READY TO GO!
 
 ## ✅ Everything is Pre-Configured!
 
 Your deployment scripts are ready with:
 - ✅ **EC2 IP:** 43.204.144.169
 - ✅ **MongoDB Atlas:** Connected and configured
-- ✅ **GitHub Repo:** https://github.com/Prabhubalu/LiteDesk.git
+- ✅ **GitHub Repo:** https://github.com/Prabhubalu/Arivu.git
 - ✅ **Auto-generated secrets:** JWT tokens will be created automatically
 - ✅ **One-click deployment:** Fully automated!
 
@@ -19,7 +19,7 @@ This is the easiest way! Just run one command from your Mac.
 
 **Step 1:** First, push your code to GitHub:
 ```bash
-cd /Users/Prabhu/Documents/GitHub/LiteDesk
+cd /Users/Prabhu/Documents/GitHub/Arivu
 git push origin main
 # (Enter your GitHub credentials if asked)
 ```
@@ -30,7 +30,7 @@ git push origin main
 ```
 
 That's it! The script will:
-- Ask for your SSH key path (e.g., `~/Downloads/litedesk-key.pem`)
+- Ask for your SSH key path (e.g., `~/Downloads/arivu-key.pem`)
 - Connect to your EC2 instance
 - Upload the deployment script
 - Run the full deployment
@@ -46,7 +46,7 @@ If you prefer to work directly on the server:
 
 **Step 1:** Push your code to GitHub:
 ```bash
-cd /Users/Prabhu/Documents/GitHub/LiteDesk
+cd /Users/Prabhu/Documents/GitHub/Arivu
 git push origin main
 ```
 
@@ -62,8 +62,8 @@ ssh -i ~/path/to/your-key.pem ubuntu@43.204.144.169
 **Step 3:** Clone and deploy:
 ```bash
 # Clone your repository
-git clone https://github.com/Prabhubalu/LiteDesk.git
-cd LiteDesk
+git clone https://github.com/Prabhubalu/Arivu.git
+cd Arivu
 
 # Run the deployment script
 chmod +x deploy-aws-quick.sh
@@ -97,7 +97,7 @@ Before deploying, make sure you have:
 
 ```bash
 # 1. Navigate to your project
-cd /Users/Prabhu/Documents/GitHub/LiteDesk
+cd /Users/Prabhu/Documents/GitHub/Arivu
 
 # 2. Push code to GitHub (if not already done)
 git push origin main
@@ -122,7 +122,7 @@ Open in browser: **http://43.204.144.169**
 
 **Login Credentials:**
 ```
-Email:    admin@litedesk.com
+Email:    admin@arivu.com
 Password: Admin@123456
 ```
 
@@ -155,7 +155,7 @@ ssh -i ~/path/to/your-key.pem ubuntu@43.204.144.169
 pm2 status
 
 # View logs
-pm2 logs litedesk-api
+pm2 logs arivu-api
 
 # Check backend health
 curl http://localhost:5000/api/health
@@ -187,30 +187,30 @@ The deployment script automatically installs and configures:
 
 ```bash
 ssh -i ~/path/to/your-key.pem ubuntu@43.204.144.169
-pm2 logs litedesk-api
+pm2 logs arivu-api
 ```
 
 ### Restart Application
 
 ```bash
 ssh -i ~/path/to/your-key.pem ubuntu@43.204.144.169
-pm2 restart litedesk-api
+pm2 restart arivu-api
 ```
 
 ### Update Application (Deploy New Changes)
 
 ```bash
 # On your Mac: Push changes
-cd /Users/Prabhu/Documents/GitHub/LiteDesk
+cd /Users/Prabhu/Documents/GitHub/Arivu
 git add .
 git commit -m "Your changes"
 git push origin main
 
 # On EC2: Pull and rebuild
 ssh -i ~/path/to/your-key.pem ubuntu@43.204.144.169
-cd /home/ubuntu/LiteDesk
+cd /home/ubuntu/Arivu
 git pull
-cd server && npm install && pm2 restart litedesk-api
+cd server && npm install && pm2 restart arivu-api
 cd ../client && npm install && npm run build
 ```
 
@@ -238,10 +238,10 @@ ssh -i ~/path/to/your-key.pem ubuntu@43.204.144.169
 pm2 status
 
 # If not running, restart it
-pm2 restart litedesk-api
+pm2 restart arivu-api
 
 # Check logs for errors
-pm2 logs litedesk-api --lines 50
+pm2 logs arivu-api --lines 50
 ```
 
 ### Issue: "Blank page" in browser
@@ -251,10 +251,10 @@ pm2 logs litedesk-api --lines 50
 ssh -i ~/path/to/your-key.pem ubuntu@43.204.144.169
 
 # Check if frontend built successfully
-ls -la /home/ubuntu/LiteDesk/client/dist
+ls -la /home/ubuntu/Arivu/client/dist
 
 # If empty, rebuild
-cd /home/ubuntu/LiteDesk/client
+cd /home/ubuntu/Arivu/client
 npm run build
 ```
 
@@ -267,7 +267,7 @@ npm run build
 
 ```bash
 ssh -i ~/path/to/your-key.pem ubuntu@43.204.144.169
-cat /home/ubuntu/LiteDesk/server/.env | grep MONGODB_URI
+cat /home/ubuntu/Arivu/server/.env | grep MONGODB_URI
 ```
 
 ---
@@ -324,8 +324,8 @@ ssh -i ~/key.pem ubuntu@43.204.144.169
 
 # Application management
 pm2 status              # Check status
-pm2 logs litedesk-api   # View logs
-pm2 restart litedesk-api # Restart app
+pm2 logs arivu-api   # View logs
+pm2 restart arivu-api # Restart app
 pm2 monit               # Monitor resources
 
 # System management
@@ -336,7 +336,7 @@ free -h                       # Memory usage
 htop                          # System monitor
 
 # View logs
-pm2 logs litedesk-api --lines 100
+pm2 logs arivu-api --lines 100
 sudo tail -f /var/log/nginx/error.log
 sudo tail -f /var/log/nginx/access.log
 ```
@@ -357,7 +357,7 @@ Before you deploy:
 After deployment:
 
 - [ ] Application accessible at http://43.204.144.169
-- [ ] Login works with admin@litedesk.com
+- [ ] Login works with admin@arivu.com
 - [ ] Changed admin password
 - [ ] Created test data
 - [ ] All features work (Contacts, Deals, Tasks)
@@ -370,7 +370,7 @@ After deployment:
 ### Quick Deployment (Copy & Paste):
 
 ```bash
-cd /Users/Prabhu/Documents/GitHub/LiteDesk
+cd /Users/Prabhu/Documents/GitHub/Arivu
 git push origin main
 ./deploy-from-local.sh
 ```
@@ -386,7 +386,7 @@ The script will guide you through the rest!
 If something goes wrong:
 
 1. Check the troubleshooting section above
-2. SSH into server and check logs: `pm2 logs litedesk-api`
+2. SSH into server and check logs: `pm2 logs arivu-api`
 3. Check Nginx logs: `sudo tail -f /var/log/nginx/error.log`
 4. Verify MongoDB Atlas is running
 5. Check AWS Console that EC2 is running

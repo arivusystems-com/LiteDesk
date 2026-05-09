@@ -324,7 +324,7 @@ watch(
 const tagStorageKey = computed(() => {
   const organizationId = authStore.user?.organizationId || authStore.organization?._id || 'default-org';
   const mk = String(props.moduleKey || 'people').toLowerCase();
-  return `litedesk-${mk}-tag-definitions-${organizationId}`;
+  return `arivu-${mk}-tag-definitions-${organizationId}`;
 });
 
 /** Must match server module keys for /modules/:moduleKey/tags/delete and list APIs in useRecordTags */

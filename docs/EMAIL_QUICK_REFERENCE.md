@@ -159,7 +159,7 @@ async function sendEmail({ to, subject, html }) {
 
 ---
 
-## 🎯 Use Cases for LiteDesk
+## 🎯 Use Cases for Arivu
 
 ✅ **Transactional:** Password resets, confirmations  
 ✅ **Customer:** Send from contact pages  

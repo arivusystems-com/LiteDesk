@@ -185,7 +185,7 @@ const { openTab } = useTabs();
 const authStore = useAuthStore();
 
 // View state - initialize from localStorage immediately for CSS to work
-const viewStorageKey = 'litedesk-events-view';
+const viewStorageKey = 'arivu-events-view';
 const getInitialView = () => {
   try {
     const savedView = localStorage.getItem(viewStorageKey);
@@ -712,8 +712,8 @@ onMounted(() => {
   
   // Listen for record creation events
   if (typeof window !== 'undefined') {
-    window.addEventListener('litedesk:record-created', handleRecordCreated);
-    window.addEventListener('litedesk:event-created', handleEventCreated);
+    window.addEventListener('arivu:record-created', handleRecordCreated);
+    window.addEventListener('arivu:event-created', handleEventCreated);
   }
 });
 
@@ -733,8 +733,8 @@ onActivated(() => {
 onUnmounted(() => {
   // Clean up event listeners
   if (typeof window !== 'undefined') {
-    window.removeEventListener('litedesk:record-created', handleRecordCreated);
-    window.removeEventListener('litedesk:event-created', handleEventCreated);
+    window.removeEventListener('arivu:record-created', handleRecordCreated);
+    window.removeEventListener('arivu:event-created', handleEventCreated);
   }
 });
 </script>

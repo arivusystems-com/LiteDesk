@@ -7,7 +7,7 @@
  *
  * Backfills the tenant-DB baseline for every Organization that has a dedicated
  * database (`database.name` set and `database.initialized=true`). For each
- * tenant DB, this script writes the same data that `litedesk_master` is given
+ * tenant DB, this script writes the same data that `arivu_master` is given
  * on first setup:
  *
  *   - AppDefinition           (platform app catalog)
@@ -23,7 +23,7 @@
  *   node server/scripts/seedTenantDatabases.js                # all tenants
  *   node server/scripts/seedTenantDatabases.js --slug ksca1    # one tenant by slug
  *   node server/scripts/seedTenantDatabases.js --orgId <id>    # one tenant by ObjectId
- *   node server/scripts/seedTenantDatabases.js --db litedesk_ksca1  # one tenant by DB name
+ *   node server/scripts/seedTenantDatabases.js --db arivu_ksca1  # one tenant by DB name
  * ============================================================================
  */
 

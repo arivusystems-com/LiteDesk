@@ -9,7 +9,7 @@ import { useAuthStore } from '@/stores/authRegistry'
 import auditRoutes from './audit.routes'
 import portalRoutes from './portal.routes'
 import { loadAndRegisterRoutes } from '@/utils/dynamicRouteLoader'
-import { logNavDebug } from '@/config/litedeskDebug.js'
+import { logNavDebug } from '@/config/arivuDebug.js'
 
 const routes = [
   {
@@ -593,7 +593,7 @@ router.beforeEach(async (to, from, next) => {
     // Important for new-tab flows (e.g. Settings opened in new tab before auth is ready).
     if (typeof window !== 'undefined' && to.path) {
       try {
-        sessionStorage.setItem('litedesk_redirect_after_login', to.fullPath || to.path)
+        sessionStorage.setItem('arivu_redirect_after_login', to.fullPath || to.path)
       } catch (_) {}
     }
     next({ name: 'login' })
@@ -630,9 +630,9 @@ router.beforeEach(async (to, from, next) => {
     let redirect = null
     if (typeof window !== 'undefined') {
       try {
-        const saved = sessionStorage.getItem('litedesk_redirect_after_login')
+        const saved = sessionStorage.getItem('arivu_redirect_after_login')
         if (saved && saved.startsWith('/') && !saved.startsWith('//')) {
-          sessionStorage.removeItem('litedesk_redirect_after_login')
+          sessionStorage.removeItem('arivu_redirect_after_login')
           redirect = saved
         }
       } catch (_) {}

@@ -44,27 +44,27 @@ echo "📁 Setting correct permissions..."
 # Give execute permission to home directory (so nginx can traverse)
 chmod 755 /home/ubuntu
 
-# Give execute permission to LiteDesk directory
-chmod 755 /home/ubuntu/LiteDesk
+# Give execute permission to Arivu directory
+chmod 755 /home/ubuntu/Arivu
 
 # Give read/execute permission to client directory
-chmod 755 /home/ubuntu/LiteDesk/client
+chmod 755 /home/ubuntu/Arivu/client
 
 # Give read permission to all files in dist
-chmod -R 755 /home/ubuntu/LiteDesk/client/dist
+chmod -R 755 /home/ubuntu/Arivu/client/dist
 
 # Change ownership to include www-data group (nginx user)
 # This allows both ubuntu and www-data to access the files
-sudo chown -R ubuntu:ubuntu /home/ubuntu/LiteDesk/client/dist
-sudo chmod -R 755 /home/ubuntu/LiteDesk/client/dist
+sudo chown -R ubuntu:ubuntu /home/ubuntu/Arivu/client/dist
+sudo chmod -R 755 /home/ubuntu/Arivu/client/dist
 
 echo ""
 echo "✅ Permissions fixed!"
 echo ""
 echo "📊 Current permissions:"
-ls -la /home/ubuntu/ | grep LiteDesk
-ls -la /home/ubuntu/LiteDesk/ | grep client
-ls -la /home/ubuntu/LiteDesk/client/ | grep dist
+ls -la /home/ubuntu/ | grep Arivu
+ls -la /home/ubuntu/Arivu/ | grep client
+ls -la /home/ubuntu/Arivu/client/ | grep dist
 
 echo ""
 echo "🔄 Restarting Nginx..."

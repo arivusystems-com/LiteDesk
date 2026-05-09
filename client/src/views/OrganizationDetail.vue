@@ -213,14 +213,14 @@ onMounted(() => {
   
   // Listen for refresh events
   if (typeof window !== 'undefined') {
-    window.addEventListener('litedesk:refresh-organization', handleRefreshOrganization);
+    window.addEventListener('arivu:refresh-organization', handleRefreshOrganization);
   }
 });
 
 onUnmounted(() => {
   // Clean up event listener
   if (typeof window !== 'undefined') {
-    window.removeEventListener('litedesk:refresh-organization', handleRefreshOrganization);
+    window.removeEventListener('arivu:refresh-organization', handleRefreshOrganization);
   }
 });
 </script>

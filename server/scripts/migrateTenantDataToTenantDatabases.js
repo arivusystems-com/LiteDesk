@@ -6,9 +6,9 @@
  * ============================================================================
  *
  * Tenant-scoped collections (deals, tasks, events, people, items, roles,
- * users, etc.) historically lived in `litedesk_master` filtered by
+ * users, etc.) historically lived in `arivu_master` filtered by
  * `organizationId`. With the data-plane refactor, every tenant database
- * (`litedesk_<slug>`) becomes the home for that tenant's records.
+ * (`arivu_<slug>`) becomes the home for that tenant's records.
  *
  * This script copies each tenant's records from master into the tenant DB
  * (preserving `_id`s) and, optionally, deletes them from master.

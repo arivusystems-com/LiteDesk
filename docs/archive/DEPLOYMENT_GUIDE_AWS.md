@@ -1,8 +1,8 @@
-# 🚀 AWS Deployment Guide - LiteDesk CRM
+# 🚀 AWS Deployment Guide - Arivu CRM
 
 ## Overview
 
-This guide will help you deploy LiteDesk CRM to AWS for testing with friends.
+This guide will help you deploy Arivu CRM to AWS for testing with friends.
 
 **Architecture**:
 - **Frontend**: Vue.js (built and served via Nginx)
@@ -41,14 +41,14 @@ This guide will help you deploy LiteDesk CRM to AWS for testing with friends.
 2. Choose **FREE** tier (Shared)
 3. Select **AWS** as cloud provider
 4. Choose region closest to your EC2 region (e.g., `us-east-1`)
-5. Cluster Name: `litedesk-cluster`
+5. Cluster Name: `arivu-cluster`
 6. Click **"Create Cluster"** (takes 3-5 minutes)
 
 ### Step 1.3: Configure Database Access
 
 1. Go to **Database Access** (left sidebar)
 2. Click **"Add New Database User"**
-   - Username: `litedesk_admin`
+   - Username: `arivu_admin`
    - Password: Click "Autogenerate Secure Password" → **COPY IT!**
    - Database User Privileges: `Atlas admin`
 3. Click **"Add User"**
@@ -67,7 +67,7 @@ This guide will help you deploy LiteDesk CRM to AWS for testing with friends.
 2. Choose **"Connect your application"**
 3. Copy the connection string:
    ```
-   mongodb+srv://litedesk_admin:<password>@litedesk-cluster.xxxxx.mongodb.net/?retryWrites=true&w=majority
+   mongodb+srv://arivu_admin:<password>@arivu-cluster.xxxxx.mongodb.net/?retryWrites=true&w=majority
    ```
 4. Replace `<password>` with the actual password you copied earlier
 5. **SAVE THIS CONNECTION STRING** - you'll need it later!
@@ -83,13 +83,13 @@ This guide will help you deploy LiteDesk CRM to AWS for testing with friends.
 3. Click **"Launch Instance"**
 
 **Configuration**:
-- **Name**: `litedesk-server`
+- **Name**: `arivu-server`
 - **AMI**: Ubuntu Server 22.04 LTS (Free tier eligible)
 - **Instance type**: `t2.micro` (Free tier - 1GB RAM, 1 vCPU)
   - ⚠️ For production, use `t3.small` or larger
 - **Key pair**: 
   - Click "Create new key pair"
-  - Name: `litedesk-key`
+  - Name: `arivu-key`
   - Type: RSA
   - Format: `.pem` (Mac/Linux) or `.ppk` (Windows/PuTTY)
   - **DOWNLOAD AND SAVE** - you can't download it again!
@@ -114,10 +114,10 @@ This guide will help you deploy LiteDesk CRM to AWS for testing with friends.
 **On Mac/Linux**:
 ```bash
 # Make key file secure
-chmod 400 ~/Downloads/litedesk-key.pem
+chmod 400 ~/Downloads/arivu-key.pem
 
 # Connect to server
-ssh -i ~/Downloads/litedesk-key.pem ubuntu@54.123.45.67
+ssh -i ~/Downloads/arivu-key.pem ubuntu@54.123.45.67
 ```
 
 **On Windows**:
@@ -203,8 +203,8 @@ sudo ufw status
 
 ```bash
 cd /home/ubuntu
-git clone https://github.com/YOUR_USERNAME/LiteDesk.git
-cd LiteDesk
+git clone https://github.com/YOUR_USERNAME/Arivu.git
+cd Arivu
 ```
 
 **If your repo is private**, you'll need to:
@@ -214,7 +214,7 @@ cd LiteDesk
 ### Step 4.2: Setup Backend
 
 ```bash
-cd /home/ubuntu/LiteDesk/server
+cd /home/ubuntu/Arivu/server
 
 # Install dependencies
 npm install --production
@@ -231,7 +231,7 @@ NODE_ENV=production
 PORT=5000
 
 # MongoDB (USE YOUR ATLAS CONNECTION STRING!)
-MONGODB_URI=mongodb+srv://litedesk_admin:YOUR_PASSWORD@litedesk-cluster.xxxxx.mongodb.net/litedesk?retryWrites=true&w=majority
+MONGODB_URI=mongodb+srv://arivu_admin:YOUR_PASSWORD@arivu-cluster.xxxxx.mongodb.net/arivu?retryWrites=true&w=majority
 
 # JWT Secret (generate a strong random string)
 JWT_SECRET=your-super-secret-jwt-key-change-this-to-something-random-and-long-12345
@@ -243,7 +243,7 @@ CLIENT_URL=http://YOUR_EC2_IP
 CORS_ORIGINS=http://YOUR_EC2_IP,http://localhost:5173
 
 # Admin Defaults
-DEFAULT_ADMIN_EMAIL=admin@litedesk.com
+DEFAULT_ADMIN_EMAIL=admin@arivu.com
 DEFAULT_ADMIN_PASSWORD=Admin@123456
 
 # Email Configuration (optional - for demo requests)
@@ -272,7 +272,7 @@ Save file: `Ctrl+X` → `Y` → `Enter`
 ### Step 4.3: Setup Frontend
 
 ```bash
-cd /home/ubuntu/LiteDesk/client
+cd /home/ubuntu/Arivu/client
 
 # Install dependencies
 npm install
@@ -298,7 +298,7 @@ This creates a `dist/` folder with optimized static files.
 ### Step 4.4: Setup Default Admin User
 
 ```bash
-cd /home/ubuntu/LiteDesk/server
+cd /home/ubuntu/Arivu/server
 node scripts/createDefaultAdmin.js
 ```
 
@@ -311,7 +311,7 @@ You should see: "✅ Default admin user created successfully"
 ### Step 5.1: Create Nginx Configuration
 
 ```bash
-sudo nano /etc/nginx/sites-available/litedesk
+sudo nano /etc/nginx/sites-available/arivu
 ```
 
 **Paste this configuration**:
@@ -323,7 +323,7 @@ server {
 
     # Frontend - Serve Vue.js build files
     location / {
-        root /home/ubuntu/LiteDesk/client/dist;
+        root /home/ubuntu/Arivu/client/dist;
         try_files $uri $uri/ /index.html;
         
         # Cache static assets
@@ -364,7 +364,7 @@ Save: `Ctrl+X` → `Y` → `Enter`
 
 ```bash
 # Create symbolic link
-sudo ln -s /etc/nginx/sites-available/litedesk /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/arivu /etc/nginx/sites-enabled/
 
 # Remove default site
 sudo rm /etc/nginx/sites-enabled/default
@@ -381,10 +381,10 @@ sudo systemctl reload nginx
 ## PART 6: Start Backend with PM2
 
 ```bash
-cd /home/ubuntu/LiteDesk/server
+cd /home/ubuntu/Arivu/server
 
 # Start backend
-pm2 start server.js --name litedesk-api
+pm2 start server.js --name arivu-api
 
 # Save PM2 configuration
 pm2 save
@@ -395,7 +395,7 @@ pm2 startup
 
 # Check status
 pm2 status
-pm2 logs litedesk-api
+pm2 logs arivu-api
 ```
 
 ---
@@ -414,11 +414,11 @@ Should return: `{"status":"OK","timestamp":"..."}`
 
 Open in browser: `http://YOUR_EC2_IP`
 
-You should see the LiteDesk login page! 🎉
+You should see the Arivu login page! 🎉
 
 ### Step 7.3: Login
 
-- **Email**: `admin@litedesk.com`
+- **Email**: `admin@arivu.com`
 - **Password**: `Admin@123456`
 
 ---
@@ -427,11 +427,11 @@ You should see the LiteDesk login page! 🎉
 
 ### Step 8.1: Point Domain to EC2
 
-If you have a domain (e.g., `litedesk.yourname.com`):
+If you have a domain (e.g., `arivu.yourname.com`):
 
 1. Go to your domain registrar (GoDaddy, Namecheap, etc.)
 2. Add an **A Record**:
-   - Name: `@` or `litedesk`
+   - Name: `@` or `arivu`
    - Value: `YOUR_EC2_IP`
    - TTL: 600
 
@@ -444,7 +444,7 @@ Wait 5-30 minutes for DNS propagation.
 sudo apt install -y certbot python3-certbot-nginx
 
 # Get certificate (replace with your domain)
-sudo certbot --nginx -d litedesk.yourname.com
+sudo certbot --nginx -d arivu.yourname.com
 
 # Follow prompts:
 # - Enter email
@@ -458,22 +458,22 @@ Certbot will automatically update your Nginx config!
 
 ```bash
 # Update backend .env
-cd /home/ubuntu/LiteDesk/server
+cd /home/ubuntu/Arivu/server
 nano .env
 ```
 
 Change:
 ```env
-CLIENT_URL=https://litedesk.yourname.com
-CORS_ORIGINS=https://litedesk.yourname.com
+CLIENT_URL=https://arivu.yourname.com
+CORS_ORIGINS=https://arivu.yourname.com
 ```
 
 ```bash
 # Restart backend
-pm2 restart litedesk-api
+pm2 restart arivu-api
 ```
 
-Now access via: `https://litedesk.yourname.com` ✅
+Now access via: `https://arivu.yourname.com` ✅
 
 ---
 
@@ -486,7 +486,7 @@ Now access via: `https://litedesk.yourname.com` ✅
 pm2 status
 
 # View logs
-pm2 logs litedesk-api
+pm2 logs arivu-api
 
 # Monitor resources
 pm2 monit
@@ -496,7 +496,7 @@ pm2 monit
 
 ```bash
 # Restart backend
-pm2 restart litedesk-api
+pm2 restart arivu-api
 
 # Restart Nginx
 sudo systemctl restart nginx
@@ -505,7 +505,7 @@ sudo systemctl restart nginx
 ### Update Application
 
 ```bash
-cd /home/ubuntu/LiteDesk
+cd /home/ubuntu/Arivu
 
 # Pull latest changes
 git pull
@@ -513,7 +513,7 @@ git pull
 # Update backend
 cd server
 npm install
-pm2 restart litedesk-api
+pm2 restart arivu-api
 
 # Update frontend
 cd ../client
@@ -546,7 +546,7 @@ sudo systemctl status nginx
 
 # Check backend status
 pm2 status
-pm2 logs litedesk-api
+pm2 logs arivu-api
 
 # Check ports
 sudo netstat -tulpn | grep LISTEN
@@ -560,10 +560,10 @@ sudo netstat -tulpn | grep LISTEN
 ### Issue 3: Frontend shows blank page
 ```bash
 # Check if dist folder exists
-ls -la /home/ubuntu/LiteDesk/client/dist
+ls -la /home/ubuntu/Arivu/client/dist
 
 # Rebuild frontend
-cd /home/ubuntu/LiteDesk/client
+cd /home/ubuntu/Arivu/client
 npm run build
 
 # Check Nginx error logs
@@ -573,12 +573,12 @@ sudo tail -f /var/log/nginx/error.log
 ### Issue 4: API calls failing (CORS errors)
 - Check `CORS_ORIGINS` in server `.env`
 - Make sure it matches your domain/IP exactly
-- Restart backend: `pm2 restart litedesk-api`
+- Restart backend: `pm2 restart arivu-api`
 
 ### Issue 5: "502 Bad Gateway"
 ```bash
 # Backend is not running
-pm2 restart litedesk-api
+pm2 restart arivu-api
 
 # Check if backend is listening on port 5000
 curl http://localhost:5000/api/health
@@ -628,16 +628,16 @@ After deployment:
 4. ✅ Import sample CSV data
 5. ✅ Share URL with friends for testing
 6. ✅ Collect feedback
-7. ✅ Monitor error logs: `pm2 logs litedesk-api --lines 100`
+7. ✅ Monitor error logs: `pm2 logs arivu-api --lines 100`
 
 ---
 
 ## 🎉 Success!
 
-Your LiteDesk CRM is now live on AWS!
+Your Arivu CRM is now live on AWS!
 
 **Access URL**: `http://YOUR_EC2_IP` (or your domain)  
-**Login**: `admin@litedesk.com` / `Admin@123456`
+**Login**: `admin@arivu.com` / `Admin@123456`
 
 Share with your friends and start collecting feedback! 🚀
 
@@ -655,7 +655,7 @@ Share with your friends and start collecting feedback! 🚀
 
 **Need help?** Check the troubleshooting section or logs:
 ```bash
-pm2 logs litedesk-api --lines 50
+pm2 logs arivu-api --lines 50
 sudo tail -f /var/log/nginx/error.log
 ```
 

@@ -7,8 +7,8 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  EKS_CLUSTER_NAME: litedesk-production
-  NAMESPACE: litedesk-master
+  EKS_CLUSTER_NAME: arivu-production
+  NAMESPACE: arivu-master
 
 jobs:
   build-and-deploy:
@@ -40,8 +40,8 @@ jobs:
           docker buildx build \
             --platform linux/amd64 \
             --file Dockerfile.backend \
-            --tag $ECR_REGISTRY/litedesk-backend:$IMAGE_TAG \
-            --tag $ECR_REGISTRY/litedesk-backend:latest \
+            --tag $ECR_REGISTRY/arivu-backend:$IMAGE_TAG \
+            --tag $ECR_REGISTRY/arivu-backend:latest \
             --push \
             .
       
@@ -53,8 +53,8 @@ jobs:
           docker buildx build \
             --platform linux/amd64 \
             --file Dockerfile.frontend \
-            --tag $ECR_REGISTRY/litedesk-frontend:$IMAGE_TAG \
-            --tag $ECR_REGISTRY/litedesk-frontend:latest \
+            --tag $ECR_REGISTRY/arivu-frontend:$IMAGE_TAG \
+            --tag $ECR_REGISTRY/arivu-frontend:latest \
             --push \
             .
       
@@ -74,26 +74,26 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          helm upgrade litedesk-master ./helm/litedesk \
+          helm upgrade arivu-master ./helm/arivu \
             --install \
             --namespace ${{ env.NAMESPACE }} \
             --create-namespace \
-            --set image.backend.repository=$ECR_REGISTRY/litedesk-backend \
+            --set image.backend.repository=$ECR_REGISTRY/arivu-backend \
             --set image.backend.tag=$IMAGE_TAG \
-            --set image.frontend.repository=$ECR_REGISTRY/litedesk-frontend \
+            --set image.frontend.repository=$ECR_REGISTRY/arivu-frontend \
             --set image.frontend.tag=$IMAGE_TAG \
             --set ingress.enabled=true \
             --set ingress.hosts[0].host=${{ secrets.MASTER_DOMAIN }} \
             --set ingress.hosts[0].paths[0].path=/ \
-            --set ingress.tls[0].secretName=litedesk-master-tls \
+            --set ingress.tls[0].secretName=arivu-master-tls \
             --set ingress.tls[0].hosts[0]=${{ secrets.MASTER_DOMAIN }} \
             --wait \
             --timeout 10m
       
       - name: Verify deployment
         run: |
-          kubectl rollout status deployment/litedesk-backend -n ${{ env.NAMESPACE }}
-          kubectl rollout status deployment/litedesk-frontend -n ${{ env.NAMESPACE }}
+          kubectl rollout status deployment/arivu-backend -n ${{ env.NAMESPACE }}
+          kubectl rollout status deployment/arivu-frontend -n ${{ env.NAMESPACE }}
       
       - name: Run health check
         run: |

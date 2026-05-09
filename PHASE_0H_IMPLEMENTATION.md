@@ -2,13 +2,13 @@
 
 **Status:** ✅ COMPLETED  
 **Date:** January 2025  
-**Objective:** Introduce Control Plane App as the single internal platform app for LiteDesk
+**Objective:** Introduce Control Plane App as the single internal platform app for Arivu
 
 ---
 
 ## 🎯 Implementation Summary
 
-Phase 0H successfully creates a Control Plane App that becomes the single internal platform app for LiteDesk, migrating existing internal modules (demo-requests, instances) into it **without rewriting business logic**.
+Phase 0H successfully creates a Control Plane App that becomes the single internal platform app for Arivu, migrating existing internal modules (demo-requests, instances) into it **without rewriting business logic**.
 
 ### Key Principles Followed
 
@@ -59,15 +59,15 @@ Phase 0H successfully creates a Control Plane App that becomes the single intern
 
 **Rules Implemented:**
 - ✅ Only platform admins can access CONTROL_PLANE
-- ✅ Platform admin check: `user.isPlatformAdmin === true` OR LiteDesk internal email
+- ✅ Platform admin check: `user.isPlatformAdmin === true` OR Arivu internal email
 - ✅ Access mode: `ADMIN` (non-billable)
 - ✅ Bypasses tenant enablement checks
 - ✅ Tenants (including owners) are **always denied** access
 
 **Helper Function:**
 ```javascript
-function isLiteDeskInternalEmail(email) {
-    // Checks for @litedesk.com, @litedesk.io, or any @litedesk domain
+function isArivuInternalEmail(email) {
+    // Checks for @arivu.com, @arivu.io, or any @arivu domain
 }
 ```
 
@@ -220,8 +220,8 @@ function isLiteDeskInternalEmail(email) {
 ## 🔒 Security Notes
 
 1. **Platform Admin Check:**
-   - Uses `user.isPlatformAdmin === true` OR LiteDesk internal email domain
-   - Internal email domains: `@litedesk.com`, `@litedesk.io`, any `@litedesk` domain
+   - Uses `user.isPlatformAdmin === true` OR Arivu internal email domain
+   - Internal email domains: `@arivu.com`, `@arivu.io`, any `@arivu` domain
 
 2. **Access Denial:**
    - Tenants (including owners) are **always denied** access to CONTROL_PLANE
@@ -239,7 +239,7 @@ function isLiteDeskInternalEmail(email) {
 
 After Phase 0H:
 
-✅ Internal LiteDesk operations are cleanly isolated  
+✅ Internal Arivu operations are cleanly isolated  
 ✅ CRM split is unblocked  
 ✅ Platform ≠ Tenant is enforced  
 ✅ Provisioning flows are safe  

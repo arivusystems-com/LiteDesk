@@ -302,11 +302,11 @@ async function updateOrganizationsModuleFields(organizationId = null) {
         process.exit(1);
       }
 
-      // Extract base URI and connect to litedesk_master
+      // Extract base URI and connect to arivu_master
       const [mongoUriWithoutQuery, mongoUriQueryPart] = MONGO_URI.split('?');
       const mongoQueryString = mongoUriQueryPart ? `?${mongoUriQueryPart}` : '';
       const baseUri = mongoUriWithoutQuery.split('/').slice(0, -1).join('/');
-      const masterDbName = 'litedesk_master';
+      const masterDbName = 'arivu_master';
       const MONGODB_URI = `${baseUri}/${masterDbName}${mongoQueryString}`;
 
       await mongoose.connect(MONGODB_URI);

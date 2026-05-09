@@ -27,7 +27,7 @@ Value:    Essential CRM feature
 ### Complete Documentation Suite:
 
 ```
-📂 LiteDesk/
+📂 Arivu/
 ├── 📄 AWS_SES_RECOMMENDATION.md          ← START HERE (10 min read)
 │   └── Executive summary, cost analysis, decision guide
 │

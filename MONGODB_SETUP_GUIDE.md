@@ -1,4 +1,4 @@
-# MongoDB Setup Guide for LiteDesk
+# MongoDB Setup Guide for Arivu
 
 ## Problem: start.sh exits after checking MongoDB setup
 
@@ -82,7 +82,7 @@ mongosh --eval "db.version()"
    
    Replace the `MONGO_URI` with your Atlas connection string:
    ```
-   MONGO_URI=mongodb+srv://YOUR_USERNAME:YOUR_PASSWORD@cluster.xxxxx.mongodb.net/litedesk?retryWrites=true&w=majority
+   MONGO_URI=mongodb+srv://YOUR_USERNAME:YOUR_PASSWORD@cluster.xxxxx.mongodb.net/arivu?retryWrites=true&w=majority
    ```
    
    **Important:** Replace `YOUR_USERNAME` and `YOUR_PASSWORD` with actual values!
@@ -129,7 +129,7 @@ mongod --dbpath ~/data/db
 
 Make sure your `.env` file has the correct format:
 ```
-MONGO_URI=mongodb+srv://USERNAME:PASSWORD@cluster.xxxxx.mongodb.net/litedesk?retryWrites=true&w=majority
+MONGO_URI=mongodb+srv://USERNAME:PASSWORD@cluster.xxxxx.mongodb.net/arivu?retryWrites=true&w=majority
 ```
 
 Common mistakes:
@@ -159,5 +159,5 @@ The script now:
 Check these resources:
 - MongoDB Installation: https://docs.mongodb.com/manual/installation/
 - MongoDB Atlas Setup: https://docs.atlas.mongodb.com/getting-started/
-- LiteDesk Documentation: See `docs/` folder
+- Arivu Documentation: See `docs/` folder
 

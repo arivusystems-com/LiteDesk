@@ -101,7 +101,7 @@ The test script is available at:
 
 Run it anytime with:
 ```bash
-export TEST_EMAIL=admin@litedesk.com
+export TEST_EMAIL=admin@arivu.com
 export TEST_PASSWORD=Admin@123
 node server/scripts/testFormsAPI.js
 ```

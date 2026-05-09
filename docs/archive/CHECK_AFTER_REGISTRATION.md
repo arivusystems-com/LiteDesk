@@ -3,7 +3,7 @@
 After you register, run this command:
 
 ```bash
-cd /Users/Prabhu/Documents/GitHub/LiteDesk/server
+cd /Users/Prabhu/Documents/GitHub/Arivu/server
 node scripts/verifySetup.js
 ```
 
@@ -32,7 +32,7 @@ node scripts/verifySetup.js
 
 ```bash
 # See what's in database
-cd /Users/Prabhu/Documents/GitHub/LiteDesk/server
+cd /Users/Prabhu/Documents/GitHub/Arivu/server
 node scripts/checkData.js
 ```
 

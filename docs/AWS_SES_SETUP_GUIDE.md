@@ -1,4 +1,4 @@
-# AWS SES Setup Guide for LiteDesk CRM
+# AWS SES Setup Guide for Arivu CRM
 
 ## 🎯 Why AWS SES for Your CRM?
 
@@ -81,7 +81,7 @@ By default, SES is in **"Sandbox Mode"** - you can only send to verified emails.
 3. Click **"Request Production Access"**
 4. Fill out the form:
    - **Use case:** Transactional emails for CRM (customer communication, notifications)
-   - **Website URL:** Your LiteDesk URL
+   - **Website URL:** Your Arivu URL
    - **Describe use case:** "We send transactional emails from our CRM system including customer notifications, password resets, and direct communication from our sales team. We do NOT send marketing campaigns or bulk emails."
    - **Process bounces/complaints:** Yes, we monitor bounces via SES dashboard
 5. Submit (usually approved within 24 hours)
@@ -94,7 +94,7 @@ By default, SES is in **"Sandbox Mode"** - you can only send to verified emails.
 
 1. Go to IAM Console: https://console.aws.amazon.com/iam/
 2. Click **"Users"** → **"Add users"**
-3. Username: `litedesk-ses-user`
+3. Username: `arivu-ses-user`
 4. Access type: ✅ **"Access key - Programmatic access"**
 5. Click **"Next: Permissions"**
 
@@ -116,7 +116,7 @@ By default, SES is in **"Sandbox Mode"** - you can only send to verified emails.
 
 ---
 
-### Step 4: Configure LiteDesk
+### Step 4: Configure Arivu
 
 #### Update `server/.env`:
 
@@ -128,7 +128,7 @@ AWS_SES_REGION=us-east-1
 AWS_SES_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
 AWS_SES_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 EMAIL_FROM=noreply@yourdomain.com
-EMAIL_FROM_NAME=LiteDesk CRM
+EMAIL_FROM_NAME=Arivu CRM
 EMAIL_REPLY_TO=support@yourdomain.com
 
 # Redis for email queue (optional but recommended)
@@ -189,8 +189,8 @@ async function testEmail() {
     const info = await transporter.sendMail({
       from: `${process.env.EMAIL_FROM_NAME} <${process.env.EMAIL_FROM}>`,
       to: 'your-test-email@gmail.com', // Change this!
-      subject: 'Test Email from LiteDesk CRM',
-      text: 'This is a test email from your LiteDesk CRM!',
+      subject: 'Test Email from Arivu CRM',
+      text: 'This is a test email from your Arivu CRM!',
       html: '<h1>Success!</h1><p>Your AWS SES is working! 🎉</p>',
     });
     
@@ -282,10 +282,10 @@ class EmailService {
   async sendWelcomeEmail(user) {
     return this.sendEmail({
       to: user.email,
-      subject: 'Welcome to LiteDesk CRM!',
+      subject: 'Welcome to Arivu CRM!',
       html: `
         <h1>Welcome ${user.name}!</h1>
-        <p>Thank you for joining LiteDesk CRM.</p>
+        <p>Thank you for joining Arivu CRM.</p>
         <p>Get started by logging in: <a href="${process.env.CLIENT_URL}">Login Here</a></p>
       `,
     });

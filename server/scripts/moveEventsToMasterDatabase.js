@@ -1,5 +1,5 @@
 /**
- * Script to move events from 'litedesk' database to 'litedesk_master' database
+ * Script to move events from 'arivu' database to 'arivu_master' database
  * This fixes the issue where events were created in the wrong database
  */
 
@@ -25,8 +25,8 @@ const [mongoUriWithoutQuery, mongoUriQueryPart] = MONGO_URI.split('?');
 const mongoQueryString = mongoUriQueryPart ? `?${mongoUriQueryPart}` : '';
 const baseUri = mongoUriWithoutQuery.split('/').slice(0, -1).join('/');
 
-const sourceDbName = 'litedesk';
-const targetDbName = 'litedesk_master';
+const sourceDbName = 'arivu';
+const targetDbName = 'arivu_master';
 
 async function moveEvents() {
   const client = new MongoClient(`${baseUri}${mongoQueryString}`);

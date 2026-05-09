@@ -29,7 +29,7 @@ import { assertValidSidebarStructure } from '@/utils/assertValidSidebarStructure
 import { getActivePinia } from 'pinia';
 import { fetchCoreModulesSettingsCached } from '@/utils/tenantSchemaApiCache';
 
-const LAST_ACTIVE_APP_ID_KEY = 'litedesk-sidebar-last-active-app-id';
+const LAST_ACTIVE_APP_ID_KEY = 'arivu-sidebar-last-active-app-id';
 
 /**
  * Hard stops (doctrine):

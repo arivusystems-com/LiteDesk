@@ -9,7 +9,7 @@ AWS SES is **perfect** for your use case. Here's why:
 
 ---
 
-## 📧 Why AWS SES is Perfect for LiteDesk CRM
+## 📧 Why AWS SES is Perfect for Arivu CRM
 
 ### ✅ Your Use Case is Ideal
 You need email for:
@@ -119,7 +119,7 @@ AWS_SES_REGION=us-east-1
 AWS_SES_ACCESS_KEY_ID=your_access_key_here
 AWS_SES_SECRET_ACCESS_KEY=your_secret_key_here
 EMAIL_FROM=noreply@yourdomain.com
-EMAIL_FROM_NAME=LiteDesk CRM
+EMAIL_FROM_NAME=Arivu CRM
 EMAIL_REPLY_TO=support@yourdomain.com
 
 # Enable email notifications

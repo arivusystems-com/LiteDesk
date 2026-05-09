@@ -1300,7 +1300,7 @@ const {
 
 const tagStorageKey = computed(() => {
   const organizationId = authStore.user?.organizationId || authStore.organization?._id || 'default-org';
-  return `litedesk-deal-tag-definitions-${organizationId}`;
+  return `arivu-deal-tag-definitions-${organizationId}`;
 });
 const hasDealTags = computed(() => Array.isArray(deal.value?.tags) && deal.value.tags.length > 0);
 const canEditDeal = computed(() => authStore.can('deals', 'edit'));
@@ -1322,7 +1322,7 @@ const { getTagChipClass: getDealTagChipClass } = useRecordTags(deal, {
   instanceTagSource: 'deals'
 });
 
-const ACTIVITY_FILTER_STORAGE_KEY = 'litedesk-deal-activity-filter';
+const ACTIVITY_FILTER_STORAGE_KEY = 'arivu-deal-activity-filter';
 
 const linkRecordDrawerContext = computed(() => (deal.value?._id ? { dealId: deal.value._id } : {}));
 const canLinkRecords = computed(() => authStore.can('deals', 'edit'));
@@ -1371,7 +1371,7 @@ const rightPaneTabs = computed(() => ([
   { id: 'integrations', name: 'Integrations', icon: PuzzlePieceIcon }
 ]));
 
-const DEAL_NAV_CONTEXT_STORAGE_PREFIX = 'litedesk-deal-nav-context:';
+const DEAL_NAV_CONTEXT_STORAGE_PREFIX = 'arivu-deal-nav-context:';
 const dealNavigationContextToken = computed(() => String(route.query?.navCtx || '').trim());
 
 const currentDealNavigationId = computed(() => String(effectiveDealId.value || deal.value?._id || ''));

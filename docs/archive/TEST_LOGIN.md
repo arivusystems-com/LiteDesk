@@ -22,9 +22,9 @@ if (user) {
 
 If logged in correctly:
 ```
-User in localStorage: {"email":"admin@litedesk.com", "token":"eyJhbGc...", ...}
+User in localStorage: {"email":"admin@arivu.com", "token":"eyJhbGc...", ...}
 Token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-Email: admin@litedesk.com
+Email: admin@arivu.com
 Role: owner
 ```
 
@@ -47,7 +47,7 @@ User in localStorage: null
 3. **Click "Admin Login"**
 
 4. **Enter:**
-   - Email: `admin@litedesk.com`
+   - Email: `admin@arivu.com`
    - Password: `Admin@123`
 
 5. **Check console for errors**
@@ -78,8 +78,8 @@ This will warn if admin exists. You can delete the user first:
 
 ```bash
 # In mongosh or MongoDB Compass
-db.users.deleteOne({email: "admin@litedesk.com"})
-db.organizations.deleteOne({name: "LiteDesk Master"})
+db.users.deleteOne({email: "admin@arivu.com"})
+db.organizations.deleteOne({name: "Arivu Master"})
 
 # Then create admin again
 node scripts/createDefaultAdmin.js

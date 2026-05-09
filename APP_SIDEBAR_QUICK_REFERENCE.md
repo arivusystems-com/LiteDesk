@@ -71,8 +71,8 @@
 **Storage:** `localStorage`
 
 **Keys:**
-- `litedesk-sidebar-domains-state` - `{ "SALES": true, "HELPDESK": false }`
-- `litedesk-sidebar-last-active-domain` - `"SALES"`
+- `arivu-sidebar-domains-state` - `{ "SALES": true, "HELPDESK": false }`
+- `arivu-sidebar-last-active-domain` - `"SALES"`
 
 **Auto-Save:** On any domain state change
 

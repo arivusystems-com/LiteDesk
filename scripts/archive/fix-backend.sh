@@ -68,13 +68,13 @@ echo ""
 
 # Check if backend files exist
 echo "3️⃣  Checking backend files..."
-if [ -f "/home/ubuntu/LiteDesk/server/server.js" ]; then
+if [ -f "/home/ubuntu/Arivu/server/server.js" ]; then
     echo "✅ server.js exists"
 else
     echo "❌ server.js not found!"
 fi
 
-if [ -f "/home/ubuntu/LiteDesk/server/.env" ]; then
+if [ -f "/home/ubuntu/Arivu/server/.env" ]; then
     echo "✅ .env exists"
 else
     echo "❌ .env not found!"
@@ -83,18 +83,18 @@ echo ""
 
 # Check if node_modules exist
 echo "4️⃣  Checking dependencies..."
-if [ -d "/home/ubuntu/LiteDesk/server/node_modules" ]; then
+if [ -d "/home/ubuntu/Arivu/server/node_modules" ]; then
     echo "✅ node_modules exists"
 else
     echo "⚠️  node_modules not found - installing..."
-    cd /home/ubuntu/LiteDesk/server
+    cd /home/ubuntu/Arivu/server
     npm install --production
 fi
 echo ""
 
 # Check MongoDB connection
 echo "5️⃣  Checking MongoDB connection..."
-cd /home/ubuntu/LiteDesk/server
+cd /home/ubuntu/Arivu/server
 node -e "
 require('dotenv').config();
 const mongoose = require('mongoose');
@@ -106,13 +106,13 @@ echo ""
 
 # Stop any existing process
 echo "6️⃣  Stopping old processes..."
-pm2 delete litedesk-api 2>/dev/null || echo "No existing process found"
+pm2 delete arivu-api 2>/dev/null || echo "No existing process found"
 echo ""
 
 # Start backend
 echo "7️⃣  Starting backend..."
-cd /home/ubuntu/LiteDesk/server
-pm2 start server.js --name litedesk-api --time
+cd /home/ubuntu/Arivu/server
+pm2 start server.js --name arivu-api --time
 pm2 save
 echo ""
 
@@ -127,7 +127,7 @@ if curl -s http://localhost:5000/api/health > /dev/null 2>&1; then
     curl -s http://localhost:5000/api/health | head -5
 else
     echo "⚠️  Backend not responding yet, checking logs..."
-    pm2 logs litedesk-api --lines 20 --nostream
+    pm2 logs arivu-api --lines 20 --nostream
 fi
 echo ""
 
@@ -137,7 +137,7 @@ echo "📊 FINAL STATUS"
 echo "════════════════════════════════════════════════════════"
 pm2 status
 echo ""
-pm2 logs litedesk-api --lines 10 --nostream
+pm2 logs arivu-api --lines 10 --nostream
 
 echo ""
 echo "════════════════════════════════════════════════════════"
@@ -156,13 +156,13 @@ if [ $? -eq 0 ]; then
     echo ""
     echo -e "${GREEN}📝 If it still doesn't work, check logs:${NC}"
     echo -e "   ${PURPLE}ssh -i $KEY_FILE ubuntu@$EC2_IP${NC}"
-    echo -e "   ${PURPLE}pm2 logs litedesk-api${NC}"
+    echo -e "   ${PURPLE}pm2 logs arivu-api${NC}"
     echo ""
 else
     echo -e "${RED}❌ Something went wrong${NC}"
     echo -e "${YELLOW}SSH into server to check:${NC}"
     echo -e "   ssh -i $KEY_FILE ubuntu@$EC2_IP"
-    echo -e "   pm2 logs litedesk-api"
+    echo -e "   pm2 logs arivu-api"
     exit 1
 fi
 

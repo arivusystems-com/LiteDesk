@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ###############################################################################
-# LiteDesk CRM - One-Click AWS Deployment Script
+# Arivu CRM - One-Click AWS Deployment Script
 ###############################################################################
 # Pre-configured for: 43.204.144.169
 # Run this script on your EC2 instance for automated deployment
@@ -18,18 +18,18 @@ PURPLE='\033[0;35m'
 NC='\033[0m' # No Color
 
 # Pre-configured values
-MONGODB_URI="mongodb+srv://litedeskadmin:TKvtQbKGOWdfP5C1@litedeskdb.qzw4euo.mongodb.net/litedesk?retryWrites=true&w=majority&appName=litedeskdb"
+MONGODB_URI="mongodb+srv://arivuadmin:TKvtQbKGOWdfP5C1@arivudb.qzw4euo.mongodb.net/arivu?retryWrites=true&w=majority&appName=arivudb"
 SERVER_ADDRESS="43.204.144.169"
-ADMIN_EMAIL="admin@litedesk.com"
+ADMIN_EMAIL="admin@arivu.com"
 ADMIN_PASSWORD="Admin@123456"
-REPO_URL="https://github.com/Prabhubalu/LiteDesk.git"
+REPO_URL="https://github.com/Prabhubalu/Arivu.git"
 
 # Banner
 echo -e "${BLUE}"
 cat << "EOF"
 ╔═══════════════════════════════════════════════════════════════╗
 ║                                                               ║
-║            🚀 LiteDesk CRM - One-Click Deployment            ║
+║            🚀 Arivu CRM - One-Click Deployment            ║
 ║                  AWS EC2 Automated Setup                      ║
 ║                                                               ║
 ╚═══════════════════════════════════════════════════════════════╝
@@ -118,7 +118,7 @@ echo ""
 # Clone/Update Repository
 ###############################################################################
 echo -e "${BLUE}📥 Step 6/11: Setting up Application${NC}"
-APP_DIR="/home/ubuntu/LiteDesk"
+APP_DIR="/home/ubuntu/Arivu"
 
 if [ -d "$APP_DIR" ]; then
     echo -e "${YELLOW}⚠ Directory exists, pulling latest changes${NC}"
@@ -236,14 +236,14 @@ echo ""
 ###############################################################################
 echo -e "${BLUE}🌐 Step 9/11: Configuring Nginx${NC}"
 
-sudo tee /etc/nginx/sites-available/litedesk > /dev/null << 'NGINXCONF'
+sudo tee /etc/nginx/sites-available/arivu > /dev/null << 'NGINXCONF'
 server {
     listen 80;
     server_name 43.204.144.169;
 
     # Frontend - Serve Vue.js build files
     location / {
-        root /home/ubuntu/LiteDesk/client/dist;
+        root /home/ubuntu/Arivu/client/dist;
         try_files $uri $uri/ /index.html;
         
         # Cache static assets
@@ -279,7 +279,7 @@ server {
 NGINXCONF
 
 # Enable site
-sudo ln -sf /etc/nginx/sites-available/litedesk /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/arivu /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 
 # Test and reload
@@ -299,10 +299,10 @@ echo -e "${BLUE}🚀 Step 10/11: Starting Backend${NC}"
 cd "$APP_DIR/server"
 
 # Stop existing process if any
-pm2 delete litedesk-api 2>/dev/null || true
+pm2 delete arivu-api 2>/dev/null || true
 
 # Start new process
-pm2 start server.js --name litedesk-api --time
+pm2 start server.js --name arivu-api --time
 pm2 save
 
 # Setup startup script
@@ -347,7 +347,7 @@ fi
 
 # Test frontend
 echo "Testing frontend..."
-if [ -f "/home/ubuntu/LiteDesk/client/dist/index.html" ]; then
+if [ -f "/home/ubuntu/Arivu/client/dist/index.html" ]; then
     echo -e "${GREEN}✓ Frontend files are in place${NC}"
 else
     echo -e "${RED}❌ Frontend files missing${NC}"
@@ -392,17 +392,17 @@ pm2 status
 echo ""
 
 echo -e "${BLUE}📝 Useful Commands:${NC}"
-echo -e "   View logs:           ${PURPLE}pm2 logs litedesk-api${NC}"
-echo -e "   Restart backend:     ${PURPLE}pm2 restart litedesk-api${NC}"
+echo -e "   View logs:           ${PURPLE}pm2 logs arivu-api${NC}"
+echo -e "   Restart backend:     ${PURPLE}pm2 restart arivu-api${NC}"
 echo -e "   Monitor resources:   ${PURPLE}pm2 monit${NC}"
 echo -e "   Check backend:       ${PURPLE}curl http://localhost:5000/api/health${NC}"
 echo -e "   Nginx logs:          ${PURPLE}sudo tail -f /var/log/nginx/error.log${NC}"
 echo ""
 
 echo -e "${BLUE}🔄 To Update Application Later:${NC}"
-echo -e "   cd /home/ubuntu/LiteDesk"
+echo -e "   cd /home/ubuntu/Arivu"
 echo -e "   git pull"
-echo -e "   cd server && npm install && pm2 restart litedesk-api"
+echo -e "   cd server && npm install && pm2 restart arivu-api"
 echo -e "   cd ../client && npm install && npm run build"
 echo ""
 
@@ -410,7 +410,7 @@ echo -e "${GREEN}🎯 Next Steps:${NC}"
 echo -e "   1. Open ${BLUE}http://43.204.144.169${NC} in your browser"
 echo -e "   2. Login with the credentials above"
 echo -e "   3. Change your admin password"
-echo -e "   4. Start using LiteDesk CRM!"
+echo -e "   4. Start using Arivu CRM!"
 echo ""
 
 echo -e "${PURPLE}✨ Enjoy your new CRM system! ✨${NC}"
@@ -418,7 +418,7 @@ echo ""
 
 # Show final status
 echo -e "${BLUE}📈 Final System Check:${NC}"
-echo -e "Backend Process: $(pm2 list | grep litedesk-api | awk '{print $10}')"
+echo -e "Backend Process: $(pm2 list | grep arivu-api | awk '{print $10}')"
 echo -e "Nginx Status: $(sudo systemctl is-active nginx)"
 echo ""
 

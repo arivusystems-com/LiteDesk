@@ -43,7 +43,7 @@ const tabBarWidth = computed(() => {
     return viewportWidth.value; // Mobile: full width
   }
   
-  const sidebarCollapsed = localStorage.getItem('litedesk-sidebar-collapsed') === 'true';
+  const sidebarCollapsed = localStorage.getItem('arivu-sidebar-collapsed') === 'true';
   const sidebarWidth = sidebarCollapsed ? 80 : 256;
   
   return viewportWidth.value - sidebarWidth;

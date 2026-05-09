@@ -294,7 +294,7 @@ const buildList = async () => {
       }));
       
       // Load custom saved views from localStorage
-      const customViewsStorageKey = `litedesk-listview-${props.moduleKey}-saved-views`;
+      const customViewsStorageKey = `arivu-listview-${props.moduleKey}-saved-views`;
       let customViews = [];
       try {
         const saved = localStorage.getItem(customViewsStorageKey);
@@ -318,8 +318,8 @@ const buildList = async () => {
       const defaultView = systemViews.find(v => v.isDefault) || systemViews[0];
       if (defaultView) {
         // Priority: last active view (if user switched before reload) > user's default (first visit) > "All"
-        const defaultViewStorageKey = `litedesk-listview-${props.moduleKey}-default-view`;
-        const savedViewStorageKey = `litedesk-listview-${props.moduleKey}-active-view`;
+        const defaultViewStorageKey = `arivu-listview-${props.moduleKey}-default-view`;
+        const savedViewStorageKey = `arivu-listview-${props.moduleKey}-active-view`;
         try {
           const userDefaultViewId = localStorage.getItem(defaultViewStorageKey);
           defaultViewId.value = userDefaultViewId || null;
@@ -1577,7 +1577,7 @@ const handleSavedViewSelected = (view) => {
 
 const handleSetDefaultView = (viewId) => {
   if (!viewId || !hasModuleListConfig(props.moduleKey)) return;
-  const defaultViewStorageKey = `litedesk-listview-${props.moduleKey}-default-view`;
+  const defaultViewStorageKey = `arivu-listview-${props.moduleKey}-default-view`;
   try {
     localStorage.setItem(defaultViewStorageKey, viewId);
     defaultViewId.value = viewId;
@@ -1687,7 +1687,7 @@ watch(() => [props.moduleKey, props.appKey], () => {
 // Persist active saved view to localStorage (modules with registry config)
 watch(() => activeSavedViewId.value, (newValue) => {
   if (hasModuleListConfig(props.moduleKey)) {
-    const savedViewStorageKey = `litedesk-listview-${props.moduleKey}-active-view`;
+    const savedViewStorageKey = `arivu-listview-${props.moduleKey}-active-view`;
     if (newValue) {
       localStorage.setItem(savedViewStorageKey, newValue);
     } else {

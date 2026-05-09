@@ -1712,7 +1712,7 @@ const activitySearchOpen = ref(false);
 const showTimestampSheet = ref(false);
 const timestampSheetValue = ref('');
 
-const ACTIVITY_FILTER_STORAGE_KEY = 'litedesk-activity-filter';
+const ACTIVITY_FILTER_STORAGE_KEY = 'arivu-activity-filter';
 function loadActivityFilter() {
   try {
     const raw = localStorage.getItem(ACTIVITY_FILTER_STORAGE_KEY);
@@ -1982,7 +1982,7 @@ const {
 
 const tagStorageKey = computed(() => {
   const organizationId = authStore.user?.organizationId || authStore.organization?._id || 'default-org';
-  return `litedesk-task-tag-definitions-${organizationId}`;
+  return `arivu-task-tag-definitions-${organizationId}`;
 });
 const hasTaskTags = computed(() => Array.isArray(task.value?.tags) && task.value.tags.length > 0);
 
@@ -3079,7 +3079,7 @@ const contextRelatedGroups = computed(() => {
 });
 
 // Header navigation (prev/next task) – same pattern as DealRecordPage
-const TASK_NAV_CONTEXT_STORAGE_PREFIX = 'litedesk-task-nav-context:';
+const TASK_NAV_CONTEXT_STORAGE_PREFIX = 'arivu-task-nav-context:';
 const taskNavigationContextToken = computed(() => String(route.query?.navCtx || '').trim());
 const currentTaskNavigationId = computed(() => String(effectiveTaskId.value || task.value?._id || ''));
 const currentTaskNavigationIndex = computed(() => {

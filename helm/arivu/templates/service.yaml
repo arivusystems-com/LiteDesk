@@ -5,7 +5,7 @@ metadata:
   name: {{ .Values.instance.name }}-backend
   namespace: {{ .Values.instance.name }}
   labels:
-    app: litedesk-backend
+    app: arivu-backend
     instance: {{ .Values.instance.subdomain }}
 spec:
   type: {{ .Values.service.type }}
@@ -15,7 +15,7 @@ spec:
       protocol: TCP
       name: http
   selector:
-    app: litedesk-backend
+    app: arivu-backend
     instance: {{ .Values.instance.subdomain }}
 ---
 apiVersion: v1
@@ -24,7 +24,7 @@ metadata:
   name: {{ .Values.instance.name }}-frontend
   namespace: {{ .Values.instance.name }}
   labels:
-    app: litedesk-frontend
+    app: arivu-frontend
     instance: {{ .Values.instance.subdomain }}
 spec:
   type: {{ .Values.service.type }}
@@ -34,6 +34,6 @@ spec:
       protocol: TCP
       name: http
   selector:
-    app: litedesk-frontend
+    app: arivu-frontend
     instance: {{ .Values.instance.subdomain }}
 

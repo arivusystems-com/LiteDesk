@@ -1,6 +1,6 @@
-# LiteDesk Multi-Instance Deployment Guide
+# Arivu Multi-Instance Deployment Guide
 
-This guide will walk you through deploying the LiteDesk multi-instance architecture to production.
+This guide will walk you through deploying the Arivu multi-instance architecture to production.
 
 ## 📋 Prerequisites
 
@@ -11,7 +11,7 @@ Before you begin, ensure you have:
 3. **kubectl** installed and configured
 4. **Helm** v3+ installed
 5. **AWS CLI** configured with your credentials
-6. **Domain name** (e.g., `litedesk.com`)
+6. **Domain name** (e.g., `arivu.com`)
 
 ---
 
@@ -26,7 +26,7 @@ brew install eksctl  # macOS
 
 # Create EKS cluster
 eksctl create cluster \
-  --name litedesk-production \
+  --name arivu-production \
   --region us-east-1 \
   --nodegroup-name standard-workers \
   --node-type t3.medium \
@@ -82,7 +82,7 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
-    email: admin@litedesk.com  # Change this to your email
+    email: admin@arivu.com  # Change this to your email
     privateKeySecretRef:
       name: letsencrypt-prod
     solvers:
@@ -97,7 +97,7 @@ EOF
 1. **Create Hosted Zone** (if you haven't already):
    ```bash
    aws route53 create-hosted-zone \
-     --name litedesk.com \
+     --name arivu.com \
      --caller-reference $(date +%s)
    ```
 
@@ -108,7 +108,7 @@ EOF
    # Get the LoadBalancer DNS from ingress-nginx
    LOADBALANCER_DNS=$(kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
    
-   # Note: You'll need to create a CNAME record for *.litedesk.com pointing to the LoadBalancer
+   # Note: You'll need to create a CNAME record for *.arivu.com pointing to the LoadBalancer
    # This can be done via AWS Console or AWS CLI
    ```
 
@@ -122,45 +122,45 @@ EOF
 
 ```bash
 # Navigate to project root
-cd /path/to/LiteDesk
+cd /path/to/Arivu
 
 # Build backend image
-docker build -f Dockerfile.backend -t your-registry/litedesk-backend:latest .
+docker build -f Dockerfile.backend -t your-registry/arivu-backend:latest .
 
 # Build frontend image
-docker build -f Dockerfile.frontend -t your-registry/litedesk-frontend:latest .
+docker build -f Dockerfile.frontend -t your-registry/arivu-frontend:latest .
 
 # Push to registry (Docker Hub, ECR, etc.)
-docker push your-registry/litedesk-backend:latest
-docker push your-registry/litedesk-frontend:latest
+docker push your-registry/arivu-backend:latest
+docker push your-registry/arivu-frontend:latest
 ```
 
 **For AWS ECR:**
 ```bash
 # Create ECR repositories
-aws ecr create-repository --repository-name litedesk-backend
-aws ecr create-repository --repository-name litedesk-frontend
+aws ecr create-repository --repository-name arivu-backend
+aws ecr create-repository --repository-name arivu-frontend
 
 # Get login token
 aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin YOUR_AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com
 
 # Tag images
-docker tag litedesk-backend:latest YOUR_AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/litedesk-backend:latest
-docker tag litedesk-frontend:latest YOUR_AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/litedesk-frontend:latest
+docker tag arivu-backend:latest YOUR_AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/arivu-backend:latest
+docker tag arivu-frontend:latest YOUR_AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/arivu-frontend:latest
 
 # Push
-docker push YOUR_AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/litedesk-backend:latest
-docker push YOUR_AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/litedesk-frontend:latest
+docker push YOUR_AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/arivu-backend:latest
+docker push YOUR_AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/arivu-frontend:latest
 ```
 
 ### Step 2.2: Deploy Master Control Plane with Helm
 
 ```bash
 # Create namespace for master control plane
-kubectl create namespace litedesk-master
+kubectl create namespace arivu-master
 
 # Create secrets
-kubectl create secret generic litedesk-master-secrets \
+kubectl create secret generic arivu-master-secrets \
   --from-literal=MONGO_URI='your_mongodb_connection_string' \
   --from-literal=JWT_SECRET='your_jwt_secret' \
   --from-literal=REFRESH_TOKEN_SECRET='your_refresh_secret' \
@@ -168,31 +168,31 @@ kubectl create secret generic litedesk-master-secrets \
   --from-literal=AWS_SECRET_ACCESS_KEY='your_aws_secret' \
   --from-literal=ROUTE53_HOSTED_ZONE_ID='your_hosted_zone_id' \
   --from-literal=MASTER_API_KEY='your_master_api_key' \
-  -n litedesk-master
+  -n arivu-master
 
-# Update helm/litedesk/values.yaml with your configuration
+# Update helm/arivu/values.yaml with your configuration
 # Then deploy
-helm install litedesk-master ./helm/litedesk \
-  --namespace litedesk-master \
-  --set image.backend.repository=YOUR_AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/litedesk-backend \
-  --set image.frontend.repository=YOUR_AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/litedesk-frontend \
-  --set ingress.hosts[0].host=app.litedesk.com \
+helm install arivu-master ./helm/arivu \
+  --namespace arivu-master \
+  --set image.backend.repository=YOUR_AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/arivu-backend \
+  --set image.frontend.repository=YOUR_AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/arivu-frontend \
+  --set ingress.hosts[0].host=app.arivu.com \
   --set ingress.hosts[0].paths[0].path=/ \
-  --set ingress.tls[0].secretName=litedesk-master-tls \
-  --set ingress.tls[0].hosts[0]=app.litedesk.com
+  --set ingress.tls[0].secretName=arivu-master-tls \
+  --set ingress.tls[0].hosts[0]=app.arivu.com
 ```
 
 ### Step 2.3: Verify Deployment
 
 ```bash
 # Check pods
-kubectl get pods -n litedesk-master
+kubectl get pods -n arivu-master
 
 # Check ingress
-kubectl get ingress -n litedesk-master
+kubectl get ingress -n arivu-master
 
 # Test health endpoint
-curl https://app.litedesk.com/health
+curl https://app.arivu.com/health
 ```
 
 ---
@@ -219,7 +219,7 @@ nano server/.env  # or use your preferred editor
 - `MONGO_URI`: MongoDB connection for master database
 - `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`: For Route 53 and other AWS services
 - `ROUTE53_HOSTED_ZONE_ID`: Your Route 53 hosted zone
-- `BASE_DOMAIN`: Your base domain (e.g., `litedesk.com`)
+- `BASE_DOMAIN`: Your base domain (e.g., `arivu.com`)
 - `KUBECONFIG_PATH`: Path to kubeconfig (for local testing, use `~/.kube/config`)
 - `INGRESS_LOADBALANCER_DNS`: LoadBalancer DNS from Step 1.2
 - `MONGODB_ADMIN_URI`: Admin connection string for creating new DBs
@@ -240,9 +240,9 @@ nano server/.env  # or use your preferred editor
 ```bash
 helm repo add bitnami https://charts.bitnami.com/bitnami
 helm install mongodb bitnami/mongodb \
-  --namespace litedesk-master \
+  --namespace arivu-master \
   --set auth.rootPassword=YOUR_ROOT_PASSWORD \
-  --set auth.database=litedesk_master
+  --set auth.database=arivu_master
 ```
 
 ---
@@ -304,22 +304,22 @@ jobs:
       
       - name: Build and push backend
         run: |
-          docker build -f Dockerfile.backend -t ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/litedesk-backend:${{ github.sha }} .
-          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/litedesk-backend:${{ github.sha }}
+          docker build -f Dockerfile.backend -t ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/arivu-backend:${{ github.sha }} .
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/arivu-backend:${{ github.sha }}
       
       - name: Build and push frontend
         run: |
-          docker build -f Dockerfile.frontend -t ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/litedesk-frontend:${{ github.sha }} .
-          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/litedesk-frontend:${{ github.sha }}
+          docker build -f Dockerfile.frontend -t ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/arivu-frontend:${{ github.sha }} .
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/arivu-frontend:${{ github.sha }}
       
       - name: Update kubeconfig
         run: |
-          aws eks update-kubeconfig --region us-east-1 --name litedesk-production
+          aws eks update-kubeconfig --region us-east-1 --name arivu-production
       
       - name: Deploy with Helm
         run: |
-          helm upgrade litedesk-master ./helm/litedesk \
-            --namespace litedesk-master \
+          helm upgrade arivu-master ./helm/arivu \
+            --namespace arivu-master \
             --set image.backend.tag=${{ github.sha }} \
             --set image.frontend.tag=${{ github.sha }} \
             --reuse-values
@@ -333,10 +333,10 @@ jobs:
 
 ```bash
 # Check master control plane health
-curl https://app.litedesk.com/health
+curl https://app.arivu.com/health
 
 # Check system status
-curl https://app.litedesk.com/health/status
+curl https://app.arivu.com/health/status
 
 # View all instance health
 # Log in to admin dashboard → Instances
@@ -346,20 +346,20 @@ curl https://app.litedesk.com/health/status
 
 ```bash
 # Master control plane logs
-kubectl logs -n litedesk-master -l app=litedesk-backend -f
+kubectl logs -n arivu-master -l app=arivu-backend -f
 
 # Specific customer instance logs
-kubectl logs -n litedesk-customer-acme -l app=litedesk-backend -f
+kubectl logs -n arivu-customer-acme -l app=arivu-backend -f
 ```
 
 ### Step 7.3: Scaling
 
 ```bash
 # Scale master control plane
-kubectl scale deployment litedesk-backend --replicas=3 -n litedesk-master
+kubectl scale deployment arivu-backend --replicas=3 -n arivu-master
 
 # Scale a customer instance
-kubectl scale deployment litedesk-acme-corp --replicas=2 -n litedesk-acme-corp
+kubectl scale deployment arivu-acme-corp --replicas=2 -n arivu-acme-corp
 ```
 
 ---
@@ -381,7 +381,7 @@ kubectl logs <pod-name> -n <namespace>
 aws route53 list-resource-record-sets --hosted-zone-id YOUR_ZONE_ID
 
 # Test DNS resolution
-nslookup customer.litedesk.com
+nslookup customer.arivu.com
 ```
 
 ### Issue: SSL certificate not issued
@@ -423,11 +423,11 @@ kubectl describe certificate -n <namespace>
 ## Support
 
 For issues or questions:
-- GitHub Issues: https://github.com/yourusername/litedesk/issues
-- Email: support@litedesk.com
-- Documentation: https://docs.litedesk.com
+- GitHub Issues: https://github.com/yourusername/arivu/issues
+- Email: support@arivu.com
+- Documentation: https://docs.arivu.com
 
 ---
 
-**🎉 Congratulations!** You've successfully deployed the LiteDesk multi-instance architecture!
+**🎉 Congratulations!** You've successfully deployed the Arivu multi-instance architecture!
 

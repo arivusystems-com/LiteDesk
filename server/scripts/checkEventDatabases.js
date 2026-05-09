@@ -28,21 +28,21 @@ async function checkDatabases() {
     await client.connect();
     console.log('✅ Connected to MongoDB\n');
 
-    const masterDb = client.db('litedesk_master');
-    const litedeskDb = client.db('litedesk');
+    const masterDb = client.db('arivu_master');
+    const arivuDb = client.db('arivu');
 
     const masterCount = await masterDb.collection('events').countDocuments({});
-    const litedeskCount = await litedeskDb.collection('events').countDocuments({});
+    const arivuCount = await arivuDb.collection('events').countDocuments({});
 
     console.log('📊 Event Counts:');
-    console.log(`  litedesk_master: ${masterCount} events`);
-    console.log(`  litedesk: ${litedeskCount} events\n`);
+    console.log(`  arivu_master: ${masterCount} events`);
+    console.log(`  arivu: ${arivuCount} events\n`);
 
-    if (litedeskCount > 0 && masterCount === 0) {
+    if (arivuCount > 0 && masterCount === 0) {
       console.log('⚠️  Events are in the wrong database!');
       console.log('   Run: node scripts/moveEventsToMasterDatabase.js\n');
     } else if (masterCount > 0) {
-      console.log('✅ Events are in the correct database (litedesk_master)');
+      console.log('✅ Events are in the correct database (arivu_master)');
       console.log('   Run: node scripts/migrateEventsToNewSchema.js\n');
     } else {
       console.log('ℹ️  No events found in either database.\n');

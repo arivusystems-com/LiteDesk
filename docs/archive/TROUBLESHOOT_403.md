@@ -10,12 +10,12 @@ You deployed successfully but got: **403 Forbidden** error in the browser.
 
 ```
 Nginx runs as:     www-data user
-Your files are in: /home/ubuntu/LiteDesk/ (owned by ubuntu)
+Your files are in: /home/ubuntu/Arivu/ (owned by ubuntu)
 
 Nginx needs permission to:
   1. Access /home/ubuntu/ (execute permission)
-  2. Access /home/ubuntu/LiteDesk/ (execute permission)
-  3. Read files in /home/ubuntu/LiteDesk/client/dist/ (read permission)
+  2. Access /home/ubuntu/Arivu/ (execute permission)
+  3. Read files in /home/ubuntu/Arivu/client/dist/ (read permission)
 ```
 
 ## ✅ Quick Fix (1 Command)
@@ -45,9 +45,9 @@ Then run these commands:
 ```bash
 # Fix directory permissions (755 = owner can do all, others can read/execute)
 chmod 755 /home/ubuntu
-chmod 755 /home/ubuntu/LiteDesk
-chmod 755 /home/ubuntu/LiteDesk/client
-chmod -R 755 /home/ubuntu/LiteDesk/client/dist
+chmod 755 /home/ubuntu/Arivu
+chmod 755 /home/ubuntu/Arivu/client
+chmod -R 755 /home/ubuntu/Arivu/client/dist
 
 # Restart Nginx
 sudo systemctl restart nginx
@@ -104,7 +104,7 @@ Or just open in browser: **http://13.203.208.47**
 
 ### 502 Bad Gateway
 **Cause:** Backend not running
-**Fix:** `pm2 restart litedesk-api`
+**Fix:** `pm2 restart arivu-api`
 
 ---
 
@@ -118,14 +118,14 @@ ssh -i ~/key.pem ubuntu@13.203.208.47
 # Check home directory
 ls -la /home/ | grep ubuntu
 
-# Check LiteDesk directory
-ls -la /home/ubuntu/ | grep LiteDesk
+# Check Arivu directory
+ls -la /home/ubuntu/ | grep Arivu
 
 # Check client/dist
-ls -la /home/ubuntu/LiteDesk/client/
+ls -la /home/ubuntu/Arivu/client/
 
 # Should see:
-# drwxr-xr-x  ubuntu ubuntu  LiteDesk
+# drwxr-xr-x  ubuntu ubuntu  Arivu
 # drwxr-xr-x  ubuntu ubuntu  client
 # drwxr-xr-x  ubuntu ubuntu  dist
 ```
@@ -159,7 +159,7 @@ The updated `deploy-local-build.sh` now automatically sets correct permissions d
 |-------|-------|-----|
 | 403 Forbidden | Permissions | `./fix-permissions.sh` |
 | 404 Not Found | Missing files | Check `dist/` exists |
-| 502 Bad Gateway | Backend down | `pm2 restart litedesk-api` |
+| 502 Bad Gateway | Backend down | `pm2 restart arivu-api` |
 | Connection Refused | EC2 stopped | Start EC2 instance |
 
 ---
@@ -171,7 +171,7 @@ Once fixed, you should see:
 ✅ Login page loads  
 ✅ No 403 errors  
 ✅ Static files load (CSS, JS)  
-✅ Can login with: admin@litedesk.com / Admin@123456
+✅ Can login with: admin@arivu.com / Admin@123456
 
 ---
 
@@ -183,8 +183,8 @@ Run these debug commands:
 ssh -i ~/key.pem ubuntu@13.203.208.47
 
 # 1. Check if files exist
-ls -la /home/ubuntu/LiteDesk/client/dist/
-ls -la /home/ubuntu/LiteDesk/client/dist/index.html
+ls -la /home/ubuntu/Arivu/client/dist/
+ls -la /home/ubuntu/Arivu/client/dist/index.html
 
 # 2. Check Nginx config
 sudo nginx -t
@@ -196,7 +196,7 @@ sudo systemctl status nginx
 pm2 status
 
 # 5. Check backend logs
-pm2 logs litedesk-api --lines 50
+pm2 logs arivu-api --lines 50
 
 # 6. Check Nginx error log
 sudo tail -20 /var/log/nginx/error.log

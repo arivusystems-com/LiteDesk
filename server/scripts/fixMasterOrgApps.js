@@ -21,7 +21,7 @@ async function fixMasterOrgApps() {
 
     // Get master database URI
     const masterUri = getMasterDatabaseUri();
-    console.log('🔗 Connecting to MongoDB master database (litedesk_master)...');
+    console.log('🔗 Connecting to MongoDB master database (arivu_master)...');
     await mongoose.connect(masterUri);
     console.log('✅ Connected to MongoDB master database\n');
 

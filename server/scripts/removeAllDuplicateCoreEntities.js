@@ -31,9 +31,9 @@ async function removeDuplicateCoreEntities() {
     console.log('🚀 Removing duplicate core entity modules from business apps...\n');
 
     const masterUri = getMasterDatabaseUri();
-    console.log('🔗 Connecting to MongoDB master database (litedesk_master)...');
+    console.log('🔗 Connecting to MongoDB master database (arivu_master)...');
     await mongoose.connect(masterUri);
-    console.log('✅ Connected to MongoDB master database (litedesk_master)\n');
+    console.log('✅ Connected to MongoDB master database (arivu_master)\n');
 
     let totalRemoved = 0;
 

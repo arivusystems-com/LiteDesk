@@ -2,7 +2,7 @@
 
 ## 🎯 What Is It?
 
-The Internal Tabs system transforms LiteDesk into a **multi-tasking powerhouse** by adding browser-like tabs to navigate between modules and records **without page refreshes**.
+The Internal Tabs system transforms Arivu into a **multi-tasking powerhouse** by adding browser-like tabs to navigate between modules and records **without page refreshes**.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐

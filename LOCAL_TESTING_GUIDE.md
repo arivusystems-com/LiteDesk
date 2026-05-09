@@ -1,6 +1,6 @@
 # 🧪 Local Single-Instance Testing Guide
 
-Complete guide for testing LiteDesk in single-instance mode locally.
+Complete guide for testing Arivu in single-instance mode locally.
 
 ---
 
@@ -61,7 +61,7 @@ mongo --eval "db.version()"
 ### Step 2: Configure Environment
 
 Your `.env` file is already configured for local testing:
-- ✅ `MONGO_URI=mongodb://localhost:27017/litedesk`
+- ✅ `MONGO_URI=mongodb://localhost:27017/arivu`
 - ✅ `ENABLE_INSTANCE_PROVISIONING=false` (single-instance mode)
 - ✅ `ENABLE_DEMO_CONVERSION=true`
 
@@ -92,7 +92,7 @@ node scripts/createDefaultAdmin.js
 **Expected output:**
 ```
 ✅ Admin user created successfully!
-Email: admin@litedesk.com
+Email: admin@arivu.com
 Password: Admin@123456
 ```
 
@@ -150,7 +150,7 @@ curl http://localhost:3000/health
 {
   "status": "healthy",
   "timestamp": "2025-01-XX...",
-  "service": "LiteDesk Master Control Plane",
+  "service": "Arivu Master Control Plane",
   "database": {
     "connected": true,
     "state": "connected"
@@ -165,7 +165,7 @@ curl http://localhost:3000/health
 1. Open browser: **http://localhost:5173**
 2. Click **"Admin Login"** tab
 3. Login with:
-   - **Email:** `admin@litedesk.com`
+   - **Email:** `admin@arivu.com`
    - **Password:** `Admin@123456`
 4. ✅ You should see the dashboard
 
@@ -239,7 +239,7 @@ curl http://localhost:3000/health
 **Verify in Database:**
 ```bash
 # Connect to MongoDB
-mongosh mongodb://localhost:27017/litedesk
+mongosh mongodb://localhost:27017/arivu
 
 # Check organizations
 db.organizations.find().pretty()
@@ -350,7 +350,7 @@ PORT=3001
 ```bash
 # Check if MongoDB requires authentication
 # If yes, update MONGO_URI in .env:
-MONGO_URI=mongodb://username:password@localhost:27017/litedesk?authSource=admin
+MONGO_URI=mongodb://username:password@localhost:27017/arivu?authSource=admin
 ```
 
 ---
@@ -408,7 +408,7 @@ npm run preview
 
 ```bash
 # Connect to MongoDB
-mongosh mongodb://localhost:27017/litedesk
+mongosh mongodb://localhost:27017/arivu
 
 # List all collections
 show collections

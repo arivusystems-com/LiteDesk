@@ -16,7 +16,7 @@
  * Tenant context is also exposed on the request as:
  *
  *   req.tenantConnection   - mongoose Connection (or null)
- *   req.tenantDatabaseName - 'litedesk_<slug>' (or null)
+ *   req.tenantDatabaseName - 'arivu_<slug>' (or null)
  * ============================================================================
  */
 

@@ -2,7 +2,7 @@
 
 ## 🎯 Feature Overview
 
-Implemented a complete **Internal Tabs Navigation System** for LiteDesk that enables users to navigate between modules and records using browser-like tabs without page refreshes or opening new windows.
+Implemented a complete **Internal Tabs Navigation System** for Arivu that enables users to navigate between modules and records using browser-like tabs without page refreshes or opening new windows.
 
 **Implementation Date:** October 26, 2025  
 **Status:** ✅ Complete and Ready to Use
@@ -261,7 +261,7 @@ const activeTabId = ref(null); // Currently active tab ID
 
 ## 💾 localStorage Schema
 
-### Key: `litedesk-tabs`
+### Key: `arivu-tabs`
 ```javascript
 {
   "tabs": [

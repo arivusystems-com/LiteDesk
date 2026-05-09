@@ -8,7 +8,7 @@
 
 ## 1. Overview
 
-This spec defines a world-class Trash (recycle bin) system for LiteDesk with:
+This spec defines a world-class Trash (recycle bin) system for Arivu with:
 
 - Snapshot backup layer for forensic recovery
 - Formal dependency policy (no vague cascade)

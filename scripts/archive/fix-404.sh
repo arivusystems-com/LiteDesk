@@ -51,14 +51,14 @@ echo "════════════════════════�
 echo ""
 
 echo "1️⃣  Checking frontend files..."
-if [ -d "/home/ubuntu/LiteDesk/client/dist" ]; then
+if [ -d "/home/ubuntu/Arivu/client/dist" ]; then
     echo "✅ dist directory exists"
     echo "📊 Files in dist:"
-    ls -la /home/ubuntu/LiteDesk/client/dist/
+    ls -la /home/ubuntu/Arivu/client/dist/
     
-    if [ -f "/home/ubuntu/LiteDesk/client/dist/index.html" ]; then
+    if [ -f "/home/ubuntu/Arivu/client/dist/index.html" ]; then
         echo "✅ index.html exists"
-        echo "   Size: $(wc -c < /home/ubuntu/LiteDesk/client/dist/index.html) bytes"
+        echo "   Size: $(wc -c < /home/ubuntu/Arivu/client/dist/index.html) bytes"
     else
         echo "❌ index.html NOT FOUND!"
     fi
@@ -69,12 +69,12 @@ fi
 
 echo ""
 echo "2️⃣  Checking Nginx configuration..."
-if [ -f "/etc/nginx/sites-available/litedesk" ]; then
+if [ -f "/etc/nginx/sites-available/arivu" ]; then
     echo "✅ Nginx config exists"
     echo ""
     echo "📝 Current Nginx config:"
     echo "----------------------------------------"
-    cat /etc/nginx/sites-available/litedesk
+    cat /etc/nginx/sites-available/arivu
     echo "----------------------------------------"
 else
     echo "❌ Nginx config NOT FOUND!"
@@ -86,7 +86,7 @@ sudo systemctl status nginx --no-pager | head -10
 
 echo ""
 echo "4️⃣  Checking file permissions..."
-ls -la /home/ubuntu/LiteDesk/client/ | grep dist
+ls -la /home/ubuntu/Arivu/client/ | grep dist
 
 echo ""
 echo "════════════════════════════════════════════════════════"
@@ -96,14 +96,14 @@ echo ""
 
 # Fix Nginx configuration
 echo "📝 Creating correct Nginx configuration..."
-sudo tee /etc/nginx/sites-available/litedesk > /dev/null << 'NGINXCONF'
+sudo tee /etc/nginx/sites-available/arivu > /dev/null << 'NGINXCONF'
 server {
     listen 80;
     server_name 13.203.208.47;
 
     # Frontend - Serve built files
     location / {
-        root /home/ubuntu/LiteDesk/client/dist;
+        root /home/ubuntu/Arivu/client/dist;
         try_files $uri $uri/ /index.html;
         
         # Cache static assets
@@ -143,8 +143,8 @@ server {
     client_max_body_size 10M;
 
     # Logging
-    access_log /var/log/nginx/litedesk_access.log;
-    error_log /var/log/nginx/litedesk_error.log;
+    access_log /var/log/nginx/arivu_access.log;
+    error_log /var/log/nginx/arivu_error.log;
 }
 NGINXCONF
 
@@ -152,17 +152,17 @@ echo "✅ Nginx config created"
 
 # Enable site
 echo "🔗 Enabling site..."
-sudo ln -sf /etc/nginx/sites-available/litedesk /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/arivu /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 
 # Fix permissions
 echo "🔒 Fixing permissions..."
 chmod 755 /home/ubuntu
-chmod 755 /home/ubuntu/LiteDesk
-chmod 755 /home/ubuntu/LiteDesk/client
+chmod 755 /home/ubuntu/Arivu
+chmod 755 /home/ubuntu/Arivu/client
 
-if [ -d "/home/ubuntu/LiteDesk/client/dist" ]; then
-    chmod -R 755 /home/ubuntu/LiteDesk/client/dist
+if [ -d "/home/ubuntu/Arivu/client/dist" ]; then
+    chmod -R 755 /home/ubuntu/Arivu/client/dist
     echo "✅ Permissions fixed"
 else
     echo "⚠️  dist directory not found - need to deploy frontend"
@@ -210,7 +210,7 @@ echo "   Status code: $HEALTH2_RESPONSE"
 echo ""
 echo "4. Checking Nginx error log:"
 echo "   Last 5 lines:"
-sudo tail -5 /var/log/nginx/litedesk_error.log 2>/dev/null || echo "   No errors logged yet"
+sudo tail -5 /var/log/nginx/arivu_error.log 2>/dev/null || echo "   No errors logged yet"
 
 echo ""
 echo "════════════════════════════════════════════════════════"
@@ -218,7 +218,7 @@ echo "✅ FIX COMPLETE"
 echo "════════════════════════════════════════════════════════"
 echo ""
 
-if [ ! -d "/home/ubuntu/LiteDesk/client/dist" ]; then
+if [ ! -d "/home/ubuntu/Arivu/client/dist" ]; then
     echo "⚠️  WARNING: Frontend dist files are missing!"
     echo "   You need to deploy the frontend:"
     echo "   Run: ./deploy-local-build.sh"

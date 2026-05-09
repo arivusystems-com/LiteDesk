@@ -21,11 +21,11 @@ async function updateUsersAllowedApps() {
   try {
     console.log('🚀 Updating users\' allowedApps to include Sales, Helpdesk, and Projects (Phase 2D)...\n');
 
-    // Get master database URI (always uses litedesk_master)
+    // Get master database URI (always uses arivu_master)
     const masterUri = getMasterDatabaseUri();
-    console.log('🔗 Connecting to MongoDB master database (litedesk_master)...');
+    console.log('🔗 Connecting to MongoDB master database (arivu_master)...');
     await mongoose.connect(masterUri);
-    console.log('✅ Connected to MongoDB master database (litedesk_master)\n');
+    console.log('✅ Connected to MongoDB master database (arivu_master)\n');
 
     // Get all users
     const users = await User.find({});

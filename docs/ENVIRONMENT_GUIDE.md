@@ -33,13 +33,13 @@ const MONGO_URI = isProduction
 NODE_ENV=development  # or 'production'
 
 # Local MongoDB
-MONGO_URI_LOCAL=mongodb://localhost:27017/litedesk
+MONGO_URI_LOCAL=mongodb://localhost:27017/arivu
 
 # Production MongoDB Atlas
-MONGO_URI_PRODUCTION=mongodb+srv://litedeskadmin:...
+MONGO_URI_PRODUCTION=mongodb+srv://arivuadmin:...
 
 # Active MongoDB (set automatically)
-MONGO_URI=mongodb://localhost:27017/litedesk
+MONGO_URI=mongodb://localhost:27017/arivu
 ```
 
 ---
@@ -63,7 +63,7 @@ npm start
 
 ### Console Output:
 ```
-🚀 Starting LiteDesk CRM in DEVELOPMENT mode
+🚀 Starting Arivu CRM in DEVELOPMENT mode
 📊 Port: 5000
 🗄️  Database: mongodb://localhost:27017...
 ✅ MongoDB connected successfully
@@ -92,9 +92,9 @@ npm start
 
 ### Console Output on EC2:
 ```
-🚀 Starting LiteDesk CRM in PRODUCTION mode
+🚀 Starting Arivu CRM in PRODUCTION mode
 📊 Port: 5000
-🗄️  Database: mongodb+srv://litedeskadmin...
+🗄️  Database: mongodb+srv://arivuadmin...
 ✅ MongoDB connected successfully
 📊 Database: MongoDB Atlas
 ```
@@ -174,7 +174,7 @@ NODE_ENV=development
 When server starts, it shows:
 
 ```
-🚀 Starting LiteDesk CRM in DEVELOPMENT mode  ← Shows current mode
+🚀 Starting Arivu CRM in DEVELOPMENT mode  ← Shows current mode
 📊 Port: 5000
 🗄️  Database: mongodb://localhost...           ← Shows which DB
 🌐 Allowed Origins: http://localhost:5173     ← Shows CORS config
@@ -198,9 +198,9 @@ When server starts, it shows:
 **Fix:**
 ```bash
 # Check your .env file has:
-MONGO_URI=mongodb://localhost:27017/litedesk
+MONGO_URI=mongodb://localhost:27017/arivu
 # Or:
-MONGO_URI_LOCAL=mongodb://localhost:27017/litedesk
+MONGO_URI_LOCAL=mongodb://localhost:27017/arivu
 ```
 
 **Issue: "Cannot connect to MongoDB"**
@@ -360,12 +360,12 @@ Check server logs on startup - they show:
 
 **Example healthy startup:**
 ```
-🚀 Starting LiteDesk CRM in DEVELOPMENT mode
+🚀 Starting Arivu CRM in DEVELOPMENT mode
 📊 Port: 5000
 🗄️  Database: mongodb://localhost:27017...
 ✅ MongoDB connected successfully
 ╔════════════════════════════════════════╗
-║  ✅ LiteDesk CRM Server Running!      ║
+║  ✅ Arivu CRM Server Running!      ║
 ╚════════════════════════════════════════╝
 ```
 

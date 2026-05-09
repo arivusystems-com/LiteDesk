@@ -13,7 +13,7 @@ function initialize() {
 
   const publicKey = process.env.VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
-  const subject = process.env.VAPID_SUBJECT || process.env.CLIENT_URL || 'mailto:admin@litedesk.com';
+  const subject = process.env.VAPID_SUBJECT || process.env.CLIENT_URL || 'mailto:admin@arivusystems.com';
 
   if (!publicKey || !privateKey) {
     console.warn('[pushService] VAPID keys not configured. Push notifications disabled.');

@@ -1,4 +1,4 @@
-# LiteDesk Platform Architecture
+# Arivu Platform Architecture
 
 **Version:** 1.0  
 **Last Updated:** January 2026  
@@ -29,7 +29,7 @@
 
 ## Executive Summary
 
-LiteDesk is a **multi-application platform** that supports multiple distinct applications (Sales, Audit, Portal, LMS) running on unified infrastructure. The platform follows a **Platform Core + Apps** pattern where shared infrastructure is app-agnostic, and each application maintains clear boundaries.
+Arivu is a **multi-application platform** that supports multiple distinct applications (Sales, Audit, Portal, LMS) running on unified infrastructure. The platform follows a **Platform Core + Apps** pattern where shared infrastructure is app-agnostic, and each application maintains clear boundaries.
 
 ### Key Architectural Principles
 
@@ -49,7 +49,7 @@ LiteDesk is a **multi-application platform** that supports multiple distinct app
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                      LiteDesk Platform Core                         │
+│                      Arivu Platform Core                         │
 │  ┌──────────────────────────────────────────────────────────────┐  │
 │  │  Authentication & Identity                                    │  │
 │  │  Organization (Tenant) Management                            │  │
@@ -82,7 +82,7 @@ LiteDesk is a **multi-application platform** that supports multiple distinct app
 - Dedicated Database (MongoDB)
 - Dedicated Application Server (Node.js + Express)
 - Dedicated Frontend (Vue.js)
-- Unique Subdomain (e.g., `acme.litedesk.com`)
+- Unique Subdomain (e.g., `acme.arivu.com`)
 - Isolated Resources (CPU, Memory, Storage)
 
 ---
@@ -885,7 +885,7 @@ exports.create = async (req, res) => {
 - Dedicated Database (MongoDB)
 - Dedicated Application Server (Node.js + Express)
 - Dedicated Frontend (Vue.js)
-- Unique Subdomain (e.g., `acme.litedesk.com`)
+- Unique Subdomain (e.g., `acme.arivu.com`)
 - Isolated Resources (CPU, Memory, Storage)
 
 **Provisioning Flow:**

@@ -421,7 +421,7 @@ const { openTab } = useTabs();
 const authStore = useAuthStore();
 
 // View state (module-specific URL param so Tasks and Deals don't affect each other)
-const viewStorageKey = 'litedesk-deals-view';
+const viewStorageKey = 'arivu-deals-view';
 const VIEW_QUERY_KEY = 'dealsView';
 const getInitialView = () => {
   try {
@@ -451,7 +451,7 @@ const stages = ref([]);
 const stageColorMap = ref({});
 // Pipeline list and selected pipeline for Kanban (stages = selected pipeline's stages)
 const pipelines = ref([]);
-const KANBAN_PIPELINE_KEY = 'litedesk-deals-kanban-pipeline';
+const KANBAN_PIPELINE_KEY = 'arivu-deals-kanban-pipeline';
 const getStoredPipelineKey = () => {
   try {
     return localStorage.getItem(KANBAN_PIPELINE_KEY) || '';
@@ -462,8 +462,8 @@ const getStoredPipelineKey = () => {
 const selectedPipelineKey = ref(getStoredPipelineKey());
 
 // Kanban customize: read from same localStorage keys as ListView Customize Kanban drawer
-const KANBAN_OPTIONS_KEY = 'litedesk-listview-deals-kanban-options';
-const KANBAN_FIELDS_KEY = 'litedesk-listview-deals-kanban-fields';
+const KANBAN_OPTIONS_KEY = 'arivu-listview-deals-kanban-options';
+const KANBAN_FIELDS_KEY = 'arivu-listview-deals-kanban-fields';
 // Default card fields (Kanban only): Title, Amount, Expected Close Date, Probability, Priority, Organization, Deal Owner
 const DEFAULT_KANBAN_SHOWN_KEYS = ['name', 'amount', 'expectedCloseDate', 'probability', 'priority', 'accountId', 'ownerId'];
 
@@ -477,7 +477,7 @@ const refreshKanbanSettings = () => { kanbanSettingsVersion.value++; };
 // Stats panel open/closed (from ListView); when closed, Kanban column height increases
 const getInitialStatsOpen = () => {
   try {
-    return localStorage.getItem('litedesk-stats-visible-deals') !== 'false';
+    return localStorage.getItem('arivu-stats-visible-deals') !== 'false';
   } catch {
     return true;
   }
@@ -684,7 +684,7 @@ const fetchKanbanDeals = async () => {
 
 const currentSearchQuery = ref('');
 
-const DEAL_NAV_CONTEXT_STORAGE_PREFIX = 'litedesk-deal-nav-context:';
+const DEAL_NAV_CONTEXT_STORAGE_PREFIX = 'arivu-deal-nav-context:';
 const DEAL_NAV_CONTEXT_MAX_ENTRIES = 12;
 
 const getCurrentDealNavigationIds = () => {
@@ -1065,7 +1065,7 @@ onMounted(() => {
     setTimeout(() => toggleTableView(currentView.value === 'list'), 100);
   });
   if (typeof window !== 'undefined') {
-    window.addEventListener('litedesk:record-created', handleRecordCreated);
+    window.addEventListener('arivu:record-created', handleRecordCreated);
   }
 });
 
@@ -1082,7 +1082,7 @@ onActivated(() => {
 
 onUnmounted(() => {
   if (typeof window !== 'undefined') {
-    window.removeEventListener('litedesk:record-created', handleRecordCreated);
+    window.removeEventListener('arivu:record-created', handleRecordCreated);
   }
 });
 </script>

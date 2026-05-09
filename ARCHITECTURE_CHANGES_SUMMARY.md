@@ -7,7 +7,7 @@
 
 ## 🎯 Executive Summary
 
-LiteDesk has evolved from a **single-tenant CRM application** into a **comprehensive multi-application platform** that supports multiple distinct applications (CRM, Audit, Portal, LMS) running on unified infrastructure. The platform follows a **Platform Core + Apps** pattern with app-aware security, permissions, and entitlements.
+Arivu has evolved from a **single-tenant CRM application** into a **comprehensive multi-application platform** that supports multiple distinct applications (CRM, Audit, Portal, LMS) running on unified infrastructure. The platform follows a **Platform Core + Apps** pattern with app-aware security, permissions, and entitlements.
 
 ---
 
@@ -580,7 +580,7 @@ CRM Event Updated
 
 ## ✅ Summary
 
-The LiteDesk Platform Architecture successfully:
+The Arivu Platform Architecture successfully:
 
 ✅ **Supports Multiple Applications** on unified infrastructure  
 ✅ **Maintains App Isolation** with clear boundaries  

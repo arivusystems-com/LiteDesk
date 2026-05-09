@@ -388,8 +388,8 @@ exports.convertToOrganization = async (req, res) => {
         
         // Generate database name from organization slug or ID
         const dbName = organization.slug 
-            ? `litedesk_${organization.slug.replace(/-/g, '_')}`
-            : `litedesk_${organization._id.toString().replace(/[^a-zA-Z0-9]/g, '_')}`;
+            ? `arivu_${organization.slug.replace(/-/g, '_')}`
+            : `arivu_${organization._id.toString().replace(/[^a-zA-Z0-9]/g, '_')}`;
         
         console.log('📦 Step 2: Creating dedicated database:', dbName);
         
@@ -462,7 +462,7 @@ exports.convertToOrganization = async (req, res) => {
             console.warn('⚠️  Failed to refresh Deals module during conversion:', moduleError.message);
         }
 
-        // Seed the tenant DB with the same baseline that litedesk_master holds
+        // Seed the tenant DB with the same baseline that arivu_master holds
         // (apps, platform module definitions, relationships, default roles, and
         // tenant app/module configurations). Idempotent — re-running is safe.
         try {

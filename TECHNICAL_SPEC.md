@@ -1,8 +1,8 @@
-# LiteDesk CRM - Technical Specification Document
+# Arivu CRM - Technical Specification Document
 
 ## 1. Executive Summary
 
-**Project Name:** LiteDesk CRM  
+**Project Name:** Arivu CRM  
 **Type:** Multi-Instance SaaS CRM Platform (White-Label Ready)  
 **Tech Stack:** Vue 3 + Node.js/Express + MongoDB + Docker + Kubernetes  
 **Architecture:** MERN Stack with JWT Authentication + Container Orchestration
@@ -24,11 +24,11 @@
 ### 2.1 Multi-Instance Deployment Model
 **Approach:** Separate Instance Per Organization (White-Label Architecture)
 
-**⚠️ IMPORTANT:** Unlike traditional multi-tenant SaaS (shared infrastructure), LiteDesk uses a **multi-instance** architecture where each organization gets its own:
+**⚠️ IMPORTANT:** Unlike traditional multi-tenant SaaS (shared infrastructure), Arivu uses a **multi-instance** architecture where each organization gets its own:
 - ✅ **Dedicated Database** (MongoDB instance)
 - ✅ **Dedicated Application Server** (Node.js + Express)
 - ✅ **Dedicated Frontend** (Vue.js deployment)
-- ✅ **Unique Subdomain** (e.g., `acme.litedesk.com`, `beta.litedesk.com`)
+- ✅ **Unique Subdomain** (e.g., `acme.arivu.com`, `beta.arivu.com`)
 - ✅ **Isolated Resources** (CPU, Memory, Storage)
 
 **Why This Architecture?**
@@ -100,7 +100,7 @@
 **Layer 1: Master Control Plane (Single Deployment)**
 ```
 ┌─────────────────────────────────────────────────────────┐
-│            Master Control Plane (litedesk.com)          │
+│            Master Control Plane (arivu.com)          │
 │  ┌────────────────────────────────────────────────────┐ │
 │  │ Admin Dashboard (Vue 3)                            │ │
 │  │ - Demo Requests Management                         │ │
@@ -129,7 +129,7 @@
 **Layer 2: Customer Instances (Multiple Deployments)**
 ```
 ┌─────────────────────────────────────────────────────────┐
-│      Customer Instance (acme.litedesk.com)              │
+│      Customer Instance (acme.arivu.com)              │
 │  ┌────────────────────────────────────────────────────┐ │
 │  │ Frontend (Vue 3) - Containerized                   │ │
 │  │ - Auth Module                                      │ │
@@ -310,19 +310,19 @@ createdAt: -1
   
   // Instance Identification
   instanceName: String,            // "Acme Corporation"
-  subdomain: String,               // "acme" → acme.litedesk.com (UNIQUE)
+  subdomain: String,               // "acme" → acme.arivu.com (UNIQUE)
   customDomain: String,            // Optional: "crm.acme.com"
   
   // Technical Details
   kubernetesNamespace: String,     // "instance-acme"
-  deploymentName: String,          // "litedesk-acme"
-  serviceName: String,             // "litedesk-acme-svc"
+  deploymentName: String,          // "arivu-acme"
+  serviceName: String,             // "arivu-acme-svc"
   
   // Database
   databaseConnection: {
     host: String,                  // MongoDB host
     port: Number,                  // MongoDB port
-    database: String,              // "litedesk_acme"
+    database: String,              // "arivu_acme"
     username: String,              // DB user
     passwordSecret: String         // Kubernetes secret name
   },
@@ -380,8 +380,8 @@ createdAt: -1
   
   // URLs
   urls: {
-    frontend: String,              // https://acme.litedesk.com
-    api: String,                   // https://api-acme.litedesk.com
+    frontend: String,              // https://acme.arivu.com
+    api: String,                   // https://api-acme.arivu.com
     admin: String                  // Instance admin panel
   },
   
@@ -2057,21 +2057,21 @@ REDIS_URL=redis://...
 # AWS S3
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
-AWS_S3_BUCKET=litedesk-files
+AWS_S3_BUCKET=arivu-files
 AWS_REGION=us-east-1
 
 # AWS SES (Email)
 AWS_SES_REGION=us-east-1
-FROM_EMAIL=noreply@litedesk.com
-FROM_NAME=LiteDesk CRM
+FROM_EMAIL=noreply@arivu.com
+FROM_NAME=Arivu CRM
 
 # Stripe
 STRIPE_SECRET_KEY=sk_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 
 # Frontend
-VITE_API_URL=https://api.litedesk.com
-VITE_APP_URL=https://app.litedesk.com
+VITE_API_URL=https://api.arivu.com
+VITE_APP_URL=https://app.arivu.com
 ```
 
 ---
@@ -2107,7 +2107,7 @@ db.activityLogs.createIndex({ organizationId: 1, timestamp: -1 });
 
 ## Conclusion
 
-This technical specification provides a comprehensive roadmap for building LiteDesk CRM. The phased approach ensures steady progress while maintaining quality. Start with the foundation (multi-tenancy & RBAC), build core CRM features, then add advanced capabilities.
+This technical specification provides a comprehensive roadmap for building Arivu CRM. The phased approach ensures steady progress while maintaining quality. Start with the foundation (multi-tenancy & RBAC), build core CRM features, then add advanced capabilities.
 
 **Next Steps:**
 1. Review and approve this specification
@@ -2191,6 +2191,6 @@ Next steps: Core CRM modules (Contacts, Organizations/Companies, Deals, Tasks, E
 
 *Document Version: 2.0*  
 *Last Updated: October 22, 2025*  
-*Author: LiteDesk Development Team*  
+*Author: Arivu Development Team*  
 *Status: Phase 1 Complete ✅ - Demo Request System Live*
 

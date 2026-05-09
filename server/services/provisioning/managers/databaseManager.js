@@ -21,7 +21,7 @@ class DatabaseManager {
     const {
       instanceName,
       subdomain,
-      databaseName = `litedesk_${subdomain}`,
+      databaseName = `arivu_${subdomain}`,
       username = `user_${subdomain}`
     } = options;
     

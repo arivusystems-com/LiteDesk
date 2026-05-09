@@ -1,6 +1,6 @@
-# 🚀 LiteDesk CRM - Deployment & Testing Guide
+# 🚀 Arivu CRM - Deployment & Testing Guide
 
-Welcome! This guide will help you deploy LiteDesk CRM to AWS and share it with friends for testing.
+Welcome! This guide will help you deploy Arivu CRM to AWS and share it with friends for testing.
 
 ---
 
@@ -81,7 +81,7 @@ Choose based on your experience level:
 ssh -i key.pem ubuntu@YOUR_EC2_IP
 
 # Download & run deployment script
-wget https://raw.githubusercontent.com/YOUR_USERNAME/LiteDesk/main/deploy-to-aws.sh
+wget https://raw.githubusercontent.com/YOUR_USERNAME/Arivu/main/deploy-to-aws.sh
 chmod +x deploy-to-aws.sh
 ./deploy-to-aws.sh
 ```
@@ -89,7 +89,7 @@ chmod +x deploy-to-aws.sh
 ### 4. Access
 ```
 URL: http://YOUR_EC2_IP
-Login: admin@litedesk.com / Admin@123456
+Login: admin@arivu.com / Admin@123456
 ```
 
 **Done!** 🎉
@@ -302,7 +302,7 @@ pm2 status
 sudo systemctl status nginx
 
 # View logs
-pm2 logs litedesk-api --lines 50
+pm2 logs arivu-api --lines 50
 sudo tail -f /var/log/nginx/access.log
 sudo tail -f /var/log/nginx/error.log
 
@@ -317,10 +317,10 @@ df -h  # Disk space
 pm2 monit
 
 # Backend logs
-pm2 logs litedesk-api
+pm2 logs arivu-api
 
 # Restart if needed
-pm2 restart litedesk-api
+pm2 restart arivu-api
 ```
 
 ---
@@ -334,13 +334,13 @@ When you push new code:
 ssh -i key.pem ubuntu@YOUR_EC2_IP
 
 # Pull latest code
-cd /home/ubuntu/LiteDesk
+cd /home/ubuntu/Arivu
 git pull
 
 # Update backend
 cd server
 npm install
-pm2 restart litedesk-api
+pm2 restart arivu-api
 
 # Update frontend
 cd ../client
@@ -359,7 +359,7 @@ npm run build
 | Issue | Solution |
 |-------|----------|
 | Can't access website | Check security group allows HTTP/HTTPS |
-| 502 Bad Gateway | Backend not running: `pm2 restart litedesk-api` |
+| 502 Bad Gateway | Backend not running: `pm2 restart arivu-api` |
 | Blank page | Rebuild frontend: `cd client && npm run build` |
 | CORS errors | Update CORS_ORIGINS in server/.env |
 | MongoDB connection failed | Check connection string and network access |
@@ -367,7 +367,7 @@ npm run build
 
 ### Get Help
 
-1. Check logs first: `pm2 logs litedesk-api`
+1. Check logs first: `pm2 logs arivu-api`
 2. Verify services: `pm2 status && sudo systemctl status nginx`
 3. Review [DEPLOYMENT_GUIDE_AWS.md](./DEPLOYMENT_GUIDE_AWS.md) troubleshooting section
 4. Check MongoDB Atlas connection from server: `mongosh "YOUR_CONNECTION_STRING"`
@@ -385,7 +385,7 @@ Viewer: viewer@test.com / Test123!
 
 **Share This**:
 ```
-🚀 LiteDesk CRM - Testing Invitation
+🚀 Arivu CRM - Testing Invitation
 
 Hi! I'm building a CRM and would love your feedback.
 

@@ -22,7 +22,7 @@ cat << "EOF"
 EOF
 echo -e "${NC}"
 
-cd /Users/Prabhu/Documents/GitHub/LiteDesk/server
+cd /Users/Prabhu/Documents/GitHub/Arivu/server
 
 # Backup current .env
 cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
@@ -31,7 +31,7 @@ echo -e "${YELLOW}📋 Backed up current .env${NC}"
 # Create clean .env for LOCAL development using MongoDB Atlas
 cat > .env << 'EOF'
 # =============================================================================
-# LiteDesk CRM - Local Development (Using MongoDB Atlas)
+# Arivu CRM - Local Development (Using MongoDB Atlas)
 # =============================================================================
 
 # ENVIRONMENT MODE - Development for local work
@@ -41,12 +41,12 @@ PORT=5000
 # -----------------------------------------------------------------------------
 # DATABASE CONFIGURATION (Using MongoDB Atlas for both local and production)
 # -----------------------------------------------------------------------------
-MONGO_URI=mongodb+srv://litedeskadmin:TKvtQbKGOWdfP5C1@litedeskdb.qzw4euo.mongodb.net/litedesk?retryWrites=true&w=majority&appName=litedeskdb
-MONGODB_URI=mongodb+srv://litedeskadmin:TKvtQbKGOWdfP5C1@litedeskdb.qzw4euo.mongodb.net/litedesk?retryWrites=true&w=majority&appName=litedeskdb
+MONGO_URI=mongodb+srv://arivuadmin:TKvtQbKGOWdfP5C1@arivudb.qzw4euo.mongodb.net/arivu?retryWrites=true&w=majority&appName=arivudb
+MONGODB_URI=mongodb+srv://arivuadmin:TKvtQbKGOWdfP5C1@arivudb.qzw4euo.mongodb.net/arivu?retryWrites=true&w=majority&appName=arivudb
 
 # For reference (not used):
-MONGO_URI_LOCAL=mongodb://localhost:27017/litedesk
-MONGO_URI_PRODUCTION=mongodb+srv://litedeskadmin:TKvtQbKGOWdfP5C1@litedeskdb.qzw4euo.mongodb.net/litedesk?retryWrites=true&w=majority&appName=litedeskdb
+MONGO_URI_LOCAL=mongodb://localhost:27017/arivu
+MONGO_URI_PRODUCTION=mongodb+srv://arivuadmin:TKvtQbKGOWdfP5C1@arivudb.qzw4euo.mongodb.net/arivu?retryWrites=true&w=majority&appName=arivudb
 
 # -----------------------------------------------------------------------------
 # AUTHENTICATION & SECURITY
@@ -73,7 +73,7 @@ CORS_ORIGINS_PRODUCTION=http://13.203.208.47,https://13.203.208.47
 # -----------------------------------------------------------------------------
 # ADMIN DEFAULTS
 # -----------------------------------------------------------------------------
-DEFAULT_ADMIN_EMAIL=admin@litedesk.com
+DEFAULT_ADMIN_EMAIL=admin@arivu.com
 DEFAULT_ADMIN_PASSWORD=Admin@123456
 
 # -----------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The LiteDesk platform uses an **app-scoped, role-based access control (RBAC)** system that separates permissions by application and provides both platform-level and application-level permissions.
+The Arivu platform uses an **app-scoped, role-based access control (RBAC)** system that separates permissions by application and provides both platform-level and application-level permissions.
 
 ---
 

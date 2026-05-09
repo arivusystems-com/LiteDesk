@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document summarizes the implementation of the **Headless Process Runtime Kernel** (Step 0) for the LiteDesk platform. This is the authoritative foundation that defines what a process is and how it executes, independent of UI, drag-and-drop, or vertical behavior.
+This document summarizes the implementation of the **Headless Process Runtime Kernel** (Step 0) for the Arivu platform. This is the authoritative foundation that defines what a process is and how it executes, independent of UI, drag-and-drop, or vertical behavior.
 
 ## Implementation Status: ✅ COMPLETE
 

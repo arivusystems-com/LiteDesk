@@ -35,8 +35,8 @@ class KubernetesManager {
         metadata: {
           name: namespaceName,
           labels: {
-            app: 'litedesk',
-            'managed-by': 'litedesk-provisioner',
+            app: 'arivu',
+            'managed-by': 'arivu-provisioner',
             ...labels
           }
         }
@@ -165,14 +165,14 @@ class KubernetesManager {
       results.services.backend = await this.createService(
         namespace,
         `${values.instance.name}-backend`,
-        { app: 'litedesk-backend', instance: values.instance.subdomain },
+        { app: 'arivu-backend', instance: values.instance.subdomain },
         values.backend.port || 3000
       );
       
       results.services.frontend = await this.createService(
         namespace,
         `${values.instance.name}-frontend`,
-        { app: 'litedesk-frontend', instance: values.instance.subdomain },
+        { app: 'arivu-frontend', instance: values.instance.subdomain },
         80
       );
       
@@ -196,7 +196,7 @@ class KubernetesManager {
         name: `${values.instance.name}-backend`,
         namespace: namespace,
         labels: {
-          app: 'litedesk-backend',
+          app: 'arivu-backend',
           instance: values.instance.subdomain
         }
       },
@@ -204,14 +204,14 @@ class KubernetesManager {
         replicas: values.backend.replicaCount || 2,
         selector: {
           matchLabels: {
-            app: 'litedesk-backend',
+            app: 'arivu-backend',
             instance: values.instance.subdomain
           }
         },
         template: {
           metadata: {
             labels: {
-              app: 'litedesk-backend',
+              app: 'arivu-backend',
               instance: values.instance.subdomain
             }
           },
@@ -280,7 +280,7 @@ class KubernetesManager {
         name: `${values.instance.name}-frontend`,
         namespace: namespace,
         labels: {
-          app: 'litedesk-frontend',
+          app: 'arivu-frontend',
           instance: values.instance.subdomain
         }
       },
@@ -288,14 +288,14 @@ class KubernetesManager {
         replicas: values.frontend.replicaCount || 2,
         selector: {
           matchLabels: {
-            app: 'litedesk-frontend',
+            app: 'arivu-frontend',
             instance: values.instance.subdomain
           }
         },
         template: {
           metadata: {
             labels: {
-              app: 'litedesk-frontend',
+              app: 'arivu-frontend',
               instance: values.instance.subdomain
             }
           },

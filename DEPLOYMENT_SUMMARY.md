@@ -1,8 +1,8 @@
-# 🚀 LiteDesk Deployment Summary
+# 🚀 Arivu Deployment Summary
 
 ## ✅ Configuration Complete!
 
-Your LiteDesk CRM is now properly configured for both **local development** and **production deployment**.
+Your Arivu CRM is now properly configured for both **local development** and **production deployment**.
 
 ---
 
@@ -30,13 +30,13 @@ NODE_ENV=development
 PORT=3000
 
 # Option 1: Local MongoDB
-MONGO_URI_LOCAL=mongodb://localhost:27017/litedesk
+MONGO_URI_LOCAL=mongodb://localhost:27017/arivu
 
 # Option 2: MongoDB Atlas (Cloud) - Currently Active
 #MONGO_URI_ATLAS=mongodb+srv://...
 
 # Active Connection (currently using local MongoDB)
-MONGO_URI=mongodb://localhost:27017/litedesk
+MONGO_URI=mongodb://localhost:27017/arivu
 
 # Local URLs
 CLIENT_URL=http://localhost:5173
@@ -48,7 +48,7 @@ CORS_ORIGINS=http://localhost:5173,http://localhost:5175,http://localhost:3000
 NODE_ENV=production
 PORT=5000
 
-MONGO_URI=mongodb+srv://litedeskadmin:...@litedeskdb...
+MONGO_URI=mongodb+srv://arivuadmin:...@arivudb...
 CLIENT_URL=http://13.203.208.47
 CORS_ORIGINS=http://13.203.208.47,https://13.203.208.47
 ```
@@ -144,18 +144,18 @@ rsync --exclude '.env' --exclude '.env.*' ...
 
 #### Option 1: Local MongoDB (Current)
 ```env
-MONGO_URI=mongodb://localhost:27017/litedesk
+MONGO_URI=mongodb://localhost:27017/arivu
 ```
 
 **To use:**
 1. Install: `brew install mongodb-community`
 2. Start: `brew services start mongodb-community`
-3. Set in `.env`: `MONGO_URI=mongodb://localhost:27017/litedesk`
+3. Set in `.env`: `MONGO_URI=mongodb://localhost:27017/arivu`
 4. Run: `./start.sh`
 
 #### Option 2: MongoDB Atlas (Cloud)
 ```env
-MONGO_URI=mongodb+srv://litedeskadmin:...
+MONGO_URI=mongodb+srv://arivuadmin:...
 ```
 
 **To use:**
@@ -165,7 +165,7 @@ MONGO_URI=mongodb+srv://litedeskadmin:...
 
 ### Production - Always MongoDB Atlas
 ```env
-MONGO_URI=mongodb+srv://litedeskadmin:...
+MONGO_URI=mongodb+srv://arivuadmin:...
 ```
 
 ---
@@ -187,10 +187,10 @@ git push
 ```bash
 # Edit server/.env
 # Option 1: Use Local MongoDB
-MONGO_URI=mongodb://localhost:27017/litedesk
+MONGO_URI=mongodb://localhost:27017/arivu
 
 # Option 2: Use MongoDB Atlas
-MONGO_URI=mongodb+srv://litedeskadmin:...
+MONGO_URI=mongodb+srv://arivuadmin:...
 
 # Restart
 ./stop.sh
@@ -203,10 +203,10 @@ MONGO_URI=mongodb+srv://litedeskadmin:...
 ssh -i your-key.pem ubuntu@13.203.208.47
 
 # Check backend
-pm2 logs litedesk-api
+pm2 logs arivu-api
 
 # Check .env
-cat /home/ubuntu/LiteDesk/server/.env
+cat /home/ubuntu/Arivu/server/.env
 ```
 
 ---
@@ -237,20 +237,20 @@ cat server/.env | grep MONGO_URI
 ssh -i your-key.pem ubuntu@13.203.208.47
 
 # Check backend logs
-pm2 logs litedesk-api
+pm2 logs arivu-api
 
 # Check .env exists
-ls -la /home/ubuntu/LiteDesk/server/.env
+ls -la /home/ubuntu/Arivu/server/.env
 
 # Restart backend
-pm2 restart litedesk-api
+pm2 restart arivu-api
 ```
 
 ### Production: 403 Error
 ```bash
 # Fix permissions on EC2
 ssh -i your-key.pem ubuntu@13.203.208.47
-chmod 755 /home/ubuntu /home/ubuntu/LiteDesk /home/ubuntu/LiteDesk/client /home/ubuntu/LiteDesk/client/dist
+chmod 755 /home/ubuntu /home/ubuntu/Arivu /home/ubuntu/Arivu/client /home/ubuntu/Arivu/client/dist
 ```
 
 ---
@@ -258,7 +258,7 @@ chmod 755 /home/ubuntu /home/ubuntu/LiteDesk /home/ubuntu/LiteDesk/client /home/
 ## 📚 Default Credentials
 
 **Both Local & Production:**
-- Email: `admin@litedesk.com`
+- Email: `admin@arivu.com`
 - Password: `Admin@123456`
 
 *Change password after first login!*

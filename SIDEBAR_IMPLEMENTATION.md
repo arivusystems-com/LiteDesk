@@ -2,7 +2,7 @@
 
 ## 🎉 What Changed
 
-Your LiteDesk CRM navigation has been transformed from a **horizontal top navbar** to a **modern vertical collapsible sidebar** on the left side of the screen!
+Your Arivu CRM navigation has been transformed from a **horizontal top navbar** to a **modern vertical collapsible sidebar** on the left side of the screen!
 
 ---
 

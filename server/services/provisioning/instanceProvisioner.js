@@ -87,9 +87,9 @@ class InstanceProvisioner {
         instanceName: companyName,
         subdomain: subdomain,
         kubernetesNamespace: `instance-${subdomain}`,
-        deploymentName: `litedesk-${subdomain}`,
-        serviceName: `litedesk-${subdomain}-svc`,
-        ingressName: `litedesk-${subdomain}-ingress`,
+        deploymentName: `arivu-${subdomain}`,
+        serviceName: `arivu-${subdomain}-svc`,
+        ingressName: `arivu-${subdomain}-ingress`,
         ownerEmail: ownerEmail,
         ownerName: ownerName,
         status: 'provisioning',
@@ -124,7 +124,7 @@ class InstanceProvisioner {
       const dbResult = await this.dbManager.provisionDatabase({
         instanceName: companyName,
         subdomain: subdomain,
-        databaseName: `litedesk_${subdomain}`,
+        databaseName: `arivu_${subdomain}`,
         username: `user_${subdomain}`
       });
       
@@ -209,7 +209,7 @@ class InstanceProvisioner {
         },
         backend: {
           image: {
-            repository: process.env.BACKEND_IMAGE_REPO || 'litedesk/crm-backend',
+            repository: process.env.BACKEND_IMAGE_REPO || 'arivu/crm-backend',
             tag: process.env.BACKEND_IMAGE_TAG || 'latest'
           },
           replicaCount: 2,
@@ -218,7 +218,7 @@ class InstanceProvisioner {
         },
         frontend: {
           image: {
-            repository: process.env.FRONTEND_IMAGE_REPO || 'litedesk/crm-frontend',
+            repository: process.env.FRONTEND_IMAGE_REPO || 'arivu/crm-frontend',
             tag: process.env.FRONTEND_IMAGE_TAG || 'latest'
           },
           replicaCount: 2,
@@ -338,9 +338,9 @@ class InstanceProvisioner {
         instanceName: companyName,
         subdomain: subdomain,
         kubernetesNamespace: `instance-${subdomain}`,
-        deploymentName: `litedesk-${subdomain}`,
-        serviceName: `litedesk-${subdomain}-svc`,
-        ingressName: `litedesk-${subdomain}-ingress`,
+        deploymentName: `arivu-${subdomain}`,
+        serviceName: `arivu-${subdomain}-svc`,
+        ingressName: `arivu-${subdomain}-ingress`,
         ownerEmail: ownerEmail,
         ownerName: ownerName,
         status: 'active', // Immediately active in development
@@ -355,7 +355,7 @@ class InstanceProvisioner {
         databaseConnection: {
           host: `localhost`,
           port: 27017,
-          database: `litedesk_${subdomain.replace(/-/g, '_')}`,
+          database: `arivu_${subdomain.replace(/-/g, '_')}`,
           username: `user_${subdomain}`,
           passwordSecret: `${subdomain}-db-secret`
         },

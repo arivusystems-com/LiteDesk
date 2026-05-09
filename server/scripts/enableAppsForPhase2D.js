@@ -18,11 +18,11 @@ async function enableAppsForPhase2D() {
   try {
     console.log('🚀 Enabling Sales, Helpdesk, and Projects apps for all organizations (Phase 2D)...\n');
 
-    // Get master database URI (always uses litedesk_master)
+    // Get master database URI (always uses arivu_master)
     const masterUri = getMasterDatabaseUri();
-    console.log('🔗 Connecting to MongoDB master database (litedesk_master)...');
+    console.log('🔗 Connecting to MongoDB master database (arivu_master)...');
     await mongoose.connect(masterUri);
-    console.log('✅ Connected to MongoDB master database (litedesk_master)\n');
+    console.log('✅ Connected to MongoDB master database (arivu_master)\n');
 
     // Get all organizations
     const organizations = await Organization.find({});

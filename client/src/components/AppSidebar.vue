@@ -669,7 +669,7 @@ function handleNavClick(
   if (routePath === '/search') {
     // Guard for SSR and tests.
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('litedesk:open-global-search'));
+      window.dispatchEvent(new CustomEvent('arivu:open-global-search'));
     }
     return;
   }

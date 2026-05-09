@@ -147,7 +147,7 @@ Add CSV import/export for events:
 
 1. **Restart Server** (if running):
    ```bash
-   cd /Users/Prabhu/Documents/GitHub/LiteDesk/server
+   cd /Users/Prabhu/Documents/GitHub/Arivu/server
    node server.js
    ```
 

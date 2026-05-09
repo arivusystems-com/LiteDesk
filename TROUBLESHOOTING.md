@@ -76,7 +76,7 @@ OR
 lsof -ti:5173 | xargs kill -9
 
 # Start fresh:
-cd /Users/Prabhu/Documents/GitHub/LiteDesk/client
+cd /Users/Prabhu/Documents/GitHub/Arivu/client
 npm run dev
 ```
 

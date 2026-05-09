@@ -4,7 +4,7 @@
  * Create Default Admin Account
  * 
  * This script creates a default admin user and organization for the platform owner.
- * Run this once when setting up your LiteDesk instance.
+ * Run this once when setting up your Arivu instance.
  * 
  * Usage: node scripts/createDefaultAdmin.js
  */
@@ -22,12 +22,12 @@ const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || process.en
 
 // Default Admin Credentials (use environment variables or defaults)
 const DEFAULT_ADMIN = {
-    email: process.env.DEFAULT_ADMIN_EMAIL || 'admin@litedesk.com',
+    email: process.env.DEFAULT_ADMIN_EMAIL || 'admin@arivusystems.com',
     password: process.env.DEFAULT_ADMIN_PASSWORD || 'Admin@123',
     username: 'Admin User',
     firstName: 'Admin',
     lastName: 'User',
-    organizationName: 'Arivu',
+    organizationName: 'Arivu Systems',
     industry: 'Technology'
 };
 
@@ -39,8 +39,8 @@ async function createDefaultAdmin() {
         if (!MONGO_URI) {
             console.error('❌ Error: MONGODB_URI is not set in .env file!');
             console.error('\n📝 Steps to fix:');
-            console.error('   1. Create /home/ubuntu/LiteDesk/server/.env file');
-            console.error('   2. Add: MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/litedesk');
+            console.error('   1. Create /home/ubuntu/Arivu/server/.env file');
+            console.error('   2. Add: MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/arivu');
             console.error('   3. Replace with your actual MongoDB Atlas connection string\n');
             process.exit(1);
         }
@@ -51,9 +51,9 @@ async function createDefaultAdmin() {
 const [uriWithoutQuery, queryPart] = MONGO_URI.split('?');
 const connectionQuery = queryPart ? `?${queryPart}` : '';
 
-// Connect to master database (litedesk_master)
+// Connect to master database (arivu_master)
 const baseUri = uriWithoutQuery.split('/').slice(0, -1).join('/');
-        const masterDbName = 'litedesk_master';
+        const masterDbName = 'arivu_master';
 const masterUri = `${baseUri}/${masterDbName}${connectionQuery}`;
         
         await mongoose.connect(masterUri);

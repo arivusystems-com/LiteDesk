@@ -105,7 +105,7 @@ client/public/assets/logo.svg
 http://13.203.208.47/assets/logo.svg
                     ↓
         Nginx serves from:
-/home/ubuntu/LiteDesk/client/dist/assets/logo.svg
+/home/ubuntu/Arivu/client/dist/assets/logo.svg
 ```
 
 ---
@@ -128,11 +128,11 @@ ls -la dist/images/*.jpg
 ssh -i your-key.pem ubuntu@13.203.208.47
 
 # Check files exist
-ls -la /home/ubuntu/LiteDesk/client/dist/assets/*.svg
-ls -la /home/ubuntu/LiteDesk/client/dist/images/*.jpg
+ls -la /home/ubuntu/Arivu/client/dist/assets/*.svg
+ls -la /home/ubuntu/Arivu/client/dist/images/*.jpg
 
 # Check Nginx permissions
-ls -ld /home/ubuntu /home/ubuntu/LiteDesk /home/ubuntu/LiteDesk/client/dist
+ls -ld /home/ubuntu /home/ubuntu/Arivu /home/ubuntu/Arivu/client/dist
 ```
 
 ---

@@ -153,8 +153,8 @@ function isActiveRoute(routePath: string): boolean {
 **Location:** `localStorage`
 
 **Keys:**
-- `litedesk-sidebar-domains-state` - Domain expanded/collapsed state
-- `litedesk-sidebar-last-active-domain` - Last active domain appKey
+- `arivu-sidebar-domains-state` - Domain expanded/collapsed state
+- `arivu-sidebar-last-active-domain` - Last active domain appKey
 
 **Format:**
 ```typescript

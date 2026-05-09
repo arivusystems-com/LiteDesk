@@ -40,12 +40,12 @@ if (!MONGO_URI) {
   process.exit(1);
 }
 
-// Extract base URI and connect to litedesk_master (same as server.js)
+// Extract base URI and connect to arivu_master (same as server.js)
 // Preserve query string parameters (important for authentication)
 const [mongoUriWithoutQuery, mongoUriQueryPart] = MONGO_URI.split('?');
 const mongoQueryString = mongoUriQueryPart ? `?${mongoUriQueryPart}` : '';
 const baseUri = mongoUriWithoutQuery.split('/').slice(0, -1).join('/');
-const masterDbName = 'litedesk_master';
+const masterDbName = 'arivu_master';
 const MONGODB_URI = `${baseUri}/${masterDbName}${mongoQueryString}`;
 
 console.log(`📊 Using database: ${masterDbName}`);

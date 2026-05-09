@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ###############################################################################
-# LiteDesk CRM - Local Deployment Helper
+# Arivu CRM - Local Deployment Helper
 ###############################################################################
 # Run this script from your LOCAL Mac to deploy to AWS EC2
 # It will upload the deployment script and execute it
@@ -26,7 +26,7 @@ echo -e "${BLUE}"
 cat << "EOF"
 ╔═══════════════════════════════════════════════════════════════╗
 ║                                                               ║
-║         🚀 LiteDesk CRM - Deploy from Local Machine          ║
+║         🚀 Arivu CRM - Deploy from Local Machine          ║
 ║                                                               ║
 ╚═══════════════════════════════════════════════════════════════╝
 EOF
@@ -35,10 +35,10 @@ echo -e "${NC}"
 echo -e "${PURPLE}📍 Target Server: ${GREEN}$EC2_IP${NC}"
 echo ""
 
-# Check if we're in the LiteDesk directory
+# Check if we're in the Arivu directory
 if [ ! -f "deploy-aws-quick.sh" ]; then
     echo -e "${RED}❌ Error: deploy-aws-quick.sh not found${NC}"
-    echo -e "${YELLOW}Please run this script from the LiteDesk directory${NC}"
+    echo -e "${YELLOW}Please run this script from the Arivu directory${NC}"
     exit 1
 fi
 
@@ -46,7 +46,7 @@ fi
 echo -e "${BLUE}🔑 SSH Key Setup${NC}"
 echo ""
 echo "Please provide the path to your EC2 SSH key file (.pem)"
-echo -e "${YELLOW}Example: ~/Downloads/litedesk-key.pem${NC}"
+echo -e "${YELLOW}Example: ~/Downloads/arivu-key.pem${NC}"
 echo ""
 read -p "Enter path to SSH key: " KEY_FILE
 
@@ -95,7 +95,7 @@ echo ""
 
 # Ask for confirmation
 echo -e "${YELLOW}════════════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}Ready to deploy LiteDesk CRM to ${GREEN}$EC2_IP${NC}"
+echo -e "${BLUE}Ready to deploy Arivu CRM to ${GREEN}$EC2_IP${NC}"
 echo ""
 echo -e "${YELLOW}This will:${NC}"
 echo "  • Install Node.js, Nginx, PM2, Git"
@@ -139,7 +139,7 @@ EOF
     echo -e "   ${BLUE}http://$EC2_IP${NC}"
     echo ""
     echo -e "${GREEN}👤 Login with:${NC}"
-    echo -e "   Email:    admin@litedesk.com"
+    echo -e "   Email:    admin@arivu.com"
     echo -e "   Password: Admin@123456"
     echo ""
     echo -e "${YELLOW}⚠️  Remember to change the admin password after first login!${NC}"

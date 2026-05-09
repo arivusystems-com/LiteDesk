@@ -35,24 +35,24 @@ ENABLE_DEMO_CONVERSION=true
 ### **Multi-Instance Architecture (When Enabled):**
 ```
 Kubernetes Cluster (EKS)
-├── Organization A → acme.litedesk.com
+├── Organization A → acme.arivu.com
 │   ├── Dedicated Backend Pod
 │   ├── Dedicated Frontend Pod
 │   └── Dedicated MongoDB Database
 │
-├── Organization B → beta.litedesk.com
+├── Organization B → beta.arivu.com
 │   ├── Dedicated Backend Pod
 │   ├── Dedicated Frontend Pod
 │   └── Dedicated MongoDB Database
 │
-└── Organization C → gamma.litedesk.com
+└── Organization C → gamma.arivu.com
     ├── Dedicated Backend Pod
     ├── Dedicated Frontend Pod
     └── Dedicated MongoDB Database
 ```
 
 **What This Would Provide:**
-- Each customer gets their own subdomain (acme.litedesk.com)
+- Each customer gets their own subdomain (acme.arivu.com)
 - Each customer gets their own app instance (complete isolation)
 - Each customer gets their own database (data isolation)
 - Independent scaling per customer
@@ -111,7 +111,7 @@ Multi-instance provisioning requires **significant infrastructure** that you don
    - ⚙️ Setup: 4-8 hours
 
 3. **Domain & DNS Management**
-   - ❌ Need wildcard DNS (*.litedesk.com)
+   - ❌ Need wildcard DNS (*.arivu.com)
    - 💰 Cost: Domain + Route 53
    - ⚙️ Setup: 2-4 hours
 
@@ -190,20 +190,20 @@ Per Instance Cost:
 
 ```bash
 # 1. Create Kubernetes Cluster
-aws eks create-cluster --name litedesk-prod
+aws eks create-cluster --name arivu-prod
 
 # 2. Setup MongoDB Atlas Cluster
 # (Via Atlas console - create M10+ cluster)
 
 # 3. Configure DNS
-# Setup wildcard: *.litedesk.com → Load Balancer
+# Setup wildcard: *.arivu.com → Load Balancer
 
 # 4. Install Dependencies
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/aws/deploy.yaml
 kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
 
 # 5. Deploy Helm Chart
-helm install litedesk ./helm/litedesk
+helm install arivu ./helm/arivu
 ```
 
 ### **Step 2: Update Environment Variables**
@@ -223,7 +223,7 @@ MONGODB_ATLAS_PROJECT_ID=your-project-id
 
 # Add DNS config
 AWS_ROUTE53_HOSTED_ZONE_ID=your-zone-id
-BASE_DOMAIN=litedesk.com
+BASE_DOMAIN=arivu.com
 ```
 
 ### **Step 3: Deploy & Test**
@@ -239,7 +239,7 @@ curl -X POST http://your-domain/api/demo-requests/ID/convert \
 
 # Monitor provisioning
 kubectl get pods -n instance-acme
-kubectl logs -n instance-acme litedesk-backend-xxx
+kubectl logs -n instance-acme arivu-backend-xxx
 ```
 
 ---

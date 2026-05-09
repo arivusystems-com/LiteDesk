@@ -81,8 +81,8 @@ function isConfigured() {
  * Get from address. Uses EMAIL_FROM and optionally EMAIL_FROM_NAME.
  */
 function getFromAddress() {
-  const from = process.env.EMAIL_FROM || 'noreply@litedesk.local';
-  const name = process.env.EMAIL_FROM_NAME || 'LiteDesk';
+  const from = process.env.EMAIL_FROM || 'noreply@arivusystems.com';
+  const name = process.env.EMAIL_FROM_NAME || 'Arivu Systems';
   return name ? `"${name}" <${from}>` : from;
 }
 

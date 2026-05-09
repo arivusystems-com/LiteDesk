@@ -254,17 +254,17 @@
 
 ```bash
 # Terminal 1: Backend
-cd /Users/Prabhu/Documents/GitHub/LiteDesk/server
+cd /Users/Prabhu/Documents/GitHub/Arivu/server
 node server.js
 
 # Terminal 2: Frontend
-cd /Users/Prabhu/Documents/GitHub/LiteDesk/client
+cd /Users/Prabhu/Documents/GitHub/Arivu/client
 npm run dev
 ```
 
 ### **Login:**
 - URL: `http://localhost:5173`
-- Email: `admin@litedesk.com`
+- Email: `admin@arivu.com`
 - Password: `Admin@123`
 
 ### **What You Can Do:**

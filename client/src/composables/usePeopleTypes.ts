@@ -51,7 +51,7 @@ function cacheKeyForApp(key: string): string {
 }
 
 function storageKeyForApp(key: string): string {
-  return `litedesk:people-types:${cacheKeyForApp(key)}`;
+  return `arivu:people-types:${cacheKeyForApp(key)}`;
 }
 
 function readStoredPeopleTypes(key: string): ParsedPeopleTypes | null {

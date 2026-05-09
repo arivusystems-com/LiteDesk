@@ -7,7 +7,7 @@
 ```bash
 curl -s -X POST http://localhost:5000/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"admin@litedesk.com","password":"Admin@123"}' | jq -r .token
+  -d '{"email":"admin@arivu.com","password":"Admin@123"}' | jq -r .token
 ```
 
 Export it:

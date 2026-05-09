@@ -23,9 +23,9 @@
 import { ref, watch } from 'vue';
 import type { Ref } from 'vue';
 
-const COLLAPSED_KEY = 'litedesk-sidebar-collapsed';
-const LAST_ACTIVE_APP_ID_KEY = 'litedesk-sidebar-last-active-app-id';
-const CORE_MODULES_COLLAPSED_KEY = 'litedesk-sidebar-core-modules-collapsed';
+const COLLAPSED_KEY = 'arivu-sidebar-collapsed';
+const LAST_ACTIVE_APP_ID_KEY = 'arivu-sidebar-last-active-app-id';
+const CORE_MODULES_COLLAPSED_KEY = 'arivu-sidebar-core-modules-collapsed';
 
 function loadBoolean(key: string, fallback: boolean): boolean {
   try {

@@ -1,6 +1,6 @@
 # 🚀 Contact Update - Quick Guide
 
-**TL;DR: How contacts get updated in LiteDesk**
+**TL;DR: How contacts get updated in Arivu**
 
 ---
 

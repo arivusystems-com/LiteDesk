@@ -4,7 +4,7 @@
  * ============================================================================
  *
  * Seeds a freshly-provisioned tenant database with the same baseline that
- * `litedesk_master` is given on first setup:
+ * `arivu_master` is given on first setup:
  *
  *   - AppDefinition           (platform app catalog)
  *   - ModuleDefinition        (platform-level + system module definitions)

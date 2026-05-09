@@ -15,7 +15,7 @@
 
 ## Executive Summary
 
-This audit provides a single source of truth for navigation intent across all modules and entities in the LiteDesk platform. Every module has been explicitly classified with navigation intent flags, ensuring clear placement in the four-section sidebar:
+This audit provides a single source of truth for navigation intent across all modules and entities in the Arivu platform. Every module has been explicitly classified with navigation intent flags, ensuring clear placement in the four-section sidebar:
 
 1. **Core** - Personal/attention layer (Home, Inbox, Reports)
 2. **Entities** - Shared system primitives (People, Organizations, Tasks, Events, Forms, Items)
@@ -28,7 +28,7 @@ This audit provides a single source of truth for navigation intent across all mo
 
 ## Platform Apps
 
-The LiteDesk platform currently has the following apps defined:
+The Arivu platform currently has the following apps defined:
 
 | App Key | App Name | Modules | Status |
 |---------|----------|---------|--------|

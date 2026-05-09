@@ -23,7 +23,7 @@ cat << "EOF"
 EOF
 echo -e "${NC}"
 
-cd /Users/Prabhu/Documents/GitHub/LiteDesk
+cd /Users/Prabhu/Documents/GitHub/Arivu
 
 echo -e "${BLUE}Step 1: Stopping any existing backend...${NC}"
 # Kill processes on both ports

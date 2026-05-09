@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-This document defines the Organization Settings module for the LiteDesk platform. Organization Settings configure the structure and behavior of business organization records (Customer, Partner, Vendor, etc.), not tenant organizations. This specification aligns with the Module Settings Doctrine and uses People Settings as the canonical reference implementation.
+This document defines the Organization Settings module for the Arivu platform. Organization Settings configure the structure and behavior of business organization records (Customer, Partner, Vendor, etc.), not tenant organizations. This specification aligns with the Module Settings Doctrine and uses People Settings as the canonical reference implementation.
 
 **Canonical Reference:** People Settings (`/settings?tab=core-modules&moduleKey=people`)  
 **Settings Location:** `/settings?tab=core-modules&moduleKey=organizations`  

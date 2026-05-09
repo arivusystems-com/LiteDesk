@@ -1161,7 +1161,7 @@ const handleSubmit = async (e) => {
       
       // Dispatch global event to refresh calendar/list views
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('litedesk:event-created', {
+        window.dispatchEvent(new CustomEvent('arivu:event-created', {
           detail: { event: response.data }
         }));
       }

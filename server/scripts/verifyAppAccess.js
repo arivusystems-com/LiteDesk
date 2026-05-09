@@ -37,9 +37,9 @@ async function verifyUsers() {
         const [uriWithoutQuery, queryPart] = MONGO_URI.split('?');
         const connectionQuery = queryPart ? `?${queryPart}` : '';
 
-        // Connect to master database (litedesk_master)
+        // Connect to master database (arivu_master)
         const baseUri = uriWithoutQuery.split('/').slice(0, -1).join('/');
-        const masterDbName = 'litedesk_master';
+        const masterDbName = 'arivu_master';
         const masterUri = `${baseUri}/${masterDbName}${connectionQuery}`;
         
         await mongoose.connect(masterUri);

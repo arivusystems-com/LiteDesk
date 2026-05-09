@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-Form Settings is the **SINGLE SOURCE OF TRUTH** for form behavior, lifecycle, access, and outcomes configuration across the LiteDesk platform. This doctrine defines the architectural principles, invariants, and boundaries that govern Form Settings.
+Form Settings is the **SINGLE SOURCE OF TRUTH** for form behavior, lifecycle, access, and outcomes configuration across the Arivu platform. This doctrine defines the architectural principles, invariants, and boundaries that govern Form Settings.
 
 **Key Principle:** Form Settings configure **structure and behavior only**. They do not manage form content, execution, submission, or responses.
 

@@ -312,7 +312,7 @@ const openCreateModal = () => {
   // ARCHITECTURAL INTENT: All entry points open drawer in Quick Create mode
   // Open drawer in same tab, not navigating to new route
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('litedesk:open-organization-quick-create'));
+    window.dispatchEvent(new CustomEvent('arivu:open-organization-quick-create'));
   }
 };
 
@@ -527,7 +527,7 @@ onMounted(async () => {
   
   // Listen for record creation events
   if (typeof window !== 'undefined') {
-    window.addEventListener('litedesk:record-created', handleRecordCreated);
+    window.addEventListener('arivu:record-created', handleRecordCreated);
   }
 });
 
@@ -539,7 +539,7 @@ onActivated(() => {
 onUnmounted(() => {
   // Clean up event listeners
   if (typeof window !== 'undefined') {
-    window.removeEventListener('litedesk:record-created', handleRecordCreated);
+    window.removeEventListener('arivu:record-created', handleRecordCreated);
   }
 });
 

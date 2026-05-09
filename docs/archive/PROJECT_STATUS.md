@@ -1,4 +1,4 @@
-# 🚀 LiteDesk CRM - Project Status & Next Steps
+# 🚀 Arivu CRM - Project Status & Next Steps
 
 **Last Updated:** December 2024  
 **Architecture:** Multi-Instance SaaS CRM (Each organization gets dedicated instance)

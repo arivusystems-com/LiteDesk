@@ -680,7 +680,7 @@ const handlePeopleDrawerSaved = (person: any) => {
   
   // Dispatch global event to refresh list views
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('litedesk:record-created', {
+    window.dispatchEvent(new CustomEvent('arivu:record-created', {
       detail: { moduleKey: 'people', record: person }
     }));
   }
@@ -705,28 +705,28 @@ const handleEventDrawerSaved = (event: any) => {
   
   // Dispatch global event to refresh calendar/list views
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('litedesk:event-created', {
+    window.dispatchEvent(new CustomEvent('arivu:event-created', {
       detail: { event }
     }));
   }
 };
 
 onMounted(() => {
-  window.addEventListener('litedesk:open-link-drawer', handleLinkDrawerOpen as EventListener);
-  window.addEventListener('litedesk:open-create-drawer', handleCreateDrawerOpen as EventListener);
+  window.addEventListener('arivu:open-link-drawer', handleLinkDrawerOpen as EventListener);
+  window.addEventListener('arivu:open-create-drawer', handleCreateDrawerOpen as EventListener);
   // ARCHITECTURAL INTENT: Organization Quick Create is separate from full create flows
   // This ensures command palette actions open Quick Create, not full create/edit
-  window.addEventListener('litedesk:open-organization-quick-create', handleOrganizationQuickCreateOpen as EventListener);
-  window.addEventListener('litedesk:open-people-quick-create', handlePeopleQuickCreateOpen as EventListener);
-  window.addEventListener('litedesk:open-event-quick-create', handleEventQuickCreateOpen as EventListener);
+  window.addEventListener('arivu:open-organization-quick-create', handleOrganizationQuickCreateOpen as EventListener);
+  window.addEventListener('arivu:open-people-quick-create', handlePeopleQuickCreateOpen as EventListener);
+  window.addEventListener('arivu:open-event-quick-create', handleEventQuickCreateOpen as EventListener);
 });
 
 onUnmounted(() => {
-  window.removeEventListener('litedesk:open-link-drawer', handleLinkDrawerOpen as EventListener);
-  window.removeEventListener('litedesk:open-create-drawer', handleCreateDrawerOpen as EventListener);
-  window.removeEventListener('litedesk:open-organization-quick-create', handleOrganizationQuickCreateOpen as EventListener);
-  window.removeEventListener('litedesk:open-people-quick-create', handlePeopleQuickCreateOpen as EventListener);
-  window.removeEventListener('litedesk:open-event-quick-create', handleEventQuickCreateOpen as EventListener);
+  window.removeEventListener('arivu:open-link-drawer', handleLinkDrawerOpen as EventListener);
+  window.removeEventListener('arivu:open-create-drawer', handleCreateDrawerOpen as EventListener);
+  window.removeEventListener('arivu:open-organization-quick-create', handleOrganizationQuickCreateOpen as EventListener);
+  window.removeEventListener('arivu:open-people-quick-create', handlePeopleQuickCreateOpen as EventListener);
+  window.removeEventListener('arivu:open-event-quick-create', handleEventQuickCreateOpen as EventListener);
 });
 
 // Perform search
@@ -1299,7 +1299,7 @@ const handleCreateDrawerSaved = async (savedRecord?: any) => {
   
   // Dispatch global event to refresh list views for all modules
   if (typeof window !== 'undefined' && savedRecord) {
-    window.dispatchEvent(new CustomEvent('litedesk:record-created', {
+    window.dispatchEvent(new CustomEvent('arivu:record-created', {
       detail: { moduleKey, record: savedRecord }
     }));
   }
@@ -1322,7 +1322,7 @@ const handleCreateDrawerSaved = async (savedRecord?: any) => {
         
         // Dispatch refresh event for person
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('litedesk:refresh-person', {
+          window.dispatchEvent(new CustomEvent('arivu:refresh-person', {
             detail: { personId: context.personId }
           }));
         }
@@ -1338,7 +1338,7 @@ const handleCreateDrawerSaved = async (savedRecord?: any) => {
         
         // Dispatch refresh event for organization
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('litedesk:refresh-organization', {
+          window.dispatchEvent(new CustomEvent('arivu:refresh-organization', {
             detail: { organizationId: context.organizationId }
           }));
         }
@@ -1510,7 +1510,7 @@ const handleLinkDrawerLinked = async ({ moduleKey, ids, context }: { moduleKey: 
       // Refresh organization data by dispatching a custom event
       // OrganizationDetail listens for this event and refreshes its data
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('litedesk:refresh-organization', {
+        window.dispatchEvent(new CustomEvent('arivu:refresh-organization', {
           detail: { organizationId: context.organizationId }
         }));
       }
@@ -1533,7 +1533,7 @@ const handleLinkDrawerLinked = async ({ moduleKey, ids, context }: { moduleKey: 
       }
       
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('litedesk:refresh-organization', {
+        window.dispatchEvent(new CustomEvent('arivu:refresh-organization', {
           detail: { organizationId: context.organizationId }
         }));
       }
@@ -1560,7 +1560,7 @@ const handleLinkDrawerLinked = async ({ moduleKey, ids, context }: { moduleKey: 
       }
       
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('litedesk:refresh-organization', {
+        window.dispatchEvent(new CustomEvent('arivu:refresh-organization', {
           detail: { organizationId: context.organizationId }
         }));
       }
@@ -1589,7 +1589,7 @@ const handleLinkDrawerLinked = async ({ moduleKey, ids, context }: { moduleKey: 
       }
       
       if (context.organizationId && typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('litedesk:refresh-organization', {
+        window.dispatchEvent(new CustomEvent('arivu:refresh-organization', {
           detail: { organizationId: context.organizationId }
         }));
       }

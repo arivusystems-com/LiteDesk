@@ -1,7 +1,7 @@
 const { getRedisClient, isRedisConfigured } = require('../lib/redisClient');
 
 const memoryAttempts = new Map();
-const PREFIX = process.env.AUTH_THROTTLE_REDIS_PREFIX || 'litedesk:auth-throttle:';
+const PREFIX = process.env.AUTH_THROTTLE_REDIS_PREFIX || 'arivu:auth-throttle:';
 
 const WINDOW_SECONDS = parseInt(process.env.AUTH_THROTTLE_WINDOW_SECONDS || '900', 10);
 const DELAY_AFTER_ATTEMPTS = parseInt(process.env.AUTH_THROTTLE_DELAY_AFTER_ATTEMPTS || '3', 10);

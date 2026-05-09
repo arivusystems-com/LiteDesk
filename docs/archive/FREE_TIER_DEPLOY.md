@@ -84,7 +84,7 @@ This builds everything on EC2, which requires:
 ### Step 1: Build and Deploy
 
 ```bash
-cd /Users/Prabhu/Documents/GitHub/LiteDesk
+cd /Users/Prabhu/Documents/GitHub/Arivu
 
 # Run the optimized deployment script
 ./deploy-local-build.sh
@@ -101,7 +101,7 @@ The script will:
 ### Step 2: Access Your App
 
 **URL:** http://43.204.144.169  
-**Login:** admin@litedesk.com / Admin@123456
+**Login:** admin@arivu.com / Admin@123456
 
 ---
 
@@ -265,7 +265,7 @@ Before deployment:
 1. ✅ **Always build locally** - Use `deploy-local-build.sh`
 2. ✅ **Monitor memory** - Run `free -h` on EC2 to check
 3. ✅ **Use production deps** - `npm install --production`
-4. ✅ **Restart if needed** - `pm2 restart litedesk-api`
+4. ✅ **Restart if needed** - `pm2 restart arivu-api`
 5. ✅ **Check logs** - `pm2 logs` to monitor health
 
 ### Memory Monitoring:

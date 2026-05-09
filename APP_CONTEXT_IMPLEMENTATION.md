@@ -300,7 +300,7 @@ function resolveAppKeyFromUrl(path) {
 Potential future improvements (not implemented):
 
 1. **Header-based Resolution:** Support `X-App-Key` header
-2. **Subdomain-based Resolution:** Resolve from subdomain (e.g., `portal.litedesk.com`)
+2. **Subdomain-based Resolution:** Resolve from subdomain (e.g., `portal.arivu.com`)
 3. **Organization-level App Access:** Check if org has access to specific apps
 4. **App-specific Permissions:** Different permission models per app
 5. **App-specific Middleware:** Conditional middleware based on appKey

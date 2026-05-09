@@ -138,7 +138,7 @@
             v-if="shouldShowExpanded"
             class="h-8 w-auto transition-all duration-300" 
             :src="logoSrc" 
-            alt="LiteDesk Logo" 
+            alt="Arivu Logo" 
           />
         </transition>
         
@@ -155,7 +155,7 @@
       
       <!-- Navigation - rendered by AppSidebar -->
       <!-- ARCHITECTURE NOTE: GlobalSearch is owned by GlobalSurfacesProvider. -->
-      <!-- Sidebar search click dispatches litedesk:open-global-search custom event. -->
+      <!-- Sidebar search click dispatches arivu:open-global-search custom event. -->
       <div class="flex-1 pt-16 overflow-y-auto">
         <AppSidebar
           v-if="sidebarStructure"
@@ -341,7 +341,7 @@ onMounted(async () => {
     await appShellStore.loadUIMetadata();
   }
   await buildSidebar();
-  window.addEventListener('litedesk:core-modules-updated', onCoreModulesUpdated);
+  window.addEventListener('arivu:core-modules-updated', onCoreModulesUpdated);
 });
 
 // Close menu when clicking outside
@@ -356,7 +356,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  window.removeEventListener('litedesk:core-modules-updated', onCoreModulesUpdated);
+  window.removeEventListener('arivu:core-modules-updated', onCoreModulesUpdated);
   document.removeEventListener('click', handleClickOutside);
 });
 

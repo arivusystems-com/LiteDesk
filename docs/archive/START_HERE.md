@@ -1,4 +1,4 @@
-# 🚀 LiteDesk - Quick Start Guide
+# 🚀 Arivu - Quick Start Guide
 
 **Last Updated:** October 22, 2025
 
@@ -20,7 +20,7 @@ Open your **first terminal** and run:
 
 ```bash
 docker run -d \
-  --name litedesk-mongo \
+  --name arivu-mongo \
   -p 27017:27017 \
   -e MONGO_INITDB_ROOT_USERNAME=admin \
   -e MONGO_INITDB_ROOT_PASSWORD=password123 \
@@ -34,10 +34,10 @@ docker run -d \
 
 **Verify it's running:**
 ```bash
-docker ps | grep litedesk-mongo
+docker ps | grep arivu-mongo
 ```
 
-You should see: `litedesk-mongo` with status `Up`
+You should see: `arivu-mongo` with status `Up`
 
 ---
 
@@ -46,7 +46,7 @@ You should see: `litedesk-mongo` with status `Up`
 Open your **second terminal** and run:
 
 ```bash
-cd /Users/Prabhu/Documents/GitHub/LiteDesk/server
+cd /Users/Prabhu/Documents/GitHub/Arivu/server
 node server.js
 ```
 
@@ -78,7 +78,7 @@ Server running on http://localhost:3000
 Open your **third terminal** and run:
 
 ```bash
-cd /Users/Prabhu/Documents/GitHub/LiteDesk/client
+cd /Users/Prabhu/Documents/GitHub/Arivu/client
 npm run dev
 ```
 
@@ -124,7 +124,7 @@ Open your browser and go to:
 
 **Frontend:** http://localhost:5173
 
-You should see the **LiteDesk Landing Page**! 🎉
+You should see the **Arivu Landing Page**! 🎉
 
 ---
 
@@ -132,7 +132,7 @@ You should see the **LiteDesk Landing Page**! 🎉
 
 ```
 ┌─────────────────────────────────────────────┐
-│     Your Local LiteDesk Environment         │
+│     Your Local Arivu Environment         │
 ├─────────────────────────────────────────────┤
 │                                             │
 │  Terminal 1: MongoDB (Docker)               │
@@ -251,8 +251,8 @@ Press: Ctrl + C
 
 ### **Stop MongoDB** (Terminal 4)
 ```bash
-docker stop litedesk-mongo
-docker rm litedesk-mongo
+docker stop arivu-mongo
+docker rm arivu-mongo
 ```
 
 ---
@@ -281,14 +281,14 @@ kill -9 <PID>
 
 # Or use a different port
 docker run -d \
-  --name litedesk-mongo \
+  --name arivu-mongo \
   -p 27018:27017 \  # Changed to 27018
   -e MONGO_INITDB_ROOT_USERNAME=admin \
   -e MONGO_INITDB_ROOT_PASSWORD=password123 \
   mongo:6.0
 
 # Then update server/.env:
-# MONGO_URI=mongodb://admin:password123@localhost:27018/litedesk?authSource=admin
+# MONGO_URI=mongodb://admin:password123@localhost:27018/arivu?authSource=admin
 ```
 
 ---
@@ -306,7 +306,7 @@ docker ps | grep mongo
 cat server/.env | grep MONGO_URI
 
 # Should be:
-# MONGO_URI=mongodb://admin:password123@localhost:27017/litedesk?authSource=admin
+# MONGO_URI=mongodb://admin:password123@localhost:27017/arivu?authSource=admin
 ```
 
 ---
@@ -366,7 +366,7 @@ lsof -i :27017
 ### **View Logs**
 ```bash
 # MongoDB logs
-docker logs litedesk-mongo -f
+docker logs arivu-mongo -f
 
 # Backend logs
 # (visible in Terminal 2)
@@ -378,13 +378,13 @@ docker logs litedesk-mongo -f
 ### **Connect to MongoDB**
 ```bash
 # Using mongosh (if installed)
-mongosh mongodb://admin:password123@localhost:27017/litedesk?authSource=admin
+mongosh mongodb://admin:password123@localhost:27017/arivu?authSource=admin
 
 # Or using Docker exec
-docker exec -it litedesk-mongo mongosh -u admin -p password123 --authenticationDatabase admin
+docker exec -it arivu-mongo mongosh -u admin -p password123 --authenticationDatabase admin
 
 # Then in mongosh:
-use litedesk
+use arivu
 show collections
 db.users.find()
 db.organizations.find()

@@ -726,7 +726,7 @@ async function updateDealsModuleFields(organizationId = null) {
 
   try {
     if (mongoose.connection.readyState === 0) {
-      const uri = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/litedesk_master';
+      const uri = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/arivu_master';
       await mongoose.connect(uri);
       shouldDisconnect = true;
       console.log(`[updateDealsModuleFields] Connected to MongoDB: ${mongoose.connection.name}`);

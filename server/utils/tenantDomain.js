@@ -1,6 +1,8 @@
 const DEFAULT_TENANT_BASE_DOMAINS = [
+  'www.arivusystems.com',
+  'arivusystems.com',
   'app.arivusystems.com',
-  'litedesk.com',
+  'arivu.com', // legacy
 ];
 
 function getTenantBaseDomains() {
@@ -33,6 +35,9 @@ function isTenantSubdomainOrigin(origin) {
 
     // Always allow tenant hosts in the form: <slug>.app.arivusystems.com
     if (/^[a-z0-9-]+\.app\.arivusystems\.com$/.test(hostname)) {
+      return true;
+    }
+    if (hostname === 'www.arivusystems.com' || hostname === 'arivusystems.com') {
       return true;
     }
 

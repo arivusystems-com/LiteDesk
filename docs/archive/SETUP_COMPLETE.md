@@ -1,6 +1,6 @@
 # ✅ Environment Setup Complete!
 
-## 🎉 Your LiteDesk CRM is Now Worry-Free!
+## 🎉 Your Arivu CRM is Now Worry-Free!
 
 I've updated your configuration to automatically work for **both local development AND production deployment** without you having to change anything!
 
@@ -96,14 +96,14 @@ npm run dev
 When you run `npm start`, you'll see:
 
 ```
-🚀 Starting LiteDesk CRM in DEVELOPMENT mode
+🚀 Starting Arivu CRM in DEVELOPMENT mode
 📊 Port: 5000
 🗄️  Database: mongodb://localhost:27017...
 🌐 Allowed Origins: http://localhost:5173
 ✅ MongoDB connected successfully
 📊 Database: Local MongoDB
 ╔════════════════════════════════════════════════════════╗
-║  ✅ LiteDesk CRM Server Running Successfully!        ║
+║  ✅ Arivu CRM Server Running Successfully!        ║
 ╚════════════════════════════════════════════════════════╝
 ```
 
@@ -132,7 +132,7 @@ Or:
 
 ```bash
 # Morning:
-cd /Users/Prabhu/Documents/GitHub/LiteDesk/server
+cd /Users/Prabhu/Documents/GitHub/Arivu/server
 npm start
 
 # Code, test, make changes...
@@ -148,7 +148,7 @@ git commit -m "Added new feature"
 
 ```bash
 # When ready to deploy:
-cd /Users/Prabhu/Documents/GitHub/LiteDesk
+cd /Users/Prabhu/Documents/GitHub/Arivu
 git push origin main
 ./deploy-local-build.sh
 

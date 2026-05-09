@@ -2,7 +2,7 @@
 
 **⚠️ CRITICAL: Security is the TOP PRIORITY for all development work**
 
-This document outlines security requirements and best practices that MUST be followed for all code changes in LiteDesk.
+This document outlines security requirements and best practices that MUST be followed for all code changes in Arivu.
 
 ---
 

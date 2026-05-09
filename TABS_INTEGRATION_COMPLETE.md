@@ -419,7 +419,7 @@ A: Use `updateTabTitle(tabId, newTitle)` from the `useTabs` composable.
 
 ## 🎉 Conclusion
 
-The internal tabs navigation system is **fully integrated** across all existing components in LiteDesk. Users can now enjoy a modern, efficient navigation experience with:
+The internal tabs navigation system is **fully integrated** across all existing components in Arivu. Users can now enjoy a modern, efficient navigation experience with:
 
 ✅ Browser-like tabs  
 ✅ Instant navigation  

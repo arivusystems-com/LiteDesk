@@ -75,7 +75,7 @@ client/.env.production    ✅ Public config (no secrets)
 ```env
 NODE_ENV=development
 PORT=3000
-MONGO_URI=mongodb://localhost:27017/litedesk  # Your actual DB
+MONGO_URI=mongodb://localhost:27017/arivu  # Your actual DB
 JWT_SECRET=your_actual_secret                 # Your actual secret
 # ... more secrets
 ```
@@ -84,7 +84,7 @@ JWT_SECRET=your_actual_secret                 # Your actual secret
 ```env
 NODE_ENV=development
 PORT=3000
-MONGO_URI=mongodb://localhost:27017/litedesk
+MONGO_URI=mongodb://localhost:27017/arivu
 JWT_SECRET=your_jwt_secret_change_this        # Placeholder
 # ... placeholders
 ```
@@ -145,8 +145,8 @@ grep -i "\.env" .gitignore
 
 ### Step 1: Clone Repository
 ```bash
-git clone https://github.com/Prabhubalu/LiteDesk.git
-cd LiteDesk
+git clone https://github.com/Prabhubalu/Arivu.git
+cd Arivu
 ```
 
 ### Step 2: Create .env from Template
@@ -163,7 +163,7 @@ code server/.env
 ### Step 3: Configure Database
 ```env
 # Option 1: Local MongoDB
-MONGO_URI=mongodb://localhost:27017/litedesk
+MONGO_URI=mongodb://localhost:27017/arivu
 
 # Option 2: Your own MongoDB Atlas
 MONGO_URI=mongodb+srv://YOUR_USERNAME:YOUR_PASSWORD@...
@@ -271,11 +271,11 @@ openssl rand -hex 64
 ```env
 # Development
 NODE_ENV=development
-MONGO_URI=mongodb://localhost:27017/litedesk
+MONGO_URI=mongodb://localhost:27017/arivu
 
 # Production
 NODE_ENV=production
-MONGO_URI=mongodb+srv://prod@cluster.mongodb.net/litedesk
+MONGO_URI=mongodb+srv://prod@cluster.mongodb.net/arivu
 ```
 
 ### 4. **Never Log Secrets**

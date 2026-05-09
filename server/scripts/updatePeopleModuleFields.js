@@ -185,7 +185,7 @@ async function updatePeopleModuleFields(organizationId = null) {
   try {
     // Connect to MongoDB if not already connected
     if (mongoose.connection.readyState === 0) {
-      const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/litedesk';
+      const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/arivu';
       await mongoose.connect(mongoUri);
       console.log(`[updatePeopleModuleFields] Connected to MongoDB: ${mongoose.connection.name}`);
     } else {

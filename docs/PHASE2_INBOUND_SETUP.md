@@ -19,8 +19,8 @@ Add to `.env`:
 
 ```env
 # Phase 2 Inbound
-EMAIL_REPLY_TO_DOMAIN=litedesk.local          # Domain for Reply-To (e.g. replies+token@litedesk.local)
-EMAIL_INBOUND_ADDRESS=replies@litedesk.local  # Inbound receiving address
+EMAIL_REPLY_TO_DOMAIN=arivu.local          # Domain for Reply-To (e.g. replies+token@arivu.local)
+EMAIL_INBOUND_ADDRESS=replies@arivu.local  # Inbound receiving address
 EMAIL_REPLY_TOKEN_SECRET=<generate with: openssl rand -hex 32>
 ```
 
@@ -52,7 +52,7 @@ curl -X POST http://localhost:3000/api/webhooks/email/inbound \
 The test `.eml` must have a recipient address containing the token, e.g.:
 
 ```
-To: replies+<payload>.<signature>@litedesk.local
+To: replies+<payload>.<signature>@arivu.local
 From: sender@example.com
 Subject: Test reply
 ```

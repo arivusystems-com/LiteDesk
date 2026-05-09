@@ -13,11 +13,11 @@ curl -s http://localhost:5000/health 2>&1 | head -3 || echo "   ❌ Backend not 
 echo ""
 
 echo "3️⃣ Checking backend logs (last 20 lines):"
-tail -20 /Users/Prabhu/Documents/GitHub/LiteDesk/backend.log 2>/dev/null || echo "   ❌ No backend.log found"
+tail -20 /Users/Prabhu/Documents/GitHub/Arivu/backend.log 2>/dev/null || echo "   ❌ No backend.log found"
 echo ""
 
 echo "4️⃣ Checking .env NODE_ENV:"
-grep "NODE_ENV" /Users/Prabhu/Documents/GitHub/LiteDesk/server/.env | head -1
+grep "NODE_ENV" /Users/Prabhu/Documents/GitHub/Arivu/server/.env | head -1
 echo ""
 
 echo "5️⃣ Frontend port check:"

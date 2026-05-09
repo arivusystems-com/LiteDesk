@@ -1,4 +1,4 @@
-# Backend Dockerfile for LiteDesk CRM
+# Backend Dockerfile for Arivu CRM
 # Multi-stage build for production
 
 # Stage 1: Build

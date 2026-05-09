@@ -1,6 +1,6 @@
 # ⚡ Quick Start Guide
 
-Get LiteDesk running in **5 minutes**!
+Get Arivu running in **5 minutes**!
 
 ---
 
@@ -8,8 +8,8 @@ Get LiteDesk running in **5 minutes**!
 
 ### 1. Clone & Install
 ```bash
-git clone https://github.com/YOUR_USERNAME/LiteDesk.git
-cd LiteDesk
+git clone https://github.com/YOUR_USERNAME/Arivu.git
+cd Arivu
 
 # Backend
 cd server && npm install
@@ -50,7 +50,7 @@ node scripts/createDefaultAdmin.js
 ```
 
 **Save these credentials:**
-- Email: `admin@litedesk.com`
+- Email: `admin@arivu.com`
 - Password: `Admin@123`
 
 ---
@@ -76,7 +76,7 @@ npm run dev
 http://localhost:5173
 ```
 
-Login with: `admin@litedesk.com` / `Admin@123`
+Login with: `admin@arivu.com` / `Admin@123`
 
 ---
 

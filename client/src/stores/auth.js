@@ -1,10 +1,10 @@
 import { defineStore } from 'pinia';
-import { logAuthAccessDebug, warnAuthAccessDebug } from '@/config/litedeskDebug.js';
+import { logAuthAccessDebug, warnAuthAccessDebug } from '@/config/arivuDebug.js';
 import { getApiUrlForFetch } from '@/config/apiBase';
 import { identifyProductUser, captureUserLoggedIn, resetPosthog } from '@/config/posthogUser';
 import { registerUseAuthStore } from './authRegistry';
 
-const PROFILE_REFRESHED_AT_KEY = 'litedesk:user-profile-refreshed-at';
+const PROFILE_REFRESHED_AT_KEY = 'arivu:user-profile-refreshed-at';
 const PROFILE_REFRESH_FRESH_MS = 5 * 60 * 1000;
 const PROD_LOGOUT_REDIRECT_ORIGIN = (import.meta.env.VITE_MAIN_APP_ORIGIN || 'https://app.arivusystems.com').replace(/\/$/, '');
 
@@ -35,13 +35,13 @@ export const useAuthStore = defineStore('auth', {
         isTrialActive: (state) => state.organization?.subscription?.status === 'trial',
         subscriptionTier: (state) => state.organization?.subscription?.tier || 'trial',
         enabledModules: (state) => state.organization?.enabledModules || [],
-        isMasterOrganization: (state) => state.organization?.name === 'LiteDesk Master',
+        isMasterOrganization: (state) => state.organization?.name === 'Arivu Master',
         isPlatformAdmin: (state) => {
             // Check if user is platform admin (Phase 0H)
             if (state.user?.isPlatformAdmin === true) return true;
-            // Check if user has LiteDesk internal email
+            // Check if user has Arivu internal email
             const email = state.user?.email || '';
-            const internalDomains = ['litedesk.com', 'litedesk.io'];
+            const internalDomains = ['arivu.com', 'arivu.io'];
             return internalDomains.some(domain => email.toLowerCase().includes(`@${domain}`));
         },
         hasAppAccess: (state) => {
@@ -178,7 +178,7 @@ export const useAuthStore = defineStore('auth', {
         _isAuthRequestDebugEnabled() {
             if (!import.meta.env.DEV) return false;
             try {
-                return localStorage.getItem('litedesk:debug:authRequests') === '1';
+                return localStorage.getItem('arivu:debug:authRequests') === '1';
             } catch (_e) {
                 return false;
             }
@@ -231,7 +231,7 @@ export const useAuthStore = defineStore('auth', {
             // Legacy cleanup (older builds stored auth under 'auth')
             localStorage.removeItem('auth');
             try {
-                sessionStorage.removeItem('litedesk_redirect_after_login');
+                sessionStorage.removeItem('arivu_redirect_after_login');
             } catch (_e) {
                 /* optional */
             }
@@ -257,7 +257,7 @@ export const useAuthStore = defineStore('auth', {
                 const keysToRemove = [];
                 for (let i = 0; i < localStorage.length; i++) {
                     const key = localStorage.key(i);
-                    if (key && key.startsWith('litedesk-listview-') && key.endsWith('-active-view')) {
+                    if (key && key.startsWith('arivu-listview-') && key.endsWith('-active-view')) {
                         keysToRemove.push(key);
                     }
                 }

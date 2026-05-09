@@ -51,7 +51,7 @@ Use this checklist to ensure you don't miss any steps!
 ## 📦 Application Deployment
 
 ### Backend
-- [ ] Cloned repository to `/home/ubuntu/LiteDesk`
+- [ ] Cloned repository to `/home/ubuntu/Arivu`
 - [ ] Installed backend dependencies: `npm install --production`
 - [ ] Created `/server/.env` file
 - [ ] Updated MongoDB connection string in `.env`
@@ -71,7 +71,7 @@ Use this checklist to ensure you don't miss any steps!
 
 ## 🌐 Nginx Configuration
 
-- [ ] Created `/etc/nginx/sites-available/litedesk`
+- [ ] Created `/etc/nginx/sites-available/arivu`
 - [ ] Updated server_name with EC2 IP or domain
 - [ ] Created symbolic link to sites-enabled
 - [ ] Removed default site
@@ -82,7 +82,7 @@ Use this checklist to ensure you don't miss any steps!
 
 ## 🚀 Start Application
 
-- [ ] Started backend with PM2: `pm2 start server.js --name litedesk-api`
+- [ ] Started backend with PM2: `pm2 start server.js --name arivu-api`
 - [ ] Saved PM2 config: `pm2 save`
 - [ ] Setup PM2 startup: `pm2 startup` (and ran the sudo command)
 - [ ] Verified PM2 status: `pm2 status`
@@ -101,7 +101,7 @@ Use this checklist to ensure you don't miss any steps!
 - [ ] Tested permissions (create another user)
 - [ ] Tested CSV import
 - [ ] Checked browser console for errors
-- [ ] Checked PM2 logs: `pm2 logs litedesk-api`
+- [ ] Checked PM2 logs: `pm2 logs arivu-api`
 
 ---
 
@@ -114,7 +114,7 @@ Use this checklist to ensure you don't miss any steps!
 - [ ] Installed Certbot: `sudo apt install certbot python3-certbot-nginx`
 - [ ] Ran Certbot: `sudo certbot --nginx -d yourdomain.com`
 - [ ] Updated backend `.env` with HTTPS URLs
-- [ ] Restarted backend: `pm2 restart litedesk-api`
+- [ ] Restarted backend: `pm2 restart arivu-api`
 - [ ] Tested HTTPS access
 - [ ] Auto-renewal configured: `sudo certbot renew --dry-run`
 
@@ -133,7 +133,7 @@ Use this checklist to ensure you don't miss any steps!
 ## 📊 Monitoring Setup
 
 - [ ] Bookmarked PM2 monitoring: `pm2 monit`
-- [ ] Tested PM2 logs: `pm2 logs litedesk-api`
+- [ ] Tested PM2 logs: `pm2 logs arivu-api`
 - [ ] Tested Nginx logs: `sudo tail -f /var/log/nginx/error.log`
 - [ ] Noted resource usage: `htop`
 - [ ] Setup monitoring alerts (optional)
@@ -162,7 +162,7 @@ Use this checklist to ensure you don't miss any steps!
 | EC2 Key Pair Location | __________________ |
 | MongoDB Connection String | __________________ |
 | Domain Name | __________________ |
-| Admin Email | admin@litedesk.com |
+| Admin Email | admin@arivu.com |
 | Initial Admin Password | Admin@123456 |
 
 **Quick Commands**:
@@ -175,11 +175,11 @@ pm2 status
 sudo systemctl status nginx
 
 # Restart services
-pm2 restart litedesk-api
+pm2 restart arivu-api
 sudo systemctl restart nginx
 
 # View logs
-pm2 logs litedesk-api --lines 50
+pm2 logs arivu-api --lines 50
 sudo tail -f /var/log/nginx/error.log
 ```
 

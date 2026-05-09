@@ -4,7 +4,7 @@
     <div class="flex justify-between items-center mb-8">
       <div>
         <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Control Plane</h1>
-        <p class="text-lg text-gray-600 dark:text-gray-400 mt-2">LiteDesk internal platform operations</p>
+        <p class="text-lg text-gray-600 dark:text-gray-400 mt-2">Arivu internal platform operations</p>
       </div>
     </div>
 

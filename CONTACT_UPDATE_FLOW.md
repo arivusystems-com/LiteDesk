@@ -6,7 +6,7 @@
 
 ## 🔄 Overview
 
-Contacts can be updated through **two main methods** in your LiteDesk CRM:
+Contacts can be updated through **two main methods** in your Arivu CRM:
 
 1. **Edit Modal** - User clicks "Edit" button on contact detail page
 2. **API Endpoint** - Direct PUT request to `/contacts/:id`

@@ -107,7 +107,7 @@
 
     <!-- Desktop Sidebar -->
     <!-- ARCHITECTURE NOTE: GlobalSearch is owned by GlobalSurfacesProvider. -->
-    <!-- Sidebar search click dispatches litedesk:open-global-search custom event. -->
+    <!-- Sidebar search click dispatches arivu:open-global-search custom event. -->
     <aside 
       @mouseenter="handleMouseEnter"
       @mouseleave="handleMouseLeave"
@@ -238,7 +238,7 @@
  * ARCHITECTURE NOTE: GlobalSearch is NOT imported here.
  * 
  * GlobalSearch is owned by GlobalSurfacesProvider (mounted in App.vue).
- * This layout triggers search via custom events only (litedesk:open-global-search).
+ * This layout triggers search via custom events only (arivu:open-global-search).
  * App layouts must NEVER own global surfaces - see GlobalSurfacesProvider.vue.
  */
 
@@ -399,8 +399,8 @@ onMounted(async () => {
   }
   
   await buildSidebar();
-  window.addEventListener('litedesk:core-modules-updated', onCoreModulesUpdated);
-  window.addEventListener('litedesk:open-notifications-panel', handleNotificationsClick);
+  window.addEventListener('arivu:core-modules-updated', onCoreModulesUpdated);
+  window.addEventListener('arivu:open-notifications-panel', handleNotificationsClick);
   
   // Load pending count
   updatePendingCount();
@@ -408,8 +408,8 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener('litedesk:core-modules-updated', onCoreModulesUpdated);
-  window.removeEventListener('litedesk:open-notifications-panel', handleNotificationsClick);
+  window.removeEventListener('arivu:core-modules-updated', onCoreModulesUpdated);
+  window.removeEventListener('arivu:open-notifications-panel', handleNotificationsClick);
   if (pendingCountIntervalId.value != null) {
     clearInterval(pendingCountIntervalId.value);
     pendingCountIntervalId.value = null;

@@ -4,15 +4,15 @@ set -euo pipefail
 
 # Usage:
 #   ./scripts/update-backend-oci.sh
-#   BACKEND_DIR=/home/ubuntu/LiteDesk/server ./scripts/update-backend-oci.sh
-#   BRANCH=main PM2_APP_NAME=litedesk-api ./scripts/update-backend-oci.sh
+#   BACKEND_DIR=/home/ubuntu/Arivu/server ./scripts/update-backend-oci.sh
+#   BRANCH=main PM2_APP_NAME=arivu-api ./scripts/update-backend-oci.sh
 #
 # By default this targets your OCI layout:
-#   backend: /home/ubuntu/LiteDesk/server
-#   repo   : /home/ubuntu/LiteDesk
+#   backend: /home/ubuntu/Arivu/server
+#   repo   : /home/ubuntu/Arivu
 
 SCRIPT_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PROJECT_ROOT="${PROJECT_ROOT:-/home/ubuntu/LiteDesk}"
+PROJECT_ROOT="${PROJECT_ROOT:-/home/ubuntu/Arivu}"
 if [ ! -d "$PROJECT_ROOT/.git" ]; then
   PROJECT_ROOT="$SCRIPT_PROJECT_ROOT"
 fi
@@ -21,7 +21,7 @@ BRANCH="${BRANCH:-main}"
 PM2_APP_NAME="${PM2_APP_NAME:-arivu-api}"
 START_FILE="${START_FILE:-server.js}"
 
-echo "==> LiteDesk backend update started"
+echo "==> Arivu backend update started"
 echo "Project root: $PROJECT_ROOT"
 echo "Backend dir : $BACKEND_DIR"
 echo "Branch      : $BRANCH"

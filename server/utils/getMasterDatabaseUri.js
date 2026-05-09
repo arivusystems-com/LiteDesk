@@ -1,5 +1,5 @@
 /**
- * Utility to get the master database URI (litedesk_master)
+ * Utility to get the master database URI (arivu_master)
  * 
  * This ensures all scripts and services connect to the correct master database
  * regardless of what's in the MONGO_URI environment variable.
@@ -23,8 +23,8 @@ function getMasterDatabaseUri() {
   const baseUri = uriParts.slice(0, -1).join('/'); // Everything except last part (database name)
   const connectionQuery = queryPart ? `?${queryPart}` : '';
   
-  // Always use litedesk_master as the database name
-  const masterDbName = 'litedesk_master';
+  // Allow safe production cutovers by overriding master DB name via env.
+  const masterDbName = process.env.MASTER_DB_NAME || 'arivu_master';
   const masterUri = `${baseUri}/${masterDbName}${connectionQuery}`;
   
   return masterUri;

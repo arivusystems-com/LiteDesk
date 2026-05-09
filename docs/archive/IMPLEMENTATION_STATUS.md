@@ -1,4 +1,4 @@
-# LiteDesk Multi-Instance Architecture - Implementation Status
+# Arivu Multi-Instance Architecture - Implementation Status
 
 **Last Updated:** October 22, 2025  
 **Status:** Phase 0 Complete ✅ | Phase 1A In Progress 🚧
@@ -84,7 +84,7 @@
 ## 📦 What We've Built So Far
 
 ```
-LiteDesk/
+Arivu/
 ├── server/
 │   ├── models/
 │   │   └── InstanceRegistry.js          ✅ NEW
@@ -96,7 +96,7 @@ LiteDesk/
 │           └── managers/                 🚧 NEXT
 │
 ├── helm/
-│   └── litedesk/
+│   └── arivu/
 │       ├── Chart.yaml                    ✅ NEW
 │       ├── values.yaml                   ✅ NEW
 │       └── templates/
@@ -199,7 +199,7 @@ docker-compose down
 
 ```bash
 # Install Helm chart
-helm install test-instance ./helm/litedesk \
+helm install test-instance ./helm/arivu \
   --set instance.name=test \
   --set instance.subdomain=test \
   --set instance.ownerEmail=test@example.com
@@ -253,7 +253,7 @@ kubectl delete namespace test
 ## ⚠️ Important Notes
 
 1. **AWS EKS Required**: You'll need an AWS EKS cluster to deploy this
-2. **Domain Required**: litedesk.com (or your domain) with wildcard DNS
+2. **Domain Required**: arivu.com (or your domain) with wildcard DNS
 3. **SSL Certificates**: cert-manager will handle Let's Encrypt
 4. **Costs**: ~$220/month base + ~$30/instance (optimized)
 

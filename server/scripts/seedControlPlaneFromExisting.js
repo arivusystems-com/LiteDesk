@@ -27,14 +27,15 @@ const RelationshipDefinition = require('../models/RelationshipDefinition');
 const CONTROL_PLANE_APP_KEY = 'control_plane';
 
 /**
- * Check if user email is a LiteDesk internal email
+ * Check if user email is a Arivu internal email
  */
-function isLiteDeskInternalEmail(email) {
+function isArivuInternalEmail(email) {
     if (!email) return false;
     const internalDomains = [
-        'litedesk.com',
-        'litedesk.io',
-        '@litedesk' // Allow any @litedesk domain
+        'arivusystems.com',
+        'arivu.com',
+        'arivu.io',
+        '@arivu',
     ];
     const emailLower = email.toLowerCase();
     return internalDomains.some(domain => emailLower.includes(domain));
@@ -49,7 +50,7 @@ async function createControlPlaneApp() {
     const appData = {
         appKey: CONTROL_PLANE_APP_KEY,
         name: 'Control Plane',
-        description: 'LiteDesk internal platform operations',
+        description: 'Arivu internal platform operations',
         category: 'SYSTEM',
         owner: 'PLATFORM',
         enabled: true,
@@ -278,7 +279,7 @@ async function seedControlPlane() {
         console.log('🚀 Starting Control Plane seed...');
         
         // Connect to MongoDB
-        const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017/litedesk';
+        const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017/arivu';
         await mongoose.connect(mongoUri);
         console.log('✅ Connected to MongoDB');
         
@@ -334,6 +335,6 @@ module.exports = {
     createDemoRequestsModule,
     createInstancesModule,
     createDemoToInstanceRelationship,
-    isLiteDeskInternalEmail
+    isArivuInternalEmail
 };
 

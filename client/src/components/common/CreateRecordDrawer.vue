@@ -1581,14 +1581,14 @@ const handleSubmit = async () => {
       
       // Dispatch global event to refresh calendar/list views for events
       if (props.moduleKey === 'events' && typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('litedesk:event-created', {
+        window.dispatchEvent(new CustomEvent('arivu:event-created', {
           detail: { event: savedRecord }
         }));
       }
       
       // Dispatch global event to refresh list views for all modules
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('litedesk:record-created', {
+        window.dispatchEvent(new CustomEvent('arivu:record-created', {
           detail: { moduleKey: props.moduleKey, record: savedRecord }
         }));
       }

@@ -24,7 +24,7 @@ const { colorMode, toggleColorMode } = useColorMode();
             <span class="sr-only">Nurtura</span>
             <img 
               :src="colorMode === 'dark' || colorMode === 'system' ? '/assets/nurtura_logo_dark.svg' : '/assets/nurtura_logo_light.svg'" 
-              alt="LiteDesk Logo" 
+              alt="Arivu Logo" 
               class="h-8 w-auto brightness-0 dark:brightness-100" 
             />  
           </a>
@@ -50,7 +50,7 @@ const { colorMode, toggleColorMode } = useColorMode();
               <span class="sr-only">Nurtura</span>
               <img 
               :src="colorMode === 'dark' || colorMode === 'system' ? '/assets/nurtura_logo_dark.svg' : '/assets/nurtura_logo_light.svg'" 
-              alt="LiteDesk Logo" 
+              alt="Arivu Logo" 
               class="h-8 w-auto brightness-0 dark:brightness-100" 
             />  
             </a>

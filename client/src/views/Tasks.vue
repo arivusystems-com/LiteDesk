@@ -319,7 +319,7 @@ const authStore = useAuthStore();
 const { openTab } = useTabs();
 
 // View state (module-specific URL param so Tasks and Deals don't affect each other)
-const viewStorageKey = 'litedesk-tasks-view';
+const viewStorageKey = 'arivu-tasks-view';
 const VIEW_QUERY_KEY = 'tasksView';
 const getInitialView = () => {
   try {
@@ -339,15 +339,15 @@ const taskStages = ref([...TASK_STAGES]);
 const statusColorMap = ref({});
 
 // Kanban options (from localStorage, same keys as ListView Customize Kanban for tasks)
-const KANBAN_OPTIONS_KEY = 'litedesk-listview-tasks-kanban-options';
-const KANBAN_FIELDS_KEY = 'litedesk-listview-tasks-kanban-fields';
+const KANBAN_OPTIONS_KEY = 'arivu-listview-tasks-kanban-options';
+const KANBAN_FIELDS_KEY = 'arivu-listview-tasks-kanban-fields';
 const DEFAULT_TASK_KANBAN_KEYS = ['title', 'assignedTo', 'dueDate', 'priority'];
 const kanbanSettingsVersion = ref(0);
 const refreshKanbanSettings = () => { kanbanSettingsVersion.value++; };
 
 const getInitialStatsOpen = () => {
   try {
-    return localStorage.getItem('litedesk-stats-visible-tasks') !== 'false';
+    return localStorage.getItem('arivu-stats-visible-tasks') !== 'false';
   } catch {
     return true;
   }
@@ -436,7 +436,7 @@ const refreshList = () => {
 };
 
 // Header navigation context (prev/next on task record page)
-const TASK_NAV_CONTEXT_STORAGE_PREFIX = 'litedesk-task-nav-context:';
+const TASK_NAV_CONTEXT_STORAGE_PREFIX = 'arivu-task-nav-context:';
 const TASK_NAV_CONTEXT_MAX_ENTRIES = 12;
 
 const getCurrentTaskNavigationIds = () => {

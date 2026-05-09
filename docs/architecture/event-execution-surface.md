@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-This document defines the Event Execution Surface as the **exclusive execution interface** for performing events in the LiteDesk platform. Event Execution guides users through completing event-related work, managing execution state, and interacting with linked work (forms, tasks). This specification establishes clear boundaries between event execution, creation, scheduling, and settings, ensuring a focused, task-oriented execution experience.
+This document defines the Event Execution Surface as the **exclusive execution interface** for performing events in the Arivu platform. Event Execution guides users through completing event-related work, managing execution state, and interacting with linked work (forms, tasks). This specification establishes clear boundaries between event execution, creation, scheduling, and settings, ensuring a focused, task-oriented execution experience.
 
 **Surface Location:** `/events/:eventId` (Event Detail)  
 **Component:** `EventExecution.vue`  

@@ -30,7 +30,7 @@ import {
 const tabsDebugEnabled = () => {
   if (!import.meta.env.DEV) return false;
   try {
-    return localStorage.getItem('litedesk:debug:tabs') === '1';
+    return localStorage.getItem('arivu:debug:tabs') === '1';
   } catch (_e) {
     return false;
   }
@@ -200,7 +200,7 @@ const getStorageKey = (instanceId, userId) => {
     // Fail loud: tabs must never initialize without instance + user context.
     throw new Error('[Tabs] Missing instanceId or userId. Tabs storage must never initialize without both.');
   }
-  return `litedesk-tabs:${instanceId}:${userId}`;
+  return `arivu-tabs:${instanceId}:${userId}`;
 };
 
 // Allow app bootstrap to configure per-instance, per-user storage scoping (one-time)

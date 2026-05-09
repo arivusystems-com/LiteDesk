@@ -57,7 +57,7 @@ const InstanceSchema = new mongoose.Schema({
   },
 
   // Phase 0J.1: Internal Instance Flag
-  // Marks LiteDesk's own instance(s) for special access handling
+  // Marks Arivu's own instance(s) for special access handling
   // - Immutable after provisioning
   // - Never user-editable
   // - Enables god-mode execution for internal operations
