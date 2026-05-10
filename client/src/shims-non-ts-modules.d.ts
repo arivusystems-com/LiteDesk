@@ -13,6 +13,11 @@ declare module '@/stores/authRegistry' {
   export function useAuthStore(): any;
 }
 
+declare module '@/stores/auth' {
+  // JS Pinia store (no TS declarations yet)
+  export function useAuthStore(): any;
+}
+
 declare module '@/stores/notifications' {
   // JS Pinia store (no TS declarations yet)
   export function useNotificationStore(): any;
@@ -69,5 +74,14 @@ declare module '@/components/activity/activityUiContract' {
   export const ACTIVITY_UI_STATE_DEFAULTS: Record<string, any>;
   export const ACTIVITY_UI_HANDLER_KEYS: string[];
   export function normalizeActivityUiContract(moduleUi?: Record<string, any>): Record<string, any>;
+}
+
+declare module '@/components/record-page/slashCommands' {
+  // JS TipTap extension; tests introspect `.config` — keep loose until migrated to TS
+  export const SlashCommands: {
+    config: {
+      addProseMirrorPlugins?: (this: unknown) => unknown[];
+    };
+  };
 }
 

@@ -13,9 +13,13 @@ describe('SlashCommands extension config', () => {
 
   it('allows slash trigger outside start-of-line', () => {
     return import('@/components/record-page/slashCommands').then(({ SlashCommands }) => {
-      SlashCommands.config.addProseMirrorPlugins.call({ editor: {} });
+      const addProseMirrorPlugins = SlashCommands.config.addProseMirrorPlugins;
+      expect(addProseMirrorPlugins).toBeTypeOf('function');
+      addProseMirrorPlugins!.call({ editor: {} } as unknown);
       expect(suggestionMock).toHaveBeenCalledTimes(1);
-      const options = suggestionMock.mock.calls[0][0];
+      const firstCall = suggestionMock.mock.calls[0];
+      expect(firstCall).toBeDefined();
+      const options = firstCall![0];
 
       expect(options.char).toBe('/');
       expect(options.startOfLine).toBe(false);
