@@ -397,6 +397,7 @@ import logoDarkUrl from '/assets/logo/Logo_dark.svg';
 import logoWordmarkLightUrl from '/assets/logo/Logo_word_light.svg';
 import logoLightUrl from '/assets/logo/Logo_light.svg';
 import {
+  ExclamationTriangleIcon,
   LifebuoyIcon,
   PresentationChartLineIcon,
   ShieldCheckIcon,
@@ -572,6 +573,7 @@ function getFigmaNavIcon(item: any) {
   if (item?.kind === 'surface') {
     if (item.id === 'home') return FigmaHomeIcon;
     if (item.id === 'inbox') return FigmaInboxIcon;
+    if (item.id === 'attention') return wrapHeroIcon(ExclamationTriangleIcon);
   }
   if (item?.kind === 'coreModule') {
     const moduleKey = item.moduleKey?.toLowerCase() || item.id?.toLowerCase() || '';

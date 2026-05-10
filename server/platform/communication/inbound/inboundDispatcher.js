@@ -14,15 +14,18 @@
 
 const path = require('path');
 const fs = require('fs');
+const mongoose = require('mongoose');
 
 const Communication = require('../../../models/Communication');
 const People = require('../../../models/People');
+const Organization = require('../../../models/Organization');
 const User = require('../../../models/User');
 const replyToTokenService = require('../../../services/replyToTokenService');
 const { handleInboundEmailForHelpdesk } = require('../../../services/helpdeskChannelIngestionService');
 const { uploadsDir } = require('../../../middleware/uploadMiddleware');
 const { MAX_ATTACHMENT_SIZE_BYTES } = require('../../../models/Communication');
 const { appendCommunicationEvent } = require('../../../services/communicationEventWriter');
+const { resolveMailboxIdForInbound } = require('../../../services/mailboxRoutingService');
 
 const { parseRawMime } = require('./inboundParser');
 const { resolveThread } = require('./threadResolver');
@@ -88,6 +91,20 @@ async function resolveTenantContext({ parsedMessage, headerOrganizationId }) {
 }
 
 async function resolveTargetRecord({ orgId, moduleKey, recordId, parsedMessage }) {
+  if (moduleKey === 'workspace') {
+    if (!recordId || String(recordId) !== String(orgId)) {
+      throw new InboundDispatchError('Invalid workspace inbound token', { stage: 'route' });
+    }
+    const org = await Organization.findById(orgId).select('_id').lean();
+    if (!org) {
+      throw new InboundDispatchError('Organization not found for workspace inbound', { stage: 'route' });
+    }
+    return {
+      relatedTo: { moduleKey: 'workspace', recordId: orgId },
+      helpdeskCaseResult: null
+    };
+  }
+
   if (moduleKey === 'people') {
     const person = await People.findOne({
       _id: recordId,
@@ -202,10 +219,16 @@ async function appendActivityLogForPerson({ orgId, recordId, communicationDoc, p
  * @param {Buffer | string} args.rawMime           Raw MIME buffer or base64 string.
  * @param {string} [args.headerOrganizationId]     Optional explicit org id from a trusted header.
  * @param {string} [args.source]                   Source label for lifecycle events.
+ * @param {object} [args.forcedWorkspaceInbox]     Trusted ingest: `{ organizationId, mailboxId, providerMessageKey? }` routes to workspace inbox (no Reply-To token).
  * @returns {Promise<object>}                      Result summary (communicationId, threadId, strategy, ...).
  * @throws {InboundDispatchError}                  When a stage fails. The caller decides whether to dead-letter.
  */
-async function processRawInbound({ rawMime, headerOrganizationId = null, source = 'inbound-webhook' }) {
+async function processRawInbound({
+  rawMime,
+  headerOrganizationId = null,
+  source = 'inbound-webhook',
+  forcedWorkspaceInbox = null
+}) {
   const rawBuffer = ensureBuffer(rawMime);
 
   const parseResult = await parseRawMime(rawBuffer);
@@ -214,10 +237,40 @@ async function processRawInbound({ rawMime, headerOrganizationId = null, source 
   }
   const parsedMessage = parseResult.value;
 
-  const { orgId, moduleKey, recordId } = await resolveTenantContext({
-    parsedMessage,
-    headerOrganizationId
-  });
+  let orgId;
+  let relatedTo;
+  let helpdeskCaseResult;
+
+  if (forcedWorkspaceInbox && forcedWorkspaceInbox.organizationId) {
+    orgId = forcedWorkspaceInbox.organizationId;
+    if (!mongoose.Types.ObjectId.isValid(String(orgId))) {
+      throw new InboundDispatchError('Invalid organization for forced workspace ingest', { stage: 'route' });
+    }
+    const oid = new mongoose.Types.ObjectId(String(orgId));
+    const org = await Organization.findById(oid).select('_id').lean();
+    if (!org) {
+      throw new InboundDispatchError('Organization not found for forced workspace ingest', { stage: 'route' });
+    }
+    if (String(oid) !== String(org._id)) {
+      throw new InboundDispatchError('Workspace record mismatch', { stage: 'route' });
+    }
+    relatedTo = { moduleKey: 'workspace', recordId: oid };
+    helpdeskCaseResult = null;
+  } else {
+    const { orgId: resolvedOrg, moduleKey, recordId } = await resolveTenantContext({
+      parsedMessage,
+      headerOrganizationId
+    });
+    orgId = resolvedOrg;
+    const resolved = await resolveTargetRecord({
+      orgId,
+      moduleKey,
+      recordId,
+      parsedMessage
+    });
+    relatedTo = resolved.relatedTo;
+    helpdeskCaseResult = resolved.helpdeskCaseResult;
+  }
 
   await appendCommunicationEvent({
     organizationId: orgId,
@@ -228,18 +281,12 @@ async function processRawInbound({ rawMime, headerOrganizationId = null, source 
       fromAddress: parsedMessage.fromAddress,
       subject: parsedMessage.subject,
       attachmentCount: parsedMessage.attachments.length,
-      rawSize: parsedMessage.rawSize
+      rawSize: parsedMessage.rawSize,
+      forcedWorkspace: Boolean(forcedWorkspaceInbox)
     }
   });
 
   await autoCreatePersonForSender({ organizationId: orgId, parsedMessage });
-
-  const { relatedTo, helpdeskCaseResult } = await resolveTargetRecord({
-    orgId,
-    moduleKey,
-    recordId,
-    parsedMessage
-  });
 
   const threadResolution = await resolveThread({
     organizationId: orgId,
@@ -270,6 +317,23 @@ async function processRawInbound({ rawMime, headerOrganizationId = null, source 
 
   const inboundAttachments = persistAttachments({ orgId, parsedMessage });
 
+  let mailboxIdInbound = forcedWorkspaceInbox?.mailboxId
+    ? (mongoose.Types.ObjectId.isValid(String(forcedWorkspaceInbox.mailboxId))
+      ? new mongoose.Types.ObjectId(String(forcedWorkspaceInbox.mailboxId))
+      : null)
+    : await resolveMailboxIdForInbound({
+      organizationId: orgId,
+      parsedMessage
+    });
+  if (!mailboxIdInbound && threadResolution.parent?.mailboxId) {
+    mailboxIdInbound = threadResolution.parent.mailboxId;
+  }
+
+  const providerMessageKey =
+    forcedWorkspaceInbox && forcedWorkspaceInbox.providerMessageKey
+      ? String(forcedWorkspaceInbox.providerMessageKey).trim().slice(0, 280)
+      : null;
+
   let doc;
   try {
     doc = new Communication({
@@ -290,6 +354,8 @@ async function processRawInbound({ rawMime, headerOrganizationId = null, source 
       receivedAt: parsedMessage.receivedAt,
       status: 'delivered',
       relatedTo,
+      mailboxId: mailboxIdInbound || null,
+      providerMessageKey: providerMessageKey || null,
       sentByUserId: null,
       attachments: inboundAttachments,
       metadata: {

@@ -309,8 +309,8 @@
             <div class="mt-4">
               <button
                 type="button"
-                @click="saveEmailConfig"
-                :disabled="savingConfig"
+                @click="saveEmailConfig(false)"
+                :disabled="savingConfig || savingGmailOAuthConfig"
                 class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {{ savingConfig ? 'Saving...' : 'Save Email Settings' }}
@@ -387,6 +387,16 @@
                 Enable outbound email from Communication API
               </label>
 
+              <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input
+                  v-model="communicationPolicy.outboundEmail.allowWorkspaceEmail"
+                  type="checkbox"
+                  class="rounded border-gray-300 dark:border-gray-600"
+                  :disabled="communicationPolicyLocked"
+                />
+                Allow Inbox standalone send (workspace-scoped mail without a person/deal record)
+              </label>
+
               <label class="text-sm block">
                 <span class="block mb-1 text-gray-700 dark:text-gray-300">Max recipients per message</span>
                 <input
@@ -442,6 +452,86 @@
                   </label>
                 </div>
               </div>
+            </div>
+
+            <div class="mt-6 border-t border-gray-200 pt-4 dark:border-gray-600">
+              <h4 class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Gmail inbox sync</h4>
+              <div
+                v-if="selectedIntegration.gmailOAuthAppConfigured"
+                class="rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 text-xs text-green-900 dark:border-green-800 dark:bg-green-900/20 dark:text-green-100"
+              >
+                <span class="font-medium">Ready for users.</span>
+                Each person connects their own mailbox from <span class="font-medium">Inbox → Connect Gmail</span> (same pattern as other CRMs—no Google Cloud forms here).
+              </div>
+              <div
+                v-else
+                class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-100"
+              >
+                <span class="font-medium">Not enabled on this API server.</span>
+                For SaaS or shared hosting, your operator sets
+                <code class="mx-0.5 rounded bg-amber-100 px-1 font-mono text-[10px] dark:bg-amber-950/60">GOOGLE_GMAIL_CLIENT_ID</code>,
+                <code class="mx-0.5 rounded bg-amber-100 px-1 font-mono text-[10px] dark:bg-amber-950/60">GOOGLE_GMAIL_CLIENT_SECRET</code>, and
+                <code class="mx-0.5 rounded bg-amber-100 px-1 font-mono text-[10px] dark:bg-amber-950/60">GOOGLE_GMAIL_REDIRECT_URI</code>
+                once on the API process, then users only use Connect Gmail.
+                <span class="mt-1 block">You do <span class="font-medium">not</span> fill Client ID / secret here for every user—only one registration per deployment (env), unless you open Advanced for a rare tenant-specific Google project.</span>
+              </div>
+
+              <details
+                v-if="isOwnerLike"
+                class="mt-3 rounded-lg border border-gray-200 bg-white px-3 py-2 dark:border-gray-600 dark:bg-gray-900/40"
+              >
+                <summary class="cursor-pointer text-xs font-medium text-gray-800 dark:text-gray-200">
+                  Advanced: custom Google Cloud OAuth app (self-hosted / overrides)
+                </summary>
+                <p class="mt-2 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
+                  <span class="font-medium text-gray-800 dark:text-gray-200">Skip this</span>
+                  if the API already has <code class="rounded bg-gray-200 px-1 font-mono text-[10px] dark:bg-gray-700">GOOGLE_GMAIL_*</code> in environment variables. Use Advanced only when this workspace must use its own Google Cloud OAuth client instead of the host’s.
+                  Optional tenant overrides are stored in the database. Redirect URI must match Google Cloud → Credentials → OAuth 2.0 Web client → Authorized redirect URIs, ending with
+                  <code class="rounded bg-gray-200 px-1 font-mono text-[10px] text-gray-800 dark:bg-gray-700 dark:text-gray-200">/api/mailboxes/inbox-sync/google/callback</code>.
+                </p>
+                <div class="mt-3 space-y-3">
+                  <label class="block text-sm">
+                    <span class="mb-1 block text-gray-700 dark:text-gray-300">Client ID</span>
+                    <input
+                      v-model="communicationPolicy.gmailInboxSync.clientId"
+                      type="text"
+                      autocomplete="off"
+                      class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-mono text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                    >
+                  </label>
+                  <label class="block text-sm">
+                    <span class="mb-1 block text-gray-700 dark:text-gray-300">Client secret</span>
+                    <input
+                      v-model="communicationPolicy.gmailInboxSync.clientSecret"
+                      type="password"
+                      autocomplete="new-password"
+                      :placeholder="communicationPolicy.gmailInboxSync.hasClientSecret ? '•••••••• (enter new secret to replace)' : 'Required to save overrides'"
+                      class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-mono text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                    >
+                  </label>
+                  <label class="block text-sm">
+                    <span class="mb-1 block text-gray-700 dark:text-gray-300">Redirect URI</span>
+                    <input
+                      v-model="communicationPolicy.gmailInboxSync.redirectUri"
+                      type="url"
+                      autocomplete="off"
+                      placeholder="https://your-api.example.com/api/mailboxes/inbox-sync/google/callback"
+                      class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-mono text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                    >
+                  </label>
+                  <button
+                    type="button"
+                    class="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-900 hover:bg-indigo-100 dark:border-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-100 dark:hover:bg-indigo-900/40"
+                    :disabled="savingGmailOAuthConfig"
+                    @click="saveEmailConfig(true)"
+                  >
+                    {{ savingGmailOAuthConfig ? 'Saving…' : 'Save custom OAuth app only' }}
+                  </button>
+                </div>
+              </details>
+              <p v-else class="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
+                Only a workspace owner can add tenant OAuth overrides. Ask an owner or your API administrator.
+              </p>
             </div>
           </div>
 
@@ -926,6 +1016,7 @@ const error = ref(null);
 const actionLoading = ref(false);
 const testEmailLoading = ref(false);
 const savingConfig = ref(false);
+const savingGmailOAuthConfig = ref(false);
 const checkingDomainStatus = ref(false);
 const loadingDiagnostics = ref(false);
 const diagnostics = ref({
@@ -988,13 +1079,20 @@ const communicationPolicy = ref({
   outboundEmail: {
     enabled: true,
     maxRecipientsPerMessage: 50,
-    allowedModuleKeys: ['people', 'organizations', 'deals', 'tasks', 'cases'],
+    allowWorkspaceEmail: true,
+    allowedModuleKeys: ['people', 'organizations', 'deals', 'tasks', 'cases', 'workspace'],
     suppression: {
       autoSuppressOnBounce: true,
       autoSuppressOnComplaint: true
     }
   },
-  supportedModuleKeys: ['people', 'organizations', 'deals', 'tasks', 'cases']
+  supportedModuleKeys: ['people', 'organizations', 'deals', 'tasks', 'cases', 'workspace'],
+  gmailInboxSync: {
+    clientId: '',
+    redirectUri: '',
+    clientSecret: '',
+    hasClientSecret: false
+  }
 });
 const emailCriticalFieldsLocked = computed(() => !isOwnerLike.value);
 const communicationPolicyLocked = computed(() => !isOwnerLike.value);
@@ -1449,9 +1547,10 @@ const fetchIntegrationDetail = async (key, options = {}) => {
           outboundEmail: {
             enabled: policy.outboundEmail?.enabled !== false,
             maxRecipientsPerMessage: Number(policy.outboundEmail?.maxRecipientsPerMessage) || 50,
+            allowWorkspaceEmail: policy.outboundEmail?.allowWorkspaceEmail !== false,
             allowedModuleKeys: Array.isArray(policy.outboundEmail?.allowedModuleKeys) && policy.outboundEmail.allowedModuleKeys.length > 0
               ? policy.outboundEmail.allowedModuleKeys
-              : ['people', 'organizations', 'deals', 'tasks', 'cases'],
+              : ['people', 'organizations', 'deals', 'tasks', 'cases', 'workspace'],
             suppression: {
               autoSuppressOnBounce: policy.outboundEmail?.suppression?.autoSuppressOnBounce !== false,
               autoSuppressOnComplaint: policy.outboundEmail?.suppression?.autoSuppressOnComplaint !== false
@@ -1459,7 +1558,13 @@ const fetchIntegrationDetail = async (key, options = {}) => {
           },
           supportedModuleKeys: Array.isArray(policy.supportedModuleKeys) && policy.supportedModuleKeys.length > 0
             ? policy.supportedModuleKeys
-            : ['people', 'organizations', 'deals', 'tasks', 'cases']
+            : ['people', 'organizations', 'deals', 'tasks', 'cases', 'workspace'],
+          gmailInboxSync: {
+            clientId: policy.gmailInboxSync?.clientId || '',
+            redirectUri: policy.gmailInboxSync?.redirectUri || '',
+            hasClientSecret: policy.gmailInboxSync?.hasClientSecret === true,
+            clientSecret: ''
+          }
         };
         await loadWebhookTemplates();
         await loadPipelineDiagnostics();
@@ -1482,10 +1587,35 @@ const fetchIntegrationDetail = async (key, options = {}) => {
   }
 };
 
-const saveEmailConfig = async () => {
+const saveEmailConfig = async (includeGmailOAuthApp = false) => {
   if (!selectedIntegration.value || selectedIntegration.value.key !== 'email-provider') return;
-  savingConfig.value = true;
+  if (includeGmailOAuthApp && !isOwnerLike.value) {
+    notifications.error('Only a workspace owner can save Gmail OAuth app overrides');
+    return;
+  }
+  if (includeGmailOAuthApp) savingGmailOAuthConfig.value = true;
+  else savingConfig.value = true;
   try {
+    const communicationPolicyPayload = {
+      outboundEmail: {
+        enabled: communicationPolicy.value.outboundEmail.enabled !== false,
+        maxRecipientsPerMessage: Number(communicationPolicy.value.outboundEmail.maxRecipientsPerMessage) || 50,
+        allowWorkspaceEmail: communicationPolicy.value.outboundEmail.allowWorkspaceEmail !== false,
+        allowedModuleKeys: communicationPolicy.value.outboundEmail.allowedModuleKeys,
+        suppression: {
+          autoSuppressOnBounce: communicationPolicy.value.outboundEmail.suppression?.autoSuppressOnBounce !== false,
+          autoSuppressOnComplaint: communicationPolicy.value.outboundEmail.suppression?.autoSuppressOnComplaint !== false
+        }
+      }
+    };
+    if (includeGmailOAuthApp) {
+      communicationPolicyPayload.gmailInboxSync = {
+        clientId: communicationPolicy.value.gmailInboxSync.clientId,
+        redirectUri: communicationPolicy.value.gmailInboxSync.redirectUri,
+        clientSecret: communicationPolicy.value.gmailInboxSync.clientSecret
+      };
+    }
+
     const payload = {
       provider: emailConfig.value.provider,
       fromEmail: emailConfig.value.fromEmail,
@@ -1496,17 +1626,7 @@ const saveEmailConfig = async () => {
       smtpUser: emailConfig.value.smtpUser,
       smtpPass: emailConfig.value.smtpPass,
       smtpSecure: !!emailConfig.value.smtpSecure,
-      communicationPolicy: {
-        outboundEmail: {
-          enabled: communicationPolicy.value.outboundEmail.enabled !== false,
-          maxRecipientsPerMessage: Number(communicationPolicy.value.outboundEmail.maxRecipientsPerMessage) || 50,
-          allowedModuleKeys: communicationPolicy.value.outboundEmail.allowedModuleKeys,
-          suppression: {
-            autoSuppressOnBounce: communicationPolicy.value.outboundEmail.suppression?.autoSuppressOnBounce !== false,
-            autoSuppressOnComplaint: communicationPolicy.value.outboundEmail.suppression?.autoSuppressOnComplaint !== false
-          }
-        }
-      }
+      communicationPolicy: communicationPolicyPayload
     };
 
     const data = await apiClient('/settings/integrations/email-provider/config', {
@@ -1515,8 +1635,11 @@ const saveEmailConfig = async () => {
     });
 
     if (data?.success) {
-      notifications.success('Email provider settings saved');
+      notifications.success(
+        includeGmailOAuthApp ? 'Custom Gmail OAuth app saved' : 'Email provider settings saved'
+      );
       emailConfig.value.smtpPass = '';
+      communicationPolicy.value.gmailInboxSync.clientSecret = '';
       await fetchIntegrationDetail('email-provider');
       await fetchIntegrations();
     } else {
@@ -1527,6 +1650,7 @@ const saveEmailConfig = async () => {
     notifications.error(err?.response?.data?.message || err?.message || 'Failed to save email settings');
   } finally {
     savingConfig.value = false;
+    savingGmailOAuthConfig.value = false;
   }
 };
 

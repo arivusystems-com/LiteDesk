@@ -34,6 +34,7 @@ type IconLookupItem = {
 };
 
 const MODULE_ICON_MAP: Record<string, any> = {
+  attention: ExclamationTriangleIcon,
   people: UserGroupIcon,
   organizations: BuildingOfficeIcon,
   deals: BriefcaseIcon,

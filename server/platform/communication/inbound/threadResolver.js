@@ -65,7 +65,7 @@ async function resolveBySubjectFallback(organizationId, subject, fromAddress) {
     createdAt: { $gte: since },
     toAddresses: { $in: [String(fromAddress || '').trim().toLowerCase()] }
   })
-    .select('_id threadId subject createdAt')
+    .select('_id threadId subject createdAt mailboxId')
     .sort({ createdAt: -1 })
     .limit(50)
     .lean();

@@ -20,7 +20,9 @@ const ThreadViewSchema = new Schema({
   organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
   threadId: { type: String, required: true, index: true },
   lastViewedAt: { type: Date, required: true },
-  doneAt: { type: Date, default: null }
+  doneAt: { type: Date, default: null },
+  /** When set and in the future, thread is hidden from default inbox lists for this user. */
+  snoozedUntil: { type: Date, default: null }
 }, {
   timestamps: true
 });

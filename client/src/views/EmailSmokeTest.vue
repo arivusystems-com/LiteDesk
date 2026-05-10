@@ -8,6 +8,8 @@ const errorMessage = ref('')
 const loadingRecords = ref(false)
 const recordOptions = ref([])
 
+const standaloneWorkspaceSend = ref(false)
+
 const form = ref({
   moduleKey: 'people',
   recordId: '',
@@ -101,7 +103,7 @@ async function onSubmit() {
     .map((item) => item.trim())
     .filter(Boolean)
 
-  if (!form.value.recordId.trim()) {
+  if (!standaloneWorkspaceSend.value && !form.value.recordId.trim()) {
     errorMessage.value = 'Record ID is required.'
     return
   }
@@ -113,15 +115,22 @@ async function onSubmit() {
 
   sending.value = true
   try {
-    const payload = {
-      relatedTo: {
-        moduleKey: form.value.moduleKey,
-        recordId: form.value.recordId.trim()
-      },
-      to: toList,
-      subject: form.value.subject.trim(),
-      body: form.value.body
-    }
+    const payload = standaloneWorkspaceSend.value
+      ? {
+          standalone: true,
+          to: toList,
+          subject: form.value.subject.trim(),
+          body: form.value.body
+        }
+      : {
+          relatedTo: {
+            moduleKey: form.value.moduleKey,
+            recordId: form.value.recordId.trim()
+          },
+          to: toList,
+          subject: form.value.subject.trim(),
+          body: form.value.body
+        }
 
     const response = await apiClient.post('/communications/email', payload)
     result.value = response
@@ -154,11 +163,16 @@ onMounted(async () => {
   <div class="mx-auto w-full max-w-3xl p-6">
     <h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">Email Smoke Test</h1>
     <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-      Sends via <code>/api/communications/email</code>. Use a valid record for the selected module key.
+      Sends via <code>/api/communications/email</code>. Use record mode, or Inbox standalone (workspace-scoped) when enabled by policy.
     </p>
 
     <form class="mt-6 space-y-4 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900" @submit.prevent="onSubmit">
-      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+        <input v-model="standaloneWorkspaceSend" type="checkbox" class="rounded border-gray-300 dark:border-gray-600" />
+        Inbox standalone send (<code>standalone: true</code>, no record)
+      </label>
+
+      <div v-if="!standaloneWorkspaceSend" class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <label class="flex flex-col gap-1 text-sm">
           <span class="text-gray-700 dark:text-gray-300">Module Key</span>
           <select v-model="form.moduleKey" class="rounded border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-800">
@@ -191,7 +205,7 @@ onMounted(async () => {
         </label>
       </div>
 
-      <label class="flex flex-col gap-1 text-sm">
+      <label v-if="!standaloneWorkspaceSend" class="flex flex-col gap-1 text-sm">
         <span class="text-gray-700 dark:text-gray-300">Record ID (manual override)</span>
         <input
           v-model="form.recordId"

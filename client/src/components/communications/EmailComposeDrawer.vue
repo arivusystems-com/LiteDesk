@@ -35,7 +35,14 @@
                 <XMarkIcon class="size-6" aria-hidden="true" />
               </button>
             </div>
-            <p class="mt-1 text-sm text-indigo-300">Compose and send an email from this record.</p>
+            <p class="mt-1 text-sm text-indigo-300">
+              <template v-if="standaloneMode">
+                Send from your workspace. Replies route back to Inbox (no person or deal record).
+              </template>
+              <template v-else>
+                Compose and send an email from this record.
+              </template>
+            </p>
           </div>
 
           <!-- Body -->
@@ -274,6 +281,8 @@ import TaskDescriptionEditor from '@/components/record-page/TaskDescriptionEdito
 
 const props = defineProps({
   isOpen: { type: Boolean, default: false },
+  /** When true, send with `standalone: true` (workspace-scoped); `relatedTo` is not required. */
+  standaloneMode: { type: Boolean, default: false },
   relatedTo: {
     type: Object,
     default: null
@@ -407,11 +416,6 @@ function removeAttachment(idx) {
 }
 
 function handleSend() {
-  if (!props.relatedTo?.moduleKey || !props.relatedTo?.recordId) {
-    error.value = 'Invalid record context';
-    return;
-  }
-
   const totalSize = attachments.value.reduce((sum, a) => sum + (a.fileSize || 0), 0);
   if (totalSize > MAX_TOTAL_SIZE) {
     error.value = `Total attachment size exceeds 25MB limit`;
@@ -423,6 +427,28 @@ function handleSend() {
       .split(/[,;\s]+/)
       .map((e) => e.trim().toLowerCase())
       .filter((e) => e && e.includes('@'));
+
+  if (props.standaloneMode) {
+    const payload = {
+      standalone: true,
+      to: [form.value.to.trim()],
+      cc: parseEmails(form.value.cc),
+      bcc: parseEmails(form.value.bcc),
+      subject: form.value.subject.trim(),
+      body: form.value.body,
+      attachments: attachments.value.length ? attachments.value : [],
+      ...(props.initialDraft?.parentCommunicationId
+        ? { parentCommunicationId: props.initialDraft.parentCommunicationId }
+        : {})
+    };
+    emit('submit', payload);
+    return;
+  }
+
+  if (!props.relatedTo?.moduleKey || !props.relatedTo?.recordId) {
+    error.value = 'Invalid record context';
+    return;
+  }
 
   const payload = {
     relatedTo: props.relatedTo,

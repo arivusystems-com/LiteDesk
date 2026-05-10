@@ -52,6 +52,9 @@ const CommunicationSchema = new Schema({
     recordId: { type: Schema.Types.ObjectId, required: true }
   },
 
+  /** Optional: workspace mailbox (personal or group) this message belongs to. */
+  mailboxId: { type: Schema.Types.ObjectId, ref: 'Mailbox', default: null, index: true },
+
   sentByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
 
   attachments: [{
@@ -66,13 +69,21 @@ const CommunicationSchema = new Schema({
   },
 
   idempotencyKey: { type: String, trim: true },
-  idempotencyKeyHash: { type: String, trim: true, index: true }
+  idempotencyKeyHash: { type: String, trim: true, index: true },
+
+  /** Stable id for provider inbox sync dedupe, e.g. `gmail:<apiMessageId>`. */
+  providerMessageKey: { type: String, trim: true, default: null }
 }, {
   timestamps: true
 });
 
 // Indexes per docs/IN_PRODUCT_EMAIL_PLAN.md
 CommunicationSchema.index({ organizationId: 1, 'relatedTo.moduleKey': 1, 'relatedTo.recordId': 1, threadId: 1 });
+CommunicationSchema.index(
+  { organizationId: 1, providerMessageKey: 1 },
+  { unique: true, partialFilterExpression: { providerMessageKey: { $exists: true, $type: 'string', $ne: '' } } }
+);
+CommunicationSchema.index({ organizationId: 1, mailboxId: 1, receivedAt: -1 });
 CommunicationSchema.index({ externalMessageId: 1 });
 CommunicationSchema.index({ messageId: 1 });
 CommunicationSchema.index({ parentCommunicationId: 1 });

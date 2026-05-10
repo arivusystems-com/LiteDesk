@@ -265,7 +265,9 @@ async function processSendJob(communicationId) {
     }
   };
 
-  if (moduleKey === 'people') {
+  if (moduleKey === 'workspace') {
+    await pushActivityLog(Organization, { _id: organizationId, deletedAt: null });
+  } else if (moduleKey === 'people') {
     await pushActivityLog(People, { _id: recordId, organizationId, deletedAt: null });
   } else if (moduleKey === 'organizations') {
     await pushActivityLog(Organization, { _id: recordId, organizationId, isTenant: false, deletedAt: null });

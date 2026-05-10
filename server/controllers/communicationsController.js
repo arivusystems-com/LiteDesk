@@ -12,7 +12,14 @@
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
+const mongoose = require('mongoose');
 const Communication = require('../models/Communication');
+const Mailbox = require('../models/Mailbox');
+const { canUserAccessMailboxThreads } = require('../services/mailboxAccessService');
+const {
+  computeThreadTriageHints,
+  loadWorkspaceThreadSummaries
+} = require('../services/workspaceThreadSummariesService');
 const CommunicationEvent = require('../models/CommunicationEvent');
 const CommunicationThreadMeta = require('../models/CommunicationThreadMeta');
 const { uploadsDir } = require('../middleware/uploadMiddleware');
@@ -113,53 +120,6 @@ async function appendThreadAuditLog({ organizationId, user, action, details }) {
   }
 }
 
-function computeThreadTriageHints(sortedMessages, { unread }) {
-  const nowMs = Date.now();
-  const inbound = sortedMessages.filter((m) => m.direction === 'inbound');
-  const lastInbound = inbound.length > 0 ? inbound[inbound.length - 1] : null;
-  const lastInboundAtRaw = lastInbound?.receivedAt || lastInbound?.createdAt || null;
-  const lastInboundAt = lastInboundAtRaw ? new Date(lastInboundAtRaw) : null;
-  const ageHours = lastInboundAt ? (nowMs - lastInboundAt.getTime()) / (1000 * 60 * 60) : null;
-
-  const hasBounce = sortedMessages.some((m) => String(m.status || '').toLowerCase() === 'bounced');
-  const hasComplaint = sortedMessages.some((m) => String(m.status || '').toLowerCase() === 'complained');
-  const latestOutbound = [...sortedMessages].reverse().find((m) => m.direction === 'outbound');
-  const latestOutboundStatus = String(latestOutbound?.status || '').toLowerCase();
-  const hasUnresolvedSendFailure = latestOutbound && ['failed', 'undelivered'].includes(latestOutboundStatus);
-
-  const riskFlags = [];
-  if (hasBounce) riskFlags.push('has_bounce');
-  if (hasComplaint) riskFlags.push('has_complaint');
-  if (hasUnresolvedSendFailure) riskFlags.push('send_failure');
-
-  let priorityHint = 'low';
-  let slaHint = 'on_track';
-  if (unread && ageHours != null && ageHours >= 24) {
-    priorityHint = 'high';
-    slaHint = 'overdue';
-  } else if (unread && ageHours != null && ageHours >= 8) {
-    priorityHint = 'medium';
-    slaHint = 'reply_due_soon';
-  } else if (unread && ageHours != null && ageHours >= 2) {
-    priorityHint = 'medium';
-    slaHint = 'on_track';
-  }
-
-  if (hasBounce || hasComplaint) {
-    priorityHint = 'high';
-    if (slaHint === 'on_track') slaHint = 'reply_due_soon';
-  } else if (hasUnresolvedSendFailure && priorityHint === 'low') {
-    priorityHint = 'medium';
-  }
-
-  return {
-    priorityHint,
-    slaHint,
-    riskFlags,
-    lastInboundAt: lastInboundAt || null
-  };
-}
-
 /**
  * POST /api/communications/email
  * Send email from record context. Insert → Send → Update flow.
@@ -175,17 +135,23 @@ exports.sendEmail = async (req, res) => {
       });
     }
     const {
-      relatedTo,
+      standalone: standaloneFlag,
+      relatedTo: relatedToFromBody,
       to: toList,
       cc,
       bcc,
       subject,
       body,
       attachments,
-      parentCommunicationId
+      parentCommunicationId,
+      mailboxId: mailboxIdFromBody
     } = validation.value;
 
     const orgId = req.user.organizationId;
+    let relatedTo = relatedToFromBody;
+    if (standaloneFlag) {
+      relatedTo = { moduleKey: 'workspace', recordId: orgId };
+    }
     const moduleKey = relatedTo.moduleKey;
     const recordId = relatedTo.recordId;
     const runtimeConfig = await getCommunicationConfigForOrganization(orgId);
@@ -211,7 +177,17 @@ exports.sendEmail = async (req, res) => {
         message: 'X-Idempotency-Key header is required by communication policy.'
       });
     }
-    if (Array.isArray(outboundPolicy.allowedModuleKeys) && !outboundPolicy.allowedModuleKeys.includes(moduleKey)) {
+    if (moduleKey === 'workspace' && outboundPolicy.allowWorkspaceEmail === false) {
+      return res.status(403).json({
+        success: false,
+        message: 'Workspace (inbox) email is disabled by tenant communication policy.'
+      });
+    }
+    if (
+      Array.isArray(outboundPolicy.allowedModuleKeys)
+      && !outboundPolicy.allowedModuleKeys.includes(moduleKey)
+      && moduleKey !== 'workspace'
+    ) {
       return res.status(403).json({
         success: false,
         message: `Module "${moduleKey}" is not allowed by tenant communication policy.`
@@ -296,7 +272,15 @@ exports.sendEmail = async (req, res) => {
     }
 
     let record = null;
-    if (moduleKey === 'people') {
+    if (moduleKey === 'workspace') {
+      if (String(recordId) !== String(orgId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid workspace email context'
+        });
+      }
+      record = await Organization.findById(orgId).select('_id name').lean();
+    } else if (moduleKey === 'people') {
       record = await People.findOne({ _id: recordId, organizationId: orgId, deletedAt: null }).lean();
     } else if (moduleKey === 'organizations') {
       const tenantUserIds = await getTenantUserIds(orgId);
@@ -333,17 +317,49 @@ exports.sendEmail = async (req, res) => {
     let threadId = null;
     let inReplyTo = null;
     let references = null;
+    let mailboxIdOutbound = null;
 
     if (parentCommunicationId) {
       const parent = await Communication.findOne({
         _id: parentCommunicationId,
         organizationId: orgId
-      }).lean();
+      })
+        .select('threadId messageId externalMessageId references mailboxId')
+        .lean();
       if (parent) {
         threadId = parent.threadId || parent._id;
         inReplyTo = parent.messageId || parent.externalMessageId;
         references = parent.references ? `${parent.references} ${parent.messageId || parent.externalMessageId}` : (parent.messageId || parent.externalMessageId);
+        if (parent.mailboxId) {
+          mailboxIdOutbound = parent.mailboxId;
+        }
       }
+    }
+
+    if (mailboxIdFromBody) {
+      if (!mongoose.Types.ObjectId.isValid(String(mailboxIdFromBody))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid mailboxId'
+        });
+      }
+      const mb = await Mailbox.findOne({
+        _id: mailboxIdFromBody,
+        organizationId: orgId
+      }).lean();
+      if (!mb) {
+        return res.status(404).json({
+          success: false,
+          message: 'Mailbox not found'
+        });
+      }
+      if (!canUserAccessMailboxThreads(req.user, mb)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not allowed to send on behalf of this mailbox'
+        });
+      }
+      mailboxIdOutbound = mb._id;
     }
 
     // Step 1: Insert (status: 'sending')
@@ -364,6 +380,7 @@ exports.sendEmail = async (req, res) => {
       references,
       status: 'sending',
       relatedTo: { moduleKey, recordId },
+      mailboxId: mailboxIdOutbound || null,
       sentByUserId: req.user._id,
       attachments: attachments || [],
       idempotencyKey: idempotencyKey || undefined,
@@ -528,7 +545,9 @@ exports.sendEmail = async (req, res) => {
       }
     };
 
-    if (moduleKey === 'people') {
+    if (moduleKey === 'workspace') {
+      await pushActivityLog(Organization, { _id: orgId, deletedAt: null });
+    } else if (moduleKey === 'people') {
       await pushActivityLog(People, { _id: recordId, organizationId: orgId, deletedAt: null });
     } else if (moduleKey === 'organizations') {
       const tenantUserIds = await getTenantUserIds(orgId);
@@ -596,12 +615,20 @@ exports.getThreads = async (req, res) => {
     if (!SUPPORTED_MODULES.has(moduleKey)) {
       return res.status(400).json({
         success: false,
-        message: 'Unsupported moduleKey. Supported: people, organizations, deals, tasks, cases'
+        message: 'Unsupported moduleKey. Supported: people, organizations, deals, tasks, cases, workspace'
       });
     }
 
     let record = null;
-    if (moduleKey === 'people') {
+    if (moduleKey === 'workspace') {
+      if (String(recordId) !== String(orgId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'workspace recordId must match organization context'
+        });
+      }
+      record = await Organization.findById(orgId).select('_id').lean();
+    } else if (moduleKey === 'people') {
       record = await People.findOne({ _id: recordId, organizationId: orgId, deletedAt: null }).lean();
     } else if (moduleKey === 'organizations') {
       const tenantUserIds = await getTenantUserIds(orgId);
@@ -793,6 +820,260 @@ exports.getThreads = async (req, res) => {
 };
 
 /**
+ * Case-insensitive substring match on aggregated workspace threads (subject, participants, record label, tags).
+ * Does not change folder counts (counts stay mailbox/global scope without search).
+ */
+function filterWorkspaceThreadsBySearch(threads, searchRaw) {
+  const q = String(searchRaw || '').trim().toLowerCase();
+  if (!q) return threads;
+  return threads.filter((t) => {
+    const blob = [
+      t.subject,
+      t.participantDisplay,
+      t.recordLabel,
+      Array.isArray(t.tags) ? t.tags.join(' ') : '',
+      t.searchBlob || ''
+    ]
+      .map((x) => String(x || '').toLowerCase())
+      .join(' ');
+    return blob.includes(q);
+  });
+}
+
+/** Remove server-only fields before JSON (e.g. body search aggregate). */
+function stripWorkspaceThreadInternalFields(row) {
+  if (!row || typeof row !== 'object') return row;
+  const { searchBlob, ...rest } = row;
+  return rest;
+}
+
+function computeWorkspaceThreadCounts(threadsRaw, includeDone, userId) {
+  const visible = includeDone ? threadsRaw : threadsRaw.filter((t) => !t.done);
+  const inboxActive = visible.filter((t) => !t.snoozeActive);
+  const snoozed = visible.filter((t) => t.snoozeActive);
+  return {
+    all: inboxActive.length,
+    unread: inboxActive.filter((t) => t.unread).length,
+    assignedToMe: inboxActive.filter((t) => String(t.assignedToUserId || '') === String(userId)).length,
+    snoozed: snoozed.length
+  };
+}
+
+/**
+ * @param {string} filter all|unread|assigned_to_me|snoozed
+ */
+function filterWorkspaceThreadsForFolder({
+  threadsRaw,
+  includeDone,
+  filter,
+  searchRaw,
+  userId
+}) {
+  const searched = filterWorkspaceThreadsBySearch(threadsRaw, searchRaw);
+  let base = includeDone ? searched : searched.filter((t) => !t.done);
+  if (filter === 'snoozed') {
+    return base.filter((t) => t.snoozeActive);
+  }
+  base = base.filter((t) => !t.snoozeActive);
+  if (filter === 'unread') return base.filter((t) => t.unread);
+  if (filter === 'assigned_to_me') {
+    return base.filter((t) => String(t.assignedToUserId || '') === String(userId));
+  }
+  return base;
+}
+
+function threadActivityMs(row) {
+  const d = row.lastActivityAt || row.firstActivityAt;
+  return d ? new Date(d).getTime() : 0;
+}
+
+function sortWorkspaceThreadsDesc(rows) {
+  return [...rows].sort((a, b) => {
+    const db = threadActivityMs(b);
+    const da = threadActivityMs(a);
+    if (db !== da) return db - da;
+    return String(b.threadId).localeCompare(String(a.threadId));
+  });
+}
+
+function encodeWorkspaceCursor(row) {
+  const payload = JSON.stringify({
+    t: threadActivityMs(row),
+    id: String(row.threadId)
+  });
+  return Buffer.from(payload, 'utf8').toString('base64url');
+}
+
+function decodeWorkspaceCursor(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  try {
+    const json = Buffer.from(String(raw).trim(), 'base64url').toString('utf8');
+    const o = JSON.parse(json);
+    if (typeof o.t !== 'number' || !o.id) return null;
+    return { t: o.t, id: String(o.id) };
+  } catch {
+    return null;
+  }
+}
+
+function isRowOlderThanCursor(row, cursor) {
+  const tr = threadActivityMs(row);
+  if (tr < cursor.t) return true;
+  if (tr > cursor.t) return false;
+  return String(row.threadId) < cursor.id;
+}
+
+function findWorkspaceCursorPageStart(sortedDesc, cursorDecoded) {
+  if (!cursorDecoded) return 0;
+  let i = 0;
+  while (i < sortedDesc.length && !isRowOlderThanCursor(sortedDesc[i], cursorDecoded)) {
+    i += 1;
+  }
+  return i;
+}
+
+/**
+ * GET /api/communications/workspace-threads
+ * Phase 5: cross-record email thread summaries for the current workspace (recent window).
+ * Query: includeDone, filter=all|unread|assigned_to_me|snoozed, limit (1–100, default 50), optional mailboxId, optional search, optional cursor (opaque).
+ * Response data.threads is filtered/sliced; data.counts reflects the same scope before folder filter and before search (for badges).
+ */
+exports.getWorkspaceThreads = async (req, res) => {
+  try {
+    const includeDone = String(req.query.includeDone || '').toLowerCase() === 'true';
+    const filter = String(req.query.filter || 'all').toLowerCase();
+    const limitRaw = Number(req.query.limit);
+    const limit = Number.isFinite(limitRaw) ? Math.min(100, Math.max(1, Math.floor(limitRaw))) : 50;
+    const mailboxIdQuery = req.query.mailboxId ? String(req.query.mailboxId).trim() : '';
+    const searchRaw = req.query.search != null ? String(req.query.search) : '';
+    const cursorRaw = req.query.cursor != null ? String(req.query.cursor) : '';
+
+    const { error, threads: threadsRaw } = await loadWorkspaceThreadSummaries(req, mailboxIdQuery);
+    if (error) {
+      return res.status(error.status).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    const counts = computeWorkspaceThreadCounts(threadsRaw, includeDone, req.user._id);
+
+    const visible = filterWorkspaceThreadsForFolder({
+      threadsRaw,
+      includeDone,
+      filter,
+      searchRaw,
+      userId: req.user._id
+    });
+
+    const sortedDesc = sortWorkspaceThreadsDesc(visible);
+    const cursorDecoded = decodeWorkspaceCursor(cursorRaw);
+    const startIdx = findWorkspaceCursorPageStart(sortedDesc, cursorDecoded);
+    const page = sortedDesc
+      .slice(startIdx, startIdx + limit)
+      .map(stripWorkspaceThreadInternalFields);
+    const lastRow = page.length > 0 ? sortedDesc[startIdx + page.length - 1] : null;
+    const nextCursor =
+      lastRow && startIdx + page.length < sortedDesc.length
+        ? encodeWorkspaceCursor(lastRow)
+        : null;
+
+    return res.json({
+      success: true,
+      data: { threads: page, counts, nextCursor }
+    });
+  } catch (err) {
+    console.error('[communicationsController] getWorkspaceThreads error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to load workspace email threads',
+      error: err.message
+    });
+  }
+};
+
+/**
+ * GET /api/communications/workspace-thread-ids
+ * Returns thread ids for the current folder/search scope (for "select all in folder"), capped.
+ */
+exports.getWorkspaceThreadIds = async (req, res) => {
+  const CAP = 500;
+  try {
+    const includeDone = String(req.query.includeDone || '').toLowerCase() === 'true';
+    const filter = String(req.query.filter || 'all').toLowerCase();
+    const mailboxIdQuery = req.query.mailboxId ? String(req.query.mailboxId).trim() : '';
+    const searchRaw = req.query.search != null ? String(req.query.search) : '';
+
+    const { error, threads: threadsRaw } = await loadWorkspaceThreadSummaries(req, mailboxIdQuery);
+    if (error) {
+      return res.status(error.status).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    const visible = filterWorkspaceThreadsForFolder({
+      threadsRaw,
+      includeDone,
+      filter,
+      searchRaw,
+      userId: req.user._id
+    });
+
+    const sortedDesc = sortWorkspaceThreadsDesc(visible);
+    const threadIds = sortedDesc.slice(0, CAP).map((t) => t.threadId);
+
+    return res.json({
+      success: true,
+      data: {
+        threadIds,
+        truncated: sortedDesc.length > CAP
+      }
+    });
+  } catch (err) {
+    console.error('[communicationsController] getWorkspaceThreadIds error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to load workspace thread ids',
+      error: err.message
+    });
+  }
+};
+
+/**
+ * GET /api/communications/workspace-thread-counts
+ * Same scope as workspace-threads (mailboxId, includeDone); returns counts for folder badges.
+ */
+exports.getWorkspaceThreadCounts = async (req, res) => {
+  try {
+    const includeDone = String(req.query.includeDone || '').toLowerCase() === 'true';
+    const mailboxIdQuery = req.query.mailboxId ? String(req.query.mailboxId).trim() : '';
+
+    const { error, threads } = await loadWorkspaceThreadSummaries(req, mailboxIdQuery);
+    if (error) {
+      return res.status(error.status).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    const payload = computeWorkspaceThreadCounts(threads, includeDone, req.user._id);
+
+    return res.json({
+      success: true,
+      data: payload
+    });
+  } catch (err) {
+    console.error('[communicationsController] getWorkspaceThreadCounts error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to load workspace thread counts',
+      error: err.message
+    });
+  }
+};
+
+/**
  * PATCH /api/communications/threads/:threadId/assign
  * Assign or unassign thread owner.
  */
@@ -949,6 +1230,225 @@ exports.markThreadDone = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to update thread status',
+      error: err.message
+    });
+  }
+};
+
+/**
+ * PATCH /api/communications/threads/:threadId/snooze
+ * Body: { snoozedUntil: ISO string | null } — hide thread from default inbox until that time (per user).
+ */
+exports.markThreadSnooze = async (req, res) => {
+  try {
+    const { threadId } = req.params;
+    const orgId = req.user.organizationId;
+
+    if (!threadId) {
+      return res.status(400).json({ success: false, message: 'threadId is required' });
+    }
+
+    let snoozedUntil = null;
+    const raw = req.body?.snoozedUntil;
+    if (raw != null && raw !== '') {
+      const d = new Date(raw);
+      if (Number.isNaN(d.getTime())) {
+        return res.status(400).json({ success: false, message: 'Invalid snoozedUntil' });
+      }
+      snoozedUntil = d;
+    }
+
+    const threadView = await ThreadView.findOneAndUpdate(
+      {
+        userId: req.user._id,
+        organizationId: orgId,
+        threadId
+      },
+      {
+        $set: { snoozedUntil },
+        $setOnInsert: { lastViewedAt: new Date() }
+      },
+      { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+    ).lean();
+
+    await appendThreadAuditLog({
+      organizationId: orgId,
+      user: req.user,
+      action: 'communication_thread_snoozed',
+      details: {
+        threadId,
+        snoozedUntil: threadView?.snoozedUntil || null
+      }
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        threadId,
+        snoozedUntil: threadView?.snoozedUntil || null
+      }
+    });
+  } catch (err) {
+    console.error('[communicationsController] markThreadSnooze error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update snooze',
+      error: err.message
+    });
+  }
+};
+
+/**
+ * PATCH /api/communications/threads/bulk
+ * Body: { threadIds: string[], action: 'done'|'assign'|'add_tag'|'remove_tag'|'snooze', done?, assignedToUserId?, tag?, snoozedUntil? }
+ */
+exports.bulkThreadActions = async (req, res) => {
+  try {
+    const orgId = req.user.organizationId;
+    const threadIds = Array.isArray(req.body?.threadIds)
+      ? req.body.threadIds.map((id) => String(id).trim()).filter(Boolean)
+      : [];
+    const action = String(req.body?.action || '').toLowerCase();
+    if (threadIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'threadIds array is required' });
+    }
+    if (threadIds.length > 50) {
+      return res.status(400).json({ success: false, message: 'Maximum 50 threads per bulk action' });
+    }
+
+    const results = [];
+
+    if (action === 'done') {
+      const done = req.body?.done !== false;
+      const now = new Date();
+      const update = done ? { $set: { doneAt: now, lastViewedAt: now } } : { $set: { doneAt: null } };
+      for (const threadId of threadIds) {
+        try {
+          await ThreadView.findOneAndUpdate(
+            { userId: req.user._id, organizationId: orgId, threadId },
+            update,
+            { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+          );
+          results.push({ threadId, ok: true });
+        } catch (err) {
+          results.push({ threadId, ok: false, error: err.message });
+        }
+      }
+      await appendThreadAuditLog({
+        organizationId: orgId,
+        user: req.user,
+        action: 'communication_thread_bulk_done',
+        details: { count: threadIds.length, done }
+      });
+      return res.json({ success: true, data: { results } });
+    }
+
+    if (action === 'assign') {
+      const rawAssignee = req.body?.assignedToUserId;
+      const assignedToUserId =
+        rawAssignee === null || rawAssignee === ''
+          ? null
+          : (rawAssignee || req.user._id);
+      if (assignedToUserId) {
+        const exists = await User.findOne({ _id: assignedToUserId, organizationId: orgId }).select('_id').lean();
+        if (!exists) {
+          return res.status(400).json({ success: false, message: 'Invalid assignee for this workspace' });
+        }
+      }
+      for (const threadId of threadIds) {
+        try {
+          await CommunicationThreadMeta.findOneAndUpdate(
+            { organizationId: orgId, threadId },
+            { $set: { assignedToUserId: assignedToUserId || null, updatedBy: req.user._id } },
+            { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+          );
+          results.push({ threadId, ok: true });
+        } catch (err) {
+          results.push({ threadId, ok: false, error: err.message });
+        }
+      }
+      await appendThreadAuditLog({
+        organizationId: orgId,
+        user: req.user,
+        action: 'communication_thread_bulk_assign',
+        details: { count: threadIds.length, assignedToUserId: assignedToUserId || null }
+      });
+      return res.json({ success: true, data: { results } });
+    }
+
+    if (action === 'add_tag' || action === 'remove_tag') {
+      const normalizedTag = normalizeThreadTag(req.body?.tag);
+      if (!normalizedTag) {
+        return res.status(400).json({ success: false, message: 'Valid tag is required' });
+      }
+      const update =
+        action === 'remove_tag'
+          ? { $pull: { tags: normalizedTag }, $set: { updatedBy: req.user._id } }
+          : { $addToSet: { tags: normalizedTag }, $set: { updatedBy: req.user._id } };
+      for (const threadId of threadIds) {
+        try {
+          await CommunicationThreadMeta.findOneAndUpdate(
+            { organizationId: orgId, threadId },
+            update,
+            { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+          );
+          results.push({ threadId, ok: true });
+        } catch (err) {
+          results.push({ threadId, ok: false, error: err.message });
+        }
+      }
+      await appendThreadAuditLog({
+        organizationId: orgId,
+        user: req.user,
+        action: action === 'remove_tag' ? 'communication_thread_bulk_tag_removed' : 'communication_thread_bulk_tag_added',
+        details: { count: threadIds.length, tag: normalizedTag }
+      });
+      return res.json({ success: true, data: { results } });
+    }
+
+    if (action === 'snooze') {
+      let snoozedUntil = null;
+      const raw = req.body?.snoozedUntil;
+      if (raw != null && raw !== '') {
+        const d = new Date(raw);
+        if (Number.isNaN(d.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid snoozedUntil' });
+        }
+        snoozedUntil = d;
+      }
+      for (const threadId of threadIds) {
+        try {
+          await ThreadView.findOneAndUpdate(
+            { userId: req.user._id, organizationId: orgId, threadId },
+            {
+              $set: { snoozedUntil },
+              $setOnInsert: { lastViewedAt: new Date() }
+            },
+            { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
+          );
+          results.push({ threadId, ok: true });
+        } catch (err) {
+          results.push({ threadId, ok: false, error: err.message });
+        }
+      }
+      await appendThreadAuditLog({
+        organizationId: orgId,
+        user: req.user,
+        action: 'communication_thread_bulk_snoozed',
+        details: { count: threadIds.length, snoozedUntil }
+      });
+      return res.json({ success: true, data: { results } });
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: 'action must be one of: done, assign, add_tag, remove_tag, snooze'
+    });
+  } catch (err) {
+    console.error('[communicationsController] bulkThreadActions error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed bulk thread action',
       error: err.message
     });
   }

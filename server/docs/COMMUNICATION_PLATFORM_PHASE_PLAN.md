@@ -197,14 +197,41 @@ HTTP integration tests (communications):
 - Requires `JWT_SECRET` and a Mongo connection string: `MONGODB_URI`, `MONGO_URI`, or `MONGO_URI_LOCAL` (normally via `server/.env`). With the flag unset, the file runs one skipped-style smoke test so default CI does not need a DB.
 - The suite creates a disposable tenant org + owner user, exercises assign / tags / done / dead-letter list, then deletes thread-related rows and those fixtures.
 
-## Suggested next
+## Phase 5 - Workspace email inbox (started)
 
-- Product: dedicated **communications inbox** surface, bulk triage, or snooze (beyond record timelines).
-- Data: optional **backfill script** for `CommunicationEvent` on legacy inbound communications.
-- Security: provider-specific **HMAC/signature** verification for inbound if the relay supports it beyond the shared Bearer token.
+**Goal:** first-class **workspace-wide email thread** visibility (not only per-record activity), building on thread metadata, done state, and assignments.
+
+Completed in this iteration:
+
+- **API:** `GET /api/communications/workspace-threads` — discovers threads via Mongo **`$group` by thread key** (cap **`MAX_WORKSPACE_THREAD_KEYS`** distinct threads), hydrates all messages for those threads, applies unread/done/triage/assignee semantics, optional **`filter=all|unread|assigned_to_me|snoozed`**, `includeDone`, `limit`, **`mailboxId`**, **`search`** (substring on subject, participants, record label, tags, and **plain-text message bodies**), **`cursor`** / **`nextCursor`**. Snoozed threads are hidden from default folders; use **`filter=snoozed`** to list them. Each row includes **`snoozeActive`**, **`snoozedUntil`**, **`anchorCommunicationId`**, **`replyToAddress`**. Resolves `recordLabel` for linked people, deals, tasks, cases, business organizations, and **`workspace`** (tenant org name).
+- **API:** `GET /api/communications/workspace-thread-ids` — same scope as the list (folder + search); returns up to **500** thread ids for “select all in folder”.
+- **API:** `PATCH /api/communications/threads/:threadId/snooze` and bulk **`action: snooze`** — per-user **`ThreadView.snoozedUntil`** hides threads until that time.
+- **API:** `GET /api/communications/workspace-thread-counts` — same scope as threads (no folder filter); used for counts-only refresh from the client.
+- **API:** `GET /api/mailboxes?includeThreadCounts=true&includeDone=…` — adds **`threadUnreadCount`** on each mailbox plus **`allMailThreadUnread`** for the combined scope (parallel summaries; suitable for small mailbox counts).
+- **API:** `POST /api/communications/email` with **`standalone: true`** — outbound email anchored to **`relatedTo: { moduleKey: 'workspace', recordId: organizationId }`** (no person/deal record). Tenant policy may opt out with **`outboundEmail.allowWorkspaceEmail: false`**. Inbound replies use the existing Reply-To token path with `moduleKey: workspace` (see `inboundDispatcher.resolveTargetRecord`).
+- **UI:** **Inbox** shell surface (`/inbox`) is **mail only** (workspace threads). **Attention** (tasks + events, `GET /api/inbox`) lives at **`/platform/attention`**, as a **shell** row **below Approvals** in the sidebar. Mail: filters + “Include done”, **search**, **folder counts**, **per-mailbox unread badges**, **standalone compose** drawer, refresh list vs refresh counts. Rows with `relatedTo.moduleKey === 'workspace'` stay in Inbox (no record deep link). Other rows open the related record. Legacy `/inbox?tab=attention` redirects to `/platform/attention`.
+- **Tests:** HTTP integration suite calls workspace threads, thread counts, search, and mailboxes `includeThreadCounts` when gated.
+
+Suggested next within Phase 5:
+
+- **Microsoft Graph / IMAP** and other providers — same pattern as Gmail (`forcedWorkspaceInbox` ingest + `providerMessageKey`); not shipped yet.
+- **Background scheduled sync** (cron per connected mailbox) instead of manual “Sync now” only.
+- **Snooze reminders** (notify when `snoozedUntil` elapses); today threads simply reappear on the next list load.
+
+Completed in follow-up iterations:
+
+- **Bulk triage:** `PATCH /api/communications/threads/bulk` (done, assign, add/remove tag) + Inbox multi-select bar.
+- **Cursor pagination (API):** `GET workspace-threads` accepts **`cursor`** (opaque); returns **`nextCursor`** when more rows exist in the aggregated list (still bounded by the same recent scan until DB paging lands).
+- **Mailbox unread:** single workspace summary per mailboxes list (partition unread by `thread.mailboxId`).
+- **Workspace thread UX:** Inbox modal + Integrations link for workspace-only threads.
+- **Policy:** `CommunicationConfig.outboundEmail.allowWorkspaceEmail` + Integrations → Communication Policy checkbox; Email Smoke Test standalone mode.
+- **Test logs:** `TEST_SILENCE_ORG_LOGS=1` or `NODE_ENV=test` suppresses noisy `[OrganizationIsolation]` dev logs.
+- **Thread discovery:** aggregation-ordered thread keys + body-aware search; reply fields on summaries; **`workspace-thread-ids`**; snooze model/API/UI; Inbox **reply** and **remove tag** / **select all in folder**.
+- **Gmail inbox sync (personal mailboxes):** Google **OAuth Web client** credentials in **`CommunicationConfig.gmailInboxSync`** (Integrations UI) or **`GOOGLE_GMAIL_*` env fallback**; per-user **refresh token** encrypted on **`Mailbox`**; **`GET /api/mailboxes/:id/inbox-sync/google/start`**, **`GET /api/mailboxes/inbox-sync/google/callback`** (no JWT), **`POST /api/mailboxes/:id/inbox-sync/run`** imports INBOX into **`relatedTo: workspace`** with **`mailboxId`** and dedupe **`providerMessageKey`**. **`filter=snoozed`** + **`counts.snoozed`**.
 
 ---
 
-## Phase 5+ (placeholder)
+## Historical “Suggested next” (cross-phase)
 
-Use this heading for the next roadmap tranche once scope is chosen (inbox product, analytics, or multi-provider inbound).
+- Data: optional **backfill script** for `CommunicationEvent` on legacy inbound communications.
+- Security: provider-specific **HMAC/signature** verification for inbound if the relay supports it beyond the shared Bearer token.

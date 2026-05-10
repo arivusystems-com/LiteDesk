@@ -96,6 +96,7 @@ const TENANT_COLLECTIONS = [
     'assignmentexecutionlogs',
     'assignmentschedulejobs',
     'communications',
+    'mailboxes',
     'relationshipinstances',
     'reports',
     'threadviews',
