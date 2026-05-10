@@ -1,0 +1,21 @@
+const express = require('express');
+const router = express.Router();
+const { protect } = require('../middleware/authMiddleware');
+const { organizationIsolation } = require('../middleware/organizationMiddleware');
+const controller = require('../controllers/mailboxController');
+
+/** Google OAuth redirect (no Bearer token). */
+router.get('/inbox-sync/google/callback', controller.gmailOAuthCallback);
+
+router.use(protect);
+router.use(organizationIsolation);
+
+router.get('/', controller.listMailboxes);
+router.post('/', controller.createMailbox);
+router.get('/:id/inbox-sync/google/start', controller.gmailInboxSyncGoogleStart);
+router.post('/:id/inbox-sync/run', controller.gmailInboxSyncRun);
+router.post('/:id/inbox-sync/google/disconnect', controller.gmailInboxSyncDisconnect);
+router.get('/:id', controller.getMailbox);
+router.patch('/:id', controller.updateMailbox);
+
+module.exports = router;

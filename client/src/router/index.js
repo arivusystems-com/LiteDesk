@@ -41,6 +41,12 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/platform/attention',
+    name: 'platform-attention',
+    component: () => import('@/views/platform/AttentionSurface.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/demo',
     name: 'demo',
     component: () => import('@/views/Demo.vue')

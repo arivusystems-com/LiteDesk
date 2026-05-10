@@ -1,63 +1,63 @@
-# InboxSurface Invariants
+# Inbox & attention surfaces (invariants)
 
 ## Purpose
 
-Define Inbox as a calm, global surface for attention-worthy work across the platform.
+- **Shell Inbox** (`/inbox`, `InboxSurface.vue`) is **workspace email only**: recent threads, triage filters, search, folder counts, optional **standalone** sends (`relatedTo.moduleKey === 'workspace'`), and per-mailbox unread when mailboxes are loaded with `includeThreadCounts`.
+- **Attention** (`/platform/attention`, `AttentionSurface.vue`) is the **cross-app attention list** (tasks + events from `GET /api/inbox`). It is a **shell** sidebar row directly **below Approvals** (above the Core section), not inside the mail surface.
 
-## 1. Core Definition
+Together they answer: “What email is active?” and “What work needs me?” — as separate destinations.
 
-Inbox is a cross-app surface that aggregates work requiring user attention.
-It answers: "What do I need to act on now?"
+## 1. Attention (tasks + events)
 
-## 2. What Belongs in Inbox
+Attention aggregates work requiring user action across apps.
+
+### What belongs
 
 - Tasks assigned to the user
 - Events that require preparation, response, or follow-up
-- Approvals or submissions awaiting action
-- Overdue or time-bound responsibilities
+- Overdue or time-bound responsibilities (per `docs/architecture/inbox-aggregation.md`)
 
-## 3. What Does NOT Belong in Inbox
+### What does not belong
 
 - Historical activity logs
 - Passive events with no required action
-- Raw entities (People, Organizations, Deals)
-- Configuration or admin items
+- Raw entity lists (People, Organizations, Deals) as the primary pattern
+- Workspace email threads (those belong on `/inbox`)
 
-## 4. UX Principles
+### UX principles
 
-- Inbox must feel calm, not busy
-- Items must be scannable in under 3 seconds
-- Each item must clearly answer:
-  - Why am I seeing this?
-  - What happens if I click it?
+- Scannable in under a few seconds per item
+- Each item answers why it appears and what click does
+- Items link to their owning surface; completion routes through existing APIs
 
-## 5. Interaction Rules
+### Navigation
 
-- Inbox items link to their owning surface (Sales, Helpdesk, Audit, etc.)
-- Inbox does not allow full editing
-- Completion or dismissal routes back to context
+- Route: `/platform/attention`
+- Sidebar: **Shell** surface `id: attention`, ordered after **Approvals** (same block as Home, Inbox, Approvals)
 
-## 6. Visual Hierarchy (Important)
+## 2. Shell Inbox (email)
 
-- Time & urgency first
-- Source/app second
-- Metadata last
-- No dense tables
+### What belongs
 
-## 7. Tasks vs Events (Conceptual Distinction)
+- Workspace-wide email threads (`GET /api/communications/workspace-threads`), optional `search` query (list only; counts stay unscoped by search)
+- Filters (all / unread / assigned to me), include done, reload list vs refresh counts (`GET /api/communications/workspace-thread-counts`)
+- `GET /api/mailboxes?includeThreadCounts=true` for **per-mailbox unread** badges (and `allMailThreadUnread`); toggling **Done** refetches mailboxes so badges match `includeDone`; counts derive from **one** workspace summary (partition by thread mailbox id).
+- **`PATCH /api/communications/threads/bulk`** for multi-select **mark done / reopen / assign to me / add tag**
+- **`GET workspace-threads`** supports **`cursor`** + **`nextCursor`** for “Load more” (same bounded aggregation until DB paging exists).
+- Row opens the linked record when `relatedTo` is a normal module; **`workspace`** threads open a **preview modal** (Integrations link); standalone send is gated by **`allowWorkspaceEmail`** in Communication Policy (Integrations → Email provider).
 
-- **Tasks** = explicit responsibility assigned to a user
-- **Events** = time-bound or system-triggered moments that may require attention
-- Events appear only if they require user action
+### What does not belong
 
-## 8. Navigation Rules
+- Task/event attention rows (use Attention)
+- Mixing thread list with `GET /api/inbox` payloads
 
-- Inbox is a Shell surface
-- Always global
-- Never app-scoped
-- Never filtered by app by default
+### Deep links
 
-## Lock Statement
+- `/inbox` — mail
+- `/inbox?tab=attention` — **redirects** to `/platform/attention` for backward compatibility
 
-Inbox must remain an attention surface, not a task manager or activity feed.
-Any change requires updating this document first.
+## 3. Lock statement
+
+Do not merge task/event attention back into `InboxSurface` without updating this document and the sidebar builder contract in `client/src/utils/buildSidebarFromRegistry.ts`.
+
+Shell surfaces: Home, Inbox (mail), Approvals, **Attention**, and Search (modal-only).

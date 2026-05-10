@@ -11,8 +11,8 @@
  * entities, app-agnostic primitives, or infrastructure.”
  *
  * Enforcement:
- * - Shell: Home / Inbox / Search only
- * - Core Modules: sourced from the app registry PLATFORM modules first, with settings fallback
+ * - Shell: Home / Inbox (mail) / Approvals / **Attention** (`/platform/attention`) / Search
+ * - Core Modules: registry PLATFORM modules (settings fallback) only
  * - App lens: exactly ONE active app at a time (route → lastActiveAppId fallback)
  * - App nav: dashboard + modules for active app only
  * - Platform: governance only
@@ -148,6 +148,14 @@ function buildShell(snapshot: PermissionSnapshot): SidebarItem[] {
     label: 'Approvals',
     route: '/approvals',
     icon: 'check-circle',
+  });
+
+  shell.push({
+    kind: 'surface',
+    id: 'attention',
+    label: 'Attention',
+    route: '/platform/attention',
+    icon: 'exclamation-triangle',
   });
 
   // Search exists as a shell surface, but is executed via UI (modal) rather than navigation.
@@ -389,9 +397,8 @@ export async function buildSidebarFromRegistry(
   const activeAppId = resolveActiveAppId(appRegistry, currentPath, lastActiveAppId);
 
   const registryCoreModules = buildCoreModulesFromRegistry(appRegistry, snapshot);
-  const coreModules = registryCoreModules.length > 0
-    ? registryCoreModules
-    : await fetchCoreModulesFromSettings(snapshot);
+  const coreModules =
+    registryCoreModules.length > 0 ? registryCoreModules : await fetchCoreModulesFromSettings(snapshot);
 
   // Note: We can't use memoizeBuilder here because buildCoreModules is async
   // and the memoization would need to handle async results differently.

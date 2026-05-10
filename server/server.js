@@ -247,6 +247,7 @@ app.use('/health', healthRoutes); // Public health check endpoint
 app.use('/api/people', peopleRoutes);
 app.use('/api/activity', activityRoutes);
 app.use('/api/communications', require('./routes/communicationsRoutes'));
+app.use('/api/mailboxes', require('./routes/mailboxRoutes'));
 app.use('/api/webhooks/email', require('./routes/inboundEmailWebhookRoutes'));
 app.use('/api/notes', notesRoutes);
 app.use('/api/files', filesRoutes);

@@ -28,7 +28,8 @@ const emailService = require('../services/emailService');
 const communicationPlatformService = require('../platform/communication/api/communicationPlatformService');
 const {
     getCommunicationConfigForOrganization,
-    upsertCommunicationConfigForOrganization
+    upsertCommunicationConfigForOrganization,
+    getGmailOAuthAppCredentialsForServer
 } = require('../platform/communication/config/communicationConfigService');
 
 function maskSecret(value) {
@@ -1816,9 +1817,16 @@ exports.getIntegration = async (req, res) => {
             payload.emailConfig = sanitizeEmailConfigForResponse(resolvedConfig);
             payload.emailDomainVerification = await deriveEmailDomainVerification(resolvedConfig);
             const communicationConfig = await getCommunicationConfigForOrganization(req.user.organizationId);
+            const gmailCreds = await getGmailOAuthAppCredentialsForServer(req.user.organizationId);
+            payload.gmailOAuthAppConfigured = !gmailCreds.error;
             payload.communicationPolicy = {
                 outboundEmail: communicationConfig.outboundEmail,
-                supportedModuleKeys: communicationPlatformService.getSupportedModules()
+                supportedModuleKeys: communicationPlatformService.getSupportedModules(),
+                gmailInboxSync: communicationConfig.gmailInboxSync || {
+                    clientId: '',
+                    redirectUri: '',
+                    hasClientSecret: false
+                }
             };
         }
 
@@ -1916,7 +1924,10 @@ exports.updateIntegrationConfig = async (req, res) => {
                 code: 'EMAIL_CONFIG_OWNER_ONLY'
             });
         }
-        const hasPolicyUpdate = communicationPolicy && typeof communicationPolicy === 'object';
+        const hasPolicyUpdate =
+            communicationPolicy &&
+            typeof communicationPolicy === 'object' &&
+            (communicationPolicy.outboundEmail || communicationPolicy.gmailInboxSync);
         if (hasPolicyUpdate && !isOwnerLike) {
             return res.status(403).json({
                 success: false,

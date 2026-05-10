@@ -17,10 +17,21 @@ const CommunicationConfigSchema = new Schema(
       requireIdempotencyKey: { type: Boolean, default: false },
       maxRecipientsPerMessage: { type: Number, default: 50, min: 1, max: 1000 },
       allowedModuleKeys: [{ type: String, trim: true }],
+      /** Inbox “standalone” send (relatedTo.workspace); default true when unset */
+      allowWorkspaceEmail: { type: Boolean, default: true },
       suppression: {
         autoSuppressOnBounce: { type: Boolean, default: true },
         autoSuppressOnComplaint: { type: Boolean, default: true }
       }
+    },
+    /**
+     * Google OAuth **app** credentials for Gmail inbox sync (per-tenant in UI).
+     * User refresh tokens stay on Mailbox; this is only the Web client id/secret/redirect.
+     */
+    gmailInboxSync: {
+      clientId: { type: String, trim: true, default: '' },
+      clientSecretEnc: { type: String, default: '' },
+      redirectUri: { type: String, trim: true, default: '' }
     }
   },
   { timestamps: true }

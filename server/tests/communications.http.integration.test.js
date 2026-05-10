@@ -59,8 +59,10 @@ if (!GATE) {
   const mongoose = require('mongoose');
 
   const communicationsRoutes = require('../routes/communicationsRoutes');
+  const mailboxRoutes = require('../routes/mailboxRoutes');
   const Organization = require('../models/Organization');
   const User = require('../models/User');
+  const Communication = require('../models/Communication');
   const CommunicationThreadMeta = require('../models/CommunicationThreadMeta');
   const ThreadView = require('../models/ThreadView');
   const InboundDeadLetter = require('../models/InboundDeadLetter');
@@ -125,6 +127,7 @@ if (!GATE) {
   }
 
   before(async () => {
+    process.env.TEST_SILENCE_ORG_LOGS = '1';
     await mongoose.connect(mongoUri);
 
     const suffix = `${Date.now()}-${randomUUID().slice(0, 8)}`;
@@ -178,6 +181,7 @@ if (!GATE) {
     app = express();
     app.use(express.json());
     app.use('/api/communications', communicationsRoutes);
+    app.use('/api/mailboxes', mailboxRoutes);
 
     await new Promise((resolve, reject) => {
       server = http.createServer(app);
@@ -193,6 +197,7 @@ if (!GATE) {
     try {
       if (orgId) {
         await Promise.all([
+          Communication.deleteMany({ organizationId: orgId }),
           CommunicationThreadMeta.deleteMany({ organizationId: orgId }),
           ThreadView.deleteMany({ organizationId: orgId }),
           InboundDeadLetter.deleteMany({ organizationId: orgId })
@@ -275,6 +280,156 @@ if (!GATE) {
     assert.equal(openRes.status, 200);
     assert.equal(openRes.body?.success, true);
     assert.equal(openRes.body?.data?.done, false);
+  });
+
+  test('GET workspace-threads returns 200 (Phase 5)', async () => {
+    const res = await requestJson({
+      method: 'GET',
+      path: '/api/communications/workspace-threads?limit=10',
+      token
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body?.success, true);
+    assert.ok(Array.isArray(res.body?.data?.threads));
+    const counts = res.body?.data?.counts;
+    assert.ok(counts && typeof counts === 'object');
+    assert.ok(typeof counts.all === 'number');
+    assert.ok(typeof counts.unread === 'number');
+    assert.ok(typeof counts.assignedToMe === 'number');
+    assert.ok(typeof counts.snoozed === 'number');
+    assert.ok(Object.prototype.hasOwnProperty.call(res.body?.data || {}, 'nextCursor'));
+  });
+
+  test('GET workspace-thread-counts returns 200', async () => {
+    const res = await requestJson({
+      method: 'GET',
+      path: '/api/communications/workspace-thread-counts',
+      token
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body?.success, true);
+    assert.ok(typeof res.body?.data?.all === 'number');
+    assert.ok(typeof res.body?.data?.unread === 'number');
+    assert.ok(typeof res.body?.data?.assignedToMe === 'number');
+    assert.ok(typeof res.body?.data?.snoozed === 'number');
+  });
+
+  test('GET workspace-threads accepts search query (200)', async () => {
+    const res = await requestJson({
+      method: 'GET',
+      path: '/api/communications/workspace-threads?limit=10&search=test',
+      token
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body?.success, true);
+    assert.ok(Array.isArray(res.body?.data?.threads));
+  });
+
+  test('PATCH threads/bulk mark done returns 200', async () => {
+    const res = await requestJson({
+      method: 'PATCH',
+      path: '/api/communications/threads/bulk',
+      body: { threadIds: [threadId], action: 'done', done: true },
+      token
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body?.success, true);
+    assert.ok(Array.isArray(res.body?.data?.results));
+  });
+
+  test('GET workspace-thread-ids returns 200', async () => {
+    const res = await requestJson({
+      method: 'GET',
+      path: '/api/communications/workspace-thread-ids?filter=all',
+      token
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body?.success, true);
+    assert.ok(Array.isArray(res.body?.data?.threadIds));
+    assert.equal(typeof res.body?.data?.truncated, 'boolean');
+  });
+
+  test('workspace search matches body; snooze hides thread until cleared', async () => {
+    const tid = new mongoose.Types.ObjectId();
+    const uniq = `bodyuniq-${randomUUID().slice(0, 8)}`;
+    await Communication.create({
+      organizationId: orgId,
+      kind: 'email',
+      direction: 'inbound',
+      threadId: tid,
+      subject: 'Integration subject',
+      body: `<p>hello ${uniq} world</p>`,
+      fromAddress: 'sender@integration.test',
+      receivedAt: new Date(),
+      status: 'delivered',
+      relatedTo: { moduleKey: 'workspace', recordId: orgId },
+      toAddresses: ['inbox@integration.test']
+    });
+
+    const resSearch = await requestJson({
+      method: 'GET',
+      path: `/api/communications/workspace-threads?search=${encodeURIComponent(uniq)}&limit=20`,
+      token
+    });
+    assert.equal(resSearch.status, 200);
+    const found = (resSearch.body?.data?.threads || []).some(
+      (t) => String(t.threadId) === String(tid)
+    );
+    assert.ok(found, 'search should match message body');
+
+    const farFuture = new Date(Date.now() + 86400000 * 365).toISOString();
+    const patchSnooze = await requestJson({
+      method: 'PATCH',
+      path: `/api/communications/threads/${encodeURIComponent(String(tid))}/snooze`,
+      body: { snoozedUntil: farFuture },
+      token
+    });
+    assert.equal(patchSnooze.status, 200);
+    assert.equal(patchSnooze.body?.success, true);
+
+    const resList = await requestJson({
+      method: 'GET',
+      path: '/api/communications/workspace-threads?limit=100',
+      token
+    });
+    assert.equal(resList.status, 200);
+    const stillListed = (resList.body?.data?.threads || []).some(
+      (t) => String(t.threadId) === String(tid)
+    );
+    assert.equal(stillListed, false, 'snoozed thread should be hidden');
+
+    const patchClear = await requestJson({
+      method: 'PATCH',
+      path: `/api/communications/threads/${encodeURIComponent(String(tid))}/snooze`,
+      body: { snoozedUntil: null },
+      token
+    });
+    assert.equal(patchClear.status, 200);
+
+    const resBack = await requestJson({
+      method: 'GET',
+      path: '/api/communications/workspace-threads?limit=100',
+      token
+    });
+    const listedAgain = (resBack.body?.data?.threads || []).some(
+      (t) => String(t.threadId) === String(tid)
+    );
+    assert.ok(listedAgain, 'thread should return after snooze cleared');
+  });
+
+  test('GET mailboxes with includeThreadCounts returns 200', async () => {
+    const res = await requestJson({
+      method: 'GET',
+      path: '/api/mailboxes?includeThreadCounts=true&includeDone=false',
+      token
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body?.success, true);
+    assert.ok(Array.isArray(res.body?.data?.mailboxes));
+    assert.ok(typeof res.body?.data?.allMailThreadUnread === 'number');
+    for (const mb of res.body.data.mailboxes) {
+      assert.ok(typeof mb.threadUnreadCount === 'number');
+    }
   });
 
   test('GET inbound dead-letter returns 200', async () => {

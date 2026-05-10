@@ -154,8 +154,10 @@ const organizationIsolation = async (req, res, next) => {
             });
         }
 
-        // Debug: Log organization state
-        if (process.env.NODE_ENV === 'development') {
+        // Debug: Log organization state (omit during integration tests — set TEST_SILENCE_ORG_LOGS=1)
+        const silenceOrgIsolationLog =
+            process.env.TEST_SILENCE_ORG_LOGS === '1' || process.env.NODE_ENV === 'test';
+        if (process.env.NODE_ENV === 'development' && !silenceOrgIsolationLog) {
             console.log('[OrganizationIsolation] Organization loaded:', {
                 orgId: organization._id,
                 isTenant: organization.isTenant,

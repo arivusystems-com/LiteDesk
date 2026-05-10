@@ -1,4 +1,4 @@
-const SUPPORTED_MODULES = new Set(['people', 'organizations', 'deals', 'tasks', 'cases']);
+const SUPPORTED_MODULES = new Set(['people', 'organizations', 'deals', 'tasks', 'cases', 'workspace']);
 
 function normalizeAddressList(value) {
   if (!value) return [];
@@ -12,7 +12,18 @@ function normalizeAddressList(value) {
 }
 
 function normalizeSendEmailPayload(payload = {}) {
+  const rawMailboxId =
+    payload.mailboxId != null && String(payload.mailboxId).trim()
+      ? String(payload.mailboxId).trim()
+      : null;
+
+  const standalone =
+    payload.standalone === true
+    || payload.standalone === 'true'
+    || String(payload.standalone || '').toLowerCase() === 'true';
+
   const normalized = {
+    standalone,
     relatedTo: payload.relatedTo || {},
     to: normalizeAddressList(payload.to),
     cc: normalizeAddressList(payload.cc),
@@ -20,12 +31,15 @@ function normalizeSendEmailPayload(payload = {}) {
     subject: typeof payload.subject === 'string' ? payload.subject.trim() : '',
     body: typeof payload.body === 'string' ? payload.body : '',
     attachments: Array.isArray(payload.attachments) ? payload.attachments : [],
-    parentCommunicationId: payload.parentCommunicationId || null
+    parentCommunicationId: payload.parentCommunicationId || null,
+    mailboxId: rawMailboxId
   };
 
   const errors = [];
-  if (!normalized.relatedTo.moduleKey || !normalized.relatedTo.recordId) {
-    errors.push('relatedTo.moduleKey and relatedTo.recordId are required');
+  if (!standalone) {
+    if (!normalized.relatedTo.moduleKey || !normalized.relatedTo.recordId) {
+      errors.push('relatedTo.moduleKey and relatedTo.recordId are required');
+    }
   }
 
   if (normalized.to.length === 0) {
@@ -37,10 +51,15 @@ function normalizeSendEmailPayload(payload = {}) {
   }
 
   if (
-    normalized.relatedTo.moduleKey &&
-    !SUPPORTED_MODULES.has(normalized.relatedTo.moduleKey)
+    !standalone
+    && normalized.relatedTo.moduleKey
+    && !SUPPORTED_MODULES.has(normalized.relatedTo.moduleKey)
   ) {
-    errors.push('Unsupported moduleKey. Supported: people, organizations, deals, tasks, cases');
+    errors.push('Unsupported moduleKey. Supported: people, organizations, deals, tasks, cases, workspace');
+  }
+
+  if (normalized.mailboxId && !/^[0-9a-fA-F]{24}$/.test(normalized.mailboxId)) {
+    errors.push('mailboxId must be a valid Mongo ObjectId');
   }
 
   return {

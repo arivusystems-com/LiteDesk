@@ -1,5 +1,12 @@
 const CommunicationConfig = require('../../../models/CommunicationConfig');
 const { SUPPORTED_MODULES } = require('../domain/sendEmailContract');
+const { encryptTenantSecret, decryptTenantSecret } = require('../../../utils/tenantSecretCrypto');
+
+const DEFAULT_GMAIL_PUBLIC = Object.freeze({
+  clientId: '',
+  redirectUri: '',
+  hasClientSecret: false
+});
 
 const DEFAULT_CONFIG = Object.freeze({
   outboundEmail: {
@@ -7,11 +14,13 @@ const DEFAULT_CONFIG = Object.freeze({
     requireIdempotencyKey: false,
     maxRecipientsPerMessage: 50,
     allowedModuleKeys: Array.from(SUPPORTED_MODULES),
+    allowWorkspaceEmail: true,
     suppression: {
       autoSuppressOnBounce: true,
       autoSuppressOnComplaint: true
     }
-  }
+  },
+  gmailInboxSync: DEFAULT_GMAIL_PUBLIC
 });
 
 function normalizeAllowedModules(modules) {
@@ -31,10 +40,58 @@ function normalizeSuppressionConfig(input = {}) {
   };
 }
 
+function publicGmailInboxSyncFromDoc(configDoc) {
+  const g = configDoc?.gmailInboxSync || {};
+  return {
+    clientId: String(g.clientId || '').trim(),
+    redirectUri: String(g.redirectUri || '').trim(),
+    hasClientSecret: Boolean(g.clientSecretEnc)
+  };
+}
+
+/**
+ * Google OAuth **Web client** credentials for Gmail API (token exchange + authorize URL).
+ * Tenant DB values override environment when present.
+ */
+async function getGmailOAuthAppCredentialsForServer(organizationId) {
+  if (!organizationId) {
+    return {
+      error:
+        'Gmail isn’t enabled on this workspace yet. Ask your LiteDesk administrator to set GOOGLE_GMAIL_CLIENT_ID, GOOGLE_GMAIL_CLIENT_SECRET, and GOOGLE_GMAIL_REDIRECT_URI on the API server (typical for SaaS—users then only click Connect Gmail).'
+    };
+  }
+  const doc = await CommunicationConfig.findOne({ organizationId }).select('gmailInboxSync').lean();
+  const g = doc?.gmailInboxSync || {};
+  let clientSecret = '';
+  if (g.clientSecretEnc) {
+    clientSecret = decryptTenantSecret(g.clientSecretEnc);
+  }
+  if (!clientSecret) {
+    clientSecret = String(process.env.GOOGLE_GMAIL_CLIENT_SECRET || '').trim();
+  }
+  const clientId = String(g.clientId || process.env.GOOGLE_GMAIL_CLIENT_ID || '').trim();
+  const redirectUri = String(g.redirectUri || process.env.GOOGLE_GMAIL_REDIRECT_URI || '').trim();
+  if (!clientId || !clientSecret || !redirectUri) {
+    const envFallbackSecret = String(process.env.GOOGLE_GMAIL_CLIENT_SECRET || '').trim();
+    const storedSecretUndecryptable =
+      Boolean(g.clientSecretEnc) && !clientSecret && !envFallbackSecret;
+    return {
+      error: storedSecretUndecryptable
+        ? 'Gmail OAuth client secret was saved but cannot be decrypted (MAILBOX_OAUTH_SECRET or JWT_SECRET likely changed). Re-enter it under Settings → Integrations → Email → Advanced (custom Google OAuth app), or set GOOGLE_GMAIL_CLIENT_SECRET on the server.'
+        : 'Gmail isn’t enabled on this API server yet. Ask your administrator to set GOOGLE_GMAIL_CLIENT_ID, GOOGLE_GMAIL_CLIENT_SECRET, and GOOGLE_GMAIL_REDIRECT_URI once (hosted deployments). Self-hosted workspace owners can optionally add overrides under Settings → Integrations → Email → Advanced.'
+    };
+  }
+  return { clientId, clientSecret, redirectUri };
+}
+
 async function getCommunicationConfigForOrganization(organizationId) {
-  if (!organizationId) return DEFAULT_CONFIG;
+  if (!organizationId) {
+    return { ...DEFAULT_CONFIG, gmailInboxSync: { ...DEFAULT_GMAIL_PUBLIC } };
+  }
   const configDoc = await CommunicationConfig.findOne({ organizationId }).lean();
-  if (!configDoc) return DEFAULT_CONFIG;
+  if (!configDoc) {
+    return { ...DEFAULT_CONFIG, gmailInboxSync: { ...DEFAULT_GMAIL_PUBLIC } };
+  }
 
   const maxRecipientsRaw = Number(configDoc?.outboundEmail?.maxRecipientsPerMessage);
   const maxRecipientsPerMessage = Number.isFinite(maxRecipientsRaw) && maxRecipientsRaw > 0
@@ -47,13 +104,20 @@ async function getCommunicationConfigForOrganization(organizationId) {
       requireIdempotencyKey: configDoc?.outboundEmail?.requireIdempotencyKey === true,
       maxRecipientsPerMessage,
       allowedModuleKeys: normalizeAllowedModules(configDoc?.outboundEmail?.allowedModuleKeys),
+      allowWorkspaceEmail: configDoc?.outboundEmail?.allowWorkspaceEmail !== false,
       suppression: normalizeSuppressionConfig(configDoc?.outboundEmail?.suppression || {})
-    }
+    },
+    gmailInboxSync: publicGmailInboxSyncFromDoc(configDoc)
   };
 }
 
 async function upsertCommunicationConfigForOrganization(organizationId, policyInput = {}) {
-  if (!organizationId) return DEFAULT_CONFIG;
+  if (!organizationId) {
+    return {
+      outboundEmail: { ...DEFAULT_CONFIG.outboundEmail },
+      gmailInboxSync: { ...DEFAULT_GMAIL_PUBLIC }
+    };
+  }
   const outboundInput = policyInput.outboundEmail || {};
   const maxRecipientsRaw = Number(outboundInput.maxRecipientsPerMessage);
   const maxRecipientsPerMessage = Number.isFinite(maxRecipientsRaw) && maxRecipientsRaw > 0
@@ -66,9 +130,29 @@ async function upsertCommunicationConfigForOrganization(organizationId, policyIn
       requireIdempotencyKey: outboundInput.requireIdempotencyKey === true,
       maxRecipientsPerMessage,
       allowedModuleKeys: normalizeAllowedModules(outboundInput.allowedModuleKeys),
+      allowWorkspaceEmail: outboundInput.allowWorkspaceEmail !== false,
       suppression: normalizeSuppressionConfig(outboundInput.suppression || {})
     }
   };
+
+  const gmailInput = policyInput.gmailInboxSync;
+  if (gmailInput && typeof gmailInput === 'object') {
+    const existing = await CommunicationConfig.findOne({ organizationId }).lean();
+    const prevG = existing?.gmailInboxSync || {};
+    const nextG = {
+      clientId: gmailInput.clientId !== undefined
+        ? String(gmailInput.clientId || '').trim()
+        : String(prevG.clientId || '').trim(),
+      redirectUri: gmailInput.redirectUri !== undefined
+        ? String(gmailInput.redirectUri || '').trim()
+        : String(prevG.redirectUri || '').trim(),
+      clientSecretEnc: prevG.clientSecretEnc || ''
+    };
+    if (gmailInput.clientSecret !== undefined && String(gmailInput.clientSecret).trim() !== '') {
+      nextG.clientSecretEnc = encryptTenantSecret(String(gmailInput.clientSecret).trim());
+    }
+    update.gmailInboxSync = nextG;
+  }
 
   await CommunicationConfig.findOneAndUpdate(
     { organizationId },
@@ -82,5 +166,6 @@ async function upsertCommunicationConfigForOrganization(organizationId, policyIn
 module.exports = {
   getCommunicationConfigForOrganization,
   upsertCommunicationConfigForOrganization,
+  getGmailOAuthAppCredentialsForServer,
   DEFAULT_CONFIG
 };
