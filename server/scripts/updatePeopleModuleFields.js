@@ -4,7 +4,7 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env'
 const ModuleDefinition = require('../models/ModuleDefinition');
 const People = require('../models/People');
 const Organization = require('../models/Organization');
-const { getDefaultPhoneValidations, getDefaultEmailValidations } = require('../utils/defaultFieldValidations');
+const { getDefaultEmailValidations } = require('../utils/defaultFieldValidations');
 
 // Field-specific data type mappings for People module
 const peopleFieldMappings = {
@@ -295,9 +295,7 @@ async function updatePeopleModuleFields(organizationId = null) {
         },
         order: order++,
         validations:
-          dataType === 'Phone'
-            ? getDefaultPhoneValidations()
-            : dataType === 'Email'
+          dataType === 'Email'
               ? getDefaultEmailValidations()
               : [],
         dependencies: dependencies,
@@ -632,4 +630,3 @@ if (require.main === module) {
 }
 
 module.exports = updatePeopleModuleFields;
-

@@ -35,7 +35,7 @@ const mongoose = require('mongoose');
 const { getRecordContextForUI } = require('../services/recordContextService');
 const ModuleDefinition = require('../models/ModuleDefinition');
 const relationshipRegistry = require('../utils/relationshipRegistry');
-const { getOutgoingRelationships } = require('../utils/relationshipRegistry');
+const { getOutgoingRelationships, getIncomingRelationships } = require('../utils/relationshipRegistry');
 
 // Map targetModuleKey → appKey for link API (used when building linkable from Settings relationships)
 const TARGET_APP_BY_MODULE_KEY = {
@@ -154,6 +154,7 @@ exports.getLinkableTargets = async (req, res) => {
     }
     // Resolve missing relationshipKey from platform (so Settings relationships show even if saved before relationshipKey was set)
     const outgoing = await getOutgoingRelationships(normalizedAppKey, normalizedModuleKey);
+    const incoming = getIncomingRelationships(normalizedAppKey, normalizedModuleKey);
     const toTargetKey = (r) => {
       const raw = r.targetModuleKey ?? r.targetModule;
       if (raw == null) return '';
@@ -165,9 +166,18 @@ exports.getLinkableTargets = async (req, res) => {
         const targetKey = toTargetKey(r);
         const relKey = r.relationshipKey && String(r.relationshipKey).trim();
         if (targetKey && (!relKey || !relationshipRegistry.has(relKey))) {
-          const matches = outgoing.filter((def) => def.target && (String(def.target.moduleKey || '').toLowerCase() === targetKey));
-          if (matches.length === 1) {
-            r.relationshipKey = matches[0].relationshipKey;
+          const outgoingMatches = outgoing.filter((def) => def.target && (String(def.target.moduleKey || '').toLowerCase() === targetKey));
+          if (outgoingMatches.length === 1) {
+            r.relationshipKey = outgoingMatches[0].relationshipKey;
+            continue;
+          }
+          // Some modules (e.g. organizations) are represented by incoming definitions where
+          // the current module is the target and the selectable module is the source.
+          const incomingMatches = (incoming || []).filter(
+            (def) => def.source && (String(def.source.moduleKey || '').toLowerCase() === targetKey)
+          );
+          if (incomingMatches.length === 1) {
+            r.relationshipKey = incomingMatches[0].relationshipKey;
           }
         }
       }
@@ -224,8 +234,8 @@ exports.getLinkableTargets = async (req, res) => {
     // Fallback to platform registry when no tenant module exists.
     // Also allow fallback for core Sales system modules when tenant module exists but has empty relationships,
     // which indicates an uninitialized/legacy module definition rather than an intentional customization.
-    if ((!usedTenantModule || allowSystemDefaultFallback) && linkable.length === 0 && Array.isArray(outgoing) && outgoing.length > 0) {
-      linkable = outgoing
+    if ((!usedTenantModule || allowSystemDefaultFallback) && linkable.length === 0 && ((Array.isArray(outgoing) && outgoing.length > 0) || (Array.isArray(incoming) && incoming.length > 0))) {
+      const outgoingFallback = (outgoing || [])
         .filter((def) => def.relationshipKey && def.target && relationshipRegistry.has(String(def.relationshipKey).trim().toLowerCase()))
         .map((def) => {
           const targetModuleKey = String(def.target.moduleKey || '').toLowerCase().trim();
@@ -234,6 +244,23 @@ exports.getLinkableTargets = async (req, res) => {
           const targetAppKey = (TARGET_APP_BY_MODULE_KEY[targetModuleKey] || 'platform').toUpperCase();
           return { key: targetModuleKey, label, relationshipKey, targetAppKey, sourceIsCurrent: true };
         });
+
+      const incomingFallback = (incoming || [])
+        .filter((def) => def.relationshipKey && def.source && relationshipRegistry.has(String(def.relationshipKey).trim().toLowerCase()))
+        .map((def) => {
+          const sourceModuleKey = String(def.source.moduleKey || '').toLowerCase().trim();
+          const label = sourceModuleKey ? (sourceModuleKey.charAt(0).toUpperCase() + sourceModuleKey.slice(1)) : sourceModuleKey;
+          const relationshipKey = String(def.relationshipKey).trim().toLowerCase();
+          const targetAppKey = (TARGET_APP_BY_MODULE_KEY[sourceModuleKey] || 'platform').toUpperCase();
+          return { key: sourceModuleKey, label, relationshipKey, targetAppKey, sourceIsCurrent: false };
+        });
+
+      const deduped = new Map();
+      for (const item of [...outgoingFallback, ...incomingFallback]) {
+        const dedupeKey = `${item.relationshipKey}:${item.key}:${item.sourceIsCurrent ? 'src' : 'tgt'}`;
+        if (!deduped.has(dedupeKey)) deduped.set(dedupeKey, item);
+      }
+      linkable = Array.from(deduped.values());
     }
 
     const payload = { success: true, data: linkable };

@@ -213,7 +213,7 @@
                             :errors="errors"
                           />
                         </template>
-                        <p v-else class="text-sm text-amber-600 dark:text-amber-400">
+                        <p v-else-if="isOpen" class="text-sm text-amber-600 dark:text-amber-400">
                           Could not load People module. Please try again.
                         </p>
                       </div>

@@ -637,7 +637,7 @@
           <template #empty>
             <div class="flex flex-col items-center justify-center py-12">
               <img
-                src="/assets/illustrations/mindfulness.svg"
+                src="/assets/illustrations/empty_state.svg"
                 alt="No records illustration"
                 class="mx-auto h-40 w-auto"
               />

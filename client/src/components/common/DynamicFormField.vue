@@ -90,29 +90,20 @@
       class="block w-full mt-2 rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
     />
     
-    <!-- Phone (digits only; non-numeric input is stripped) -->
-    <input 
+    <!-- Phone -->
+    <PhoneInput
       v-else-if="field.dataType === 'Phone'"
       :id="field.key"
       :name="field.key"
-      type="text"
-      inputmode="numeric"
-      autocomplete="tel"
-      maxlength="10"
-      :value="value"
-      @input="updateValue($event.target.value)"
-      @keydown="preventNonDigitPhoneKeys"
-      @blur="onPhoneFieldBlur"
-      @keydown.enter="$event.target.blur()"
-      :placeholder="field.placeholder || '10-digit phone number'"
+      :model-value="value"
+      :placeholder="field.placeholder || 'Phone number'"
       :required="isRequired"
       :disabled="isReadOnly"
-      :class="[
-        'block w-full mt-2 rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500',
-        localValidationError || errors[field.key]
-          ? 'border border-red-500 dark:border-red-500 focus:ring-red-500 dark:focus:ring-red-500'
-          : ''
-      ]"
+      :invalid="Boolean(localValidationError || errors[field.key])"
+      class="mt-2"
+      @update:model-value="updateValue($event)"
+      @blur="onPhoneFieldBlur"
+      @enter="$emit('blur')"
     />
     
     <!-- Currency: amount input + inline currency selector -->
@@ -656,76 +647,232 @@
         </div>
       </Combobox>
       
-      <!-- Lookup Modal -->
-      <Teleport to="body">
-        <Transition name="modal">
-          <div
-            v-if="showLookupModal"
-            class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm"
-            @click.self="closeLookupModal"
+      <!-- Lookup Drawer -->
+      <TransitionRoot as="template" :show="showLookupModal">
+        <Dialog :initialFocus="lookupModalSearchInputRef" class="relative z-[10000]" @close="closeLookupModal">
+          <TransitionChild
+            as="template"
+            enter="ease-out duration-200"
+            enter-from="opacity-0"
+            enter-to="opacity-100"
+            leave="ease-in duration-200"
+            leave-from="opacity-100"
+            leave-to="opacity-0"
           >
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-6xl mx-4 max-h-[90vh] flex flex-col">
-              <!-- Modal Header -->
-              <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                <div>
-                  <h3 class="text-xl font-semibold text-gray-900 dark:text-white">Select Record</h3>
-                  <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ getLookupModuleName() }}</p>
-                </div>
-                <button
-                  @click="closeLookupModal"
-                  class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                >
-                  <XMarkIcon class="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                </button>
-              </div>
+            <div class="fixed inset-0 bg-gray-500/75 dark:bg-black/75" />
+          </TransitionChild>
 
-              <!-- Modal Body with DataTable -->
-              <div class="flex-1 overflow-hidden p-6">
-                <DataTable
-                  :data="lookupModalData"
-                  :columns="lookupModalColumns"
-                  :loading="lookupModalLoading"
-                  :paginated="true"
-                  :per-page="20"
-                  :total-records="lookupModalTotal"
-                  :server-side="true"
-                  :selectable="false"
-                  table-id="lookup-modal-table"
-                  @row-click="handleLookupRowClick"
-                  @page-change="handleLookupPageChange"
-                  @search="handleLookupSearch"
-                  @sort="handleLookupSort"
+          <div class="fixed inset-0 overflow-hidden">
+            <div class="absolute inset-0 overflow-hidden">
+              <div class="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10 sm:pl-16">
+                <TransitionChild
+                  as="template"
+                  enter="transform transition ease-in-out duration-300 sm:duration-300"
+                  enter-from="translate-x-full"
+                  enter-to="translate-x-0"
+                  leave="transform transition ease-in-out duration-300 sm:duration-300"
+                  leave-from="translate-x-0"
+                  leave-to="translate-x-full"
                 >
-                  <!-- Custom display field rendering -->
-                  <template v-if="isUserLookupField" #name="{ row }">
-                    <div class="flex items-center gap-3">
-                      <Avatar :user="row" size="md" />
-                      <span class="font-medium text-gray-900 dark:text-white">{{ getUserDisplayName(row) }}</span>
+                  <DialogPanel class="pointer-events-auto w-screen max-w-3xl">
+                    <div class="relative flex h-full flex-col divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800 shadow-xl">
+                      <!-- Header -->
+                      <div class="flex-shrink-0 bg-indigo-700 dark:bg-indigo-800 px-4 py-6 sm:px-6">
+                        <div class="flex items-center justify-between">
+                          <DialogTitle class="text-base font-semibold text-white">
+                            Select {{ lookupModuleSingularLabel }}
+                          </DialogTitle>
+                          <div class="ml-3 flex h-7 items-center">
+                            <button
+                              type="button"
+                              class="relative rounded-md text-indigo-200 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                              @click="closeLookupModal"
+                            >
+                              <span class="absolute -inset-2.5" />
+                              <span class="sr-only">Close panel</span>
+                              <XMarkIcon class="size-6" aria-hidden="true" />
+                            </button>
+                          </div>
+                        </div>
+                        <p class="mt-1 text-sm text-indigo-300">
+                          Choose one {{ lookupModuleSingularLabel.toLowerCase() }} to fill <span class="font-medium text-white">{{ effectiveLabel }}</span>
+                        </p>
+                      </div>
+
+                      <!-- Body -->
+                      <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
+                        <!-- Search bar -->
+                        <div class="flex-shrink-0 p-4 border-b border-gray-200 dark:border-gray-700">
+                          <div class="flex items-center gap-3">
+                            <div class="relative flex-1 min-w-0">
+                              <MagnifyingGlassIcon class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+                              <input
+                                ref="lookupModalSearchInputRef"
+                                v-model="lookupModalSearchInput"
+                                type="search"
+                                class="block w-full rounded-md bg-gray-100 dark:bg-gray-700 pl-9 pr-3 py-2 text-gray-900 dark:text-white text-sm outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 dark:focus:bg-gray-800 dark:outline-white/10"
+                                :placeholder="`Search ${lookupModulePluralLabel.toLowerCase()}...`"
+                                autocomplete="off"
+                                @input="handleLookupSearchInput"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              class="inline-flex shrink-0 items-center justify-center rounded-md bg-white dark:bg-gray-800 p-2 text-gray-500 dark:text-gray-300 shadow-xs ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                              :disabled="lookupModalLoading"
+                              :title="lookupModalLoading ? 'Refreshing...' : 'Refresh'"
+                              @click="refreshLookupModalData"
+                            >
+                              <span class="sr-only">Refresh</span>
+                              <ArrowPathIcon class="size-4" :class="lookupModalLoading ? 'animate-spin' : ''" aria-hidden="true" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <!-- List -->
+                        <div class="flex-1 overflow-auto p-4">
+                          <!-- Loading skeletons -->
+                          <ul v-if="lookupModalLoading" class="divide-y divide-gray-200 dark:divide-gray-700">
+                            <li v-for="i in 6" :key="`skeleton-${i}`" class="flex items-center gap-3 py-3 px-2">
+                              <div class="size-9 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700" />
+                              <div class="min-w-0 flex-1 space-y-2">
+                                <div class="h-3.5 w-1/3 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+                                <div class="h-3 w-2/3 animate-pulse rounded bg-gray-100 dark:bg-gray-700/70" />
+                              </div>
+                            </li>
+                          </ul>
+
+                          <!-- Empty state -->
+                          <div
+                            v-else-if="lookupModalData.length === 0"
+                            class="flex min-h-[20rem] flex-col items-center justify-center text-center px-6"
+                          >
+                            <div class="flex size-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700">
+                              <MagnifyingGlassIcon class="size-6 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+                            </div>
+                            <h4 class="mt-4 text-sm font-semibold text-gray-900 dark:text-white">No records found</h4>
+                            <p class="mt-1 max-w-sm text-sm text-gray-500 dark:text-gray-400">
+                              <template v-if="lookupModalSearchQuery">
+                                No {{ lookupModulePluralLabel.toLowerCase() }} match <span class="font-medium text-gray-700 dark:text-gray-300">"{{ lookupModalSearchQuery }}"</span>.
+                              </template>
+                              <template v-else>
+                                There are no {{ lookupModulePluralLabel.toLowerCase() }} to choose from yet.
+                              </template>
+                            </p>
+                            <button
+                              v-if="canCreateLookupRecord"
+                              type="button"
+                              class="mt-4 inline-flex items-center gap-2 rounded-md bg-indigo-600 dark:bg-indigo-500 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 dark:hover:bg-indigo-600"
+                              @click="openLookupCreateDrawer"
+                            >
+                              <PlusIcon class="size-4" aria-hidden="true" />
+                              Create new {{ lookupModuleSingularLabel.toLowerCase() }}
+                            </button>
+                          </div>
+
+                          <!-- Records list -->
+                          <ul v-else class="divide-y divide-gray-200 dark:divide-gray-700">
+                            <li
+                              v-for="row in lookupModalData"
+                              :key="row._id"
+                              :class="[
+                                'flex items-center gap-3 py-3 px-2 rounded-md transition-colors',
+                                String(normalizedLookupValue || '') === String(row._id || '')
+                                  ? 'bg-indigo-50 dark:bg-indigo-500/10'
+                                  : 'hover:bg-gray-50 dark:hover:bg-gray-700/40'
+                              ]"
+                            >
+                              <div class="shrink-0">
+                                <Avatar v-if="isUserLookupField" :user="row" size="md" />
+                                <div
+                                  v-else
+                                  class="flex size-9 items-center justify-center rounded-full bg-indigo-50 text-xs font-semibold text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200"
+                                >
+                                  {{ getLookupInitials(row) }}
+                                </div>
+                              </div>
+                              <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-2">
+                                  <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                    {{ getLookupDisplay(row) }}
+                                  </p>
+                                  <span
+                                    v-if="String(normalizedLookupValue || '') === String(row._id || '')"
+                                    class="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-200"
+                                  >
+                                    <CheckSolidIcon class="size-3" aria-hidden="true" />
+                                    Selected
+                                  </span>
+                                </div>
+                                <p
+                                  v-if="getLookupSubtitle(row)"
+                                  class="mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate"
+                                >
+                                  {{ getLookupSubtitle(row) }}
+                                </p>
+                              </div>
+                              <div v-if="String(normalizedLookupValue || '') !== String(row._id || '')" class="shrink-0">
+                                <button
+                                  type="button"
+                                  class="rounded-md bg-white dark:bg-gray-800 px-3 py-1.5 text-xs font-semibold text-gray-900 dark:text-white shadow-xs ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                  @click="handleLookupRowClick(row)"
+                                >
+                                  Select
+                                </button>
+                              </div>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+
+                      <!-- Footer -->
+                      <div class="flex flex-shrink-0 items-center justify-between gap-3 px-4 py-4 sm:px-6 border-t border-gray-200 dark:border-gray-700">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ lookupModalPageSummary }}</p>
+                        <div class="flex items-center gap-2">
+                          <button
+                            v-if="canCreateLookupRecord"
+                            type="button"
+                            class="inline-flex items-center gap-1.5 rounded-md bg-white dark:bg-gray-800 px-3 py-2 text-sm font-semibold text-gray-900 dark:text-white shadow-xs ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+                            @click="openLookupCreateDrawer"
+                          >
+                            <PlusIcon class="size-4" aria-hidden="true" />
+                            Create new
+                          </button>
+                          <div class="ml-1 flex items-center gap-1">
+                            <button
+                              type="button"
+                              class="inline-flex size-8 items-center justify-center rounded-md text-gray-500 dark:text-gray-300 ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                              :disabled="lookupModalCurrentPage <= 1 || lookupModalLoading"
+                              :title="'Previous page'"
+                              @click="handleLookupPageChange(lookupModalCurrentPage - 1)"
+                            >
+                              <span class="sr-only">Previous page</span>
+                              <ChevronLeftIcon class="size-4" aria-hidden="true" />
+                            </button>
+                            <span class="min-w-12 text-center text-xs font-medium text-gray-600 dark:text-gray-300 tabular-nums">
+                              {{ lookupModalCurrentPage }} / {{ lookupModalTotalPages }}
+                            </span>
+                            <button
+                              type="button"
+                              class="inline-flex size-8 items-center justify-center rounded-md text-gray-500 dark:text-gray-300 ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                              :disabled="lookupModalCurrentPage >= lookupModalTotalPages || lookupModalLoading"
+                              :title="'Next page'"
+                              @click="handleLookupPageChange(lookupModalCurrentPage + 1)"
+                            >
+                              <span class="sr-only">Next page</span>
+                              <ChevronRightIcon class="size-4" aria-hidden="true" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </template>
-                </DataTable>
-              </div>
-
-              <!-- Modal Footer -->
-              <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-                <button
-                  v-if="canCreateLookupRecord"
-                  @click="openLookupCreateDrawer"
-                  class="px-4 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 rounded-lg transition-colors"
-                >
-                  Create New
-                </button>
-                <button
-                  @click="closeLookupModal"
-                  class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
+                  </DialogPanel>
+                </TransitionChild>
               </div>
             </div>
           </div>
-        </Transition>
-      </Teleport>
+        </Dialog>
+      </TransitionRoot>
 
       <CreateRecordDrawer
         v-if="canCreateLookupRecord"
@@ -827,17 +974,17 @@
 <script setup>
 import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
-import { Listbox, ListboxButton, ListboxOptions, ListboxOption, Combobox, ComboboxButton, ComboboxInput, ComboboxOptions, ComboboxOption } from '@headlessui/vue';
-import { CheckIcon, ChevronUpDownIcon, XMarkIcon, MagnifyingGlassIcon, ArrowUpTrayIcon, PlusIcon } from '@heroicons/vue/24/outline';
+import { Dialog, DialogPanel, DialogTitle, Listbox, ListboxButton, ListboxOptions, ListboxOption, Combobox, ComboboxButton, ComboboxInput, ComboboxOptions, ComboboxOption, TransitionChild, TransitionRoot } from '@headlessui/vue';
+import { CheckIcon, ChevronUpDownIcon, ChevronLeftIcon, ChevronRightIcon, XMarkIcon, MagnifyingGlassIcon, ArrowUpTrayIcon, PlusIcon, ArrowPathIcon } from '@heroicons/vue/24/outline';
 import { CheckIcon as CheckSolidIcon } from '@heroicons/vue/24/solid';
-import { Teleport, Transition } from 'vue';
-import DataTable from '@/components/common/DataTable.vue';
+import { Transition } from 'vue';
 import Avatar from '@/components/common/Avatar.vue';
 import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import FormTagsField from '@/components/common/FormTagsField.vue';
+import PhoneInput from '@/components/common/PhoneInput.vue';
 import apiClient from '@/utils/apiClient';
 import { validateField } from '@/utils/fieldValidation';
-import { sanitizePhoneDigits, preventNonDigitPhoneKeys } from '@/utils/phoneInput';
+import { sanitizeInternationalPhone, validatePhoneValue } from '@/utils/phoneInput';
 import { getWebsiteValidationMessage } from '@/utils/urlInputValidation';
 import { getFieldDisplayLabel } from '@/utils/fieldDisplay';
 import { openDatePicker } from '@/utils/dateUtils';
@@ -1004,9 +1151,13 @@ const lookupModalTotal = ref(0);
 const lookupModalColumns = ref([]);
 const lookupModalCurrentPage = ref(1);
 const lookupModalSearchQuery = ref('');
+const lookupModalSearchInput = ref('');
 const lookupModalSortBy = ref('');
 const lookupModalSortOrder = ref('asc');
+const lookupModalSearchInputRef = ref(null);
 const showLookupCreateDrawer = ref(false);
+const LOOKUP_MODAL_PAGE_SIZE = 20;
+let lookupModalSearchDebounce = null;
 const isReadOnly = computed(() => {
   // Check if explicitly locked via prop
   if (props.locked) return true;
@@ -1124,8 +1275,15 @@ const canCreateLookupRecord = computed(() => {
   return !isReadOnly.value && !!lookupTargetModuleKey.value && lookupTargetModuleKey.value !== 'users';
 });
 
+// When the lookup drawer is open, prefer its search seed; fall back to the inline combobox query otherwise.
+const activeLookupSearchSeed = computed(() => {
+  const drawer = String(lookupModalSearchQuery.value || lookupModalSearchInput.value || '').trim();
+  if (showLookupModal.value && drawer) return drawer;
+  return String(lookupSearchQuery.value || '').trim();
+});
+
 const lookupCreateInitialData = computed(() => {
-  const seed = String(lookupSearchQuery.value || '').trim();
+  const seed = activeLookupSearchSeed.value;
   if (!seed) return {};
 
   const displayField = String(props.field?.lookupSettings?.displayField || '').trim();
@@ -1146,6 +1304,32 @@ const lookupCreatePrefillFieldKey = computed(() => {
   if (moduleKey === 'people') return 'first_name';
   if (moduleKey === 'tasks') return 'title';
   return 'name';
+});
+
+const lookupModulePluralLabel = computed(() => {
+  const raw = getLookupModuleName();
+  // getLookupModuleName already returns title-cased plurals (e.g., "Users", "Organizations")
+  return raw || 'Records';
+});
+
+const lookupModuleSingularLabel = computed(() => {
+  const plural = lookupModulePluralLabel.value;
+  if (!plural) return 'Record';
+  // Naive singularize: trim a trailing "s" if present and result is non-empty
+  if (plural.length > 1 && plural.toLowerCase().endsWith('s')) {
+    return plural.slice(0, -1);
+  }
+  return plural;
+});
+
+const lookupModalTotalPages = computed(() => Math.max(1, Math.ceil((lookupModalTotal.value || lookupModalData.value.length || 0) / LOOKUP_MODAL_PAGE_SIZE)));
+
+const lookupModalPageSummary = computed(() => {
+  const total = lookupModalTotal.value || lookupModalData.value.length || 0;
+  if (!total) return 'No records to show';
+  const start = ((lookupModalCurrentPage.value - 1) * LOOKUP_MODAL_PAGE_SIZE) + 1;
+  const end = Math.min(start + lookupModalData.value.length - 1, total);
+  return `Showing ${start}-${end} of ${total} ${total === 1 ? 'record' : 'records'}`;
 });
 
 // Real-time validation
@@ -1206,20 +1390,28 @@ const validateValue = (val, opts = {}) => {
     }
   }
 
-  if (!props.field.validations || !Array.isArray(props.field.validations) || props.field.validations.length === 0) {
+  // Phone: while typing partial international numbers, validate fully on blur.
+  if (props.field.dataType === 'Phone') {
+    const phoneValidation = validatePhoneValue(strVal);
+    if (!phoneBlur && strVal && !phoneValidation.isValid) {
+      localValidationError.value = null;
+      emit('validation-error', props.field.key, null);
+      return;
+    }
+    if (!phoneValidation.isValid) {
+      localValidationError.value = phoneValidation.error;
+      emit('validation-error', props.field.key, localValidationError.value);
+      return;
+    }
     localValidationError.value = null;
     emit('validation-error', props.field.key, null);
     return;
   }
 
-  // Phone: while typing 1–9 digits, do not show "must be 10 digits" yet; validate fully on blur
-  if (props.field.dataType === 'Phone' && !phoneBlur) {
-    const digits = strVal.replace(/\D/g, '');
-    if (digits.length > 0 && digits.length < 10) {
-      localValidationError.value = null;
-      emit('validation-error', props.field.key, null);
-      return;
-    }
+  if (!props.field.validations || !Array.isArray(props.field.validations) || props.field.validations.length === 0) {
+    localValidationError.value = null;
+    emit('validation-error', props.field.key, null);
+    return;
   }
 
   const result = validateField(val, props.field.validations);
@@ -1294,7 +1486,7 @@ const updateValue = (newValue) => {
   hasInteracted.value = true;
   let v = newValue;
   if (props.field.dataType === 'Phone') {
-    v = sanitizePhoneDigits(
+    v = sanitizeInternationalPhone(
       typeof newValue === 'string' ? newValue : newValue == null ? '' : String(newValue)
     );
   }
@@ -1973,6 +2165,7 @@ const getLookupModuleName = () => {
 const openLookupModal = async () => {
   if (isReadOnly.value) return;
   showLookupModal.value = true;
+  lookupModalColumns.value = generateLookupModalColumns();
   await fetchLookupModalData();
 };
 
@@ -2002,8 +2195,13 @@ const closeLookupModal = () => {
   lookupModalData.value = [];
   lookupModalCurrentPage.value = 1;
   lookupModalSearchQuery.value = '';
+  lookupModalSearchInput.value = '';
   lookupModalSortBy.value = '';
   lookupModalSortOrder.value = 'asc';
+  if (lookupModalSearchDebounce) {
+    window.clearTimeout(lookupModalSearchDebounce);
+    lookupModalSearchDebounce = null;
+  }
 };
 
 // Fetch data for lookup modal
@@ -2013,7 +2211,7 @@ const fetchLookupModalData = async () => {
     let endpoint = '';
     let params = {
       page: lookupModalCurrentPage.value,
-      limit: 20
+      limit: LOOKUP_MODAL_PAGE_SIZE
     };
     
     if (lookupModalSearchQuery.value) {
@@ -2105,9 +2303,36 @@ const generateLookupModalColumns = () => {
   return columns;
 };
 
+const getLookupSubtitle = (row) => {
+  if (isUserLookupField.value || isAssignedToField.value) return row?.email || row?.username || '';
+  const candidates = ['email', 'phone', 'website', 'industry', 'status', 'title'];
+  const primaryKey = props.field?.lookupSettings?.displayField || (lookupModalColumns.value[0]?.key) || 'name';
+  for (const key of candidates) {
+    if (key === primaryKey) continue;
+    const value = row?.[key];
+    if (value) return String(value);
+  }
+  return '';
+};
+
+const getLookupInitials = (row) => {
+  const label = getLookupDisplay(row) || '?';
+  return label
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('') || '?';
+};
+
+const refreshLookupModalData = () => {
+  fetchLookupModalData();
+};
+
 // Handle row click in lookup modal
 const handleLookupRowClick = (row) => {
   updateValue(row._id);
+  emit('blur');
   closeLookupModal();
 };
 
@@ -2120,8 +2345,18 @@ const handleLookupPageChange = (page) => {
 // Handle search in lookup modal
 const handleLookupSearch = (query) => {
   lookupModalSearchQuery.value = query;
+  lookupModalSearchInput.value = query;
   lookupModalCurrentPage.value = 1;
   fetchLookupModalData();
+};
+
+const handleLookupSearchInput = () => {
+  if (lookupModalSearchDebounce) window.clearTimeout(lookupModalSearchDebounce);
+  lookupModalSearchDebounce = window.setTimeout(() => {
+    lookupModalSearchQuery.value = lookupModalSearchInput.value.trim();
+    lookupModalCurrentPage.value = 1;
+    fetchLookupModalData();
+  }, 250);
 };
 
 // Handle sort in lookup modal
@@ -2245,29 +2480,14 @@ onMounted(async () => {
     emit('update:value', arrayValue);
   }
 });
+
+onUnmounted(() => {
+  if (lookupModalSearchDebounce) {
+    window.clearTimeout(lookupModalSearchDebounce);
+    lookupModalSearchDebounce = null;
+  }
+});
 </script>
 
 <style scoped>
-/* Modal transition animations */
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-
-.modal-enter-active .bg-white,
-.modal-leave-active .bg-white {
-  transition: transform 0.2s ease, opacity 0.2s ease;
-}
-
-.modal-enter-from .bg-white,
-.modal-leave-to .bg-white {
-  opacity: 0;
-  transform: scale(0.95);
-}
 </style>
-

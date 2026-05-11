@@ -371,16 +371,12 @@ Post-creation behavior is driven by invocation context via query params:
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Phone
             </label>
-            <input
-              :value="formData.phone"
-              type="text"
-              inputmode="numeric"
-              autocomplete="tel"
-              maxlength="10"
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              placeholder="10-digit phone number"
-              @input="formData.phone = sanitizePhoneDigits($event.target.value)"
-              @keydown="preventNonDigitPhoneKeys"
+            <PhoneInput
+              :model-value="formData.phone"
+              placeholder="Phone number"
+              input-class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              :invalid="Boolean(validationErrors.phone)"
+              @update:model-value="formData.phone = $event"
               @blur="validatePhoneField"
             />
             <p v-if="validationErrors.phone" class="mt-1 text-sm text-red-600 dark:text-red-400">
@@ -433,8 +429,8 @@ import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
-import { sanitizePhoneDigits, preventNonDigitPhoneKeys } from '@/utils/phoneInput';
-import { DEFAULT_PHONE_VALIDATION_MESSAGE } from '@/utils/defaultFieldValidations';
+import PhoneInput from '@/components/common/PhoneInput.vue';
+import { sanitizeInternationalPhone, validatePhoneValue } from '@/utils/phoneInput';
 import { getWebsiteValidationMessage } from '@/utils/urlInputValidation';
 import { getAllowedStatusesForTypes, getDefaultStatusForTypes, getOrganizationIntentsForTypes } from '@/platform/organizations/organizationIntents';
 
@@ -483,10 +479,11 @@ const typesReadOnly = ref(false);
 const websiteTouched = ref(false);
 
 const validatePhoneField = () => {
-  const p = sanitizePhoneDigits(formData.value.phone || '');
+  const p = sanitizeInternationalPhone(formData.value.phone || '');
   formData.value.phone = p;
-  if (p.length > 0 && p.length !== 10) {
-    validationErrors.value = { ...validationErrors.value, phone: DEFAULT_PHONE_VALIDATION_MESSAGE };
+  const phoneValidation = validatePhoneValue(p);
+  if (!phoneValidation.isValid) {
+    validationErrors.value = { ...validationErrors.value, phone: phoneValidation.error };
     return false;
   }
   if (validationErrors.value.phone) {
@@ -969,7 +966,7 @@ const fetchOrganizationData = async () => {
         types: Array.isArray(data.types) ? [...data.types] : [],
         industry: data.industry || '',
         website: data.website || '',
-        phone: sanitizePhoneDigits(data.phone || ''),
+        phone: sanitizeInternationalPhone(data.phone || ''),
         address: data.address || '',
         // Status fields (preserve existing values in edit mode)
         customerStatus: data.customerStatus || null,

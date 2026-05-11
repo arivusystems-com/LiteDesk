@@ -3262,7 +3262,14 @@ async function handleLinkRecordDrawerLinked({ moduleKey: targetModuleKey, ids, c
       await apiClient.post('/relationships/link', linkPayload);
     } catch (err) {
       console.error('Error linking record:', err);
-      alert(err?.response?.data?.message || 'Failed to link record.');
+      const responseMessage = err?.response?.data?.message;
+      const validationErrors = Array.isArray(err?.response?.data?.errors)
+        ? err.response.data.errors.filter(Boolean)
+        : [];
+      const detailedMessage = validationErrors.length > 0
+        ? `${responseMessage || 'Failed to link record.'}\n\n${validationErrors.join('\n')}`
+        : (responseMessage || 'Failed to link record.');
+      alert(detailedMessage);
       return;
     }
   }

@@ -315,10 +315,9 @@ async function seedPlatformRelationships() {
       const validation = await validateRelationship(relData);
       
       if (!validation.valid) {
-        console.log(`  ⚠️  Skipping ${relData.relationshipKey} - Validation errors:`);
+        console.log(`  ⚠️  Validation warnings for ${relData.relationshipKey}:`);
         validation.errors.forEach(err => console.log(`     - ${err}`));
-        relationshipsSkipped++;
-        continue;
+        console.log('     → Upserting anyway to keep platform defaults present in DB.');
       }
 
       const existingRel = await RelationshipDefinition.findOne({
@@ -329,10 +328,9 @@ async function seedPlatformRelationships() {
         // Re-validate with exclude key for updates
         const updateValidation = await validateRelationship(relData, relData.relationshipKey);
         if (!updateValidation.valid) {
-          console.log(`  ⚠️  Skipping update for ${relData.relationshipKey} - Validation errors:`);
+          console.log(`  ⚠️  Update validation warnings for ${relData.relationshipKey}:`);
           updateValidation.errors.forEach(err => console.log(`     - ${err}`));
-          relationshipsSkipped++;
-          continue;
+          console.log('     → Updating anyway to keep platform defaults present in DB.');
         }
 
         await RelationshipDefinition.updateOne(

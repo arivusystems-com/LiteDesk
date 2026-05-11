@@ -1653,8 +1653,7 @@ import CreateRecordDrawer from '@/components/common/CreateRecordDrawer.vue';
 import LinkRecordsDrawer from '@/components/common/LinkRecordsDrawer.vue';
 import apiClient from '@/utils/apiClient';
 import { fetchModulesListCached } from '@/utils/tenantSchemaApiCache';
-import { sanitizePhoneDigits } from '@/utils/phoneInput';
-import { DEFAULT_PHONE_VALIDATION_MESSAGE } from '@/utils/defaultFieldValidations';
+import { sanitizeInternationalPhone, validatePhoneValue } from '@/utils/phoneInput';
 import { PEOPLE_SALES_ROLE_MODULE_DEFINITION_KEYS } from '@/utils/peopleParticipationUi';
 import { useAuthStore } from '@/stores/authRegistry';
 import { useTabs } from '@/composables/useTabs';
@@ -4628,7 +4627,7 @@ function shouldCoercePhoneField(fieldKey) {
 
 function coerceSummaryPhoneValue(fieldKey, raw) {
   if (!shouldCoercePhoneField(fieldKey)) return raw;
-  return sanitizePhoneDigits(raw == null ? '' : String(raw));
+  return sanitizeInternationalPhone(raw == null ? '' : String(raw));
 }
 
 // Update field value (for immediate UI updates during typing - no save, no log)
@@ -5065,9 +5064,9 @@ const saveFieldOnBlur = async (field) => {
     if (props.record) props.record[field] = currentValue;
     pendingFieldChanges.value[field] = { originalValue, currentValue };
 
-    const digits = String(currentValue || '');
-    if (digits.length > 0 && digits.length < 10) {
-      fieldErrors.value = { ...fieldErrors.value, [field]: DEFAULT_PHONE_VALIDATION_MESSAGE };
+    const phoneValidation = validatePhoneValue(currentValue);
+    if (!phoneValidation.isValid) {
+      fieldErrors.value = { ...fieldErrors.value, [field]: phoneValidation.error };
       return;
     }
     const nextErr = { ...fieldErrors.value };

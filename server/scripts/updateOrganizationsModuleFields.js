@@ -3,7 +3,6 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const ModuleDefinition = require('../models/ModuleDefinition');
 const Organization = require('../models/Organization');
-const { getDefaultPhoneValidations } = require('../utils/defaultFieldValidations');
 
 const defaultOrganizationRelationships = Object.freeze([
   { name: 'Related Contacts', type: 'one_to_many', isLookup: false, targetModuleKey: 'people', relationshipKey: 'people_organizations' },
@@ -275,10 +274,6 @@ function generateOrganizationFields() {
       field.filterPriority = filterMeta.filterPriority;
     }
 
-    if (mapping.type === 'Phone') {
-      field.validations = getDefaultPhoneValidations();
-    }
-
     fields.push(field);
   }
 
@@ -529,4 +524,3 @@ if (require.main === module) {
 }
 
 module.exports = updateOrganizationsModuleFields;
-

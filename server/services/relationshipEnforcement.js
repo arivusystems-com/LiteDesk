@@ -330,19 +330,21 @@ async function validateCardinality(organizationId, relationshipKey, source, targ
       }
     }
 
-    // Check MANY_TO_ONE: target can only have one source (if ownership is TARGET)
-    if (cardinality === 'MANY_TO_ONE' && relDef.ownership === 'TARGET') {
+    // Check MANY_TO_ONE: each source can have only one target.
+    // Example: people -> organizations means many people can point to one organization,
+    // but a single person cannot point to multiple organizations.
+    if (cardinality === 'MANY_TO_ONE') {
       const existing = await RelationshipInstance.findOne({
         organizationId,
         relationshipKey: normalizedRelationshipKey,
-        'target.appKey': target.appKey.toLowerCase(),
-        'target.moduleKey': target.moduleKey.toLowerCase(),
-        'target.recordId': target.recordId
+        'source.appKey': source.appKey.toLowerCase(),
+        'source.moduleKey': source.moduleKey.toLowerCase(),
+        'source.recordId': source.recordId
       });
 
       if (existing) {
         errors.push(
-          `MANY_TO_ONE relationship '${relationshipKey}' already exists for target record`
+          `MANY_TO_ONE relationship '${relationshipKey}' already exists for source record`
         );
       }
     }
