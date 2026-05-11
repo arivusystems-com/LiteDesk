@@ -53,7 +53,7 @@
           <div class="min-w-0 flex-1">
             <div class="flex min-w-0 items-center gap-2">
               <span
-                class="min-w-0 flex-1 font-semibold text-gray-900 dark:text-white whitespace-nowrap group-hover:truncate"
+                class="min-w-0 flex-1 font-semibold text-gray-900 dark:text-white truncate"
               >
                 {{ row.first_name }} {{ row.last_name }}
               </span>
@@ -70,7 +70,7 @@
             </div>
             <div
               v-if="row.email"
-              class="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap group-hover:truncate"
+              class="text-sm text-gray-500 dark:text-gray-400 truncate"
             >
               {{ row.email }}
             </div>

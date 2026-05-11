@@ -1,6 +1,5 @@
 <script setup>
 import { useRouter, useRoute } from 'vue-router';
-import { useTabs } from '@/composables/useTabs';
 import { useAuthStore } from '@/stores/authRegistry';
 import { useAppShellStore } from '@/stores/appShell';
 import NotificationBell from '@/components/notifications/NotificationBell.vue';
@@ -9,11 +8,13 @@ import { computed, inject, ref, watch, onMounted, onUnmounted } from 'vue';
 import { buildSidebarStructureForSession } from '@/utils/buildSidebarForSession';
 import { invalidateTenantSchemaCaches } from '@/utils/tenantSchemaApiCache';
 import { createPermissionSnapshot, hasPermission as hasSnapshotPermission } from '@/types/permission-snapshot.types';
-import { hasAnySettingsAccess } from '@/utils/settingsTabAccess';
 import { useColorMode } from '@/composables/useColorMode';
 import { useSidebarState } from '@/composables/useSidebarState';
+import { useUserStatus } from '@/composables/useUserStatus';
 import AppSidebar from '@/components/AppSidebar.vue';
-import { Dialog, DialogPanel, TransitionChild, TransitionRoot, Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
+import UserMenu from '@/components/UserMenu.vue';
+import clickOutside from '@/directives/clickOutside';
+import { Dialog, DialogPanel, TransitionChild, TransitionRoot } from '@headlessui/vue'
 import { 
   Bars3Icon, 
   BellIcon, 
@@ -25,6 +26,8 @@ import {
   InformationCircleIcon,
   DocumentTextIcon
 } from '@heroicons/vue/24/outline'
+
+const vClickOutside = clickOutside;
 
 // Define props and emits
 const props = defineProps({
@@ -39,8 +42,7 @@ const emit = defineEmits(['update:modelValue']);
 const initDynamicRoutes = inject('arivuInitializeDynamicRoutes');
 const router = useRouter();
 const route = useRoute();
-const { openTab } = useTabs();
-const { colorMode, toggleColorMode, clearStoredMode } = useColorMode();
+const { colorMode } = useColorMode();
 const authStore = useAuthStore();
 const appShellStore = useAppShellStore();
 const { lastActiveAppId } = useSidebarState();
@@ -300,27 +302,22 @@ const DEFAULT_AVATAR =
 
 const workspaceAvatar = computed(() => authStore.user?.avatar || DEFAULT_AVATAR);
 
-const isAdmin = computed(() => authStore.isAdminLike || authStore.isPlatformAdmin);
-
-const settingsAccessCtx = computed(() => ({
-  isOwner: !!authStore.user?.isOwner,
-  role: authStore.user?.role,
-  permissions: authStore.user?.permissions,
-}));
+// Mobile-top-bar account dropdown is now a shared <UserMenu>. Track open state +
+// surface the current presence dot on the avatar so the menu and the trigger
+// stay visually in sync (mirrors TabBar's desktop treatment).
+const showProfileDropdown = ref(false);
+const toggleProfileDropdown = () => {
+  showProfileDropdown.value = !showProfileDropdown.value;
+};
+const closeProfileDropdown = () => {
+  showProfileDropdown.value = false;
+};
+const currentUserId = computed(() => authStore.user?._id || null);
+const { currentPreset: userStatusPreset } = useUserStatus(currentUserId);
 
 /** Same compact bell treatment as TabBar (mobile / tablet top bar). */
 const shellTopBarBellClass =
   '!min-h-9 !min-w-9 !p-1.5 rounded-md !border-0 !bg-transparent shadow-none hover:!bg-gray-100 dark:hover:!bg-gray-700 [&_svg]:!w-6 [&_svg]:!h-6';
-
-const handleLogout = () => {
-  authStore.logout();
-  router.replace('/login');
-  authStore.error = null;
-};
-
-const toggleColorModeFromMenu = () => {
-  toggleColorMode(colorMode.value === 'light' ? 'dark' : 'light');
-};
 
 const mobileHeaderTitle = computed(() => {
   const path = route.path || '/';
@@ -365,33 +362,6 @@ const mobileHeaderTitle = computed(() => {
   }
 
   return 'Home';
-});
-
-// Menu items for the user dropdown (match TabBar account menu)
-const userMenuItems = computed(() => {
-  const items = [{ name: 'Your Profile', action: () => router.push('/profile') }];
-
-  if (isAdmin.value) {
-    items.push({ name: 'Control Panel', action: () => router.push('/control') });
-  }
-
-  if (hasAnySettingsAccess(settingsAccessCtx.value)) {
-    items.push({ name: 'Settings', action: () => openTab('/settings', { title: 'Settings' }) });
-  }
-
-  if (authStore.can('settings', 'view')) {
-    items.push({ name: 'Trash', action: () => router.push('/trash') });
-  }
-
-  items.push(
-    {
-      name: colorMode.value === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode',
-      action: toggleColorModeFromMenu,
-    },
-    { name: 'Sign out', action: handleLogout, divider: true, isLogout: true }
-  );
-
-  return items;
 });
 
 const logoSrc = computed(() => {
@@ -519,44 +489,28 @@ const logoSrc = computed(() => {
           @toggle="handleNotificationClick"
         />
 
-        <Menu as="div" class="relative">
-          <MenuButton
-            class="inline-flex items-center justify-center rounded-full overflow-hidden w-8 h-8 flex-shrink-0 ring-1 ring-gray-200 dark:ring-gray-600 hover:ring-gray-300 dark:hover:ring-gray-500 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        <div
+          v-click-outside="closeProfileDropdown"
+          class="relative flex items-center"
+        >
+          <button
+            type="button"
+            class="relative inline-flex items-center justify-center rounded-full w-8 h-8 flex-shrink-0 ring-1 ring-gray-200 dark:ring-gray-600 hover:ring-gray-300 dark:hover:ring-gray-500 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            aria-haspopup="true"
+            :aria-expanded="showProfileDropdown"
+            @click.stop="toggleProfileDropdown"
           >
-            <img :src="workspaceAvatar" alt="" class="w-full h-full object-cover" />
-          </MenuButton>
-
-          <transition
-            enter-active-class="transition ease-out duration-100"
-            enter-from-class="transform opacity-0 scale-95"
-            enter-to-class="transform opacity-100 scale-100"
-            leave-active-class="transition ease-in duration-75"
-            leave-from-class="transform opacity-100 scale-100"
-            leave-to-class="transform opacity-0 scale-95"
-          >
-            <MenuItems
-              class="absolute right-0 top-full mt-1 w-48 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 py-1 z-50"
-            >
-              <template v-for="(item, index) in userMenuItems" :key="index">
-                <hr v-if="item.divider" class="my-1 border-gray-200 dark:border-gray-700" />
-                <MenuItem v-slot="{ active }">
-                  <button
-                    @click="item.action()"
-                    :class="[
-                      'w-full text-left px-4 py-2 text-sm transition-colors duration-150',
-                      active ? 'bg-gray-100 dark:bg-gray-700' : '',
-                      item.isLogout
-                        ? 'text-red-600 dark:text-red-400'
-                        : 'text-gray-700 dark:text-gray-200'
-                    ]"
-                  >
-                    {{ item.name }}
-                  </button>
-                </MenuItem>
-              </template>
-            </MenuItems>
-          </transition>
-        </Menu>
+            <img :src="workspaceAvatar" alt="" class="w-full h-full rounded-full object-cover" />
+            <span
+              :class="[
+                'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-gray-900',
+                userStatusPreset.dotClass
+              ]"
+              aria-hidden="true"
+            />
+          </button>
+          <UserMenu :open="showProfileDropdown" align="right" @close="closeProfileDropdown" />
+        </div>
       </div>
     </div>
   </div>

@@ -136,13 +136,13 @@
           />
           <div class="min-w-0 flex-1">
             <span
-              class="block min-w-0 font-semibold text-gray-900 dark:text-white whitespace-nowrap group-hover:truncate"
+              class="block min-w-0 font-semibold text-gray-900 dark:text-white truncate"
             >
               {{ row.name }}
             </span>
             <div
               v-if="row.account?.name"
-              class="min-w-0 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap group-hover:truncate"
+              class="min-w-0 text-sm text-gray-500 dark:text-gray-400 truncate"
             >
               {{ row.account.name }}
             </div>

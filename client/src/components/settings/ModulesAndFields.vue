@@ -10755,6 +10755,41 @@ function getModuleName(key) {
 }
 
 
+// Auto-select required fields in Quick Create.
+// When a field is marked as required in the field configuration, it is
+// automatically added to the Quick Create selection (and order) and cannot be
+// unchecked until `required` is turned off. Pairs with the existing "cannot
+// uncheck required" guard in toggleQuickCreate() and the `:disabled="f.required"`
+// checkbox bindings in the Quick Create palette.
+//
+// We watch the eligible (`quickCreateAvailableFields`) required keys AND the
+// current selection, because module-load paths replace the entire
+// `quickCreateSelected` Set with the persisted config — refiring on selection
+// changes ensures required fields are re-injected after every reset.
+watch(
+  [
+    () => quickCreateAvailableFields.value
+      .filter(f => f && f.key && f.required)
+      .map(f => f.key)
+      .join('|'),
+    () => Array.from(quickCreateSelected.value || []).join('|')
+  ],
+  ([requiredKeysStr]) => {
+    if (!requiredKeysStr) return;
+    const requiredKeys = requiredKeysStr.split('|');
+    for (const key of requiredKeys) {
+      if (!key) continue;
+      if (!quickCreateSelected.value.has(key)) {
+        quickCreateSelected.value.add(key);
+      }
+      if (!quickCreateFieldOrder.value.includes(key)) {
+        quickCreateFieldOrder.value.push(key);
+      }
+    }
+  },
+  { immediate: true }
+);
+
 function toggleQuickCreate(key, checked) {
   const s = quickCreateSelected.value;
   

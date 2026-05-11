@@ -19,6 +19,11 @@ const OrganizationSubscription = require('../models/OrganizationSubscription');
 const { getAppConfig } = require('../utils/appAccessUtils');
 const appPricingRegistry = require('../constants/appPricingRegistry');
 const { APP_KEYS } = require('../constants/appKeys');
+const {
+    isInternalOrganization,
+    buildEnterpriseAppSubscription,
+    normalizeExistingEntryForInternalOrg
+} = require('../utils/internalOrganization');
 
 /**
  * Ensure a subscription exists for an app
@@ -84,12 +89,31 @@ async function ensureSubscriptionForApp({ organizationId, appKey, initiatedByUse
             });
         }
 
+        // Internal-org rule: Arivu's own tenants always get ENTERPRISE / unlimited /
+        // ACTIVE on every app, with no trial. This applies both when first creating
+        // an app entry AND when one already exists but has drifted (e.g. was
+        // provisioned as BASIC before the org was flagged internal).
+        const internal = await isInternalOrganization(organizationId);
+
         // Check if app subscription already exists
         const existingAppSubscription = subscription.apps.find(
             app => app.appKey === appKey
         );
 
         if (existingAppSubscription) {
+            if (internal) {
+                const changed = normalizeExistingEntryForInternalOrg(existingAppSubscription);
+                if (changed) {
+                    await subscription.save();
+                    console.info('[SubscriptionBootstrap] INTERNAL_NORMALIZED', {
+                        orgId: organizationId,
+                        appKey,
+                        planKey: existingAppSubscription.planKey,
+                        seatLimit: existingAppSubscription.seatLimit
+                    });
+                }
+                return { created: false, subscription: existingAppSubscription };
+            }
             console.info('[SubscriptionBootstrap] Subscription already exists', {
                 orgId: organizationId,
                 appKey,
@@ -98,54 +122,70 @@ async function ensureSubscriptionForApp({ organizationId, appKey, initiatedByUse
             return { created: false, subscription: existingAppSubscription };
         }
 
-        // Get default plan and trial days from pricing config
-        const defaultPlan = pricingConfig.defaultPlan || 'BASIC';
-        const trialDays = pricingConfig.trialDays || 14; // Default to 14 days if not specified
+        let appSubscription;
+        let logShape;
 
-        // Get plan config
-        const planConfig = pricingConfig.plans[defaultPlan];
-        if (!planConfig) {
-            console.error('[SubscriptionBootstrap] Default plan not found in pricing config', {
-                orgId: organizationId,
-                appKey,
-                defaultPlan
-            });
-            return { created: false, subscription: null };
+        if (internal) {
+            appSubscription = buildEnterpriseAppSubscription(appKey);
+            logShape = {
+                event: 'INTERNAL_ENTERPRISE_CREATED',
+                planKey: appSubscription.planKey,
+                seatLimit: appSubscription.seatLimit
+            };
+        } else {
+            // Get default plan and trial days from pricing config
+            const defaultPlan = pricingConfig.defaultPlan || 'BASIC';
+            const trialDays = pricingConfig.trialDays || 14; // Default to 14 days if not specified
+
+            // Get plan config
+            const planConfig = pricingConfig.plans[defaultPlan];
+            if (!planConfig) {
+                console.error('[SubscriptionBootstrap] Default plan not found in pricing config', {
+                    orgId: organizationId,
+                    appKey,
+                    defaultPlan
+                });
+                return { created: false, subscription: null };
+            }
+
+            // Calculate seat limit
+            let seatLimit = null;
+            if (pricingConfig.billingType === 'PER_USER') {
+                seatLimit = planConfig.seatLimit || null;
+            }
+            // FLAT apps have null seatLimit
+
+            // Calculate trial end date
+            const trialEndsAt = new Date();
+            trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
+
+            appSubscription = {
+                appKey: appKey,
+                planKey: defaultPlan,
+                seatLimit: seatLimit,
+                seatsUsed: 0,
+                status: 'TRIAL',
+                trialEndsAt: trialEndsAt,
+                startedAt: new Date()
+            };
+
+            logShape = {
+                event: 'TRIAL_CREATED',
+                planKey: defaultPlan,
+                trialDays,
+                trialEndsAt: trialEndsAt.toISOString(),
+                seatLimit
+            };
         }
-
-        // Calculate seat limit
-        let seatLimit = null;
-        if (pricingConfig.billingType === 'PER_USER') {
-            seatLimit = planConfig.seatLimit || null;
-        }
-        // FLAT apps have null seatLimit
-
-        // Calculate trial end date
-        const trialEndsAt = new Date();
-        trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
-
-        // Create app subscription entry
-        const appSubscription = {
-            appKey: appKey,
-            planKey: defaultPlan,
-            seatLimit: seatLimit,
-            seatsUsed: 0,
-            status: 'TRIAL',
-            trialEndsAt: trialEndsAt,
-            startedAt: new Date()
-        };
 
         // Add to apps array
         subscription.apps.push(appSubscription);
         await subscription.save();
 
-        console.info('[SubscriptionBootstrap] TRIAL_CREATED', {
+        console.info(`[SubscriptionBootstrap] ${logShape.event}`, {
             orgId: organizationId,
             appKey,
-            planKey: defaultPlan,
-            trialDays: trialDays,
-            trialEndsAt: trialEndsAt.toISOString(),
-            seatLimit: seatLimit,
+            ...logShape,
             initiatedByUserId: initiatedByUserId
         });
 

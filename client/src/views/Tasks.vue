@@ -53,13 +53,13 @@
 
       <!-- Custom Title Cell with checkbox -->
       <template #cell-title="{ row }">
-        <div class="flex items-center gap-3">
+        <div class="flex min-w-0 items-center gap-3">
           <HeadlessCheckbox 
             :checked="row.status === 'completed'"
             @click.stop="toggleTaskStatus(row)"
             checkbox-class="w-5 h-5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
           />
-          <span :class="['font-semibold', row.status === 'completed' ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white']">
+          <span :class="['min-w-0 flex-1 font-semibold truncate', row.status === 'completed' ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white']">
             {{ row.title }}
           </span>
         </div>

@@ -25,6 +25,10 @@ const { isAppEnabledForOrg, validateUserTypeForApp } = require('../utils/appAcce
 const { getOrgSubscription, assertSubscriptionUsable } = require('../utils/subscriptionUtils');
 const { resolveAppAccess } = require('../services/accessResolutionService');
 const { resolveAccessFeedback } = require('../utils/executionFeedbackResolver');
+const {
+    isInternalOrganization,
+    buildEnterpriseAppSubscription
+} = require('../utils/internalOrganization');
 
 // Debug flag for access resolution (can be enabled via environment variable)
 const ACCESS_DEBUG = process.env.ACCESS_DEBUG === 'true';
@@ -510,12 +514,14 @@ const requireAppEntitlement = async (req, res, next) => {
             let subscription = await getOrgSubscription(organizationId);
             let appSubscription = subscription?.apps.find(app => app.appKey === req.appKey);
 
-            // Special handling for CRM: Auto-create TRIAL subscription if missing but app is enabled
-            // Only for EXECUTION access (ADMIN bypasses billing)
+            // Special handling for CRM: Auto-create subscription if missing but app is enabled
+            // Only for EXECUTION access (ADMIN bypasses billing).
+            // Internal orgs land directly on ENTERPRISE/unlimited/ACTIVE; everyone else
+            // gets the standard BASIC TRIAL.
             if (req.appKey === APP_KEYS.SALES && !appSubscription && accessResult.mode === 'EXECUTION') {
                 const OrganizationSubscription = require('../models/OrganizationSubscription');
                 const appPricingRegistry = require('../constants/appPricingRegistry');
-                
+
                 // Create subscription document if it doesn't exist
                 if (!subscription) {
                     subscription = await OrganizationSubscription.create({
@@ -524,33 +530,44 @@ const requireAppEntitlement = async (req, res, next) => {
                     });
                 }
 
-                // Create CRM TRIAL subscription
-                const pricingConfig = appPricingRegistry[APP_KEYS.SALES];
-                const defaultPlan = pricingConfig?.defaultPlan || 'BASIC';
-                const trialDays = pricingConfig?.trialDays || 14;
-                const planConfig = pricingConfig?.plans[defaultPlan];
-                const seatLimit = planConfig?.seatLimit || null;
+                const internal = await isInternalOrganization(organizationId);
 
-                const trialEndsAt = new Date();
-                trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
+                if (internal) {
+                    appSubscription = buildEnterpriseAppSubscription(APP_KEYS.SALES);
+                    subscription.apps.push(appSubscription);
+                    await subscription.save();
+                    console.info('[AppEntitlement] Auto-created INTERNAL ENTERPRISE subscription', {
+                        orgId: organizationId,
+                        appKey: APP_KEYS.SALES
+                    });
+                } else {
+                    const pricingConfig = appPricingRegistry[APP_KEYS.SALES];
+                    const defaultPlan = pricingConfig?.defaultPlan || 'BASIC';
+                    const trialDays = pricingConfig?.trialDays || 14;
+                    const planConfig = pricingConfig?.plans[defaultPlan];
+                    const seatLimit = planConfig?.seatLimit || null;
 
-                appSubscription = {
-                    appKey: APP_KEYS.SALES,
-                    planKey: defaultPlan,
-                    seatLimit: seatLimit,
-                    seatsUsed: 0,
-                    status: 'TRIAL',
-                    trialEndsAt: trialEndsAt,
-                    startedAt: new Date()
-                };
+                    const trialEndsAt = new Date();
+                    trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
 
-                subscription.apps.push(appSubscription);
-                await subscription.save();
+                    appSubscription = {
+                        appKey: APP_KEYS.SALES,
+                        planKey: defaultPlan,
+                        seatLimit: seatLimit,
+                        seatsUsed: 0,
+                        status: 'TRIAL',
+                        trialEndsAt: trialEndsAt,
+                        startedAt: new Date()
+                    };
 
-                console.info('[AppEntitlement] Auto-created CRM TRIAL subscription', {
-                    orgId: organizationId,
-                    trialEndsAt: trialEndsAt.toISOString()
-                });
+                    subscription.apps.push(appSubscription);
+                    await subscription.save();
+
+                    console.info('[AppEntitlement] Auto-created CRM TRIAL subscription', {
+                        orgId: organizationId,
+                        trialEndsAt: trialEndsAt.toISOString()
+                    });
+                }
             }
 
             // ADMIN access bypasses billing checks
