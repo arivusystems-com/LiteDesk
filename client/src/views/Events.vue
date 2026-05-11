@@ -54,7 +54,7 @@
 
       <!-- Custom Event Name Cell -->
       <template #cell-eventName="{ row }">
-        <span class="font-semibold text-gray-900 dark:text-white">
+        <span class="block min-w-0 font-semibold text-gray-900 dark:text-white truncate">
           {{ row.eventName }}
         </span>
       </template>

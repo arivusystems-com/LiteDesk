@@ -16,6 +16,8 @@ const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const Organization = require('../models/Organization');
 const Role = require('../models/Role');
+const Instance = require('../models/Instance');
+const { INSTANCE_STATUS } = require('../constants/instanceLifecycle');
 const { ensureDefaultCommunicationSettingsForOrganization } = require('../services/communicationDefaultsSeeder');
 
 // Support both MONGODB_URI and MONGO_URI
@@ -198,6 +200,27 @@ const masterUri = `${baseUri}/${masterDbName}${connectionQuery}`;
         console.log(`   Name: ${adminUser.firstName} ${adminUser.lastName}`);
         console.log(`   Email: ${adminUser.email}`);
         console.log(`   Role: ${adminUser.role}`);
+
+        // Mark this org's Instance as internal so subscriptionBootstrapService and
+        // ensureOrgSubscriptionForEnabledApps permanently treat it as ENTERPRISE /
+        // unlimited / ACTIVE — including for any apps enabled later. Idempotent.
+        console.log('\n🏢 Marking Instance as internal (Arivu master tenant)...');
+        let instance = await Instance.findOne({ organizationId: organization._id });
+        if (!instance) {
+            instance = await Instance.create({
+                organizationId: organization._id,
+                status: INSTANCE_STATUS.ACTIVE,
+                isInternal: true,
+                source: 'MANUAL'
+            });
+            console.log(`   ✅ Instance created with isInternal=true, status=${instance.status}`);
+        } else if (!instance.isInternal) {
+            instance.isInternal = true;
+            await instance.save();
+            console.log('   ✅ Instance updated with isInternal=true');
+        } else {
+            console.log('   ✅ Instance already marked as internal');
+        }
 
         // Success summary
         console.log('\n' + '='.repeat(60));

@@ -341,29 +341,33 @@
                       ]"
                       :style="columnCellStyle(column)"
                     >
-                      <!-- First column: actions overlay on hover — no layout reserve while hidden (see slot padding) -->
-                      <div v-if="columnIndex === 0 && hasActions" class="relative flex items-center">
-                        <div
-                          class="min-w-0 flex-1 pr-0 transition-[padding-right] duration-150 ease-out group-hover:pr-28 group-focus-within:pr-28"
-                        >
-                          <slot
-                            :name="`cell-${columnKey(column)}`"
-                            :column="column"
-                            :row="row"
-                            :value="resolveValue(row, column)"
+                      <!-- First column: actions overlay on hover — overlay anchors to <td> so its
+                           inset-y-0 spans the full cell height (incl. padding), keeping h-8 buttons
+                           vertically centered without being clipped by the cell's overflow:hidden. -->
+                      <template v-if="columnIndex === 0 && hasActions">
+                        <div class="flex items-center">
+                          <div
+                            class="min-w-0 flex-1 pr-0 transition-[padding-right] duration-150 ease-out group-hover:pr-28 group-focus-within:pr-28"
                           >
-                            <slot name="cell" :column="column" :row="row" :value="resolveValue(row, column)">
-                              {{ resolveValue(row, column) }}
+                            <slot
+                              :name="`cell-${columnKey(column)}`"
+                              :column="column"
+                              :row="row"
+                              :value="resolveValue(row, column)"
+                            >
+                              <slot name="cell" :column="column" :row="row" :value="resolveValue(row, column)">
+                                {{ resolveValue(row, column) }}
+                              </slot>
                             </slot>
-                          </slot>
+                          </div>
                         </div>
                         <div
-                          class="pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center gap-0.5 pl-3 opacity-0 transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+                          class="pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center gap-0.5 pl-3 pr-5 opacity-0 transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
                           @click.stop
                         >
                           <slot name="actions" :row="row" />
                         </div>
-                      </div>
+                      </template>
                       <!-- Other columns: Normal rendering; first column content truncates -->
                       <template v-else>
                         <div v-if="columnIndex === 0" class="min-w-0 truncate">

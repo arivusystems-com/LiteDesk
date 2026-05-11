@@ -24,6 +24,11 @@ const OrganizationSubscription = require('../models/OrganizationSubscription');
 const User = require('../models/User');
 const { getAppConfig } = require('./appAccessUtils');
 const appPricingRegistry = require('../constants/appPricingRegistry');
+const {
+    isInternalOrganization,
+    buildEnterpriseAppSubscription,
+    normalizeExistingEntryForInternalOrg
+} = require('./internalOrganization');
 
 function normalizeAppKey(appKey) {
     const upper = String(appKey || '').toUpperCase();
@@ -76,6 +81,9 @@ async function ensureOrgSubscriptionForEnabledApps(organization) {
     }
 
     const paid = isOrgPaid(organization);
+    // Internal orgs (Arivu's own tenants) always get ENTERPRISE/unlimited/ACTIVE
+    // regardless of billing tier or trial state. Look it up once per call.
+    const internal = await isInternalOrganization(organization._id);
     const now = new Date();
     const trialEndFromOrg = organization?.subscription?.trialEndDate
         ? new Date(organization.subscription.trialEndDate)
@@ -90,6 +98,23 @@ async function ensureOrgSubscriptionForEnabledApps(organization) {
         if (!appConfig || !pricingConfig) continue;
 
         const existing = subscription.apps.find((a) => normalizeAppKey(a.appKey) === appKey);
+
+        if (internal) {
+            if (!existing) {
+                subscription.apps.push(buildEnterpriseAppSubscription(appKey));
+                changed = true;
+                continue;
+            }
+            // Normalize stored appKey if legacy (CRM)
+            if (normalizeAppKey(existing.appKey) !== existing.appKey) {
+                existing.appKey = appKey;
+                changed = true;
+            }
+            if (normalizeExistingEntryForInternalOrg(existing)) {
+                changed = true;
+            }
+            continue;
+        }
 
         const planKey = pricingConfig.defaultPlan || 'BASIC';
         const planConfig = pricingConfig.plans?.[planKey] || {};

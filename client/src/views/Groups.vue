@@ -154,8 +154,8 @@
             size="md"
           />
           <div class="flex min-w-0 flex-1 flex-col">
-            <span class="font-semibold text-gray-900 dark:text-white truncate">{{ row.name }}</span>
-            <span v-if="row.description" class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs">{{ row.description }}</span>
+            <span class="min-w-0 font-semibold text-gray-900 dark:text-white truncate">{{ row.name }}</span>
+            <span v-if="row.description" class="min-w-0 text-xs text-gray-500 dark:text-gray-400 truncate">{{ row.description }}</span>
           </div>
         </div>
       </template>

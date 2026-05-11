@@ -21,11 +21,11 @@
           <div v-else class="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
             <span class="text-white font-semibold text-sm">{{ getInitials(row.item_name) }}</span>
           </div>
-          <div class="min-w-0">
-            <div class="font-semibold text-gray-900 dark:text-white truncate">
+          <div class="min-w-0 flex-1">
+            <div class="min-w-0 font-semibold text-gray-900 dark:text-white truncate">
               {{ row.item_name }}
             </div>
-            <div v-if="row.item_code" class="text-xs text-gray-500 dark:text-gray-400 truncate">
+            <div v-if="row.item_code" class="min-w-0 text-xs text-gray-500 dark:text-gray-400 truncate">
               {{ row.item_code }}
             </div>
           </div>

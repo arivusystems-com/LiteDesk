@@ -1,19 +1,17 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { useTabs } from '@/composables/useTabs';
 import { useAuthStore } from '@/stores/authRegistry';
-import { hasAnySettingsAccess } from '@/utils/settingsTabAccess';
-import { useColorMode } from '@/composables/useColorMode';
 import clickOutside from '@/directives/clickOutside';
 import NotificationBell from '@/components/notifications/NotificationBell.vue';
+import UserMenu from '@/components/UserMenu.vue';
+import { useUserStatus } from '@/composables/useUserStatus';
 import { XMarkIcon } from '@heroicons/vue/20/solid';
 
-const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
-const { colorMode, toggleColorMode } = useColorMode();
-const { tabs, activeTabId, switchToTab, closeTab, closeOtherTabs, closeAllTabs, openTab } = useTabs();
+const { tabs, activeTabId, switchToTab, closeTab, closeOtherTabs, closeAllTabs } = useTabs();
 
 const DEFAULT_AVATAR =
   'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=128&h=128&q=80';
@@ -22,56 +20,11 @@ const workspaceAvatarUrl = computed(
   () => authStore.user?.avatar || DEFAULT_AVATAR
 );
 
-const isAdmin = computed(
-  () => authStore.isAdminLike || authStore.isPlatformAdmin
-);
-
-const settingsAccessCtx = computed(() => ({
-  isOwner: !!authStore.user?.isOwner,
-  role: authStore.user?.role,
-  permissions: authStore.user?.permissions,
-}));
+const currentUserId = computed(() => authStore.user?._id || null);
+const { currentPreset: userStatusPreset } = useUserStatus(currentUserId);
 
 const showProfileDropdown = ref(false);
 const profileDropdownRef = ref(null);
-
-const handleLogout = () => {
-  authStore.logout();
-  router.replace('/login');
-  authStore.error = null;
-};
-
-const profileMenuItems = computed(() => {
-  const items = [{ name: 'Your Profile', action: () => router.push('/profile') }];
-
-  if (isAdmin.value) {
-    items.push({ name: 'Control Panel', action: () => router.push('/control') });
-  }
-
-  if (hasAnySettingsAccess(settingsAccessCtx.value)) {
-    items.push({
-      name: 'Settings',
-      action: () => openTab('/settings', { title: 'Settings' }),
-    });
-  }
-
-  if (authStore.can('settings', 'view')) {
-    items.push({ name: 'Trash', action: () => router.push('/trash') });
-  }
-
-  items.push(
-    {
-      name: colorMode.value === 'light' ? '🌙 Dark Mode' : '☀️ Light Mode',
-      action: () => {
-        const newMode = colorMode.value === 'light' ? 'dark' : 'light';
-        toggleColorMode(newMode);
-      },
-    },
-    { name: 'Sign out', action: handleLogout, divider: true, isLogout: true }
-  );
-
-  return items;
-});
 
 const toggleProfileDropdown = () => {
   showProfileDropdown.value = !showProfileDropdown.value;
@@ -79,11 +32,6 @@ const toggleProfileDropdown = () => {
 
 const closeProfileDropdown = () => {
   showProfileDropdown.value = false;
-};
-
-const runProfileMenuAction = (action) => {
-  action();
-  closeProfileDropdown();
 };
 
 /** Audit layout has no Nav “keeper” bell — TabBar owns SSE there. Platform shell uses Nav’s hidden bell. */
@@ -433,46 +381,24 @@ onUnmounted(() => {
           v-click-outside="closeProfileDropdown"
           class="relative flex items-center"
         >
-        <button
-          type="button"
-          class="rounded-full overflow-hidden w-8 h-8 flex-shrink-0 ring-1 ring-gray-200 dark:ring-gray-600 hover:ring-gray-300 dark:hover:ring-gray-500 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-          title="Account"
-          aria-haspopup="true"
-          :aria-expanded="showProfileDropdown"
-          @click.stop="toggleProfileDropdown"
-        >
-          <img :src="workspaceAvatarUrl" alt="" class="w-full h-full object-cover" />
-        </button>
-        <transition
-          enter-active-class="transition ease-out duration-100"
-          enter-from-class="opacity-0 scale-95"
-          enter-to-class="opacity-100 scale-100"
-          leave-active-class="transition ease-in duration-75"
-          leave-from-class="opacity-100 scale-100"
-          leave-to-class="opacity-0 scale-95"
-        >
-          <div
-            v-if="showProfileDropdown"
-            class="absolute right-0 top-full mt-1 w-48 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 py-1 z-[100]"
-            @click.stop
+          <button
+            type="button"
+            class="relative rounded-full overflow-visible w-8 h-8 flex-shrink-0 ring-1 ring-gray-200 dark:ring-gray-600 hover:ring-gray-300 dark:hover:ring-gray-500 transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            title="Account"
+            aria-haspopup="true"
+            :aria-expanded="showProfileDropdown"
+            @click.stop="toggleProfileDropdown"
           >
-            <button
-              v-for="(item, index) in profileMenuItems"
-              :key="index"
-              type="button"
-              @click="runProfileMenuAction(item.action)"
+            <img :src="workspaceAvatarUrl" alt="" class="w-full h-full rounded-full object-cover" />
+            <span
               :class="[
-                'w-full text-left px-4 py-2 text-sm transition-colors',
-                item.isLogout
-                  ? 'text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700',
-                item.divider ? 'border-t border-gray-200 dark:border-gray-700 mt-1 pt-1' : '',
+                'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-gray-800',
+                userStatusPreset.dotClass
               ]"
-            >
-              {{ item.name }}
-            </button>
-          </div>
-        </transition>
+              aria-hidden="true"
+            />
+          </button>
+          <UserMenu :open="showProfileDropdown" align="right" @close="closeProfileDropdown" />
         </div>
       </div>
     </div>
