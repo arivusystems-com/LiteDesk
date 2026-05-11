@@ -54,17 +54,14 @@
               {{ field.label }}
               <span v-if="field.required" class="text-red-500">*</span>
             </label>
-            <input
+            <PhoneInput
               v-if="field.dataType === 'Phone'"
-              :value="formData[field.key]"
-              type="text"
-              inputmode="numeric"
-              maxlength="10"
+              :model-value="formData[field.key]"
               :required="field.required"
-              :placeholder="field.placeholder || '10-digit phone number'"
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              @input="formData[field.key] = sanitizePhoneDigits($event.target.value)"
-              @keydown="preventNonDigitPhoneKeys"
+              :placeholder="field.placeholder || 'Phone number'"
+              input-class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              :invalid="Boolean(validationErrors[field.key])"
+              @update:model-value="formData[field.key] = $event"
             />
             <input
               v-else-if="field.dataType !== 'Checkbox' && field.dataType !== 'Picklist'"
@@ -129,8 +126,9 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/authRegistry';
 import apiClient from '@/utils/apiClient';
-import { sanitizePhoneDigits, preventNonDigitPhoneKeys } from '@/utils/phoneInput';
-import { DEFAULT_PHONE_VALIDATION_MESSAGE, getDefaultEmailValidations } from '@/utils/defaultFieldValidations';
+import PhoneInput from '@/components/common/PhoneInput.vue';
+import { sanitizeInternationalPhone, validatePhoneValue } from '@/utils/phoneInput';
+import { getDefaultEmailValidations } from '@/utils/defaultFieldValidations';
 import { validateField } from '@/utils/fieldValidation';
 import { 
   getCoreIdentityFields, 
@@ -383,10 +381,11 @@ const handleSubmit = async () => {
       errors[field.key] = `${field.label} is required`;
     }
     if (field.dataType === 'Phone') {
-      const p = sanitizePhoneDigits(formData.value[field.key] || '');
+      const p = sanitizeInternationalPhone(formData.value[field.key] || '');
       formData.value[field.key] = p;
-      if (p.length > 0 && p.length !== 10) {
-        errors[field.key] = DEFAULT_PHONE_VALIDATION_MESSAGE;
+      const phoneValidation = validatePhoneValue(p);
+      if (!phoneValidation.isValid) {
+        errors[field.key] = phoneValidation.error;
       }
     }
     const isEmailField =

@@ -1,4 +1,5 @@
 const ModuleDefinition = require('../models/ModuleDefinition');
+const RelationshipDefinition = require('../models/RelationshipDefinition');
 const relationshipRegistry = require('../utils/relationshipRegistry');
 const { getOutgoingRelationships } = require('../utils/relationshipRegistry');
 const { filterFieldsByReadAccess, filterFieldsByWriteAccess, validateFieldWrite } = require('../utils/fieldAccessControl');
@@ -8,10 +9,87 @@ const {
     migratePeopleQuickCreateLayoutKeys,
 } = require('../utils/normalizePeopleModuleConfig');
 const {
-    getDefaultPhoneValidations,
     getDefaultEmailValidations,
     ensurePhoneFieldDefaultValidations,
 } = require('../utils/defaultFieldValidations');
+
+const MODULE_APP_KEY_BY_KEY = Object.freeze({
+    people: 'sales',
+    organizations: 'sales',
+    deals: 'sales',
+    tasks: 'platform',
+    events: 'platform',
+    forms: 'platform',
+    items: 'platform',
+    projects: 'projects',
+    cases: 'helpdesk'
+});
+
+function resolveModuleAppKey(moduleKey, fallback = 'platform') {
+    const key = String(moduleKey || '').toLowerCase().trim();
+    if (!key) return String(fallback || 'platform').toLowerCase();
+    return MODULE_APP_KEY_BY_KEY[key] || String(fallback || 'platform').toLowerCase();
+}
+
+function normalizeRelationshipCardinality(rawType) {
+    const normalized = String(rawType || '').toLowerCase().trim();
+    if (normalized === 'one_to_one') return 'ONE_TO_ONE';
+    if (normalized === 'one_to_many') return 'ONE_TO_MANY';
+    if (normalized === 'many_to_one' || normalized === 'lookup') return 'MANY_TO_ONE';
+    return 'MANY_TO_MANY';
+}
+
+async function ensurePlatformRelationshipDefinition({
+    relationshipKey,
+    sourceAppKey,
+    sourceModuleKey,
+    targetModuleKey,
+    relationshipType
+}) {
+    const cardinality = normalizeRelationshipCardinality(relationshipType);
+    const ownership = cardinality === 'MANY_TO_ONE' ? 'TARGET' : 'SOURCE';
+    const normalizedKey = String(relationshipKey || '').trim().toLowerCase();
+    const normalizedSourceAppKey = resolveModuleAppKey(sourceModuleKey, sourceAppKey);
+    const normalizedSourceModuleKey = String(sourceModuleKey || '').toLowerCase().trim();
+    const normalizedTargetModuleKey = String(targetModuleKey || '').toLowerCase().trim();
+    const normalizedTargetAppKey = resolveModuleAppKey(targetModuleKey, 'platform');
+
+    if (!normalizedKey || !normalizedSourceModuleKey || !normalizedTargetModuleKey) return false;
+
+    await RelationshipDefinition.updateOne(
+        { relationshipKey: normalizedKey },
+        {
+            $setOnInsert: {
+                relationshipKey: normalizedKey,
+                source: {
+                    appKey: normalizedSourceAppKey,
+                    moduleKey: normalizedSourceModuleKey
+                },
+                target: {
+                    appKey: normalizedTargetAppKey,
+                    moduleKey: normalizedTargetModuleKey
+                },
+                cardinality,
+                relationshipType: cardinality,
+                ownership,
+                required: false,
+                userLinkable: true,
+                display: {
+                    coreFields: false,
+                    relatedSummary: true,
+                    relatedExplorer: true,
+                    linkRecord: true
+                },
+                cascade: { onDelete: 'DETACH' },
+                automation: { allowed: true },
+                enabled: true
+            }
+        },
+        { upsert: true }
+    );
+
+    return true;
+}
 
 /** Canonical key for field dedup: lowercase, trim, strip spaces and hyphens (so "deleted-by", "deletedBy", "Deleted By" all match) */
 function fieldKeyCanonical(k) {
@@ -1139,9 +1217,7 @@ function getBaseFieldsForKey(key) {
                     visibility: { list: true, detail: true },
                     order: 0,
                     validations:
-                        dataType === 'Phone'
-                            ? getDefaultPhoneValidations()
-                            : dataType === 'Email'
+                        dataType === 'Email'
                               ? getDefaultEmailValidations()
                               : [],
                     dependencies: dependencies,
@@ -3419,10 +3495,7 @@ exports.updateModule = async (req, res) => {
         // relationships show in the Link Record drawer without requiring relationshipKey in the UI).
         if (relationships !== undefined) {
             const newRelationships = Array.isArray(relationships) ? [...relationships] : [];
-            const sourceAppKey = (
-                mod.appKey ||
-                (mod.key === 'deals' ? 'sales' : mod.key === 'cases' ? 'helpdesk' : mod.key === 'tasks' ? 'platform' : 'platform')
-            ).toString().toLowerCase();
+            const sourceAppKey = resolveModuleAppKey((mod.moduleKey || mod.key || ''), mod.appKey || 'platform');
             const sourceModuleKey = (mod.moduleKey || mod.key || '').toString().toLowerCase();
             const toTargetKey = (r) => {
                 const raw = r.targetModuleKey ?? r.targetModule;
@@ -3431,25 +3504,30 @@ exports.updateModule = async (req, res) => {
                 return String(raw).toLowerCase().trim();
             };
             const outgoing = await getOutgoingRelationships(sourceAppKey, sourceModuleKey);
+            let createdDefinitions = false;
             for (const r of newRelationships) {
                 const targetKey = toTargetKey(r);
-                if (targetKey && (!r.relationshipKey || !String(r.relationshipKey).trim())) {
+                const currentKey = r.relationshipKey && String(r.relationshipKey).trim().toLowerCase();
+                if (targetKey && (!currentKey || !relationshipRegistry.has(currentKey))) {
                     const matches = outgoing.filter((def) => def.target && (String(def.target.moduleKey || '').toLowerCase() === targetKey));
                     if (matches.length === 1) {
                         r.relationshipKey = matches[0].relationshipKey;
+                        continue;
                     }
+                    const generatedKey = currentKey || `${sourceModuleKey}_${targetKey}`.replace(/[^a-z0-9_]/g, '_');
+                    await ensurePlatformRelationshipDefinition({
+                        relationshipKey: generatedKey,
+                        sourceAppKey,
+                        sourceModuleKey,
+                        targetModuleKey: targetKey,
+                        relationshipType: r.type
+                    });
+                    r.relationshipKey = generatedKey;
+                    createdDefinitions = true;
                 }
             }
-            const missingKey = newRelationships.findIndex((r) => !r.relationshipKey || !String(r.relationshipKey).trim());
-            if (missingKey !== -1) {
-                const r = newRelationships[missingKey];
-                const targetKey = toTargetKey(r) || '?';
-                return res.status(400).json({
-                    success: false,
-                    message: `No platform relationship defined for ${sourceModuleKey} → ${targetKey}. Add it in seedPlatformRelationships.js (or run the seed script), then try again.`,
-                    code: 'RELATIONSHIP_KEY_REQUIRED',
-                    invalidIndex: missingKey
-                });
+            if (createdDefinitions) {
+                await relationshipRegistry.refreshRelationshipKeyCache();
             }
             const invalid = newRelationships
                 .map((r) => String(r.relationshipKey).trim())
@@ -3839,7 +3917,7 @@ exports.updateSystemModule = async (req, res) => {
         // Resolve and validate relationships (same as updateModule) so saved config works in Link Record drawer
         if (relationships !== undefined) {
             const newRelationships = Array.isArray(relationships) ? [...relationships] : [];
-            const sourceAppKey = (keyLower === 'deals' ? 'sales' : keyLower === 'cases' ? 'helpdesk' : keyLower === 'tasks' ? 'platform' : 'platform').toString().toLowerCase();
+            const sourceAppKey = resolveModuleAppKey(keyLower, 'platform');
             const sourceModuleKey = keyLower;
             const toTargetKey = (r) => {
                 const raw = r.targetModuleKey ?? r.targetModule;
@@ -3848,26 +3926,30 @@ exports.updateSystemModule = async (req, res) => {
                 return String(raw).toLowerCase().trim();
             };
             const outgoing = await getOutgoingRelationships(sourceAppKey, sourceModuleKey);
+            let createdDefinitions = false;
             for (const r of newRelationships) {
                 const targetKey = toTargetKey(r);
-                const relKey = r.relationshipKey && String(r.relationshipKey).trim();
+                const relKey = r.relationshipKey && String(r.relationshipKey).trim().toLowerCase();
                 if (targetKey && (!relKey || !relationshipRegistry.has(relKey))) {
                     const matches = outgoing.filter((def) => def.target && (String(def.target.moduleKey || '').toLowerCase() === targetKey));
                     if (matches.length === 1) {
                         r.relationshipKey = matches[0].relationshipKey;
+                        continue;
                     }
+                    const generatedKey = relKey || `${sourceModuleKey}_${targetKey}`.replace(/[^a-z0-9_]/g, '_');
+                    await ensurePlatformRelationshipDefinition({
+                        relationshipKey: generatedKey,
+                        sourceAppKey,
+                        sourceModuleKey,
+                        targetModuleKey: targetKey,
+                        relationshipType: r.type
+                    });
+                    r.relationshipKey = generatedKey;
+                    createdDefinitions = true;
                 }
             }
-            const missingKey = newRelationships.findIndex((r) => !r.relationshipKey || !String(r.relationshipKey).trim());
-            if (missingKey !== -1) {
-                const r = newRelationships[missingKey];
-                const targetKey = toTargetKey(r) || '?';
-                return res.status(400).json({
-                    success: false,
-                    message: `No platform relationship defined for ${sourceModuleKey} → ${targetKey}. Add it in seedPlatformRelationships.js (or run the seed script), then try again.`,
-                    code: 'RELATIONSHIP_KEY_REQUIRED',
-                    invalidIndex: missingKey
-                });
+            if (createdDefinitions) {
+                await relationshipRegistry.refreshRelationshipKeyCache();
             }
             const invalid = newRelationships
                 .map((r) => String(r.relationshipKey).trim())

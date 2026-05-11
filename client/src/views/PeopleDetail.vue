@@ -357,16 +357,11 @@
                 <label class="block text-sm text-gray-700 dark:text-gray-300 mb-2">
                   Phone
                 </label>
-                <input
-                  :value="editForm.phone"
-                  type="text"
-                  inputmode="numeric"
-                  autocomplete="tel"
-                  maxlength="10"
-                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  placeholder="10-digit phone number"
-                  @input="editForm.phone = sanitizePhoneDigits($event.target.value)"
-                  @keydown="preventNonDigitPhoneKeys"
+                <PhoneInput
+                  :model-value="editForm.phone"
+                  placeholder="Phone number"
+                  input-class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  @update:model-value="editForm.phone = $event"
                 />
               </div>
               <!-- Mobile -->
@@ -374,16 +369,11 @@
                 <label class="block text-sm text-gray-700 dark:text-gray-300 mb-2">
                   Mobile
                 </label>
-                <input
-                  :value="editForm.mobile"
-                  type="text"
-                  inputmode="numeric"
-                  autocomplete="tel"
-                  maxlength="10"
-                  class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  placeholder="10-digit mobile number"
-                  @input="editForm.mobile = sanitizePhoneDigits($event.target.value)"
-                  @keydown="preventNonDigitPhoneKeys"
+                <PhoneInput
+                  :model-value="editForm.mobile"
+                  placeholder="Mobile number"
+                  input-class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  @update:model-value="editForm.mobile = $event"
                 />
               </div>
               <!-- Do Not Contact -->
@@ -980,8 +970,9 @@ import { ref, computed, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/authRegistry';
 import apiClient from '@/utils/apiClient';
-import { sanitizePhoneDigits, preventNonDigitPhoneKeys } from '@/utils/phoneInput';
-import { DEFAULT_PHONE_VALIDATION_MESSAGE, getDefaultEmailValidations } from '@/utils/defaultFieldValidations';
+import PhoneInput from '@/components/common/PhoneInput.vue';
+import { sanitizeInternationalPhone, validatePhoneValue } from '@/utils/phoneInput';
+import { getDefaultEmailValidations } from '@/utils/defaultFieldValidations';
 import { validateField } from '@/utils/fieldValidation';
 import { toAttachRole } from '@/utils/getParticipation';
 import { openDatePicker } from '@/utils/dateUtils';
@@ -1133,8 +1124,8 @@ const enterEditMode = () => {
     first_name: profileData.value.core.fields.first_name || '',
     last_name: profileData.value.core.fields.last_name || '',
     email: profileData.value.core.fields.email || '',
-    phone: sanitizePhoneDigits(profileData.value.core.fields.phone || ''),
-    mobile: sanitizePhoneDigits(profileData.value.core.fields.mobile || ''),
+    phone: sanitizeInternationalPhone(profileData.value.core.fields.phone || ''),
+    mobile: sanitizeInternationalPhone(profileData.value.core.fields.mobile || ''),
     do_not_contact: profileData.value.core.fields.do_not_contact || false
   };
   
@@ -1167,12 +1158,12 @@ const saveCoreFields = async () => {
       return;
     }
 
-    const phoneDigits = sanitizePhoneDigits(editForm.value.phone || '');
-    const mobileDigits = sanitizePhoneDigits(editForm.value.mobile || '');
-    editForm.value.phone = phoneDigits;
-    editForm.value.mobile = mobileDigits;
-    if ((phoneDigits.length > 0 && phoneDigits.length !== 10) || (mobileDigits.length > 0 && mobileDigits.length !== 10)) {
-      editError.value = DEFAULT_PHONE_VALIDATION_MESSAGE;
+    editForm.value.phone = sanitizeInternationalPhone(editForm.value.phone || '');
+    editForm.value.mobile = sanitizeInternationalPhone(editForm.value.mobile || '');
+    const phoneValidation = validatePhoneValue(editForm.value.phone);
+    const mobileValidation = validatePhoneValue(editForm.value.mobile);
+    if (!phoneValidation.isValid || !mobileValidation.isValid) {
+      editError.value = phoneValidation.error || mobileValidation.error;
       saving.value = false;
       return;
     }
@@ -1669,4 +1660,3 @@ const handleAttachSubmit = async () => {
 };
 
 </script>
-

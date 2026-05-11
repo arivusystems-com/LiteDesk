@@ -22,19 +22,13 @@
         <div class="form-group">
           <label for="phone" class="block text-sm/6 font-medium text-gray-900 dark:text-white">Phone Number *</label>
           <div class="mt-2">
-            <input
-              type="text"
+            <PhoneInput
               id="phone"
-              :value="formData.phone"
-              inputmode="numeric"
-              maxlength="10"
-              placeholder="10-digit phone number"
-              autocomplete="tel"
+              :model-value="formData.phone"
+              placeholder="Phone number"
               required
-              class="block w-full rounded-md bg-gray-100 px-3 py-1.5 text-gray-900 text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 
-              dark:text-white dark:bg-gray-700 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-              @input="formData.phone = sanitizePhoneDigits($event.target.value)"
-              @keydown="preventNonDigitPhoneKeys"
+              input-class="block w-full rounded-md bg-gray-100 px-3 py-1.5 text-gray-900 text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:text-white dark:bg-gray-700 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+              @update:model-value="formData.phone = $event"
             />
           </div>
         </div>
@@ -182,7 +176,8 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import apiClient from '../utils/apiClient';
-import { sanitizePhoneDigits, preventNonDigitPhoneKeys } from '../utils/phoneInput';
+import PhoneInput from '@/components/common/PhoneInput.vue';
+import { sanitizeInternationalPhone } from '../utils/phoneInput';
 import { Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import { CheckIcon } from '@heroicons/vue/24/outline';
 
@@ -210,7 +205,10 @@ const handleSubmit = async () => {
   success.value = '';
 
   try {
-    const data = await apiClient.post('/demo/request', formData.value);
+    const data = await apiClient.post('/demo/request', {
+      ...formData.value,
+      phone: sanitizeInternationalPhone(formData.value.phone),
+    });
 
     if (data.success) {
       success.value = data.message;

@@ -1671,7 +1671,23 @@
                 </div>
               </div>
               
-              <div>
+              <div v-if="currentField.dataType === 'Phone'" class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <div class="flex items-start gap-3">
+                  <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <p class="text-sm font-medium text-blue-900 dark:text-blue-200">
+                      Phone validation is based on the selected country.
+                    </p>
+                    <p class="mt-1 text-sm text-blue-800 dark:text-blue-300">
+                      Static regex rules are not used for phone fields because each country can have a different number length.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div v-else>
                 <!-- Empty State -->
                 <div v-if="!currentField.validations || currentField.validations.length === 0" class="flex flex-col items-center justify-center py-12 px-4 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-16 h-16 text-gray-300 dark:text-gray-600 mb-4">
@@ -1720,7 +1736,7 @@
                           <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Validation Name</label>
                           <input 
                             v-model="v.name" 
-                            placeholder="e.g., Phone must be 10 digits" 
+                            placeholder="e.g., Must match business ID format" 
                             :disabled="isValidationDisabled()"
                             class="w-full px-3 py-2 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 disabled:opacity-50 disabled:cursor-not-allowed" 
                           />
@@ -5481,7 +5497,7 @@ import { useAuthStore } from '@/stores/authRegistry';
 import { Switch, Dialog, DialogPanel, DialogTitle, TransitionChild, TransitionRoot } from '@headlessui/vue';
 import apiClient from '@/utils/apiClient';
 import { invalidateTenantSchemaCaches } from '@/utils/tenantSchemaApiCache';
-import { getDefaultPhoneValidations, getDefaultEmailValidations } from '@/utils/defaultFieldValidations';
+import { getDefaultEmailValidations } from '@/utils/defaultFieldValidations';
 import {
   CURRENCY_OPTIONS,
   DEFAULT_CURRENCY_CODE,
@@ -5557,6 +5573,7 @@ import {
   getStateFields,
   getDetailFields
 } from '@/platform/fields/peopleFieldModel';
+import { isGlobalSystemFieldKey } from '@/platform/fields/globalSystemFields';
 import {
   TASK_FIELD_METADATA,
   getTaskFieldMetadata,
@@ -5688,7 +5705,7 @@ const selectedFieldIdx = ref(0);
  */
 function normalizeFieldsForConfig(moduleKey, fields) {
   if (!Array.isArray(fields)) return fields;
-  const backendFields = fields.filter((f) => f?.key);
+  const backendFields = fields.filter((f) => f?.key).map(stripLegacyDefaultPhoneValidations);
 
   if (isModuleRegistered(moduleKey)) {
     const metadataMap = getFieldMetadataMap(moduleKey);
@@ -5703,6 +5720,22 @@ function normalizeFieldsForConfig(moduleKey, fields) {
 
   // Forms and modules without metadata: filter by fallback
   return filterToVisibleInConfig(backendFields, (key) => getFallbackMetadataForVisibleInConfig(key));
+}
+
+function isLegacyDefaultPhoneValidation(validation) {
+  if (!validation || validation.type !== 'regex') return false;
+  return [
+    '^(?:\\d{10})?$',
+    '^\\d{10}$',
+    '^(?:\\+[1-9]\\d{6,14})?$',
+  ].includes(validation.pattern);
+}
+
+function stripLegacyDefaultPhoneValidations(field) {
+  if (!field || field.dataType !== 'Phone' || !Array.isArray(field.validations)) return field;
+  if (field.validations.length === 0) return field;
+  if (!field.validations.every(isLegacyDefaultPhoneValidation)) return field;
+  return { ...field, validations: [] };
 }
 
 // Filter modules for display - exclude 'users' from main list (it's only for lookups)
@@ -7684,6 +7717,10 @@ const groupedFields = computed(() => {
         system.push(fieldKey);
       } else {
         // People module: use metadata
+        if (isGlobalSystemFieldKey(fieldKey)) {
+          system.push(fieldKey);
+          continue;
+        }
         const metadata = getFieldMetadata(fieldKey);
         
         if (metadata.owner === 'core' && metadata.intent === 'identity') {
@@ -8071,6 +8108,7 @@ function formatIntentDisplay(intent) {
 
 // Helper: Check if validation editing should be disabled (for participation fields)
 function isValidationDisabled() {
+  if (currentField.value?.dataType === 'Phone') return true;
   if (!isPeopleModule.value || !currentField.value?.key) return false;
   const metadata = getPeopleFieldMetadata(currentField.value.key);
   return metadata?.owner === 'participation';
@@ -9341,7 +9379,9 @@ const selectModule = (mod, preferFieldKey = null) => {
     const missingFields = [];
     for (const field of normalizedFields) {
       // Org custom fields are intentionally runtime-defined and not listed in PEOPLE_FIELD_METADATA.
-      if (field.key && field.owner !== 'org') {
+      // Global system fields (trash/audit infra) are classified centrally and may not
+      // exist in module-specific metadata maps.
+      if (field.key && field.owner !== 'org' && !isGlobalSystemFieldKey(field.key)) {
         try {
           getFieldMetadata(field.key);
         } catch (err) {
@@ -9712,9 +9752,6 @@ const handleAddFieldFromDrawer = async (field) => {
     owner: 'org',
     context: rawCtx === 'global' ? 'global' : rawCtx
   };
-  if (newField.dataType === 'Phone' && (!newField.validations || !newField.validations.length)) {
-    newField.validations = getDefaultPhoneValidations();
-  }
   if (newField.dataType === 'Email' && (!newField.validations || !newField.validations.length)) {
     newField.validations = getDefaultEmailValidations();
   }
@@ -9905,7 +9942,7 @@ const saveModule = async () => {
     
     // Filter to config-visible fields (metadata-driven: exclude infrastructure)
     const getMeta = (key) => isModuleRegistered(mod.key) ? getFieldMetadataFromRegistry(mod.key, key) : getFallbackMetadataForVisibleInConfig(key);
-    const fieldsToSave = filterToVisibleInConfig(deduplicatedFields, getMeta);
+    const fieldsToSave = filterToVisibleInConfig(deduplicatedFields, getMeta).map(stripLegacyDefaultPhoneValidations);
     editFields.value = fieldsToSave;
     const url = mod.type === 'system' ? `/api/modules/system/${mod.key}` : `/api/modules/${mod._id}`;
     // Get ordered keys from selected fields - these are the actual field keys from editFields
@@ -10341,12 +10378,6 @@ watch(() => currentField.value?.dataType, (newType) => {
   if (['Picklist', 'Multi-Picklist', 'Radio Button'].includes(newType)) {
     if (!Array.isArray(currentField.value.options)) {
       currentField.value.options = [];
-    }
-  }
-  if (newType === 'Phone') {
-    const v = currentField.value.validations;
-    if (!v || !Array.isArray(v) || v.length === 0) {
-      currentField.value.validations = getDefaultPhoneValidations();
     }
   }
   if (newType === 'Email') {
@@ -11121,6 +11152,7 @@ function extractLayoutKeys(layout) {
 }
 
 function addValidation() {
+  if (currentField.value?.dataType === 'Phone') return;
   if (!currentField.value.validations) currentField.value.validations = [];
   currentField.value.validations.push({ name: '', type: 'regex', pattern: '', minLength: undefined, maxLength: undefined, min: undefined, max: undefined, allowedValues: [], message: '' });
 }
@@ -11137,7 +11169,6 @@ function applyAllowedValues(idx) {
 function addPreset(kind) {
   const presets = {
     email: { pattern: '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$', message: 'Invalid email' },
-    phone10: { pattern: '^\\d{10}$', message: 'Enter exactly 10 digits (numbers only).' },
     url: { pattern: '^(https?:\\/\\/)?([\\w.-]+)\\.([a-z.]{2,6})([\\/\\w .-]*)*\\/?$', message: 'Invalid URL' },
     integer: { pattern: '^-?\\d+$', message: 'Must be an integer' },
     positive: { pattern: '^[+]?([1-9]\\d*)$', message: 'Must be a positive number' },
@@ -13455,5 +13486,3 @@ function onStageListDrop(pipelineKey) {
 
 defineExpose({ openCreateModal, selectedModule, clearSelection });
 </script>
-
-

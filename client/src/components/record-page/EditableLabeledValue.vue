@@ -119,23 +119,16 @@
         ]"
       >
         <div v-if="type === 'phone'" class="flex flex-col w-full min-w-0">
-          <input
+          <PhoneInput
             ref="inputRef"
-            :value="localValue"
-            type="text"
-            inputmode="numeric"
-            maxlength="10"
-            autocomplete="tel"
-            placeholder="10-digit phone number"
-            @input="onPhoneInput"
-            @keydown="preventNonDigitPhoneKeys"
+            :model-value="localValue"
+            placeholder="Phone number"
+            :invalid="Boolean(phoneError || saveHttpError)"
+            input-class="w-full h-8 px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            @update:model-value="onPhoneInput"
             @blur="handleBlur"
-            @keydown.enter="handleBlur"
-            @keydown.esc="handleCancel"
-            :class="[
-              'w-full h-8 px-2 py-1 text-sm border rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent',
-              phoneError || saveHttpError ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
-            ]"
+            @enter="handleBlur"
+            @escape="handleCancel"
           />
           <p v-if="phoneError" class="mt-1 text-xs text-red-600 dark:text-red-400 leading-snug">{{ phoneError }}</p>
           <p v-else-if="saveHttpError" class="mt-1 text-xs text-red-600 dark:text-red-400 leading-snug">{{ saveHttpError }}</p>
@@ -343,20 +336,16 @@
       <!-- Editable mode for text/url/phone/number/date -->
       <div v-else-if="isEditing && canEdit" class="editable-labeled-value__edit">
         <div v-if="type === 'phone'" class="flex flex-col w-full">
-          <input
+          <PhoneInput
             ref="inputRef"
-            :value="localValue"
-            type="text"
-            inputmode="numeric"
-            maxlength="10"
-            autocomplete="tel"
-            placeholder="10-digit phone number"
-            @input="onPhoneInput"
-            @keydown="preventNonDigitPhoneKeys"
+            :model-value="localValue"
+            placeholder="Phone number"
+            :invalid="Boolean(phoneError || saveHttpError)"
+            :input-class="stackSingleLineEditInputClass"
+            @update:model-value="onPhoneInput"
             @blur="handleBlur"
-            @keydown.enter="handleBlur"
-            @keydown.esc="handleCancel"
-            :class="stackSingleLineEditInputClass"
+            @enter="handleBlur"
+            @escape="handleCancel"
           />
           <p v-if="phoneError" class="mt-1 text-xs text-red-600 dark:text-red-400 leading-snug">{{ phoneError }}</p>
           <p v-else-if="saveHttpError" class="mt-1 text-xs text-red-600 dark:text-red-400 leading-snug">{{ saveHttpError }}</p>
@@ -477,8 +466,8 @@ import {
 } from '@heroicons/vue/24/outline';
 import apiClient from '@/utils/apiClient';
 import { openDatePicker } from '@/utils/dateUtils';
-import { sanitizePhoneDigits, preventNonDigitPhoneKeys } from '@/utils/phoneInput';
-import { DEFAULT_PHONE_VALIDATION_MESSAGE } from '@/utils/defaultFieldValidations';
+import PhoneInput from '@/components/common/PhoneInput.vue';
+import { sanitizeInternationalPhone, validatePhoneValue } from '@/utils/phoneInput';
 import { getApiErrorMessage } from '@/utils/httpErrors';
 
 const props = defineProps({
@@ -703,7 +692,7 @@ const initializeLocalValue = () => {
       localValue.value = null;
     }
   } else if (props.type === 'phone') {
-    localValue.value = sanitizePhoneDigits(props.value == null ? '' : String(props.value));
+    localValue.value = sanitizeInternationalPhone(props.value == null ? '' : String(props.value));
   } else {
     localValue.value = props.value;
   }
@@ -938,10 +927,10 @@ const handleClick = (event) => {
   });
 };
 
-function onPhoneInput(e) {
+function onPhoneInput(value) {
   phoneError.value = null;
   saveHttpError.value = null;
-  localValue.value = sanitizePhoneDigits(e?.target?.value ?? '');
+  localValue.value = sanitizeInternationalPhone(value == null ? '' : String(value));
 }
 
 const handleBlur = async () => {
@@ -949,11 +938,11 @@ const handleBlur = async () => {
 
   let valueToSave = localValue.value;
   if (props.type === 'phone') {
-    valueToSave = sanitizePhoneDigits(valueToSave == null ? '' : String(valueToSave));
+    valueToSave = sanitizeInternationalPhone(valueToSave == null ? '' : String(valueToSave));
     localValue.value = valueToSave;
-    const digits = String(valueToSave || '');
-    if (digits.length > 0 && digits.length < 10) {
-      phoneError.value = DEFAULT_PHONE_VALIDATION_MESSAGE;
+    const phoneValidation = validatePhoneValue(valueToSave);
+    if (!phoneValidation.isValid) {
+      phoneError.value = phoneValidation.error;
       return;
     }
     phoneError.value = null;

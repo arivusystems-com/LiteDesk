@@ -381,6 +381,7 @@ export const useTaskSectionDataProviders = (context = {}) => {
     const getRelatedRecordMeta = context.getRelatedRecordMeta || (() => '');
 
     const taskEvents = resolveValue(context.taskEvents);
+    const taskPeople = resolveValue(context.taskPeople);
     const taskDeals = resolveValue(context.taskDeals);
     const taskForms = resolveValue(context.taskForms);
 
@@ -411,6 +412,20 @@ export const useTaskSectionDataProviders = (context = {}) => {
           meta: getRelatedRecordMeta('event', event),
           type: 'event',
           recordId: String(event?._id || '')
+        }))
+      });
+    }
+
+    if (Array.isArray(taskPeople) && taskPeople.length > 0) {
+      groups.push({
+        key: 'people',
+        label: 'People',
+        items: taskPeople.slice(0, 5).map((person) => ({
+          id: String(person?._id || ''),
+          title: getRelatedRecordTitle('people', person),
+          meta: getRelatedRecordMeta('people', person),
+          type: 'people',
+          recordId: String(person?._id || '')
         }))
       });
     }
