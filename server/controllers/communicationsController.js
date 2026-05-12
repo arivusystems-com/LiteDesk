@@ -1458,6 +1458,102 @@ exports.bulkThreadActions = async (req, res) => {
  * PATCH /api/communications/threads/:threadId/view
  * Mark a thread as viewed by the current user.
  */
+/**
+ * GET /api/communications/threads/:threadId/messages
+ *
+ * Returns the ordered messages of a single thread for the Gmail-style inbox
+ * reader. Output shape matches the `messages` array inside getThreads so the
+ * client can reuse the same EmailThreadCard component.
+ *
+ * Authorization:
+ *   1. Org isolation (all queries scoped to req.user.organizationId).
+ *   2. If the thread is mailbox-scoped (workspace inbox), the user must have
+ *      access to at least one of those mailboxes (same rule as the list view —
+ *      see canUserAccessMailboxThreads).
+ *   3. If the thread has no mailbox (legacy record-only thread), org isolation
+ *      is sufficient — record-level access is enforced at the record page.
+ */
+exports.getThreadMessages = async (req, res) => {
+  try {
+    const { threadId } = req.params;
+    const orgId = req.user.organizationId;
+
+    if (!threadId || !mongoose.Types.ObjectId.isValid(String(threadId))) {
+      return res.status(400).json({ success: false, message: 'Invalid threadId' });
+    }
+
+    // Include messages whose threadId === :threadId AND the seed message
+    // (whose threadId may still be unset, with _id === :threadId).
+    const messages = await Communication.find({
+      organizationId: orgId,
+      $or: [{ threadId }, { _id: threadId }]
+    })
+      .sort({ sentAt: 1, receivedAt: 1, createdAt: 1 })
+      .lean();
+
+    if (messages.length === 0) {
+      return res.status(404).json({ success: false, message: 'Thread not found' });
+    }
+
+    const mailboxIds = [
+      ...new Set(messages.map((m) => m.mailboxId).filter(Boolean).map(String))
+    ];
+    if (mailboxIds.length > 0) {
+      const mailboxes = await Mailbox.find({
+        _id: { $in: mailboxIds },
+        organizationId: orgId
+      }).lean();
+      const hasAccess = mailboxes.some((mb) => canUserAccessMailboxThreads(req.user, mb));
+      if (!hasAccess) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not allowed to view this thread'
+        });
+      }
+    }
+
+    const last = messages[messages.length - 1];
+    const first = messages[0];
+    const subject = String(last.subject || first.subject || '(no subject)');
+    const relatedTo = first.relatedTo || null;
+
+    return res.json({
+      success: true,
+      data: {
+        threadId: String(first.threadId || first._id),
+        subject,
+        messageCount: messages.length,
+        relatedTo: relatedTo
+          ? {
+              moduleKey: relatedTo.moduleKey,
+              recordId: relatedTo.recordId ? String(relatedTo.recordId) : null
+            }
+          : null,
+        messages: messages.map((m) => ({
+          _id: m._id,
+          direction: m.direction,
+          fromAddress: m.fromAddress,
+          toAddresses: m.toAddresses || [],
+          ccAddresses: m.ccAddresses || [],
+          subject: m.subject,
+          body: m.body,
+          attachments: m.attachments || [],
+          sentAt: m.sentAt,
+          receivedAt: m.receivedAt,
+          status: m.status
+        }))
+      }
+    });
+  } catch (err) {
+    console.error('[communicationsController] getThreadMessages error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to load thread messages',
+      error: err.message
+    });
+  }
+};
+
 exports.markThreadViewed = async (req, res) => {
   try {
     const { threadId } = req.params;
