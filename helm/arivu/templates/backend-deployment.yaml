@@ -45,6 +45,36 @@ spec:
               key: jwt-secret
         - name: JWT_EXPIRES_IN
           value: {{ .Values.backend.env.jwtExpiresIn }}
+        - name: CLIENT_URL
+          {{- if .Values.backend.env.clientUrl }}
+          value: {{ .Values.backend.env.clientUrl | quote }}
+          {{- else if and .Values.ingress.enabled (gt (len .Values.ingress.hosts) 0) }}
+          value: {{ printf "https://%s" (index .Values.ingress.hosts 0).host | quote }}
+          {{- else }}
+          value: ""
+          {{- end }}
+        {{- if .Values.backend.env.mailboxOAuthSecret }}
+        - name: MAILBOX_OAUTH_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.instance.name }}-app-secret
+              key: mailbox-oauth-secret
+        {{- end }}
+        {{- if .Values.backend.gmail.clientId }}
+        - name: GOOGLE_GMAIL_CLIENT_ID
+          value: {{ .Values.backend.gmail.clientId | quote }}
+        {{- end }}
+        {{- if .Values.backend.gmail.clientSecret }}
+        - name: GOOGLE_GMAIL_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.instance.name }}-app-secret
+              key: gmail-client-secret
+        {{- end }}
+        {{- if .Values.backend.gmail.redirectUri }}
+        - name: GOOGLE_GMAIL_REDIRECT_URI
+          value: {{ .Values.backend.gmail.redirectUri | quote }}
+        {{- end }}
         livenessProbe:
           {{- toYaml .Values.livenessProbe | nindent 10 }}
         readinessProbe:

@@ -44,6 +44,27 @@ backend:
     nodeEnv: production
     port: 3000
     jwtExpiresIn: "1d"
+    # Public URL of the frontend, used for OAuth-callback redirects and CORS-friendly
+    # redirects (e.g. /inbox?gmail=connected). When empty, the chart auto-derives it
+    # from ingress.hosts[0].host as https://<that host>. Set this explicitly when
+    # frontend and API are on different hosts (api.* vs app.*).
+    clientUrl: ""
+    # Optional. Stable encryption key for OAuth secrets stored per-tenant in MongoDB
+    # (CommunicationConfig.gmailInboxSync.clientSecretEnc, etc). Falls back to
+    # JWT_SECRET when unset — but that means rotating JWT_SECRET will invalidate
+    # already-stored OAuth secrets, so prefer setting this independently.
+    mailboxOAuthSecret: ""
+
+  # Hosted Gmail OAuth web client (project must have the Gmail API enabled).
+  # When set, all tenants in this instance can connect personal Gmail mailboxes
+  # without configuring their own OAuth app. Workspace admins can still override
+  # these per-org under Settings → Integrations → Email → Advanced.
+  gmail:
+    clientId: ""
+    clientSecret: ""
+    # Must match the "Authorized redirect URI" on the OAuth client exactly.
+    # Typically: https://<api-host>/api/mailboxes/inbox-sync/google/callback
+    redirectUri: ""
 
 # MongoDB configuration
 mongodb:
