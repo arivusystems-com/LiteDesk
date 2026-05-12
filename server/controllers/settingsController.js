@@ -1819,14 +1819,22 @@ exports.getIntegration = async (req, res) => {
             const communicationConfig = await getCommunicationConfigForOrganization(req.user.organizationId);
             const gmailCreds = await getGmailOAuthAppCredentialsForServer(req.user.organizationId);
             payload.gmailOAuthAppConfigured = !gmailCreds.error;
+            // Gmail OAuth client config is platform-level: only LiteDesk platform
+            // admins ever see clientId / redirectUri / hasClientSecret. Customer
+            // workspace owners get an empty stub — the gmailOAuthAppConfigured
+            // boolean above is all they need to render the "Ready for users" badge.
+            const isPlatformAdminForRead = req.user?.isPlatformAdmin === true;
+            const rawGmailPolicy = communicationConfig.gmailInboxSync || {
+                clientId: '',
+                redirectUri: '',
+                hasClientSecret: false
+            };
             payload.communicationPolicy = {
                 outboundEmail: communicationConfig.outboundEmail,
                 supportedModuleKeys: communicationPlatformService.getSupportedModules(),
-                gmailInboxSync: communicationConfig.gmailInboxSync || {
-                    clientId: '',
-                    redirectUri: '',
-                    hasClientSecret: false
-                }
+                gmailInboxSync: isPlatformAdminForRead
+                    ? rawGmailPolicy
+                    : { clientId: '', redirectUri: '', hasClientSecret: false }
             };
         }
 
@@ -1875,6 +1883,7 @@ exports.updateIntegrationConfig = async (req, res) => {
             communicationPolicy
         } = req.body || {};
         const isOwnerLike = req.user?.isOwner === true || String(req.user?.role || '').toLowerCase() === 'owner';
+        const isPlatformAdmin = req.user?.isPlatformAdmin === true;
 
         if (!fromEmail || !String(fromEmail).includes('@')) {
             return res.status(400).json({
@@ -1924,15 +1933,34 @@ exports.updateIntegrationConfig = async (req, res) => {
                 code: 'EMAIL_CONFIG_OWNER_ONLY'
             });
         }
-        const hasPolicyUpdate =
+        const hasOutboundPolicyUpdate =
             communicationPolicy &&
             typeof communicationPolicy === 'object' &&
-            (communicationPolicy.outboundEmail || communicationPolicy.gmailInboxSync);
-        if (hasPolicyUpdate && !isOwnerLike) {
+            communicationPolicy.outboundEmail &&
+            typeof communicationPolicy.outboundEmail === 'object';
+        const hasGmailOAuthPolicyUpdate =
+            communicationPolicy &&
+            typeof communicationPolicy === 'object' &&
+            communicationPolicy.gmailInboxSync &&
+            typeof communicationPolicy.gmailInboxSync === 'object';
+        const hasPolicyUpdate = hasOutboundPolicyUpdate || hasGmailOAuthPolicyUpdate;
+        if (hasOutboundPolicyUpdate && !isOwnerLike) {
             return res.status(403).json({
                 success: false,
                 message: 'Only workspace owner can modify communication policy',
                 code: 'COMMUNICATION_POLICY_OWNER_ONLY'
+            });
+        }
+        // Gmail OAuth client credentials are platform-level, not tenant-level: they
+        // identify the Google Cloud project that owns the OAuth consent screen, not
+        // the workspace. Allowing customer workspace owners to overwrite them would
+        // either point Connect Gmail at a foreign Google project (security risk) or
+        // break it entirely for their workspace.
+        if (hasGmailOAuthPolicyUpdate && !isPlatformAdmin) {
+            return res.status(403).json({
+                success: false,
+                message: 'Only LiteDesk platform administrators can modify the Gmail OAuth client configuration',
+                code: 'GMAIL_OAUTH_PLATFORM_ADMIN_ONLY'
             });
         }
 

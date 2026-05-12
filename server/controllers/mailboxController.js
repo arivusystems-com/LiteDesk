@@ -11,6 +11,7 @@ const { loadWorkspaceThreadSummaries } = require('../services/workspaceThreadSum
 const {
   buildGmailAuthorizeUrl,
   completeGmailOAuthCallback,
+  resolveClientBaseUrlFromState,
   runGmailInboxSyncForMailbox,
   assertPersonalOwner
 } = require('../services/mailboxGmailInboxSyncService');
@@ -292,10 +293,24 @@ async function getMailbox(req, res) {
 
 /**
  * GET /api/mailboxes/inbox-sync/google/callback — Google redirects here (no JWT).
+ *
+ * Frontend base URL for the post-callback redirect is resolved up front so
+ * every exit path (success, structured error, thrown error) lands on the same
+ * host. Resolution order:
+ *   1. process.env.CLIENT_URL — explicit operator override
+ *   2. origin of the per-org Gmail redirect URI (Settings → Integrations →
+ *      Email → Advanced, or GOOGLE_GMAIL_REDIRECT_URI env). Works for single-
+ *      host deployments where the API and SPA share a hostname.
+ *   3. http://localhost:5173 — dev fallback
  */
 async function gmailOAuthCallback(req, res) {
+  let base = String(process.env.CLIENT_URL || '').replace(/\/$/, '');
+  if (!base) {
+    const fromState = await resolveClientBaseUrlFromState(req.query.state).catch(() => '');
+    base = (fromState || 'http://localhost:5173').replace(/\/$/, '');
+  }
+
   try {
-    const base = String(process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
     const result = await completeGmailOAuthCallback({
       code: req.query.code,
       state: req.query.state
@@ -307,7 +322,6 @@ async function gmailOAuthCallback(req, res) {
     return res.redirect(`${base}/inbox?gmail=error&message=${msg}`);
   } catch (err) {
     console.error('[mailboxController] gmailOAuthCallback:', err);
-    const base = String(process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
     return res.redirect(`${base}/inbox?gmail=error&message=${encodeURIComponent(err.message || 'oauth_failed')}`);
   }
 }
