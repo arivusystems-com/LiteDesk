@@ -21,6 +21,39 @@ function normalizeOAuthLoginHint(raw) {
   return s;
 }
 
+function originOf(url) {
+  try {
+    const u = new URL(String(url || ''));
+    if (!u.protocol || !u.host) return '';
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Best-effort: pull the orgId out of the (possibly-expired) state JWT so we
+ * can derive a frontend base URL from the per-org Gmail redirect URI's origin.
+ * Used only to pick the host for the post-callback redirect, never for trust —
+ * so we decode without verifying (verification still happens in
+ * completeGmailOAuthCallback before any tokens are stored).
+ *
+ * @returns {Promise<string>} Origin like "https://app.example.com" or "" when
+ *   the state is unparseable or no per-org redirect URI is configured.
+ */
+async function resolveClientBaseUrlFromState(state) {
+  try {
+    const payload = jwt.decode(String(state || ''));
+    const orgId = payload && payload.oid;
+    if (!orgId) return '';
+    const creds = await getGmailOAuthAppCredentialsForServer(orgId);
+    if (creds.error || !creds.redirectUri) return '';
+    return originOf(creds.redirectUri);
+  } catch {
+    return '';
+  }
+}
+
 async function getOAuthClient(organizationId) {
   const creds = await getGmailOAuthAppCredentialsForServer(organizationId);
   if (creds.error) return { error: creds.error };
@@ -277,6 +310,7 @@ module.exports = {
   decryptRefreshToken: decryptTenantSecret,
   buildGmailAuthorizeUrl,
   completeGmailOAuthCallback,
+  resolveClientBaseUrlFromState,
   runGmailInboxSyncForMailbox,
   assertPersonalOwner,
   MAX_MESSAGES_PER_RUN

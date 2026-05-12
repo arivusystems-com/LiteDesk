@@ -477,11 +477,11 @@
               </div>
 
               <details
-                v-if="isOwnerLike"
+                v-if="isPlatformAdmin"
                 class="mt-3 rounded-lg border border-gray-200 bg-white px-3 py-2 dark:border-gray-600 dark:bg-gray-900/40"
               >
                 <summary class="cursor-pointer text-xs font-medium text-gray-800 dark:text-gray-200">
-                  Advanced: custom Google Cloud OAuth app (self-hosted / overrides)
+                  Advanced: custom Google Cloud OAuth app (LiteDesk platform admins only)
                 </summary>
                 <p class="mt-2 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
                   <span class="font-medium text-gray-800 dark:text-gray-200">Skip this</span>
@@ -529,9 +529,6 @@
                   </button>
                 </div>
               </details>
-              <p v-else class="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
-                Only a workspace owner can add tenant OAuth overrides. Ask an owner or your API administrator.
-              </p>
             </div>
           </div>
 
@@ -1008,6 +1005,11 @@ import { useNotifications } from '@/composables/useNotifications';
 const authStore = useAuthStore();
 const notifications = useNotifications();
 const isOwnerLike = computed(() => authStore.isOwner || String(authStore.userRole || '').toLowerCase() === 'owner');
+// Gmail OAuth client credentials are a LiteDesk-platform concern (they identify the
+// Google Cloud project that owns the consent screen), not a per-tenant setting.
+// The Advanced override block is therefore visible only to platform admins — customer
+// workspace owners just see the "Ready for users" / "Not enabled" status above it.
+const isPlatformAdmin = computed(() => authStore.isPlatformAdmin === true);
 
 const integrations = ref([]);
 const selectedIntegration = ref(null);
@@ -1589,8 +1591,8 @@ const fetchIntegrationDetail = async (key, options = {}) => {
 
 const saveEmailConfig = async (includeGmailOAuthApp = false) => {
   if (!selectedIntegration.value || selectedIntegration.value.key !== 'email-provider') return;
-  if (includeGmailOAuthApp && !isOwnerLike.value) {
-    notifications.error('Only a workspace owner can save Gmail OAuth app overrides');
+  if (includeGmailOAuthApp && !isPlatformAdmin.value) {
+    notifications.error('Only LiteDesk platform administrators can modify the Gmail OAuth client configuration');
     return;
   }
   if (includeGmailOAuthApp) savingGmailOAuthConfig.value = true;
