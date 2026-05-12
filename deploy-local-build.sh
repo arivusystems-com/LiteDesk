@@ -25,6 +25,23 @@ ADMIN_EMAIL="admin@arivu.com"
 ADMIN_PASSWORD="Admin@123456"
 KEY_FILE=""
 
+# Public URLs (frontend lives on the same EC2 box behind nginx on :80).
+# Override with PUBLIC_BASE_URL=https://your-domain ./deploy-local-build.sh if
+# you've put a domain/HTTPS in front.
+PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-http://$EC2_IP}"
+
+# Gmail OAuth web client (project 64604669022). Must match the Authorized
+# redirect URI on the Google Cloud OAuth client EXACTLY. Pass these in via
+# env when running the script so secrets don't live in source control:
+#   GOOGLE_GMAIL_CLIENT_ID=... \
+#   GOOGLE_GMAIL_CLIENT_SECRET=... \
+#   MAILBOX_OAUTH_SECRET=... \
+#   ./deploy-local-build.sh
+GOOGLE_GMAIL_CLIENT_ID="${GOOGLE_GMAIL_CLIENT_ID:-}"
+GOOGLE_GMAIL_CLIENT_SECRET="${GOOGLE_GMAIL_CLIENT_SECRET:-}"
+GOOGLE_GMAIL_REDIRECT_URI="${GOOGLE_GMAIL_REDIRECT_URI:-$PUBLIC_BASE_URL/api/mailboxes/inbox-sync/google/callback}"
+MAILBOX_OAUTH_SECRET="${MAILBOX_OAUTH_SECRET:-}"
+
 echo -e "${BLUE}"
 cat << "EOF"
 ╔═══════════════════════════════════════════════════════════════╗
@@ -252,8 +269,17 @@ MASTER_API_KEY=$MASTER_API_KEY
 # -----------------------------------------------------------------------------
 # APPLICATION URLS (Production)
 # -----------------------------------------------------------------------------
-CLIENT_URL=http://$EC2_IP
-CORS_ORIGINS=http://$EC2_IP,https://$EC2_IP
+CLIENT_URL=$PUBLIC_BASE_URL
+CORS_ORIGINS=$PUBLIC_BASE_URL,http://$EC2_IP,https://$EC2_IP
+
+# -----------------------------------------------------------------------------
+# GMAIL OAUTH (server-wide fallback; tenants may override via Settings →
+# Integrations → Email → Advanced). Required for personal mailbox inbox sync.
+# -----------------------------------------------------------------------------
+GOOGLE_GMAIL_CLIENT_ID=$GOOGLE_GMAIL_CLIENT_ID
+GOOGLE_GMAIL_CLIENT_SECRET=$GOOGLE_GMAIL_CLIENT_SECRET
+GOOGLE_GMAIL_REDIRECT_URI=$GOOGLE_GMAIL_REDIRECT_URI
+MAILBOX_OAUTH_SECRET=$MAILBOX_OAUTH_SECRET
 
 # -----------------------------------------------------------------------------
 # ADMIN DEFAULTS
@@ -311,12 +337,26 @@ fi
 # Stop existing PM2 process
 pm2 delete arivu-api 2>/dev/null || true
 
-# Start backend
+# Start backend (fresh start re-reads .env via dotenv)
 pm2 start server.js --name arivu-api --time
 pm2 save
 
 # Setup startup
 pm2 startup systemd -u ubuntu --hp /home/ubuntu | grep "sudo env" | bash || true
+
+# Verify the env we care about actually got loaded into the live process.
+# (PM2 caches env at process start, so if anything looks empty here it would
+# also look empty inside Node. Re-deploys via this script always do a fresh
+# pm2 start, which is what re-reads .env.)
+echo ""
+echo "🔎 Verifying OAuth env on running backend..."
+PM_ID=$(pm2 jlist | python3 -c "import sys,json;print(next(p['pm_id'] for p in json.load(sys.stdin) if p['name']=='arivu-api'))" 2>/dev/null || echo "")
+if [ -n "$PM_ID" ]; then
+  pm2 env "$PM_ID" 2>/dev/null \
+    | grep -E '^(CLIENT_URL|GOOGLE_GMAIL_CLIENT_ID|GOOGLE_GMAIL_REDIRECT_URI|MAILBOX_OAUTH_SECRET):' \
+    | sed -E 's/(CLIENT_SECRET|MAILBOX_OAUTH_SECRET): .+/\1: <redacted>/' \
+    || echo "⚠️  Could not read env — check 'pm2 env $PM_ID' manually"
+fi
 
 echo "✅ Backend started!"
 REMOTE
