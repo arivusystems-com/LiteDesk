@@ -926,6 +926,26 @@ const gmailSyncLoading = ref(false);
 const connectInboxWizardOpen = ref(false);
 const gmailServerSetupModalOpen = ref(false);
 
+// Gmail OAuth opens in a sized popup window (not the current tab). State below
+// is local to the parent tab — the popup itself runs the same InboxSurface
+// SPA, posts a result message back via window.opener, and closes itself
+// (see consumeGmailOAuthQuery).
+let gmailOAuthPopupRef = null;
+let gmailOAuthPollTimer = null;
+let gmailOAuthMessageHandler = null;
+
+function cleanupGmailOAuthPopup() {
+  if (gmailOAuthPollTimer) {
+    clearInterval(gmailOAuthPollTimer);
+    gmailOAuthPollTimer = null;
+  }
+  if (gmailOAuthMessageHandler) {
+    window.removeEventListener('message', gmailOAuthMessageHandler);
+    gmailOAuthMessageHandler = null;
+  }
+  gmailOAuthPopupRef = null;
+}
+
 const gmailOAuthReady = computed(() => mailboxFlags.value.gmailOAuthAppConfigured === true);
 
 const gmailRedirectExample = computed(() => {
@@ -1026,15 +1046,66 @@ async function startGmailOAuth(loginHint = '') {
     const hint = String(loginHint || '').trim();
     const options = hint ? { params: { login_hint: hint } } : {};
     const res = await apiClient.get(`/mailboxes/${mb.id}/inbox-sync/google/start`, options);
-    if (res?.success && res?.data?.url) {
+    if (!res?.success || !res?.data?.url) {
+      notifications.error(res?.message || 'Could not start Gmail connection');
+      gmailSyncLoading.value = false;
+      return;
+    }
+
+    // Open Google's consent screen in a sized popup window. Providing
+    // explicit width/height is what tells Chrome (and most browsers) to
+    // create a separate "popup" window instead of a tab in the current
+    // window. The OAuth callback eventually lands back on our own
+    // /inbox?gmail=connected URL inside this popup; that page detects
+    // window.opener and posts a result back here, then closes itself.
+    const w = 520;
+    const h = 720;
+    const screenLeft = typeof window.screen.availLeft === 'number' ? window.screen.availLeft : 0;
+    const screenTop = typeof window.screen.availTop === 'number' ? window.screen.availTop : 0;
+    const left = Math.max(0, Math.round((window.screen.availWidth - w) / 2 + screenLeft));
+    const top = Math.max(0, Math.round((window.screen.availHeight - h) / 2 + screenTop));
+    const features = `popup=yes,width=${w},height=${h},left=${left},top=${top},scrollbars=yes,resizable=yes`;
+    const popup = window.open(res.data.url, 'gmail-oauth', features);
+
+    if (!popup) {
+      // Popup blocked by the browser — fall back to same-tab redirect so the
+      // user can still complete the flow. They'll come back via the post-
+      // callback redirect handled by consumeGmailOAuthQuery on next mount.
       connectInboxWizardOpen.value = false;
       window.location.href = res.data.url;
       return;
     }
-    notifications.error(res?.message || 'Could not start Gmail connection');
+
+    cleanupGmailOAuthPopup();
+    gmailOAuthPopupRef = popup;
+    connectInboxWizardOpen.value = false;
+    try { popup.focus(); } catch { /* ignore */ }
+
+    gmailOAuthMessageHandler = (event) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data;
+      if (!data || data.type !== 'gmail-oauth-result') return;
+      if (data.status === 'connected') {
+        notifications.success('Gmail connected. Run Sync now to import INBOX mail.');
+        fetchMailboxes();
+      } else if (data.status === 'error') {
+        notifications.error(String(data.message || 'Connection failed'));
+      }
+      try { popup.close(); } catch { /* ignore */ }
+      cleanupGmailOAuthPopup();
+      gmailSyncLoading.value = false;
+    };
+    window.addEventListener('message', gmailOAuthMessageHandler);
+
+    // Detect manual popup close (user dismissed without finishing OAuth).
+    gmailOAuthPollTimer = setInterval(() => {
+      if (popup.closed) {
+        cleanupGmailOAuthPopup();
+        gmailSyncLoading.value = false;
+      }
+    }, 500);
   } catch (err) {
     notifications.error(err?.response?.data?.message || err?.message || 'Could not start Gmail connection');
-  } finally {
     gmailSyncLoading.value = false;
   }
 }
@@ -1082,19 +1153,43 @@ async function disconnectGmail() {
 
 function consumeGmailOAuthQuery() {
   const g = String(route.query.gmail || '');
+  if (g !== 'connected' && g !== 'error') return;
+
+  const rawMessage = route.query.message != null ? String(route.query.message) : '';
+  const decodedMessage = rawMessage ? decodeURIComponent(rawMessage.replace(/\+/g, ' ')) : '';
+
+  // When this page is opened as the OAuth popup (window.opener points back
+  // to the tab that called startGmailOAuth), hand the result to that opener
+  // and close ourselves instead of showing notifications here — the parent
+  // tab will refresh state and surface the toast in the user's main view.
+  const isOAuthPopup =
+    typeof window !== 'undefined' &&
+    window.opener &&
+    window.opener !== window &&
+    !window.opener.closed;
+  if (isOAuthPopup) {
+    try {
+      const payload =
+        g === 'connected'
+          ? { type: 'gmail-oauth-result', status: 'connected' }
+          : { type: 'gmail-oauth-result', status: 'error', message: decodedMessage || 'Connection failed' };
+      window.opener.postMessage(payload, window.location.origin);
+    } catch { /* opener may be cross-origin / closed — fall through to close */ }
+    try { window.close(); } catch { /* ignore */ }
+    return;
+  }
+
+  // Direct-navigation fallback: user pasted the success URL, or popup was
+  // blocked and we did a full-tab redirect instead. Behave the old way.
   if (g === 'connected') {
     notifications.success('Gmail connected. Run Sync now to import INBOX mail.');
-  } else if (g === 'error') {
-    const raw = route.query.message != null ? String(route.query.message) : '';
-    const msg = raw ? decodeURIComponent(raw.replace(/\+/g, ' ')) : 'Connection failed';
-    notifications.error(msg);
+  } else {
+    notifications.error(decodedMessage || 'Connection failed');
   }
-  if (g === 'connected' || g === 'error') {
-    const q = { ...route.query };
-    delete q.gmail;
-    delete q.message;
-    router.replace({ path: route.path, query: q });
-  }
+  const q = { ...route.query };
+  delete q.gmail;
+  delete q.message;
+  router.replace({ path: route.path, query: q });
 }
 
 function isWorkspaceThreadRow(row) {
@@ -1725,5 +1820,6 @@ onUnmounted(() => {
   document.removeEventListener('visibilitychange', onDocumentVisibilityChange);
   if (visibilityCountsTimer) clearTimeout(visibilityCountsTimer);
   if (emailSearchDebounceTimer) clearTimeout(emailSearchDebounceTimer);
+  cleanupGmailOAuthPopup();
 });
 </script>

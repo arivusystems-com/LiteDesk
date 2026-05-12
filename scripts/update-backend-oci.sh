@@ -67,8 +67,12 @@ cd "$BACKEND_DIR"
 npm install
 
 if pm2 describe "$PM2_APP_NAME" >/dev/null 2>&1; then
-  echo "==> Restarting PM2 app: $PM2_APP_NAME"
-  pm2 restart "$PM2_APP_NAME"
+  echo "==> Restarting PM2 app: $PM2_APP_NAME (with --update-env to re-read .env)"
+  # --update-env is required for PM2 to re-read $BACKEND_DIR/.env on restart;
+  # without it, PM2 reuses whatever env was captured when the process first
+  # started, and edits to .env (CLIENT_URL, GOOGLE_GMAIL_*, etc.) silently
+  # have no effect.
+  pm2 restart "$PM2_APP_NAME" --update-env
 else
   echo "==> PM2 app not found, starting new app: $PM2_APP_NAME"
   pm2 start "$START_FILE" --name "$PM2_APP_NAME" --time
