@@ -207,7 +207,10 @@
         </p>
       </div>
 
-      <div class="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900/95 lg:rounded-l-none lg:rounded-r-xl">
+      <div
+        v-if="!openThreadRow"
+        class="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900/95 lg:rounded-l-none lg:rounded-r-xl"
+      >
       <!-- Toolbar -->
       <div class="flex flex-wrap items-center gap-2 border-b border-gray-200 bg-gray-50/90 px-2 py-2 dark:border-gray-700 dark:bg-gray-800/80">
         <button
@@ -605,6 +608,22 @@
         </button>
       </div>
     </div>
+
+      <EmailThreadReader
+        v-else
+        :key="String(openThreadRow.threadId)"
+        :thread-id="String(openThreadRow.threadId)"
+        :thread-row="openThreadRow"
+        :record-path="openThreadRecordPath"
+        class="overflow-hidden rounded-xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900/95 lg:rounded-l-none lg:rounded-r-xl"
+        @close="closeThreadReader"
+        @reply="openReplyCompose($event)"
+        @forward="openReplyCompose($event.row)"
+        @toggle-done="toggleRowDone($event)"
+        @snooze="snoozeRowTomorrow($event)"
+        @assign-to-me="assignRowToMe($event)"
+        @open-record="onReaderOpenRecord($event)"
+      />
     </div>
 
     <!-- Workspace mail preview (no record deep link) -->
@@ -846,6 +865,7 @@ import {
 } from '@heroicons/vue/24/outline';
 import EmailComposeDrawer from '@/components/communications/EmailComposeDrawer.vue';
 import ConnectInboxWizard from '@/components/inbox/ConnectInboxWizard.vue';
+import EmailThreadReader from '@/components/inbox/EmailThreadReader.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -907,6 +927,14 @@ const selectedThreadIds = ref([]);
 const emailNextCursor = ref(null);
 const emailLoadingMore = ref(false);
 const workspacePreviewThread = ref(null);
+
+// Gmail-style thread reader. When this is set, the inbox content pane swaps
+// from the list view to <EmailThreadReader>. Mailbox sidebar (left column)
+// stays visible. URL is kept in sync via ?thread=<id> so back-button works
+// and refresh re-opens the same thread.
+const openThreadRow = ref(null);
+
+const openThreadRecordPath = computed(() => recordPathForEmailThread(openThreadRow.value) || '');
 
 const allVisibleSelected = computed(() => {
   const rows = emailThreads.value;
@@ -1724,11 +1752,78 @@ function recordPathForEmailThread(row) {
 }
 
 function openEmailThreadRecord(row) {
-  const rt = row?.relatedTo;
-  if (rt?.moduleKey && String(rt.moduleKey).toLowerCase() === 'workspace') {
-    workspacePreviewThread.value = row;
+  if (!row?.threadId) return;
+  // Gmail-style: always open the thread inline in the reader (workspace
+  // threads, record-tied threads, both). The "Go to record" action inside the
+  // reader is still available for jumping to the record context.
+  openThreadRow.value = row;
+  setRouteThreadId(String(row.threadId));
+}
+
+function closeThreadReader() {
+  openThreadRow.value = null;
+  setRouteThreadId(null);
+}
+
+function setRouteThreadId(value) {
+  // Keep the URL in sync so back-button + refresh restore the same thread.
+  const current = route.query.thread;
+  if (value && String(current || '') === String(value)) return;
+  if (!value && !current) return;
+  const next = { ...route.query };
+  if (value) next.thread = value;
+  else delete next.thread;
+  router.replace({ query: next });
+}
+
+async function toggleRowDone(row) {
+  if (!row?.threadId) return;
+  try {
+    const res = await apiClient.patch(
+      `/communications/threads/${encodeURIComponent(String(row.threadId))}/done`,
+      { done: !row.done }
+    );
+    if (res?.success) {
+      notifications.success(row.done ? 'Reopened' : 'Marked done');
+      // The reader stays open even when the local `row.done` flag changes —
+      // matches Gmail's "Archive" behavior where the thread remains visible.
+      openThreadRow.value = { ...row, done: !row.done };
+      await Promise.all([
+        refreshInboxThreadsAndCounts(),
+        fetchWorkspaceThreadCountsOnly({ silent: true })
+      ]);
+    } else {
+      notifications.error(res?.message || 'Action failed');
+    }
+  } catch (err) {
+    notifications.error(err?.response?.data?.message || err?.message || 'Action failed');
+  }
+}
+
+async function assignRowToMe(row) {
+  if (!row?.threadId) return;
+  const uid = authStore.user?._id || authStore.user?.id;
+  if (!uid) {
+    notifications.error('Not signed in');
     return;
   }
+  try {
+    const res = await apiClient.patch(
+      `/communications/threads/${encodeURIComponent(String(row.threadId))}/assign`,
+      { assignedToUserId: uid }
+    );
+    if (res?.success) {
+      notifications.success('Assigned to you');
+      await refreshInboxThreadsAndCounts();
+    } else {
+      notifications.error(res?.message || 'Assign failed');
+    }
+  } catch (err) {
+    notifications.error(err?.response?.data?.message || err?.message || 'Assign failed');
+  }
+}
+
+function onReaderOpenRecord(row) {
   const path = recordPathForEmailThread(row);
   if (!path) {
     notifications.error('Cannot open this thread — unknown record type');
@@ -1812,7 +1907,16 @@ onMounted(async () => {
   }
   await fetchMailboxes();
   consumeGmailOAuthQuery();
-  fetchEmailThreads();
+  await fetchEmailThreads();
+  // Restore the reader on refresh / deep link (?thread=<id>). Try to match the
+  // id against the just-fetched thread list so the reader has full row data
+  // for its header. If we don't find a row (e.g. paginated past), still open
+  // the reader with a minimal row — it fetches its own messages anyway.
+  const initialThreadId = String(route.query.thread || '').trim();
+  if (initialThreadId) {
+    const match = emailThreads.value.find((r) => String(r.threadId) === initialThreadId);
+    openThreadRow.value = match || { threadId: initialThreadId };
+  }
   document.addEventListener('visibilitychange', onDocumentVisibilityChange);
 });
 

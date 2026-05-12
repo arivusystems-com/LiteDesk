@@ -20,6 +20,7 @@ router.delete('/suppressions/:email', controller.removeSuppression);
 router.get('/webhook-test/templates', controller.getWebhookTestTemplates);
 router.post('/webhook-test/simulate', controller.simulateWebhookEvent);
 router.get('/threads', controller.getThreads);
+router.get('/threads/:threadId/messages', controller.getThreadMessages);
 router.get('/workspace-threads', controller.getWorkspaceThreads);
 router.get('/workspace-thread-ids', controller.getWorkspaceThreadIds);
 router.get('/workspace-thread-counts', controller.getWorkspaceThreadCounts);
