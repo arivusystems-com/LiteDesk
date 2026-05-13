@@ -122,6 +122,16 @@
         :collapsed="!shouldShowExpanded"
         :on-toggle-collapse="toggleSidebar"
       />
+      <AppSidebarSkeleton
+        v-else-if="loadingSidebar && !sidebarStructure"
+        :collapsed="!shouldShowExpanded"
+      />
+      <div
+        v-else-if="!loadingSidebar && !sidebarStructure"
+        class="px-3 py-4 text-center text-sm text-gray-500 dark:text-gray-400"
+      >
+        No navigation available
+      </div>
     </aside>
 
     <!-- Mobile Drawer -->
@@ -178,9 +188,10 @@
                     embedded
                   />
 
-                  <div v-if="loadingSidebar" class="px-2 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                    Loading...
-                  </div>
+                  <AppSidebarSkeleton
+                    v-else-if="loadingSidebar && !sidebarStructure"
+                    :collapsed="false"
+                  />
 
                   <div v-if="!loadingSidebar && !sidebarStructure" class="px-2 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                     No navigation available
@@ -257,6 +268,7 @@ import NotificationBell from '@/components/notifications/NotificationBell.vue';
 import NotificationSheet from '@/components/notifications/NotificationSheet.vue';
 import NotificationDrawer from '@/components/notifications/NotificationDrawer.vue';
 import AppSidebar from '@/components/AppSidebar.vue';
+import AppSidebarSkeleton from '@/components/AppSidebarSkeleton.vue';
 import TabBar from '@/components/TabBar.vue';
 import { configureTabsStorage, useTabs } from '@/composables/useTabs';
 

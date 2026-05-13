@@ -12,6 +12,7 @@ import { useColorMode } from '@/composables/useColorMode';
 import { useSidebarState } from '@/composables/useSidebarState';
 import { useUserStatus } from '@/composables/useUserStatus';
 import AppSidebar from '@/components/AppSidebar.vue';
+import AppSidebarSkeleton from '@/components/AppSidebarSkeleton.vue';
 import UserMenu from '@/components/UserMenu.vue';
 import clickOutside from '@/directives/clickOutside';
 import { Dialog, DialogPanel, TransitionChild, TransitionRoot } from '@headlessui/vue'
@@ -414,13 +415,13 @@ const logoSrc = computed(() => {
                     embedded
                   />
 
-                  <!-- Loading State -->
-                  <div v-if="loadingSidebar" class="px-2 py-4 text-center text-sm text-gray-500">
-                    Loading...
-                  </div>
+                  <AppSidebarSkeleton
+                    v-else-if="loadingSidebar && !sidebarStructure"
+                    :collapsed="false"
+                  />
 
                   <!-- Empty State -->
-                  <div v-if="!loadingSidebar && !sidebarStructure" class="px-2 py-4 text-center text-sm text-gray-500">
+                  <div v-if="!loadingSidebar && !sidebarStructure" class="px-2 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                     No navigation available
                   </div>
                 </div>
@@ -458,10 +459,10 @@ const logoSrc = computed(() => {
           embedded
         />
 
-        <!-- Loading State -->
-        <div v-if="loadingSidebar" class="px-2 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
-          Loading...
-        </div>
+        <AppSidebarSkeleton
+          v-else-if="loadingSidebar && !sidebarStructure"
+          :collapsed="!shouldShowExpanded"
+        />
 
         <!-- Empty State -->
         <div v-if="!loadingSidebar && !sidebarStructure" class="px-2 py-4 text-center text-sm text-gray-500 dark:text-gray-400">

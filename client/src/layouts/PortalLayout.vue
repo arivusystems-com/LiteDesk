@@ -163,6 +163,16 @@
           :collapsed="!shouldShowExpanded"
           embedded
         />
+        <AppSidebarSkeleton
+          v-else-if="loadingSidebar && !sidebarStructure"
+          :collapsed="!shouldShowExpanded"
+        />
+        <div
+          v-else-if="!loadingSidebar && !sidebarStructure"
+          class="px-3 py-4 text-center text-sm text-gray-500 dark:text-gray-400"
+        >
+          No navigation available
+        </div>
       </div>
     </aside>
 
@@ -265,6 +275,7 @@ import NotificationBell from '@/components/notifications/NotificationBell.vue';
 import NotificationDrawer from '@/components/notifications/NotificationDrawer.vue';
 import NotificationSheet from '@/components/notifications/NotificationSheet.vue';
 import AppSidebar from '@/components/AppSidebar.vue';
+import AppSidebarSkeleton from '@/components/AppSidebarSkeleton.vue';
 
 const route = useRoute();
 const router = useRouter();
