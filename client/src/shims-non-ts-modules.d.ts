@@ -52,8 +52,10 @@ declare module '@/composables/useTabs' {
 declare module '@/composables/useColorMode' {
   // JS color mode composable (no TS declarations yet)
   export function useColorMode(): {
-    colorMode: { value: 'light' | 'dark' | 'system' };
+    colorMode: import('vue').Ref<'light' | 'dark' | 'system'>;
+    effectiveDark: import('vue').Ref<boolean>;
     toggleColorMode: (mode: 'light' | 'dark' | 'system') => void;
+    clearStoredMode: () => void;
   };
 }
 
