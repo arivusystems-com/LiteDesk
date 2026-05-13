@@ -1399,3 +1399,111 @@ exports.resetUserPassword = async (req, res) => {
         });
     }
 };
+
+// --- Upload current user's avatar ---
+// POST /api/users/profile/avatar (multipart: avatar)
+exports.uploadAvatar = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: 'No file uploaded'
+            });
+        }
+
+        const allowedImageMimes = [
+            'image/jpeg',
+            'image/jpg',
+            'image/png',
+            'image/gif',
+            'image/webp',
+            'image/svg+xml'
+        ];
+        if (!allowedImageMimes.includes(req.file.mimetype)) {
+            try {
+                const fs = require('fs');
+                fs.unlink(req.file.path, () => {});
+            } catch (_) {
+                // ignore cleanup failures
+            }
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid file type. Please upload an image (PNG, JPG, GIF, WEBP, or SVG).'
+            });
+        }
+
+        const organization = req.organization || await Organization.findById(req.user.organizationId);
+        if (!organization) {
+            return res.status(404).json({
+                success: false,
+                message: 'Organization not found'
+            });
+        }
+
+        const ScopedUser = await getScopedUserModel(organization);
+        const user = await ScopedUser.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        const { getFileUrl } = require('../middleware/uploadMiddleware');
+        const fileUrl = getFileUrl(req, req.file.filename);
+        user.avatar = fileUrl;
+        await user.save();
+
+        return res.json({
+            success: true,
+            message: 'Avatar updated',
+            data: { avatar: fileUrl }
+        });
+    } catch (error) {
+        console.error('Upload avatar error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to upload avatar',
+            error: error.message
+        });
+    }
+};
+
+// --- Remove current user's avatar ---
+// DELETE /api/users/profile/avatar
+exports.deleteAvatar = async (req, res) => {
+    try {
+        const organization = req.organization || await Organization.findById(req.user.organizationId);
+        if (!organization) {
+            return res.status(404).json({
+                success: false,
+                message: 'Organization not found'
+            });
+        }
+
+        const ScopedUser = await getScopedUserModel(organization);
+        const user = await ScopedUser.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        user.avatar = '';
+        await user.save();
+
+        return res.json({
+            success: true,
+            message: 'Avatar removed',
+            data: { avatar: '' }
+        });
+    } catch (error) {
+        console.error('Delete avatar error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to remove avatar',
+            error: error.message
+        });
+    }
+};

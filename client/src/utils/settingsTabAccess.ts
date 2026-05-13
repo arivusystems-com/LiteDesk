@@ -6,6 +6,10 @@ export function canAccessSettingsTab(
   tabId: string,
   ctx: { isOwner: boolean; role: string | null | undefined; permissions: Record<string, any> | null | undefined }
 ): boolean {
+  // Personal profile is always accessible to authenticated users; do not require
+  // owner/admin or any settings.* flag to manage your own identity.
+  if (tabId === 'profile') return true;
+
   if (ctx.isOwner) return true;
   if (String(ctx.role || '').toLowerCase() === 'admin') return true;
 
@@ -37,6 +41,7 @@ export function canAccessSettingsTab(
 }
 
 const SETTINGS_TAB_IDS = [
+  'profile',
   'organization',
   'users-access',
   'core-modules',

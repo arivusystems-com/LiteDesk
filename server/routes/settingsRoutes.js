@@ -6,6 +6,7 @@ const controller = require('../controllers/settingsController');
 const helpdeskSettingsController = require('../controllers/helpdeskSettingsController');
 const assignmentRulesController = require('../controllers/assignmentRulesController');
 const { organizationSettingsLimiter } = require('../middleware/rateLimitMiddleware');
+const { uploadSingle } = require('../middleware/uploadMiddleware');
 const {
     cacheJsonResponse,
     invalidateCacheOnSuccessfulMutation,
@@ -55,6 +56,17 @@ router.put(
     '/organization',
     invalidateCacheOnSuccessfulMutation({ namespace: 'settings:organization' }),
     controller.updateOrganizationSettings
+);
+router.post(
+    '/organization/logo',
+    invalidateCacheOnSuccessfulMutation({ namespace: 'settings:organization' }),
+    uploadSingle('logo'),
+    controller.uploadOrganizationLogo
+);
+router.delete(
+    '/organization/logo',
+    invalidateCacheOnSuccessfulMutation({ namespace: 'settings:organization' }),
+    controller.deleteOrganizationLogo
 );
 
 // Security settings endpoints
