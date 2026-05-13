@@ -117,6 +117,15 @@ const routes = [
     meta: { requiresAuth: true } // render with shell (internal tab, sidebar collapsed by default)
   },
   {
+    // The user menu's "Your profile" entry deep-links here. We surface the
+    // profile screen inside the Settings shell so users keep the familiar
+    // sidebar navigation between personal and workspace settings.
+    path: '/profile',
+    name: 'profile',
+    redirect: () => ({ path: '/settings', query: { tab: 'profile' } }),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/settings/notifications/overview',
     name: 'notification-overview',
     component: () => import('@/views/settings/NotificationOverview.vue'),

@@ -51,6 +51,20 @@ const settingsAccessCtx = computed(() => ({
 }));
 
 // Icon components
+const ProfileIcon = () => h('svg', {
+  fill: 'none',
+  stroke: 'currentColor',
+  viewBox: '0 0 24 24',
+  xmlns: 'http://www.w3.org/2000/svg'
+}, [
+  h('path', {
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    'stroke-width': '2',
+    d: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'
+  })
+]);
+
 const OrganizationIcon = () => h('svg', {
   fill: 'none',
   stroke: 'currentColor',
@@ -180,6 +194,13 @@ const IntegrationsIcon = () => h('svg', {
 // Sections configuration (filtered by the same rules as the Settings sidebar)
 const sections = computed(() => {
   const all = [
+    {
+      id: 'profile',
+      name: 'Your Profile',
+      description: 'Update your name, photo, password, and personal preferences',
+      icon: ProfileIcon,
+      route: '/settings?tab=profile',
+    },
     {
       id: 'organization',
       name: 'Company Details',

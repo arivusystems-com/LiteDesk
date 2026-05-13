@@ -3,6 +3,7 @@ const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
 const { organizationIsolation, checkTrialStatus } = require('../middleware/organizationMiddleware');
 const { canManageUsers } = require('../middleware/permissionMiddleware');
+const { uploadSingle } = require('../middleware/uploadMiddleware');
 const {
     getUsers,
     getUsersForAssignment,
@@ -14,7 +15,9 @@ const {
     updateProfile,
     changePassword,
     resetUserPassword,
-    getAddCapabilities
+    getAddCapabilities,
+    uploadAvatar,
+    deleteAvatar
 } = require('../controllers/userController');
 
 // Apply auth and organization middleware to all routes
@@ -28,6 +31,8 @@ router.use(checkTrialStatus);
 router.get('/profile', getProfile);
 router.put('/profile', updateProfile);
 router.put('/profile/password', changePassword);
+router.post('/profile/avatar', uploadSingle('avatar'), uploadAvatar);
+router.delete('/profile/avatar', deleteAvatar);
 
 // --- User Management Routes (Platform-level, app-agnostic) ---
 // User management is platform-level, NOT app-specific

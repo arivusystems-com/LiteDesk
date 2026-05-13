@@ -1388,6 +1388,118 @@ exports.updateOrganizationSettings = async (req, res) => {
 };
 
 /**
+ * Upload organization logo
+ * POST /api/settings/organization/logo
+ *
+ * Accepts a multipart/form-data request with field name `logo`.
+ * Persists the file via the shared upload middleware and writes the
+ * resulting URL to `organization.settings.logoUrl`.
+ */
+exports.uploadOrganizationLogo = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: 'No file uploaded'
+            });
+        }
+
+        // Only allow image types for logos (the shared middleware allows docs too).
+        const allowedImageMimes = [
+            'image/jpeg',
+            'image/jpg',
+            'image/png',
+            'image/gif',
+            'image/webp',
+            'image/svg+xml'
+        ];
+        if (!allowedImageMimes.includes(req.file.mimetype)) {
+            // Best-effort cleanup of the rejected file
+            try {
+                const fs = require('fs');
+                fs.unlink(req.file.path, () => {});
+            } catch (_) {
+                // ignore
+            }
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid file type. Please upload an image (PNG, JPG, GIF, WEBP, or SVG).'
+            });
+        }
+
+        const organization = await Organization.findById(req.user.organizationId);
+        if (!organization) {
+            return res.status(404).json({
+                success: false,
+                message: 'Organization not found'
+            });
+        }
+
+        const { getFileUrl } = require('../middleware/uploadMiddleware');
+        const fileUrl = getFileUrl(req, req.file.filename);
+
+        if (!organization.settings) {
+            organization.settings = {};
+        }
+        organization.settings.logoUrl = fileUrl;
+        await organization.save();
+
+        return res.json({
+            success: true,
+            message: 'Logo uploaded successfully',
+            data: {
+                logoUrl: fileUrl,
+                filename: req.file.filename,
+                originalname: req.file.originalname,
+                size: req.file.size,
+                mimetype: req.file.mimetype
+            }
+        });
+    } catch (error) {
+        console.error('Upload organization logo error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to upload logo',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Remove organization logo
+ * DELETE /api/settings/organization/logo
+ */
+exports.deleteOrganizationLogo = async (req, res) => {
+    try {
+        const organization = await Organization.findById(req.user.organizationId);
+        if (!organization) {
+            return res.status(404).json({
+                success: false,
+                message: 'Organization not found'
+            });
+        }
+
+        if (organization.settings?.logoUrl) {
+            organization.settings.logoUrl = null;
+            await organization.save();
+        }
+
+        return res.json({
+            success: true,
+            message: 'Logo removed',
+            data: { logoUrl: null }
+        });
+    } catch (error) {
+        console.error('Delete organization logo error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to remove logo',
+            error: error.message
+        });
+    }
+};
+
+/**
  * Get security settings
  * GET /api/settings/security
  */

@@ -118,6 +118,38 @@ const showContextMenu = ref(false);
 const contextMenuTab = ref(null);
 const contextMenuPosition = ref({ x: 0, y: 0 });
 
+// Chrome-style tab width freeze:
+// While the cursor is over the tab strip and the user closes a tab via the X,
+// the remaining tabs hold their current pixel width so the next X stays under
+// the cursor. Widths un-freeze (and animate back) when the cursor leaves the
+// tab area.
+const tabsContainerRef = ref(null);
+const frozenTabWidth = ref(null);
+
+const tabItemStyle = computed(() => {
+  if (frozenTabWidth.value !== null) {
+    const w = `${frozenTabWidth.value}px`;
+    return {
+      flex: '0 0 auto',
+      width: w,
+      minWidth: '0',
+      maxWidth: w,
+    };
+  }
+  return {
+    flex: '1 1 0',
+    flexBasis: '0',
+    minWidth: '0',
+    maxWidth: '200px',
+  };
+});
+
+const releaseFrozenTabWidth = () => {
+  if (frozenTabWidth.value !== null) {
+    frozenTabWidth.value = null;
+  }
+};
+
 // Handle tab click
 const handleTabClick = (tabId) => {
   switchToTab(tabId);
@@ -126,6 +158,18 @@ const handleTabClick = (tabId) => {
 // Handle tab close
 const handleCloseTab = (event, tabId) => {
   event.stopPropagation();
+
+  // Snapshot the current rendered width of a tab before removal so the
+  // remaining tabs stay the same size until the cursor leaves the strip.
+  const container = tabsContainerRef.value;
+  if (container) {
+    const sample = container.querySelector('[data-tab-item]');
+    if (sample) {
+      const w = sample.getBoundingClientRect().width;
+      if (w > 0) frozenTabWidth.value = w;
+    }
+  }
+
   closeTab(tabId);
 };
 
@@ -294,12 +338,18 @@ onUnmounted(() => {
     }"
   >
     <div class="flex items-stretch h-12 min-w-0 w-full gap-6" :style="{ width: '100%', maxWidth: '100%' }">
-      <div class="flex flex-1 min-w-0 items-center h-full overflow-x-hidden">
-      <!-- Tabs - Chrome style shrinking with aggressive overflow prevention -->
+      <div
+        ref="tabsContainerRef"
+        class="flex flex-1 min-w-0 items-center h-full overflow-x-hidden"
+        @mouseleave="releaseFrozenTabWidth"
+      >
+      <!-- Tabs - Chrome style: widths shrink to fit, and stay frozen on close
+           until the cursor leaves the strip. -->
       <template v-if="tabsArray.length > 0">
         <div
           v-for="tab in tabsArray"
           :key="tab.id"
+        data-tab-item
         draggable="true"
         @dragstart="handleDragStart($event, tab.id)"
         @dragend="handleDragEnd"
@@ -318,12 +368,7 @@ onUnmounted(() => {
             : 'bg-white dark:bg-gray-800',
           dragOverTabId === tab.id ? 'border-l-2 border-l-blue-500' : ''
         ]"
-        :style="{ 
-          flex: '1 1 0',
-          minWidth: '0',
-          maxWidth: '200px',
-          flexBasis: '0'
-        }"
+        :style="tabItemStyle"
       >
         <!-- Icon -->
         <component 

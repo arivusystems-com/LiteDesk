@@ -114,25 +114,37 @@
                   </transition>
                 </button>
               </li>
-              <li v-for="tab in tabs" :key="tab.id">
-                <button
-                  @click="handleTabClick(tab)"
-                  :title="!shouldShowExpanded ? tab.name : ''"
-                  :class="[
-                    'w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
-                    activeTab === tab.id || (tab.id === 'notifications' && route.path.includes('/notifications'))
-                      ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'
-                  ]"
-                >
-                  <div class="flex items-center justify-center w-5">
-                    <component :is="tab.icon" class="w-5 h-5" />
+              <template v-for="(tab, idx) in tabs" :key="tab.id">
+                <li>
+                  <button
+                    @click="handleTabClick(tab)"
+                    :title="!shouldShowExpanded ? tab.name : ''"
+                    :class="[
+                      'w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
+                      activeTab === tab.id || (tab.id === 'notifications' && route.path.includes('/notifications'))
+                        ? 'bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'
+                    ]"
+                  >
+                    <div class="flex items-center justify-center w-5">
+                      <component :is="tab.icon" class="w-5 h-5" />
+                    </div>
+                    <transition enter-active-class="transition-all duration-300 ease-out" enter-from-class="opacity-0 max-w-0" enter-to-class="opacity-100 max-w-xs" leave-active-class="transition-all duration-300 ease-in" leave-from-class="opacity-100 max-w-xs" leave-to-class="opacity-0 max-w-0">
+                      <span v-if="shouldShowExpanded" class="truncate">{{ tab.name }}</span>
+                    </transition>
+                  </button>
+                </li>
+                <!-- Visual separator between the personal "Your Profile" tab and the
+                     workspace-level tabs below it. Only render when the next tab is the
+                     first workspace tab, so we don't draw a divider if Profile is the
+                     only entry visible. -->
+                <li v-if="tab.id === 'profile' && idx < tabs.length - 1">
+                  <hr class="my-2 border-gray-200 dark:border-gray-700" />
+                  <div v-if="shouldShowExpanded" class="px-3 py-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Workspace
                   </div>
-                  <transition enter-active-class="transition-all duration-300 ease-out" enter-from-class="opacity-0 max-w-0" enter-to-class="opacity-100 max-w-xs" leave-active-class="transition-all duration-300 ease-in" leave-from-class="opacity-100 max-w-xs" leave-to-class="opacity-0 max-w-0">
-                    <span v-if="shouldShowExpanded" class="truncate">{{ tab.name }}</span>
-                  </transition>
-                </button>
-              </li>
+                </li>
+              </template>
               
               <!-- Internal Section (Environment-Gated) -->
               <template v-if="isInternalEnvironment">
@@ -192,6 +204,7 @@ import { canAccessSettingsTab } from '@/utils/settingsTabAccess';
 import { useColorMode } from '@/composables/useColorMode';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
 
+const ProfileSettings = defineAsyncComponent(() => import('@/components/settings/ProfileSettings.vue'));
 const OrganizationSettings = defineAsyncComponent(() => import('@/components/settings/OrganizationSettings.vue'));
 const SecuritySettings = defineAsyncComponent(() => import('@/components/settings/SecuritySettings.vue'));
 const IntegrationsSettings = defineAsyncComponent(() => import('@/components/settings/IntegrationsSettings.vue'));
@@ -245,6 +258,20 @@ const handleMouseLeave = () => { isHovering.value = false; };
 watch(isCollapsed, (v) => localStorage.setItem('arivu-settings-collapsed', v.toString()));
 
 // Icon components as functions
+const ProfileIcon = () => h('svg', {
+  fill: 'none',
+  stroke: 'currentColor',
+  viewBox: '0 0 24 24',
+  xmlns: 'http://www.w3.org/2000/svg'
+}, [
+  h('path', {
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    'stroke-width': '2',
+    d: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'
+  })
+]);
+
 const UsersIcon = () => h('svg', {
   fill: 'none',
   stroke: 'currentColor',
@@ -371,6 +398,7 @@ const settingsAccessCtx = computed(() => ({
 
 const tabs = computed(() => {
   const all = [
+    { id: 'profile', name: 'Your Profile', icon: ProfileIcon, component: ProfileSettings },
     { id: 'organization', name: 'Company Details', icon: PlatformIcon, component: OrganizationSettings },
     { id: 'users-access', name: 'Users & Access', icon: UsersIcon, component: UsersAccessSettings },
     { id: 'core-modules', name: 'Core Modules', icon: CoreModulesIcon, component: CoreModulesList },

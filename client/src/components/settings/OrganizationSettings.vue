@@ -1,256 +1,549 @@
 <template>
-  <div class="space-y-6">
+  <div class="relative pb-28">
     <!-- Header -->
-    <div>
+    <div class="mb-6">
       <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Company Details</h2>
       <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-        Manage your company identity and global settings that apply across the platform
+        Manage your company identity and global defaults that apply across the platform
       </p>
     </div>
 
-    <!-- Info Banner -->
-    <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-      <div class="flex items-start gap-3">
-        <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <div>
-          <h3 class="text-sm font-semibold text-blue-800 dark:text-blue-300">Company Identity</h3>
-          <p class="text-sm text-blue-700 dark:text-blue-400 mt-1">
-            These settings define your company's identity and defaults. Changes here affect display and defaults across all applications, but do not modify application logic or permissions.
-          </p>
-        </div>
+    <!-- Loading State -->
+    <div v-if="loading" class="flex items-center justify-center py-24">
+      <div class="flex flex-col items-center gap-3">
+        <div class="animate-spin rounded-full h-10 w-10 border-2 border-gray-200 border-t-indigo-600 dark:border-gray-700 dark:border-t-indigo-400"></div>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Loading company details…</p>
       </div>
     </div>
 
-    <!-- Loading State -->
-    <div v-if="loading" class="flex items-center justify-center py-12">
-      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-    </div>
-
     <!-- Error State -->
-    <div v-else-if="error" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-      <div class="flex items-center gap-2">
-        <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div
+      v-else-if="error"
+      class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-start gap-3"
+    >
+      <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 flex-shrink-0">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <p class="text-sm text-red-800 dark:text-red-300">
-          {{ error.message || 'Failed to load organization settings' }}
-        </p>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-red-900 dark:text-red-200">Couldn't load company details</h3>
+        <p class="text-sm text-red-700 dark:text-red-300 mt-1">{{ error.message || 'Please try again.' }}</p>
+        <button
+          type="button"
+          @click="fetchOrganizationSettings"
+          class="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-red-700 dark:text-red-300 hover:text-red-900 dark:hover:text-red-100"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Retry
+        </button>
       </div>
     </div>
 
     <!-- Settings Form -->
     <form v-else @submit.prevent="handleSubmit" class="space-y-6">
-      <!-- Company Name -->
-      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-        <div class="flex items-center gap-3 mb-4">
-          <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
-          </div>
-          <div>
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Company Name</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400">Your company display name</p>
-          </div>
-        </div>
-        <div>
-          <input
-            v-model="form.name"
-            type="text"
-            required
-            class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
-            placeholder="Enter company name"
-          />
-        </div>
-      </div>
+      <!-- Brand Identity Hero -->
+      <section
+        class="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+      >
+        <!-- Gradient backdrop -->
+        <div
+          aria-hidden="true"
+          class="absolute inset-0 bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-indigo-950/40 dark:via-gray-800 dark:to-purple-950/40"
+        ></div>
+        <div
+          aria-hidden="true"
+          class="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-indigo-200/40 dark:bg-indigo-500/10 blur-3xl"
+        ></div>
+        <div
+          aria-hidden="true"
+          class="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-purple-200/40 dark:bg-purple-500/10 blur-3xl"
+        ></div>
 
-      <!-- Logo / Brand Image -->
-      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-        <div class="flex items-center gap-3 mb-4">
-          <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
+        <div class="relative p-6 sm:p-8">
+          <div class="flex flex-col sm:flex-row sm:items-center gap-6">
+            <!-- Logo Preview Avatar -->
+            <div class="relative flex-shrink-0">
+              <div
+                class="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-white dark:bg-gray-900 shadow-lg ring-1 ring-black/5 dark:ring-white/10 flex items-center justify-center overflow-hidden"
+              >
+                <img
+                  v-if="form.logoUrl && !logoBroken"
+                  :src="resolvedLogoUrl"
+                  alt="Company logo"
+                  class="w-full h-full object-contain p-2"
+                  @error="logoBroken = true"
+                />
+                <div
+                  v-else
+                  class="w-full h-full flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-3xl font-bold"
+                >
+                  {{ companyInitials }}
+                </div>
+              </div>
+              <span
+                v-if="logoUploading"
+                class="absolute inset-0 rounded-2xl bg-black/40 flex items-center justify-center text-white"
+              >
+                <svg class="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              </span>
+            </div>
+
+            <!-- Identity summary -->
+            <div class="flex-1 min-w-0">
+              <p class="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                Company Identity
+              </p>
+              <h3 class="mt-1 text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white truncate">
+                {{ form.name || 'Your Company' }}
+              </h3>
+              <div class="mt-3 flex flex-wrap gap-2">
+                <span
+                  class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/70 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-700 dark:text-gray-300 backdrop-blur"
+                >
+                  <svg class="w-3.5 h-3.5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {{ timezoneShortLabel }}
+                </span>
+                <span
+                  class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/70 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-700 dark:text-gray-300 backdrop-blur"
+                >
+                  <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {{ form.currency }}
+                </span>
+                <span
+                  class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/70 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-700 dark:text-gray-300 backdrop-blur"
+                >
+                  <svg class="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
+                  </svg>
+                  {{ languageLabel }}
+                </span>
+                <span
+                  class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/70 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-700 dark:text-gray-300 backdrop-blur"
+                >
+                  <svg class="w-3.5 h-3.5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {{ form.dataRegion }}
+                </span>
+              </div>
+              <p class="mt-3 text-sm text-gray-600 dark:text-gray-400 max-w-2xl">
+                These settings define how your company appears across every application and shape the defaults for dates, currency, and language.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Branding Section -->
+      <section class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <header class="flex items-center gap-3 px-6 py-5 border-b border-gray-100 dark:border-gray-700/60">
+          <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-sm">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
             </svg>
           </div>
           <div>
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Logo / Brand Image</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400">Your company logo URL</p>
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Branding</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Your company name and logo that appear throughout the app</p>
           </div>
-        </div>
-        <div class="space-y-4">
-          <div>
+        </header>
+
+        <div class="p-6 grid grid-cols-1 lg:grid-cols-5 gap-6">
+          <!-- Company Name -->
+          <div class="lg:col-span-2 space-y-2">
+            <label for="company-name" class="block text-sm font-medium text-gray-900 dark:text-gray-200">
+              Company name
+              <span class="text-red-500">*</span>
+            </label>
             <input
-              v-model="form.logoUrl"
-              type="url"
-              class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
-              placeholder="https://example.com/logo.png"
-            />
-          </div>
-          <div v-if="form.logoUrl" class="flex items-center gap-4">
-            <img
-              :src="form.logoUrl"
-              alt="Company logo"
-              class="w-20 h-20 object-contain rounded-lg border border-gray-200 dark:border-gray-700"
-              @error="handleImageError"
-            />
-            <button
-              type="button"
-              @click="form.logoUrl = ''"
-              class="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
-            >
-              Remove logo
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Timezone -->
-      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-        <div class="flex items-center gap-3 mb-4">
-          <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <div>
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Timezone</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400">Your company default timezone</p>
-          </div>
-        </div>
-        <div>
-          <HeadlessSelect
-            v-model="form.timeZone"
-            :options="timezones"
-            @update:model-value="handleTimezoneChange"
-          />
-          <p v-if="showTimezoneWarning" class="mt-2 text-sm text-amber-600 dark:text-amber-400">
-            ⚠️ Changing timezone will affect how dates and times are displayed across the platform.
-          </p>
-        </div>
-      </div>
-
-      <!-- Currency -->
-      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-        <div class="flex items-center gap-3 mb-4">
-          <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <div>
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Currency</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400">Default currency for financial values</p>
-          </div>
-        </div>
-        <div>
-          <HeadlessSelect
-            v-model="form.currency"
-            :options="currencyOptions"
-          />
-        </div>
-      </div>
-
-      <!-- Locale / Language -->
-      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-        <div class="flex items-center gap-3 mb-4">
-          <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
-            </svg>
-          </div>
-          <div>
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Locale / Language</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400">Default language and locale for the platform</p>
-          </div>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Language</label>
-            <select
-              v-model="form.language"
-              class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
-            >
-              <option v-for="lang in languages" :key="lang.code" :value="lang.code">
-                {{ lang.name }}
-              </option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Locale</label>
-            <input
-              v-model="form.locale"
+              id="company-name"
+              v-model="form.name"
               type="text"
-              class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-600 focus:border-transparent transition-all"
-              placeholder="en-US"
+              required
+              maxlength="120"
+              class="w-full px-3.5 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900/50 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 dark:focus:border-indigo-400 transition-all outline-none"
+              placeholder="e.g. Arivu Systems"
             />
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Format: language-COUNTRY (e.g., en-US, fr-FR)</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              Shown to users, on emails, and in PDF exports.
+            </p>
+          </div>
+
+          <!-- Logo Upload -->
+          <div class="lg:col-span-3 space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="block text-sm font-medium text-gray-900 dark:text-gray-200">Company logo</label>
+              <button
+                v-if="form.logoUrl"
+                type="button"
+                @click="removeLogo"
+                class="text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 inline-flex items-center gap-1"
+                :disabled="logoUploading"
+              >
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M1 7h22M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
+                </svg>
+                Remove logo
+              </button>
+            </div>
+
+            <!-- Drop zone -->
+            <div
+              @click="triggerFilePicker"
+              @keydown.enter.prevent="triggerFilePicker"
+              @keydown.space.prevent="triggerFilePicker"
+              @dragenter.prevent="isDragging = true"
+              @dragover.prevent="isDragging = true"
+              @dragleave.prevent="isDragging = false"
+              @drop.prevent="handleDrop"
+              role="button"
+              tabindex="0"
+              :aria-disabled="logoUploading"
+              :class="[
+                'group relative flex flex-col items-center justify-center gap-3 px-6 py-8 rounded-xl border-2 border-dashed transition-all cursor-pointer outline-none',
+                isDragging
+                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 scale-[1.01]'
+                  : 'border-gray-300 dark:border-gray-600 hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-gray-50 dark:hover:bg-gray-900/30',
+                logoUploading && 'pointer-events-none opacity-70'
+              ]"
+            >
+              <div
+                v-if="form.logoUrl && !logoBroken"
+                class="w-16 h-16 rounded-xl bg-white dark:bg-gray-900 ring-1 ring-gray-200 dark:ring-gray-700 flex items-center justify-center overflow-hidden"
+              >
+                <img :src="resolvedLogoUrl" alt="Logo preview" class="w-full h-full object-contain p-1.5" @error="logoBroken = true" />
+              </div>
+              <div
+                v-else
+                class="w-16 h-16 rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/40 dark:to-purple-900/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400"
+              >
+                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+
+              <div class="text-center">
+                <p class="text-sm font-medium text-gray-900 dark:text-white">
+                  <span class="text-indigo-600 dark:text-indigo-400">Click to upload</span> or drag and drop
+                </p>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  PNG, JPG, SVG, GIF or WEBP &middot; up to 10MB &middot; recommended 512×512
+                </p>
+              </div>
+
+              <span
+                v-if="logoUploading"
+                class="absolute inset-0 rounded-xl bg-white/70 dark:bg-gray-900/60 flex items-center justify-center"
+              >
+                <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-gray-800 shadow text-sm text-gray-700 dark:text-gray-200">
+                  <svg class="animate-spin h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Uploading…
+                </span>
+              </span>
+
+              <input
+                ref="fileInputRef"
+                type="file"
+                class="sr-only"
+                accept="image/png,image/jpeg,image/jpg,image/gif,image/webp,image/svg+xml"
+                @change="handleFileSelected"
+              />
+            </div>
+
+            <!-- Manual URL fallback -->
+            <details class="group">
+              <summary class="text-xs text-gray-500 dark:text-gray-400 cursor-pointer select-none inline-flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-300">
+                <svg class="w-3.5 h-3.5 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+                Or paste a logo URL
+              </summary>
+              <input
+                v-model="form.logoUrl"
+                type="url"
+                class="mt-2 w-full px-3.5 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900/50 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 dark:focus:border-indigo-400 transition-all outline-none"
+                placeholder="https://example.com/logo.png"
+                @input="logoBroken = false"
+              />
+            </details>
+
+            <p v-if="logoError" class="text-xs text-red-600 dark:text-red-400 flex items-center gap-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {{ logoError }}
+            </p>
           </div>
         </div>
-      </div>
+      </section>
 
-      <!-- Data Region (Read-only) -->
-      <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-        <div class="flex items-center gap-3 mb-4">
-          <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+      <!-- Regional Settings -->
+      <section class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <header class="flex items-center gap-3 px-6 py-5 border-b border-gray-100 dark:border-gray-700/60">
+          <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500 to-cyan-500 text-white shadow-sm">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
           <div>
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Data Region</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400">Your company data storage region</p>
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Regional &amp; Localization</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Defaults for time, currency and language used across the platform</p>
+          </div>
+        </header>
+
+        <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Timezone -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <label class="block text-sm font-medium text-gray-900 dark:text-gray-200">
+                Timezone
+              </label>
+              <button
+                v-if="detectedTimezone && detectedTimezone !== form.timeZone"
+                type="button"
+                @click="useDetectedTimezone"
+                class="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+              >
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 5.876A12.074 12.074 0 0014.81 9M2 12a10 10 0 0118-6m2 4a10 10 0 01-8 9.776" />
+                </svg>
+                Use my browser timezone
+              </button>
+            </div>
+            <div class="relative" data-tz-root>
+              <input
+                v-model="timezoneSearch"
+                @focus="timezoneOpen = true"
+                @input="timezoneOpen = true"
+                @keydown.escape="timezoneOpen = false"
+                type="text"
+                class="w-full px-3.5 py-2.5 pr-10 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900/50 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 dark:focus:border-indigo-400 transition-all outline-none"
+                :placeholder="selectedTimezoneLabel || 'Search a timezone…'"
+              />
+              <button
+                type="button"
+                @click="timezoneOpen = !timezoneOpen"
+                class="absolute inset-y-0 right-0 px-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                aria-label="Toggle timezone list"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              <!-- Dropdown -->
+              <div
+                v-if="timezoneOpen"
+                class="absolute z-30 mt-2 w-full max-h-80 overflow-y-auto rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg"
+                @click.stop
+              >
+                <div v-if="filteredTimezoneGroups.length === 0" class="px-4 py-6 text-sm text-gray-500 dark:text-gray-400 text-center">
+                  No timezones match "{{ timezoneSearch }}"
+                </div>
+                <div
+                  v-for="group in filteredTimezoneGroups"
+                  :key="group.region"
+                  class="py-1"
+                >
+                  <div class="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-900/40 sticky top-0">
+                    {{ group.region }}
+                  </div>
+                  <button
+                    v-for="tz in group.items"
+                    :key="tz.value"
+                    type="button"
+                    @click="selectTimezone(tz.value)"
+                    :class="[
+                      'w-full flex items-center justify-between px-3 py-2 text-sm text-left transition-colors',
+                      tz.value === form.timeZone
+                        ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-200 font-medium'
+                        : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/40'
+                    ]"
+                  >
+                    <span class="flex flex-col">
+                      <span>{{ tz.label }}</span>
+                      <span v-if="tz.sublabel" class="text-xs text-gray-500 dark:text-gray-400">{{ tz.sublabel }}</span>
+                    </span>
+                    <span class="text-xs font-mono text-gray-500 dark:text-gray-400 ml-3 flex-shrink-0">{{ tz.offset }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p v-if="detectedTimezone && detectedTimezone !== form.timeZone" class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 flex-shrink-0 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Detected from your browser: <span class="font-medium text-gray-700 dark:text-gray-300">{{ detectedTimezoneLabel }}</span>
+            </p>
+            <p v-if="showTimezoneWarning" class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              Changing timezone affects how dates and times display across the platform.
+            </p>
+          </div>
+
+          <!-- Currency -->
+          <div class="space-y-2">
+            <label class="block text-sm font-medium text-gray-900 dark:text-gray-200">Default currency</label>
+            <HeadlessSelect
+              v-model="form.currency"
+              :options="currencyOptions"
+            />
+            <p class="text-xs text-gray-500 dark:text-gray-400">Used for monetary values in deals, invoices, and reports.</p>
+          </div>
+
+          <!-- Language -->
+          <div class="space-y-2">
+            <label class="block text-sm font-medium text-gray-900 dark:text-gray-200">Language</label>
+            <HeadlessSelect
+              v-model="form.language"
+              :options="languageOptions"
+            />
+            <p class="text-xs text-gray-500 dark:text-gray-400">Default UI language for new users.</p>
+          </div>
+
+          <!-- Locale -->
+          <div class="space-y-2">
+            <label class="block text-sm font-medium text-gray-900 dark:text-gray-200">Locale</label>
+            <input
+              v-model="form.locale"
+              type="text"
+              class="w-full px-3.5 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900/50 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 dark:focus:border-indigo-400 transition-all outline-none font-mono"
+              placeholder="en-US"
+            />
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              Controls number, date and currency formatting. Format: <code class="px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-700/60 text-[11px]">language-COUNTRY</code> (e.g. en-US, en-IN, fr-FR).
+            </p>
           </div>
         </div>
-        <div>
-          <input
-            :value="form.dataRegion"
-            type="text"
-            disabled
-            class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed"
-          />
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Data region is set during company setup and cannot be changed.</p>
+      </section>
+
+      <!-- Data Region (read-only) -->
+      <section class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-800/40">
+        <div class="p-6 flex items-start gap-4">
+          <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-gray-200/70 dark:bg-gray-700 text-gray-600 dark:text-gray-300 flex-shrink-0">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <h3 class="text-base font-semibold text-gray-900 dark:text-white">Data Region</h3>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-xs font-medium text-gray-700 dark:text-gray-300">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                Locked
+              </span>
+            </div>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              Your data is stored in <span class="font-mono font-medium text-gray-900 dark:text-gray-100">{{ form.dataRegion || 'us-east-1' }}</span>. Set during onboarding and cannot be changed.
+            </p>
+          </div>
+        </div>
+      </section>
+    </form>
+
+    <!-- Sticky Save Bar -->
+    <transition
+      enter-active-class="transition duration-200 ease-out"
+      enter-from-class="opacity-0 translate-y-3"
+      enter-to-class="opacity-100 translate-y-0"
+      leave-active-class="transition duration-150 ease-in"
+      leave-from-class="opacity-100 translate-y-0"
+      leave-to-class="opacity-0 translate-y-3"
+    >
+      <div
+        v-if="!loading && !error && hasChanges"
+        class="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[min(95vw,720px)]"
+      >
+        <div class="rounded-2xl bg-white dark:bg-gray-800 shadow-2xl ring-1 ring-black/5 dark:ring-white/10 border border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between gap-4">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300 flex-shrink-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </span>
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-gray-900 dark:text-white truncate">You have unsaved changes</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400 truncate">Save your updates to apply them across the platform.</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <button
+              type="button"
+              @click="resetForm"
+              :disabled="saving"
+              class="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Discard
+            </button>
+            <button
+              type="button"
+              @click="handleSubmit"
+              :disabled="saving"
+              class="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-2"
+            >
+              <svg v-if="saving" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              {{ saving ? 'Saving…' : 'Save changes' }}
+            </button>
+          </div>
         </div>
       </div>
-
-      <!-- Save Button -->
-      <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-        <button
-          type="button"
-          @click="resetForm"
-          :disabled="saving"
-          class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Reset
-        </button>
-        <button
-          type="submit"
-          :disabled="saving || !hasChanges"
-          class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
-        >
-          <span v-if="saving">Saving...</span>
-          <span v-else>Save Changes</span>
-          <svg v-if="saving" class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-        </button>
-      </div>
-    </form>
+    </transition>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import apiClient from '@/utils/apiClient';
+import { getApiUrlForFetch } from '@/config/apiBase';
+import { useAuthStore } from '@/stores/authRegistry';
+import { useNotifications } from '@/composables/useNotifications';
 import HeadlessSelect from '@/components/ui/HeadlessSelect.vue';
+
+const authStore = useAuthStore();
+const { success: notifySuccess, error: notifyError } = useNotifications();
 
 const loading = ref(true);
 const saving = ref(false);
 const error = ref(null);
 const showTimezoneWarning = ref(false);
 const originalForm = ref({});
+const logoUploading = ref(false);
+const logoBroken = ref(false);
+const logoError = ref('');
+const isDragging = ref(false);
+const fileInputRef = ref(null);
+
+const timezoneOpen = ref(false);
+const timezoneSearch = ref('');
+
+// Detect the browser's IANA timezone (e.g. "Asia/Kolkata") once on load.
+// Falls back to empty string if the API is unavailable.
+const detectedTimezone = ref('');
+try {
+  detectedTimezone.value = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+} catch (_) {
+  detectedTimezone.value = '';
+}
 
 const form = ref({
   name: '',
@@ -262,39 +555,206 @@ const form = ref({
   dataRegion: 'us-east-1'
 });
 
-// Common timezones
-const timezones = [
-  { value: 'UTC', label: 'UTC (Coordinated Universal Time)' },
-  { value: 'America/New_York', label: 'America/New_York (Eastern Time)' },
-  { value: 'America/Chicago', label: 'America/Chicago (Central Time)' },
-  { value: 'America/Denver', label: 'America/Denver (Mountain Time)' },
-  { value: 'America/Los_Angeles', label: 'America/Los_Angeles (Pacific Time)' },
-  { value: 'Europe/London', label: 'Europe/London (GMT)' },
-  { value: 'Europe/Paris', label: 'Europe/Paris (CET)' },
-  { value: 'Asia/Tokyo', label: 'Asia/Tokyo (JST)' },
-  { value: 'Asia/Shanghai', label: 'Asia/Shanghai (CST)' },
-  { value: 'Australia/Sydney', label: 'Australia/Sydney (AEDT)' }
+// -------- Timezones (grouped, comprehensive, with offsets) --------
+// Offsets are static labels for display only; actual TZ logic uses IANA value.
+const timezoneGroups = [
+  {
+    region: 'Popular',
+    items: [
+      { value: 'UTC', label: 'UTC — Coordinated Universal Time', sublabel: 'UTC', offset: 'UTC+00:00' },
+      { value: 'Asia/Kolkata', label: 'India Standard Time', sublabel: 'Kolkata, Mumbai, New Delhi, Chennai', offset: 'UTC+05:30' },
+      { value: 'America/New_York', label: 'Eastern Time', sublabel: 'New York, Toronto', offset: 'UTC−05:00' },
+      { value: 'America/Los_Angeles', label: 'Pacific Time', sublabel: 'Los Angeles, San Francisco', offset: 'UTC−08:00' },
+      { value: 'Europe/London', label: 'British Time', sublabel: 'London, Edinburgh', offset: 'UTC+00:00' },
+      { value: 'Asia/Singapore', label: 'Singapore Time', sublabel: 'Singapore', offset: 'UTC+08:00' }
+    ]
+  },
+  {
+    region: 'Americas',
+    items: [
+      { value: 'America/New_York', label: 'America/New_York', sublabel: 'Eastern Time', offset: 'UTC−05:00' },
+      { value: 'America/Chicago', label: 'America/Chicago', sublabel: 'Central Time', offset: 'UTC−06:00' },
+      { value: 'America/Denver', label: 'America/Denver', sublabel: 'Mountain Time', offset: 'UTC−07:00' },
+      { value: 'America/Phoenix', label: 'America/Phoenix', sublabel: 'Arizona (no DST)', offset: 'UTC−07:00' },
+      { value: 'America/Los_Angeles', label: 'America/Los_Angeles', sublabel: 'Pacific Time', offset: 'UTC−08:00' },
+      { value: 'America/Anchorage', label: 'America/Anchorage', sublabel: 'Alaska Time', offset: 'UTC−09:00' },
+      { value: 'Pacific/Honolulu', label: 'Pacific/Honolulu', sublabel: 'Hawaii Time', offset: 'UTC−10:00' },
+      { value: 'America/Toronto', label: 'America/Toronto', sublabel: 'Eastern Time (Canada)', offset: 'UTC−05:00' },
+      { value: 'America/Vancouver', label: 'America/Vancouver', sublabel: 'Pacific Time (Canada)', offset: 'UTC−08:00' },
+      { value: 'America/Mexico_City', label: 'America/Mexico_City', sublabel: 'Mexico City', offset: 'UTC−06:00' },
+      { value: 'America/Bogota', label: 'America/Bogota', sublabel: 'Colombia', offset: 'UTC−05:00' },
+      { value: 'America/Sao_Paulo', label: 'America/Sao_Paulo', sublabel: 'Brazil (São Paulo)', offset: 'UTC−03:00' },
+      { value: 'America/Buenos_Aires', label: 'America/Argentina/Buenos_Aires', sublabel: 'Argentina', offset: 'UTC−03:00' },
+      { value: 'America/Santiago', label: 'America/Santiago', sublabel: 'Chile', offset: 'UTC−04:00' }
+    ]
+  },
+  {
+    region: 'Europe',
+    items: [
+      { value: 'Europe/London', label: 'Europe/London', sublabel: 'GMT / BST', offset: 'UTC+00:00' },
+      { value: 'Europe/Dublin', label: 'Europe/Dublin', sublabel: 'Ireland', offset: 'UTC+00:00' },
+      { value: 'Europe/Lisbon', label: 'Europe/Lisbon', sublabel: 'Portugal', offset: 'UTC+00:00' },
+      { value: 'Europe/Paris', label: 'Europe/Paris', sublabel: 'Central European Time', offset: 'UTC+01:00' },
+      { value: 'Europe/Berlin', label: 'Europe/Berlin', sublabel: 'Germany', offset: 'UTC+01:00' },
+      { value: 'Europe/Madrid', label: 'Europe/Madrid', sublabel: 'Spain', offset: 'UTC+01:00' },
+      { value: 'Europe/Rome', label: 'Europe/Rome', sublabel: 'Italy', offset: 'UTC+01:00' },
+      { value: 'Europe/Amsterdam', label: 'Europe/Amsterdam', sublabel: 'Netherlands', offset: 'UTC+01:00' },
+      { value: 'Europe/Stockholm', label: 'Europe/Stockholm', sublabel: 'Sweden', offset: 'UTC+01:00' },
+      { value: 'Europe/Zurich', label: 'Europe/Zurich', sublabel: 'Switzerland', offset: 'UTC+01:00' },
+      { value: 'Europe/Warsaw', label: 'Europe/Warsaw', sublabel: 'Poland', offset: 'UTC+01:00' },
+      { value: 'Europe/Athens', label: 'Europe/Athens', sublabel: 'Greece', offset: 'UTC+02:00' },
+      { value: 'Europe/Helsinki', label: 'Europe/Helsinki', sublabel: 'Finland', offset: 'UTC+02:00' },
+      { value: 'Europe/Istanbul', label: 'Europe/Istanbul', sublabel: 'Turkey', offset: 'UTC+03:00' },
+      { value: 'Europe/Moscow', label: 'Europe/Moscow', sublabel: 'Russia (Moscow)', offset: 'UTC+03:00' }
+    ]
+  },
+  {
+    region: 'Asia',
+    items: [
+      { value: 'Asia/Jerusalem', label: 'Asia/Jerusalem', sublabel: 'Israel', offset: 'UTC+02:00' },
+      { value: 'Asia/Dubai', label: 'Asia/Dubai', sublabel: 'UAE', offset: 'UTC+04:00' },
+      { value: 'Asia/Riyadh', label: 'Asia/Riyadh', sublabel: 'Saudi Arabia', offset: 'UTC+03:00' },
+      { value: 'Asia/Tehran', label: 'Asia/Tehran', sublabel: 'Iran', offset: 'UTC+03:30' },
+      { value: 'Asia/Karachi', label: 'Asia/Karachi', sublabel: 'Pakistan', offset: 'UTC+05:00' },
+      { value: 'Asia/Kolkata', label: 'Asia/Kolkata', sublabel: 'India Standard Time (IST)', offset: 'UTC+05:30' },
+      { value: 'Asia/Colombo', label: 'Asia/Colombo', sublabel: 'Sri Lanka', offset: 'UTC+05:30' },
+      { value: 'Asia/Kathmandu', label: 'Asia/Kathmandu', sublabel: 'Nepal', offset: 'UTC+05:45' },
+      { value: 'Asia/Dhaka', label: 'Asia/Dhaka', sublabel: 'Bangladesh', offset: 'UTC+06:00' },
+      { value: 'Asia/Bangkok', label: 'Asia/Bangkok', sublabel: 'Thailand, Vietnam', offset: 'UTC+07:00' },
+      { value: 'Asia/Jakarta', label: 'Asia/Jakarta', sublabel: 'Indonesia (Western)', offset: 'UTC+07:00' },
+      { value: 'Asia/Singapore', label: 'Asia/Singapore', sublabel: 'Singapore', offset: 'UTC+08:00' },
+      { value: 'Asia/Kuala_Lumpur', label: 'Asia/Kuala_Lumpur', sublabel: 'Malaysia', offset: 'UTC+08:00' },
+      { value: 'Asia/Hong_Kong', label: 'Asia/Hong_Kong', sublabel: 'Hong Kong', offset: 'UTC+08:00' },
+      { value: 'Asia/Shanghai', label: 'Asia/Shanghai', sublabel: 'China', offset: 'UTC+08:00' },
+      { value: 'Asia/Taipei', label: 'Asia/Taipei', sublabel: 'Taiwan', offset: 'UTC+08:00' },
+      { value: 'Asia/Manila', label: 'Asia/Manila', sublabel: 'Philippines', offset: 'UTC+08:00' },
+      { value: 'Asia/Seoul', label: 'Asia/Seoul', sublabel: 'South Korea', offset: 'UTC+09:00' },
+      { value: 'Asia/Tokyo', label: 'Asia/Tokyo', sublabel: 'Japan', offset: 'UTC+09:00' }
+    ]
+  },
+  {
+    region: 'Africa',
+    items: [
+      { value: 'Africa/Casablanca', label: 'Africa/Casablanca', sublabel: 'Morocco', offset: 'UTC+01:00' },
+      { value: 'Africa/Lagos', label: 'Africa/Lagos', sublabel: 'Nigeria', offset: 'UTC+01:00' },
+      { value: 'Africa/Johannesburg', label: 'Africa/Johannesburg', sublabel: 'South Africa', offset: 'UTC+02:00' },
+      { value: 'Africa/Cairo', label: 'Africa/Cairo', sublabel: 'Egypt', offset: 'UTC+02:00' },
+      { value: 'Africa/Nairobi', label: 'Africa/Nairobi', sublabel: 'Kenya', offset: 'UTC+03:00' }
+    ]
+  },
+  {
+    region: 'Oceania',
+    items: [
+      { value: 'Australia/Perth', label: 'Australia/Perth', sublabel: 'Western Australia', offset: 'UTC+08:00' },
+      { value: 'Australia/Adelaide', label: 'Australia/Adelaide', sublabel: 'Central Australia', offset: 'UTC+09:30' },
+      { value: 'Australia/Sydney', label: 'Australia/Sydney', sublabel: 'New South Wales', offset: 'UTC+10:00' },
+      { value: 'Australia/Melbourne', label: 'Australia/Melbourne', sublabel: 'Victoria', offset: 'UTC+10:00' },
+      { value: 'Australia/Brisbane', label: 'Australia/Brisbane', sublabel: 'Queensland', offset: 'UTC+10:00' },
+      { value: 'Pacific/Auckland', label: 'Pacific/Auckland', sublabel: 'New Zealand', offset: 'UTC+12:00' },
+      { value: 'Pacific/Fiji', label: 'Pacific/Fiji', sublabel: 'Fiji', offset: 'UTC+12:00' }
+    ]
+  }
 ];
 
-// Common currencies
+const allTimezones = computed(() => {
+  const seen = new Set();
+  const list = [];
+  for (const g of timezoneGroups) {
+    for (const tz of g.items) {
+      if (seen.has(tz.value)) continue;
+      seen.add(tz.value);
+      list.push(tz);
+    }
+  }
+  return list;
+});
+
+const filteredTimezoneGroups = computed(() => {
+  const q = timezoneSearch.value.trim().toLowerCase();
+  if (!q) return timezoneGroups;
+  return timezoneGroups
+    .map((g) => ({
+      region: g.region,
+      items: g.items.filter((tz) => {
+        const haystack = `${tz.value} ${tz.label} ${tz.sublabel || ''} ${tz.offset}`.toLowerCase();
+        return haystack.includes(q);
+      })
+    }))
+    .filter((g) => g.items.length > 0);
+});
+
+const selectedTimezoneMeta = computed(() => {
+  return allTimezones.value.find((tz) => tz.value === form.value.timeZone) || null;
+});
+
+const selectedTimezoneLabel = computed(() => {
+  const tz = selectedTimezoneMeta.value;
+  if (!tz) return form.value.timeZone || '';
+  return `${tz.sublabel || tz.label} (${tz.offset})`;
+});
+
+const timezoneShortLabel = computed(() => {
+  const tz = selectedTimezoneMeta.value;
+  if (!tz) return form.value.timeZone || 'UTC';
+  return `${tz.sublabel || tz.label.replace(/^.*\//, '')} · ${tz.offset}`;
+});
+
+const selectTimezone = (value) => {
+  form.value.timeZone = value;
+  timezoneSearch.value = '';
+  timezoneOpen.value = false;
+  handleTimezoneChange();
+};
+
+const detectedTimezoneLabel = computed(() => {
+  if (!detectedTimezone.value) return '';
+  const known = allTimezones.value.find((tz) => tz.value === detectedTimezone.value);
+  return known ? `${known.sublabel || known.label} (${known.offset})` : detectedTimezone.value;
+});
+
+const useDetectedTimezone = () => {
+  if (!detectedTimezone.value) return;
+  selectTimezone(detectedTimezone.value);
+};
+
+const closeTimezoneOnOutside = (e) => {
+  if (!timezoneOpen.value) return;
+  // Close if click is outside the search input dropdown container.
+  const target = e.target;
+  if (!(target instanceof Element)) return;
+  if (target.closest('[data-tz-root]')) return;
+  timezoneOpen.value = false;
+};
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', closeTimezoneOnOutside);
+});
+
+// -------- Currencies --------
 const currencies = [
-  { code: 'USD', name: 'US Dollar' },
-  { code: 'EUR', name: 'Euro' },
-  { code: 'GBP', name: 'British Pound' },
-  { code: 'JPY', name: 'Japanese Yen' },
-  { code: 'AUD', name: 'Australian Dollar' },
-  { code: 'CAD', name: 'Canadian Dollar' },
-  { code: 'CHF', name: 'Swiss Franc' },
-  { code: 'CNY', name: 'Chinese Yuan' },
-  { code: 'INR', name: 'Indian Rupee' },
-  { code: 'SGD', name: 'Singapore Dollar' }
+  { code: 'USD', name: 'US Dollar', symbol: '$' },
+  { code: 'EUR', name: 'Euro', symbol: '€' },
+  { code: 'GBP', name: 'British Pound', symbol: '£' },
+  { code: 'JPY', name: 'Japanese Yen', symbol: '¥' },
+  { code: 'CNY', name: 'Chinese Yuan', symbol: '¥' },
+  { code: 'INR', name: 'Indian Rupee', symbol: '₹' },
+  { code: 'AUD', name: 'Australian Dollar', symbol: 'A$' },
+  { code: 'CAD', name: 'Canadian Dollar', symbol: 'C$' },
+  { code: 'CHF', name: 'Swiss Franc', symbol: 'CHF' },
+  { code: 'SGD', name: 'Singapore Dollar', symbol: 'S$' },
+  { code: 'HKD', name: 'Hong Kong Dollar', symbol: 'HK$' },
+  { code: 'AED', name: 'UAE Dirham', symbol: 'د.إ' },
+  { code: 'SAR', name: 'Saudi Riyal', symbol: '﷼' },
+  { code: 'BRL', name: 'Brazilian Real', symbol: 'R$' },
+  { code: 'MXN', name: 'Mexican Peso', symbol: 'Mex$' },
+  { code: 'ZAR', name: 'South African Rand', symbol: 'R' }
 ];
 
 const currencyOptions = computed(() =>
-  currencies.map((c) => ({ value: c.code, label: `${c.code} - ${c.name}` }))
+  currencies.map((c) => ({ value: c.code, label: `${c.symbol}  ${c.code} — ${c.name}` }))
 );
 
-// Common languages
+// -------- Languages --------
 const languages = [
   { code: 'en', name: 'English' },
   { code: 'es', name: 'Spanish' },
@@ -302,36 +762,81 @@ const languages = [
   { code: 'de', name: 'German' },
   { code: 'it', name: 'Italian' },
   { code: 'pt', name: 'Portuguese' },
+  { code: 'nl', name: 'Dutch' },
+  { code: 'ru', name: 'Russian' },
+  { code: 'ar', name: 'Arabic' },
+  { code: 'hi', name: 'Hindi' },
   { code: 'ja', name: 'Japanese' },
   { code: 'zh', name: 'Chinese' },
-  { code: 'ko', name: 'Korean' },
-  { code: 'ar', name: 'Arabic' }
+  { code: 'ko', name: 'Korean' }
 ];
+
+const languageOptions = computed(() =>
+  languages.map((l) => ({ value: l.code, label: l.name }))
+);
+
+const languageLabel = computed(() => {
+  return languages.find((l) => l.code === form.value.language)?.name || form.value.language || 'English';
+});
+
+// -------- Derived --------
+const companyInitials = computed(() => {
+  const name = (form.value.name || 'Company').trim();
+  if (!name) return 'C';
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+});
+
+const resolvedLogoUrl = computed(() => {
+  const url = form.value.logoUrl || '';
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:')) {
+    return url;
+  }
+  // For server-relative URLs (e.g. /api/uploads/...), normalize via apiBase.
+  return getApiUrlForFetch(url);
+});
 
 const hasChanges = computed(() => {
   return JSON.stringify(form.value) !== JSON.stringify(originalForm.value);
 });
 
+// -------- Lifecycle / API --------
 const fetchOrganizationSettings = async () => {
   loading.value = true;
   error.value = null;
+  logoBroken.value = false;
 
   try {
-    const data = await apiClient('/settings/organization', {
-      method: 'GET'
-    });
+    const data = await apiClient('/settings/organization', { method: 'GET', cache: 'no-store' });
 
     if (data && data.success && data.data) {
+      const savedTimeZone = data.data.timeZone || 'UTC';
       form.value = {
         name: data.data.name || '',
         logoUrl: data.data.logoUrl || '',
-        timeZone: data.data.timeZone || 'UTC',
+        timeZone: savedTimeZone,
         currency: data.data.currency || 'USD',
         locale: data.data.locale || 'en-US',
         language: data.data.language || 'en',
         dataRegion: data.data.dataRegion || 'us-east-1'
       };
+      // Capture the server-saved state as the baseline used for "unsaved changes" detection.
       originalForm.value = JSON.parse(JSON.stringify(form.value));
+
+      // Smart default: if the org has never explicitly chosen a timezone (still on
+      // the UTC fallback) and the browser reports a different zone, pre-fill the
+      // form with the detected zone. This shows up as an unsaved change so the
+      // admin can confirm by saving — we never silently mutate persisted data.
+      if (
+        savedTimeZone === 'UTC' &&
+        detectedTimezone.value &&
+        detectedTimezone.value !== 'UTC'
+      ) {
+        form.value.timeZone = detectedTimezone.value;
+        showTimezoneWarning.value = true;
+      }
     } else {
       error.value = new Error('Invalid response from server');
     }
@@ -344,27 +849,18 @@ const fetchOrganizationSettings = async () => {
 };
 
 const handleTimezoneChange = () => {
-  if (form.value.timeZone !== originalForm.value.timeZone) {
-    showTimezoneWarning.value = true;
-  } else {
-    showTimezoneWarning.value = false;
-  }
-};
-
-const handleImageError = () => {
-  // Handle image load error
-  console.warn('Failed to load logo image');
+  showTimezoneWarning.value = form.value.timeZone !== originalForm.value.timeZone;
 };
 
 const resetForm = () => {
   form.value = JSON.parse(JSON.stringify(originalForm.value));
   showTimezoneWarning.value = false;
+  logoBroken.value = false;
+  logoError.value = '';
 };
 
 const handleSubmit = async () => {
   saving.value = true;
-  error.value = null;
-
   try {
     const data = await apiClient('/settings/organization', {
       method: 'PUT',
@@ -379,25 +875,128 @@ const handleSubmit = async () => {
     });
 
     if (data && data.success) {
-      // Update original form to reflect saved state
       originalForm.value = JSON.parse(JSON.stringify(form.value));
       showTimezoneWarning.value = false;
-      
-      // Show success message (you could use a toast notification here)
-      alert('Company details updated successfully');
+      notifySuccess('Company details updated successfully');
     } else {
-      error.value = new Error(data.message || 'Failed to update organization settings');
+      const msg = data?.message || 'Failed to update company details';
+      notifyError(msg);
     }
   } catch (err) {
     console.error('Failed to update organization settings:', err);
-    error.value = err;
+    notifyError(err?.message || 'Failed to update company details');
   } finally {
     saving.value = false;
   }
 };
 
+// -------- Logo upload --------
+const MAX_LOGO_SIZE = 10 * 1024 * 1024;
+const ACCEPTED_LOGO_TYPES = [
+  'image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/svg+xml'
+];
+
+const triggerFilePicker = () => {
+  if (logoUploading.value) return;
+  fileInputRef.value?.click();
+};
+
+const handleFileSelected = (e) => {
+  const file = e.target.files?.[0];
+  if (file) uploadLogo(file);
+  // Reset input so the same file can be selected again.
+  if (fileInputRef.value) fileInputRef.value.value = '';
+};
+
+const handleDrop = (e) => {
+  isDragging.value = false;
+  const file = e.dataTransfer?.files?.[0];
+  if (file) uploadLogo(file);
+};
+
+const uploadLogo = async (file) => {
+  logoError.value = '';
+  if (!ACCEPTED_LOGO_TYPES.includes(file.type)) {
+    logoError.value = 'Unsupported file type. Please use PNG, JPG, GIF, WEBP or SVG.';
+    return;
+  }
+  if (file.size > MAX_LOGO_SIZE) {
+    logoError.value = 'File too large. Maximum size is 10MB.';
+    return;
+  }
+
+  logoUploading.value = true;
+  try {
+    const formData = new FormData();
+    formData.append('logo', file);
+
+    const token = authStore.user?.token;
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const response = await fetch(getApiUrlForFetch('/settings/organization/logo'), {
+      method: 'POST',
+      headers,
+      body: formData
+    });
+
+    if (response.status === 401) {
+      authStore.logout();
+      throw new Error('Session expired. Please log in again.');
+    }
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || `Upload failed (${response.status})`);
+    }
+
+    const newUrl = result.data?.logoUrl;
+    if (newUrl) {
+      form.value.logoUrl = newUrl;
+      // Server has already persisted this URL — keep originalForm in sync to avoid
+      // appearing as a pending change just because of the logo.
+      originalForm.value.logoUrl = newUrl;
+      logoBroken.value = false;
+      notifySuccess('Logo uploaded');
+    }
+  } catch (err) {
+    console.error('Logo upload failed:', err);
+    logoError.value = err?.message || 'Failed to upload logo';
+    notifyError(logoError.value);
+  } finally {
+    logoUploading.value = false;
+  }
+};
+
+const removeLogo = async () => {
+  if (logoUploading.value) return;
+  // If the current URL is server-managed, call DELETE to remove the file reference.
+  // Otherwise just clear locally (it'll persist via the main Save action).
+  const isServerManaged = form.value.logoUrl && form.value.logoUrl.startsWith('/api/uploads/');
+  if (isServerManaged) {
+    logoUploading.value = true;
+    try {
+      const result = await apiClient('/settings/organization/logo', { method: 'DELETE' });
+      if (result?.success) {
+        form.value.logoUrl = '';
+        originalForm.value.logoUrl = '';
+        notifySuccess('Logo removed');
+      } else {
+        notifyError(result?.message || 'Failed to remove logo');
+      }
+    } catch (err) {
+      notifyError(err?.message || 'Failed to remove logo');
+    } finally {
+      logoUploading.value = false;
+    }
+  } else {
+    form.value.logoUrl = '';
+    logoBroken.value = false;
+  }
+};
+
 onMounted(() => {
   fetchOrganizationSettings();
+  document.addEventListener('click', closeTimezoneOnOutside);
 });
 </script>
-
