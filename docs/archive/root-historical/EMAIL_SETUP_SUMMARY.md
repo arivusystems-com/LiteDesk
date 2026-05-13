@@ -463,7 +463,7 @@ I provided:
 
 ## 🚀 Start Your Implementation
 
-**Begin here:** [`START_HERE_EMAIL.md`](START_HERE_EMAIL.md)
+**Begin here:** [`START_HERE_EMAIL.md`](../../START_HERE_EMAIL.md)
 
 **Time to implement:** 2-4 hours  
 **Monthly cost:** $0-10  

@@ -1,6 +1,6 @@
 <template>
   <div
-    class="mx-auto w-full max-w-[1600px] px-4 pb-12 pt-4 sm:px-6 lg:px-8"
+    class="list-page-skeleton w-full pb-12"
     aria-busy="true"
     aria-label="Loading list"
   >
@@ -40,41 +40,45 @@
       </div>
     </div>
 
-    <!-- Table card -->
-    <div
-      class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"
-    >
-      <!-- Fake header row -->
-      <div
-        class="flex items-center gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-900"
-      >
-        <div class="stb-shimmer h-4 w-10 rounded" />
-        <div class="stb-shimmer h-4 flex-1 rounded sm:max-w-[min(280px,40%)]" />
-        <div class="stb-shimmer hidden h-4 w-24 rounded md:block" />
-        <div class="stb-shimmer hidden h-4 w-20 rounded lg:block" />
-        <div class="stb-shimmer hidden h-4 w-28 rounded xl:block" />
-        <div class="stb-shimmer hidden h-4 w-24 rounded xl:block" />
-      </div>
-
-      <!-- Body rows -->
-      <div class="divide-y divide-gray-100 dark:divide-gray-800">
+    <!-- Table card: same px + negative mx as ListView → TableView so edges match header/stats -->
+    <div class="mt-4 px-4 sm:px-6 lg:px-8">
+      <div class="-mx-4 -my-2 sm:-mx-6 lg:-mx-8">
         <div
-          v-for="row in rowCount"
-          :key="`sk-${row}`"
-          class="flex items-center gap-3 px-4 py-4"
+          class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900"
         >
-          <div class="stb-shimmer h-4 w-6 rounded text-center tabular-nums" />
-          <div class="stb-shimmer h-10 w-10 flex-shrink-0 rounded-full" />
-          <div class="min-w-0 flex-1 space-y-2">
-            <div
-              class="stb-shimmer h-3.5 rounded"
-              :style="{ width: rowWidths[(row - 1) % rowWidths.length] }"
-            />
-            <div class="stb-shimmer h-3 max-w-xs rounded" style="width: 80%" />
+          <!-- Fake header row -->
+          <div
+            class="flex items-center gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-900"
+          >
+            <div class="stb-shimmer h-4 w-10 rounded" />
+            <div class="stb-shimmer h-4 flex-1 rounded sm:max-w-[min(280px,40%)]" />
+            <div class="stb-shimmer hidden h-4 w-24 rounded md:block" />
+            <div class="stb-shimmer hidden h-4 w-20 rounded lg:block" />
+            <div class="stb-shimmer hidden h-4 w-28 rounded xl:block" />
+            <div class="stb-shimmer hidden h-4 w-24 rounded xl:block" />
           </div>
-          <div class="stb-shimmer hidden h-3 w-20 rounded md:block" />
-          <div class="stb-shimmer hidden h-3 w-24 rounded lg:block" />
-          <div class="stb-shimmer hidden h-3 w-28 rounded xl:block" />
+
+          <!-- Body rows -->
+          <div class="divide-y divide-gray-100 dark:divide-gray-800">
+            <div
+              v-for="row in rowCount"
+              :key="`sk-${row}`"
+              class="flex items-center gap-3 px-4 py-4"
+            >
+              <div class="stb-shimmer h-4 w-6 rounded text-center tabular-nums" />
+              <div class="stb-shimmer h-10 w-10 flex-shrink-0 rounded-full" />
+              <div class="min-w-0 flex-1 space-y-2">
+                <div
+                  class="stb-shimmer h-3.5 rounded"
+                  :style="{ width: rowWidths[(row - 1) % rowWidths.length] }"
+                />
+                <div class="stb-shimmer h-3 max-w-xs rounded" style="width: 80%" />
+              </div>
+              <div class="stb-shimmer hidden h-3 w-20 rounded md:block" />
+              <div class="stb-shimmer hidden h-3 w-24 rounded lg:block" />
+              <div class="stb-shimmer hidden h-3 w-28 rounded xl:block" />
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -97,7 +101,7 @@ const rowCount = computed(() => Math.min(16, Math.max(6, props.bodyRows)));
 const rowWidths = ['72%', '85%', '68%', '78%', '82%', '75%'];
 </script>
 
-<style scoped>
+<style>
 @keyframes stb-shimmer-move {
   0% {
     background-position: -200% 0;
@@ -107,7 +111,7 @@ const rowWidths = ['72%', '85%', '68%', '78%', '82%', '75%'];
   }
 }
 
-.stb-shimmer {
+.list-page-skeleton .stb-shimmer {
   position: relative;
   overflow: hidden;
   background: linear-gradient(
@@ -120,7 +124,7 @@ const rowWidths = ['72%', '85%', '68%', '78%', '82%', '75%'];
   animation: stb-shimmer-move 1.35s ease-in-out infinite;
 }
 
-:global(.dark) .stb-shimmer {
+html.dark .list-page-skeleton .stb-shimmer {
   background: linear-gradient(
     90deg,
     rgb(55 65 81) 0%,

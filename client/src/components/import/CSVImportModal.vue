@@ -589,6 +589,88 @@ import HeadlessCheckbox from '@/components/ui/HeadlessCheckbox.vue';
 import { ref, reactive, computed, watch } from 'vue';
 import apiClient from '@/utils/apiClient';
 
+/** Collapse labels and keys for header ↔ field matching (e.g. First Name, first_name, firstname). */
+function normalizeImportFieldToken(s) {
+  return String(s || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[\s._-]+/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function getImportFieldsForEntityType(entityType) {
+  if (entityType === 'Contacts') {
+    return [
+      { label: 'First Name', value: 'first_name' },
+      { label: 'Last Name', value: 'last_name' },
+      { label: 'Email', value: 'email' },
+      { label: 'Phone', value: 'phone' },
+      { label: 'Job Title', value: 'job_title' },
+      { label: 'Company', value: 'company' },
+      { label: 'Lifecycle Stage', value: 'lifecycle_stage' },
+      { label: 'Lead Source', value: 'lead_source' },
+      { label: 'Status', value: 'status' },
+      { label: 'Lead Score', value: 'lead_score' }
+    ];
+  }
+  if (entityType === 'Deals') {
+    return [
+      { label: 'Name', value: 'name' },
+      { label: 'Amount', value: 'amount' },
+      { label: 'Stage', value: 'stage' },
+      { label: 'Status', value: 'status' },
+      { label: 'Priority', value: 'priority' },
+      { label: 'Expected Close Date', value: 'expectedCloseDate' }
+    ];
+  }
+  if (entityType === 'Tasks') {
+    return [
+      { label: 'Title', value: 'title' },
+      { label: 'Description', value: 'description' },
+      { label: 'Status', value: 'status' },
+      { label: 'Priority', value: 'priority' },
+      { label: 'Due Date', value: 'dueDate' },
+      { label: 'Tags', value: 'tags' },
+      { label: 'Time Estimate (minutes)', value: 'timeEstimate' }
+    ];
+  }
+  return [
+    { label: 'Name', value: 'name' },
+    { label: 'Industry', value: 'industry' },
+    { label: 'Website', value: 'website' },
+    { label: 'Phone', value: 'phone' },
+    { label: 'Email', value: 'email' },
+    { label: 'Address', value: 'address' }
+  ];
+}
+
+/**
+ * Default mapping: each CSV column maps to at most one module field (first column wins for a field).
+ * Matches header text to field API key or display label (case- and separator-insensitive).
+ */
+function buildAutoImportFieldMapping(csvHeaders, fields) {
+  const usedValues = new Set();
+  const mapping = {};
+  for (const header of csvHeaders) {
+    const hNorm = normalizeImportFieldToken(header);
+    let chosen = '';
+    if (hNorm) {
+      for (const field of fields) {
+        if (usedValues.has(field.value)) continue;
+        const keyNorm = normalizeImportFieldToken(field.value);
+        const labelNorm = normalizeImportFieldToken(field.label);
+        if (hNorm === keyNorm || hNorm === labelNorm) {
+          chosen = field.value;
+          usedValues.add(field.value);
+          break;
+        }
+      }
+    }
+    mapping[header] = chosen;
+  }
+  return mapping;
+}
+
 const props = defineProps({
   entityType: {
     type: String,
@@ -627,51 +709,7 @@ const steps = [
   { title: 'Import Results', shortTitle: 'Results', description: 'Review import results' }
 ];
 
-const availableFields = computed(() => {
-  if (props.entityType === 'Contacts') {
-    return [
-      { label: 'First Name', value: 'first_name' },
-      { label: 'Last Name', value: 'last_name' },
-      { label: 'Email', value: 'email' },
-      { label: 'Phone', value: 'phone' },
-      { label: 'Job Title', value: 'job_title' },
-      { label: 'Company', value: 'company' },
-      { label: 'Lifecycle Stage', value: 'lifecycle_stage' },
-      { label: 'Lead Source', value: 'lead_source' },
-      { label: 'Status', value: 'status' },
-      { label: 'Lead Score', value: 'lead_score' }
-    ];
-  } else if (props.entityType === 'Deals') {
-    return [
-      { label: 'Name', value: 'name' },
-      { label: 'Amount', value: 'amount' },
-      { label: 'Stage', value: 'stage' },
-      { label: 'Status', value: 'status' },
-      { label: 'Priority', value: 'priority' },
-      { label: 'Expected Close Date', value: 'expectedCloseDate' }
-    ];
-  } else if (props.entityType === 'Tasks') {
-    return [
-      { label: 'Title', value: 'title' },
-      { label: 'Description', value: 'description' },
-      { label: 'Status', value: 'status' },
-      { label: 'Priority', value: 'priority' },
-      { label: 'Due Date', value: 'dueDate' },
-      { label: 'Tags', value: 'tags' },
-      { label: 'Time Estimate (minutes)', value: 'timeEstimate' }
-    ];
-  } else {
-    // Organizations
-    return [
-      { label: 'Name', value: 'name' },
-      { label: 'Industry', value: 'industry' },
-      { label: 'Website', value: 'website' },
-      { label: 'Phone', value: 'phone' },
-      { label: 'Email', value: 'email' },
-      { label: 'Address', value: 'address' }
-    ];
-  }
-});
+const availableFields = computed(() => getImportFieldsForEntityType(props.entityType));
 
 const duplicateCheckableFields = computed(() => {
   // Get only the fields that are actually mapped
@@ -783,7 +821,7 @@ const clearFile = () => {
   csvHeaders.value = [];
   preview.value = [];
   totalRows.value = 0;
-  fieldMapping.value = {};
+  Object.keys(fieldMapping).forEach((k) => delete fieldMapping[k]);
 };
 
 const parseCSVLine = (line) => {
@@ -826,7 +864,14 @@ const parseCSV = () => {
 
     // Parse headers
     csvHeaders.value = parseCSVLine(lines[0]);
-    
+
+    Object.keys(fieldMapping).forEach((k) => delete fieldMapping[k]);
+    const fields = getImportFieldsForEntityType(props.entityType);
+    const autoMap = buildAutoImportFieldMapping(csvHeaders.value, fields);
+    for (const header of csvHeaders.value) {
+      fieldMapping[header] = autoMap[header] ?? '';
+    }
+
     // Parse preview (first 5 rows)
     preview.value = lines.slice(1, 6).map(line => {
       const values = parseCSVLine(line);

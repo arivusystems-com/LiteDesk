@@ -97,9 +97,9 @@ Arivu is a modern CRM platform built on a unique multi-instance architecture whe
 
 ## 🚀 Quick Start
 
-**New Developer?** → See **[QUICK_START.md](QUICK_START.md)** for 5-minute setup!
+**New Developer?** → See **[Quick Start](docs/QUICK_START.md)** for 5-minute setup!
 
-**Detailed Setup?** → See **[DEVELOPER_SETUP.md](DEVELOPER_SETUP.md)** for complete guide!
+**Detailed Setup?** → See **[Developer setup](docs/DEVELOPER_SETUP.md)** for complete guide!
 
 ### Prerequisites
 - Node.js 20.19+ or 22.12+
@@ -138,15 +138,15 @@ node scripts/createDefaultAdmin.js
 
 ### For Production Deployment
 
-See **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** for AWS/Kubernetes deployment.
+See **[Production deployment](docs/ARIVU_PRODUCTION_DEPLOYMENT.md)** for the current hosting runbook (Vercel + Railway + Atlas).
 
 ---
 
 ## 📚 Documentation
 
 ### Getting Started
-- **[Quick Start Guide](QUICK_START.md)** - Get running in 5 minutes ⚡
-- **[Developer Setup Guide](DEVELOPER_SETUP.md)** - Complete developer onboarding 📖
+- **[Quick Start Guide](docs/QUICK_START.md)** - Get running in 5 minutes ⚡
+- **[Developer Setup Guide](docs/DEVELOPER_SETUP.md)** - Complete developer onboarding 📖
 - **[MongoDB Setup Guide](MONGODB_SETUP_GUIDE.md)** - MongoDB installation and configuration 🗄️
 
 ### People and OrganizationV2 (New Models)
@@ -195,9 +195,9 @@ Quick verify
 
 ### Technical Documentation  
 - **[Technical Specification](TECHNICAL_SPEC.md)** - Complete technical details
-- **[Multi-Instance Implementation](MULTI_INSTANCE_IMPLEMENTATION.md)** - Multi-instance architecture
-- **[Deployment Guide](DEPLOYMENT_GUIDE.md)** - Production AWS/Kubernetes deployment
-- **[Build Summary](BUILD_SUMMARY.md)** - Development progress and changelog
+- **[Multi-instance status](docs/MULTI_INSTANCE_STATUS.md)** - Provisioning status and architecture notes
+- **[Production deployment](docs/ARIVU_PRODUCTION_DEPLOYMENT.md)** - Vercel, Railway, Atlas, and related runbooks
+- **[Build summary (archived)](docs/archive/BUILD_SUMMARY.md)** - Historical development changelog
 
 ---
 
@@ -239,7 +239,7 @@ Quick verify
 
 ### Production Deployment to AWS
 
-Follow the comprehensive [Deployment Guide](DEPLOYMENT_GUIDE.md) for step-by-step instructions.
+Follow the [production deployment runbook](docs/ARIVU_PRODUCTION_DEPLOYMENT.md) for step-by-step instructions.
 
 **Quick Overview:**
 1. Create AWS EKS cluster
@@ -453,8 +453,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Contact
 
 **Project Maintainer:** Your Name
-- Website: [arivu.com](https://arivu.com)
-- Email: hello@arivu.com
+- Website: [arivu.com](https://arivusystems.com)
+- Email: hello@arivusystems.com
 - Twitter: [@arivu](https://twitter.com/arivu)
 
 ---

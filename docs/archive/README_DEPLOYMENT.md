@@ -444,12 +444,12 @@ Thanks for testing! 🙏
 - [DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md) - Progress tracker
 
 **Development**:
-- [DEVELOPER_SETUP.md](./DEVELOPER_SETUP.md) - Local development
-- [QUICK_START.md](./QUICK_START.md) - Getting started
-- [TECHNICAL_SPEC.md](./TECHNICAL_SPEC.md) - Architecture details
+- [DEVELOPER_SETUP.md](../DEVELOPER_SETUP.md) - Local development
+- [QUICK_START.md](../QUICK_START.md) - Getting started
+- [TECHNICAL_SPEC.md](../../TECHNICAL_SPEC.md) - Architecture details
 
 **Features**:
-- [PERMISSION_COMPONENTS_GUIDE.md](./PERMISSION_COMPONENTS_GUIDE.md) - RBAC system
+- [PERMISSION_COMPONENTS_GUIDE.md](../PERMISSION_COMPONENTS_GUIDE.md) - RBAC system
 - [MIGRATION_COMPLETE_SUMMARY.md](./MIGRATION_COMPLETE_SUMMARY.md) - Recent updates
 
 **Scripts**:
