@@ -189,8 +189,8 @@
           :key="`stat-sk-${n}`"
           class="px-4 py-5 sm:p-6"
         >
-          <div class="list-sk-bar mb-3 h-4 w-28 rounded" />
-          <div class="list-sk-bar h-8 w-20 rounded-md" />
+          <div class="relative mb-3 h-4 w-28 overflow-hidden rounded bg-gray-200 animate-pulse dark:bg-gray-600" />
+          <div class="relative h-8 w-20 overflow-hidden rounded-md bg-gray-200 animate-pulse dark:bg-gray-600" />
         </div>
       </div>
       <dl
@@ -590,7 +590,6 @@
           :data="data"
           :columns="computedColumns"
           :loading="tableLoading"
-          :skeleton-row-count="skeletonRowCount"
           :selectable="true"
           :has-actions="true"
           :sort-field="sortField"
@@ -2583,15 +2582,34 @@ const computedStats = computed(() => {
 
 
 
+const dataLength = computed(() => (Array.isArray(props.data) ? props.data.length : 0));
+
+const initialRender = ref(true);
+
+const tableLoading = computed(() => {
+  if (props.loading && dataLength.value === 0) {
+    return true;
+  }
+  if (initialRender.value && !Array.isArray(props.data)) {
+    return true;
+  }
+  return false;
+});
+
 // Computed columns based on visible columns (preserve locked for title column width in TableView)
 const computedColumns = computed(() => {
-  return visibleColumns.value
+  const mapped = visibleColumns.value
     .filter(col => col.visible)
     .map(col => {
       const originalCol = props.columns.find(c => c.key === col.key);
       const merged = originalCol ? { ...originalCol, locked: col.locked } : { ...col };
       return merged;
     });
+  if (mapped.length > 0) return mapped;
+  if (tableLoading.value && Array.isArray(props.columns) && props.columns.length > 0) {
+    return props.columns.map((c) => ({ ...c }));
+  }
+  return [];
 });
 
 // Dynamic positioning based on sidebar state (reads localStorage like TabBar)
@@ -2645,8 +2663,6 @@ const hasActiveFilters = computed(() => {
   return hasSearch || hasInternalFilters || hasExternalFilters;
 });
 
-const dataLength = computed(() => (Array.isArray(props.data) ? props.data.length : 0));
-
 const hasMorePages = computed(() => {
   if (!props.infiniteScroll) return false;
   const p = props.pagination;
@@ -2674,38 +2690,14 @@ const dataHash = computed(() => {
   const ids = props.data.slice(0, 3).map(item => item[props.rowKey] || item._id).join('-');
   return ids || 'no-ids';
 });
-const initialRender = ref(true);
-const tableLoading = computed(() => {
-  // Only show loading if:
-  // 1. props.loading is true AND data is empty, OR
-  // 2. initialRender is true AND we haven't received any data yet (not even empty array)
-  if (props.loading && dataLength.value === 0) {
-    return true;
-  }
-  // Once we've received data (even if empty), stop showing initial render loading
-  if (initialRender.value && !Array.isArray(props.data)) {
-    return true;
-  }
-  return false;
-});
 
-/** Stats strip shimmer while table data is loading (same phase as table skeleton) */
+/** Stats strip shimmer while list data is loading */
 const statsBarSkeleton = computed(
   () =>
     Boolean(props.statsConfig?.length) &&
     props.loading &&
     dataLength.value === 0
 );
-const skeletonRowCount = computed(() => {
-  const limit = Number(props.pagination?.limit);
-  if (Number.isFinite(limit) && limit > 0) {
-    return limit;
-  }
-  if (dataLength.value > 0) {
-    return dataLength.value;
-  }
-  return 5;
-});
 const showEmptyState = computed(() => !tableLoading.value && dataLength.value === 0);
 onMounted(() => {
   requestAnimationFrame(() => {
@@ -4214,37 +4206,3 @@ const handleSetDefaultView = (view) => {
   emit('saved-view-selected', view);
 };
 </script>
-
-<style scoped>
-@keyframes list-sk-shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
-}
-
-.list-sk-bar {
-  position: relative;
-  overflow: hidden;
-  background: linear-gradient(
-    90deg,
-    rgb(229 231 235) 0%,
-    rgb(243 244 246) 42%,
-    rgb(229 231 235) 100%
-  );
-  background-size: 200% 100%;
-  animation: list-sk-shimmer 1.35s ease-in-out infinite;
-}
-
-:global(.dark) .list-sk-bar {
-  background: linear-gradient(
-    90deg,
-    rgb(55 65 81) 0%,
-    rgb(75 85 99) 42%,
-    rgb(55 65 81) 100%
-  );
-  background-size: 200% 100%;
-}
-</style>

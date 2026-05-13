@@ -28,6 +28,14 @@
         // If it's light mode, the 'dark' class is *not* added, ensuring light mode styles apply.
       })();
     </script>
+    <!-- Before the app CSS bundle loads, avoid a white viewport flash when <html> already has .dark -->
+    <style>
+      html.dark,
+      html.dark body {
+        background-color: #111827;
+        color-scheme: dark;
+      }
+    </style>
     <link rel="icon" href="/assets/logo/Logo_light.svg" type="image/svg+xml" sizes="any">
     <link rel="manifest" href="/manifest.json">
     <!-- Tailwind CSS v4 processes styles dynamically -->

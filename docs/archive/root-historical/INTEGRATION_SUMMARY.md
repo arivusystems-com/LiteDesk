@@ -174,10 +174,10 @@ Page refresh → Tabs restore → Seamless! ✅
 
 Everything is documented:
 
-1. **Quick Start**: [START_HERE_TABS.md](START_HERE_TABS.md) (5 min)
-2. **Developer Guide**: [docs/TABS_QUICK_REFERENCE.md](docs/TABS_QUICK_REFERENCE.md) (10 min)
-3. **Technical Docs**: [INTERNAL_TABS_IMPLEMENTATION.md](INTERNAL_TABS_IMPLEMENTATION.md) (30 min)
-4. **Integration Summary**: [TABS_INTEGRATION_COMPLETE.md](TABS_INTEGRATION_COMPLETE.md)
+1. **Quick Start**: [START_HERE_TABS.md](../../START_HERE_TABS.md) (5 min)
+2. **Developer Guide**: [docs/TABS_QUICK_REFERENCE.md](../../../docs/TABS_QUICK_REFERENCE.md) (10 min)
+3. **Technical Docs**: [INTERNAL_TABS_IMPLEMENTATION.md](../../INTERNAL_TABS_IMPLEMENTATION.md) (30 min)
+4. **Integration Summary**: [TABS_INTEGRATION_COMPLETE.md](../../TABS_INTEGRATION_COMPLETE.md)
 
 ---
 
@@ -206,9 +206,9 @@ The tabs system is:
 
 ## 🤔 Need Help?
 
-- **Using the feature?** → See [START_HERE_TABS.md](START_HERE_TABS.md)
-- **Adding to new components?** → See [docs/TABS_QUICK_REFERENCE.md](docs/TABS_QUICK_REFERENCE.md)
-- **Understanding the code?** → See [INTERNAL_TABS_IMPLEMENTATION.md](INTERNAL_TABS_IMPLEMENTATION.md)
+- **Using the feature?** → See [START_HERE_TABS.md](../../START_HERE_TABS.md)
+- **Adding to new components?** → See [docs/TABS_QUICK_REFERENCE.md](../../../docs/TABS_QUICK_REFERENCE.md)
+- **Understanding the code?** → See [INTERNAL_TABS_IMPLEMENTATION.md](../../INTERNAL_TABS_IMPLEMENTATION.md)
 
 ---
 

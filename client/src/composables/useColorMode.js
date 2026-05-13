@@ -5,9 +5,27 @@ function dbg(...args) {
   if (import.meta.env.DEV) console.log(...args);
 }
 
-const colorMode = ref('light'); // Global state shared across the app
+/** Must stay aligned with `client/index.html` boot script default when localStorage has no `color-mode`. */
+const colorMode = ref('system');
+/** True when the UI is dark: explicit dark, or system + OS prefers dark. Kept in sync with `html.dark`. */
+const effectiveDark = ref(false);
 let initialized = false; // Track if color mode has been initialized
 let systemListener = null; // Store the system listener reference
+
+function syncEffectiveDark(mode) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  let dark = false;
+  if (mode === 'dark') {
+    dark = true;
+  } else if (mode === 'light') {
+    dark = false;
+  } else {
+    dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  effectiveDark.value = dark;
+}
 
 // Inside src/composables/useColorMode.js
 
@@ -40,6 +58,7 @@ const applyMode = (mode) => {
   dbg('HTML classes after applyMode:', root.classList.toString());
   dbg('Dark class present:', root.classList.contains('dark'));
   dbg('Current mode:', mode);
+  syncEffectiveDark(mode);
   // If mode is 'light', the 'dark' class remains removed, 
   // and Tailwind defaults to the base (light mode) styles.
 };
@@ -52,14 +71,10 @@ const initializeColorMode = () => {
   
   const storedMode = localStorage.getItem('color-mode');
   dbg('Stored color mode:', storedMode);
-  if (['light', 'dark', 'system'].includes(storedMode)) {
-    colorMode.value = storedMode;
-    dbg('Using stored mode:', storedMode);
-  } else {
-    dbg('Using default mode:', colorMode.value);
-  }
-  
-  applyMode(colorMode.value);
+  const effectiveMode = ['light', 'dark', 'system'].includes(storedMode) ? storedMode : 'system';
+  colorMode.value = effectiveMode;
+  dbg('Using mode:', effectiveMode);
+  applyMode(effectiveMode);
   initialized = true;
 };
 
@@ -124,6 +139,7 @@ export function useColorMode() {
   // Expose the current mode for use in templates (e.g., to switch logos)
   return {
     colorMode,
+    effectiveDark,
     toggleColorMode,
     clearStoredMode,
   };

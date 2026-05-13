@@ -27,11 +27,11 @@ LiteDesk/                         ← workspace root (project codename: Arivu)
 ├── deploy-local-build.sh         Local build → deploy helper
 ├── README.md                     High-level overview & quick start
 ├── TECHNICAL_SPEC.md             Deep technical specification
-├── PLATFORM_ARCHITECTURE.md      Platform-level architecture
-└── *.md (many)                   Phase / feature / migration design notes
+├── SECURITY_*.md                 Security guidelines for contributors
+└── docs/archive/root-historical/*.md   Historical phase / feature / migration notes (moved from repo root)
 ```
 
-The numerous `*.md` files at the root are historical phase / feature design notes (e.g. `PHASE_0D_*`, `TABS_*`, `SIDEBAR_*`, `AUDIT_*`, `FORMS_*`, `EVENTS_*`). They document the evolution of features and are useful as context, but the canonical entry points are `README.md`, `TECHNICAL_SPEC.md`, and `PLATFORM_ARCHITECTURE.md`.
+Most historical design notes (for example `PHASE_0D_*`, `TABS_*`, `SIDEBAR_*`, `AUDIT_*`, `FORMS_*`, `EVENTS_*`) live under `docs/archive/root-historical/`. Canonical entry points remain `README.md`, `TECHNICAL_SPEC.md`, and [`PLATFORM_ARCHITECTURE.md`](./PLATFORM_ARCHITECTURE.md) in this same folder for the deep platform write-up.
 
 ---
 
@@ -447,17 +447,17 @@ CI/CD lives in `.github/workflows/` and is wired through GitHub Actions; PR hygi
 
 There are two doc surfaces:
 
-1. **Root-level `*.md` files** — Phase notes, feature design docs, debug walkthroughs, test summaries. They tell the story of how a feature was built/changed.
-2. **`docs/`** — More polished, evergreen guides: developer setup, environment, deployment, monitoring, scripts, API references (e.g. `Arivu_API_v2.postman_collection.json`), permission components, datatable usage, etc. Subfolders:
+1. **Repository root `*.md`** — A small set of entry points (`README.md`, security guides, onboarding summaries, `TECHNICAL_SPEC.md`, tabs/email primers, etc.).
+2. **`docs/`** — Evergreen guides: developer setup, environment, deployment, monitoring, scripts, API references, permission components, datatable usage, etc. Subfolders:
    - `docs/architecture/` — architecture diagrams & deep-dives.
    - `docs/design-system/` — design tokens / component guidelines.
-   - `docs/archive/` — older docs kept for reference.
+   - `docs/archive/` — older docs kept for reference, including `docs/archive/root-historical/` (phase notes and session write-ups moved from the repo root).
 
 If you need to onboard:
 
-1. `README.md` — the 5-minute path to running locally.
+1. `README.md` — the high-level path to running locally.
 2. `docs/DEVELOPER_SETUP.md` — full onboarding.
-3. `TECHNICAL_SPEC.md` + `PLATFORM_ARCHITECTURE.md` — system-level mental model.
+3. `TECHNICAL_SPEC.md` + [`PLATFORM_ARCHITECTURE.md`](./PLATFORM_ARCHITECTURE.md) (in this archive folder) — system-level mental model.
 4. `SECURITY_GUIDELINES.md` + `.github/SECURITY_CHECKLIST.md` — required reading before submitting code.
 
 ---
@@ -505,7 +505,7 @@ The same shape applies for Deals, Tasks, Cases (Helpdesk), Audit assignments, Fo
 
 **Source files cited in this document:**
 
-- `README.md`, `TECHNICAL_SPEC.md`, `PLATFORM_ARCHITECTURE.md`
+- `README.md`, `TECHNICAL_SPEC.md`, [`PLATFORM_ARCHITECTURE.md`](./PLATFORM_ARCHITECTURE.md)
 - `server/server.js`, `server/worker.js`, `server/package.json`
 - `client/package.json`, `client/src/main.ts`
 - `docker-compose.yml`, `Dockerfile.backend`, `Dockerfile.frontend`

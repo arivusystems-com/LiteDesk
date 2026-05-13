@@ -278,7 +278,7 @@ Complete documentation available:
 1. **[START_HERE_TABS.md](START_HERE_TABS.md)** - Quick overview (5 min read)
 2. **[docs/TABS_QUICK_REFERENCE.md](docs/TABS_QUICK_REFERENCE.md)** - Copy-paste examples
 3. **[INTERNAL_TABS_IMPLEMENTATION.md](INTERNAL_TABS_IMPLEMENTATION.md)** - Technical deep dive
-4. **[TABS_FEATURE_SUMMARY.md](TABS_FEATURE_SUMMARY.md)** - Complete summary
+4. **[TABS_FEATURE_SUMMARY.md](docs/archive/root-historical/TABS_FEATURE_SUMMARY.md)** - Complete summary
 5. **[README.md](README.md)** - Updated with tabs section
 
 ---

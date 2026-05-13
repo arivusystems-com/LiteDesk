@@ -420,25 +420,24 @@ const { openTab } = useTabs();
 // Sidebar state management
 const { lastActiveAppId, coreModulesCollapsed } = useSidebarState();
 
-// Logo in sidebar header: mark when expanded, glyph when collapsed (color mode aware)
+const { effectiveDark } = useColorMode();
+
+// App switcher dropdown state
+const showAppSwitcherDropdown = ref(false);
+const appSwitcherDropdownRef = ref<HTMLElement | null>(null);
+
+// Logo in sidebar header: mark when expanded, glyph when collapsed (matches `html.dark`, including system + OS dark)
 const sidebarLogoUrl = computed(() => {
-  const isDark = colorMode.value === 'dark';
+  const isDark = effectiveDark.value;
   if (props.collapsed) {
     return isDark ? logoLightUrl : logoDarkUrl;
   }
   return isDark ? logoWordmarkLightUrl : logoWordmarkDarkUrl;
 });
 
-// App switcher dropdown state
-const showAppSwitcherDropdown = ref(false);
-const appSwitcherDropdownRef = ref<HTMLElement | null>(null);
-
-// Color mode for menu
-const { colorMode, toggleColorMode } = useColorMode();
-
-// Icon colors based on color mode
+// Icon fills — must follow effective appearance, not only explicit `dark` preference
 const iconColors = computed(() => {
-  const isDark = colorMode.value === 'dark';
+  const isDark = effectiveDark.value;
   return {
     // Primary icon color (default)
     primary: isDark ? '#e5e7eb' : '#070922', // gray-200 in dark, dark gray in light

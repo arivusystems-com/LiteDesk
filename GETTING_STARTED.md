@@ -65,7 +65,7 @@ npm install @kubernetes/client-node aws-sdk bull redis yaml axios
 
 #### Step 2: Set Up AWS Infrastructure (1-2 days)
 
-Follow the complete [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for:
+Follow the [production deployment runbook](docs/ARIVU_PRODUCTION_DEPLOYMENT.md) for:
 
 1. ☁️ Create AWS EKS cluster
 2. 🔧 Install ingress-nginx controller
@@ -107,9 +107,9 @@ Before you begin, familiarize yourself with these documents:
 |----------|---------|--------------|
 | **[README.md](README.md)** | Project overview and quick start | Start here! |
 | **[TECHNICAL_SPEC.md](TECHNICAL_SPEC.md)** | Complete technical specification | Understanding the system |
-| **[MULTI_INSTANCE_IMPLEMENTATION.md](MULTI_INSTANCE_IMPLEMENTATION.md)** | Implementation details | Building features |
-| **[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)** | Production deployment steps | Going to production |
-| **[BUILD_SUMMARY.md](BUILD_SUMMARY.md)** | What was built in this session | Understanding what you have |
+| **[docs/MULTI_INSTANCE_STATUS.md](docs/MULTI_INSTANCE_STATUS.md)** | Multi-instance provisioning status | Building features |
+| **[docs/ARIVU_PRODUCTION_DEPLOYMENT.md](docs/ARIVU_PRODUCTION_DEPLOYMENT.md)** | Production deployment runbook | Going to production |
+| **[docs/archive/BUILD_SUMMARY.md](docs/archive/BUILD_SUMMARY.md)** | Historical build changelog | Understanding what you have |
 
 ---
 
@@ -214,7 +214,7 @@ Open your browser and navigate to:
 - Understand the provisioning workflow
 
 **Day 4-5: AWS Setup**
-- Follow `DEPLOYMENT_GUIDE.md`
+- Follow `docs/ARIVU_PRODUCTION_DEPLOYMENT.md`
 - Set up AWS infrastructure
 - Deploy to production
 
