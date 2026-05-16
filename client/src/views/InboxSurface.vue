@@ -363,7 +363,9 @@
       >
         <div class="font-semibold text-violet-900 dark:text-violet-100">Gmail inbox sync</div>
         <p class="mt-1 text-[11px] leading-snug text-violet-800/90 dark:text-violet-200/90">
-          Your personal mailbox is linked to Google. LiteDesk imports <span class="font-medium">INBOX</span> with a read-only scope.
+          Your personal mailbox is linked to Google. LiteDesk imports mail from the
+          <span class="font-medium">Gmail labels you choose</span>
+          (default: Inbox, Starred, Important) using a read-only scope. The server also syncs in the background; use Sync now for an immediate refresh.
         </p>
         <div class="mt-1 text-[11px] text-violet-800 dark:text-violet-200">
           Connected as <span class="font-mono">{{ selectedPersonalMailbox.gmailInboxSync.accountEmail || '—' }}</span>
@@ -375,6 +377,14 @@
           {{ selectedPersonalMailbox.gmailInboxSync.lastError }}
         </p>
         <div class="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="rounded-lg border border-violet-300 bg-white px-3 py-1.5 text-xs font-medium text-violet-900 hover:bg-violet-100 dark:border-violet-700 dark:bg-violet-950 dark:text-violet-100 dark:hover:bg-violet-900/40"
+            :disabled="gmailSyncLoading"
+            @click="gmailFolderModalOpen = true"
+          >
+            Select folders to sync
+          </button>
           <button
             type="button"
             class="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-50"
@@ -749,6 +759,12 @@
       </div>
     </div>
 
+    <GmailMailboxFolderModal
+      v-model="gmailFolderModalOpen"
+      :mailbox-id="gmailFolderModalMailboxId"
+      @saved="onGmailFolderModalSaved"
+    />
+
     <EmailComposeDrawer
       :key="composeRow?.threadId || 'new-compose'"
       :is-open="composeDrawerOpen"
@@ -865,6 +881,7 @@ import {
 } from '@heroicons/vue/24/outline';
 import EmailComposeDrawer from '@/components/communications/EmailComposeDrawer.vue';
 import ConnectInboxWizard from '@/components/inbox/ConnectInboxWizard.vue';
+import GmailMailboxFolderModal from '@/components/inbox/GmailMailboxFolderModal.vue';
 import EmailThreadReader from '@/components/inbox/EmailThreadReader.vue';
 
 const router = useRouter();
@@ -949,10 +966,19 @@ const selectedPersonalMailbox = computed(() => {
   return m && m.kind === 'personal' ? m : null;
 });
 
+/** Personal mailbox id for Gmail folder modal / OAuth when "All mail" scope is active. */
+const gmailFolderModalMailboxId = computed(() => {
+  const s = selectedPersonalMailbox.value;
+  if (s?.id) return String(s.id);
+  const first = mailboxes.value.find((x) => x.kind === 'personal');
+  return first?.id ? String(first.id) : '';
+});
+
 const threadCounts = ref({ all: 0, unread: 0, assignedToMe: 0, snoozed: 0 });
 const gmailSyncLoading = ref(false);
 const connectInboxWizardOpen = ref(false);
 const gmailServerSetupModalOpen = ref(false);
+const gmailFolderModalOpen = ref(false);
 
 // Gmail OAuth opens in a sized popup window (not the current tab). State below
 // is local to the parent tab — the popup itself runs the same InboxSurface
@@ -1114,8 +1140,10 @@ async function startGmailOAuth(loginHint = '') {
       const data = event.data;
       if (!data || data.type !== 'gmail-oauth-result') return;
       if (data.status === 'connected') {
-        notifications.success('Gmail connected. Run Sync now to import INBOX mail.');
-        fetchMailboxes();
+        notifications.success('Gmail connected. Choose which folders to sync, then use Sync now if you want mail immediately.');
+        fetchMailboxes().then(() => {
+          gmailFolderModalOpen.value = true;
+        });
       } else if (data.status === 'error') {
         notifications.error(String(data.message || 'Connection failed'));
       }
@@ -1157,6 +1185,11 @@ async function runGmailInboxSync() {
   } finally {
     gmailSyncLoading.value = false;
   }
+}
+
+async function onGmailFolderModalSaved() {
+  await fetchMailboxes();
+  notifications.success('Sync folders saved');
 }
 
 async function disconnectGmail() {
@@ -1210,7 +1243,10 @@ function consumeGmailOAuthQuery() {
   // Direct-navigation fallback: user pasted the success URL, or popup was
   // blocked and we did a full-tab redirect instead. Behave the old way.
   if (g === 'connected') {
-    notifications.success('Gmail connected. Run Sync now to import INBOX mail.');
+    notifications.success('Gmail connected. Choose which folders to sync, then use Sync now if you want mail immediately.');
+    fetchMailboxes().then(() => {
+      gmailFolderModalOpen.value = true;
+    });
   } else {
     notifications.error(decodedMessage || 'Connection failed');
   }

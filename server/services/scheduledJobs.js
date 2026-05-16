@@ -4,6 +4,8 @@ const { tick: escalationTick } = require('./escalationResolver');
 const { purgeExpiredRetention } = require('./deletionService');
 const { processDueAssignmentJobs } = require('./assignmentSchedulingService');
 const { tickHelpdeskSlaNotifications } = require('./helpdeskSlaMonitorService');
+const { tickScheduledGmailInboxSync } = require('./gmailInboxSyncSchedulerService');
+const { tickSnoozeWakeNotifications } = require('./snoozeWakeNotificationSchedulerService');
 
 const NOTIFICATION_DEBUG = process.env.NOTIFICATION_DEBUG === 'true';
 const ENABLE_DIGEST_SCHEDULER = process.env.ENABLE_DIGEST_SCHEDULER !== 'false'; // Default: enabled
@@ -11,6 +13,9 @@ const ENABLE_ESCALATION_SCHEDULER = process.env.ENABLE_ESCALATION_SCHEDULER !== 
 const ENABLE_TRASH_RETENTION_SCHEDULER = process.env.ENABLE_TRASH_RETENTION_SCHEDULER !== 'false'; // Default: enabled
 const ENABLE_ASSIGNMENT_SCHEDULER = process.env.ENABLE_ASSIGNMENT_SCHEDULER !== 'false'; // Default: enabled (Helpdesk Step 7C)
 const ENABLE_HELPDESK_SLA_SCHEDULER = process.env.ENABLE_HELPDESK_SLA_SCHEDULER !== 'false'; // Default: enabled (Step 9)
+const ENABLE_GMAIL_INBOX_SYNC_SCHEDULER = process.env.ENABLE_GMAIL_INBOX_SYNC_SCHEDULER !== 'false'; // Default: enabled (Phase 5)
+const ENABLE_SNOOZE_WAKE_NOTIFICATION_SCHEDULER =
+  process.env.ENABLE_SNOOZE_WAKE_NOTIFICATION_SCHEDULER !== 'false'; // Default: enabled (Phase 6)
 
 let dailyDigestJob = null;
 let weeklyDigestJob = null;
@@ -18,15 +23,17 @@ let escalationJob = null;
 let trashRetentionJob = null;
 let assignmentJob = null;
 let helpdeskSlaJob = null;
+let gmailInboxSyncJob = null;
+let snoozeWakeNotificationJob = null;
 
 /**
- * Initialize and start scheduled jobs for notification digests.
- * 
- * Jobs:
- * - Daily digest: Runs every day at 9:00 AM
- * - Weekly digest: Runs every Monday at 9:00 AM
- * 
- * Set ENABLE_DIGEST_SCHEDULER=false to disable.
+ * Initialize and start scheduled jobs (node-cron).
+ *
+ * Master switch on the API process: set ENABLE_SCHEDULED_JOBS=false to skip
+ * starting this module entirely (see server.js).
+ *
+ * Per-job toggles include ENABLE_DIGEST_SCHEDULER, ENABLE_ESCALATION_SCHEDULER,
+ * ENABLE_GMAIL_INBOX_SYNC_SCHEDULER, etc.
  */
 function startScheduledJobs() {
   console.log('[scheduledJobs] Starting scheduled jobs...');
@@ -162,6 +169,54 @@ function startScheduledJobs() {
     console.log('[scheduledJobs] Helpdesk SLA scheduler disabled (ENABLE_HELPDESK_SLA_SCHEDULER=false)');
   }
 
+  // Gmail personal inbox sync (Phase 5): poll Gmail API on an interval across tenant DBs
+  if (ENABLE_GMAIL_INBOX_SYNC_SCHEDULER) {
+    const gmailCron = String(process.env.GMAIL_INBOX_SYNC_CRON || '*/5 * * * *').trim();
+    const tickGmail = async () => {
+      const startTime = new Date();
+      try {
+        await tickScheduledGmailInboxSync();
+      } catch (err) {
+        console.error('[scheduledJobs] Gmail inbox sync tick failed:', err.message);
+      }
+      if (NOTIFICATION_DEBUG) {
+        console.log(`[scheduledJobs] Gmail inbox sync tick finished in ${Date.now() - startTime.getTime()}ms`);
+      }
+    };
+    try {
+      if (!cron.validate(gmailCron)) {
+        console.error(
+          `[scheduledJobs] Invalid GMAIL_INBOX_SYNC_CRON="${gmailCron}" — Gmail inbox scheduler not started`
+        );
+      } else {
+        gmailInboxSyncJob = cron.schedule(gmailCron, tickGmail, {
+          scheduled: true,
+          timezone: process.env.DIGEST_TIMEZONE || 'UTC'
+        });
+        console.log(`[scheduledJobs]   - Gmail inbox sync: cron "${gmailCron}"`);
+      }
+    } catch (err) {
+      console.error('[scheduledJobs] Gmail inbox sync scheduler failed to start:', err.message);
+    }
+  } else {
+    console.log('[scheduledJobs] Gmail inbox sync scheduler disabled (ENABLE_GMAIL_INBOX_SYNC_SCHEDULER=false)');
+  }
+
+  if (ENABLE_SNOOZE_WAKE_NOTIFICATION_SCHEDULER) {
+    snoozeWakeNotificationJob = cron.schedule('* * * * *', async () => {
+      try {
+        await tickSnoozeWakeNotifications();
+      } catch (err) {
+        console.error('[scheduledJobs] Snooze wake notification tick failed:', err.message);
+      }
+    }, { scheduled: true, timezone: process.env.DIGEST_TIMEZONE || 'UTC' });
+    console.log('[scheduledJobs]   - Snooze wake notifications: every minute');
+  } else {
+    console.log(
+      '[scheduledJobs] Snooze wake notification scheduler disabled (ENABLE_SNOOZE_WAKE_NOTIFICATION_SCHEDULER=false)'
+    );
+  }
+
   console.log(`[scheduledJobs]   - Timezone: ${process.env.DIGEST_TIMEZONE || 'UTC'}`);
   if (NOTIFICATION_DEBUG) {
     console.log('[scheduledJobs]   - Debug mode: enabled');
@@ -207,6 +262,18 @@ function stopScheduledJobs() {
     helpdeskSlaJob = null;
     console.log('[scheduledJobs] Helpdesk SLA scheduler job stopped');
   }
+
+  if (gmailInboxSyncJob) {
+    gmailInboxSyncJob.stop();
+    gmailInboxSyncJob = null;
+    console.log('[scheduledJobs] Gmail inbox sync job stopped');
+  }
+
+  if (snoozeWakeNotificationJob) {
+    snoozeWakeNotificationJob.stop();
+    snoozeWakeNotificationJob = null;
+    console.log('[scheduledJobs] Snooze wake notification job stopped');
+  }
 }
 
 /**
@@ -233,11 +300,23 @@ async function triggerTrashRetention() {
   return purgeExpiredRetention();
 }
 
+async function triggerGmailInboxSyncTick() {
+  console.log('[scheduledJobs] Manually triggering Gmail inbox sync tick...');
+  return tickScheduledGmailInboxSync();
+}
+
+async function triggerSnoozeWakeNotificationsTick() {
+  console.log('[scheduledJobs] Manually triggering snooze wake notification tick...');
+  return tickSnoozeWakeNotifications();
+}
+
 module.exports = {
   startScheduledJobs,
   stopScheduledJobs,
   triggerDailyDigest,
   triggerWeeklyDigest,
-  triggerTrashRetention
+  triggerTrashRetention,
+  triggerGmailInboxSyncTick,
+  triggerSnoozeWakeNotificationsTick
 };
 

@@ -14,6 +14,26 @@ const { getGmailOAuthAppCredentialsForServer } = require('../platform/communicat
 const { encryptTenantSecret, decryptTenantSecret } = require('../utils/tenantSecretCrypto');
 
 const MAX_MESSAGES_PER_RUN = 40;
+const MAX_SYNC_LABELS = 24;
+/** When the mailbox has no `gmailSyncLabelIds` yet (legacy rows), sync INBOX only. */
+const LEGACY_DEFAULT_SYNC_LABEL_IDS = ['INBOX'];
+/** Applied on first successful Gmail OAuth for a personal mailbox. */
+const OAUTH_DEFAULT_SYNC_LABEL_IDS = ['INBOX', 'STARRED', 'IMPORTANT'];
+
+function normalizeGmailSyncLabelIds(raw) {
+  const list = Array.isArray(raw) ? raw.map((x) => String(x).trim()).filter(Boolean) : [];
+  const uniq = [...new Set(list)];
+  const safe = uniq
+    .filter((id) => /^[A-Za-z0-9_]+$/.test(id) && id.length <= 128)
+    .slice(0, MAX_SYNC_LABELS);
+  return safe.length ? safe : [...LEGACY_DEFAULT_SYNC_LABEL_IDS];
+}
+
+function buildGmailListQueryFromLabelIds(labelIds) {
+  const ids = normalizeGmailSyncLabelIds(labelIds);
+  if (ids.length === 1) return `label:${ids[0]}`;
+  return `(${ids.map((id) => `label:${id}`).join(' OR ')})`;
+}
 
 function normalizeOAuthLoginHint(raw) {
   const s = String(raw || '').trim().slice(0, 320);
@@ -148,7 +168,11 @@ async function completeGmailOAuthCallback({ code, state }) {
         gmailHistoryId: prof.data.historyId ? String(prof.data.historyId) : '',
         syncStatus: 'connected',
         lastInboxSyncError: '',
-        emailAddress: accountEmail || mb.emailAddress
+        emailAddress: accountEmail || mb.emailAddress,
+        gmailSyncLabelIds:
+          Array.isArray(mb.gmailSyncLabelIds) && mb.gmailSyncLabelIds.length > 0
+            ? mb.gmailSyncLabelIds
+            : OAUTH_DEFAULT_SYNC_LABEL_IDS
       }
     }
   );
@@ -186,6 +210,77 @@ async function listMessageIdsSinceHistory(gmail, historyId) {
   return { ids, latestHistoryId, resetHistory: false };
 }
 
+async function listGmailLabelsFromApi(gmail) {
+  const res = await gmail.users.labels.list({ userId: 'me' });
+  const labels = (res.data.labels || [])
+    .map((l) => ({
+      id: String(l.id || ''),
+      name: String(l.name || l.id || ''),
+      type: l.type === 'system' ? 'system' : 'user',
+      messageListVisibility: l.messageListVisibility || ''
+    }))
+    .filter((l) => l.id);
+  labels.sort((a, b) => {
+    const ao = a.type === 'system' ? 0 : 1;
+    const bo = b.type === 'system' ? 0 : 1;
+    if (ao !== bo) return ao - bo;
+    return a.name.localeCompare(b.name);
+  });
+  return labels;
+}
+
+/**
+ * @param {object} mailboxLean — mailbox with encrypted refresh
+ * @returns {Promise<{ labels?: Array<{ id: string, name: string, type: string, messageListVisibility: string }>, error?: string }>}
+ */
+async function listGmailLabelsForMailbox(mailboxLean) {
+  const orgId = mailboxLean.organizationId;
+  const enc = mailboxLean.inboxSyncEncryptedRefreshToken;
+  const refresh = decryptTenantSecret(enc);
+  if (!refresh) {
+    return { error: 'Missing or invalid stored refresh token' };
+  }
+  const oauthClient = await getOAuthClient(orgId);
+  if (oauthClient.error) return { error: oauthClient.error };
+  const { google, oauth2Client } = oauthClient;
+  oauth2Client.setCredentials({ refresh_token: refresh });
+  const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+  try {
+    const labels = await listGmailLabelsFromApi(gmail);
+    return { labels };
+  } catch (err) {
+    return { error: err?.message || String(err) };
+  }
+}
+
+/**
+ * @param {object} gmail — Gmail API client (googleapis v1)
+ * @param {string[]} messageIds
+ * @param {string[]} syncLabelIds
+ * @returns {Promise<string[]>}
+ */
+async function filterMessageIdsBySyncLabels(gmail, messageIds, syncLabelIds) {
+  const wanted = new Set(normalizeGmailSyncLabelIds(syncLabelIds));
+  const out = [];
+  for (const mid of messageIds) {
+    try {
+      const meta = await gmail.users.messages.get({
+        userId: 'me',
+        id: mid,
+        format: 'metadata',
+        metadataHeaders: []
+      });
+      const lids = meta.data.labelIds || [];
+      if (lids.some((lid) => wanted.has(String(lid)))) {
+        out.push(String(mid));
+      }
+    } catch {
+      /* skip unreadable message */
+    }
+  }
+  return out;
+}
+
 /**
  * @param {object} mailboxLean — mailbox with encrypted refresh
  * @returns {Promise<{ imported: number, skipped: number, error?: string }>}
@@ -206,6 +301,11 @@ async function runGmailInboxSyncForMailbox(mailboxLean) {
   oauth2Client.setCredentials({ refresh_token: refresh });
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
+  const syncLabelIds =
+    Array.isArray(mailboxLean.gmailSyncLabelIds) && mailboxLean.gmailSyncLabelIds.length > 0
+      ? mailboxLean.gmailSyncLabelIds
+      : LEGACY_DEFAULT_SYNC_LABEL_IDS;
+
   let messageIds = [];
   let storedHistory = mailboxLean.gmailHistoryId ? String(mailboxLean.gmailHistoryId) : '';
 
@@ -214,7 +314,8 @@ async function runGmailInboxSyncForMailbox(mailboxLean) {
     if (hist.resetHistory) {
       storedHistory = '';
     } else {
-      messageIds = [...new Set(hist.ids)].slice(0, MAX_MESSAGES_PER_RUN);
+      const rawIds = [...new Set(hist.ids)].slice(0, MAX_MESSAGES_PER_RUN);
+      messageIds = await filterMessageIdsBySyncLabels(gmail, rawIds, syncLabelIds);
     }
   }
 
@@ -222,7 +323,7 @@ async function runGmailInboxSyncForMailbox(mailboxLean) {
     const list = await gmail.users.messages.list({
       userId: 'me',
       maxResults: MAX_MESSAGES_PER_RUN,
-      q: 'in:inbox'
+      q: buildGmailListQueryFromLabelIds(syncLabelIds)
     });
     messageIds = (list.data.messages || []).map((m) => String(m.id)).filter(Boolean);
   }
@@ -312,6 +413,10 @@ module.exports = {
   completeGmailOAuthCallback,
   resolveClientBaseUrlFromState,
   runGmailInboxSyncForMailbox,
+  listGmailLabelsForMailbox,
+  normalizeGmailSyncLabelIds,
   assertPersonalOwner,
-  MAX_MESSAGES_PER_RUN
+  MAX_MESSAGES_PER_RUN,
+  OAUTH_DEFAULT_SYNC_LABEL_IDS,
+  LEGACY_DEFAULT_SYNC_LABEL_IDS
 };

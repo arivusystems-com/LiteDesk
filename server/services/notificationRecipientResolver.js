@@ -47,6 +47,8 @@ async function resolveKey(key, context) {
       return resolveSalesOrganizationAssignee(context);
     case 'CASE_OWNER':
       return resolveCaseOwner(context);
+    case 'INBOX_SNOOZE_USER':
+      return resolveInboxSnoozeWake(context);
     default:
       console.warn('[notificationRecipientResolver] Unhandled recipient key:', key);
       return [];
@@ -129,6 +131,24 @@ async function resolveSalesOrganizationAssignee({ entity, organizationId, eventT
       : `Update on organization "${label}".`;
 
   return [{ userId: row.assignedTo, title, body }];
+}
+
+async function resolveInboxSnoozeWake({ entity, organizationId, eventType }) {
+  if (eventType !== domainEvents.EMAIL_THREAD_SNOOZE_ENDED) return [];
+  if (!entity || entity.type !== 'EmailThread' || !entity.notifyUserId) return [];
+  if (!organizationId) return [];
+
+  const subject = String(entity.subject || '(No subject)').trim().slice(0, 240) || '(No subject)';
+  const title = 'Snoozed thread is back';
+  const body = `"${subject}" is visible in your inbox again. Open Inbox to review.`;
+
+  return [
+    {
+      userId: entity.notifyUserId,
+      title,
+      body
+    }
+  ];
 }
 
 async function resolveCaseOwner({ entity, organizationId, eventType }) {

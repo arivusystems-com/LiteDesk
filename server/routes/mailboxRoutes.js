@@ -13,6 +13,8 @@ router.use(organizationIsolation);
 router.get('/', controller.listMailboxes);
 router.post('/', controller.createMailbox);
 router.get('/:id/inbox-sync/google/start', controller.gmailInboxSyncGoogleStart);
+router.get('/:id/inbox-sync/google/labels', controller.listGmailInboxSyncLabels);
+router.patch('/:id/inbox-sync/google/sync-labels', controller.patchGmailInboxSyncSyncLabels);
 router.post('/:id/inbox-sync/run', controller.gmailInboxSyncRun);
 router.post('/:id/inbox-sync/google/disconnect', controller.gmailInboxSyncDisconnect);
 router.get('/:id', controller.getMailbox);

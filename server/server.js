@@ -405,11 +405,15 @@ connectMasterWithRetry(masterUri)
       console.log('✅ Metrics collector started');
     }
     
-    // 3. Start Scheduled Jobs (Notification Digests)
-    if (process.env.ENABLE_DIGEST_SCHEDULER !== 'false') {
+    // 3. Start scheduled jobs (digests, escalations, trash retention, Gmail inbox sync, …)
+    //    Master switch: ENABLE_SCHEDULED_JOBS=false disables all cron registered here.
+    //    Individual toggles (e.g. ENABLE_DIGEST_SCHEDULER) still apply inside scheduledJobs.
+    if (process.env.ENABLE_SCHEDULED_JOBS !== 'false') {
       const scheduledJobs = require('./services/scheduledJobs');
       scheduledJobs.startScheduledJobs();
       console.log('✅ Scheduled jobs started');
+    } else {
+      console.log('⏭️  Scheduled jobs disabled (ENABLE_SCHEDULED_JOBS=false)');
     }
 
     // 3b. Initialize automation engine (domain events → rule resolution → dry-run planning)

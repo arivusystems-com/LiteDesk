@@ -22,7 +22,12 @@ const ThreadViewSchema = new Schema({
   lastViewedAt: { type: Date, required: true },
   doneAt: { type: Date, default: null },
   /** When set and in the future, thread is hidden from default inbox lists for this user. */
-  snoozedUntil: { type: Date, default: null }
+  snoozedUntil: { type: Date, default: null },
+  /**
+   * When snooze ends (snoozedUntil in the past), snooze wake notification is sent once per snooze
+   * session; this field stores the snoozedUntil value we last notified for (see Phase 6 scheduler).
+   */
+  snoozeWakeNotifiedAt: { type: Date, default: null }
 }, {
   timestamps: true
 });

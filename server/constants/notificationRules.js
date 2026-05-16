@@ -319,6 +319,19 @@ module.exports = {
       sms: false
     }
   },
+  [domainEvents.EMAIL_THREAD_SNOOZE_ENDED]: {
+    appKey: 'SALES',
+    recipients: ['INBOX_SNOOZE_USER'],
+    priority: 'NORMAL',
+    defaultChannels: ['IN_APP'],
+    channels: {
+      inApp: true,
+      email: false,
+      push: false,
+      whatsapp: false,
+      sms: false
+    }
+  },
   [domainEvents.DIGEST_DAILY]: {
     appKey: '*',
     recipients: ['USER_SELF'],
