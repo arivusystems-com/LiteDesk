@@ -12,7 +12,8 @@ const {
   buildGmailAuthorizeUrl,
   completeGmailOAuthCallback,
   resolveClientBaseUrlFromState,
-  runGmailInboxSyncForMailbox,
+  listGmailLabelsForMailbox,
+  normalizeGmailSyncLabelIds,
   assertPersonalOwner
 } = require('../services/mailboxGmailInboxSyncService');
 const { getGmailOAuthAppCredentialsForServer } = require('../platform/communication/config/communicationConfigService');
@@ -46,7 +47,10 @@ function serializeMailbox(doc) {
       connected: hasGmailToken,
       accountEmail: o.inboxSyncAccountEmail || '',
       lastSyncAt: o.lastInboxSyncAt || null,
-      lastError: o.lastInboxSyncError ? String(o.lastInboxSyncError).slice(0, 500) : ''
+      lastError: o.lastInboxSyncError ? String(o.lastInboxSyncError).slice(0, 500) : '',
+      syncLabelIds: Array.isArray(o.gmailSyncLabelIds)
+        ? o.gmailSyncLabelIds.map((x) => String(x).trim()).filter(Boolean)
+        : []
     },
     createdAt: o.createdAt,
     updatedAt: o.updatedAt
@@ -431,6 +435,103 @@ async function gmailInboxSyncRun(req, res) {
 }
 
 /**
+ * GET /api/mailboxes/:id/inbox-sync/google/labels — list Gmail labels + current sync selection (owner).
+ */
+async function listGmailInboxSyncLabels(req, res) {
+  try {
+    const orgId = req.user.organizationId;
+    const userId = req.user._id;
+    const id = toId(req.params.id);
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Invalid mailbox id' });
+    }
+    const mailbox = await Mailbox.findOne({ _id: id, organizationId: orgId }).lean();
+    const ownerErr = assertPersonalOwner(mailbox, userId);
+    if (ownerErr) {
+      return res.status(403).json({ success: false, message: ownerErr });
+    }
+    if (!mailbox || mailbox.inboxProvider !== 'google' || !mailbox.inboxSyncEncryptedRefreshToken) {
+      return res.status(400).json({
+        success: false,
+        message: 'Gmail inbox is not connected for this mailbox.'
+      });
+    }
+    const result = await listGmailLabelsForMailbox(mailbox);
+    if (result.error) {
+      return res.status(502).json({ success: false, message: result.error });
+    }
+    const selected =
+      Array.isArray(mailbox.gmailSyncLabelIds) && mailbox.gmailSyncLabelIds.length > 0
+        ? normalizeGmailSyncLabelIds(mailbox.gmailSyncLabelIds)
+        : normalizeGmailSyncLabelIds([]);
+    return res.json({
+      success: true,
+      data: {
+        labels: result.labels,
+        selectedLabelIds: selected
+      }
+    });
+  } catch (err) {
+    console.error('[mailboxController] listGmailInboxSyncLabels:', err);
+    return res.status(500).json({ success: false, message: 'Failed to list Gmail labels' });
+  }
+}
+
+/**
+ * PATCH /api/mailboxes/:id/inbox-sync/google/sync-labels
+ * Body: { labelIds: string[] } — which Gmail labels/folders to import on sync.
+ */
+async function patchGmailInboxSyncSyncLabels(req, res) {
+  try {
+    const orgId = req.user.organizationId;
+    const userId = req.user._id;
+    const id = toId(req.params.id);
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Invalid mailbox id' });
+    }
+    const mailbox = await Mailbox.findOne({ _id: id, organizationId: orgId }).lean();
+    const ownerErr = assertPersonalOwner(mailbox, userId);
+    if (ownerErr) {
+      return res.status(403).json({ success: false, message: ownerErr });
+    }
+    if (!mailbox || mailbox.inboxProvider !== 'google' || !mailbox.inboxSyncEncryptedRefreshToken) {
+      return res.status(400).json({
+        success: false,
+        message: 'Gmail inbox is not connected for this mailbox.'
+      });
+    }
+    const raw = req.body?.labelIds;
+    if (!Array.isArray(raw) || raw.length === 0) {
+      return res.status(400).json({ success: false, message: 'labelIds must be a non-empty array' });
+    }
+    if (raw.length > 40) {
+      return res.status(400).json({ success: false, message: 'Too many labels selected' });
+    }
+
+    const listResult = await listGmailLabelsForMailbox(mailbox);
+    if (listResult.error) {
+      return res.status(502).json({ success: false, message: listResult.error });
+    }
+    const allowed = new Set((listResult.labels || []).map((l) => l.id));
+    const requested = normalizeGmailSyncLabelIds(raw).filter((lid) => allowed.has(lid));
+    const finalIds = requested.length ? requested : ['INBOX'];
+
+    await Mailbox.updateOne(
+      { _id: id, organizationId: orgId },
+      { $set: { gmailSyncLabelIds: finalIds } }
+    );
+    const updated = await Mailbox.findOne({ _id: id, organizationId: orgId }).lean();
+    return res.json({
+      success: true,
+      data: { mailbox: serializeMailbox(updated), selectedLabelIds: finalIds }
+    });
+  } catch (err) {
+    console.error('[mailboxController] patchGmailInboxSyncSyncLabels:', err);
+    return res.status(500).json({ success: false, message: 'Failed to save sync folders' });
+  }
+}
+
+/**
  * POST /api/mailboxes/:id/inbox-sync/google/disconnect
  */
 async function gmailInboxSyncDisconnect(req, res) {
@@ -454,6 +555,7 @@ async function gmailInboxSyncDisconnect(req, res) {
           inboxSyncEncryptedRefreshToken: '',
           inboxSyncAccountEmail: '',
           gmailHistoryId: '',
+          gmailSyncLabelIds: [],
           lastInboxSyncError: '',
           syncStatus: 'not_configured'
         }
@@ -474,5 +576,7 @@ module.exports = {
   gmailOAuthCallback,
   gmailInboxSyncGoogleStart,
   gmailInboxSyncRun,
+  listGmailInboxSyncLabels,
+  patchGmailInboxSyncSyncLabels,
   gmailInboxSyncDisconnect
 };

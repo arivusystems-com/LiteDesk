@@ -58,6 +58,11 @@ const MailboxSchema = new Schema(
     },
     inboxSyncEncryptedRefreshToken: { type: String, default: '' },
     inboxSyncAccountEmail: { type: String, trim: true, lowercase: true, default: '' },
+    /**
+     * Gmail label IDs to import during mailbox sync (system + user labels).
+     * Empty / missing means server default (see mailboxGmailInboxSyncService).
+     */
+    gmailSyncLabelIds: [{ type: String, trim: true, maxlength: 128 }],
     gmailHistoryId: { type: String, trim: true, default: '' },
     lastInboxSyncAt: { type: Date, default: null },
     lastInboxSyncError: { type: String, trim: true, default: '', maxlength: 2000 }

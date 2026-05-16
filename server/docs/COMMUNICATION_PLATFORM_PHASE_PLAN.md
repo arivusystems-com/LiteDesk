@@ -212,11 +212,9 @@ Completed in this iteration:
 - **UI:** **Inbox** shell surface (`/inbox`) is **mail only** (workspace threads). **Attention** (tasks + events, `GET /api/inbox`) lives at **`/platform/attention`**, as a **shell** row **below Approvals** in the sidebar. Mail: filters + “Include done”, **search**, **folder counts**, **per-mailbox unread badges**, **standalone compose** drawer, refresh list vs refresh counts. Rows with `relatedTo.moduleKey === 'workspace'` stay in Inbox (no record deep link). Other rows open the related record. Legacy `/inbox?tab=attention` redirects to `/platform/attention`.
 - **Tests:** HTTP integration suite calls workspace threads, thread counts, search, and mailboxes `includeThreadCounts` when gated.
 
-Suggested next within Phase 5:
+Suggested next within Phase 5 (deferred — continue in **Phase 6**):
 
 - **Microsoft Graph / IMAP** and other providers — same pattern as Gmail (`forcedWorkspaceInbox` ingest + `providerMessageKey`); not shipped yet.
-- **Background scheduled sync** (cron per connected mailbox) instead of manual “Sync now” only.
-- **Snooze reminders** (notify when `snoozedUntil` elapses); today threads simply reappear on the next list load.
 
 Completed in follow-up iterations:
 
@@ -228,6 +226,21 @@ Completed in follow-up iterations:
 - **Test logs:** `TEST_SILENCE_ORG_LOGS=1` or `NODE_ENV=test` suppresses noisy `[OrganizationIsolation]` dev logs.
 - **Thread discovery:** aggregation-ordered thread keys + body-aware search; reply fields on summaries; **`workspace-thread-ids`**; snooze model/API/UI; Inbox **reply** and **remove tag** / **select all in folder**.
 - **Gmail inbox sync (personal mailboxes):** Google **OAuth Web client** credentials in **`CommunicationConfig.gmailInboxSync`** (Integrations UI) or **`GOOGLE_GMAIL_*` env fallback**; per-user **refresh token** encrypted on **`Mailbox`**; **`GET /api/mailboxes/:id/inbox-sync/google/start`**, **`GET /api/mailboxes/inbox-sync/google/callback`** (no JWT), **`POST /api/mailboxes/:id/inbox-sync/run`** imports INBOX into **`relatedTo: workspace`** with **`mailboxId`** and dedupe **`providerMessageKey`**. **`filter=snoozed`** + **`counts.snoozed`**.
+- **Background Gmail inbox sync:** `node-cron` tick in **`scheduledJobs`** (default every **5 minutes**, `GMAIL_INBOX_SYNC_CRON`) runs **`gmailInboxSyncSchedulerService`** across tenant DBs (`runWithTenantContext` + `runGmailInboxSyncForMailbox`). Skips mailboxes synced inside **`GMAIL_INBOX_SYNC_MIN_INTERVAL_MINUTES`** (default **4**) to limit overlap with manual **Sync now**. Disable with **`ENABLE_GMAIL_INBOX_SYNC_SCHEDULER=false`**. API process must run **`startScheduledJobs`** (`ENABLE_SCHEDULED_JOBS` master switch, default on).
+
+## Phase 6 - Inbox lifecycle & extended mailbox (started)
+
+**Goal:** close the loop on inbox UX that does not require the user to reload lists (snooze wake), then broaden mailbox ingestion beyond Gmail.
+
+Status: **Started**
+
+Completed in this iteration:
+
+- **Snooze wake notifications:** when `ThreadView.snoozedUntil` is in the past (snooze ended), a **one-time** in-app notification is emitted per snooze session. `ThreadView.snoozeWakeNotifiedAt` stores the `snoozedUntil` value already notified for; any user snooze change clears it (`PATCH` snooze + bulk snooze). Scheduler: **`snoozeWakeNotificationSchedulerService`** + **`scheduledJobs`** cron **every minute** (`ENABLE_SNOOZE_WAKE_NOTIFICATION_SCHEDULER`, default on). Only rows with `snoozedUntil` within **`SNOOZE_WAKE_MAX_LOOKBACK_HOURS`** (default **72**) of “now” are considered (avoids mass notify on stale data). Domain event **`EMAIL_THREAD_SNOOZE_ENDED`** (`domainEvents`), notification rule + recipient key **`INBOX_SNOOZE_USER`** (`notificationRecipientResolver`). Manual tick: **`triggerSnoozeWakeNotificationsTick()`** from `scheduledJobs`.
+
+Suggested next within Phase 6:
+
+- **Microsoft Graph / IMAP** (and other providers) — same pattern as Gmail (`forcedWorkspaceInbox` + `providerMessageKey`).
 
 ---
 

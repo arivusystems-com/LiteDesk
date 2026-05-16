@@ -1265,7 +1265,7 @@ exports.markThreadSnooze = async (req, res) => {
         threadId
       },
       {
-        $set: { snoozedUntil },
+        $set: { snoozedUntil, snoozeWakeNotifiedAt: null },
         $setOnInsert: { lastViewedAt: new Date() }
       },
       { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
@@ -1421,7 +1421,7 @@ exports.bulkThreadActions = async (req, res) => {
           await ThreadView.findOneAndUpdate(
             { userId: req.user._id, organizationId: orgId, threadId },
             {
-              $set: { snoozedUntil },
+              $set: { snoozedUntil, snoozeWakeNotifiedAt: null },
               $setOnInsert: { lastViewedAt: new Date() }
             },
             { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
