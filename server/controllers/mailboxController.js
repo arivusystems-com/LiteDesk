@@ -12,6 +12,7 @@ const {
   buildGmailAuthorizeUrl,
   completeGmailOAuthCallback,
   resolveClientBaseUrlFromState,
+  runGmailInboxSyncForMailbox,
   listGmailLabelsForMailbox,
   normalizeGmailSyncLabelIds,
   assertPersonalOwner
@@ -413,7 +414,9 @@ async function gmailInboxSyncRun(req, res) {
       data: { imported: result.imported, skipped: result.skipped }
     });
   } catch (err) {
-    console.error('[mailboxController] gmailInboxSyncRun:', err);
+    const apiMsg = err?.response?.data?.error?.message;
+    const displayMsg = apiMsg || err.message || 'Gmail sync failed';
+    console.error('[mailboxController] gmailInboxSyncRun:', displayMsg, err.stack || err);
     const orgId = req.user.organizationId;
     const id = toId(req.params.id);
     if (id) {
@@ -421,7 +424,7 @@ async function gmailInboxSyncRun(req, res) {
         { _id: id, organizationId: orgId },
         {
           $set: {
-            lastInboxSyncError: String(err.message || err).slice(0, 2000),
+            lastInboxSyncError: String(displayMsg).slice(0, 2000),
             lastInboxSyncAt: new Date()
           }
         }
@@ -429,7 +432,7 @@ async function gmailInboxSyncRun(req, res) {
     }
     return res.status(500).json({
       success: false,
-      message: err.message || 'Gmail sync failed'
+      message: displayMsg
     });
   }
 }

@@ -9,9 +9,12 @@
 const jwt = require('jsonwebtoken');
 const Communication = require('../models/Communication');
 const Mailbox = require('../models/Mailbox');
-const { processRawInbound } = require('../platform/communication/inbound/inboundDispatcher');
+const Organization = require('../models/Organization');
+const { processRawInbound, InboundDispatchError } = require('../platform/communication/inbound/inboundDispatcher');
 const { getGmailOAuthAppCredentialsForServer } = require('../platform/communication/config/communicationConfigService');
 const { encryptTenantSecret, decryptTenantSecret } = require('../utils/tenantSecretCrypto');
+const dbConnectionManager = require('../utils/databaseConnectionManager');
+const { runWithTenantContext } = require('../utils/tenantContext');
 
 const MAX_MESSAGES_PER_RUN = 40;
 const MAX_SYNC_LABELS = 24;
@@ -29,10 +32,55 @@ function normalizeGmailSyncLabelIds(raw) {
   return safe.length ? safe : [...LEGACY_DEFAULT_SYNC_LABEL_IDS];
 }
 
-function buildGmailListQueryFromLabelIds(labelIds) {
-  const ids = normalizeGmailSyncLabelIds(labelIds);
-  if (ids.length === 1) return `label:${ids[0]}`;
-  return `(${ids.map((id) => `label:${id}`).join(' OR ')})`;
+function formatGmailSyncError(err) {
+  const apiMsg = err?.response?.data?.error?.message;
+  if (apiMsg) return String(apiMsg);
+  if (err instanceof InboundDispatchError) {
+    return `${err.stage || 'inbound'}: ${err.message}`;
+  }
+  return String(err?.message || err);
+}
+
+/**
+ * Run fn inside tenant DB context when the org has a dedicated database (OAuth callback has no JWT middleware).
+ */
+async function runWithOrganizationTenantContext(organizationId, fn) {
+  const org = await Organization.findById(organizationId).select('database').lean();
+  if (!org?.database?.name || !org.database.initialized) {
+    return fn();
+  }
+  const conn = await dbConnectionManager.getOrganizationConnection(org.database.name);
+  if (conn.readyState !== 1) await conn.asPromise();
+  return runWithTenantContext(
+    { organizationId: org._id, connection: conn, databaseName: org.database.name },
+    fn
+  );
+}
+
+/**
+ * List recent message ids for any of the selected labels (union). Uses labelIds[] per label — more reliable than q OR.
+ */
+async function listMessageIdsForSyncLabels(gmail, syncLabelIds, maxResults = MAX_MESSAGES_PER_RUN) {
+  const ids = new Set();
+  const labels = normalizeGmailSyncLabelIds(syncLabelIds);
+  for (const labelId of labels) {
+    let pageToken;
+    do {
+      const res = await gmail.users.messages.list({
+        userId: 'me',
+        labelIds: [labelId],
+        maxResults: Math.min(50, Math.max(1, maxResults - ids.size)),
+        pageToken: pageToken || undefined
+      });
+      for (const m of res.data.messages || []) {
+        if (m?.id) ids.add(String(m.id));
+        if (ids.size >= maxResults) break;
+      }
+      pageToken = ids.size >= maxResults ? null : res.data.nextPageToken || null;
+    } while (pageToken && ids.size < maxResults);
+    if (ids.size >= maxResults) break;
+  }
+  return [...ids];
 }
 
 function normalizeOAuthLoginHint(raw) {
@@ -148,36 +196,38 @@ async function completeGmailOAuthCallback({ code, state }) {
   const prof = await gmail.users.getProfile({ userId: 'me' });
   const accountEmail = String(prof.data.emailAddress || '').toLowerCase().trim();
 
-  const mb = await Mailbox.findOne({
-    _id: mailboxId,
-    organizationId,
-    kind: 'personal',
-    ownerUserId: userId
-  });
-  if (!mb) {
-    return { ok: false, error: 'Mailbox not found or not a personal mailbox owned by you' };
-  }
-
-  await Mailbox.updateOne(
-    { _id: mb._id },
-    {
-      $set: {
-        inboxProvider: 'google',
-        inboxSyncEncryptedRefreshToken: encryptTenantSecret(tokens.refresh_token),
-        inboxSyncAccountEmail: accountEmail,
-        gmailHistoryId: prof.data.historyId ? String(prof.data.historyId) : '',
-        syncStatus: 'connected',
-        lastInboxSyncError: '',
-        emailAddress: accountEmail || mb.emailAddress,
-        gmailSyncLabelIds:
-          Array.isArray(mb.gmailSyncLabelIds) && mb.gmailSyncLabelIds.length > 0
-            ? mb.gmailSyncLabelIds
-            : OAUTH_DEFAULT_SYNC_LABEL_IDS
-      }
+  return runWithOrganizationTenantContext(organizationId, async () => {
+    const mb = await Mailbox.findOne({
+      _id: mailboxId,
+      organizationId,
+      kind: 'personal',
+      ownerUserId: userId
+    });
+    if (!mb) {
+      return { ok: false, error: 'Mailbox not found or not a personal mailbox owned by you' };
     }
-  );
 
-  return { ok: true, accountEmail };
+    await Mailbox.updateOne(
+      { _id: mb._id },
+      {
+        $set: {
+          inboxProvider: 'google',
+          inboxSyncEncryptedRefreshToken: encryptTenantSecret(tokens.refresh_token),
+          inboxSyncAccountEmail: accountEmail,
+          gmailHistoryId: prof.data.historyId ? String(prof.data.historyId) : '',
+          syncStatus: 'connected',
+          lastInboxSyncError: '',
+          emailAddress: accountEmail || mb.emailAddress,
+          gmailSyncLabelIds:
+            Array.isArray(mb.gmailSyncLabelIds) && mb.gmailSyncLabelIds.length > 0
+              ? mb.gmailSyncLabelIds
+              : OAUTH_DEFAULT_SYNC_LABEL_IDS
+        }
+      }
+    );
+
+    return { ok: true, accountEmail };
+  });
 }
 
 async function listMessageIdsSinceHistory(gmail, historyId) {
@@ -267,8 +317,7 @@ async function filterMessageIdsBySyncLabels(gmail, messageIds, syncLabelIds) {
       const meta = await gmail.users.messages.get({
         userId: 'me',
         id: mid,
-        format: 'metadata',
-        metadataHeaders: []
+        format: 'minimal'
       });
       const lids = meta.data.labelIds || [];
       if (lids.some((lid) => wanted.has(String(lid)))) {
@@ -286,6 +335,14 @@ async function filterMessageIdsBySyncLabels(gmail, messageIds, syncLabelIds) {
  * @returns {Promise<{ imported: number, skipped: number, error?: string }>}
  */
 async function runGmailInboxSyncForMailbox(mailboxLean) {
+  try {
+    return await runGmailInboxSyncForMailboxInner(mailboxLean);
+  } catch (err) {
+    return { imported: 0, skipped: 0, error: formatGmailSyncError(err) };
+  }
+}
+
+async function runGmailInboxSyncForMailboxInner(mailboxLean) {
   const orgId = mailboxLean.organizationId;
   const mailboxId = mailboxLean._id;
   const enc = mailboxLean.inboxSyncEncryptedRefreshToken;
@@ -320,12 +377,7 @@ async function runGmailInboxSyncForMailbox(mailboxLean) {
   }
 
   if (!messageIds.length) {
-    const list = await gmail.users.messages.list({
-      userId: 'me',
-      maxResults: MAX_MESSAGES_PER_RUN,
-      q: buildGmailListQueryFromLabelIds(syncLabelIds)
-    });
-    messageIds = (list.data.messages || []).map((m) => String(m.id)).filter(Boolean);
+    messageIds = await listMessageIdsForSyncLabels(gmail, syncLabelIds, MAX_MESSAGES_PER_RUN);
   }
 
   let imported = 0;
@@ -355,6 +407,7 @@ async function runGmailInboxSyncForMailbox(mailboxLean) {
       continue;
     }
     const rawMime = Buffer.from(String(rawB64).replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+    const gmailLabelIds = (full.data.labelIds || []).map((x) => String(x).trim()).filter(Boolean);
 
     try {
       await processRawInbound({
@@ -364,7 +417,8 @@ async function runGmailInboxSyncForMailbox(mailboxLean) {
         forcedWorkspaceInbox: {
           organizationId: orgId,
           mailboxId,
-          providerMessageKey
+          providerMessageKey,
+          gmailLabelIds
         }
       });
       imported += 1;

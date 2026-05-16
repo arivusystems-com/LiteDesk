@@ -356,6 +356,12 @@ async function processRawInbound({
       relatedTo,
       mailboxId: mailboxIdInbound || null,
       providerMessageKey: providerMessageKey || null,
+      gmailLabelIds: Array.isArray(forcedWorkspaceInbox?.gmailLabelIds)
+        ? forcedWorkspaceInbox.gmailLabelIds
+          .map((x) => String(x).trim())
+          .filter(Boolean)
+          .slice(0, 64)
+        : [],
       sentByUserId: null,
       attachments: inboundAttachments,
       metadata: {

@@ -867,17 +867,28 @@ function filterWorkspaceThreadsForFolder({
   includeDone,
   filter,
   searchRaw,
-  userId
+  userId,
+  gmailLabelId
 }) {
   const searched = filterWorkspaceThreadsBySearch(threadsRaw, searchRaw);
   let base = includeDone ? searched : searched.filter((t) => !t.done);
   if (filter === 'snoozed') {
-    return base.filter((t) => t.snoozeActive);
+    base = base.filter((t) => t.snoozeActive);
+  } else {
+    base = base.filter((t) => !t.snoozeActive);
+    if (filter === 'unread') base = base.filter((t) => t.unread);
+    else if (filter === 'assigned_to_me') {
+      base = base.filter((t) => String(t.assignedToUserId || '') === String(userId));
+    }
   }
-  base = base.filter((t) => !t.snoozeActive);
-  if (filter === 'unread') return base.filter((t) => t.unread);
-  if (filter === 'assigned_to_me') {
-    return base.filter((t) => String(t.assignedToUserId || '') === String(userId));
+  const lid = String(gmailLabelId || '').trim();
+  if (lid) {
+    const want = lid.toUpperCase();
+    base = base.filter((t) => {
+      const ids = t.gmailLabelIds;
+      if (!Array.isArray(ids) || !ids.length) return false;
+      return ids.some((id) => String(id).toUpperCase() === want);
+    });
   }
   return base;
 }
@@ -935,7 +946,7 @@ function findWorkspaceCursorPageStart(sortedDesc, cursorDecoded) {
 /**
  * GET /api/communications/workspace-threads
  * Phase 5: cross-record email thread summaries for the current workspace (recent window).
- * Query: includeDone, filter=all|unread|assigned_to_me|snoozed, limit (1–100, default 50), optional mailboxId, optional search, optional cursor (opaque).
+ * Query: includeDone, filter=all|unread|assigned_to_me|snoozed, limit (1–100, default 50), optional mailboxId, optional gmailLabelId, optional search, optional cursor (opaque).
  * Response data.threads is filtered/sliced; data.counts reflects the same scope before folder filter and before search (for badges).
  */
 exports.getWorkspaceThreads = async (req, res) => {
@@ -945,6 +956,7 @@ exports.getWorkspaceThreads = async (req, res) => {
     const limitRaw = Number(req.query.limit);
     const limit = Number.isFinite(limitRaw) ? Math.min(100, Math.max(1, Math.floor(limitRaw))) : 50;
     const mailboxIdQuery = req.query.mailboxId ? String(req.query.mailboxId).trim() : '';
+    const gmailLabelIdQuery = req.query.gmailLabelId ? String(req.query.gmailLabelId).trim() : '';
     const searchRaw = req.query.search != null ? String(req.query.search) : '';
     const cursorRaw = req.query.cursor != null ? String(req.query.cursor) : '';
 
@@ -963,7 +975,8 @@ exports.getWorkspaceThreads = async (req, res) => {
       includeDone,
       filter,
       searchRaw,
-      userId: req.user._id
+      userId: req.user._id,
+      gmailLabelId: gmailLabelIdQuery
     });
 
     const sortedDesc = sortWorkspaceThreadsDesc(visible);
@@ -1002,6 +1015,7 @@ exports.getWorkspaceThreadIds = async (req, res) => {
     const includeDone = String(req.query.includeDone || '').toLowerCase() === 'true';
     const filter = String(req.query.filter || 'all').toLowerCase();
     const mailboxIdQuery = req.query.mailboxId ? String(req.query.mailboxId).trim() : '';
+    const gmailLabelIdQuery = req.query.gmailLabelId ? String(req.query.gmailLabelId).trim() : '';
     const searchRaw = req.query.search != null ? String(req.query.search) : '';
 
     const { error, threads: threadsRaw } = await loadWorkspaceThreadSummaries(req, mailboxIdQuery);
@@ -1017,7 +1031,8 @@ exports.getWorkspaceThreadIds = async (req, res) => {
       includeDone,
       filter,
       searchRaw,
-      userId: req.user._id
+      userId: req.user._id,
+      gmailLabelId: gmailLabelIdQuery
     });
 
     const sortedDesc = sortWorkspaceThreadsDesc(visible);
