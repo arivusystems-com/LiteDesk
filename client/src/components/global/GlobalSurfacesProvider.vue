@@ -34,6 +34,12 @@
   <!-- NOTE: Currently using GlobalSearch for command palette functionality -->
   <!-- GlobalSearch switches to command mode when user types '/' -->
   <!-- A separate CommandPalette component can be added here if needed in the future -->
+
+  <ConnectMailboxModal
+    v-model="connectModalOpen"
+    :reason="connectModalReason"
+    @connected="onMailboxConnected"
+  />
 </template>
 
 <script setup>
@@ -53,11 +59,24 @@
  */
 
 import { ref, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue';
+import { useConnectMailboxPrompt } from '@/composables/useConnectMailboxPrompt';
+import { useMailboxConnection } from '@/composables/useMailboxConnection';
+import ConnectMailboxModal from '@/components/inbox/ConnectMailboxModal.vue';
 
 // Async so GlobalSearch (+ drawers, field engines, command registry, API client) is NOT in the
 // same synchronous ESM pass as app.use(router) / root shell. A static import caused production
 // ReferenceError: Cannot access 'G' before initialization inside defineComponent (TDZ / cycle).
 const GlobalSearch = defineAsyncComponent(() => import('@/components/GlobalSearch.vue'));
+
+const { connectModalOpen, connectModalReason } = useConnectMailboxPrompt();
+const { refreshMailboxes } = useMailboxConnection();
+
+function onMailboxConnected() {
+  void refreshMailboxes();
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('litedesk:mailbox-connected'));
+  }
+}
 
 // Visibility state for global surfaces
 const showGlobalSearch = ref(false);

@@ -1,5 +1,26 @@
 <template>
-  <div class="w-full min-w-0 max-w-none flex flex-col gap-4 px-3 py-6 sm:px-4 lg:flex-row lg:items-stretch lg:gap-0 lg:px-6 lg:py-8">
+  <div class="w-full min-w-0 max-w-none">
+    <div
+      v-if="showInboxGetStarted"
+      class="mx-3 my-6 min-h-[min(70vh,640px)] rounded-xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900/95 sm:mx-4 lg:mx-6 lg:my-8"
+    >
+      <div v-if="mailboxesLoading" class="flex items-center justify-center py-24">
+        <div class="h-9 w-9 animate-spin rounded-full border-2 border-gray-200 border-t-emerald-600 dark:border-gray-700 dark:border-t-emerald-400" />
+      </div>
+      <InboxGetStarted
+        v-else
+        :gmail-oauth-ready="gmailOAuthReady"
+        :connect-loading="gmailSyncLoading"
+        @connect-mailbox="openConnectInboxModal"
+        @setup-group="onGetStartedGroupSetup"
+        @coming-soon="onGetStartedComingSoon"
+      />
+    </div>
+
+    <div
+      v-else
+      class="flex flex-col gap-4 px-3 py-6 sm:px-4 lg:flex-row lg:items-stretch lg:gap-0 lg:px-6 lg:py-8"
+    >
     <!-- Gmail-style left rail: scopes + mailboxes + primary folders -->
     <aside
       class="flex max-h-[min(70vh,520px)] w-full shrink-0 flex-col overflow-hidden rounded-xl border border-gray-200/90 bg-[#f6f8fc] shadow-sm dark:border-gray-700 dark:bg-gray-900/95 lg:max-h-none lg:w-56 lg:rounded-r-none lg:rounded-l-xl lg:border-r-0 xl:w-60"
@@ -11,7 +32,7 @@
           <button
             type="button"
             class="rounded-md p-1.5 text-gray-600 hover:bg-gray-200/80 dark:text-gray-400 dark:hover:bg-gray-800"
-            title="Compose workspace email (opens send panel)"
+            title="Compose workspace email"
             @click="openNewCompose"
           >
             <PencilSquareIcon class="h-4 w-4" aria-hidden="true" />
@@ -313,7 +334,7 @@
           Connect your inbox to LiteDesk
         </h2>
         <p class="mt-1 max-w-2xl text-sm text-gray-600 dark:text-gray-400">
-          Manage work email in a private inbox that stays in sync with your provider. Choose how you receive mail—LiteDesk imports your Gmail INBOX into workspace threads (read-only).
+          Link your work email provider to sync mail into LiteDesk and send from the CRM. Gmail is available today; Outlook, Yahoo, and IMAP are on the roadmap.
         </p>
         <p class="mt-4 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-500">
           Select your email provider
@@ -369,12 +390,6 @@
           <span class="mt-1 block font-medium text-amber-950 dark:text-amber-50">Click the Gmail tile above</span>
           for copy-paste steps, or ask your administrator to add the three variables and restart the API.
         </p>
-        <ConnectInboxWizard
-          v-model="connectInboxWizardOpen"
-          :loading="gmailSyncLoading"
-          :initial-email="connectWizardInitialEmail"
-          @connect="onConnectInboxWizardSubmit"
-        />
       </div>
 
       <div
@@ -655,6 +670,7 @@
         @open-record="onReaderOpenRecord($event)"
       />
     </div>
+    </div>
 
     <!-- Workspace mail preview (no record deep link) -->
     <div
@@ -879,6 +895,13 @@
         </div>
       </div>
     </Teleport>
+
+    <ConnectInboxWizard
+      v-model="connectInboxWizardOpen"
+      :loading="gmailSyncLoading"
+      :initial-email="connectWizardInitialEmail"
+      @connect="onConnectInboxWizardSubmit"
+    />
   </div>
 </template>
 
@@ -902,13 +925,16 @@ import {
 } from '@heroicons/vue/24/outline';
 import EmailComposeDrawer from '@/components/communications/EmailComposeDrawer.vue';
 import ConnectInboxWizard from '@/components/inbox/ConnectInboxWizard.vue';
+import InboxGetStarted from '@/components/inbox/InboxGetStarted.vue';
 import GmailMailboxFolderModal from '@/components/inbox/GmailMailboxFolderModal.vue';
 import EmailThreadReader from '@/components/inbox/EmailThreadReader.vue';
+import { useConnectMailboxPrompt } from '@/composables/useConnectMailboxPrompt';
 
 const router = useRouter();
 const route = useRoute();
 const notifications = useNotifications();
 const authStore = useAuthStore();
+const { promptConnectMailbox } = useConnectMailboxPrompt();
 
 const emailThreads = ref([]);
 const emailLoading = ref(false);
@@ -1102,7 +1128,13 @@ function onGmailProviderClick() {
     gmailServerSetupModalOpen.value = true;
     return;
   }
-  connectInboxWizardOpen.value = true;
+  promptConnectMailbox('inbox');
+}
+
+/** Get Started → Connect: always open provider picker popup. */
+function openConnectInboxModal() {
+  if (gmailSyncLoading.value) return;
+  promptConnectMailbox('inbox');
 }
 
 async function copyGmailRedirectExample() {
@@ -1394,6 +1426,29 @@ function isWorkspaceThreadRow(row) {
   const mk = row?.relatedTo?.moduleKey;
   if (!mk) return false;
   return String(mk).toLowerCase() === 'workspace';
+}
+
+function inboxHasConnectedMailbox() {
+  return mailboxes.value.some((m) => m.kind === 'personal' && m.gmailInboxSync?.connected);
+}
+
+/** Full-page onboarding until a personal mailbox is linked (Gmail, etc.). */
+const showInboxGetStarted = computed(
+  () => !mailboxesLoading.value && !inboxHasConnectedMailbox()
+);
+
+function onGetStartedGroupSetup() {
+  if (!inboxHasConnectedMailbox()) {
+    notifications.info('Connect your personal mailbox first, then you can add a group inbox.');
+    openConnectInboxModal();
+    return;
+  }
+  showGroupMailboxForm.value = true;
+  notifications.info('Use the sidebar to create a group mailbox.');
+}
+
+function onGetStartedComingSoon() {
+  notifications.info('This integration is coming soon.');
 }
 
 function openNewCompose() {
@@ -2100,10 +2155,16 @@ onMounted(async () => {
     openThreadRow.value = match || { threadId: initialThreadId };
   }
   document.addEventListener('visibilitychange', onDocumentVisibilityChange);
+  window.addEventListener('litedesk:mailbox-connected', onMailboxConnectedEvent);
 });
+
+function onMailboxConnectedEvent() {
+  void fetchMailboxes();
+}
 
 onUnmounted(() => {
   document.removeEventListener('visibilitychange', onDocumentVisibilityChange);
+  window.removeEventListener('litedesk:mailbox-connected', onMailboxConnectedEvent);
   if (visibilityCountsTimer) clearTimeout(visibilityCountsTimer);
   if (emailSearchDebounceTimer) clearTimeout(emailSearchDebounceTimer);
   cleanupGmailOAuthPopup();

@@ -19,9 +19,14 @@ const Role = require('../models/Role');
 const Instance = require('../models/Instance');
 const { INSTANCE_STATUS } = require('../constants/instanceLifecycle');
 const { ensureDefaultCommunicationSettingsForOrganization } = require('../services/communicationDefaultsSeeder');
+const { getMongoUris, connectMasterWithRetry } = require('../lib/mongoConnect');
 
-// Support both MONGODB_URI and MONGO_URI
-const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI || process.env.MONGO_URI_LOCAL;
+function slugFromOrganizationName(name) {
+    return String(name)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+}
 
 // Default Admin Credentials (use environment variables or defaults)
 const DEFAULT_ADMIN = {
@@ -38,43 +43,42 @@ async function createDefaultAdmin() {
     try {
         console.log('🚀 Creating Default Admin Account...\n');
 
-        // Validate MongoDB URI
-        if (!MONGO_URI) {
-            console.error('❌ Error: MONGODB_URI is not set in .env file!');
-            console.error('\n📝 Steps to fix:');
-            console.error('   1. Create /home/ubuntu/Arivu/server/.env file');
-            console.error('   2. Add: MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/arivu');
-            console.error('   3. Replace with your actual MongoDB Atlas connection string\n');
-            process.exit(1);
-        }
-
         console.log('🔗 Connecting to MongoDB...');
-        
-// Preserve any query string (e.g., authSource)
-const [uriWithoutQuery, queryPart] = MONGO_URI.split('?');
-const connectionQuery = queryPart ? `?${queryPart}` : '';
-
-// Connect to master database (arivu_master)
-const baseUri = uriWithoutQuery.split('/').slice(0, -1).join('/');
-        const masterDbName = 'arivu_master';
-const masterUri = `${baseUri}/${masterDbName}${connectionQuery}`;
-        
-        await mongoose.connect(masterUri);
+        const { masterUri, masterDbName } = getMongoUris();
+        await connectMasterWithRetry(masterUri);
         console.log(`✅ Connected to MongoDB master database: ${masterDbName}`);
 
-        // Check if admin already exists
-        const existingAdmin = await User.findOne({ email: DEFAULT_ADMIN.email });
-        if (existingAdmin) {
-            console.log('⚠️  Admin user already exists!');
+        const expectedSlug = slugFromOrganizationName(DEFAULT_ADMIN.organizationName);
+        const existingAdmin = await User.findOne({ email: DEFAULT_ADMIN.email.toLowerCase() });
+        let organization = await Organization.findOne({
+            isTenant: true,
+            $or: [{ slug: expectedSlug }, { name: DEFAULT_ADMIN.organizationName }]
+        });
+
+        if (existingAdmin && organization) {
+            console.log('⚠️  Default admin and organization already exist — nothing to create.');
             console.log(`   Email: ${DEFAULT_ADMIN.email}`);
-            console.log('\n   To reset, delete the user first or change the email in this script.');
+            console.log(`   Organization: ${organization.name} (${organization._id})`);
+            await ensureDefaultCommunicationSettingsForOrganization(organization._id);
             await mongoose.connection.close();
             return;
         }
 
-        // Create Master Organization
-        console.log('\n📋 Creating Master Organization...');
-        const organization = new Organization({
+        if (existingAdmin) {
+            console.log('⚠️  Admin user already exists but tenant organization was not found.');
+            console.log(`   Email: ${DEFAULT_ADMIN.email}`);
+            await mongoose.connection.close();
+            return;
+        }
+
+        if (organization) {
+            console.log('\n📋 Reusing existing tenant organization...');
+            console.log(`   Name: ${organization.name}`);
+            console.log(`   ID: ${organization._id}`);
+            console.log(`   Slug: ${organization.slug || expectedSlug}`);
+        } else {
+            console.log('\n📋 Creating tenant organization...');
+            organization = new Organization({
             name: DEFAULT_ADMIN.organizationName,
             industry: DEFAULT_ADMIN.industry,
             isActive: true,
@@ -116,13 +120,15 @@ const masterUri = `${baseUri}/${masterDbName}${connectionQuery}`;
                 status: 'ACTIVE',
                 enabledAt: new Date()
             }]
-        });
+            });
 
-        await organization.save();
+            await organization.save();
+            console.log('✅ Tenant organization created');
+            console.log(`   Name: ${organization.name}`);
+            console.log(`   ID: ${organization._id}`);
+        }
+
         await ensureDefaultCommunicationSettingsForOrganization(organization._id);
-        console.log('✅ Master Organization created');
-        console.log(`   Name: ${organization.name}`);
-        console.log(`   ID: ${organization._id}`);
 
         // CRM organization will be created after admin user is created (to set assignedTo/accountManager)
 

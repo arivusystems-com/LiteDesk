@@ -115,7 +115,7 @@
                         'w-full text-left px-4 py-2 text-sm transition-colors duration-150 flex items-center gap-2',
                         active ? 'bg-gray-100 dark:bg-gray-700' : 'text-gray-700 dark:text-gray-200'
                       ]"
-                      @click="showEmailModal = true"
+                      @click="openEmailComposeModal()"
                     >
                       <EnvelopeIcon class="w-4 h-4" />
                       <span>Send email</span>
@@ -577,7 +577,7 @@
                         'w-full text-left px-4 py-2 text-sm transition-colors duration-150 flex items-center gap-2',
                         active ? 'bg-gray-100 dark:bg-gray-700' : 'text-gray-700 dark:text-gray-200'
                       ]"
-                      @click="showEmailModal = true"
+                      @click="openEmailComposeModal()"
                     >
                       <EnvelopeIcon class="w-4 h-4" />
                       <span>Send email</span>
@@ -968,6 +968,7 @@ import {
 } from '@/components/record-page/activityEventModel';
 import { normalizeActivityUiContract } from '@/components/activity/activityUiContract';
 import { useNotifications } from '@/composables/useNotifications';
+import { useOpenEmailCompose } from '@/composables/useOpenEmailCompose';
 import dateUtils from '@/utils/dateUtils';
 import {
   PencilSquareIcon,
@@ -1030,6 +1031,7 @@ const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const notifications = useNotifications();
+const { guardAndOpenEmailCompose } = useOpenEmailCompose();
 const { openTab, activeTabId, findTabById, updateTabTitle, replaceActiveTab } = useTabs();
 const recordLayoutIsMobile = inject('recordLayoutIsMobile', ref(false));
 const quickPreviewNav = inject('quickPreviewNav', null);
@@ -1070,6 +1072,13 @@ const activityRaw = ref([]);
 const showEditModal = ref(false);
 const showEmailModal = ref(false);
 const emailComposeDraft = ref(null);
+
+function openEmailComposeModal(draft = null) {
+  void guardAndOpenEmailCompose(() => {
+    emailComposeDraft.value = draft && typeof draft === 'object' ? draft : null;
+    showEmailModal.value = true;
+  });
+}
 const showLinkRecordDrawer = ref(false);
 const activeThreadRootCommentId = ref(null);
 const showCommentReactionPicker = ref(false);
@@ -2338,8 +2347,7 @@ const activityUi = computed(() => {
     },
     handleReplyToEmailMessage: (payload) => {
       if (!supportsEmail.value) return;
-      emailComposeDraft.value = payload && typeof payload === 'object' ? payload : null;
-      showEmailModal.value = true;
+      openEmailComposeModal(payload);
     },
     handleToggleThreadDone: async ({ threadId, done }) => {
       if (!threadId) return;

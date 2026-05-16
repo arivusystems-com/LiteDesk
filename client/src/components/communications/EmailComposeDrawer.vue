@@ -278,7 +278,6 @@ import { ChevronUpDownIcon, CheckIcon, XMarkIcon } from '@heroicons/vue/24/outli
 import { useAuthStore } from '@/stores/authRegistry';
 import apiClient from '@/utils/apiClient';
 import TaskDescriptionEditor from '@/components/record-page/TaskDescriptionEditor.vue';
-
 const props = defineProps({
   isOpen: { type: Boolean, default: false },
   /** When true, send with `standalone: true` (workspace-scoped); `relatedTo` is not required. */
