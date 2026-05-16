@@ -72,7 +72,10 @@ const CommunicationSchema = new Schema({
   idempotencyKeyHash: { type: String, trim: true, index: true },
 
   /** Stable id for provider inbox sync dedupe, e.g. `gmail:<apiMessageId>`. */
-  providerMessageKey: { type: String, trim: true, default: null }
+  providerMessageKey: { type: String, trim: true, default: null },
+
+  /** Gmail label ids at import time (e.g. INBOX, STARRED) for workspace inbox filtering. */
+  gmailLabelIds: [{ type: String, trim: true, maxlength: 128 }]
 }, {
   timestamps: true
 });

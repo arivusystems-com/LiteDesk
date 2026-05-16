@@ -242,7 +242,7 @@ async function loadCommunicationsForThreadKeys(commQuery, threadKeysOrdered) {
   }
   return Communication.find({ ...commQuery, $or: orPart })
     .select(
-      'threadId _id relatedTo subject direction fromAddress toAddresses sentAt receivedAt createdAt status mailboxId body'
+      'threadId _id relatedTo subject direction fromAddress toAddresses sentAt receivedAt createdAt status mailboxId body gmailLabelIds'
     )
     .lean();
 }
@@ -418,6 +418,14 @@ async function loadWorkspaceThreadSummaries(req, mailboxIdQuery) {
     const anchorCommunicationId = last?._id != null ? String(last._id) : '';
     const replyToAddress = computeReplyToAddress(sorted);
 
+    const gmailLabelSet = new Set();
+    for (const m of sorted) {
+      for (const lid of m.gmailLabelIds || []) {
+        const s = String(lid).trim();
+        if (s) gmailLabelSet.add(s);
+      }
+    }
+
     threads.push({
       threadId,
       subject,
@@ -440,6 +448,7 @@ async function loadWorkspaceThreadSummaries(req, mailboxIdQuery) {
       tags: threadMeta.tags,
       relatedTo,
       mailboxId: threadMailboxId,
+      gmailLabelIds: [...gmailLabelSet],
       anchorCommunicationId,
       replyToAddress,
       searchBlob: searchBlob.trim()

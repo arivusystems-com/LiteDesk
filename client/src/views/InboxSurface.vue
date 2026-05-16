@@ -127,6 +127,26 @@
           >{{ folderCountBadge(opt.value) }}</span>
         </button>
 
+        <template v-if="gmailSidebarFolders.length">
+          <div class="mt-4 px-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-500">
+            Gmail folders
+          </div>
+          <p v-if="gmailLabelsLoading" class="px-3 py-1 text-xs text-gray-500 dark:text-gray-400">
+            Loading folders…
+          </p>
+          <button
+            v-for="folder in gmailSidebarFolders"
+            :key="'gmail-folder-' + folder.id"
+            type="button"
+            class="flex w-full items-center gap-2 rounded-e-full py-2 pl-3 pr-2 text-left text-sm transition-colors"
+            :class="sidebarGmailLabelActive(folder.id)"
+            @click="selectGmailLabel(folder.id)"
+          >
+            <FolderIcon class="h-4 w-4 shrink-0 opacity-75" aria-hidden="true" />
+            <span class="min-w-0 flex-1 truncate font-medium">{{ folder.label }}</span>
+          </button>
+        </template>
+
         <div class="mt-auto border-t border-gray-200/80 pt-3 dark:border-gray-700/80">
           <div class="flex flex-col gap-2 px-1.5">
             <button
@@ -872,6 +892,7 @@ import { useNotifications } from '@/composables/useNotifications';
 import {
   ArrowPathIcon,
   EnvelopeIcon,
+  FolderIcon,
   HashtagIcon,
   InboxIcon,
   MagnifyingGlassIcon,
@@ -908,6 +929,59 @@ const showGroupMailboxForm = ref(false);
 const newGroupMailboxLabel = ref('');
 const newGroupMailboxEmail = ref('');
 const selectedMailboxFilter = ref(null);
+const selectedGmailLabelId = ref(null);
+const gmailLabelCatalog = ref([]);
+const gmailLabelsLoading = ref(false);
+
+const GMAIL_LABEL_FALLBACK_NAMES = {
+  INBOX: 'Inbox',
+  STARRED: 'Starred',
+  IMPORTANT: 'Important',
+  SENT: 'Sent',
+  DRAFT: 'Drafts',
+  TRASH: 'Trash',
+  SPAM: 'Spam',
+  UNREAD: 'Unread',
+  CATEGORY_PERSONAL: 'Primary',
+  CATEGORY_SOCIAL: 'Social',
+  CATEGORY_PROMOTIONS: 'Promotions',
+  CATEGORY_UPDATES: 'Updates',
+  CATEGORY_FORUMS: 'Forums'
+};
+
+function displayNameForGmailLabelId(id) {
+  const key = String(id || '').trim().toUpperCase();
+  if (GMAIL_LABEL_FALLBACK_NAMES[key]) return GMAIL_LABEL_FALLBACK_NAMES[key];
+  return key
+    .replace(/^CATEGORY_/, '')
+    .replace(/_/g, ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+const gmailSidebarMailbox = computed(() => {
+  if (selectedPersonalMailbox.value) return selectedPersonalMailbox.value;
+  return (
+    mailboxes.value.find((x) => x.kind === 'personal' && x.gmailInboxSync?.connected) || null
+  );
+});
+
+const gmailSidebarFolders = computed(() => {
+  const mb = gmailSidebarMailbox.value;
+  if (!mb?.gmailInboxSync?.connected) return [];
+  const ids = mb.gmailInboxSync.syncLabelIds || [];
+  if (!ids.length) return [];
+  const nameById = new Map(
+    gmailLabelCatalog.value.map((l) => [String(l.id).toUpperCase(), l.name || l.id])
+  );
+  return ids.map((id) => {
+    const sid = String(id);
+    return {
+      id: sid,
+      label: nameById.get(sid.toUpperCase()) || displayNameForGmailLabelId(sid)
+    };
+  });
+});
 
 const emailSearchInput = ref('');
 const composeDrawerOpen = ref(false);
@@ -1081,6 +1155,57 @@ function sidebarFolderActive(filterValue) {
 
 function selectMailboxFilter(mailboxId) {
   selectedMailboxFilter.value = mailboxId;
+  selectedGmailLabelId.value = null;
+  selectedThreadIds.value = [];
+  refreshInboxThreadsAndCounts();
+  const mb = mailboxId
+    ? mailboxes.value.find((x) => String(x.id) === String(mailboxId))
+    : null;
+  if (mb?.kind === 'personal' && mb.gmailInboxSync?.connected) {
+    loadGmailLabelCatalog();
+  } else {
+    gmailLabelCatalog.value = [];
+  }
+}
+
+async function loadGmailLabelCatalog() {
+  const mb = gmailSidebarMailbox.value;
+  if (!mb?.id || !mb.gmailInboxSync?.connected) {
+    gmailLabelCatalog.value = [];
+    return;
+  }
+  gmailLabelsLoading.value = true;
+  try {
+    const res = await apiClient.get(
+      `/mailboxes/${encodeURIComponent(mb.id)}/inbox-sync/google/labels`
+    );
+    if (res?.success && Array.isArray(res.data?.labels)) {
+      gmailLabelCatalog.value = res.data.labels;
+    }
+  } catch (err) {
+    console.warn('[Inbox] gmail labels:', err);
+  } finally {
+    gmailLabelsLoading.value = false;
+  }
+}
+
+function sidebarGmailLabelActive(labelId) {
+  const active = selectedGmailLabelId.value === labelId;
+  return active
+    ? 'bg-blue-200/80 font-medium text-blue-950 dark:bg-blue-950/70 dark:text-blue-50'
+    : 'text-gray-800 hover:bg-gray-200/70 dark:text-gray-200 dark:hover:bg-gray-800/70';
+}
+
+function selectGmailLabel(labelId) {
+  const next =
+    labelId && selectedGmailLabelId.value === labelId ? null : labelId || null;
+  selectedGmailLabelId.value = next;
+  if (next) {
+    const mb = gmailSidebarMailbox.value;
+    if (mb?.id && !selectedMailboxFilter.value) {
+      selectedMailboxFilter.value = mb.id;
+    }
+  }
   selectedThreadIds.value = [];
   refreshInboxThreadsAndCounts();
 }
@@ -1188,7 +1313,14 @@ async function runGmailInboxSync() {
 }
 
 async function onGmailFolderModalSaved() {
+  const prevLabel = selectedGmailLabelId.value;
   await fetchMailboxes();
+  await loadGmailLabelCatalog();
+  const syncIds = gmailSidebarMailbox.value?.gmailInboxSync?.syncLabelIds || [];
+  if (prevLabel && !syncIds.some((id) => String(id) === String(prevLabel))) {
+    selectedGmailLabelId.value = null;
+    await refreshInboxThreadsAndCounts();
+  }
   notifications.success('Sync folders saved');
 }
 
@@ -1201,6 +1333,8 @@ async function disconnectGmail() {
     const res = await apiClient.post(`/mailboxes/${mb.id}/inbox-sync/google/disconnect`, {});
     if (res?.success) {
       notifications.success('Gmail disconnected');
+      selectedGmailLabelId.value = null;
+      gmailLabelCatalog.value = [];
       await fetchMailboxes();
     } else {
       notifications.error(res?.message || 'Disconnect failed');
@@ -1600,6 +1734,9 @@ const fetchMailboxes = async () => {
         canCreateGroup: Boolean(res.data.flags?.canCreateGroup),
         gmailOAuthAppConfigured: Boolean(res.data.flags?.gmailOAuthAppConfigured)
       };
+      if (gmailSidebarMailbox.value?.gmailInboxSync?.connected) {
+        loadGmailLabelCatalog();
+      }
     } else {
       mailboxes.value = [];
       mailboxesError.value = res?.message || 'Unable to load mailboxes';
@@ -1668,6 +1805,12 @@ function buildWorkspaceThreadParams() {
   };
   if (selectedMailboxFilter.value) {
     params.mailboxId = selectedMailboxFilter.value;
+  }
+  if (selectedGmailLabelId.value && gmailSidebarMailbox.value) {
+    params.gmailLabelId = selectedGmailLabelId.value;
+    if (!params.mailboxId && gmailSidebarMailbox.value?.id) {
+      params.mailboxId = gmailSidebarMailbox.value.id;
+    }
   }
   const q = emailSearchInput.value.trim();
   if (q) {
@@ -1942,6 +2085,9 @@ onMounted(async () => {
     return;
   }
   await fetchMailboxes();
+  if (gmailSidebarMailbox.value?.gmailInboxSync?.connected) {
+    await loadGmailLabelCatalog();
+  }
   consumeGmailOAuthQuery();
   await fetchEmailThreads();
   // Restore the reader on refresh / deep link (?thread=<id>). Try to match the
