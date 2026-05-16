@@ -6,6 +6,7 @@ const { processDueAssignmentJobs } = require('./assignmentSchedulingService');
 const { tickHelpdeskSlaNotifications } = require('./helpdeskSlaMonitorService');
 const { tickScheduledGmailInboxSync } = require('./gmailInboxSyncSchedulerService');
 const { tickSnoozeWakeNotifications } = require('./snoozeWakeNotificationSchedulerService');
+const { tickAppointmentReminders } = require('./appointmentReminderSchedulerService');
 
 const NOTIFICATION_DEBUG = process.env.NOTIFICATION_DEBUG === 'true';
 const ENABLE_DIGEST_SCHEDULER = process.env.ENABLE_DIGEST_SCHEDULER !== 'false'; // Default: enabled
@@ -16,6 +17,8 @@ const ENABLE_HELPDESK_SLA_SCHEDULER = process.env.ENABLE_HELPDESK_SLA_SCHEDULER 
 const ENABLE_GMAIL_INBOX_SYNC_SCHEDULER = process.env.ENABLE_GMAIL_INBOX_SYNC_SCHEDULER !== 'false'; // Default: enabled (Phase 5)
 const ENABLE_SNOOZE_WAKE_NOTIFICATION_SCHEDULER =
   process.env.ENABLE_SNOOZE_WAKE_NOTIFICATION_SCHEDULER !== 'false'; // Default: enabled (Phase 6)
+const ENABLE_APPOINTMENT_REMINDER_SCHEDULER =
+  process.env.ENABLE_APPOINTMENT_REMINDER_SCHEDULER !== 'false'; // Default: enabled
 
 let dailyDigestJob = null;
 let weeklyDigestJob = null;
@@ -25,6 +28,7 @@ let assignmentJob = null;
 let helpdeskSlaJob = null;
 let gmailInboxSyncJob = null;
 let snoozeWakeNotificationJob = null;
+let appointmentReminderJob = null;
 
 /**
  * Initialize and start scheduled jobs (node-cron).
@@ -217,6 +221,32 @@ function startScheduledJobs() {
     );
   }
 
+  if (ENABLE_APPOINTMENT_REMINDER_SCHEDULER) {
+    const reminderCron = String(process.env.APPOINTMENT_REMINDER_CRON || '*/10 * * * *').trim();
+    if (!cron.validate(reminderCron)) {
+      console.error(
+        `[scheduledJobs] Invalid APPOINTMENT_REMINDER_CRON="${reminderCron}" — appointment reminder scheduler not started`
+      );
+    } else {
+      appointmentReminderJob = cron.schedule(
+        reminderCron,
+        async () => {
+          try {
+            await tickAppointmentReminders();
+          } catch (err) {
+            console.error('[scheduledJobs] Appointment reminder tick failed:', err.message);
+          }
+        },
+        { scheduled: true, timezone: process.env.DIGEST_TIMEZONE || 'UTC' }
+      );
+      console.log(`[scheduledJobs]   - Appointment reminders: cron "${reminderCron}"`);
+    }
+  } else {
+    console.log(
+      '[scheduledJobs] Appointment reminder scheduler disabled (ENABLE_APPOINTMENT_REMINDER_SCHEDULER=false)'
+    );
+  }
+
   console.log(`[scheduledJobs]   - Timezone: ${process.env.DIGEST_TIMEZONE || 'UTC'}`);
   if (NOTIFICATION_DEBUG) {
     console.log('[scheduledJobs]   - Debug mode: enabled');
@@ -274,6 +304,12 @@ function stopScheduledJobs() {
     snoozeWakeNotificationJob = null;
     console.log('[scheduledJobs] Snooze wake notification job stopped');
   }
+
+  if (appointmentReminderJob) {
+    appointmentReminderJob.stop();
+    appointmentReminderJob = null;
+    console.log('[scheduledJobs] Appointment reminder job stopped');
+  }
 }
 
 /**
@@ -310,6 +346,11 @@ async function triggerSnoozeWakeNotificationsTick() {
   return tickSnoozeWakeNotifications();
 }
 
+async function triggerAppointmentRemindersTick() {
+  console.log('[scheduledJobs] Manually triggering appointment reminder tick...');
+  return tickAppointmentReminders();
+}
+
 module.exports = {
   startScheduledJobs,
   stopScheduledJobs,
@@ -317,6 +358,7 @@ module.exports = {
   triggerWeeklyDigest,
   triggerTrashRetention,
   triggerGmailInboxSyncTick,
-  triggerSnoozeWakeNotificationsTick
+  triggerSnoozeWakeNotificationsTick,
+  triggerAppointmentRemindersTick
 };
 

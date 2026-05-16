@@ -7,9 +7,10 @@ const { getGmailOAuthAppCredentialsForServer } = require('../platform/communicat
 const { encryptTenantSecret, decryptTenantSecret } = require('../utils/tenantSecretCrypto');
 const { loadGoogleapis } = require('../utils/loadGoogleapis');
 
-/** calendar.events = create/update events + Meet; userinfo.email = show connected account */
+/** events + Meet, read calendars for free/busy, email for connected-account label */
 const CALENDAR_SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/calendar.readonly',
   'https://www.googleapis.com/auth/userinfo.email'
 ];
 
@@ -126,6 +127,43 @@ async function completeCalendarOAuthCallback({ code, state }) {
   return { ok: true, accountEmail };
 }
 
+/**
+ * Busy intervals from Google Calendar (primary) for a date range.
+ * @returns {Promise<Array<{ start: Date, end: Date }>>}
+ */
+async function getGoogleFreeBusyIntervals(bookingConfig, rangeStart, rangeEnd) {
+  const token = bookingConfig?.googleCalendar?.encryptedRefreshToken;
+  if (!token) return [];
+
+  const client = await getCalendarClientForConfig(bookingConfig);
+  if (client.error) return [];
+
+  try {
+    const tz = bookingConfig.workingHours?.timezone || 'UTC';
+    const res = await client.calendar.freebusy.query({
+      requestBody: {
+        timeMin: new Date(rangeStart).toISOString(),
+        timeMax: new Date(rangeEnd).toISOString(),
+        timeZone: tz,
+        items: [{ id: 'primary' }]
+      }
+    });
+    const busy = res.data?.calendars?.primary?.busy || [];
+    return busy.map((b) => ({
+      start: new Date(b.start),
+      end: new Date(b.end)
+    }));
+  } catch (err) {
+    console.warn('[appointmentCalendar] freebusy query failed:', err.message);
+    return [];
+  }
+}
+
+function slotOverlapsBusyIntervals(slotStart, slotEnd, busyIntervals) {
+  if (!busyIntervals?.length) return false;
+  return busyIntervals.some((b) => slotStart < b.end && b.start < slotEnd);
+}
+
 async function getCalendarClientForConfig(config) {
   const refreshToken = decryptTenantSecret(config.googleCalendar?.encryptedRefreshToken);
   if (!refreshToken) return { error: 'Google Calendar is not connected' };
@@ -222,5 +260,8 @@ module.exports = {
   disconnectGoogleCalendar,
   resolveHostCalendarConfig,
   getExpectedCalendarRedirectUri,
-  calendarRedirectUri
+  getGoogleFreeBusyIntervals,
+  slotOverlapsBusyIntervals,
+  calendarRedirectUri,
+  getCalendarClientForConfig
 };

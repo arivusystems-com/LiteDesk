@@ -75,6 +75,12 @@ let isBrowserNavigation = false;
 // Flag to prevent concurrent calls to createDefaultTab
 let isCreatingHomeTab = false;
 
+/** Public booking / manage URLs must not be overridden by persisted CRM tabs. */
+export function isStandalonePublicRoute(path) {
+  const p = String(path || '').split('?')[0];
+  return p.startsWith('/book/') || p.startsWith('/appointments/manage/');
+}
+
 // Icon mapping for serialization/deserialization
 const iconMap = {
   'home': HomeIcon,
@@ -546,6 +552,8 @@ const getTitleForPath = (path, params = {}) => {
     '/demo-requests': 'Demo Requests',
     '/instances': 'Instances',
     '/settings': 'Settings',
+    '/appointments/pages': 'Booking Pages',
+    '/appointments/configure': 'Personal booking page',
     // Control Plane routes
     '/control': 'Control Plane',
     '/control/demo-requests': 'Demo Requests',
@@ -602,6 +610,25 @@ const getTitleForPath = (path, params = {}) => {
       return 'My Audits';
     }
     return 'Audit';
+  }
+
+  // Appointment booking pages
+  if (path.startsWith('/appointments/')) {
+    if (path === '/appointments/pages' || path.startsWith('/appointments/pages')) {
+      return 'Booking Pages';
+    }
+    if (path.startsWith('/appointments/team/configure')) {
+      const id = segments[3];
+      if (!id) return 'New team page';
+      return 'Team booking page';
+    }
+    if (path.startsWith('/appointments/configure/user/')) {
+      return 'Booking page';
+    }
+    if (path === '/appointments/configure' || path.startsWith('/appointments/configure')) {
+      return 'Personal booking page';
+    }
+    return 'Booking Pages';
   }
 
   // Special case: Helpdesk cases routes
@@ -766,7 +793,7 @@ export function useTabs() {
     // Skip if path is login, landing, or audit app (no tabs)
     // Audit app has its own layout and doesn't use the CRM tabs system
     // Settings now uses internal tabs
-    if (path === '/login' || path === '/' || path.startsWith('/audit/')) {
+    if (path === '/login' || path === '/' || path.startsWith('/audit/') || isStandalonePublicRoute(path)) {
       logTabsDebug('⏭️ Skipping sync for path:', path);
       return;
     }
@@ -949,8 +976,8 @@ export function useTabs() {
     let tabWasRestored = false;
     
     // First, check if we have an active tab from storage - restore it
-    // Skip restoration if the active tab is a settings route (settings shouldn't be tabs)
-    if (activeTabId.value) {
+    // Skip restoration when landing on a public booking URL (e.g. link opened in new tab)
+    if (activeTabId.value && !isStandalonePublicRoute(currentPath)) {
       const activeTab = tabs.value.find(tab => tab.id === activeTabId.value);
       if (activeTab) {
         // If user loaded directly on Settings (e.g. bookmark), create Settings tab and stay
@@ -1047,6 +1074,8 @@ export function useTabs() {
           activeTabId.value = 'home';
         }
       }
+    } else if (isStandalonePublicRoute(currentPath)) {
+      logTabsDebug('⏭️ [setupRouteWatcher] Standalone public route, keeping URL:', currentPath);
     } else {
       // On a different route (e.g., dashboard route)
       // If tabs are empty, create a tab for the current route
@@ -1180,7 +1209,7 @@ export function useTabs() {
       // These routes should be handled by the router, not by tab syncing
       // Audit app has its own layout and doesn't use the CRM tabs system
       // Settings now uses internal tabs
-      if (newPath === '/login' || newPath === '/' || newPath.startsWith('/audit/')) {
+      if (newPath === '/login' || newPath === '/' || newPath.startsWith('/audit/') || isStandalonePublicRoute(newPath)) {
         console.log('⏭️ Route watcher: skipping tab sync for non-tab route:', newPath);
         return;
       }
@@ -1351,8 +1380,8 @@ export function useTabs() {
       
       // Skip non-tab routes (but log it)
       // Settings now uses internal tabs
-      if (targetPathWithoutQuery === '/login' || targetPathWithoutQuery === '/' || 
-          targetPathWithoutQuery.startsWith('/audit/')) {
+      if (targetPathWithoutQuery === '/login' || targetPathWithoutQuery === '/' ||
+          targetPathWithoutQuery.startsWith('/audit/') || isStandalonePublicRoute(targetPathWithoutQuery)) {
         console.log('🔙 Skipping - non-tab route:', targetPathWithoutQuery);
         return;
       }

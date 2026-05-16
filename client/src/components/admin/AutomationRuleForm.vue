@@ -102,6 +102,7 @@
                                 <option value="people">People</option>
                                 <option value="organization">Organization</option>
                                 <option value="deal">Deal</option>
+                                <option value="events">Events / Appointments</option>
                               </select>
                             </div>
                           </div>
@@ -114,6 +115,29 @@
                               <span class="text-sm text-gray-700 dark:text-gray-300">Enabled</span>
                             </label>
                           </div>
+                        </div>
+                      </section>
+
+                      <section
+                        v-if="!isEditing"
+                        class="rounded-xl border border-indigo-200/80 bg-indigo-50/60 p-4 dark:border-indigo-800/60 dark:bg-indigo-950/30"
+                      >
+                        <h3 class="text-sm font-semibold text-indigo-900 dark:text-indigo-200">
+                          Appointment quick start
+                        </h3>
+                        <p class="mt-1 text-xs text-indigo-800/80 dark:text-indigo-300/80">
+                          Pre-fill a rule for common booking workflows.
+                        </p>
+                        <div class="mt-3 flex flex-wrap gap-2">
+                          <button
+                            v-for="tpl in appointmentTemplates"
+                            :key="tpl.id"
+                            type="button"
+                            class="rounded-lg bg-white px-3 py-1.5 text-xs font-medium text-indigo-700 shadow-sm ring-1 ring-indigo-200 hover:bg-indigo-50 dark:bg-gray-900 dark:text-indigo-300 dark:ring-indigo-800 dark:hover:bg-indigo-950/50"
+                            @click="applyTemplate(tpl)"
+                          >
+                            {{ tpl.label }}
+                          </button>
                         </div>
                       </section>
 
@@ -132,10 +156,24 @@
                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                             >
                               <option value="">Select event...</option>
-                              <option v-for="et in eventTypes" :key="et.value" :value="et.value">
-                                {{ et.label }}
-                              </option>
+                              <optgroup
+                                v-for="group in eventTypeGroups"
+                                :key="group.key"
+                                :label="group.label"
+                              >
+                                <option v-for="et in group.items" :key="et.value" :value="et.value">
+                                  {{ et.label }}
+                                </option>
+                              </optgroup>
                             </select>
+                            <p
+                              v-if="selectedEventMeta?.category === 'appointments'"
+                              class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"
+                            >
+                              Use entity type
+                              <span class="font-medium text-gray-700 dark:text-gray-300">Events / Appointments</span>
+                              so rules fire for booked meetings.
+                            </p>
                           </div>
                           <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -155,11 +193,13 @@
                                   class="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                                 >
                                   <option value="">Select field...</option>
-                                  <option value="currentState.sales_type">Current SALES role</option>
-                                  <option value="previousState.sales_type">Previous SALES role</option>
-                                  <option value="currentState.stage">Current Stage</option>
-                                  <option value="currentState.pipeline">Current Pipeline</option>
-                                  <option value="previousState.stage">Previous Stage</option>
+                                  <option
+                                    v-for="field in availableConditionFields"
+                                    :key="field.value"
+                                    :value="field.value"
+                                  >
+                                    {{ field.label }}
+                                  </option>
                                 </select>
                                 <span class="text-gray-500">=</span>
                                 <input
@@ -272,6 +312,7 @@
                                   <option value="people">People</option>
                                   <option value="organization">Organization</option>
                                   <option value="deal">Deal</option>
+                                  <option value="events">Event / Appointment</option>
                                 </select>
                                 <input
                                   v-model="form.action.params.relatedEntity.entityId"
@@ -371,6 +412,43 @@ const saving = ref(false);
 const validationError = ref(null);
 const eventTypes = ref([]);
 
+const DEFAULT_CONDITION_FIELDS = [
+  { value: 'currentState.sales_type', label: 'Current SALES role' },
+  { value: 'previousState.sales_type', label: 'Previous SALES role' },
+  { value: 'currentState.stage', label: 'Current stage' },
+  { value: 'currentState.pipeline', label: 'Current pipeline' },
+  { value: 'previousState.stage', label: 'Previous stage' }
+];
+
+const eventTypeGroups = computed(() => {
+  const byCategory = new Map();
+  for (const et of eventTypes.value) {
+    const key = et.category || 'other';
+    if (!byCategory.has(key)) {
+      byCategory.set(key, {
+        key,
+        label: et.categoryLabel || key,
+        items: []
+      });
+    }
+    byCategory.get(key).items.push(et);
+  }
+  const order = ['appointments', 'crm', 'other'];
+  return [...byCategory.values()].sort(
+    (a, b) => order.indexOf(a.key) - order.indexOf(b.key)
+  );
+});
+
+const selectedEventMeta = computed(() =>
+  eventTypes.value.find((et) => et.value === form.value.trigger.eventType)
+);
+
+const availableConditionFields = computed(() => {
+  const fields = selectedEventMeta.value?.conditionFields;
+  if (fields?.length) return fields;
+  return DEFAULT_CONDITION_FIELDS;
+});
+
 const form = ref({
   name: '',
   description: '',
@@ -389,6 +467,73 @@ const form = ref({
 
 const conditionEntries = ref([]);
 
+const appointmentTemplates = [
+  {
+    id: 'booked-notify',
+    label: 'Notify host when booked',
+    patch: {
+      name: 'Notify host on new booking',
+      entityType: 'events',
+      trigger: { eventType: 'appointment.created', condition: null },
+      action: {
+        type: 'notify_user',
+        params: {
+          message: 'A new appointment was booked on your calendar.',
+          recipient: 'owner'
+        }
+      }
+    }
+  },
+  {
+    id: 'noshow-task',
+    label: 'Task on no-show',
+    patch: {
+      name: 'Follow up after no-show',
+      entityType: 'events',
+      trigger: { eventType: 'appointment.no_show', condition: null },
+      action: {
+        type: 'create_task',
+        params: {
+          title: 'Follow up: appointment no-show',
+          description: 'Contact the guest and reschedule if needed.',
+          dueInDays: 1,
+          assignee: 'owner',
+          relatedEntity: { entityType: 'events', entityId: '__trigger__' }
+        }
+      }
+    }
+  },
+  {
+    id: 'cancelled-notify',
+    label: 'Notify host when cancelled',
+    patch: {
+      name: 'Notify host on cancellation',
+      entityType: 'events',
+      trigger: { eventType: 'appointment.cancelled', condition: null },
+      action: {
+        type: 'notify_user',
+        params: {
+          message: 'An appointment was cancelled.',
+          recipient: 'owner'
+        }
+      }
+    }
+  }
+];
+
+function applyTemplate(tpl) {
+  const { patch } = tpl;
+  form.value.name = patch.name;
+  form.value.entityType = patch.entityType;
+  form.value.trigger = { ...patch.trigger };
+  form.value.action = {
+    type: patch.action.type,
+    params: JSON.parse(JSON.stringify(patch.action.params))
+  };
+  conditionEntries.value = [];
+  onEventTypeChange();
+}
+
 function addCondition() {
   conditionEntries.value.push({ key: '', value: '' });
 }
@@ -398,8 +543,19 @@ function removeCondition(idx) {
 }
 
 function onEventTypeChange() {
-  // Reset conditions when event type changes
   conditionEntries.value = [];
+  const meta = selectedEventMeta.value;
+  if (meta?.suggestedEntityType) {
+    form.value.entityType = meta.suggestedEntityType;
+  }
+  if (
+    form.value.action.type === 'create_task' &&
+    meta?.suggestedEntityType === 'events'
+  ) {
+    form.value.action.params.relatedEntity = form.value.action.params.relatedEntity || {};
+    form.value.action.params.relatedEntity.entityType = 'events';
+    form.value.action.params.relatedEntity.entityId = '__trigger__';
+  }
 }
 
 function onActionTypeChange() {

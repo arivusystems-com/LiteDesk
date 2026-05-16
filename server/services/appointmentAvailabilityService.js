@@ -1,4 +1,9 @@
 const Event = require('../models/Event');
+const AppointmentBookingConfig = require('../models/AppointmentBookingConfig');
+const {
+  getExternalBusyIntervals,
+  slotOverlapsBusyIntervals
+} = require('./appointmentExternalCalendarService');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -45,9 +50,22 @@ function overlaps(aStart, aEnd, bStart, bEnd) {
  * @param {ObjectId} ownerId
  * @param {ObjectId} organizationId
  */
+async function loadConfigWithCalendar(config) {
+  if (config?.googleCalendar?.encryptedRefreshToken) return config;
+  if (!config?._id) return config;
+  return AppointmentBookingConfig.findById(config._id).lean();
+}
+
 async function getAvailableSlots(config, rangeStart, rangeEnd, ownerId, organizationId) {
   const availableDays = new Set(config.availableDays || [1, 2, 3, 4, 5]);
   const now = new Date();
+
+  const configForCalendar = await loadConfigWithCalendar(config);
+  const externalBusy = await getExternalBusyIntervals(
+    configForCalendar || config,
+    rangeStart,
+    rangeEnd
+  );
 
   const existing = await Event.find({
     organizationId,
@@ -84,9 +102,14 @@ async function getAvailableSlots(config, rangeStart, rangeEnd, ownerId, organiza
 
       slots = slots.filter((slot) => {
         if (slot.start < now) return false;
-        return !existing.some((ev) =>
-          overlaps(slot.start, slot.end, new Date(ev.startDateTime), new Date(ev.endDateTime))
-        );
+        if (
+          existing.some((ev) =>
+            overlaps(slot.start, slot.end, new Date(ev.startDateTime), new Date(ev.endDateTime))
+          )
+        ) {
+          return false;
+        }
+        return !slotOverlapsBusyIntervals(slot.start, slot.end, externalBusy);
       });
 
       for (const slot of slots) {

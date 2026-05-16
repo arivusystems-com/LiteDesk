@@ -1,5 +1,11 @@
 const Event = require('../models/Event');
 const { emitAppointmentDomainEvent } = require('../services/appointmentDomainEvents');
+const { buildManageUrl, generateManageToken } = require('../utils/appointmentManageToken');
+const {
+  resolveEventBookingConfig,
+  getRescheduleSlots,
+  rescheduleAppointment
+} = require('../services/appointmentManageService');
 
 async function findAppointmentEvent(req) {
   return Event.findOne({
@@ -100,10 +106,18 @@ exports.cancelAppointment = async (req, res) => {
     event.modifiedTime = new Date();
     if (event.appointment) {
       event.appointment.cancellationSource = req.body?.source === 'customer' ? 'customer' : 'user';
+      event.appointment.reminderStatus = 'none';
     }
     pushStatusAudit(event, req.user._id, previousStatus, 'Cancelled', {
       reason: event.cancellationReason
     });
+
+    try {
+      const { syncExternalCalendarOnCancel } = require('../services/appointmentCalendarSyncService');
+      await syncExternalCalendarOnCancel(event);
+    } catch (err) {
+      console.warn('[appointmentController] external calendar cancel sync failed:', err.message);
+    }
 
     await event.save();
 
@@ -115,6 +129,18 @@ exports.cancelAppointment = async (req, res) => {
       });
     } catch (err) {
       console.warn('[appointmentController] domain event emit failed:', err.message);
+    }
+
+    try {
+      const {
+        sendAppointmentCancellationEmail
+      } = require('../services/appointmentConfirmationEmailService');
+      await sendAppointmentCancellationEmail({
+        event,
+        reason: event.cancellationReason
+      });
+    } catch (err) {
+      console.warn('[appointmentController] cancellation email failed:', err.message);
     }
 
     res.status(200).json({ success: true, data: event });
@@ -220,5 +246,126 @@ exports.markAppointmentNoShow = async (req, res) => {
     res.status(200).json({ success: true, data: event });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/** Guest self-service link (for hosts to share with bookers). */
+exports.getGuestManageLink = async (req, res) => {
+  try {
+    const event = await findAppointmentEvent(req);
+    if (!event) {
+      return res.status(404).json({ success: false, message: 'Appointment not found' });
+    }
+    let token = event.appointment?.manageToken;
+    if (!token) {
+      if (!event.appointment) event.appointment = { isAppointment: true };
+      token = generateManageToken();
+      event.appointment.manageToken = token;
+      event.markModified('appointment');
+      await event.save();
+    }
+    if (event.status !== 'Planned') {
+      return res.status(400).json({
+        success: false,
+        message: 'Manage link is only available for planned appointments.'
+      });
+    }
+    res.status(200).json({
+      success: true,
+      data: {
+        manageUrl: buildManageUrl(token),
+        bookedByEmail: event.appointment?.bookedByEmail || null
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/** Available slots for host reschedule (same rules as guest self-service). */
+exports.getEventRescheduleSlots = async (req, res) => {
+  try {
+    const event = await findAppointmentEvent(req);
+    if (!event) {
+      return res.status(404).json({ success: false, message: 'Appointment not found' });
+    }
+    if (event.status !== 'Planned' || event.appointment?.noShow) {
+      return res.status(400).json({
+        success: false,
+        message: 'Only planned appointments can be rescheduled.'
+      });
+    }
+
+    const date = req.query.date;
+    if (!date) {
+      return res.status(400).json({ success: false, message: 'date query param is required (YYYY-MM-DD).' });
+    }
+
+    const config = await resolveEventBookingConfig(event);
+    if (!config) {
+      return res.status(400).json({
+        success: false,
+        message: 'Booking configuration not found for this appointment.'
+      });
+    }
+
+    const slots = await getRescheduleSlots(event, config, date);
+    res.status(200).json({
+      success: true,
+      data: {
+        slots,
+        timezone: config.workingHours?.timezone || 'UTC',
+        slotDurationMinutes: config.slotDurationMinutes || 30
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/** Host reschedule from CRM event record. */
+exports.rescheduleEvent = async (req, res) => {
+  try {
+    const { start, notifyGuest } = req.body;
+    if (!start) {
+      return res.status(400).json({ success: false, message: 'start is required (ISO datetime).' });
+    }
+
+    const event = await findAppointmentEvent(req);
+    if (!event) {
+      return res.status(404).json({ success: false, message: 'Appointment not found' });
+    }
+
+    const config = await resolveEventBookingConfig(event);
+    if (!config) {
+      return res.status(400).json({
+        success: false,
+        message: 'Booking configuration not found for this appointment.'
+      });
+    }
+
+    const updated = await rescheduleAppointment(event, config, start, {
+      actorUserId: req.user._id,
+      source: 'host_record',
+      notifyGuest: notifyGuest !== false
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        _id: updated._id,
+        eventId: updated.eventId || updated._id,
+        startDateTime: updated.startDateTime,
+        endDateTime: updated.endDateTime,
+        status: updated.status
+      }
+    });
+  } catch (error) {
+    const status = error.statusCode || 500;
+    res.status(status).json({
+      success: false,
+      message: error.message || 'Reschedule failed.',
+      code: error.code
+    });
   }
 };

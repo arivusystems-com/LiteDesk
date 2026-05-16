@@ -55,15 +55,26 @@ async function resolveRules(event) {
     appKey,
     'trigger.eventType': event.eventType
   };
-  if (entityType) query.entityType = { $in: [null, entityType] };
+
+  const andClauses = [];
+  if (entityType) {
+    andClauses.push({
+      $or: [
+        { entityType: null },
+        { entityType: '' },
+        { entityType: { $exists: false } },
+        { entityType }
+      ]
+    });
+  }
   if (organizationId) {
-    query.$or = [
-      { organizationId: null },
-      { organizationId: organizationId }
-    ];
+    andClauses.push({
+      $or: [{ organizationId: null }, { organizationId }]
+    });
   } else {
     query.organizationId = null;
   }
+  if (andClauses.length) query.$and = andClauses;
 
   let rules = [];
   try {

@@ -1,10 +1,16 @@
 <template>
-  <div class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-indigo-50/30 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-950/20">
-    <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:py-10">
+  <div class="mx-auto w-full max-w-6xl">
+    <button
+      type="button"
+      class="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 transition hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400"
+      @click="goToPagesHub"
+    >
+      ← Booking Pages
+    </button>
       <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p class="text-sm font-medium text-indigo-600 dark:text-indigo-400">
-            {{ isAdminEdit ? 'Admin · Booking page' : 'My Appointments' }}
+            {{ isAdminEdit ? 'Admin · Booking page' : 'Personal booking page' }}
           </p>
           <h1 class="mt-1 text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
             {{ isAdminEdit ? editUserLabel : 'Booking page' }}
@@ -17,6 +23,12 @@
               Share your link so customers can book time on your calendar. Every booking creates an event automatically.
             </template>
           </p>
+          <RouterLink
+            to="/control/automation-rules"
+            class="mt-2 inline-flex text-sm font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+          >
+            Set up automations for bookings →
+          </RouterLink>
         </div>
         <div class="flex items-center gap-3">
           <label class="flex cursor-pointer items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -95,6 +107,8 @@
             </div>
           </section>
 
+          <AppointmentEmbedSnippet v-if="form.slug" :slug="form.slug" />
+
           <section class="rounded-2xl border border-gray-200/80 bg-white p-6 shadow-sm dark:border-gray-700/80 dark:bg-gray-900/80">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Availability</h2>
             <div class="mt-4">
@@ -161,26 +175,86 @@
           </section>
 
           <section
+            v-if="form.meetingType === 'ms_teams'"
+            class="rounded-2xl border border-gray-200/80 bg-white p-6 shadow-sm dark:border-gray-700/80 dark:bg-gray-900/80"
+          >
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Microsoft Outlook & Teams</h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              Connect Microsoft 365 to auto-create Teams links and hide times when you're busy on Outlook.
+            </p>
+            <div
+              v-if="calendarStatus.microsoft && !calendarStatus.microsoft.configured"
+              class="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+            >
+              Microsoft OAuth is not configured on the API server yet. Ask your admin to set
+              <code class="text-xs">MICROSOFT_CALENDAR_CLIENT_ID</code> and
+              <code class="text-xs">MICROSOFT_CALENDAR_CLIENT_SECRET</code>.
+            </div>
+            <div v-else-if="!config?._id" class="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+              Save this page first, then connect Microsoft Calendar.
+            </div>
+            <div v-else class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p v-if="microsoftCalendarConnected" class="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                  Connected as {{ calendarStatus.microsoft?.accountEmail }}
+                </p>
+                <p v-else class="text-sm text-gray-600 dark:text-gray-400">Not connected</p>
+              </div>
+              <div class="flex gap-2">
+                <button
+                  v-if="!microsoftCalendarConnected"
+                  type="button"
+                  class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                  :disabled="microsoftCalendarConnecting || !calendarStatus.microsoft?.configured"
+                  @click="connectMicrosoftCalendar"
+                >
+                  {{ microsoftCalendarConnecting ? 'Opening…' : 'Connect Microsoft' }}
+                </button>
+                <button
+                  v-else
+                  type="button"
+                  class="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300"
+                  @click="disconnectMicrosoftCalendar"
+                >
+                  Disconnect
+                </button>
+              </div>
+            </div>
+            <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
+              Register an app in
+              <a href="https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps" target="_blank" rel="noopener" class="text-indigo-600 underline">Azure App registrations</a>
+              with delegated permissions: Calendars.Read, Calendars.ReadWrite, OnlineMeetings.ReadWrite, User.Read.
+            </p>
+            <p
+              v-if="calendarStatus.microsoft?.redirectUri"
+              class="mt-2 rounded-lg bg-gray-100 px-3 py-2 font-mono text-xs text-gray-700 break-all dark:bg-gray-800 dark:text-gray-300"
+            >
+              Add this redirect URI in Azure → Authentication → Web:<br />
+              <span class="text-indigo-600 dark:text-indigo-400">{{ calendarStatus.microsoft.redirectUri }}</span>
+            </p>
+          </section>
+
+          <section
             v-if="form.meetingType === 'google_meet'"
             class="rounded-2xl border border-gray-200/80 bg-white p-6 shadow-sm dark:border-gray-700/80 dark:bg-gray-900/80"
           >
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Google Calendar & Meet</h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Connect Google Calendar to auto-create Meet links when someone books.
+              Connect Google Calendar to auto-create Meet links and hide times when you're busy on Google.
             </p>
             <div v-if="!config?._id" class="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
               Save this page first, then connect Google Calendar.
             </div>
             <div v-else class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p v-if="calendarStatus.connected" class="text-sm font-medium text-emerald-700 dark:text-emerald-300">
-                  Connected as {{ calendarStatus.accountEmail }}
+                <p v-if="googleCalendarConnected" class="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                  Connected as {{ calendarStatus.google?.accountEmail || calendarStatus.accountEmail }}
                 </p>
                 <p v-else class="text-sm text-gray-600 dark:text-gray-400">Not connected</p>
               </div>
               <div class="flex gap-2">
                 <button
-                  v-if="!calendarStatus.connected"
+                  v-if="!googleCalendarConnected"
                   type="button"
                   class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
                   :disabled="calendarConnecting"
@@ -213,6 +287,8 @@
               <span class="text-indigo-600 dark:text-indigo-400">{{ calendarStatus.redirectUri }}</span>
             </p>
           </section>
+
+          <AppointmentCustomFieldsEditor v-model="form.customFields" />
 
           <section class="rounded-2xl border border-gray-200/80 bg-white p-6 shadow-sm dark:border-gray-700/80 dark:bg-gray-900/80">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Branding</h2>
@@ -267,92 +343,7 @@
           </div>
         </div>
       </div>
-
-      <section v-if="isAdmin" class="mt-12 border-t border-gray-200 pt-10 dark:border-gray-800">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">All booking pages</h2>
-            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              Personal and team pages in your organization.
-            </p>
-          </div>
-          <button
-            type="button"
-            class="shrink-0 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 dark:border-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-200"
-            @click="openCreateTeamPage"
-          >
-            + Create team page
-          </button>
-        </div>
-        <div v-if="teamLoading" class="mt-6 flex justify-center py-8">
-          <div class="h-8 w-8 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
-        </div>
-        <div
-          v-else-if="teamConfigs.length === 0"
-          class="mt-6 rounded-xl border border-dashed border-gray-300 px-4 py-8 text-center text-sm text-gray-500 dark:border-gray-700"
-        >
-          No booking pages configured yet.
-        </div>
-        <div v-else class="mt-6 overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
-          <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
-            <thead class="bg-gray-50 dark:bg-gray-800/80">
-              <tr>
-                <th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">Name</th>
-                <th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">Type</th>
-                <th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">Page</th>
-                <th class="px-4 py-3 text-left font-medium text-gray-600 dark:text-gray-300">Status</th>
-                <th class="px-4 py-3 text-right font-medium text-gray-600 dark:text-gray-300">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
-              <tr v-for="row in teamConfigs" :key="row._id">
-                <td class="px-4 py-3 text-gray-900 dark:text-white">{{ rowLabel(row) }}</td>
-                <td class="px-4 py-3">
-                  <span
-                    class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium"
-                    :class="row.ownerType === 'team'
-                      ? 'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200'
-                      : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'"
-                  >
-                    {{ row.ownerType === 'team' ? 'Team' : 'Personal' }}
-                  </span>
-                </td>
-                <td class="px-4 py-3 text-gray-600 dark:text-gray-400">/book/{{ row.slug }}</td>
-                <td class="px-4 py-3">
-                  <span
-                    class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium"
-                    :class="row.enabled
-                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200'
-                      : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'"
-                  >
-                    {{ row.enabled ? 'Live' : 'Paused' }}
-                  </span>
-                </td>
-                <td class="px-4 py-3 text-right space-x-3">
-                  <button
-                    type="button"
-                    class="text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400"
-                    @click="row.ownerType === 'team' ? openTeamEdit(row) : openPersonalEdit(row)"
-                  >
-                    Edit
-                  </button>
-                  <a
-                    v-if="row.bookingUrl"
-                    :href="row.bookingUrl"
-                    target="_blank"
-                    rel="noopener"
-                    class="text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400"
-                  >
-                    Open
-                  </a>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
       </div>
-    </div>
   </div>
 </template>
 
@@ -372,6 +363,8 @@ import {
   slugifyClient
 } from '@/utils/appointmentFormatters';
 import { useNotifications } from '@/composables/useNotifications';
+import AppointmentCustomFieldsEditor from '@/components/appointments/AppointmentCustomFieldsEditor.vue';
+import AppointmentEmbedSnippet from '@/components/appointments/AppointmentEmbedSnippet.vue';
 
 const {
   config,
@@ -392,16 +385,24 @@ const authStore = useAuthStore();
 const router = useRouter();
 const route = useRoute();
 const { openTab } = useTabs();
-const isAdmin = computed(() => authStore.isAdminLike);
 const editUserId = computed(() => route.params.userId || null);
 const isAdminEdit = computed(
   () => editUserId.value && String(editUserId.value) !== String(authStore.user?._id)
 );
 const editUserLabel = ref('User booking page');
-const teamConfigs = ref([]);
-const teamLoading = ref(false);
-const calendarStatus = ref({ connected: false, accountEmail: null });
+const calendarStatus = ref({
+  connected: false,
+  accountEmail: null,
+  google: { connected: false, accountEmail: null },
+  microsoft: { connected: false, accountEmail: null, configured: false }
+});
 const calendarConnecting = ref(false);
+const microsoftCalendarConnecting = ref(false);
+
+const googleCalendarConnected = computed(
+  () => calendarStatus.value.google?.connected || calendarStatus.value.connected
+);
+const microsoftCalendarConnected = computed(() => !!calendarStatus.value.microsoft?.connected);
 
 const form = reactive({
   displayName: '',
@@ -413,6 +414,7 @@ const form = reactive({
   bufferMinutes: 10,
   meetingType: 'offline',
   appointmentTypes: ['demo', 'consultation'],
+  customFields: [],
   branding: { themeColor: '#4f46e5', welcomeNote: '', logoUrl: '' }
 });
 
@@ -457,10 +459,49 @@ async function refreshCalendarStatus() {
   if (!config.value?._id) return;
   try {
     const res = await apiClient.get(`/appointments/calendar/${config.value._id}/status`);
-    if (res.success) calendarStatus.value = res.data;
+    if (res.success) {
+      const data = res.data || {};
+      calendarStatus.value = {
+        ...data,
+        google: data.google || {
+          connected: !!data.connected,
+          accountEmail: data.accountEmail
+        },
+        microsoft: data.microsoft || { connected: false, configured: false }
+      };
+    }
   } catch {
-    calendarStatus.value = { connected: false, accountEmail: null };
+    calendarStatus.value = {
+      connected: false,
+      accountEmail: null,
+      google: { connected: false },
+      microsoft: { connected: false, configured: false }
+    };
   }
+}
+
+async function openCalendarOAuthPopup(url, popupName) {
+  const w = 520;
+  const h = 720;
+  const left = Math.max(0, Math.round((window.screen.availWidth - w) / 2));
+  const top = Math.max(0, Math.round((window.screen.availHeight - h) / 2));
+  const popup = window.open(
+    url,
+    popupName,
+    `popup=yes,width=${w},height=${h},left=${left},top=${top}`
+  );
+  if (!popup) {
+    window.location.href = url;
+    return;
+  }
+  await new Promise((resolve) => {
+    const timer = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(timer);
+        resolve();
+      }
+    }, 500);
+  });
 }
 
 async function connectGoogleCalendar() {
@@ -472,27 +513,9 @@ async function connectGoogleCalendar() {
       notifyError(res.message || 'Could not start Google connection');
       return;
     }
-    const w = 520;
-    const h = 720;
-    const left = Math.max(0, Math.round((window.screen.availWidth - w) / 2));
-    const top = Math.max(0, Math.round((window.screen.availHeight - h) / 2));
-    const popup = window.open(
-      res.data.url,
-      'google-calendar-oauth',
-      `popup=yes,width=${w},height=${h},left=${left},top=${top}`
-    );
-    if (!popup) {
-      window.location.href = res.data.url;
-      return;
-    }
-    const timer = setInterval(async () => {
-      if (popup.closed) {
-        clearInterval(timer);
-        calendarConnecting.value = false;
-        await fetchConfig();
-        await refreshCalendarStatus();
-      }
-    }, 500);
+    await openCalendarOAuthPopup(res.data.url, 'google-calendar-oauth');
+    await fetchConfig();
+    await refreshCalendarStatus();
   } catch (e) {
     notifyError(e?.message || 'Connection failed');
   } finally {
@@ -503,19 +526,49 @@ async function connectGoogleCalendar() {
 async function disconnectGoogleCalendar() {
   if (!config.value?._id) return;
   await apiClient.delete(`/appointments/calendar/${config.value._id}/google`);
-  calendarStatus.value = { connected: false, accountEmail: null };
+  calendarStatus.value.google = { connected: false, accountEmail: null };
+  calendarStatus.value.connected = false;
   notifySuccess('Google Calendar disconnected');
+}
+
+async function connectMicrosoftCalendar() {
+  if (!config.value?._id) return;
+  microsoftCalendarConnecting.value = true;
+  try {
+    const res = await apiClient.get(`/appointments/calendar/${config.value._id}/microsoft/start`);
+    if (!res.success || !res.data?.url) {
+      notifyError(res.message || 'Could not start Microsoft connection');
+      return;
+    }
+    await openCalendarOAuthPopup(res.data.url, 'microsoft-calendar-oauth');
+    await fetchConfig();
+    await refreshCalendarStatus();
+  } catch (e) {
+    notifyError(e?.message || 'Connection failed');
+  } finally {
+    microsoftCalendarConnecting.value = false;
+  }
+}
+
+async function disconnectMicrosoftCalendar() {
+  if (!config.value?._id) return;
+  await apiClient.delete(`/appointments/calendar/${config.value._id}/microsoft`);
+  calendarStatus.value.microsoft = { connected: false, accountEmail: null };
+  notifySuccess('Microsoft Calendar disconnected');
 }
 
 async function fetchConfig() {
   if (isAdminEdit.value) {
     await fetchUserConfig(editUserId.value);
-    const owner = teamConfigs.value.find((r) => String(r.ownerId?._id || r.ownerId) === String(editUserId.value));
-    if (owner) editUserLabel.value = rowLabel(owner);
-    else editUserLabel.value = config.value?.displayName || 'User booking page';
+    editUserLabel.value = config.value?.displayName || 'User booking page';
   } else {
     await fetchMyConfig();
   }
+}
+
+function goToPagesHub() {
+  openTab('/appointments/pages', { title: 'Booking Pages', icon: '📅' });
+  router.push({ name: 'appointments-pages' });
 }
 
 async function copyLink() {
@@ -536,74 +589,36 @@ watch(config, (c) => {
     bufferMinutes: c.bufferMinutes ?? 10,
     meetingType: c.meetingType || 'offline',
     appointmentTypes: c.appointmentTypes || ['demo', 'consultation'],
+    customFields: (c.customFields || []).map((f) => ({ ...f, options: [...(f.options || [])] })),
     branding: { ...form.branding, ...(c.branding || {}) }
   });
   if (c.googleCalendar) {
-    calendarStatus.value = {
+    calendarStatus.value.google = {
       connected: !!c.googleCalendar.connected,
       accountEmail: c.googleCalendar.accountEmail || null
+    };
+    calendarStatus.value.connected = calendarStatus.value.google.connected;
+    calendarStatus.value.accountEmail = calendarStatus.value.google.accountEmail;
+  }
+  if (c.microsoftCalendar) {
+    calendarStatus.value.microsoft = {
+      ...calendarStatus.value.microsoft,
+      connected: !!c.microsoftCalendar.connected,
+      accountEmail: c.microsoftCalendar.accountEmail || null
     };
   }
 }, { immediate: true });
 
-function teamOwnerName(row) {
-  const u = row.ownerId;
-  if (u && typeof u === 'object') {
-    const name = [u.firstName, u.lastName].filter(Boolean).join(' ');
-    return name || u.email || u.username || row.displayName || 'User';
-  }
-  return row.displayName || 'User';
-}
-
-function rowLabel(row) {
-  if (row.ownerType === 'team') {
-    const count = row.memberUserIds?.length || 0;
-    return `${row.displayName || 'Team'} (${count} members)`;
-  }
-  return teamOwnerName(row);
-}
-
-function openCreateTeamPage() {
-  openTab('/appointments/team/configure', { title: 'Team booking', icon: '👥' });
-  router.push({ name: 'appointments-team-configure-new' });
-}
-
-function openTeamEdit(row) {
-  const path = `/appointments/team/configure/${row._id}`;
-  openTab(path, { title: row.displayName || 'Team booking', icon: '👥' });
-  router.push({ name: 'appointments-team-configure', params: { id: row._id } });
-}
-
-function openPersonalEdit(row) {
-  const userId = row.ownerId?._id || row.ownerId;
-  const path = `/appointments/configure/user/${userId}`;
-  const name = teamOwnerName(row);
-  openTab(path, { title: `${name} · Booking`, icon: '📅' });
-  router.push({ name: 'appointments-configure-user', params: { userId } });
-}
-
-async function fetchTeamConfigs() {
-  if (!isAdmin.value) return;
-  teamLoading.value = true;
-  try {
-    const res = await apiClient.get('/appointments/config');
-    if (res.success) teamConfigs.value = Array.isArray(res.data) ? res.data : [];
-  } catch {
-    teamConfigs.value = [];
-  } finally {
-    teamLoading.value = false;
-  }
-}
-
 onMounted(async () => {
-  if (isAdmin.value) await fetchTeamConfigs();
   await fetchConfig();
   await refreshCalendarStatus();
   if (route.query.calendar === 'connected') {
-    notifySuccess('Google Calendar connected');
+    const provider = route.query.provider === 'microsoft' ? 'Microsoft' : 'Google';
+    notifySuccess(`${provider} Calendar connected`);
     router.replace({ query: {} });
   } else if (route.query.calendar === 'error') {
-    notifyError(route.query.message || 'Google Calendar connection failed');
+    const provider = route.query.provider === 'microsoft' ? 'Microsoft' : 'Google';
+    notifyError(route.query.message || `${provider} Calendar connection failed`);
     router.replace({ query: {} });
   }
 });

@@ -12,6 +12,7 @@ router.use(organizationIsolation);
 
 router.get('/config/me', appointmentConfigController.getMyConfig);
 router.put('/config/me', appointmentConfigController.upsertMyConfig);
+router.get('/config/pages', appointmentConfigController.listMyPages);
 router.get('/config/slug-available', appointmentConfigController.checkSlugAvailable);
 router.get('/config/user/:userId', appointmentConfigController.getUserConfig);
 router.put('/config/user/:userId', appointmentConfigController.upsertUserConfig);
@@ -20,6 +21,8 @@ router.get('/config', appointmentConfigController.listAllConfigs);
 router.get('/calendar/:configId/status', appointmentCalendarController.getCalendarStatus);
 router.get('/calendar/:configId/google/start', appointmentCalendarController.googleOAuthStart);
 router.delete('/calendar/:configId/google', appointmentCalendarController.googleDisconnect);
+router.get('/calendar/:configId/microsoft/start', appointmentCalendarController.microsoftOAuthStart);
+router.delete('/calendar/:configId/microsoft', appointmentCalendarController.microsoftDisconnect);
 
 router.get('/config/teams', appointmentTeamConfigController.listTeamConfigs);
 router.post('/config/team', appointmentTeamConfigController.createTeamConfig);
@@ -28,6 +31,9 @@ router.put('/config/team/:id', appointmentTeamConfigController.updateTeamConfig)
 router.delete('/config/team/:id', appointmentTeamConfigController.deleteTeamConfig);
 
 router.get('/stats', appointmentController.getAppointmentStats);
+router.get('/events/:id/guest-link', appointmentController.getGuestManageLink);
+router.get('/events/:id/reschedule-slots', appointmentController.getEventRescheduleSlots);
+router.post('/events/:id/reschedule', appointmentController.rescheduleEvent);
 router.post('/events/:id/cancel', appointmentController.cancelAppointment);
 router.post('/events/:id/complete', appointmentController.completeAppointment);
 router.post('/events/:id/no-show', appointmentController.markAppointmentNoShow);

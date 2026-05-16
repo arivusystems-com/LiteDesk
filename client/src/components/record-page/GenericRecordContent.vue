@@ -420,9 +420,11 @@
           class="mt-4"
           :appointment="record.appointment"
           :status="record.status"
+          :event-id="String(record._id || record.eventId || '')"
           @cancel="cancelAppointment"
           @complete="completeAppointment"
           @no-show="markAppointmentNoShow"
+          @rescheduled="onAppointmentRescheduled"
         />
 
         <!-- Section stack: show when collapsed, or when expanded to details/related (adapter returns only that section) -->
@@ -2591,6 +2593,11 @@ async function markAppointmentNoShow() {
   } catch (e) {
     notifications.error(e?.message || 'Could not mark no-show');
   }
+}
+
+async function onAppointmentRescheduled() {
+  notifications.success('Appointment rescheduled');
+  await fetchRecord();
 }
 
 async function fetchRecord() {
