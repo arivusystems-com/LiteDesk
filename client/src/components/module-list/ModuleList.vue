@@ -48,6 +48,7 @@
       :pagination="pagination"
       :filter-config="adaptedFilters"
       :external-filters="filters"
+      :boost-visible-column-keys="boostVisibleColumnKeys"
       :table-id="`${listDefinition.moduleKey}-table`"
       row-key="_id"
       :empty-title="listDefinition.emptyState?.title || `No ${listDefinition.title.toLowerCase()} yet`"
@@ -405,6 +406,14 @@ const adaptedColumns = computed(() => {
     sortKey: col.fieldPath || col.key,
     dataType: col.dataType
   }));
+});
+
+const boostVisibleColumnKeys = computed(() => {
+  if (props.moduleKey !== 'events') return [];
+  const f = filters.value || {};
+  if (f.appointmentOnly !== 'true' && f.appointmentOnly !== true) return [];
+  const moduleConfig = getModuleListConfig('events');
+  return moduleConfig?.appointmentListColumns ?? [];
 });
 
 // Fetch module field definitions for schema-driven filters
@@ -1814,7 +1823,8 @@ defineExpose({
   searchQuery: searchQuery,
   getFilters: () => filters.value,
   getSearchQuery: () => searchQuery.value,
-  getCurrentRows: () => (Array.isArray(data.value) ? data.value : [])
+  getCurrentRows: () => (Array.isArray(data.value) ? data.value : []),
+  setFilters: (newFilters) => handleFiltersUpdate(newFilters)
 });
 </script>
 

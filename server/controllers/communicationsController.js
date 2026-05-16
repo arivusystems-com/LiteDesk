@@ -308,7 +308,7 @@ exports.sendEmail = async (req, res) => {
     if (!(await communicationPlatformService.canSendEmailNow({ organizationId: orgId }))) {
       return res.status(503).json({
         success: false,
-        message: 'Email service is not configured. Configure AWS SES or SMTP in environment.'
+        message: 'Email service is not configured. Configure AWS SES, OCI Email Delivery, or SMTP in environment.'
       });
     }
 

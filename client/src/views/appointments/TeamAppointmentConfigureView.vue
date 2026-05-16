@@ -1,0 +1,321 @@
+<template>
+  <div class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-indigo-50/30 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-950/20">
+    <div class="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:py-10">
+      <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p class="text-sm font-medium text-indigo-600 dark:text-indigo-400">Team booking</p>
+          <h1 class="mt-1 text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
+            {{ isEdit ? 'Edit team page' : 'Create team page' }}
+          </h1>
+          <p class="mt-2 max-w-xl text-gray-600 dark:text-gray-400">
+            One link for customers — meetings are assigned to your team automatically.
+          </p>
+        </div>
+        <button
+          type="button"
+          class="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-indigo-700 disabled:opacity-50"
+          :disabled="saving || !slugAvailable || form.memberUserIds.length === 0"
+          @click="handleSave"
+        >
+          {{ saving ? 'Saving…' : 'Save team page' }}
+        </button>
+      </div>
+
+      <div v-if="error" class="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">
+        {{ error }}
+      </div>
+
+      <div v-if="loading" class="flex justify-center py-24">
+        <div class="h-10 w-10 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
+      </div>
+
+      <div v-else class="space-y-6">
+        <section class="rounded-2xl border border-gray-200/80 bg-white p-6 shadow-sm dark:border-gray-700/80 dark:bg-gray-900/80">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Team details</h2>
+          <div class="mt-4 space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Team name</label>
+              <input
+                v-model="form.displayName"
+                type="text"
+                class="mt-1.5 w-full rounded-xl border border-gray-200 px-4 py-2.5 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                placeholder="e.g. Sales team"
+                @blur="maybeAutoSlug"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Public URL</label>
+              <div class="mt-1.5 flex overflow-hidden rounded-xl border border-gray-200 dark:border-gray-600">
+                <span class="flex items-center bg-gray-100 px-3 text-sm text-gray-500 dark:bg-gray-800">/book/</span>
+                <input
+                  v-model="form.slug"
+                  type="text"
+                  class="min-w-0 flex-1 border-0 bg-white px-3 py-2.5 dark:bg-gray-900 dark:text-white"
+                  @input="onSlugInput"
+                />
+              </div>
+              <p v-if="!slugAvailable" class="mt-1 text-xs text-amber-600">URL already taken</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Assignment</label>
+              <select
+                v-model="form.assignmentStrategy"
+                class="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              >
+                <option value="round_robin">Round robin (rotate fairly)</option>
+                <option value="first_available">First available member</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section class="rounded-2xl border border-gray-200/80 bg-white p-6 shadow-sm dark:border-gray-700/80 dark:bg-gray-900/80">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Team members</h2>
+          <p class="mt-1 text-sm text-gray-500">Only selected members can receive bookings from this page.</p>
+          <div v-if="usersLoading" class="mt-4 text-sm text-gray-500">Loading users…</div>
+          <div v-else class="mt-4 max-h-64 space-y-2 overflow-y-auto">
+            <label
+              v-for="u in orgUsers"
+              :key="u._id"
+              class="flex cursor-pointer items-center gap-3 rounded-lg border border-gray-200 px-3 py-2 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800/80"
+            >
+              <input
+                v-model="form.memberUserIds"
+                type="checkbox"
+                :value="u._id"
+                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <span class="text-sm text-gray-900 dark:text-white">
+                {{ userLabel(u) }}
+              </span>
+            </label>
+          </div>
+          <p v-if="form.memberUserIds.length === 0" class="mt-2 text-xs text-amber-600">Select at least one member.</p>
+        </section>
+
+        <section class="rounded-2xl border border-gray-200/80 bg-white p-6 shadow-sm dark:border-gray-700/80 dark:bg-gray-900/80">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Availability</h2>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <button
+              v-for="(label, idx) in DAY_LABELS"
+              :key="idx"
+              type="button"
+              class="rounded-full px-3.5 py-1.5 text-sm font-medium transition-all"
+              :class="form.availableDays.includes(idx)
+                ? 'bg-indigo-600 text-white'
+                : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'"
+              @click="toggleDay(idx)"
+            >
+              {{ label }}
+            </button>
+          </div>
+          <div class="mt-5 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">From</label>
+              <input v-model="form.workingHours.start" type="time" class="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+            </div>
+            <div>
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">To</label>
+              <input v-model="form.workingHours.end" type="time" class="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
+            </div>
+          </div>
+          <div class="mt-5 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Slot length</label>
+              <select v-model.number="form.slotDurationMinutes" class="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+                <option v-for="o in SLOT_DURATION_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Buffer</label>
+              <select v-model.number="form.bufferMinutes" class="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+                <option v-for="o in BUFFER_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section class="rounded-2xl border border-gray-200/80 bg-white p-6 shadow-sm dark:border-gray-700/80 dark:bg-gray-900/80">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Branding</h2>
+          <div class="mt-4">
+            <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Accent color</label>
+            <input v-model="form.branding.themeColor" type="color" class="mt-2 h-10 w-full cursor-pointer rounded-lg" />
+          </div>
+          <div class="mt-4">
+            <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Welcome note</label>
+            <textarea
+              v-model="form.branding.welcomeNote"
+              rows="3"
+              class="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              placeholder="Book time with our team…"
+            />
+          </div>
+        </section>
+
+        <div v-if="bookingUrl" class="rounded-xl bg-indigo-50 p-4 dark:bg-indigo-950/40">
+          <p class="text-sm font-medium text-indigo-900 dark:text-indigo-200">Team booking link</p>
+          <a :href="bookingUrl" target="_blank" rel="noopener" class="mt-1 block truncate text-sm text-indigo-600 hover:underline dark:text-indigo-400">{{ bookingUrl }}</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { reactive, ref, computed, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import apiClient from '@/utils/apiClient';
+import { useNotifications } from '@/composables/useNotifications';
+import {
+  DAY_LABELS,
+  SLOT_DURATION_OPTIONS,
+  BUFFER_OPTIONS,
+  slugifyClient
+} from '@/utils/appointmentFormatters';
+
+const route = useRoute();
+const router = useRouter();
+const { success: notifySuccess } = useNotifications();
+
+const teamId = computed(() => route.params.id || null);
+const isEdit = computed(() => !!teamId.value);
+
+const loading = ref(false);
+const saving = ref(false);
+const error = ref(null);
+const slugAvailable = ref(true);
+const savedConfig = ref(null);
+const orgUsers = ref([]);
+const usersLoading = ref(false);
+
+const form = reactive({
+  displayName: '',
+  slug: '',
+  enabled: true,
+  memberUserIds: [],
+  assignmentStrategy: 'round_robin',
+  availableDays: [1, 2, 3, 4, 5],
+  workingHours: { start: '09:00', end: '18:00', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' },
+  slotDurationMinutes: 30,
+  bufferMinutes: 10,
+  meetingType: 'offline',
+  appointmentTypes: ['demo', 'consultation'],
+  branding: { themeColor: '#4f46e5', welcomeNote: '', logoUrl: '' }
+});
+
+const bookingUrl = computed(() => {
+  const slug = savedConfig.value?.slug || form.slug;
+  if (!slug) return '';
+  if (savedConfig.value?.bookingUrl) return savedConfig.value.bookingUrl;
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  return `${origin}/book/${slug}`;
+});
+
+function userLabel(u) {
+  const name = [u.firstName, u.lastName].filter(Boolean).join(' ');
+  return name || u.email || u.username || 'User';
+}
+
+let slugDebounce;
+function onSlugInput() {
+  form.slug = slugifyClient(form.slug);
+  clearTimeout(slugDebounce);
+  slugDebounce = setTimeout(() => checkSlug(form.slug), 400);
+}
+
+async function checkSlug(slug) {
+  const params = { slug };
+  if (teamId.value) params.excludeId = teamId.value;
+  const res = await apiClient.get('/appointments/config/slug-available', { params });
+  slugAvailable.value = res.success && res.available;
+}
+
+function maybeAutoSlug() {
+  if (!form.slug && form.displayName) {
+    form.slug = slugifyClient(form.displayName);
+    checkSlug(form.slug);
+  }
+}
+
+function toggleDay(idx) {
+  const i = form.availableDays.indexOf(idx);
+  if (i >= 0) form.availableDays.splice(i, 1);
+  else form.availableDays.push(idx);
+  form.availableDays.sort((a, b) => a - b);
+}
+
+async function fetchUsers() {
+  usersLoading.value = true;
+  try {
+    const res = await apiClient.get('/users/list');
+    orgUsers.value = Array.isArray(res)
+      ? res
+      : Array.isArray(res?.data)
+        ? res.data
+        : res?.data?.users || [];
+  } catch {
+    orgUsers.value = [];
+  } finally {
+    usersLoading.value = false;
+  }
+}
+
+async function loadTeam() {
+  if (!teamId.value) return;
+  loading.value = true;
+  try {
+    const res = await apiClient.get(`/appointments/config/team/${teamId.value}`);
+    if (res.success && res.data) {
+      savedConfig.value = res.data;
+      Object.assign(form, {
+        displayName: res.data.displayName || '',
+        slug: res.data.slug || '',
+        enabled: res.data.enabled !== false,
+        memberUserIds: (res.data.memberUserIds || []).map((id) => String(id._id || id)),
+        assignmentStrategy: res.data.assignmentStrategy || 'round_robin',
+        availableDays: [...(res.data.availableDays || [1, 2, 3, 4, 5])],
+        workingHours: { ...form.workingHours, ...(res.data.workingHours || {}) },
+        slotDurationMinutes: res.data.slotDurationMinutes ?? 30,
+        bufferMinutes: res.data.bufferMinutes ?? 10,
+        meetingType: res.data.meetingType || 'offline',
+        appointmentTypes: res.data.appointmentTypes || ['demo', 'consultation'],
+        branding: { ...form.branding, ...(res.data.branding || {}) }
+      });
+    }
+  } catch (e) {
+    error.value = e.message || 'Failed to load team page';
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function handleSave() {
+  saving.value = true;
+  error.value = null;
+  form.workingHours.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || form.workingHours.timezone;
+  try {
+    const payload = { ...form };
+    const res = isEdit.value
+      ? await apiClient.put(`/appointments/config/team/${teamId.value}`, payload)
+      : await apiClient.post('/appointments/config/team', payload);
+    if (res.success) {
+      savedConfig.value = res.data;
+      notifySuccess('Team booking page saved');
+      if (!isEdit.value && res.data._id) {
+        router.replace({ name: 'appointments-team-configure', params: { id: res.data._id } });
+      }
+    } else {
+      throw new Error(res.message || 'Save failed');
+    }
+  } catch (e) {
+    error.value = e.message || 'Save failed';
+  } finally {
+    saving.value = false;
+  }
+}
+
+onMounted(async () => {
+  await fetchUsers();
+  if (isEdit.value) await loadTeam();
+});
+</script>

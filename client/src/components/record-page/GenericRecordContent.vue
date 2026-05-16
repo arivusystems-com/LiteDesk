@@ -415,6 +415,16 @@
           </section>
         </div>
 
+        <AppointmentDetailCard
+          v-if="isEventAppointment"
+          class="mt-4"
+          :appointment="record.appointment"
+          :status="record.status"
+          @cancel="cancelAppointment"
+          @complete="completeAppointment"
+          @no-show="markAppointmentNoShow"
+        />
+
         <!-- Section stack: show when collapsed, or when expanded to details/related (adapter returns only that section) -->
         <section
           v-if="record && genericSections.length && (!expandedLeftSection || expandedLeftSection === 'details' || expandedLeftSection === 'related')"
@@ -927,6 +937,7 @@ import RecordStateSection from '@/components/record-page/RecordStateSection.vue'
 import RecordPageTitleRow from '@/components/record-page/RecordPageTitleRow.vue';
 import { useStickyTitleRow } from '@/components/record-page/composables/useStickyTitleRow';
 import SectionStack from '@/components/record-page/sections/SectionStack.vue';
+import AppointmentDetailCard from '@/components/appointments/AppointmentDetailCard.vue';
 import RelatedSection from '@/components/record-page/sections/RelatedSection.vue';
 import DetailsSection from '@/components/record-page/sections/DetailsSection.vue';
 import RecordRightPane from '@/components/record-page/RecordRightPane.vue';
@@ -1200,6 +1211,10 @@ const {
 } = useStickyTitleRow(genericRecordContentRootRef);
 
 const moduleKeyLower = computed(() => (props.moduleKey || '').toLowerCase());
+const isEventsModule = computed(() => moduleKeyLower.value === 'events');
+const isEventAppointment = computed(
+  () => isEventsModule.value && !!record.value?.appointment?.isAppointment
+);
 /** REST + in-app paths for record CRUD (helpdesk cases use /helpdesk/cases, not /cases). */
 const recordCrudPathBase = computed(() =>
   getModuleRecordCrudPathBase(props.moduleKey, {
@@ -2525,6 +2540,58 @@ const activityEventsForDisplay = computed(() => {
   }
   return [activeThreadRootComment.value, ...threadReplyEvents.value];
 });
+
+async function cancelAppointment() {
+  if (!record.value?._id) return;
+  if (!window.confirm('Cancel this appointment? The guest can book again using your public link.')) return;
+  try {
+    const res = await apiClient.post(`/appointments/events/${record.value._id}/cancel`, {
+      reason: 'Cancelled from event record'
+    });
+    if (res.success) {
+      notifications.success('Appointment cancelled');
+      await fetchRecord();
+    } else {
+      notifications.error(res.message || 'Could not cancel appointment');
+    }
+  } catch (e) {
+    notifications.error(e?.message || 'Could not cancel appointment');
+  }
+}
+
+async function completeAppointment() {
+  if (!record.value?._id) return;
+  if (!window.confirm('Mark this appointment as completed?')) return;
+  try {
+    const res = await apiClient.post(`/appointments/events/${record.value._id}/complete`);
+    if (res.success) {
+      notifications.success('Appointment completed');
+      await fetchRecord();
+    } else {
+      notifications.error(res.message || 'Could not complete appointment');
+    }
+  } catch (e) {
+    notifications.error(e?.message || 'Could not complete appointment');
+  }
+}
+
+async function markAppointmentNoShow() {
+  if (!record.value?._id) return;
+  if (!window.confirm('Mark this appointment as a no-show? The event will stay on your calendar as planned.')) return;
+  try {
+    const res = await apiClient.post(`/appointments/events/${record.value._id}/no-show`, {
+      reason: 'Marked from event record'
+    });
+    if (res.success) {
+      notifications.success('Marked as no-show');
+      await fetchRecord();
+    } else {
+      notifications.error(res.message || 'Could not mark no-show');
+    }
+  } catch (e) {
+    notifications.error(e?.message || 'Could not mark no-show');
+  }
+}
 
 async function fetchRecord() {
   if (!props.recordId || props.recordId === 'new') {

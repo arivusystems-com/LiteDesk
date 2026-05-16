@@ -1,6 +1,6 @@
 <template>
   <div class="mx-auto w-full" :data-view="currentView">
-    <!-- Registry-Driven ModuleList with Calendar/List View Switcher -->
+    <AppointmentsStatsBar v-if="currentView === 'list' && showAppointmentsScope" />
     <ModuleList
       ref="moduleListRef"
       module-key="events"
@@ -14,6 +14,22 @@
       @filters-changed="handleFiltersChanged"
       @search-changed="handleSearchChanged"
     >
+      <template v-if="currentView === 'list'" #search-actions>
+        <button
+          type="button"
+          @click="toggleAppointmentsOnly"
+          class="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+          :class="showAppointmentsScope
+            ? 'border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-200'
+            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'"
+          :aria-pressed="showAppointmentsScope"
+        >
+          <CalendarDaysIcon class="h-4 w-4 shrink-0" />
+          <span class="hidden sm:inline">Appointments only</span>
+          <span class="sm:hidden">Appts</span>
+        </button>
+      </template>
+
       <!-- Custom Header Slot - View Switcher (segmented control with sliding pill) -->
       <template #header-actions>
         <div class="flex gap-3 items-center">
@@ -97,6 +113,42 @@
       </template>
 
       <!-- Custom Owner Cell -->
+      <template #cell-appointmentBookedBy="{ row }">
+        <span
+          v-if="row.appointmentBookedBy"
+          class="block min-w-0 truncate text-sm text-gray-900 dark:text-white"
+        >
+          {{ row.appointmentBookedBy }}
+        </span>
+        <span v-else class="text-sm text-gray-500 dark:text-gray-400">—</span>
+      </template>
+
+      <template #cell-appointmentBookingSource="{ value }">
+        <span class="text-sm text-gray-700 dark:text-gray-300">
+          {{ appointmentSourceLabel(value) }}
+        </span>
+      </template>
+
+      <template #cell-appointmentType="{ value }">
+        <span class="text-sm text-gray-700 dark:text-gray-300">
+          {{ appointmentTypeLabel(value) }}
+        </span>
+      </template>
+
+      <template #cell-appointmentMeetingLink="{ value }">
+        <a
+          v-if="value"
+          :href="value"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+          @click.stop
+        >
+          Join
+        </a>
+        <span v-else class="text-sm text-gray-500 dark:text-gray-400">—</span>
+      </template>
+
       <template #cell-eventOwnerId="{ row }">
         <div v-if="row.eventOwnerId" class="flex items-center gap-2">
           <Avatar
@@ -172,8 +224,10 @@ import Avatar from '@/components/common/Avatar.vue';
 import CSVImportModal from '@/components/import/CSVImportModal.vue';
 import ModuleActions from '@/components/common/ModuleActions.vue';
 import EventQuickCreateDrawer from '@/components/events/EventQuickCreateDrawer.vue';
+import AppointmentsStatsBar from '@/components/appointments/AppointmentsStatsBar.vue';
 import { getModuleListConfig } from '@/platform/modules/moduleListRegistry';
-import { CalendarIcon, ListBulletIcon } from '@heroicons/vue/24/outline';
+import { CalendarIcon, CalendarDaysIcon, ListBulletIcon } from '@heroicons/vue/24/outline';
+import { appointmentSourceLabel, appointmentTypeLabel } from '@/utils/appointmentFormatters';
 
 const router = useRouter();
 const route = useRoute();
@@ -189,12 +243,14 @@ const viewStorageKey = 'arivu-events-view';
 const getInitialView = () => {
   try {
     const savedView = localStorage.getItem(viewStorageKey);
-    return savedView === 'list' ? 'list' : 'calendar';
+    if (savedView === 'list' || savedView === 'appointments') return 'list';
+    return 'calendar';
   } catch {
     return 'calendar';
   }
 };
 const currentView = ref(getInitialView());
+const showAppointmentsScope = ref(false);
 
 // Calendar data state
 const calendarEvents = ref([]);
@@ -206,67 +262,96 @@ const eventQuickCreateInitialData = ref({});
 const showImportModal = ref(false);
 const isDarkMode = ref(false);
 
-// Initialize view from route query or localStorage (persist so returning to page keeps list/calendar)
+function isListView(view) {
+  return view === 'list';
+}
+
+/** Apply view state locally; optionally sync URL (only when it actually changes). */
+function applyView(view, { updateRoute = false } = {}) {
+  currentView.value = view;
+  try {
+    localStorage.setItem(viewStorageKey, view);
+  } catch (_) {}
+
+  if (updateRoute) {
+    const routeView = route.query.view;
+    if (view === 'calendar') {
+      if (routeView != null && routeView !== '') {
+        const newQuery = { ...route.query };
+        delete newQuery.view;
+        router.replace({ query: newQuery });
+      }
+    } else if (routeView !== view) {
+      router.replace({ query: { ...route.query, view } });
+    }
+  }
+
+  nextTick(() => {
+    toggleTableView(isListView(view));
+    if (view === 'calendar') {
+      fetchCalendarEvents();
+    }
+  });
+}
+
+// Initialize view from route query or localStorage (first load / keep-alive return)
 const initializeView = () => {
   const viewParam = route.query.view;
-  if (viewParam === 'list') {
-    currentView.value = 'list';
-    try { localStorage.setItem(viewStorageKey, 'list'); } catch (_) {}
-  } else if (viewParam === undefined) {
-    const savedView = localStorage.getItem(viewStorageKey);
-    if (savedView === 'list') {
-      currentView.value = 'list';
-      try { localStorage.setItem(viewStorageKey, 'list'); } catch (_) {}
-      router.replace({ query: { ...route.query, view: 'list' } });
-    } else {
-      currentView.value = 'calendar';
-      try { localStorage.setItem(viewStorageKey, 'calendar'); } catch (_) {}
+
+  if (viewParam === 'list' || viewParam === 'appointments') {
+    applyView('list', { updateRoute: viewParam === 'appointments' ? true : false });
+    return;
+  }
+
+  if (viewParam === undefined) {
+    if (currentView.value === 'calendar') {
+      applyView('calendar', { updateRoute: false });
+      return;
     }
-  } else {
-    currentView.value = 'calendar';
-    try { localStorage.setItem(viewStorageKey, 'calendar'); } catch (_) {}
-    const newQuery = { ...route.query };
-    delete newQuery.view;
-    router.replace({ query: newQuery });
+    const savedView = localStorage.getItem(viewStorageKey);
+    if (savedView === 'list' || savedView === 'appointments') {
+      applyView('list', { updateRoute: savedView === 'appointments' || route.query.view !== 'list' });
+      return;
+    }
+    applyView('calendar', { updateRoute: false });
+    return;
   }
-  
-  nextTick(() => {
-    toggleTableView(currentView.value === 'list');
-  });
+
+  applyView('calendar', { updateRoute: true });
 };
 
-// Switch view
-const switchView = async (view) => {
-  currentView.value = view;
-  localStorage.setItem(viewStorageKey, view);
-  
-  // Update route query
-  if (view === 'list') {
-    router.replace({ query: { ...route.query, view: 'list' } });
-  } else {
-    const newQuery = { ...route.query };
-    delete newQuery.view;
-    router.replace({ query: newQuery });
-    // Fetch calendar data when switching to calendar
-    await fetchCalendarEvents();
-  }
-  
-  // Hide/show table after DOM updates
-  await nextTick();
-  toggleTableView(view === 'list');
+// User-initiated tab change
+const switchView = (view) => {
+  applyView(view, { updateRoute: true });
 };
 
-// Watch route query changes (when URL has no view param, sync from localStorage — do not force calendar)
-watch(() => route.query.view, (newView) => {
-  if (newView === 'list' && currentView.value !== 'list') {
-    switchView('list');
-  } else if (newView === undefined) {
-    // Returning to /events without ?view= — restore from localStorage so list view persists
-    initializeView();
-  } else if (newView !== 'list' && currentView.value !== 'calendar') {
-    switchView('calendar');
+// Sync from URL (back/forward) without re-navigating
+watch(
+  () => route.query.view,
+  (newView) => {
+    if (newView === 'list' || newView === 'appointments') {
+      if (currentView.value !== 'list') {
+        applyView('list', { updateRoute: false });
+      }
+      return;
+    }
+    if (newView === undefined) {
+      if (currentView.value === 'calendar') return;
+      const savedView = localStorage.getItem(viewStorageKey);
+      if (savedView === 'list' || savedView === 'appointments') {
+        if (currentView.value !== 'list') {
+          applyView('list', { updateRoute: false });
+        }
+      } else if (currentView.value !== 'calendar') {
+        applyView('calendar', { updateRoute: false });
+      }
+      return;
+    }
+    if (currentView.value !== 'calendar') {
+      applyView('calendar', { updateRoute: false });
+    }
   }
-});
+);
 
 // Helper function to toggle table visibility
 const toggleTableView = (showTable) => {
@@ -363,11 +448,31 @@ const fetchCalendarEvents = async () => {
 const currentSearchQuery = ref('');
 
 // Handle filter/search changes from ModuleList
-const handleFiltersChanged = () => {
+function syncAppointmentsScopeFromFilters(filters) {
+  const f = filters ?? moduleListRef.value?.getFilters?.() ?? {};
+  showAppointmentsScope.value =
+    f.appointmentOnly === 'true' || f.appointmentOnly === true;
+}
+
+const handleFiltersChanged = (filters) => {
+  syncAppointmentsScopeFromFilters(filters);
   if (currentView.value === 'calendar') {
     fetchCalendarEvents();
   }
 };
+
+function toggleAppointmentsOnly() {
+  if (currentView.value !== 'list') {
+    switchView('list');
+  }
+  const current = { ...(moduleListRef.value?.getFilters?.() ?? {}) };
+  if (showAppointmentsScope.value) {
+    delete current.appointmentOnly;
+  } else {
+    current.appointmentOnly = 'true';
+  }
+  moduleListRef.value?.setFilters?.(current);
+}
 
 const handleSearchChanged = (searchQuery) => {
   currentSearchQuery.value = searchQuery || '';
@@ -386,7 +491,7 @@ watch(currentView, (newView) => {
   
   // Toggle table visibility using DOM manipulation
   nextTick(() => {
-    toggleTableView(newView === 'list');
+    toggleTableView(isListView(newView));
   });
 }, { immediate: true });
 
@@ -692,7 +797,8 @@ onMounted(() => {
   nextTick(() => {
     // Small delay to ensure ModuleList has fully rendered its table
     setTimeout(() => {
-      toggleTableView(currentView.value === 'list');
+      toggleTableView(isListView(currentView.value));
+      syncAppointmentsScopeFromFilters();
     }, 100);
   });
   
@@ -726,7 +832,10 @@ onActivated(() => {
     moduleListRef.value.refresh();
   }
   nextTick(() => {
-    setTimeout(() => toggleTableView(currentView.value === 'list'), 80);
+    setTimeout(() => {
+      toggleTableView(isListView(currentView.value));
+      syncAppointmentsScopeFromFilters();
+    }, 80);
   });
 });
 

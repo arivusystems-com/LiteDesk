@@ -1,0 +1,183 @@
+const AppointmentBookingConfig = require('../models/AppointmentBookingConfig');
+const User = require('../models/User');
+const { getSlotsForDate } = require('../services/appointmentAvailabilityService');
+const { getTeamSlotsForDate, loadTeamMembersPublic, pickTeamAssignee } = require('../services/appointmentTeamService');
+const { bookAppointment } = require('../services/appointmentBookingService');
+
+function publicConfigPayload(config, host, extras = {}) {
+  return {
+    slug: config.slug,
+    displayName: config.displayName,
+    enabled: config.enabled,
+    ownerType: config.ownerType || 'user',
+    slotDurationMinutes: config.slotDurationMinutes,
+    bufferMinutes: config.bufferMinutes,
+    appointmentTypes: config.appointmentTypes || ['consultation'],
+    customFields: (config.customFields || []).map((f) => ({
+      key: f.key,
+      label: f.label,
+      type: f.type,
+      required: f.required,
+      options: f.options
+    })),
+    branding: config.branding,
+    workingHours: config.workingHours,
+    availableDays: config.availableDays,
+    host: host
+      ? {
+          name: host.displayName || `${host.firstName || ''} ${host.lastName || ''}`.trim(),
+          avatar: host.avatar || null
+        }
+      : null,
+    ...extras
+  };
+}
+
+async function resolveConfig(slug) {
+  return AppointmentBookingConfig.findOne({
+    slug: slug.toLowerCase(),
+    enabled: true
+  });
+}
+
+exports.getPublicPage = async (req, res) => {
+  try {
+    const config = await resolveConfig(req.params.slug);
+    if (!config) {
+      return res.status(404).json({ success: false, message: 'Booking page not found.' });
+    }
+
+    const lean = config.toObject ? config.toObject() : config;
+
+    if (lean.ownerType === 'team') {
+      const members = await loadTeamMembersPublic(lean.memberUserIds);
+      return res.status(200).json({
+        success: true,
+        data: publicConfigPayload(lean, null, {
+          isTeam: true,
+          members,
+          assignmentStrategy: lean.assignmentStrategy
+        })
+      });
+    }
+
+    const host = await User.findById(lean.ownerId)
+      .select('firstName lastName username avatar')
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      data: publicConfigPayload(lean, host, { isTeam: false })
+    });
+  } catch (error) {
+    console.error('[publicBooking] getPublicPage:', error);
+    res.status(500).json({ success: false, message: 'Unable to load booking page.' });
+  }
+};
+
+exports.getPublicSlots = async (req, res) => {
+  try {
+    const { date, timezone } = req.query;
+    if (!date) {
+      return res.status(400).json({ success: false, message: 'date query param required (YYYY-MM-DD)' });
+    }
+
+    const config = await resolveConfig(req.params.slug);
+    if (!config) {
+      return res.status(404).json({ success: false, message: 'Booking page not found.' });
+    }
+
+    const lean = config.toObject ? config.toObject() : config;
+    let slots;
+
+    if (lean.ownerType === 'team') {
+      slots = await getTeamSlotsForDate(lean, date);
+    } else {
+      slots = await getSlotsForDate(
+        lean,
+        date,
+        lean.ownerId,
+        lean.organizationId
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        date,
+        timezone: timezone || lean.workingHours?.timezone || 'UTC',
+        slots
+      }
+    });
+  } catch (error) {
+    console.error('[publicBooking] getPublicSlots:', error);
+    res.status(400).json({ success: false, message: error.message || 'Invalid request' });
+  }
+};
+
+exports.submitBooking = async (req, res) => {
+  try {
+    const config = await resolveConfig(req.params.slug);
+    if (!config) {
+      return res.status(404).json({ success: false, message: 'Booking page not found.' });
+    }
+
+    const {
+      start,
+      appointmentType,
+      customerTimezone,
+      guest,
+      formResponses
+    } = req.body;
+
+    if (!start || !guest?.email || !guest?.firstName) {
+      return res.status(400).json({
+        success: false,
+        message: 'start, guest.email, and guest.firstName are required.'
+      });
+    }
+
+    for (const field of config.customFields || []) {
+      if (field.required && !formResponses?.[field.key]) {
+        return res.status(400).json({
+          success: false,
+          message: `${field.label} is required.`
+        });
+      }
+    }
+
+    let assigneeUserId = null;
+    if (config.ownerType === 'team') {
+      assigneeUserId = await pickTeamAssignee(config, start);
+    }
+
+    const { event } = await bookAppointment({
+      config,
+      startISO: start,
+      guest,
+      appointmentType: appointmentType || 'consultation',
+      customerTimezone,
+      formResponses,
+      assigneeUserId
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        eventId: event.eventId || event._id,
+        eventName: event.eventName,
+        startDateTime: event.startDateTime,
+        endDateTime: event.endDateTime,
+        message: 'Your appointment is confirmed.'
+      }
+    });
+  } catch (error) {
+    console.error('[publicBooking] submitBooking:', error);
+    const status = error.statusCode || 500;
+    res.status(status).json({
+      success: false,
+      message: error.message || 'Booking failed.',
+      code: error.code
+    });
+  }
+};

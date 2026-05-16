@@ -209,10 +209,10 @@
           >
             <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">Configuration</h4>
             <p v-if="selectedIntegration.configStatus === 'configured'" class="text-sm text-green-800 dark:text-green-300">
-              Email service is configured via environment (AWS SES or SMTP). Notifications will be sent when this integration is enabled.
+              Email service is configured via environment (AWS SES, OCI Email Delivery, or SMTP). Notifications will be sent when this integration is enabled.
             </p>
             <p v-else class="text-sm text-amber-800 dark:text-amber-300">
-              Email service is not configured. Add AWS SES or SMTP credentials to the server environment variables to send emails. See <code class="text-xs bg-gray-200 dark:bg-gray-700 px-1 rounded">.env.example</code> for required variables.
+              Email service is not configured. Add AWS SES, OCI Email Delivery (SMTP), or other SMTP credentials to the server environment variables to send emails. See <code class="text-xs bg-gray-200 dark:bg-gray-700 px-1 rounded">.env.example</code> for required variables.
             </p>
             <button
               v-if="selectedIntegration.configStatus === 'configured'"
@@ -246,7 +246,26 @@
                   <option value="resend">resend</option>
                   <option value="smtp">smtp</option>
                   <option value="aws-ses">aws-ses</option>
+                  <option value="oci-email-delivery">oci-email-delivery</option>
                 </select>
+              </label>
+
+              <label v-if="emailConfig.provider === 'oci-email-delivery'" class="text-sm md:col-span-2">
+                <span class="block mb-1 text-gray-700 dark:text-gray-300">
+                  OCI Region
+                  <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">(owner-only)</span>
+                </span>
+                <input
+                  v-model="emailConfig.ociRegion"
+                  :disabled="emailCriticalFieldsLocked"
+                  type="text"
+                  class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                  placeholder="us-phoenix-1"
+                />
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Used to build the SMTP host (<code class="text-[11px]">smtp.email.&lt;region&gt;.oci.oraclecloud.com</code>) when SMTP Host is empty.
+                  OCI requires <strong>port 465</strong> with TLS (not 587). Create SMTP credentials under Identity → Users → SMTP Credentials; use an approved sender for From Email.
+                </p>
               </label>
 
               <label class="text-sm">
@@ -272,7 +291,13 @@
                   SMTP Host
                   <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">(owner-only)</span>
                 </span>
-                <input v-model="emailConfig.smtpHost" :disabled="emailCriticalFieldsLocked" type="text" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed" placeholder="smtp.resend.com" />
+                <input
+                  v-model="emailConfig.smtpHost"
+                  :disabled="emailCriticalFieldsLocked"
+                  type="text"
+                  class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                  :placeholder="emailConfig.provider === 'oci-email-delivery' ? 'smtp.email.us-phoenix-1.oci.oraclecloud.com' : 'smtp.resend.com'"
+                />
               </label>
 
               <label class="text-sm">
@@ -280,7 +305,13 @@
                   SMTP Port
                   <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">(owner-only)</span>
                 </span>
-                <input v-model="emailConfig.smtpPort" :disabled="emailCriticalFieldsLocked" type="number" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed" placeholder="587" />
+                <input
+                  v-model="emailConfig.smtpPort"
+                  :disabled="emailCriticalFieldsLocked"
+                  type="number"
+                  class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                  :placeholder="emailConfig.provider === 'oci-email-delivery' ? '465' : '587'"
+                />
               </label>
 
               <label class="text-sm">
@@ -288,7 +319,13 @@
                   SMTP User
                   <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">(owner-only)</span>
                 </span>
-                <input v-model="emailConfig.smtpUser" :disabled="emailCriticalFieldsLocked" type="text" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed" placeholder="resend" />
+                <input
+                  v-model="emailConfig.smtpUser"
+                  :disabled="emailCriticalFieldsLocked"
+                  type="text"
+                  class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                  :placeholder="emailConfig.provider === 'oci-email-delivery' ? 'OCI SMTP username' : 'resend'"
+                />
               </label>
 
               <label class="text-sm">
@@ -302,8 +339,17 @@
             </div>
 
             <label class="mt-3 inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-              <input v-model="emailConfig.smtpSecure" type="checkbox" class="rounded border-gray-300 dark:border-gray-600" />
+              <input
+                v-model="emailConfig.smtpSecure"
+                type="checkbox"
+                class="rounded border-gray-300 dark:border-gray-600"
+                :disabled="emailConfig.provider === 'oci-email-delivery'"
+              />
               Use secure SMTP (TLS)
+              <span
+                v-if="emailConfig.provider === 'oci-email-delivery'"
+                class="text-xs text-gray-500 dark:text-gray-400"
+              >(required on port 465 for OCI)</span>
             </label>
 
             <div class="mt-4">
@@ -1070,6 +1116,7 @@ const emailConfig = ref({
   fromEmail: '',
   fromName: '',
   replyTo: '',
+  ociRegion: '',
   smtpHost: '',
   smtpPort: 587,
   smtpUser: '',
@@ -1078,6 +1125,50 @@ const emailConfig = ref({
   smtpPassMasked: '',
   hasSmtpPass: false
 });
+
+const buildOciSmtpHost = (region) => {
+  const normalized = String(region || '').trim().toLowerCase();
+  if (!normalized) return '';
+  return `smtp.email.${normalized}.oci.oraclecloud.com`;
+};
+
+const isOciSmtpHost = (host) => {
+  const value = String(host || '').toLowerCase();
+  return value.includes('email.') && value.includes('.oci.oraclecloud.com');
+};
+
+const isResendLikeSmtpConfig = (cfg) => {
+  const host = String(cfg?.smtpHost || '').toLowerCase();
+  const user = String(cfg?.smtpUser || '').toLowerCase();
+  return host.includes('resend.com') || user === 'resend';
+};
+
+const applyOciEmailDefaults = ({ providerJustChanged = false } = {}) => {
+  if (emailConfig.value.provider !== 'oci-email-delivery') return;
+
+  // OCI Email Delivery: implicit TLS on port 465 only (not 587 + STARTTLS).
+  emailConfig.value.smtpPort = 465;
+  emailConfig.value.smtpSecure = true;
+
+  const ociHost = buildOciSmtpHost(emailConfig.value.ociRegion);
+  if (ociHost && !isOciSmtpHost(emailConfig.value.smtpHost)) {
+    emailConfig.value.smtpHost = ociHost;
+  }
+
+  if (providerJustChanged || isResendLikeSmtpConfig(emailConfig.value)) {
+    if (String(emailConfig.value.smtpUser || '').toLowerCase() === 'resend') {
+      emailConfig.value.smtpUser = '';
+    }
+    if (providerJustChanged && emailConfig.value.hasSmtpPass) {
+      emailConfig.value.smtpPass = '';
+      emailConfig.value.hasSmtpPass = false;
+      emailConfig.value.smtpPassMasked = '';
+      notifications.info(
+        'Provider changed to OCI Email Delivery. Enter your OCI SMTP username and password, then save.'
+      );
+    }
+  }
+};
 const communicationPolicy = ref({
   outboundEmail: {
     enabled: true,
@@ -1537,6 +1628,7 @@ const fetchIntegrationDetail = async (key, options = {}) => {
           fromEmail: cfg.fromEmail || '',
           fromName: cfg.fromName || '',
           replyTo: cfg.replyTo || '',
+          ociRegion: cfg.ociRegion || '',
           smtpHost: cfg.smtpHost || '',
           smtpPort: cfg.smtpPort || 587,
           smtpUser: cfg.smtpUser || '',
@@ -1545,6 +1637,7 @@ const fetchIntegrationDetail = async (key, options = {}) => {
           smtpPassMasked: cfg.smtpPassMasked || '',
           hasSmtpPass: cfg.hasSmtpPass === true
         };
+        applyOciEmailDefaults();
         const policy = data.integration.communicationPolicy || {};
         communicationPolicy.value = {
           outboundEmail: {
@@ -1621,11 +1714,14 @@ const saveEmailConfig = async (includeGmailOAuthApp = false) => {
       };
     }
 
+    applyOciEmailDefaults();
+
     const payload = {
       provider: emailConfig.value.provider,
       fromEmail: emailConfig.value.fromEmail,
       fromName: emailConfig.value.fromName,
       replyTo: emailConfig.value.replyTo,
+      ociRegion: emailConfig.value.ociRegion,
       smtpHost: emailConfig.value.smtpHost,
       smtpPort: Number(emailConfig.value.smtpPort) || 587,
       smtpUser: emailConfig.value.smtpUser,
@@ -1748,4 +1844,20 @@ watch(inboundIncludeResolved, () => {
   if (selectedIntegration.value?.key !== 'email-provider') return;
   loadInboundDeadLetters();
 });
+
+watch(
+  () => emailConfig.value.provider,
+  (next, prev) => {
+    applyOciEmailDefaults({ providerJustChanged: next === 'oci-email-delivery' && prev !== 'oci-email-delivery' });
+  }
+);
+
+watch(
+  () => emailConfig.value.ociRegion,
+  () => {
+    if (emailConfig.value.provider === 'oci-email-delivery') {
+      applyOciEmailDefaults();
+    }
+  }
+);
 </script>

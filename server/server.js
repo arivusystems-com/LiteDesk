@@ -258,6 +258,12 @@ app.use('/api/modules', moduleRecordRoutes);
 app.use('/api/modules', moduleRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/public/forms', formRoutes); // Public form routes
+app.use('/api/public/book', require('./routes/publicBookingRoutes'));
+app.get(
+  '/api/appointments/calendar/google/callback',
+  require('./controllers/appointmentCalendarController').googleOAuthCallback
+);
+app.use('/api/appointments', require('./routes/appointmentRoutes'));
 app.use('/api/forms', formRoutes.protected); // Protected form routes
 app.use('/api/reports', reportRoutes);
 app.use('/api/items', itemRoutes);
@@ -266,6 +272,9 @@ app.use('/api/upload', uploadRoutes);
 
 // Inbox Routes (Cross-app attention surface)
 app.use('/api/inbox', inboxRoutes);
+
+// Platform home snapshot (landing page)
+app.use('/api/platform', require('./routes/platformHomeRoutes'));
 
 // Portal Application Routes (App #2)
 app.use('/portal', portalRoutes);

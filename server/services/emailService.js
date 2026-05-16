@@ -1,12 +1,12 @@
 /**
  * Email service - sends transactional and notification emails.
  * Supports provider-agnostic delivery via environment configuration.
- * Common setup: Resend over SMTP.
- * Optional: AWS SES when configured.
+ * Providers: Resend (SMTP/API), AWS SES, OCI Email Delivery (SMTP), generic SMTP.
  * Never throws; returns { success, messageId?, error? } for all operations.
  */
 
 const EMAIL_PROVIDER_KEY = 'email-provider';
+const ociEmailDelivery = require('./emailProviders/ociEmailDelivery');
 
 function isTruthy(value) {
   return String(value || '').toLowerCase() === 'true';
@@ -14,11 +14,12 @@ function isTruthy(value) {
 
 function resolveRuntimeConfig(config = {}) {
   const smtpPort = parseInt(config.smtpPort || process.env.SMTP_PORT || '0', 10);
-  return {
+  const base = {
     provider: config.provider || process.env.EMAIL_PROVIDER || '',
     fromEmail: config.fromEmail || process.env.EMAIL_FROM || '',
     fromName: config.fromName || process.env.EMAIL_FROM_NAME || 'Arivu Systems',
     replyTo: config.replyTo || process.env.EMAIL_REPLY_TO || '',
+    ociRegion: config.ociRegion || process.env.OCI_EMAIL_REGION || process.env.OCI_REGION || '',
     smtpHost: config.smtpHost || process.env.SMTP_HOST || '',
     smtpPort: Number.isNaN(smtpPort) ? 0 : smtpPort,
     smtpUser: config.smtpUser || process.env.SMTP_USER || '',
@@ -28,6 +29,24 @@ function resolveRuntimeConfig(config = {}) {
     awsAccessKeyId: config.awsAccessKeyId || process.env.AWS_SES_ACCESS_KEY_ID || '',
     awsSecretAccessKey: config.awsSecretAccessKey || process.env.AWS_SES_SECRET_ACCESS_KEY || '',
   };
+  return ociEmailDelivery.applyOciEmailDeliveryDefaults(base);
+}
+
+function normalizeProviderKey(runtimeConfig = {}) {
+  return String(runtimeConfig.provider || '').trim().toLowerCase();
+}
+
+function shouldUseSes(runtimeConfig = {}) {
+  const provider = normalizeProviderKey(runtimeConfig);
+  if (provider === 'aws-ses') return true;
+  if (provider === 'oci-email-delivery' || provider === 'oci' || provider === 'resend' || provider === 'smtp') {
+    return false;
+  }
+  return !!createSesClient(runtimeConfig);
+}
+
+function shouldUseOciSmtp(runtimeConfig = {}) {
+  return ociEmailDelivery.isOciEmailDeliveryProvider(runtimeConfig);
 }
 
 function resolveSafeReplyToAddress(value) {
@@ -64,10 +83,22 @@ function createSmtpTransport(runtimeConfig) {
   if (!runtimeConfig.smtpHost || !runtimeConfig.smtpPort) return null;
   try {
     const nodemailer = require('nodemailer');
+    const isOci = ociEmailDelivery.isOciEmailDeliveryProvider(runtimeConfig);
+    let port = runtimeConfig.smtpPort;
+    let secure = runtimeConfig.smtpSecure === true;
+    if (isOci) {
+      if (port === 587 || port === 25) {
+        port = ociEmailDelivery.DEFAULT_SMTP_PORT;
+      }
+      secure = port === 465;
+    } else if (port === 587 && secure) {
+      // STARTTLS on 587: do not open with implicit TLS (causes wrong version number).
+      secure = false;
+    }
     return nodemailer.createTransport({
       host: runtimeConfig.smtpHost,
-      port: runtimeConfig.smtpPort,
-      secure: runtimeConfig.smtpSecure,
+      port,
+      secure,
       auth: runtimeConfig.smtpUser && runtimeConfig.smtpPass
         ? { user: runtimeConfig.smtpUser, pass: runtimeConfig.smtpPass }
         : undefined,
@@ -104,7 +135,10 @@ function isConfigured() {
   if (process.env.ENABLE_EMAIL_NOTIFICATIONS === 'false') return false;
   const runtimeConfig = resolveRuntimeConfig();
   if (!runtimeConfig.fromEmail) return false;
-  if (createSesClient(runtimeConfig)) return true;
+  if (shouldUseOciSmtp(runtimeConfig) && ociEmailDelivery.isOciEmailDeliveryConfigured(runtimeConfig)) {
+    return true;
+  }
+  if (shouldUseSes(runtimeConfig) && createSesClient(runtimeConfig)) return true;
   return !!createSmtpTransport(runtimeConfig);
 }
 
@@ -113,7 +147,10 @@ async function isConfiguredForOrganization(organizationId) {
   const orgConfig = await getOrganizationEmailConfig(organizationId);
   const runtimeConfig = resolveRuntimeConfig(orgConfig || {});
   if (!runtimeConfig.fromEmail) return false;
-  if (createSesClient(runtimeConfig)) return true;
+  if (shouldUseOciSmtp(runtimeConfig) && ociEmailDelivery.isOciEmailDeliveryConfigured(runtimeConfig)) {
+    return true;
+  }
+  if (shouldUseSes(runtimeConfig) && createSesClient(runtimeConfig)) return true;
   return !!createSmtpTransport(runtimeConfig);
 }
 
@@ -182,33 +219,64 @@ async function sendEmail(opts) {
   const replyToAddr = resolveSafeReplyToAddress(replyTo || runtimeConfig.replyTo);
 
   const hasAttachments = attachments && attachments.length > 0;
+  const smtpProviderTag = shouldUseOciSmtp(runtimeConfig)
+    ? ociEmailDelivery.PROVIDER_KEY
+    : 'smtp';
+
+  const sendViaSmtp = async (transport) => {
+    const info = await transport.sendMail({
+      from,
+      to: toList,
+      subject,
+      text: text || (html ? html.replace(/<[^>]+>/g, '') : ''),
+      html: html || undefined,
+      replyTo: replyToAddr,
+      ...(hasAttachments
+        ? {
+            attachments: attachments.map((a) => ({
+              filename: a.filename || a.fileName || 'attachment',
+              content: a.content
+            }))
+          }
+        : {})
+    });
+    return { success: true, messageId: info.messageId, provider: smtpProviderTag };
+  };
 
   if (hasAttachments) {
     const transport = createSmtpTransport(runtimeConfig);
     if (!transport) {
-      return { success: false, error: 'Attachments require SMTP. Configure SMTP (e.g. Mailtrap) for attachment support.' };
+      return {
+        success: false,
+        error: 'Attachments require SMTP. Configure SMTP (e.g. Mailtrap or OCI Email Delivery) for attachment support.'
+      };
     }
     try {
-      const info = await transport.sendMail({
-        from,
-        to: toList,
-        subject,
-        text: text || (html ? html.replace(/<[^>]+>/g, '') : ''),
-        html: html || undefined,
-        replyTo: replyToAddr,
-        attachments: attachments.map((a) => ({
-          filename: a.filename || a.fileName || 'attachment',
-          content: a.content
-        }))
-      });
-      return { success: true, messageId: info.messageId, provider: 'smtp' };
+      return await sendViaSmtp(transport);
     } catch (err) {
       console.error('[emailService] SMTP send failed:', err.message);
       return { success: false, error: err.message };
     }
   }
 
-  const client = createSesClient(runtimeConfig);
+  if (shouldUseOciSmtp(runtimeConfig)) {
+    const transport = createSmtpTransport(runtimeConfig);
+    if (!transport) {
+      return {
+        success: false,
+        error:
+          'OCI Email Delivery is not configured. Set OCI_EMAIL_REGION (or smtpHost), SMTP user/password from OCI SMTP credentials, and an approved sender as From Email.'
+      };
+    }
+    try {
+      return await sendViaSmtp(transport);
+    } catch (err) {
+      console.error('[emailService] OCI Email Delivery SMTP send failed:', err.message);
+      return { success: false, error: err.message };
+    }
+  }
+
+  const client = shouldUseSes(runtimeConfig) ? createSesClient(runtimeConfig) : null;
   if (client) {
     try {
       const { SendEmailCommand } = require('@aws-sdk/client-ses');
@@ -235,15 +303,7 @@ async function sendEmail(opts) {
   const transport = createSmtpTransport(runtimeConfig);
   if (transport) {
     try {
-      const info = await transport.sendMail({
-        from,
-        to: toList,
-        subject,
-        text: text || (html ? html.replace(/<[^>]+>/g, '') : ''),
-        html: html || undefined,
-        replyTo: replyToAddr
-      });
-      return { success: true, messageId: info.messageId, provider: 'smtp' };
+      return await sendViaSmtp(transport);
     } catch (err) {
       console.error('[emailService] SMTP send failed:', err.message);
       const isDnsLookupError = /ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(String(err?.message || ''));
