@@ -38,6 +38,19 @@
     </div>
 
     <div
+      v-if="formResponseEntries.length"
+      class="mt-4 rounded-xl border border-gray-200/80 bg-white/80 p-3 dark:border-gray-700 dark:bg-gray-800/60"
+    >
+      <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Booking answers</p>
+      <dl class="mt-2 space-y-2">
+        <div v-for="row in formResponseEntries" :key="row.key" class="text-sm">
+          <dt class="text-gray-500">{{ row.label }}</dt>
+          <dd class="font-medium text-gray-900 dark:text-white">{{ row.value }}</dd>
+        </div>
+      </dl>
+    </div>
+
+    <div
       v-if="appointment.noShow"
       class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
     >
@@ -57,6 +70,23 @@
       >
         Join
       </a>
+      <button
+        v-if="canReschedule"
+        type="button"
+        class="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50 dark:border-indigo-700 dark:bg-gray-900 dark:text-indigo-300 dark:hover:bg-indigo-950/50"
+        @click="showRescheduleModal = true"
+      >
+        Reschedule
+      </button>
+      <button
+        v-if="canCopyGuestLink"
+        type="button"
+        class="rounded-xl border border-indigo-200 bg-white px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50 dark:border-indigo-700 dark:bg-gray-900 dark:text-indigo-300 dark:hover:bg-indigo-950/50"
+        :disabled="guestLinkLoading"
+        @click="copyGuestManageLink"
+      >
+        {{ guestLinkCopied ? 'Link copied' : guestLinkLoading ? 'Loading…' : 'Copy guest link' }}
+      </button>
       <button
         v-if="canComplete"
         type="button"
@@ -82,21 +112,38 @@
         Cancel appointment
       </button>
     </div>
+    <p v-if="guestLinkError" class="mt-2 text-sm text-red-600 dark:text-red-400">{{ guestLinkError }}</p>
+
+    <AppointmentRescheduleModal
+      v-if="eventId"
+      v-model:open="showRescheduleModal"
+      :event-id="eventId"
+      :guest-label="appointment?.bookedByName || appointment?.bookedByEmail || ''"
+      @rescheduled="$emit('rescheduled')"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import BadgeCell from '@/components/common/table/BadgeCell.vue';
+import AppointmentRescheduleModal from '@/components/appointments/AppointmentRescheduleModal.vue';
+import apiClient from '@/utils/apiClient';
 import { appointmentSourceLabel, appointmentTypeLabel } from '@/utils/appointmentFormatters';
 
 const props = defineProps({
   appointment: { type: Object, default: null },
   status: { type: String, default: '' },
-  canCancel: { type: Boolean, default: true }
+  canCancel: { type: Boolean, default: true },
+  eventId: { type: String, default: '' }
 });
 
-defineEmits(['cancel', 'complete', 'no-show']);
+defineEmits(['cancel', 'complete', 'no-show', 'rescheduled']);
+
+const showRescheduleModal = ref(false);
+const guestLinkLoading = ref(false);
+const guestLinkCopied = ref(false);
+const guestLinkError = ref('');
 
 const isPlanned = computed(() => props.status === 'Planned');
 const canComplete = computed(
@@ -108,6 +155,24 @@ const canMarkNoShow = computed(
 const canCancel = computed(
   () => props.canCancel && isPlanned.value && !props.appointment?.noShow
 );
+const canReschedule = computed(
+  () => isPlanned.value && !props.appointment?.noShow && !!props.eventId
+);
+const canCopyGuestLink = computed(
+  () => isPlanned.value && !props.appointment?.noShow && !!props.eventId
+);
+
+const formResponseEntries = computed(() => {
+  const responses = props.appointment?.formResponses;
+  if (!responses || typeof responses !== 'object') return [];
+  return Object.entries(responses)
+    .filter(([, v]) => v != null && String(v).trim() !== '')
+    .map(([key, value]) => ({
+      key,
+      label: key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+      value: String(value)
+    }));
+});
 
 function formatMarkedAt(iso) {
   try {
@@ -127,4 +192,27 @@ const publicBookUrl = computed(() => {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   return `${origin}/book/${props.appointment.publicPageSlug}`;
 });
+
+async function copyGuestManageLink() {
+  if (!props.eventId) return;
+  guestLinkError.value = '';
+  guestLinkCopied.value = false;
+  guestLinkLoading.value = true;
+  try {
+    const res = await apiClient.get(`/appointments/events/${props.eventId}/guest-link`);
+    if (!res.success || !res.data?.manageUrl) {
+      guestLinkError.value = res.message || 'Could not load guest link';
+      return;
+    }
+    await navigator.clipboard.writeText(res.data.manageUrl);
+    guestLinkCopied.value = true;
+    setTimeout(() => {
+      guestLinkCopied.value = false;
+    }, 2500);
+  } catch (e) {
+    guestLinkError.value = e?.message || 'Could not copy guest link';
+  } finally {
+    guestLinkLoading.value = false;
+  }
+}
 </script>

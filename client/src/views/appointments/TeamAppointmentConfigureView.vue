@@ -1,6 +1,12 @@
 <template>
-  <div class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-indigo-50/30 dark:from-gray-950 dark:via-gray-900 dark:to-indigo-950/20">
-    <div class="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:py-10">
+  <div class="mx-auto w-full max-w-3xl">
+    <button
+      type="button"
+      class="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 transition hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400"
+      @click="goToPagesHub"
+    >
+      ← Booking Pages
+    </button>
       <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p class="text-sm font-medium text-indigo-600 dark:text-indigo-400">Team booking</p>
@@ -71,7 +77,10 @@
 
         <section class="rounded-2xl border border-gray-200/80 bg-white p-6 shadow-sm dark:border-gray-700/80 dark:bg-gray-900/80">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Team members</h2>
-          <p class="mt-1 text-sm text-gray-500">Only selected members can receive bookings from this page.</p>
+          <p class="mt-1 text-sm text-gray-500">
+            Only selected members can receive bookings from this page. Each member’s personal booking page
+            calendar connection (Google or Microsoft, matching the meeting format below) is used to hide busy times.
+          </p>
           <div v-if="usersLoading" class="mt-4 text-sm text-gray-500">Loading users…</div>
           <div v-else class="mt-4 max-h-64 space-y-2 overflow-y-auto">
             <label
@@ -135,6 +144,8 @@
           </div>
         </section>
 
+        <AppointmentCustomFieldsEditor v-model="form.customFields" />
+
         <section class="rounded-2xl border border-gray-200/80 bg-white p-6 shadow-sm dark:border-gray-700/80 dark:bg-gray-900/80">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Branding</h2>
           <div class="mt-4">
@@ -156,8 +167,9 @@
           <p class="text-sm font-medium text-indigo-900 dark:text-indigo-200">Team booking link</p>
           <a :href="bookingUrl" target="_blank" rel="noopener" class="mt-1 block truncate text-sm text-indigo-600 hover:underline dark:text-indigo-400">{{ bookingUrl }}</a>
         </div>
+
+        <AppointmentEmbedSnippet v-if="form.slug" :slug="form.slug" />
       </div>
-    </div>
   </div>
 </template>
 
@@ -165,6 +177,7 @@
 import { reactive, ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
+import { useTabs } from '@/composables/useTabs';
 import { useNotifications } from '@/composables/useNotifications';
 import {
   DAY_LABELS,
@@ -172,10 +185,18 @@ import {
   BUFFER_OPTIONS,
   slugifyClient
 } from '@/utils/appointmentFormatters';
+import AppointmentCustomFieldsEditor from '@/components/appointments/AppointmentCustomFieldsEditor.vue';
+import AppointmentEmbedSnippet from '@/components/appointments/AppointmentEmbedSnippet.vue';
 
 const route = useRoute();
 const router = useRouter();
+const { openTab } = useTabs();
 const { success: notifySuccess } = useNotifications();
+
+function goToPagesHub() {
+  openTab('/appointments/pages', { title: 'Booking Pages', icon: '📅' });
+  router.push({ name: 'appointments-pages' });
+}
 
 const teamId = computed(() => route.params.id || null);
 const isEdit = computed(() => !!teamId.value);
@@ -200,6 +221,7 @@ const form = reactive({
   bufferMinutes: 10,
   meetingType: 'offline',
   appointmentTypes: ['demo', 'consultation'],
+  customFields: [],
   branding: { themeColor: '#4f46e5', welcomeNote: '', logoUrl: '' }
 });
 
@@ -279,6 +301,7 @@ async function loadTeam() {
         bufferMinutes: res.data.bufferMinutes ?? 10,
         meetingType: res.data.meetingType || 'offline',
         appointmentTypes: res.data.appointmentTypes || ['demo', 'consultation'],
+        customFields: (res.data.customFields || []).map((f) => ({ ...f, options: [...(f.options || [])] })),
         branding: { ...form.branding, ...(res.data.branding || {}) }
       });
     }

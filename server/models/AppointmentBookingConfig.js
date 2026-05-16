@@ -95,6 +95,11 @@ const appointmentBookingConfigSchema = new Schema({
     accountEmail: { type: String, default: '', trim: true, lowercase: true },
     connectedAt: { type: Date, default: null }
   },
+  microsoftCalendar: {
+    encryptedRefreshToken: { type: String, default: '' },
+    accountEmail: { type: String, default: '', trim: true, lowercase: true },
+    connectedAt: { type: Date, default: null }
+  },
   createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   modifiedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true }
 }, {

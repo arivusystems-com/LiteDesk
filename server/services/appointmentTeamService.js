@@ -1,33 +1,85 @@
 const Event = require('../models/Event');
 const User = require('../models/User');
 const { generateDaySlots } = require('./appointmentAvailabilityService');
+const { getMemberExternalBusy, slotOverlapsBusyIntervals } = require('./appointmentExternalCalendarService');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-async function memberHasConflict(organizationId, memberId, start, end) {
-  const conflict = await Event.findOne({
+/** Per-request cache: memberId -> busy intervals for the day */
+const memberExternalBusyCache = new Map();
+
+async function getMemberExternalBusyForRange(
+  organizationId,
+  memberId,
+  rangeStart,
+  rangeEnd,
+  teamMeetingType
+) {
+  const key = `${organizationId}:${memberId}:${rangeStart.toISOString()}:${teamMeetingType || ''}`;
+  if (memberExternalBusyCache.has(key)) return memberExternalBusyCache.get(key);
+
+  const intervals = await getMemberExternalBusy(
+    organizationId,
+    memberId,
+    rangeStart,
+    rangeEnd,
+    teamMeetingType
+  );
+  memberExternalBusyCache.set(key, intervals);
+  return intervals;
+}
+
+async function memberHasConflict(
+  organizationId,
+  memberId,
+  start,
+  end,
+  externalBusyForDay,
+  teamMeetingType,
+  excludeEventId = null
+) {
+  const conflictQuery = {
     organizationId,
     eventOwnerId: memberId,
     deletedAt: null,
     status: { $ne: 'Cancelled' },
     startDateTime: { $lt: end },
     endDateTime: { $gt: start }
-  })
-    .select('_id')
-    .lean();
-  return !!conflict;
+  };
+  if (excludeEventId) conflictQuery._id = { $ne: excludeEventId };
+  const conflict = await Event.findOne(conflictQuery).select('_id').lean();
+  if (conflict) return true;
+
+  const busy =
+    externalBusyForDay ??
+    (await getMemberExternalBusyForRange(
+      organizationId,
+      memberId,
+      new Date(start.getTime() - DAY_MS),
+      new Date(end.getTime() + DAY_MS),
+      teamMeetingType
+    ));
+  return slotOverlapsBusyIntervals(start, end, busy);
 }
 
 /**
  * Members free for a given slot window.
  */
-async function getAvailableMembersForSlot(teamConfig, start, end) {
+async function getAvailableMembersForSlot(teamConfig, start, end, dayExternalBusyByMember) {
   const members = (teamConfig.memberUserIds || []).map((id) => String(id));
   if (!members.length) return [];
 
   const available = [];
   for (const memberId of members) {
-    const busy = await memberHasConflict(teamConfig.organizationId, memberId, start, end);
+    const externalBusy = dayExternalBusyByMember?.get(memberId);
+    const busy = await memberHasConflict(
+      teamConfig.organizationId,
+      memberId,
+      start,
+      end,
+      externalBusy,
+      teamConfig.meetingType
+    );
     if (!busy) available.push(memberId);
   }
   return available;
@@ -42,7 +94,7 @@ async function getTeamSlotsForDate(teamConfig, dateStr) {
     throw new Error('Invalid date');
   }
 
-  const members = teamConfig.memberUserIds || [];
+  const members = (teamConfig.memberUserIds || []).map((id) => String(id));
   if (!members.length) return [];
 
   const now = new Date();
@@ -51,12 +103,33 @@ async function getTeamSlotsForDate(teamConfig, dateStr) {
   if (!availableDays.has(dayOfWeek)) return [];
 
   const dayStart = new Date(day);
+  const dayEnd = new Date(day.getTime() + DAY_MS);
   const rawSlots = generateDaySlots(teamConfig, dayStart);
   const results = [];
 
+  memberExternalBusyCache.clear();
+  const dayExternalBusyByMember = new Map();
+  await Promise.all(
+    members.map(async (memberId) => {
+      const busy = await getMemberExternalBusyForRange(
+        teamConfig.organizationId,
+        memberId,
+        dayStart,
+        dayEnd,
+        teamConfig.meetingType
+      );
+      dayExternalBusyByMember.set(memberId, busy);
+    })
+  );
+
   for (const slot of rawSlots) {
     if (slot.start < now) continue;
-    const freeMembers = await getAvailableMembersForSlot(teamConfig, slot.start, slot.end);
+    const freeMembers = await getAvailableMembersForSlot(
+      teamConfig,
+      slot.start,
+      slot.end,
+      dayExternalBusyByMember
+    );
     if (freeMembers.length > 0) {
       results.push({
         start: slot.start.toISOString(),

@@ -42,6 +42,7 @@
         <option value="people">People</option>
         <option value="organization">Organization</option>
         <option value="deal">Deal</option>
+        <option value="events">Events / Appointments</option>
       </select>
       <select
         v-model="filters.enabled"

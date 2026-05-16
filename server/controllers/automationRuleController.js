@@ -12,6 +12,11 @@
 const AutomationRule = require('../models/AutomationRule');
 const { processEvent } = require('../services/automationEngine');
 const { createLogger } = require('../services/automationLogger');
+const {
+  CATEGORY_LABELS,
+  getEventMetadata,
+  buildPreviewTestEvent
+} = require('../constants/automationEventMetadata');
 
 const log = createLogger('automationRuleController');
 
@@ -437,18 +442,12 @@ exports.previewRule = async (req, res) => {
     }
     
     // Build test event if not provided
-    const event = testEvent || {
-      eventId: 'preview-' + Date.now(),
-      entityType: rule.entityType || 'deal',
-      entityId: '507f1f77bcf86cd799439011',
-      eventType: rule.trigger.eventType,
-      previousState: rule.trigger.condition?.['previousState.stage'] ? { stage: 'Proposal' } : null,
-      currentState: rule.trigger.condition?.['currentState.stage'] ? { stage: rule.trigger.condition['currentState.stage'] } : { stage: 'Closed Won' },
-      appKey: rule.appKey || 'SALES',
-      organizationId: req.user.organizationId || null,
-      triggeredBy: req.user._id || null,
-      ownerId: null
-    };
+    const event =
+      testEvent ||
+      buildPreviewTestEvent(rule, {
+        organizationId: req.user.organizationId,
+        userId: req.user._id
+      });
     
     // Temporarily create the rule in DB for preview (then delete it)
     let tempRuleId = null;
@@ -503,10 +502,18 @@ exports.previewRule = async (req, res) => {
 exports.getEventTypes = async (req, res) => {
   res.json({
     success: true,
-    data: DOMAIN_EVENT_TYPES.map(type => ({
-      value: type,
-      label: type.replace(/\./g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-    }))
+    data: DOMAIN_EVENT_TYPES.map((type) => {
+      const meta = getEventMetadata(type);
+      return {
+        value: type,
+        label: meta.label,
+        category: meta.category,
+        categoryLabel: CATEGORY_LABELS[meta.category] || 'Other',
+        suggestedEntityType: meta.suggestedEntityType,
+        conditionFields: meta.conditionFields
+      };
+    }),
+    categories: CATEGORY_LABELS
   });
 };
 

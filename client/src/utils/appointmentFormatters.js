@@ -63,3 +63,20 @@ export function appointmentTypeLabel(type) {
   const found = APPOINTMENT_TYPE_OPTIONS.find((o) => o.value === type);
   return found?.label || type || '—';
 }
+
+/** Public booking page URL (standalone or embed). */
+export function buildBookingPageUrl(slug, { embed = false, origin } = {}) {
+  const base = (origin || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
+  const path = embed ? `/book/${slug}/embed` : `/book/${slug}`;
+  return `${base}${path}`;
+}
+
+export function buildBookingIframeSnippet(slug, { height = 720, origin } = {}) {
+  const url = buildBookingPageUrl(slug, { embed: true, origin });
+  return `<iframe src="${url}" title="Book an appointment" width="100%" height="${height}" frameborder="0" style="border:0;border-radius:12px;max-width:480px;" allow="clipboard-write"></iframe>`;
+}
+
+export function buildBookingScriptSnippet(slug, { height = 720, origin } = {}) {
+  const base = (origin || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
+  return `<div id="litedesk-booking" data-slug="${slug}" data-height="${height}"></div>\n<script src="${base}/embed/booking.js" async><\/script>`;
+}

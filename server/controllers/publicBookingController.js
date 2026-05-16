@@ -3,6 +3,7 @@ const User = require('../models/User');
 const { getSlotsForDate } = require('../services/appointmentAvailabilityService');
 const { getTeamSlotsForDate, loadTeamMembersPublic, pickTeamAssignee } = require('../services/appointmentTeamService');
 const { bookAppointment } = require('../services/appointmentBookingService');
+const { buildManageUrl } = require('../utils/appointmentManageToken');
 
 function publicConfigPayload(config, host, extras = {}) {
   return {
@@ -161,6 +162,10 @@ exports.submitBooking = async (req, res) => {
       assigneeUserId
     });
 
+    const manageUrl = event.appointment?.manageToken
+      ? buildManageUrl(event.appointment.manageToken)
+      : null;
+
     res.status(201).json({
       success: true,
       data: {
@@ -168,6 +173,7 @@ exports.submitBooking = async (req, res) => {
         eventName: event.eventName,
         startDateTime: event.startDateTime,
         endDateTime: event.endDateTime,
+        manageUrl,
         message: 'Your appointment is confirmed.'
       }
     });

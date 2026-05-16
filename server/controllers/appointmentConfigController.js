@@ -1,6 +1,7 @@
 const AppointmentBookingConfig = require('../models/AppointmentBookingConfig');
 const User = require('../models/User');
 const { slugifyBase, ensureUniqueSlug } = require('../utils/appointmentSlug');
+const { normalizeCustomFields } = require('../utils/appointmentCustomFields');
 
 function sanitizeConfigBody(body) {
   const allowed = [
@@ -15,6 +16,9 @@ function sanitizeConfigBody(body) {
   if (out.slug) {
     out.slug = slugifyBase(out.slug);
   }
+  if (out.customFields !== undefined) {
+    out.customFields = normalizeCustomFields(out.customFields);
+  }
   return out;
 }
 
@@ -28,6 +32,15 @@ function toPublicConfig(doc, req) {
     };
   } else if (base.googleCalendar) {
     base.googleCalendar = { connected: false, accountEmail: null, connectedAt: null };
+  }
+  if (base.microsoftCalendar?.encryptedRefreshToken) {
+    base.microsoftCalendar = {
+      accountEmail: base.microsoftCalendar.accountEmail,
+      connectedAt: base.microsoftCalendar.connectedAt,
+      connected: true
+    };
+  } else if (base.microsoftCalendar) {
+    base.microsoftCalendar = { connected: false, accountEmail: null, connectedAt: null };
   }
   const origin = req?.get?.('origin') || process.env.CLIENT_URL || '';
   const bookingUrl = origin
@@ -254,6 +267,38 @@ exports.listAllConfigs = async (req, res) => {
       data: configs.map((c) => toPublicConfig(c, req))
     });
   } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/** Booking pages visible to the current user (personal + team membership; admins see all). */
+exports.listMyPages = async (req, res) => {
+  try {
+    const organizationId = req.user.organizationId;
+    const userId = req.user._id;
+    const isAdmin =
+      req.user.isOwner || req.user.role === 'admin' || req.user.isPlatformAdmin;
+
+    const query = { organizationId };
+    if (!isAdmin) {
+      query.$or = [
+        { ownerType: 'user', ownerId: userId },
+        { ownerType: 'team', memberUserIds: userId }
+      ];
+    }
+
+    const configs = await AppointmentBookingConfig.find(query)
+      .populate('ownerId', 'firstName lastName email username avatar')
+      .populate('memberUserIds', 'firstName lastName email username avatar')
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      data: configs.map((c) => toPublicConfig(c, req))
+    });
+  } catch (error) {
+    console.error('[appointmentConfig] listMyPages:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

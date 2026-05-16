@@ -64,7 +64,7 @@
                   type="email"
                   required
                   class="block w-full mt-2 rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                  placeholder="recipient@example.com"
+                  placeholder="recipient@example.com (comma-separated for multiple)"
                 />
               </div>
 
@@ -259,7 +259,7 @@
               <button
                 type="submit"
                 class="rounded-md bg-indigo-600 dark:bg-indigo-500 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 dark:hover:bg-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                :disabled="!form.to || !form.subject"
+                :disabled="!toRecipients.length || !form.subject"
               >
                 Send
               </button>
@@ -272,7 +272,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { Listbox, ListboxButton, ListboxOptions, ListboxOption } from '@headlessui/vue';
 import { ChevronUpDownIcon, CheckIcon, XMarkIcon } from '@heroicons/vue/24/outline';
 import { useAuthStore } from '@/stores/authRegistry';
@@ -312,6 +312,15 @@ const error = ref(null);
 const attachments = ref([]);
 const uploading = ref(false);
 const fileInputRef = ref(null);
+
+function parseEmails(s) {
+  return (s || '')
+    .split(/[,;\s]+/)
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => e && e.includes('@'));
+}
+
+const toRecipients = computed(() => parseEmails(form.value.to));
 
 watch(() => props.initialTo, (val) => {
   form.value.to = val || '';
@@ -422,16 +431,16 @@ function handleSend() {
     return;
   }
 
-  const parseEmails = (s) =>
-    (s || '')
-      .split(/[,;\s]+/)
-      .map((e) => e.trim().toLowerCase())
-      .filter((e) => e && e.includes('@'));
+  const toList = parseEmails(form.value.to);
+  if (!toList.length) {
+    error.value = 'Add at least one valid recipient email';
+    return;
+  }
 
   if (props.standaloneMode) {
     const payload = {
       standalone: true,
-      to: [form.value.to.trim()],
+      to: toList,
       cc: parseEmails(form.value.cc),
       bcc: parseEmails(form.value.bcc),
       subject: form.value.subject.trim(),
@@ -452,7 +461,7 @@ function handleSend() {
 
   const payload = {
     relatedTo: props.relatedTo,
-    to: [form.value.to.trim()],
+    to: toList,
     cc: parseEmails(form.value.cc),
     bcc: parseEmails(form.value.bcc),
     subject: form.value.subject.trim(),

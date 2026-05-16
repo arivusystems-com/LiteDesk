@@ -1,6 +1,7 @@
 const AppointmentBookingConfig = require('../models/AppointmentBookingConfig');
 const User = require('../models/User');
 const { slugifyBase, ensureUniqueSlug } = require('../utils/appointmentSlug');
+const { normalizeCustomFields } = require('../utils/appointmentCustomFields');
 
 function sanitizeTeamBody(body) {
   const allowed = [
@@ -15,6 +16,9 @@ function sanitizeTeamBody(body) {
   if (out.slug) out.slug = slugifyBase(out.slug);
   if (Array.isArray(out.memberUserIds)) {
     out.memberUserIds = [...new Set(out.memberUserIds.map(String))];
+  }
+  if (out.customFields !== undefined) {
+    out.customFields = normalizeCustomFields(out.customFields);
   }
   return out;
 }

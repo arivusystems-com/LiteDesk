@@ -23,6 +23,8 @@
     "migrate:task-home-summary-index": "node migrations/addTaskHomeSummaryIndex.js",
     "backfill:people-org-links": "node scripts/backfillPeopleOrganizationLinks.js",
     "backfill:people-org-links:apply": "node scripts/backfillPeopleOrganizationLinks.js --apply",
+    "backfill:appointment-manage-tokens": "node scripts/backfillAppointmentManageTokens.js",
+    "backfill:appointment-manage-tokens:dry-run": "node scripts/backfillAppointmentManageTokens.js --dry-run",
     "seed:internal-beta": "node scripts/seedInternalBetaData.js",
     "start": "node server.js",
     "worker": "node worker.js",

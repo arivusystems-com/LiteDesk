@@ -1,13 +1,20 @@
 <template>
   <div
-    class="min-h-screen"
+    ref="rootEl"
+    :class="isEmbed ? 'booking-embed-surface min-h-0 bg-gray-50' : 'min-h-screen'"
     :style="pageStyle"
   >
-    <div class="mx-auto flex min-h-screen max-w-lg flex-col px-4 py-10 sm:px-6">
+    <div
+      class="mx-auto flex max-w-lg flex-col px-4 sm:px-6"
+      :class="isEmbed ? 'py-4' : 'min-h-screen py-10'"
+    >
       <!-- Loading -->
       <div v-if="loading" class="flex flex-1 flex-col items-center justify-center gap-4">
-        <div class="h-11 w-11 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-        <p class="text-sm text-white/80">Loading calendar…</p>
+        <div
+          class="h-11 w-11 animate-spin rounded-full border-2"
+          :class="isEmbed ? 'border-gray-300 border-t-indigo-600' : 'border-white/30 border-t-white'"
+        ></div>
+        <p class="text-sm" :class="isEmbed ? 'text-gray-500' : 'text-white/80'">Loading calendar…</p>
       </div>
 
       <!-- Error -->
@@ -36,14 +43,23 @@
             <p class="text-indigo-600 dark:text-indigo-400">
               {{ formatSlotTime(confirmation.startDateTime) }} – {{ formatSlotTime(confirmation.endDateTime) }}
             </p>
-            <p class="mt-6 text-sm text-gray-500">A confirmation has been sent to your email.</p>
+            <p class="mt-6 text-sm text-gray-500">
+              A confirmation has been sent to your email. You'll get a reminder before your appointment.
+            </p>
+            <a
+              v-if="confirmation.manageUrl"
+              :href="confirmation.manageUrl"
+              class="mt-4 inline-block text-sm font-medium text-indigo-600 underline"
+            >
+              Reschedule or cancel
+            </a>
           </div>
       </div>
 
       <!-- Booking flow -->
       <template v-else-if="page">
         <!-- Host card -->
-        <header class="mb-8 text-center text-white">
+        <header class="mb-8 text-center" :class="isEmbed ? 'text-gray-900' : 'text-white'">
           <div
             v-if="page.isTeam && page.members?.length"
             class="mx-auto mb-4 flex h-20 items-center justify-center"
@@ -51,7 +67,10 @@
             <div
               v-for="(m, i) in page.members.slice(0, 4)"
               :key="m.id || i"
-              class="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border-2 border-white/40 bg-white/20 text-lg font-bold ring-2 ring-white/30"
+              class="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border-2 text-lg font-bold ring-2"
+              :class="isEmbed
+                ? 'border-gray-200 bg-gray-100 text-gray-800 ring-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:ring-gray-700'
+                : 'border-white/40 bg-white/20 ring-white/30'"
               :style="{ marginLeft: i > 0 ? '-12px' : '0', zIndex: 10 - i }"
             >
               <img v-if="m.avatar" :src="m.avatar" alt="" class="h-full w-full object-cover" />
@@ -60,19 +79,32 @@
           </div>
           <div
             v-else-if="page.host?.avatar"
-            class="mx-auto mb-4 h-20 w-20 overflow-hidden rounded-full ring-4 ring-white/30"
+            class="mx-auto mb-4 h-20 w-20 overflow-hidden rounded-full ring-4"
+            :class="isEmbed ? 'ring-gray-200 dark:ring-gray-700' : 'ring-white/30'"
           >
             <img :src="page.host.avatar" alt="" class="h-full w-full object-cover" />
           </div>
           <div
             v-else
-            class="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-white/20 text-2xl font-bold ring-4 ring-white/30"
+            class="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full text-2xl font-bold ring-4"
+            :class="isEmbed
+              ? 'bg-[var(--accent)]/15 text-[var(--accent)] ring-[var(--accent)]/25 dark:bg-[var(--accent)]/25 dark:text-indigo-200 dark:ring-[var(--accent)]/40'
+              : 'bg-white/20 ring-white/30'"
           >
             {{ hostInitial }}
           </div>
           <h1 class="text-2xl font-bold tracking-tight">{{ page.displayName || page.host?.name }}</h1>
-          <p v-if="page.isTeam" class="mt-1 text-sm text-white/75">Book with our team</p>
-          <p class="mt-2 text-sm text-white/85 max-w-md mx-auto leading-relaxed">
+          <p
+            v-if="page.isTeam"
+            class="mt-1 text-sm"
+            :class="isEmbed ? 'text-gray-500 dark:text-gray-400' : 'text-white/75'"
+          >
+            Book with our team
+          </p>
+          <p
+            class="mt-2 max-w-md mx-auto text-sm leading-relaxed"
+            :class="isEmbed ? 'text-gray-600 dark:text-gray-400' : 'text-white/85'"
+          >
             {{ page.branding?.welcomeNote || 'Select a time for our meeting.' }}
           </p>
         </header>
@@ -83,11 +115,19 @@
             v-for="(label, i) in stepLabels"
             :key="label"
             class="h-1.5 rounded-full transition-all duration-300"
-            :class="i <= stepIndex ? 'w-8 bg-white' : 'w-4 bg-white/35'"
+            :class="[
+              i <= stepIndex ? 'w-8' : 'w-4',
+              isEmbed
+                ? (i <= stepIndex ? 'bg-[var(--accent)]' : 'bg-gray-300 dark:bg-gray-600')
+                : (i <= stepIndex ? 'bg-white' : 'bg-white/35')
+            ]"
           />
         </div>
 
-        <div class="flex-1 rounded-2xl bg-white shadow-2xl dark:bg-gray-900">
+        <div
+          class="flex-1 rounded-2xl bg-white"
+          :class="isEmbed ? 'shadow-md ring-1 ring-gray-200/80' : 'shadow-2xl dark:bg-gray-900'"
+        >
           <!-- Step 0: Type -->
           <div v-show="step === 'type'" class="p-6 sm:p-8">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">What would you like to discuss?</h2>
@@ -133,7 +173,7 @@
 
             <h3 class="mt-6 text-sm font-semibold text-gray-700 dark:text-gray-300">Available times</h3>
             <div v-if="slotsLoading" class="mt-4 flex justify-center py-8">
-              <div class="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-[var(--accent)]" />
+              <div class="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-[var(--accent)]"></div>
             </div>
             <p v-else-if="!slots.length" class="mt-4 text-sm text-gray-500">No times available this day. Try another date.</p>
             <div v-else class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -195,17 +235,27 @@
               </div>
               <div v-for="field in page.customFields" :key="field.key">
                 <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ field.label }}{{ field.required ? ' *' : '' }}</label>
-                <input
-                  v-if="field.type !== 'textarea'"
-                  v-model="formResponses[field.key]"
-                  :required="field.required"
-                  class="field-input mt-1"
-                />
                 <textarea
-                  v-else
+                  v-if="field.type === 'textarea'"
                   v-model="formResponses[field.key]"
                   :required="field.required"
                   rows="3"
+                  class="field-input mt-1"
+                />
+                <select
+                  v-else-if="field.type === 'select'"
+                  v-model="formResponses[field.key]"
+                  :required="field.required"
+                  class="field-input mt-1"
+                >
+                  <option value="" disabled>{{ field.required ? 'Select…' : 'Optional' }}</option>
+                  <option v-for="opt in field.options || []" :key="opt" :value="opt">{{ opt }}</option>
+                </select>
+                <input
+                  v-else
+                  v-model="formResponses[field.key]"
+                  :type="field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : 'text'"
+                  :required="field.required"
                   class="field-input mt-1"
                 />
               </div>
@@ -222,14 +272,14 @@
           </div>
         </div>
 
-        <p class="mt-6 text-center text-xs text-white/60">Powered by your CRM</p>
+        <p v-if="!isEmbed" class="mt-6 text-center text-xs text-white/60">Powered by your CRM</p>
       </template>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import {
   CalendarDaysIcon,
@@ -244,6 +294,9 @@ import {
 
 const route = useRoute();
 const slug = computed(() => route.params.slug);
+const isEmbed = computed(() => route.meta.embed === true);
+const rootEl = ref(null);
+let resizeObserver = null;
 
 const loading = ref(true);
 const loadError = ref(null);
@@ -265,10 +318,30 @@ const stepLabels = ['Type', 'Time', 'Details'];
 const stepIndex = computed(() => ({ type: 0, schedule: 1, details: 2 }[step.value] ?? 0));
 
 const accent = computed(() => page.value?.branding?.themeColor || '#4f46e5');
-const pageStyle = computed(() => ({
-  background: `linear-gradient(165deg, ${accent.value} 0%, ${adjustColor(accent.value, -40)} 45%, #0f172a 100%)`,
-  '--accent': accent.value
-}));
+const pageStyle = computed(() => {
+  if (isEmbed.value) {
+    return { '--accent': accent.value };
+  }
+  return {
+    background: `linear-gradient(165deg, ${accent.value} 0%, ${adjustColor(accent.value, -40)} 45%, #0f172a 100%)`,
+    '--accent': accent.value
+  };
+});
+
+function notifyEmbedHeight() {
+  if (!isEmbed.value || typeof window === 'undefined' || window.parent === window) return;
+  const height = Math.ceil(document.documentElement.scrollHeight);
+  window.parent.postMessage({ type: 'litedesk-booking-resize', height }, '*');
+}
+
+function setupEmbedResize() {
+  if (!isEmbed.value) return;
+  notifyEmbedHeight();
+  if (typeof ResizeObserver !== 'undefined' && rootEl.value) {
+    resizeObserver = new ResizeObserver(() => notifyEmbedHeight());
+    resizeObserver.observe(rootEl.value);
+  }
+}
 
 const hostInitial = computed(() => {
   const n = page.value?.displayName || page.value?.host?.name || '?';
@@ -394,13 +467,26 @@ async function submitBooking() {
 }
 
 watch(slug, fetchPage);
+watch([loading, step, confirmed, page], () => {
+  nextTick(() => notifyEmbedHeight());
+});
+
 onMounted(() => {
   fetchPage();
   if (dateOptions.value.length) selectedDate.value = dateOptions.value[0].key;
+  nextTick(() => setupEmbedResize());
+});
+
+onUnmounted(() => {
+  resizeObserver?.disconnect();
 });
 </script>
 
 <style scoped>
+.booking-embed-surface {
+  color-scheme: light;
+}
+
 .field-input {
   width: 100%;
   border-radius: 0.75rem;

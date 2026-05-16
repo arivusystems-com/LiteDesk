@@ -166,7 +166,7 @@ function openSettings() {
   go(() => openTab('/settings', { title: 'Settings' }));
 }
 function openAppointments() {
-  go(() => openTab('/appointments/configure', { title: 'My Appointments', icon: '📅' }));
+  go(() => openTab('/appointments/pages', { title: 'Booking Pages', icon: '📅' }));
 }
 function openTrash() {
   go(() => router.push('/trash'));
@@ -449,7 +449,7 @@ function chooseStatus(typeId) {
           @click="openAppointments"
         >
           <CalendarDaysIcon class="h-5 w-5 text-gray-400 dark:text-gray-500" />
-          My Appointments
+          Booking Pages
         </button>
         <button
           v-if="canViewSettings"

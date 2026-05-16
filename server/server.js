@@ -259,9 +259,14 @@ app.use('/api/modules', moduleRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/public/forms', formRoutes); // Public form routes
 app.use('/api/public/book', require('./routes/publicBookingRoutes'));
+app.use('/api/public/appointments/manage', require('./routes/publicAppointmentManageRoutes'));
 app.get(
   '/api/appointments/calendar/google/callback',
   require('./controllers/appointmentCalendarController').googleOAuthCallback
+);
+app.get(
+  '/api/appointments/calendar/microsoft/callback',
+  require('./controllers/appointmentCalendarController').microsoftOAuthCallback
 );
 app.use('/api/appointments', require('./routes/appointmentRoutes'));
 app.use('/api/forms', formRoutes.protected); // Protected form routes
