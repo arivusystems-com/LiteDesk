@@ -38,7 +38,11 @@ class DatabaseConnectionManager {
     
     // Extract base URI from environment or use the one set from server.js
     if (!this.baseMongoUri) {
-      const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI;
+      const { getMongoUris } = require('../lib/mongoConnect');
+      const MONGO_URI =
+        process.env.MONGODB_URI ||
+        process.env.MONGO_URI ||
+        getMongoUris().MONGO_URI;
       if (MONGO_URI) {
         // Extract base URI (without database name)
         const [uriWithoutQuery, queryPart] = MONGO_URI.split('?');
@@ -106,11 +110,19 @@ class DatabaseConnectionManager {
       }
       console.log(`🔌 Connecting to organization database: ${orgUri}`);
       
-      const connection = await mongoose.createConnection(orgUri, {
+      const connection = mongoose.createConnection(orgUri, {
         maxPoolSize: 10,
         serverSelectionTimeoutMS: 10000, // Increased timeout
       });
-      
+      if (typeof connection.asPromise === 'function') {
+        await connection.asPromise();
+      } else if (connection.readyState !== 1) {
+        await new Promise((resolve, reject) => {
+          connection.once('open', resolve);
+          connection.once('error', reject);
+        });
+      }
+
       // Cache the connection
       this.organizationConnections.set(databaseName, connection);
       
@@ -129,9 +141,12 @@ class DatabaseConnectionManager {
    * @returns {Promise<object>} - Database creation result
    */
   async createOrganizationDatabase(databaseName, adminUri = null) {
-    const adminConnectionString = adminUri || process.env.MONGODB_ADMIN_URI || 
-      process.env.MONGODB_URI || process.env.MONGO_URI;
-    
+    await this.initializeMasterConnection();
+    const adminConnectionString =
+      adminUri ||
+      process.env.MONGODB_ADMIN_URI ||
+      `${this.baseMongoUri}/${this.masterDbName}${this.connectionQuery}`;
+
     const client = new MongoClient(adminConnectionString);
     
     try {
@@ -167,7 +182,13 @@ class DatabaseConnectionManager {
    */
   async initializeOrganizationDatabase(databaseName) {
     const connection = await this.getOrganizationConnection(databaseName);
+    if (connection.readyState !== 1 && typeof connection.asPromise === 'function') {
+      await connection.asPromise();
+    }
     const db = connection.db;
+    if (!db) {
+      throw new Error(`Database handle unavailable for ${databaseName}`);
+    }
     
     console.log(`🔧 Initializing database schema for ${databaseName}...`);
     

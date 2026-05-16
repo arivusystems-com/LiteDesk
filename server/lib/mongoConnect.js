@@ -26,7 +26,12 @@ function getMongoUris() {
 
   const [mongoUriWithoutQuery, mongoUriQueryPart] = MONGO_URI.split('?');
   const mongoQueryString = mongoUriQueryPart ? `?${mongoUriQueryPart}` : '';
-  const baseUri = mongoUriWithoutQuery.split('/').slice(0, -1).join('/');
+  const pathParts = mongoUriWithoutQuery.split('/');
+  // mongodb://host:port or mongodb+srv://cluster — no DB in path; mongodb://host/db has one
+  const hasDbInPath = pathParts.length > 3 && Boolean(pathParts[3]);
+  const baseUri = hasDbInPath
+    ? pathParts.slice(0, -1).join('/')
+    : mongoUriWithoutQuery.replace(/\/$/, '');
   const masterUri = `${baseUri}/${MASTER_DB}${mongoQueryString}`;
 
   return { MONGO_URI, mongoQueryString, baseUri, masterUri, masterDbName: MASTER_DB };

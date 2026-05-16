@@ -30,7 +30,7 @@ const tenantContext = async (req, res, next) => {
         const dedicatedInitialized = organization?.database?.initialized;
 
         if (!organization || !dedicatedDbName || !dedicatedInitialized) {
-            // No tenant DB - leave context empty so tenant models fall back to master.
+            // No tenant DB — tenant models use master (arivu_master).
             return next();
         }
 

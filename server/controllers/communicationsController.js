@@ -171,6 +171,7 @@ exports.sendEmail = async (req, res) => {
         message: 'Outbound email is disabled by communication policy for this tenant.'
       });
     }
+
     if (outboundPolicy.requireIdempotencyKey && !idempotencyKey) {
       return res.status(400).json({
         success: false,
