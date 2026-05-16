@@ -21,8 +21,67 @@
 const Task = require('../models/Task');
 const Event = require('../models/Event');
 const Organization = require('../models/Organization');
+const People = require('../models/People');
+const Deal = require('../models/Deal');
 const FormResponse = require('../models/FormResponse');
 const mongoose = require('mongoose');
+
+/** Map relatedTo.type → model (refPath uses type as model name; "none" must not be populated). */
+const TASK_RELATED_TO_MODEL_MAP = {
+  contact: { model: People, displayFields: ['first_name', 'last_name'] },
+  deal: { model: Deal, displayFields: ['name'] },
+  organization: { model: Organization, displayFields: ['name'] },
+  project: null
+};
+
+async function populateTaskRelatedToNames(tasks) {
+  if (!tasks?.length) return;
+
+  const idsByType = { contact: [], deal: [], organization: [], project: [] };
+  for (const task of tasks) {
+    const rt = task?.relatedTo;
+    if (!rt || rt.type === 'none' || !rt.id) continue;
+    const type = String(rt.type || '').toLowerCase();
+    const id = rt.id && typeof rt.id === 'object' ? rt.id._id : rt.id;
+    if (id && idsByType[type]) idsByType[type].push(id);
+  }
+
+  const idToName = new Map();
+  for (const [type, ids] of Object.entries(idsByType)) {
+    if (ids.length === 0) continue;
+    const config = TASK_RELATED_TO_MODEL_MAP[type];
+    if (!config?.model) continue;
+    const uniqueIds = [...new Set(ids.map((id) => String(id)))].filter(Boolean);
+    if (uniqueIds.length === 0) continue;
+    const docs = await config.model
+      .find({ _id: { $in: uniqueIds } })
+      .select(config.displayFields.join(' '))
+      .lean();
+    for (const doc of docs) {
+      const id = doc._id?.toString?.() || doc._id;
+      let name = '';
+      if (config.displayFields.includes('first_name') || config.displayFields.includes('last_name')) {
+        const first = doc.first_name || '';
+        const last = doc.last_name || '';
+        name = `${first} ${last}`.trim() || doc.name || doc.title || '';
+      } else {
+        name = doc.name || doc.title || '';
+      }
+      if (name) idToName.set(id, name);
+    }
+  }
+
+  for (const task of tasks) {
+    const rt = task.relatedTo;
+    if (!rt || rt.type === 'none' || !rt.id) continue;
+    const id = rt.id && typeof rt.id === 'object' ? rt.id._id : rt.id;
+    const idStr = id?.toString?.() || id;
+    const name = idToName.get(idStr);
+    if (name) {
+      task.relatedTo = { ...rt, name };
+    }
+  }
+}
 
 // ============================================================================
 // TIME RELEVANCE WINDOWS (UX-Driven)
@@ -76,9 +135,10 @@ async function fetchInboxTasks(userId, organizationId) {
       { dueDate: null } // No due date (include for now, will filter later)
     ]
   })
-    .populate('relatedTo.id', 'name')
     .populate('organizationId', 'name')
     .lean();
+
+  await populateTaskRelatedToNames(tasks);
 
   return tasks.filter(task => {
     // Exclude tasks with no due date that are not overdue
@@ -130,7 +190,10 @@ function formatTaskRelatedLabel(task) {
   };
 
   const typeLabel = typeLabels[task.relatedTo.type] || 'Task';
-  const entityName = relatedEntity.name || 'Unknown';
+  const entityName =
+    task.relatedTo.name ||
+    (typeof relatedEntity === 'object' && relatedEntity?.name) ||
+    'Unknown';
 
   return `${typeLabel} · ${entityName}`;
 }
@@ -647,12 +710,31 @@ function sortInboxItems(items) {
 // ============================================================================
 
 /**
+ * Build unified InboxItem[] for a user (shared by GET /api/inbox and platform home).
+ * @returns {Promise<object[]>}
+ */
+async function buildInboxItemsForUser(userId, organizationId) {
+  if (!userId || !organizationId) {
+    return [];
+  }
+
+  const [tasks, events] = await Promise.all([
+    fetchInboxTasks(userId, organizationId),
+    fetchInboxEvents(userId, organizationId)
+  ]);
+
+  const taskItems = tasks.map(mapTaskToInboxItem);
+  const eventItems = await Promise.all(events.map(mapEventToInboxItem));
+  const allItems = [...taskItems, ...eventItems];
+  return sortInboxItems(allItems);
+}
+
+exports.buildInboxItemsForUser = buildInboxItemsForUser;
+
+/**
  * GET /api/inbox
- * 
+ *
  * Aggregate Tasks and Events into unified InboxItem[]
- * 
- * Returns only ready-to-render InboxItem[] - never raw Task or Event models.
- * UI does not need to filter or transform.
  */
 exports.getInboxItems = async (req, res) => {
   try {
@@ -667,21 +749,8 @@ exports.getInboxItems = async (req, res) => {
       });
     }
 
-    // Fetch tasks and events in parallel
-    const [tasks, events] = await Promise.all([
-      fetchInboxTasks(userId, organizationId),
-      fetchInboxEvents(userId, organizationId)
-    ]);
+    const sortedItems = await buildInboxItemsForUser(userId, organizationId);
 
-    // Map to InboxItem format
-    const taskItems = tasks.map(mapTaskToInboxItem);
-    const eventItems = await Promise.all(events.map(mapEventToInboxItem));
-
-    // Combine and sort
-    const allItems = [...taskItems, ...eventItems];
-    const sortedItems = sortInboxItems(allItems);
-
-    // Return only InboxItem[] - never raw models
     return res.status(200).json({
       success: true,
       data: sortedItems

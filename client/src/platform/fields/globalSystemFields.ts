@@ -10,6 +10,7 @@ const GLOBAL_SYSTEM_FIELD_KEYS = new Set([
   'deletedby',
   'deletionreason',
   'source',
+  'appointment',
 ]);
 
 /** @internal Used by fieldCapabilityEngine with pre-normalized keys. */

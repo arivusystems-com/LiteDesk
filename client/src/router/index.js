@@ -520,6 +520,36 @@ const routes = [
     meta: { requiresAuth: false, hideShell: true } // Public route - render without app shell (sidebar/tabbar)
   },
   {
+    path: '/book/:slug',
+    name: 'public-booking',
+    component: () => import('@/views/PublicBookingView.vue'),
+    meta: { requiresAuth: false, hideShell: true }
+  },
+  {
+    path: '/appointments/configure',
+    name: 'appointments-configure',
+    component: () => import('@/views/appointments/AppointmentConfigureView.vue'),
+    meta: { requiresAuth: true, hideShell: true }
+  },
+  {
+    path: '/appointments/configure/user/:userId',
+    name: 'appointments-configure-user',
+    component: () => import('@/views/appointments/AppointmentConfigureView.vue'),
+    meta: { requiresAuth: true, hideShell: true }
+  },
+  {
+    path: '/appointments/team/configure',
+    name: 'appointments-team-configure-new',
+    component: () => import('@/views/appointments/TeamAppointmentConfigureView.vue'),
+    meta: { requiresAuth: true, hideShell: true }
+  },
+  {
+    path: '/appointments/team/configure/:id',
+    name: 'appointments-team-configure',
+    component: () => import('@/views/appointments/TeamAppointmentConfigureView.vue'),
+    meta: { requiresAuth: true, hideShell: true }
+  },
+  {
     path: '/forms/:id/detail',
     name: 'form-detail',
     component: () => import('@/views/FormDetail.vue'),

@@ -17,7 +17,8 @@ import {
   CheckIcon,
   PencilSquareIcon,
   XMarkIcon,
-  ChevronDownIcon
+  ChevronDownIcon,
+  CalendarDaysIcon
 } from '@heroicons/vue/24/outline';
 
 const props = defineProps({
@@ -163,6 +164,9 @@ function openControlPanel() {
 }
 function openSettings() {
   go(() => openTab('/settings', { title: 'Settings' }));
+}
+function openAppointments() {
+  go(() => openTab('/appointments/configure', { title: 'My Appointments', icon: '📅' }));
 }
 function openTrash() {
   go(() => router.push('/trash'));
@@ -437,6 +441,15 @@ function chooseStatus(typeId) {
         >
           <ShieldCheckIcon class="h-5 w-5 text-gray-400 dark:text-gray-500" />
           Control panel
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          class="flex w-full items-center gap-3 px-5 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
+          @click="openAppointments"
+        >
+          <CalendarDaysIcon class="h-5 w-5 text-gray-400 dark:text-gray-500" />
+          My Appointments
         </button>
         <button
           v-if="canViewSettings"

@@ -201,6 +201,33 @@ const normalizeEventStatus = (status) => {
     return statusMap[status.toLowerCase().replace(/_/g, '-')] || normalized;
 };
 
+/** Flatten appointment fields for list columns (client table keys). */
+function enrichEventForList(event) {
+    if (!event) return event;
+    const ap = event.appointment;
+    if (!ap?.isAppointment) {
+        return {
+            ...event,
+            appointmentBookedBy: null,
+            appointmentBookingSource: null,
+            appointmentType: null,
+            appointmentMeetingLink: null
+        };
+    }
+    const bookedBy = ap.bookedByName
+        || ap.bookedByEmail
+        || (ap.bookedByPersonId && typeof ap.bookedByPersonId === 'object'
+            ? ap.bookedByPersonId.name
+            : null);
+    return {
+        ...event,
+        appointmentBookedBy: bookedBy || null,
+        appointmentBookingSource: ap.bookingSource || null,
+        appointmentType: ap.appointmentType || null,
+        appointmentMeetingLink: ap.meetingLink || null
+    };
+}
+
 // Get all events (with date range filtering for calendar)
 exports.getEvents = async (req, res) => {
     try {
@@ -221,6 +248,10 @@ exports.getEvents = async (req, res) => {
         } = req.query;
         
         let query = { organizationId: req.user.organizationId, deletedAt: null };
+
+        if (req.query.appointmentOnly === 'true' || req.query.appointmentOnly === true) {
+            query['appointment.isAppointment'] = true;
+        }
         
         // Date range filter
         if (startDateTime || endDateTime) {
@@ -355,10 +386,12 @@ exports.getEvents = async (req, res) => {
             .lean(),
           Event.countDocuments(query)
         ]);
+
+        const enrichedEvents = events.map(enrichEventForList);
         
         res.status(200).json({
             success: true,
-            data: events,
+            data: enrichedEvents,
             totalPages: Math.ceil(count / limitNum),
             currentPage: pageNum,
             total: count

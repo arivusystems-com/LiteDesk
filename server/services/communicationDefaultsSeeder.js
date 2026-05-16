@@ -1,5 +1,6 @@
 const Organization = require('../models/Organization');
 const emailService = require('./emailService');
+const { applyOciEmailDeliveryDefaults } = require('./emailProviders/ociEmailDelivery');
 const {
   upsertCommunicationConfigForOrganization
 } = require('../platform/communication/config/communicationConfigService');
@@ -7,17 +8,18 @@ const {
 function defaultEmailConfigFromEnv() {
   const smtpPortRaw = process.env.SMTP_PORT;
   const smtpPort = smtpPortRaw ? Number(smtpPortRaw) || 587 : 587;
-  return {
+  return applyOciEmailDeliveryDefaults({
     provider: String(process.env.EMAIL_PROVIDER || 'resend').trim().toLowerCase(),
     fromEmail: String(process.env.EMAIL_FROM || '').trim(),
     fromName: String(process.env.EMAIL_FROM_NAME || 'Arivu Systems').trim(),
     replyTo: String(process.env.EMAIL_REPLY_TO || '').trim(),
+    ociRegion: String(process.env.OCI_EMAIL_REGION || process.env.OCI_REGION || '').trim(),
     smtpHost: String(process.env.SMTP_HOST || '').trim(),
     smtpPort,
-    smtpUser: String(process.env.SMTP_USER || '').trim(),
-    smtpPass: String(process.env.SMTP_PASS || ''),
+    smtpUser: String(process.env.SMTP_USER || process.env.OCI_SMTP_USER || '').trim(),
+    smtpPass: String(process.env.SMTP_PASS || process.env.OCI_SMTP_PASS || ''),
     smtpSecure: String(smtpPort) === '465'
-  };
+  });
 }
 
 async function ensureDefaultCommunicationSettingsForOrganization(organizationId) {
@@ -31,17 +33,18 @@ async function ensureDefaultCommunicationSettingsForOrganization(organizationId)
   const existingConfig = existing.config || {};
   const envDefaults = defaultEmailConfigFromEnv();
 
-  const seededConfig = {
+  const seededConfig = applyOciEmailDeliveryDefaults({
     provider: existingConfig.provider || envDefaults.provider,
     fromEmail: existingConfig.fromEmail || envDefaults.fromEmail,
     fromName: existingConfig.fromName || envDefaults.fromName,
     replyTo: existingConfig.replyTo || envDefaults.replyTo,
+    ociRegion: existingConfig.ociRegion || envDefaults.ociRegion,
     smtpHost: existingConfig.smtpHost || envDefaults.smtpHost,
     smtpPort: existingConfig.smtpPort || envDefaults.smtpPort,
     smtpUser: existingConfig.smtpUser || envDefaults.smtpUser,
     smtpPass: existingConfig.smtpPass || envDefaults.smtpPass,
     smtpSecure: existingConfig.smtpSecure === true || envDefaults.smtpSecure === true
-  };
+  });
 
   const nextState = {
     ...existing,

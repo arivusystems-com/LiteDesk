@@ -25,6 +25,10 @@ const People = require('../models/People');
 const TenantModuleConfiguration = require('../models/TenantModuleConfiguration');
 const integrationRegistry = require('../constants/integrationRegistry');
 const emailService = require('../services/emailService');
+const {
+    buildOciSmtpHost,
+    applyOciEmailDeliveryDefaults
+} = require('../services/emailProviders/ociEmailDelivery');
 const communicationPlatformService = require('../platform/communication/api/communicationPlatformService');
 const {
     getCommunicationConfigForOrganization,
@@ -40,32 +44,35 @@ function maskSecret(value) {
 }
 
 function sanitizeEmailConfigForResponse(config = {}) {
+    const normalized = applyOciEmailDeliveryDefaults(config);
     return {
-        provider: config.provider || '',
-        fromEmail: config.fromEmail || '',
-        fromName: config.fromName || '',
-        replyTo: config.replyTo || '',
-        smtpHost: config.smtpHost || '',
-        smtpPort: config.smtpPort || '',
-        smtpUser: config.smtpUser || '',
-        smtpSecure: config.smtpSecure === true,
-        smtpPassMasked: config.smtpPass ? maskSecret(config.smtpPass) : '',
-        hasSmtpPass: !!config.smtpPass
+        provider: normalized.provider || '',
+        fromEmail: normalized.fromEmail || '',
+        fromName: normalized.fromName || '',
+        replyTo: normalized.replyTo || '',
+        ociRegion: normalized.ociRegion || '',
+        smtpHost: normalized.smtpHost || '',
+        smtpPort: normalized.smtpPort || '',
+        smtpUser: normalized.smtpUser || '',
+        smtpSecure: normalized.smtpSecure === true,
+        smtpPassMasked: normalized.smtpPass ? maskSecret(normalized.smtpPass) : '',
+        hasSmtpPass: !!normalized.smtpPass
     };
 }
 
 function getEnvEmailConfigFallback() {
-    return {
+    return applyOciEmailDeliveryDefaults({
         provider: process.env.EMAIL_PROVIDER || '',
         fromEmail: process.env.EMAIL_FROM || '',
         fromName: process.env.EMAIL_FROM_NAME || '',
         replyTo: process.env.EMAIL_REPLY_TO || '',
+        ociRegion: process.env.OCI_EMAIL_REGION || process.env.OCI_REGION || '',
         smtpHost: process.env.SMTP_HOST || '',
         smtpPort: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) || process.env.SMTP_PORT : '',
-        smtpUser: process.env.SMTP_USER || '',
+        smtpUser: process.env.SMTP_USER || process.env.OCI_SMTP_USER || '',
         smtpSecure: String(process.env.SMTP_PORT || '') === '465',
-        smtpPass: process.env.SMTP_PASS || ''
-    };
+        smtpPass: process.env.SMTP_PASS || process.env.OCI_SMTP_PASS || ''
+    });
 }
 
 function toComparable(value) {
@@ -1992,6 +1999,7 @@ exports.updateIntegrationConfig = async (req, res) => {
             fromEmail,
             fromName,
             replyTo,
+            ociRegion,
             smtpHost,
             smtpPort,
             smtpUser,
@@ -2015,34 +2023,69 @@ exports.updateIntegrationConfig = async (req, res) => {
                 message: 'Valid fromEmail is required'
             });
         }
-        if (!smtpHost || !smtpPort || !smtpUser) {
+
+        const current = organization.integrations || {};
+        const prev = current[key] || {};
+        const prevConfig = prev.config || {};
+
+        const providerKey = String(provider || 'resend').trim().toLowerCase();
+        const resolvedOciRegion = String(
+            ociRegion || prevConfig.ociRegion || process.env.OCI_EMAIL_REGION || ''
+        ).trim().toLowerCase();
+        let resolvedSmtpHost = String(smtpHost || '').trim();
+        if (providerKey === 'oci-email-delivery' && !resolvedSmtpHost && resolvedOciRegion) {
+            resolvedSmtpHost = buildOciSmtpHost(resolvedOciRegion);
+        }
+
+        if (providerKey === 'oci-email-delivery') {
+            if (!resolvedSmtpHost && !resolvedOciRegion) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'OCI Email Delivery requires smtpHost or ociRegion (e.g. us-phoenix-1)'
+                });
+            }
+        } else if (!resolvedSmtpHost || !smtpPort || !smtpUser) {
             return res.status(400).json({
                 success: false,
                 message: 'smtpHost, smtpPort, and smtpUser are required'
             });
         }
 
-        const current = organization.integrations || {};
-        const prev = current[key] || {};
-        const prevConfig = prev.config || {};
+        if (!smtpPort || !smtpUser) {
+            return res.status(400).json({
+                success: false,
+                message: 'smtpPort and smtpUser are required'
+            });
+        }
+
         const baselineConfig = Object.keys(prevConfig).length > 0
             ? prevConfig
             : getEnvEmailConfigFallback();
-        const nextConfig = {
-            provider: String(provider || 'resend').trim().toLowerCase(),
+        const prevProvider = String(prevConfig.provider || '').trim().toLowerCase();
+        const switchedToOci =
+            providerKey === 'oci-email-delivery' && prevProvider && prevProvider !== 'oci-email-delivery';
+        const passProvided = smtpPass !== undefined && String(smtpPass).trim() !== '';
+        let resolvedSmtpPass = passProvided
+            ? String(smtpPass)
+            : (prevConfig.smtpPass || '');
+        if (switchedToOci && !passProvided) {
+            resolvedSmtpPass = '';
+        }
+
+        const nextConfig = applyOciEmailDeliveryDefaults({
+            provider: providerKey,
             fromEmail: String(fromEmail || '').trim(),
             fromName: String(fromName || '').trim(),
             replyTo: String(replyTo || '').trim(),
-            smtpHost: String(smtpHost || '').trim(),
+            ociRegion: resolvedOciRegion,
+            smtpHost: resolvedSmtpHost,
             smtpPort: Number(smtpPort) || 587,
             smtpUser: String(smtpUser || '').trim(),
             smtpSecure: smtpSecure === true || String(smtpSecure).toLowerCase() === 'true',
-            smtpPass: (smtpPass !== undefined && String(smtpPass).trim() !== '')
-                ? String(smtpPass)
-                : (prevConfig.smtpPass || '')
-        };
+            smtpPass: resolvedSmtpPass
+        });
 
-        const criticalFields = ['provider', 'fromEmail', 'smtpHost', 'smtpPort', 'smtpUser', 'smtpPass'];
+        const criticalFields = ['provider', 'fromEmail', 'ociRegion', 'smtpHost', 'smtpPort', 'smtpUser', 'smtpPass'];
         const changedCriticalFields = criticalFields.filter((fieldKey) => {
             if (fieldKey === 'smtpPass') {
                 if (smtpPass === undefined || String(smtpPass).trim() === '') return false;

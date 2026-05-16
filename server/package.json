@@ -8,6 +8,7 @@
     "test:people": "node --test utils/__tests__/peopleFieldRegistry.test.js utils/__tests__/warnDeprecatedPeopleTypeAlias.test.js utils/__tests__/normalizePeopleModuleConfig.test.js utils/__tests__/peopleTypeDefsFields.test.js utils/__tests__/collectAllowedPeopleParticipationFieldKeys.test.js",
     "test:communications-threads": "node --test --test-force-exit tests/communicationsThreadActions.controller.test.js tests/communicationsMarkThreadAndReplay.controller.test.js",
     "test:communications-http-integration": "node --test --test-force-exit tests/communications.http.integration.test.js",
+    "test:email-providers": "node --test services/emailProviders/__tests__/ociEmailDelivery.test.js",
     "test:helpdesk": "node --test utils/__tests__/caseApiValidators.test.js utils/__tests__/caseListQuery.test.js utils/__tests__/caseAnalytics.test.js",
     "smoke:helpdesk": "node scripts/helpdeskSmokeChecks.js",
     "migrate:people-automation": "node scripts/migratePeopleAutomationTriggers.js",

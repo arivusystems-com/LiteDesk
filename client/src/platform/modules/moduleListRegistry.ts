@@ -55,6 +55,8 @@ export interface SystemView {
 export interface ModuleListConfig {
   /** Default column configuration */
   defaultColumns: DefaultColumnConfig;
+  /** Extra list columns shown when appointment-only filter is active (events module) */
+  appointmentListColumns?: string[];
   /** Statistics configuration */
   statistics?: StatisticsConfig;
   /** System saved views */
@@ -906,8 +908,19 @@ export const MODULE_LIST_REGISTRY: Record<string, ModuleListConfig> = {
     defaultColumns: {
       defaultVisibleColumns: ['eventName', 'eventType', 'startDateTime', 'endDateTime', 'status', 'eventOwnerId'],
       lockedColumn: 'eventName',
-      excludedFromDefault: []
+      excludedFromDefault: [
+        'appointmentBookedBy',
+        'appointmentBookingSource',
+        'appointmentType',
+        'appointmentMeetingLink'
+      ]
     },
+    appointmentListColumns: [
+      'appointmentBookedBy',
+      'appointmentBookingSource',
+      'appointmentType',
+      'appointmentMeetingLink'
+    ],
     statistics: {
       stats: [
         { name: 'Total Events', key: 'totalEvents', formatter: 'number' },
@@ -940,6 +953,16 @@ export const MODULE_LIST_REGISTRY: Record<string, ModuleListConfig> = {
         id: 'my-events',
         name: 'My Events',
         filters: { eventOwnerId: 'me' }
+      },
+      {
+        id: 'appointments',
+        name: 'Appointments',
+        filters: { appointmentOnly: 'true' }
+      },
+      {
+        id: 'upcoming-appointments',
+        name: 'Upcoming Appointments',
+        filters: { appointmentOnly: 'true', _special: 'upcoming' }
       }
     ],
     apiEndpoint: '/events',

@@ -1577,6 +1577,11 @@ const props = defineProps({
     type: String,
     default: 'numbered-hover',
     validator: (v) => !v || v === 'checkbox' || v === 'numbered-hover'
+  },
+  /** Column keys to show while active (e.g. appointment columns when filtering appointments) */
+  boostVisibleColumnKeys: {
+    type: Array,
+    default: () => []
   }
 });
 
@@ -1978,10 +1983,22 @@ const TASKS_KANBAN_DEFAULT_VISIBLE_KEYS = ['title', 'assignedTo', 'dueDate', 'pr
 const TASKS_KANBAN_DEFAULT_LABELS = { assignedTo: 'Assigned to', dueDate: 'Due Date' };
 // Labels for synthetic list columns (when backend/props don't include the key, e.g. accountId)
 const DEALS_LIST_DEFAULT_LABELS = { accountId: 'Organization', ownerId: 'Deal Owner' };
+const EVENTS_LIST_DEFAULT_LABELS = {
+  appointmentBookedBy: 'Booked by',
+  appointmentBookingSource: 'Source',
+  appointmentType: 'Type',
+  appointmentMeetingLink: 'Meeting link'
+};
+const EVENTS_APPOINTMENT_BOOST_KEYS = Object.keys(EVENTS_LIST_DEFAULT_LABELS);
 /** Ensure every key in defaultVisibleColumns exists in the column map (add synthetic columns if missing). */
 function ensureDefaultColumnsInMap(moduleKey, defaultVisibleColumns, columnMap) {
   if (!defaultVisibleColumns || !columnMap) return;
-  const labelMap = moduleKey === 'deals' ? DEALS_LIST_DEFAULT_LABELS : {};
+  const labelMap =
+    moduleKey === 'deals'
+      ? DEALS_LIST_DEFAULT_LABELS
+      : moduleKey === 'events'
+        ? EVENTS_LIST_DEFAULT_LABELS
+        : {};
   defaultVisibleColumns.forEach((key) => {
     if (!columnMap.has(key)) {
       columnMap.set(key, {
@@ -2504,6 +2521,75 @@ watch(visibleColumns, () => {
   }, 300);
 }, { deep: true });
 
+function findOrCreateBoostColumn(key) {
+  let col = visibleColumns.value.find((c) => c.key === key);
+  if (col) return col;
+  const fromProps = props.columns.find((c) => c.key === key);
+  const label = EVENTS_LIST_DEFAULT_LABELS[key] || key;
+  const base = fromProps
+    ? { ...fromProps }
+    : { key, label, dataType: 'Text', sortable: false };
+  col = {
+    ...base,
+    key,
+    label: base.label || label,
+    visible: false,
+    showInTable: false,
+    sortable: base.sortable !== false
+  };
+  visibleColumns.value.push(col);
+  return col;
+}
+
+function boostColumnStateSignature(cols) {
+  if (!Array.isArray(cols)) return '';
+  return cols
+    .map(
+      (c) =>
+        `${c.key}:${c.visible ? 1 : 0}:${c.showInTable ? 1 : 0}:${c.locked ? 1 : 0}`
+    )
+    .join('|');
+}
+
+function applyBoostVisibleColumnKeys(keys = []) {
+  const boostSet = new Set(Array.isArray(keys) ? keys : []);
+  // Non-events lists use boost only when empty; running normalizeColumnOrder on every
+  // visibleColumns churn always returns a fresh array for `people`, which retriggered
+  // the boost watcher and caused "Maximum recursive updates exceeded".
+  if (boostSet.size === 0 && props.moduleKey !== 'events') {
+    return;
+  }
+  boostSet.forEach((key) => {
+    const col = findOrCreateBoostColumn(key);
+    col.visible = true;
+    col.showInTable = true;
+  });
+  if (props.moduleKey === 'events') {
+    EVENTS_APPOINTMENT_BOOST_KEYS.forEach((key) => {
+      if (boostSet.has(key)) return;
+      const col = visibleColumns.value.find((c) => c.key === key);
+      if (col) {
+        col.visible = false;
+        col.showInTable = false;
+      }
+    });
+  }
+  const next = normalizeColumnOrder(visibleColumns.value);
+  if (boostColumnStateSignature(next) !== boostColumnStateSignature(visibleColumns.value)) {
+    visibleColumns.value = next;
+  }
+  // If only the array reference changed (e.g. people module), keep the current ref to avoid watcher churn.
+}
+
+watch(
+  [() => props.boostVisibleColumnKeys, () => visibleColumns.value.length],
+  ([keys]) => {
+    if (visibleColumns.value.length === 0) return;
+    applyBoostVisibleColumnKeys(keys);
+  },
+  { deep: true, immediate: true }
+);
+
 // Computed grid columns class based on number of stats
 const statsGridColsClass = computed(() => {
   if (!props.statsConfig || props.statsConfig.length === 0) return 'md:grid-cols-1';
@@ -2587,7 +2673,8 @@ const dataLength = computed(() => (Array.isArray(props.data) ? props.data.length
 const initialRender = ref(true);
 
 const tableLoading = computed(() => {
-  if (props.loading && dataLength.value === 0) {
+  // Match parent `loading` even if row data is momentarily non-empty (avoid flashing row numbers).
+  if (props.loading) {
     return true;
   }
   if (initialRender.value && !Array.isArray(props.data)) {

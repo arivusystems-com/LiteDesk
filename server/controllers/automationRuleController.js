@@ -27,7 +27,13 @@ const DOMAIN_EVENT_TYPES = [
   'deal.stage.changed',
   'deal.pipeline.changed',
   'deal.deal.won',
-  'deal.deal.lost'
+  'deal.deal.lost',
+  // Appointment / event booking
+  'appointment.created',
+  'appointment.updated',
+  'appointment.completed',
+  'appointment.cancelled',
+  'appointment.no_show'
 ];
 
 // Known action types
@@ -37,7 +43,7 @@ const ACTION_TYPES = ['create_task', 'notify_user'];
 const APP_KEYS = ['SALES', 'AUDIT', 'PORTAL'];
 
 // Known entity types
-const ENTITY_TYPES = ['people', 'organization', 'deal'];
+const ENTITY_TYPES = ['people', 'organization', 'deal', 'events'];
 
 /**
  * Validate trigger schema

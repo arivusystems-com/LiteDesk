@@ -186,7 +186,7 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
-              <template v-if="displayRows.length > 0">
+              <template v-if="showDataRows">
                 <tr
                   v-for="(row, rowIndex) in displayRows"
                   :key="rowIdentifier(row, rowIndex)"
@@ -342,7 +342,68 @@
                   </td>
                 </tr>
               </template>
-              <template v-else-if="isLoading" />
+              <template v-else-if="isLoading">
+                <!-- Awaiting columns: one block so we don't flash numbered gutters or stray rows -->
+                <tr v-if="displayColumns.length === 0" class="border-0">
+                  <td :colspan="tableBodyColspan" class="border-0 px-5 py-10">
+                    <div class="space-y-3" role="status" aria-live="polite" aria-busy="true">
+                      <span class="sr-only">Loading table</span>
+                      <div
+                        v-for="n in loadingSkeletonRowCount"
+                        :key="`sk-block-${n}`"
+                        class="h-10 w-full rounded-lg bg-gray-100 animate-pulse dark:bg-gray-800/80"
+                      />
+                    </div>
+                  </td>
+                </tr>
+                <template v-else>
+                  <tr
+                    v-for="n in loadingSkeletonRowCount"
+                    :key="`sk-row-${n}`"
+                    class="border-0"
+                  >
+                    <td
+                      v-if="selectable"
+                      :class="[
+                        'relative box-border border-0 bg-white align-middle dark:bg-gray-900',
+                        rowHeightClass,
+                        selectionColumnVariant === 'numbered-hover'
+                          ? 'px-1 tv-num-when-hover'
+                          : 'px-7 sm:w-12 sm:px-6'
+                      ]"
+                      :style="selectionColumnCellStyle"
+                    >
+                      <div
+                        class="mx-auto h-4 w-4 rounded bg-gray-100 animate-pulse dark:bg-gray-800"
+                        aria-hidden="true"
+                      />
+                    </td>
+                    <td
+                      v-for="(column, columnIndex) in displayColumns"
+                      :key="`sk-${n}-${cellKey(column)}`"
+                      :class="[
+                        'border-0 px-5 align-middle',
+                        rowHeightClass,
+                        columnIndex === 0
+                          ? 'title-column-cell sticky z-20 bg-white dark:bg-gray-900 sticky-column-border'
+                          : 'bg-white dark:bg-gray-900'
+                      ]"
+                      :style="columnCellStyle(column)"
+                    >
+                      <div
+                        class="h-4 max-w-full rounded bg-gray-100 animate-pulse dark:bg-gray-800"
+                        :class="columnIndex === 0 ? 'w-[85%]' : 'w-[55%]'"
+                        aria-hidden="true"
+                      />
+                    </td>
+                    <td
+                      v-if="hasFlexFillColumn"
+                      aria-hidden="true"
+                      :class="['border-0 p-0 align-middle bg-white dark:bg-gray-900', rowHeightClass]"
+                    />
+                  </tr>
+                </template>
+              </template>
               <tr v-else>
                 <td :colspan="tableBodyColspan" class="px-5 py-10 text-center">
                   <slot name="empty">
@@ -510,14 +571,17 @@ const displayColumns = computed(() => {
 
 const displayRows = computed(() => providedRows.value)
 
+/** Full skeleton body: awaiting columns, or parent loading (hide stale rows to avoid numbered gutter flash). */
 const isLoading = computed(() => {
   const awaitingColumns =
     Boolean(props.tableId) &&
     displayColumns.value.length === 0 &&
     (Boolean(props.loading) || displayRows.value.length > 0)
   if (awaitingColumns) return true
-  return Boolean(props.loading) && displayRows.value.length === 0
+  return Boolean(props.loading)
 })
+
+const showDataRows = computed(() => displayRows.value.length > 0 && !isLoading.value)
 
 const tableMinWidth = computed(() => {
   if (displayColumns.value.length === 0) {
@@ -656,6 +720,9 @@ const rowHeightClasses = {
 }
 
 const rowHeightClass = computed(() => rowHeightClasses[props.rowHeight] || rowHeightClasses.small)
+
+/** Skeleton rows while `isLoading` (no fake row indices; keeps first paint clean) */
+const loadingSkeletonRowCount = 10
 
 const columnCellStyle = (column: ColumnDef) => {
   const width = getColumnWidth(column)

@@ -4,16 +4,17 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/authRegistry';
 import { useAppShellStore } from '@/stores/appShell';
 import { useTabs } from '@/composables/useTabs';
-import apiClient from '@/utils/apiClient';
-import AppFlows from '@/components/automation/AppFlows.vue';
+import { usePlatformHome } from '@/composables/usePlatformHome';
+import { useAttentionItems } from '@/composables/useAttentionItems';
+import AttentionItemRow from '@/components/platform/AttentionItemRow.vue';
+import AppPulseCard from '@/components/platform/AppPulseCard.vue';
+import { formatPlatformGreeting } from '@/utils/platformHomeGreeting';
 import {
   CheckCircleIcon,
-  ClockIcon,
   ExclamationTriangleIcon,
   CalendarIcon,
   ArrowRightIcon,
   SparklesIcon,
-  BellIcon,
   XCircleIcon,
   InformationCircleIcon,
   ShieldCheckIcon,
@@ -22,7 +23,9 @@ import {
   RectangleStackIcon,
   GlobeAltIcon,
   Squares2X2Icon,
-  TicketIcon
+  TicketIcon,
+  InboxIcon,
+  ClipboardDocumentCheckIcon
 } from '@heroicons/vue/24/outline';
 
 const router = useRouter();
@@ -30,14 +33,10 @@ const authStore = useAuthStore();
 const appShellStore = useAppShellStore();
 const { openTab } = useTabs();
 
-// State
-const loading = ref(true);
-const tasks = ref({
-  overdue: [],
-  dueToday: [],
-  upcoming: []
-});
-const recentActivity = ref([]);
+const { loading: homeLoading, error: homeError, snapshot, fetchSnapshot } = usePlatformHome();
+const { completeTask } = useAttentionItems();
+
+const pageLoading = ref(true);
 const quickAccessApps = ref([]);
 const alerts = ref([]);
 
@@ -91,126 +90,48 @@ const getQuickAccessIcon = (app) => {
   return Squares2X2Icon;
 };
 
-// Computed
-const hasAnyData = computed(() => {
-  return tasks.value.overdue.length > 0 ||
-    tasks.value.dueToday.length > 0 ||
-    tasks.value.upcoming.length > 0 ||
-    recentActivity.value.length > 0 ||
-    quickAccessApps.value.length > 0 ||
-    alerts.value.length > 0;
+const attentionItems = computed(() => snapshot.value.attention.items);
+const attentionSummary = computed(() => snapshot.value.attention.summary);
+const attentionTotal = computed(() => snapshot.value.attention.total);
+const attentionPreview = computed(() => attentionItems.value);
+const hasMoreAttention = computed(() => attentionTotal.value > attentionItems.value.length);
+const resumeItems = computed(() => snapshot.value.resume || []);
+const appPulses = computed(() => snapshot.value.appPulses || []);
+const shellCounts = computed(() => snapshot.value.shell);
+const focusLine = computed(() => snapshot.value.focusLine || '');
+
+const greetingTitle = computed(() => {
+  const user = authStore.user;
+  const fallbackName = user?.firstName || user?.name?.split?.(' ')?.[0] || '';
+  return formatPlatformGreeting(snapshot.value.greeting, fallbackName);
 });
 
-// Format date/time helpers
-const formatDate = (dateString) => {
-  if (!dateString) return '';
-  try {
-    const date = new Date(dateString);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    if (date.toDateString() === today.toDateString()) {
-      return 'Today';
-    } else if (date.toDateString() === tomorrow.toDateString()) {
-      return 'Tomorrow';
-    } else {
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined
-      });
-    }
-  } catch {
-    return '';
-  }
-};
+const pulseAppKeys = computed(() => new Set(appPulses.value.map((p) => p.appKey)));
 
-const formatTime = (dateString) => {
-  if (!dateString) return '';
-  try {
-    return new Date(dateString).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit'
-    });
-  } catch {
-    return '';
-  }
-};
+const quickAccessWithoutPulses = computed(() =>
+  quickAccessApps.value.filter((app) => !pulseAppKeys.value.has(String(app.appKey || '').toUpperCase()))
+);
 
-const formatRelativeTime = (dateString) => {
-  if (!dateString) return '';
-  try {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-    
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return formatDate(dateString);
-  } catch {
-    return '';
-  }
-};
+const showTodayStrip = computed(() => {
+  const s = shellCounts.value;
+  return (
+    attentionTotal.value > 0 ||
+    (s?.approvalsPending ?? 0) > 0 ||
+    (s?.mail?.unread ?? 0) > 0
+  );
+});
 
-// Fetch My Tasks
-const fetchTasks = async () => {
-  try {
-    const userId = authStore.user?._id;
-    if (!userId) return;
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const nextWeek = new Date(today);
-    nextWeek.setDate(nextWeek.getDate() + 7);
-    
-    const taskSummaryResponse = await apiClient.get('/tasks/summary');
-    if (taskSummaryResponse.success) {
-      const taskData = taskSummaryResponse.data || {};
-      tasks.value.overdue = taskData.overdue || [];
-      tasks.value.dueToday = taskData.dueToday || [];
-      tasks.value.upcoming = taskData.upcoming || [];
-    }
-  } catch (error) {
-    console.error('[PlatformHome] Error fetching tasks:', error);
-    // Silently fail - tasks section will just be empty
-  }
-};
-
-// Fetch Recent Activity (Events)
-const fetchRecentActivity = async () => {
-  try {
-    if (!authStore.can('events', 'view')) {
-      return;
-    }
-
-    // Fetch recent events (last 30 days, cross-app)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
-    const response = await apiClient.get('/events/summary', {
-      params: {
-        startDateTime: thirtyDaysAgo.toISOString(),
-        scope: 'mine',
-        limit: 15
-      }
-    });
-    
-    if (response.success) {
-      recentActivity.value = response.data || [];
-    }
-  } catch (error) {
-    console.error('[PlatformHome] Error fetching recent activity:', error);
-    // Silently fail - activity section will just be empty
-  }
-};
+const hasAnyData = computed(() => {
+  return (
+    attentionTotal.value > 0 ||
+    resumeItems.value.length > 0 ||
+    appPulses.value.length > 0 ||
+    (shellCounts.value?.approvalsPending ?? 0) > 0 ||
+    (shellCounts.value?.mail?.unread ?? 0) > 0 ||
+    quickAccessApps.value.length > 0 ||
+    alerts.value.length > 0
+  );
+});
 
 // Load Quick Access Apps
 const loadQuickAccessApps = async () => {
@@ -321,26 +242,37 @@ const loadAlerts = async () => {
   }
 };
 
-// Navigation handlers
-const navigateToTask = (task) => {
-  openTab(`/tasks/${task._id}`, {
-    title: task.title || 'Task',
-    icon: '📋',
-    insertAdjacent: true
-  });
+const goToAttention = () => {
+  router.push('/platform/attention');
 };
 
-const navigateToEvent = (event) => {
-  openTab(`/events/${event._id}`, {
-    title: event.eventName || 'Event',
-    icon: '📅',
-    insertAdjacent: true
-  });
+const handleAttentionSelect = (item) => {
+  if (item.routeTarget) {
+    router.push(item.routeTarget);
+  }
+};
+
+const handleAttentionComplete = async (item) => {
+  const result = await completeTask(item);
+  if (result && typeof result === 'object' && result.navigate) {
+    router.push(result.navigate);
+    return;
+  }
+  if (result === true) {
+    await fetchSnapshot();
+  }
+};
+
+const goToApprovals = () => router.push('/approvals');
+const goToInbox = () => router.push('/inbox');
+
+const handleResumeSelect = (item) => {
+  if (item?.route) {
+    router.push(item.route);
+  }
 };
 
 const navigateToApp = (app) => {
-  // For Audit app, open in a new internal tab
-  // Other apps can navigate in the same tab or open in new tab as needed
   const appKeyUpper = app.appKey?.toUpperCase();
   if (appKeyUpper === 'AUDIT') {
     openTab(app.route, {
@@ -352,20 +284,31 @@ const navigateToApp = (app) => {
   }
 };
 
-// Load all data
+const openAppPulse = (pulse) => {
+  const appKeyUpper = pulse?.appKey?.toUpperCase();
+  if (appKeyUpper === 'AUDIT') {
+    openTab(pulse.route, {
+      title: pulse.name || 'Audit Dashboard',
+      icon: 'document'
+    });
+  } else if (pulse?.route) {
+    router.push(pulse.route);
+  }
+};
+
 const loadData = async () => {
-  loading.value = true;
+  pageLoading.value = true;
+  alerts.value = [];
   try {
     await Promise.all([
-      fetchTasks(),
-      fetchRecentActivity(),
+      fetchSnapshot(),
       loadQuickAccessApps(),
       loadAlerts()
     ]);
   } catch (error) {
     console.error('[PlatformHome] Error loading data:', error);
   } finally {
-    loading.value = false;
+    pageLoading.value = false;
   }
 };
 
@@ -378,17 +321,26 @@ onMounted(() => {
   <div class="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4 sm:px-6 lg:px-8">
     <div class="max-w-7xl mx-auto">
       <!-- Header -->
-      <div class="mb-8">
+      <header class="mb-8">
         <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          Home
+          {{ greetingTitle }}
         </h1>
-        <p class="text-gray-600 dark:text-gray-400">
+        <p
+          v-if="focusLine"
+          class="text-base text-gray-700 dark:text-gray-300 max-w-2xl"
+        >
+          {{ focusLine }}
+        </p>
+        <p
+          v-else
+          class="text-gray-600 dark:text-gray-400"
+        >
           What needs your attention right now
         </p>
-      </div>
+      </header>
 
       <!-- Loading State -->
-      <div v-if="loading" class="space-y-6">
+      <div v-if="pageLoading" class="space-y-6">
         <div
           v-for="i in 4"
           :key="i"
@@ -409,153 +361,149 @@ onMounted(() => {
           Welcome to your Home
         </h3>
         <p class="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
-          This is your personal attention center. Tasks, recent activity, and alerts will appear here as you start using Sales, Helpdesk, and other apps.
+          Tasks, events, and alerts from your apps will appear here as you get started.
         </p>
       </div>
 
       <!-- Content Sections -->
       <div v-else class="space-y-6">
-        <!-- 1️⃣ My Tasks (Primary Section) -->
+        <!-- Today strip: counts → owning surfaces -->
         <div
-          v-if="tasks.overdue.length > 0 || tasks.dueToday.length > 0 || tasks.upcoming.length > 0"
-          class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
+          v-if="showTodayStrip"
+          class="flex flex-wrap gap-2"
         >
-          <div class="p-6 border-b border-gray-200 dark:border-gray-700">
-            <h2 class="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              <CheckCircleIcon class="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-              My Tasks
-            </h2>
-          </div>
-          
-          <div class="p-6 space-y-6">
-            <!-- Overdue Tasks -->
-            <div v-if="tasks.overdue.length > 0">
-              <h3 class="text-sm font-medium text-red-600 dark:text-red-400 mb-3 flex items-center gap-2">
-                <XCircleIcon class="w-4 h-4" />
-                Overdue
-              </h3>
-              <div class="space-y-2">
-                <button
-                  v-for="task in tasks.overdue"
-                  :key="task._id"
-                  @click="navigateToTask(task)"
-                  class="w-full text-left p-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors group"
-                >
-                  <div class="flex items-start justify-between">
-                    <div class="flex-1 min-w-0">
-                      <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
-                        {{ task.title }}
-                      </p>
-                      <p v-if="task.dueDate" class="text-xs text-red-600 dark:text-red-400 mt-1">
-                        Due {{ formatDate(task.dueDate) }}
-                      </p>
-                    </div>
-                    <ArrowRightIcon class="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 ml-2 flex-shrink-0" />
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            <!-- Due Today -->
-            <div v-if="tasks.dueToday.length > 0">
-              <h3 class="text-sm font-medium text-orange-600 dark:text-orange-400 mb-3 flex items-center gap-2">
-                <ClockIcon class="w-4 h-4" />
-                Due Today
-              </h3>
-              <div class="space-y-2">
-                <button
-                  v-for="task in tasks.dueToday"
-                  :key="task._id"
-                  @click="navigateToTask(task)"
-                  class="w-full text-left p-3 rounded-lg border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20 hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-colors group"
-                >
-                  <div class="flex items-start justify-between">
-                    <div class="flex-1 min-w-0">
-                      <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
-                        {{ task.title }}
-                      </p>
-                      <p v-if="task.dueDate" class="text-xs text-orange-600 dark:text-orange-400 mt-1">
-                        Due {{ formatDate(task.dueDate) }}
-                      </p>
-                    </div>
-                    <ArrowRightIcon class="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 ml-2 flex-shrink-0" />
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            <!-- Upcoming -->
-            <div v-if="tasks.upcoming.length > 0">
-              <h3 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-3 flex items-center gap-2">
-                <CalendarIcon class="w-4 h-4" />
-                Upcoming
-              </h3>
-              <div class="space-y-2">
-                <button
-                  v-for="task in tasks.upcoming"
-                  :key="task._id"
-                  @click="navigateToTask(task)"
-                  class="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
-                >
-                  <div class="flex items-start justify-between">
-                    <div class="flex-1 min-w-0">
-                      <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
-                        {{ task.title }}
-                      </p>
-                      <p v-if="task.dueDate" class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        Due {{ formatDate(task.dueDate) }}
-                      </p>
-                    </div>
-                    <ArrowRightIcon class="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 ml-2 flex-shrink-0" />
-                  </div>
-                </button>
-              </div>
-            </div>
-          </div>
+          <button
+            v-if="attentionTotal > 0"
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors"
+            @click="goToAttention"
+          >
+            <CheckCircleIcon class="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            {{ attentionTotal }} need attention
+          </button>
+          <button
+            v-if="shellCounts.approvalsPending > 0"
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors"
+            @click="goToApprovals"
+          >
+            <ClipboardDocumentCheckIcon class="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            {{ shellCounts.approvalsPending }} approval{{ shellCounts.approvalsPending !== 1 ? 's' : '' }}
+          </button>
+          <button
+            v-if="shellCounts.mail.unread > 0"
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors"
+            @click="goToInbox"
+          >
+            <InboxIcon class="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            {{ shellCounts.mail.unread }} unread
+          </button>
         </div>
 
-        <!-- 2️⃣ Recent Activity -->
-        <div
-          v-if="recentActivity.length > 0"
+        <!-- Attention preview (GET /api/platform/home) -->
+        <section
+          v-if="attentionTotal > 0 || homeError"
           class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
         >
-          <div class="p-6 border-b border-gray-200 dark:border-gray-700">
-            <h2 class="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-              <BellIcon class="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-              Recent Activity
-            </h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              What just happened while you were away
-            </p>
-          </div>
-          
-          <div class="p-6">
-            <div class="space-y-3">
-              <button
-                v-for="event in recentActivity"
-                :key="event._id"
-                @click="navigateToEvent(event)"
-                class="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors group"
+          <div class="p-6 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+                Needs your attention
+              </h2>
+              <p
+                v-if="attentionSummary.total > 0"
+                class="text-sm text-gray-500 dark:text-gray-400 mt-1"
               >
-                <div class="flex items-start justify-between">
-                  <div class="flex-1 min-w-0">
-                    <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
-                      {{ event.eventName || 'Event' }}
-                    </p>
-                    <p v-if="event.startDateTime" class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {{ formatDate(event.startDateTime) }} • {{ formatRelativeTime(event.startDateTime) }}
-                    </p>
-                  </div>
-                  <ArrowRightIcon class="w-4 h-4 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 ml-2 flex-shrink-0" />
-                </div>
-              </button>
+                <span v-if="attentionSummary.overdue > 0" class="text-red-600 dark:text-red-400">
+                  {{ attentionSummary.overdue }} overdue
+                </span>
+                <span v-if="attentionSummary.overdue > 0 && attentionSummary.dueToday > 0"> · </span>
+                <span v-if="attentionSummary.dueToday > 0">
+                  {{ attentionSummary.dueToday }} due today
+                </span>
+                <span v-if="attentionSummary.overdue === 0 && attentionSummary.dueToday === 0">
+                  {{ attentionSummary.total }} item{{ attentionSummary.total !== 1 ? 's' : '' }}
+                </span>
+              </p>
             </div>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+              @click="goToAttention"
+            >
+              View all
+              <span v-if="hasMoreAttention">({{ attentionSummary.total }})</span>
+              <ArrowRightIcon class="w-4 h-4" />
+            </button>
           </div>
-        </div>
 
-        <!-- 3️⃣ Quick Access -->
+          <div v-if="homeError && attentionTotal === 0" class="p-6">
+            <p class="text-sm text-red-600 dark:text-red-400">{{ homeError }}</p>
+          </div>
+
+          <div v-else class="px-6 pb-2">
+            <AttentionItemRow
+              v-for="(item, index) in attentionPreview"
+              :key="item.id"
+              :item="item"
+              :show-divider="index < attentionPreview.length - 1"
+              compact
+              @select="handleAttentionSelect"
+              @complete="handleAttentionComplete"
+            />
+          </div>
+        </section>
+
+        <!-- Resume -->
+        <section
+          v-if="resumeItems.length > 0"
+          class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
+        >
+          <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+              Continue where you left off
+            </h2>
+          </div>
+          <div class="p-6 space-y-2">
+            <button
+              v-for="item in resumeItems"
+              :key="`${item.moduleKey}-${item.id}`"
+              type="button"
+              class="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors group flex items-center justify-between gap-3"
+              @click="handleResumeSelect(item)"
+            >
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-gray-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                  {{ item.title }}
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {{ item.sourceApp }}
+                </p>
+              </div>
+              <ArrowRightIcon class="w-4 h-4 text-gray-400 flex-shrink-0" />
+            </button>
+          </div>
+        </section>
+
+        <!-- App pulse cards -->
+        <section v-if="appPulses.length > 0">
+          <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            Your apps
+          </h2>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <AppPulseCard
+              v-for="pulse in appPulses"
+              :key="pulse.appKey"
+              :pulse="pulse"
+              @open="openAppPulse"
+            />
+          </div>
+        </section>
+
+        <!-- Quick Access (apps without pulse metrics) -->
         <div
-          v-if="quickAccessApps.length > 0"
+          v-if="quickAccessWithoutPulses.length > 0"
           class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
         >
           <div class="p-6 border-b border-gray-200 dark:border-gray-700">
@@ -568,7 +516,7 @@ onMounted(() => {
           <div class="p-6">
             <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
               <button
-                v-for="app in quickAccessApps"
+                v-for="app in quickAccessWithoutPulses"
                 :key="app.appKey"
                 @click="navigateToApp(app)"
                 class="p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900/50 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors text-left group"
@@ -588,13 +536,7 @@ onMounted(() => {
             </div>
           </div>
         </div>
-
-        <!-- 4️⃣ How This App Works (Business Flows) -->
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <AppFlows app-key="SALES" />
-        </div>
-
-        <!-- 5️⃣ Alerts / Warnings -->
+        <!-- Alerts -->
         <div
           v-if="alerts.length > 0"
           class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
