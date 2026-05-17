@@ -90,6 +90,30 @@ function scanRoutingAddressesFromRawMime(rawBuffer) {
   return out;
 }
 
+/** Domain-agnostic scan (catch-all may rewrite To: while token remains in Received / body). */
+function scanRoutingAddressesFromRawMimeRelaxed(rawBuffer) {
+  const maxBytes = Math.min(rawBuffer.length, 512 * 1024);
+  const text = rawBuffer.toString('utf8', 0, maxBytes);
+  const re = /(?:reply|replies)\+([a-z0-9]{6,16})@([a-z0-9][a-z0-9.-]*)/gi;
+  const out = [];
+  let match;
+  while ((match = re.exec(text)) !== null) {
+    const full = String(match[0]).trim().toLowerCase();
+    if (full && !out.includes(full)) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+/** @returns {string | null} short CRM token e.g. dbb4x4ux */
+function scanCrmThreadTokenFromRawMime(rawBuffer) {
+  const maxBytes = Math.min(rawBuffer.length, 512 * 1024);
+  const text = rawBuffer.toString('utf8', 0, maxBytes);
+  const match = text.match(/(?:reply|replies)\+([a-z0-9]{6,16})@/i);
+  return match ? String(match[1]).toLowerCase() : null;
+}
+
 function collectEnvelopeRoutingAddresses(parsed) {
   const headerNames = [
     'delivered-to',
@@ -146,7 +170,10 @@ async function parseRawMime(rawBuffer) {
   const ccAddresses = collectAddresses(parsed.cc);
   const bccAddresses = collectAddresses(parsed.bcc);
   const envelopeRoutingAddresses = collectEnvelopeRoutingAddresses(parsed);
-  const mimeScanAddresses = scanRoutingAddressesFromRawMime(rawBuffer);
+  const mimeScanAddresses = [
+    ...scanRoutingAddressesFromRawMime(rawBuffer),
+    ...scanRoutingAddressesFromRawMimeRelaxed(rawBuffer)
+  ];
   // Reply-To on an outbound CRM copy in the catch-all inbox is not an inbound recipient;
   // only include Reply-To when it is itself a reply+ routing address.
   const replyToRouting = extractEmailsFromHeaderValue(parsed.replyTo).filter((addr) =>
@@ -214,5 +241,7 @@ async function parseRawMime(rawBuffer) {
 }
 
 module.exports = {
-  parseRawMime
+  parseRawMime,
+  scanCrmThreadTokenFromRawMime,
+  scanRoutingAddressesFromRawMimeRelaxed
 };

@@ -125,13 +125,13 @@ function processInboxToArivu() {
 
     try {
       const rawB64 = Gmail.Users.Messages.get('me', messageId, { format: 'raw' }).raw;
-      // Do not base64-decode in Apps Script (throws "Could not decode string").
-      // POST JSON; Arivu accepts { rawMime: "<base64>" }.
+      // Gmail `raw` is base64url — decode to bytes and POST as RFC822 (most reliable).
+      const mimeBytes = Utilities.base64DecodeWebSafe(rawB64);
       const res = UrlFetchApp.fetch(url, {
         method: 'post',
-        contentType: 'application/json',
+        contentType: 'message/rfc822',
         headers: { Authorization: 'Bearer ' + secret },
-        payload: JSON.stringify({ rawMime: toStandardBase64_(rawB64) }),
+        payload: mimeBytes,
         muteHttpExceptions: true
       });
 
@@ -203,7 +203,7 @@ function modifyMessageLabels_(messageId, addLabelIds, removeLabelIds) {
   Gmail.Users.Messages.modify(resource, 'me', messageId);
 }
 
-/** Gmail API `raw` is base64url → standard base64 for Arivu webhook JSON body. */
+/** Optional fallback: JSON body with standard base64 (prefer message/rfc822 + base64DecodeWebSafe above). */
 function toStandardBase64_(rawB64) {
   var s = String(rawB64).replace(/-/g, '+').replace(/_/g, '/');
   while (s.length % 4) {
@@ -319,6 +319,7 @@ Production options:
 | `400` Unknown CRM reply thread token | Reply-To token not in To/Cc; or outbound never registered `email_threads` |
 | `400` No valid Reply-To token | Email has no `reply+` / `replies+` in To/Cc/Bcc/**Delivered-To**; reply to a CRM-sent Reply-To, not mail sent directly to `inbox@reply…` |
 | `400` … routing token (Apps Script sent wrong message) | Script posted an outbound CRM copy (token only in **Reply-To** header). Update script: use `findRoutableMessageInThread_` and routing headers only (§3.2) |
+| `400` … routing token (MIME garbled) | Use `Utilities.base64DecodeWebSafe` + `Content-Type: message/rfc822` (not JSON `rawMime` only). Deploy latest API (`decodeInboundRawMime`) |
 | `400` (old mail in inbox) | Label or archive non-token mail; only customer **replies to CRM Reply-To** should be ingested |
 | Mail in Google, not Arivu | Trigger not running; wrong URL; script not authorized |
 | Apps Script **200** but empty Inbox | Sidebar mailbox filter hides threads without `mailboxId` — select **All mailboxes** or deploy latest inbound (uses mailbox from reply token) |
