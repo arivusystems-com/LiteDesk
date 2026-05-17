@@ -1,7 +1,6 @@
 'use strict';
 
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const { resolveUserFromToken } = require('../utils/resolveUserFromToken');
 const inboxSSEHub = require('../services/inboxSSEHub');
 
 async function validateTokenFromQuery(req) {
@@ -9,17 +8,8 @@ async function validateTokenFromQuery(req) {
   if (!token && req.headers.authorization?.startsWith('Bearer ')) {
     token = req.headers.authorization.split(' ')[1];
   }
-  if (!token || !process.env.JWT_SECRET) return null;
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).select('-password').lean();
-    if (!user?.organizationId) return null;
-    if (user.status && user.status !== 'active') return null;
-    return user;
-  } catch {
-    return null;
-  }
+  if (!token) return null;
+  return resolveUserFromToken(token, { lean: true });
 }
 
 /**
