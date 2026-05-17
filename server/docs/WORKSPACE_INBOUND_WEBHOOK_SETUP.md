@@ -112,16 +112,16 @@ function processInboxToArivu() {
     const messages = thread.messages || [];
     if (messages.length === 0) return;
 
-    // One webhook per thread (latest message only)
-    const messageId = messages[messages.length - 1].id;
-
-    if (!messageHasRoutingToken_(messageId)) {
+    // Pick the message in the thread that was actually delivered to reply+… (not latest by date).
+    const routable = findRoutableMessageInThread_(messages);
+    if (!routable) {
       messages.forEach(function (m) {
         modifyMessageLabels_(m.id, [skippedLabelId], []);
       });
-      console.log('Skipped (no reply+ token)', messageId);
+      console.log('Skipped (no reply+ in To/Delivered-To)', thread.id);
       return;
     }
+    const messageId = routable.id;
 
     try {
       const rawB64 = Gmail.Users.Messages.get('me', messageId, { format: 'raw' }).raw;
@@ -155,15 +155,41 @@ function processInboxToArivu() {
   });
 }
 
-/** True when To/Cc/Delivered-To (etc.) contains reply+token@ or replies+… */
+/** Headers that carry the envelope recipient (not CRM Reply-To on outbound copies). */
+var ROUTING_HEADER_NAMES_ = {
+  'to': true,
+  'cc': true,
+  'bcc': true,
+  'delivered-to': true,
+  'x-original-to': true,
+  'x-forwarded-to': true,
+  'x-real-to': true,
+  'envelope-to': true,
+  'x-gm-original-to': true,
+  'x-google-original-to': true,
+  'x-envelope-to': true
+};
+
+/** True when To / Delivered-To / envelope headers contain reply+token@ (matches Arivu API). */
 function messageHasRoutingToken_(messageId) {
   const msg = Gmail.Users.Messages.get('me', messageId, { format: 'metadata' });
   const headers = (msg.payload && msg.payload.headers) || [];
   const re = /(?:reply|replies)\+[a-z0-9]{6,16}@/i;
   for (var i = 0; i < headers.length; i++) {
+    const name = String(headers[i].name || '').toLowerCase();
+    if (!ROUTING_HEADER_NAMES_[name]) continue;
     if (re.test(String(headers[i].value || ''))) return true;
   }
   return false;
+}
+
+/** Prefer the inbound customer message, not the latest CRM outbound copy in the thread. */
+function findRoutableMessageInThread_(messages) {
+  if (!messages || !messages.length) return null;
+  for (var i = messages.length - 1; i >= 0; i--) {
+    if (messageHasRoutingToken_(messages[i].id)) return messages[i];
+  }
+  return null;
 }
 
 /**
@@ -292,6 +318,7 @@ Production options:
 | `401` | Secret mismatch between relay and `.env` |
 | `400` Unknown CRM reply thread token | Reply-To token not in To/Cc; or outbound never registered `email_threads` |
 | `400` No valid Reply-To token | Email has no `reply+` / `replies+` in To/Cc/Bcc/**Delivered-To**; reply to a CRM-sent Reply-To, not mail sent directly to `inbox@reply…` |
+| `400` … routing token (Apps Script sent wrong message) | Script posted an outbound CRM copy (token only in **Reply-To** header). Update script: use `findRoutableMessageInThread_` and routing headers only (§3.2) |
 | `400` (old mail in inbox) | Label or archive non-token mail; only customer **replies to CRM Reply-To** should be ingested |
 | Mail in Google, not Arivu | Trigger not running; wrong URL; script not authorized |
 | Apps Script **200** but empty Inbox | Sidebar mailbox filter hides threads without `mailboxId` — select **All mailboxes** or deploy latest inbound (uses mailbox from reply token) |

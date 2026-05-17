@@ -147,12 +147,18 @@ async function parseRawMime(rawBuffer) {
   const bccAddresses = collectAddresses(parsed.bcc);
   const envelopeRoutingAddresses = collectEnvelopeRoutingAddresses(parsed);
   const mimeScanAddresses = scanRoutingAddressesFromRawMime(rawBuffer);
+  // Reply-To on an outbound CRM copy in the catch-all inbox is not an inbound recipient;
+  // only include Reply-To when it is itself a reply+ routing address.
+  const replyToRouting = extractEmailsFromHeaderValue(parsed.replyTo).filter((addr) =>
+    /(?:^|[\s,;])(?:reply|replies)\+[a-z0-9]{6,16}@/i.test(addr)
+  );
   const allRecipients = [
     ...toAddresses,
     ...ccAddresses,
     ...bccAddresses,
     ...envelopeRoutingAddresses,
-    ...mimeScanAddresses
+    ...mimeScanAddresses,
+    ...replyToRouting
   ];
   // De-dupe (case-insensitive)
   const seen = new Set();
