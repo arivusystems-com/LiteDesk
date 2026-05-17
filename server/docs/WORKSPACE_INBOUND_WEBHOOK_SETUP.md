@@ -117,7 +117,7 @@ function processInboxToArivu() {
 
     if (!messageHasRoutingToken_(messageId)) {
       messages.forEach(function (m) {
-        Gmail.Users.Messages.modify('me', m.id, { addLabelIds: [skippedLabelId] });
+        modifyMessageLabels_(m.id, [skippedLabelId], []);
       });
       console.log('Skipped (no reply+ token)', messageId);
       return;
@@ -136,14 +136,18 @@ function processInboxToArivu() {
       });
 
       const code = res.getResponseCode();
-      if (code === 200 || code === 202) {
+      const body = res.getContentText();
+      // 200 = processed now (CRM has the message). 202 = queued only — needs Bull worker.
+      if (code === 200) {
         messages.forEach(function (m) {
-          Gmail.Users.Messages.modify('me', m.id, {
-            addLabelIds: [processedLabelId]
-          });
+          modifyMessageLabels_(m.id, [processedLabelId], []);
         });
+        console.log('Arivu inbound OK', body);
+      } else if (code === 202) {
+        console.log('Arivu inbound queued (worker must run)', body);
+        // Optional: label arivu-queued instead of arivu-processed until worker is confirmed.
       } else {
-        console.error('Arivu inbound failed', code, res.getContentText());
+        console.error('Arivu inbound failed', code, body);
       }
     } catch (e) {
       console.error('Thread failed', t.id, e);
@@ -160,6 +164,17 @@ function messageHasRoutingToken_(messageId) {
     if (re.test(String(headers[i].value || ''))) return true;
   }
   return false;
+}
+
+/**
+ * Gmail advanced service: modify(resource, userId, messageId) — resource must be first.
+ * Wrong order (userId first) yields: Invalid JSON payload … Unexpected token. me
+ */
+function modifyMessageLabels_(messageId, addLabelIds, removeLabelIds) {
+  var resource = {};
+  if (addLabelIds && addLabelIds.length) resource.addLabelIds = addLabelIds;
+  if (removeLabelIds && removeLabelIds.length) resource.removeLabelIds = removeLabelIds;
+  Gmail.Users.Messages.modify(resource, 'me', messageId);
 }
 
 /** Gmail API `raw` is base64url → standard base64 for Arivu webhook JSON body. */
@@ -273,13 +288,22 @@ Production options:
 
 | Symptom | Fix |
 |---------|-----|
+| `Invalid JSON payload … Unexpected token. me` on `messages.modify` | Apps Script argument order: use `modify(resource, 'me', messageId)` not `modify('me', messageId, resource)` — update script from §3.2 |
 | `401` | Secret mismatch between relay and `.env` |
 | `400` Unknown CRM reply thread token | Reply-To token not in To/Cc; or outbound never registered `email_threads` |
 | `400` No valid Reply-To token | Email has no `reply+` / `replies+` in To/Cc/Bcc/**Delivered-To**; reply to a CRM-sent Reply-To, not mail sent directly to `inbox@reply…` |
 | `400` (old mail in inbox) | Label or archive non-token mail; only customer **replies to CRM Reply-To** should be ingested |
 | Mail in Google, not Arivu | Trigger not running; wrong URL; script not authorized |
 | Apps Script **200** but empty Inbox | Sidebar mailbox filter hides threads without `mailboxId` — select **All mailboxes** or deploy latest inbound (uses mailbox from reply token) |
-| `queued: true` but no UI update | Redis worker not running; check inbound queue consumer |
+| `arivu-processed` in Gmail but empty CRM | Webhook returned **202** (queued) but inbound **worker** never ran or job **failed** — see below |
+| `queued: true` but no UI update | Run `npm run worker` with same `REDIS_URL`, or set `INBOUND_WEBHOOK_FORCE_SYNC=true` on API until worker is stable |
+
+**Fix “processed label but no CRM” (production):**
+
+1. Confirm API logs show `Email + inbound queue consumers running` OR run a dedicated worker (`npm run worker`).
+2. `curl -s https://YOUR_API/api/webhooks/email/inbound/health | jq '.data.inboundQueue'` — if `waiting` or `failed` > 0, jobs are stuck.
+3. Temporary: set `INBOUND_WEBHOOK_FORCE_SYNC=true` on the API (process inline, returns **200** + `communicationId`), redeploy, re-run relay on mail **without** `arivu-processed` (remove label or use a new reply).
+4. In CRM: **Settings → Integrations → Email** → inbound diagnostics / dead-letters (owner).
 
 ---
 

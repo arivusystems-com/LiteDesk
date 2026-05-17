@@ -493,7 +493,22 @@ async function processRawInbound({
   });
 }
 
+/**
+ * Best-effort org id from MIME (for dead-letter scoping when webhook returns 202 before worker fails).
+ */
+async function tryResolveInboundOrganizationId(rawMime) {
+  const rawBuffer = ensureBuffer(rawMime);
+  const parseResult = await parseRawMime(rawBuffer);
+  if (!parseResult.ok) return null;
+  const tenantCtx = await resolveTenantContext({
+    parsedMessage: parseResult.value,
+    headerOrganizationId: null
+  });
+  return tenantCtx?.orgId || null;
+}
+
 module.exports = {
   processRawInbound,
+  tryResolveInboundOrganizationId,
   InboundDispatchError
 };

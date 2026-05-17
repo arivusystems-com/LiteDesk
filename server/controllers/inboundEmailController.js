@@ -73,6 +73,13 @@ function extractRawMimeBuffer(req) {
  * GET /api/webhooks/email/inbound/health — R0 routing readiness (no auth).
  */
 exports.inboundHealth = async (_req, res) => {
+  let inboundQueueStats = null;
+  try {
+    inboundQueueStats = await inboundEmailQueueService.getQueueStats();
+  } catch {
+    inboundQueueStats = null;
+  }
+
   const replyDomain =
     String(process.env.EMAIL_REPLY_TO_DOMAIN || process.env.BASE_DOMAIN || '').trim() ||
     (String(process.env.EMAIL_INBOUND_ADDRESS || '').includes('@')
@@ -104,6 +111,9 @@ exports.inboundHealth = async (_req, res) => {
       requireReplyToken:
         String(process.env.EMAIL_INBOUND_REQUIRE_REPLY_TOKEN || '').trim().toLowerCase() === 'true',
       queueAvailable: inboundProcessingQueue.isQueueAvailable(),
+      forceSync:
+        String(process.env.INBOUND_WEBHOOK_FORCE_SYNC || '').trim().toLowerCase() === 'true',
+      inboundQueue: inboundQueueStats,
       supportedLocalParts: ['replies+', 'reply+'],
       sampleReplyToFormat: sampleToken ? `${sampleToken.split('@')[0]}@${sampleToken.split('@')[1]}` : null
     }
@@ -158,7 +168,10 @@ exports.handleInbound = async (req, res) => {
     });
   }
 
-  if (inboundProcessingQueue.isQueueAvailable()) {
+  const forceSync =
+    String(process.env.INBOUND_WEBHOOK_FORCE_SYNC || '').trim().toLowerCase() === 'true';
+
+  if (!forceSync && inboundProcessingQueue.isQueueAvailable()) {
     const queued = inboundProcessingQueue.enqueueInboundMessage({
       rawMimeBase64,
       headerOrganizationId
