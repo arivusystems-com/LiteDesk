@@ -41,6 +41,50 @@ function stripBrackets(value) {
   return str.replace(/^<|>$/g, '');
 }
 
+/** Pull email addresses from a header value (string or mailparser header object). */
+function extractEmailsFromHeaderValue(value) {
+  if (!value) return [];
+  let str = value;
+  if (typeof value === 'object' && value !== null) {
+    if (typeof value.text === 'string') str = value.text;
+    else if (Array.isArray(value.value)) {
+      return value.value.map((a) => String(a.address || '').trim().toLowerCase()).filter(Boolean);
+    } else if (typeof value.toString === 'function') {
+      str = value.toString();
+    }
+  }
+  const matches = String(str).match(/[\w.+-]+@[\w.-]+\.\w+/gi) || [];
+  return matches.map((e) => e.trim().toLowerCase());
+}
+
+/**
+ * Catch-all / alias delivery often keeps the routed address only in envelope headers,
+ * not in To (e.g. To: inbox@reply.domain but Delivered-To: reply+token@reply.domain).
+ */
+function collectEnvelopeRoutingAddresses(parsed) {
+  const headerNames = [
+    'delivered-to',
+    'x-original-to',
+    'x-forwarded-to',
+    'x-real-to',
+    'envelope-to',
+    'resent-to'
+  ];
+  const out = [];
+  if (!parsed.headers || typeof parsed.headers.get !== 'function') {
+    return out;
+  }
+  for (const name of headerNames) {
+    const raw = parsed.headers.get(name);
+    if (!raw) continue;
+    const emails = extractEmailsFromHeaderValue(raw);
+    for (const email of emails) {
+      if (email && !out.includes(email)) out.push(email);
+    }
+  }
+  return out;
+}
+
 /**
  * Parse a raw MIME buffer into a normalized inbound message.
  *
@@ -69,7 +113,13 @@ async function parseRawMime(rawBuffer) {
   const toAddresses = collectAddresses(parsed.to);
   const ccAddresses = collectAddresses(parsed.cc);
   const bccAddresses = collectAddresses(parsed.bcc);
-  const allRecipients = [...toAddresses, ...ccAddresses, ...bccAddresses];
+  const envelopeRoutingAddresses = collectEnvelopeRoutingAddresses(parsed);
+  const allRecipients = [
+    ...toAddresses,
+    ...ccAddresses,
+    ...bccAddresses,
+    ...envelopeRoutingAddresses
+  ];
 
   const messageId = stripBrackets(parsed.messageId);
   const inReplyTo = stripBrackets(parsed.inReplyTo);

@@ -1,6 +1,6 @@
-# Google Workspace → LiteDesk inbound webhook
+# Google Workspace → Arivu inbound webhook
 
-Use this when **catch-all** delivers mail to `inbox@reply.arivusystems.com` and LiteDesk receives it via **`POST /api/webhooks/email/inbound`** (not Gmail OAuth on that mailbox).
+Use this when **catch-all** delivers mail to `inbox@reply.arivusystems.com` and Arivu receives it via **`POST /api/webhooks/email/inbound`** (not Gmail OAuth on that mailbox).
 
 ## Flow
 
@@ -8,14 +8,14 @@ Use this when **catch-all** delivers mail to `inbox@reply.arivusystems.com` and 
 Customer reply → reply+TOKEN@reply.arivusystems.com
   → Workspace catch-all → inbox@reply.arivusystems.com
   → Relay (Apps Script / worker) POSTs raw MIME
-  → LiteDesk parses token → email_threads → tenant DB → Inbox UI
+  → Arivu parses token → email_threads → tenant DB → Inbox UI
 ```
 
 You do **not** need to connect `inbox@reply…` as a CRM mailbox when using this path.
 
 ---
 
-## 1. LiteDesk prerequisites
+## 1. Arivu prerequisites
 
 ### `.env` (already set)
 
@@ -73,66 +73,108 @@ Run as the **`inbox@reply.arivusystems.com`** user (or a delegated admin script 
 ### 3.1 Create the script
 
 1. Sign in as `inbox@reply.arivusystems.com`.
-2. Open [script.google.com](https://script.google.com) → **New project**.
+2. Open [script.google.com](https://script.google.com) → **New project** (name it e.g. **Arivu Inbound Relay**).
 3. **Project settings** → enable **Show "appsscript.json" manifest file"**.
 4. **Services** → add **Gmail API** (identifier `Gmail`, v1).
 5. Paste the script below and set **Script properties** (Project settings → Script properties):
 
 | Property | Example |
 |----------|---------|
-| `LITEDESK_INBOUND_URL` | `https://api.arivusystems.com/api/webhooks/email/inbound` |
-| `LITEDESK_INBOUND_SECRET` | same as `EMAIL_INBOUND_WEBHOOK_SECRET` |
-| `PROCESSED_LABEL` | `litedesk-processed` (optional) |
+| `ARIVU_INBOUND_URL` | `https://api.arivusystems.com/api/webhooks/email/inbound` |
+| `ARIVU_INBOUND_SECRET` | same as `EMAIL_INBOUND_WEBHOOK_SECRET` |
+| `PROCESSED_LABEL` | `arivu-processed` (optional) |
 
 ### 3.2 Script
 
-```javascript
-const PROPS = PropertiesService.getScriptProperties();
+Uses the **Gmail API** service only (no `GmailMessage.getLabelNames()` / `getLabels()` — those are unreliable in some Apps Script runtimes).
 
-function processInboxToLiteDesk() {
-  const url = PROPS.getProperty('LITEDESK_INBOUND_URL');
-  const secret = PROPS.getProperty('LITEDESK_INBOUND_SECRET');
-  const labelName = PROPS.getProperty('PROCESSED_LABEL') || 'litedesk-processed';
+```javascript
+function processInboxToArivu() {
+  const props = PropertiesService.getScriptProperties();
+  const url = props.getProperty('ARIVU_INBOUND_URL');
+  const secret = props.getProperty('ARIVU_INBOUND_SECRET');
+  const labelName = props.getProperty('PROCESSED_LABEL') || 'arivu-processed';
 
   if (!url || !secret) {
-    throw new Error('Set LITEDESK_INBOUND_URL and LITEDESK_INBOUND_SECRET script properties');
+    throw new Error('Set ARIVU_INBOUND_URL and ARIVU_INBOUND_SECRET script properties');
   }
 
-  const label = GmailApp.getUserLabelByName(labelName) || GmailApp.createLabel(labelName);
-  const threads = GmailApp.search('in:inbox -label:' + labelName, 0, 20);
+  const processedLabelId = getOrCreateLabelId_(labelName);
+  const list = Gmail.Users.Threads.list('me', {
+    q: 'in:inbox -label:' + labelName,
+    maxResults: 20
+  });
+  const threads = list.threads || [];
 
-  threads.forEach(function (thread) {
-    thread.getMessages().forEach(function (msg) {
-      if (msg.getLabels().indexOf(labelName) >= 0) return;
+  threads.forEach(function (t) {
+    const thread = Gmail.Users.Threads.get('me', t.id, { format: 'minimal' });
+    const messages = thread.messages || [];
+    if (messages.length === 0) return;
 
-      const id = msg.getId();
-      const raw = Gmail.Users.Messages.get('me', id, { format: 'raw' }).raw;
-      const mimeBytes = Utilities.base64DecodeWebSafe(raw);
-      const mimeString = Utilities.newBlob(mimeBytes).getDataAsString();
+    // One webhook per thread (latest message only)
+    const messageId = messages[messages.length - 1].id;
 
+    try {
+      const rawB64 = Gmail.Users.Messages.get('me', messageId, { format: 'raw' }).raw;
+      // Do not base64-decode in Apps Script (throws "Could not decode string").
+      // POST JSON; Arivu accepts { rawMime: "<base64>" }.
       const res = UrlFetchApp.fetch(url, {
         method: 'post',
-        contentType: 'message/rfc822',
+        contentType: 'application/json',
         headers: { Authorization: 'Bearer ' + secret },
-        payload: mimeString,
+        payload: JSON.stringify({ rawMime: toStandardBase64_(rawB64) }),
         muteHttpExceptions: true
       });
 
       const code = res.getResponseCode();
       if (code === 200 || code === 202) {
-        msg.addLabel(label);
+        messages.forEach(function (m) {
+          Gmail.Users.Messages.modify('me', m.id, {
+            addLabelIds: [processedLabelId]
+          });
+        });
       } else {
-        console.error('LiteDesk inbound failed', code, res.getContentText());
+        console.error('Arivu inbound failed', code, res.getContentText());
       }
-    });
+    } catch (e) {
+      console.error('Thread failed', t.id, e);
+    }
   });
+}
+
+/** Gmail API `raw` is base64url → standard base64 for Arivu webhook JSON body. */
+function toStandardBase64_(rawB64) {
+  var s = String(rawB64).replace(/-/g, '+').replace(/_/g, '/');
+  while (s.length % 4) {
+    s += '=';
+  }
+  return s;
+}
+
+/** @returns {string} Gmail label id */
+function getOrCreateLabelId_(name) {
+  const labels = Gmail.Users.Labels.list('me').labels || [];
+  const existing = labels.filter(function (l) {
+    return l.name === name;
+  })[0];
+  if (existing) return existing.id;
+
+  const created = Gmail.Users.Labels.create(
+    {
+      name: name,
+      labelListVisibility: 'labelShow',
+      messageListVisibility: 'show'
+    },
+    'me'
+  );
+  return created.id;
 }
 ```
 
 ### 3.3 Trigger
 
-1. **Triggers** → Add trigger → `processInboxToLiteDesk` → **Time-driven** → every **1** or **5** minutes.
-2. First run: authorize Gmail + external URL access.
+1. **Triggers** → Add trigger → `processInboxToArivu` → **Time-driven** → every **1** or **5** minutes.
+2. First run: authorize Gmail + external URL access (OAuth screen may show **Arivu** as the project name).
 
 ### 3.4 Limits
 
@@ -169,11 +211,11 @@ Get `<token>` from a CRM email you sent (Reply-To header) or from `email_threads
 
 ### End-to-end
 
-1. Send email from CRM to yourself.
+1. Send email from Arivu CRM to yourself.
 2. Copy **Reply-To** address from the received message.
 3. Reply from an external client to that address.
 4. Confirm message in `inbox@reply…` (Gmail).
-5. After relay runs (≤5 min), confirm thread in CRM Inbox.
+5. After relay runs (≤5 min), confirm thread in Arivu Inbox.
 
 ---
 
@@ -182,7 +224,7 @@ Get `<token>` from a CRM email you sent (Reply-To header) or from `email_threads
 - [ ] API on HTTPS; firewall allows relay egress to `/api/webhooks/email/inbound`
 - [ ] `EMAIL_INBOUND_WEBHOOK_SECRET` matches relay Bearer token
 - [ ] Redis running; `queueAvailable: true` in health
-- [ ] Apps Script trigger active; test email labeled `litedesk-processed`
+- [ ] Apps Script trigger active; test email labeled `arivu-processed`
 - [ ] `EMAIL_INBOUND_REQUIRE_REPLY_TOKEN=true`
 - [ ] Monitor dead letters / server logs for `InboundDispatchError`
 
@@ -194,8 +236,9 @@ Get `<token>` from a CRM email you sent (Reply-To header) or from `email_threads
 |---------|-----|
 | `401` | Secret mismatch between relay and `.env` |
 | `400` Unknown CRM reply thread token | Reply-To token not in To/Cc; or outbound never registered `email_threads` |
-| `400` No valid Reply-To token | Enable token in test MIME; or temporarily `EMAIL_INBOUND_REQUIRE_REPLY_TOKEN=false` for debugging only |
-| Mail in Google, not CRM | Trigger not running; wrong URL; script not authorized |
+| `400` No valid Reply-To token | Email has no `reply+` / `replies+` in To/Cc/Bcc/**Delivered-To**; reply to a CRM-sent Reply-To, not mail sent directly to `inbox@reply…` |
+| `400` (old mail in inbox) | Label or archive non-token mail; only customer **replies to CRM Reply-To** should be ingested |
+| Mail in Google, not Arivu | Trigger not running; wrong URL; script not authorized |
 | `queued: true` but no UI update | Redis worker not running; check inbound queue consumer |
 
 ---
