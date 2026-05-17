@@ -166,8 +166,17 @@ async function processInboundJob({ rawMimeBase64, headerOrganizationId = null, s
   } catch (err) {
     const stage = err instanceof InboundDispatchError ? err.stage : 'unknown';
     const summary = err?.parsedSummary || {};
+    let organizationId = headerOrganizationId || null;
+    if (!organizationId && rawBuffer) {
+      try {
+        const { tryResolveInboundOrganizationId } = require('../platform/communication/inbound/inboundDispatcher');
+        organizationId = await tryResolveInboundOrganizationId(rawBuffer);
+      } catch {
+        /* best-effort for dead-letter scoping */
+      }
+    }
     await persistDeadLetter({
-      organizationId: headerOrganizationId || null,
+      organizationId: organizationId || null,
       stage,
       reason: err.message,
       error: err?.cause?.message || err.message,
@@ -175,9 +184,9 @@ async function processInboundJob({ rawMimeBase64, headerOrganizationId = null, s
       parsedSummary: summary,
       context: { source }
     });
-    if (headerOrganizationId) {
+    if (organizationId) {
       await appendCommunicationEvent({
-        organizationId: headerOrganizationId,
+        organizationId,
         eventType: 'inbound_failed',
         source,
         payload: {
