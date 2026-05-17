@@ -426,7 +426,13 @@ async function processRawInbound({
       threadId: threadResolution.threadId || null,
       parentCommunicationId: threadResolution.parent?._id || null,
       subject: parsedMessage.subject,
-      body: normalizedReply.displayBody || parsedMessage.body,
+      body:
+        normalizedReply.displayBody
+        || normalizedReply.originalBody
+        || parsedMessage.text
+        || parsedMessage.html
+        || parsedMessage.body
+        || '',
       fromAddress: parsedMessage.fromAddress,
       toAddresses: parsedMessage.toAddresses,
       ccAddresses: parsedMessage.ccAddresses,

@@ -202,13 +202,39 @@ function modifyMessageLabels_(messageId, addLabelIds, removeLabelIds) {
 function buildMimeFromFullMessage_(messageId) {
   var msg = Gmail.Users.Messages.get('me', messageId, { format: 'full' });
   var headers = (msg.payload && msg.payload.headers) || [];
-  var lines = [];
+  var keep = {
+    'from': true,
+    'to': true,
+    'cc': true,
+    'bcc': true,
+    'subject': true,
+    'date': true,
+    'message-id': true,
+    'in-reply-to': true,
+    'references': true,
+    'delivered-to': true,
+    'x-original-to': true,
+    'x-forwarded-to': true,
+    'envelope-to': true,
+    'reply-to': true
+  };
+  var lines = [
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: 8bit'
+  ];
   for (var i = 0; i < headers.length; i++) {
-    lines.push(headers[i].name + ': ' + headers[i].value);
+    var n = String(headers[i].name || '').toLowerCase();
+    if (keep[n]) {
+      lines.push(headers[i].name + ': ' + headers[i].value);
+    }
   }
   var body = extractPlainBodyFromPayload_(msg.payload) || '';
   if (!body) {
     body = extractHtmlBodyFromPayload_(msg.payload) || '';
+  }
+  if (!body && msg.snippet) {
+    body = String(msg.snippet);
   }
   return lines.join('\r\n') + '\r\n\r\n' + body;
 }
@@ -371,7 +397,8 @@ Production options:
 | `400` Unknown CRM reply thread token | Reply-To token not in To/Cc; or outbound never registered `email_threads` |
 | `400` No valid Reply-To token | Email has no `reply+` / `replies+` in To/Cc/Bcc/**Delivered-To**; reply to a CRM-sent Reply-To, not mail sent directly to `inbox@reply…` |
 | `400` … routing token (Apps Script sent wrong message) | Script posted an outbound CRM copy (token only in **Reply-To** header). Update script: use `findRoutableMessageInThread_` and routing headers only (§3.2) |
-| `Could not decode string` in Apps Script | Do **not** call `Utilities.base64Decode` / `base64DecodeWebSafe` on Gmail `raw`. Use `postInboundMimeToArivu_` (JSON + `toStandardBase64_`) from §3.2 |
+| Reply in CRM shows **(no content)** | Old relay copied `multipart` headers with empty/wrong body. Update `buildMimeFromFullMessage_` (§3.2: clean `text/plain` MIME + `msg.snippet` fallback). Deploy API normalizer fix; send a **new** test reply |
+| `Could not decode string` in Apps Script | Do **not** decode whole-message `raw`. Use `buildMimeFromFullMessage_` + `message/rfc822` from §3.2 |
 | `400` … routing token (MIME garbled) | Deploy latest API (`decodeInboundRawMime`); keep JSON relay; confirm `findRoutableMessageInThread_` |
 | `400` (old mail in inbox) | Label or archive non-token mail; only customer **replies to CRM Reply-To** should be ingested |
 | Mail in Google, not Arivu | Trigger not running; wrong URL; script not authorized |
