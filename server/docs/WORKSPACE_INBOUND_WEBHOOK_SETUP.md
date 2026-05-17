@@ -124,16 +124,8 @@ function processInboxToArivu() {
     const messageId = routable.id;
 
     try {
-      const rawB64 = Gmail.Users.Messages.get('me', messageId, { format: 'raw' }).raw;
-      // Gmail `raw` is base64url — decode to bytes and POST as RFC822 (most reliable).
-      const mimeBytes = Utilities.base64DecodeWebSafe(rawB64);
-      const res = UrlFetchApp.fetch(url, {
-        method: 'post',
-        contentType: 'message/rfc822',
-        headers: { Authorization: 'Bearer ' + secret },
-        payload: mimeBytes,
-        muteHttpExceptions: true
-      });
+      // Prefer rebuilding MIME from format:full (Gmail `raw` + JSON base64 often yields empty headers on the API).
+      const res = postInboundMimeToArivu_(url, secret, messageId);
 
       const code = res.getResponseCode();
       const body = res.getContentText();
@@ -203,13 +195,73 @@ function modifyMessageLabels_(messageId, addLabelIds, removeLabelIds) {
   Gmail.Users.Messages.modify(resource, 'me', messageId);
 }
 
-/** Optional fallback: JSON body with standard base64 (prefer message/rfc822 + base64DecodeWebSafe above). */
-function toStandardBase64_(rawB64) {
-  var s = String(rawB64).replace(/-/g, '+').replace(/_/g, '/');
-  while (s.length % 4) {
-    s += '=';
+/**
+ * Build RFC822 text from Gmail format:full (reliable headers for reply+ routing).
+ * Avoids decoding the whole message `raw` field (often breaks in Apps Script).
+ */
+function buildMimeFromFullMessage_(messageId) {
+  var msg = Gmail.Users.Messages.get('me', messageId, { format: 'full' });
+  var headers = (msg.payload && msg.payload.headers) || [];
+  var lines = [];
+  for (var i = 0; i < headers.length; i++) {
+    lines.push(headers[i].name + ': ' + headers[i].value);
   }
-  return s;
+  var body = extractPlainBodyFromPayload_(msg.payload) || '';
+  if (!body) {
+    body = extractHtmlBodyFromPayload_(msg.payload) || '';
+  }
+  return lines.join('\r\n') + '\r\n\r\n' + body;
+}
+
+function decodePartData_(dataB64) {
+  if (!dataB64) return '';
+  try {
+    return Utilities.newBlob(Utilities.base64DecodeWebSafe(dataB64)).getDataAsString('utf-8');
+  } catch (e1) {
+    try {
+      return Utilities.newBlob(Utilities.base64Decode(dataB64)).getDataAsString('utf-8');
+    } catch (e2) {
+      return '';
+    }
+  }
+}
+
+function extractPlainBodyFromPayload_(payload) {
+  if (!payload) return '';
+  if (payload.mimeType === 'text/plain' && payload.body && payload.body.data) {
+    return decodePartData_(payload.body.data);
+  }
+  var parts = payload.parts || [];
+  for (var i = 0; i < parts.length; i++) {
+    var t = extractPlainBodyFromPayload_(parts[i]);
+    if (t) return t;
+  }
+  return '';
+}
+
+function extractHtmlBodyFromPayload_(payload) {
+  if (!payload) return '';
+  if (payload.mimeType === 'text/html' && payload.body && payload.body.data) {
+    return decodePartData_(payload.body.data);
+  }
+  var parts = payload.parts || [];
+  for (var i = 0; i < parts.length; i++) {
+    var t = extractHtmlBodyFromPayload_(parts[i]);
+    if (t) return t;
+  }
+  return '';
+}
+
+/** POST rebuilt MIME as message/rfc822 (no whole-message base64 decode). */
+function postInboundMimeToArivu_(url, secret, messageId) {
+  var mimeText = buildMimeFromFullMessage_(messageId);
+  return UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'message/rfc822',
+    headers: { Authorization: 'Bearer ' + secret },
+    payload: mimeText,
+    muteHttpExceptions: true
+  });
 }
 
 /** @returns {string} Gmail label id */
@@ -319,7 +371,8 @@ Production options:
 | `400` Unknown CRM reply thread token | Reply-To token not in To/Cc; or outbound never registered `email_threads` |
 | `400` No valid Reply-To token | Email has no `reply+` / `replies+` in To/Cc/Bcc/**Delivered-To**; reply to a CRM-sent Reply-To, not mail sent directly to `inbox@reply…` |
 | `400` … routing token (Apps Script sent wrong message) | Script posted an outbound CRM copy (token only in **Reply-To** header). Update script: use `findRoutableMessageInThread_` and routing headers only (§3.2) |
-| `400` … routing token (MIME garbled) | Use `Utilities.base64DecodeWebSafe` + `Content-Type: message/rfc822` (not JSON `rawMime` only). Deploy latest API (`decodeInboundRawMime`) |
+| `Could not decode string` in Apps Script | Do **not** call `Utilities.base64Decode` / `base64DecodeWebSafe` on Gmail `raw`. Use `postInboundMimeToArivu_` (JSON + `toStandardBase64_`) from §3.2 |
+| `400` … routing token (MIME garbled) | Deploy latest API (`decodeInboundRawMime`); keep JSON relay; confirm `findRoutableMessageInThread_` |
 | `400` (old mail in inbox) | Label or archive non-token mail; only customer **replies to CRM Reply-To** should be ingested |
 | Mail in Google, not Arivu | Trigger not running; wrong URL; script not authorized |
 | Apps Script **200** but empty Inbox | Sidebar mailbox filter hides threads without `mailboxId` — select **All mailboxes** or deploy latest inbound (uses mailbox from reply token) |

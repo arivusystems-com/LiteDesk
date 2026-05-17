@@ -114,7 +114,10 @@ async function resolveTenantContext({ parsedMessage, headerOrganizationId, rawBu
           recipientsSample: (parsedMessage.allRecipients || []).slice(0, 8),
           subject: parsedMessage.subject || null,
           hint:
-            'Ensure the relay posts the customer reply (To/Delivered-To contains reply+token@) and MIME is base64url-decoded (use Utilities.base64DecodeWebSafe in Apps Script).'
+            'Relay MIME has no recipients. Use buildMimeFromFullMessage_ in Apps Script (§3.2) instead of Gmail raw base64; confirm findRoutableMessageInThread_ picks the customer reply.',
+          mimeHeaderPreview: rawBuffer
+            ? rawBuffer.slice(0, 320).toString('latin1').replace(/[^\x20-\x7e\r\n]/g, '.')
+            : null
         }
       }
     );
