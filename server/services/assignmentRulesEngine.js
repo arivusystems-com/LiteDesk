@@ -86,7 +86,11 @@ function chooseUserFromGroup({ mode, group, userWeights = [], context = {} }) {
     const selected = members.find((id) => available.includes(id));
     return selected
       ? { assignedUserId: selected, assignmentState: 'assigned', strategyDetail: 'availability_first' }
-      : { assignedUserId: null, assignmentState: 'skipped', strategyDetail: 'no_available_users' };
+      : {
+        assignedUserId: null,
+        assignmentState: 'queued',
+        strategyDetail: 'off_hours_deferred'
+      };
   }
 
   if (mode === 'load_balanced') {
@@ -142,6 +146,20 @@ function normalizeRules(rules) {
 
 async function simulateAssignment({ organizationId, appKey, moduleKey, rules, record = {}, context = {} }) {
   const orderedRules = normalizeRules(rules);
+  let enrichedContext = { ...context };
+
+  const needsAvailability = orderedRules.some(
+    (rule) => rule?.enabled !== false && rule.distribution?.mode === 'availability_based'
+  );
+  if (needsAvailability && !Array.isArray(context.availableUserIds)) {
+    const {
+      filterUsersAvailableNow,
+      collectMemberIdsForRules
+    } = require('./assignmentAvailabilityService');
+    const memberIds = await collectMemberIdsForRules(organizationId, orderedRules);
+    enrichedContext.availableUserIds = await filterUsersAvailableNow(organizationId, memberIds);
+  }
+
   const trace = [];
 
   for (const rule of orderedRules) {
@@ -182,7 +200,7 @@ async function simulateAssignment({ organizationId, appKey, moduleKey, rules, re
       mode: rule.distribution?.mode || 'queue',
       group: chosenGroup,
       userWeights: rule.distribution?.userWeights || [],
-      context
+      context: enrichedContext
     });
 
     if (!userDecision.assignedUserId && userDecision.assignmentState !== 'queued' && groupCandidates.length > 1) {
@@ -192,7 +210,7 @@ async function simulateAssignment({ organizationId, appKey, moduleKey, rules, re
           mode: rule.distribution?.mode || 'queue',
           group: fallbackGroup,
           userWeights: rule.distribution?.userWeights || [],
-          context
+          context: enrichedContext
         });
         if (fallbackDecision.assignedUserId || fallbackDecision.assignmentState === 'queued') {
           chosenGroup = fallbackGroup;

@@ -18,6 +18,8 @@ const DEFAULT_HELPDESK_EXECUTION_SETTINGS = {
   },
   businessHours: {
     enabled: false,
+    scheduleSource: null,
+    businessHourSetId: null,
     timezone: 'UTC',
     workingDays: [1, 2, 3, 4, 5],
     startTime: '09:00',
@@ -86,6 +88,16 @@ function mergeWithDefaults(rawSettings) {
   if (isPlainObject(source.businessHours)) {
     const businessHours = source.businessHours;
     if (typeof businessHours.enabled === 'boolean') merged.businessHours.enabled = businessHours.enabled;
+    if (['inherit', 'custom', 'legacy'].includes(businessHours.scheduleSource)) {
+      merged.businessHours.scheduleSource = businessHours.scheduleSource;
+    } else if (businessHours.scheduleSource === null) {
+      merged.businessHours.scheduleSource = null;
+    }
+    if (businessHours.businessHourSetId) {
+      merged.businessHours.businessHourSetId = String(businessHours.businessHourSetId);
+    } else if (businessHours.businessHourSetId === null) {
+      merged.businessHours.businessHourSetId = null;
+    }
     if (typeof businessHours.timezone === 'string' && businessHours.timezone.trim()) {
       merged.businessHours.timezone = businessHours.timezone.trim();
     }
@@ -139,8 +151,22 @@ function validatePriorityTargets(targets) {
 function validateBusinessHours(businessHours) {
   if (!isPlainObject(businessHours)) return 'businessHours must be an object';
   if (typeof businessHours.enabled !== 'boolean') return 'businessHours.enabled must be a boolean';
+
+  if (!businessHours.enabled) return null;
+
+  const source = businessHours.scheduleSource || 'legacy';
+
+  if (source === 'custom') {
+    if (!businessHours.businessHourSetId || typeof businessHours.businessHourSetId !== 'string') {
+      return 'businessHours.businessHourSetId is required when scheduleSource is custom';
+    }
+    return null;
+  }
+
+  if (source === 'inherit') return null;
+
   if (typeof businessHours.timezone !== 'string' || !businessHours.timezone.trim()) {
-    return 'businessHours.timezone is required';
+    return 'businessHours.timezone is required for inline SLA hours';
   }
   if (!Array.isArray(businessHours.workingDays) || businessHours.workingDays.length === 0) {
     return 'businessHours.workingDays must be a non-empty array';
@@ -285,6 +311,29 @@ exports.getHelpdeskExecutionSettings = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch Helpdesk execution settings'
+    });
+  }
+};
+
+exports.recalculateOpenCaseSlas = async (req, res) => {
+  try {
+    if (!req.user.isOwner && req.user.role !== 'admin' && !req.user.isPlatformAdmin) {
+      return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+
+    const { recalculateOpenCaseSlas } = require('../services/helpdeskSlaRecalculateService');
+    const limit = Number(req.body?.limit) || 500;
+    const result = await recalculateOpenCaseSlas(req.user.organizationId, { limit });
+
+    return res.json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    console.error('[helpdeskSettingsController] recalculateOpenCaseSlas error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to recalculate open case SLAs'
     });
   }
 };

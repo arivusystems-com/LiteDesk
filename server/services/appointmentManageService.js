@@ -2,7 +2,7 @@
 
 const Event = require('../models/Event');
 const AppointmentBookingConfig = require('../models/AppointmentBookingConfig');
-const { generateDaySlots } = require('./appointmentAvailabilityService');
+const { getSlotsForDate } = require('./appointmentAvailabilityService');
 const { memberHasConflict } = require('./appointmentTeamService');
 const { assertSlotAvailable } = require('./appointmentBookingService');
 const { emitAppointmentDomainEvent } = require('./appointmentDomainEvents');
@@ -71,34 +71,22 @@ async function getRescheduleSlots(event, config, dateStr) {
   const organizationId = event.organizationId;
   const excludeEventId = event._id;
 
-  const day = new Date(`${dateStr}T00:00:00.000Z`);
-  if (Number.isNaN(day.getTime())) throw new Error('Invalid date');
-
-  const availableDays = new Set(config.availableDays || [1, 2, 3, 4, 5]);
-  if (!availableDays.has(day.getDay())) return [];
-
-  const now = new Date();
-  const rawSlots = generateDaySlots(config, new Date(day));
+  const { slots: rawSlots } = await getSlotsForDate(config, dateStr, ownerId, organizationId);
   const results = [];
 
   for (const slot of rawSlots) {
-    if (slot.start < now) continue;
+    const start = new Date(slot.start);
+    const end = new Date(slot.end);
     const busy = await memberHasConflict(
       organizationId,
       ownerId,
-      slot.start,
-      slot.end,
+      start,
+      end,
       null,
       config.meetingType,
       excludeEventId
     );
-    if (!busy) {
-      results.push({
-        start: slot.start.toISOString(),
-        end: slot.end.toISOString(),
-        timezone: config.workingHours?.timezone || 'UTC'
-      });
-    }
+    if (!busy) results.push(slot);
   }
   return results;
 }

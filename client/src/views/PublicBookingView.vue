@@ -172,10 +172,16 @@
             </div>
 
             <h3 class="mt-6 text-sm font-semibold text-gray-700 dark:text-gray-300">Available times</h3>
+            <p v-if="visitorTimezoneLabel" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Times in your timezone ({{ visitorTimezoneLabel }})
+              <span v-if="scheduleTimezoneLabel && scheduleTimezoneLabel !== visitorTimezoneLabel">
+                · Host: {{ scheduleTimezoneLabel }}
+              </span>
+            </p>
             <div v-if="slotsLoading" class="mt-4 flex justify-center py-8">
               <div class="h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-[var(--accent)]"></div>
             </div>
-            <p v-else-if="!slots.length" class="mt-4 text-sm text-gray-500">No times available this day. Try another date.</p>
+            <p v-else-if="!slots.length" class="mt-4 text-sm text-gray-500">{{ emptySlotsMessage }}</p>
             <div v-else class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
               <button
                 v-for="slot in slots"
@@ -307,6 +313,23 @@ const selectedDate = ref(null);
 const selectedSlot = ref(null);
 const slots = ref([]);
 const slotsLoading = ref(false);
+const dayClosedReason = ref(null);
+const scheduleTimezoneLabel = ref('');
+const visitorTimezoneLabel = ref(
+  typeof Intl !== 'undefined'
+    ? Intl.DateTimeFormat().resolvedOptions().timeZone
+    : ''
+);
+
+const emptySlotsMessage = computed(() => {
+  if (dayClosedReason.value === 'holiday') {
+    return 'This date is a holiday for the host. Please choose another day.';
+  }
+  if (dayClosedReason.value === 'non_working_day') {
+    return 'The host is not available on this day. Try another date.';
+  }
+  return 'No open times left this day — the calendar may be full. Try another date.';
+});
 const guest = ref({ firstName: '', lastName: '', email: '', phone: '' });
 const formResponses = ref({});
 const submitting = ref(false);
@@ -425,9 +448,17 @@ async function fetchSlots() {
       `/api/public/book/${slug.value}/slots?date=${selectedDate.value}&timezone=${encodeURIComponent(tz)}`
     );
     const data = await res.json();
-    slots.value = data.success ? data.data.slots : [];
+    if (data.success) {
+      slots.value = data.data.slots || [];
+      dayClosedReason.value = data.data.dayClosed ? data.data.dayClosedReason : null;
+      scheduleTimezoneLabel.value = data.data.timezone || '';
+    } else {
+      slots.value = [];
+      dayClosedReason.value = null;
+    }
   } catch {
     slots.value = [];
+    dayClosedReason.value = null;
   } finally {
     slotsLoading.value = false;
   }

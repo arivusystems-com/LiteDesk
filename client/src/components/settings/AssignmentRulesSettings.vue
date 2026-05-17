@@ -319,6 +319,12 @@
                   <option value="load_balanced">Load balanced</option>
                   <option value="availability_based">Availability-based</option>
                 </select>
+                <p
+                  v-if="rule.distribution.mode === 'availability_based'"
+                  class="mt-1 text-xs text-gray-500 dark:text-gray-400"
+                >
+                  Only assigns users who are within business hours now; otherwise queues until the next open window.
+                </p>
               </div>
             </div>
             <div v-if="rule.distribution.mode === 'queue'" class="max-w-xs">

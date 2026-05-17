@@ -1,5 +1,14 @@
+const { DateTime } = require('luxon');
 const Event = require('../models/Event');
 const AppointmentBookingConfig = require('../models/AppointmentBookingConfig');
+const {
+  generateBookingSlots,
+  describeDayAvailability
+} = require('./businessHoursEngine');
+const {
+  resolveScheduleForBookingConfig,
+  getDisplayTimezone
+} = require('./appointmentBusinessHoursService');
 const {
   getExternalBusyIntervals,
   slotOverlapsBusyIntervals
@@ -7,40 +16,15 @@ const {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function parseTimeToMinutes(timeStr) {
-  const [h, m] = String(timeStr || '09:00').split(':').map(Number);
-  return (h || 0) * 60 + (m || 0);
-}
-
-function minutesToDate(baseDate, minutes, timezone) {
-  const d = new Date(baseDate);
-  d.setHours(0, 0, 0, 0);
-  d.setMinutes(minutes);
-  return d;
-}
-
-/**
- * Build slot start/end Date objects for a calendar day in local wall-clock (config timezone
- * applied as offset label only for MVP — slots use server-local day boundaries from date param).
- */
-function generateDaySlots(config, dayStart) {
-  const duration = config.slotDurationMinutes || 30;
-  const buffer = config.bufferMinutes || 0;
-  const startMin = parseTimeToMinutes(config.workingHours?.start);
-  const endMin = parseTimeToMinutes(config.workingHours?.end);
-  const step = duration + buffer;
-  const slots = [];
-
-  for (let m = startMin; m + duration <= endMin; m += step) {
-    const start = minutesToDate(dayStart, m);
-    const end = new Date(start.getTime() + duration * 60 * 1000);
-    slots.push({ start, end });
-  }
-  return slots;
-}
-
 function overlaps(aStart, aEnd, bStart, bEnd) {
   return aStart < bEnd && bStart < aEnd;
+}
+
+async function loadConfigWithCalendar(config) {
+  if (config?.googleCalendar?.encryptedRefreshToken) return config;
+  if (config?.microsoftCalendar?.encryptedRefreshToken) return config;
+  if (!config?._id) return config;
+  return AppointmentBookingConfig.findById(config._id).lean();
 }
 
 /**
@@ -50,14 +34,9 @@ function overlaps(aStart, aEnd, bStart, bEnd) {
  * @param {ObjectId} ownerId
  * @param {ObjectId} organizationId
  */
-async function loadConfigWithCalendar(config) {
-  if (config?.googleCalendar?.encryptedRefreshToken) return config;
-  if (!config?._id) return config;
-  return AppointmentBookingConfig.findById(config._id).lean();
-}
-
 async function getAvailableSlots(config, rangeStart, rangeEnd, ownerId, organizationId) {
-  const availableDays = new Set(config.availableDays || [1, 2, 3, 4, 5]);
+  const resolved = await resolveScheduleForBookingConfig(config, organizationId, ownerId);
+  const timezone = getDisplayTimezone(config, resolved);
   const now = new Date();
 
   const configForCalendar = await loadConfigWithCalendar(config);
@@ -78,70 +57,94 @@ async function getAvailableSlots(config, rangeStart, rangeEnd, ownerId, organiza
     .select('startDateTime endDateTime')
     .lean();
 
-  const results = [];
-  const cursor = new Date(rangeStart);
-  cursor.setHours(0, 0, 0, 0);
+  let slots = generateBookingSlots(resolved.schedule, {
+    rangeStart,
+    rangeEnd,
+    slotDurationMinutes: config.slotDurationMinutes || 30,
+    bufferMinutes: config.bufferMinutes || 0
+  });
 
-  while (cursor <= rangeEnd) {
-    const dayOfWeek = cursor.getDay();
-    if (availableDays.has(dayOfWeek)) {
-      const dayStart = new Date(cursor);
-      const dayEnd = new Date(cursor.getTime() + DAY_MS);
-      let slots = generateDaySlots(config, dayStart);
-
-      if (config.dailyCapacity != null && config.dailyCapacity > 0) {
-        const bookedToday = existing.filter((e) => {
-          const s = new Date(e.startDateTime);
-          return s >= dayStart && s < dayEnd;
-        }).length;
-        if (bookedToday >= config.dailyCapacity) {
-          cursor.setDate(cursor.getDate() + 1);
-          continue;
-        }
-      }
-
-      slots = slots.filter((slot) => {
-        if (slot.start < now) return false;
-        if (
-          existing.some((ev) =>
-            overlaps(slot.start, slot.end, new Date(ev.startDateTime), new Date(ev.endDateTime))
-          )
-        ) {
-          return false;
-        }
-        return !slotOverlapsBusyIntervals(slot.start, slot.end, externalBusy);
-      });
-
-      for (const slot of slots) {
-        results.push({
-          start: slot.start.toISOString(),
-          end: slot.end.toISOString(),
-          timezone: config.workingHours?.timezone || 'UTC'
-        });
-      }
+  if (config.dailyCapacity != null && config.dailyCapacity > 0) {
+    const zone = timezone;
+    const bookedByDay = new Map();
+    for (const ev of existing) {
+      const key = DateTime.fromJSDate(new Date(ev.startDateTime), { zone }).toISODate();
+      bookedByDay.set(key, (bookedByDay.get(key) || 0) + 1);
     }
-    cursor.setDate(cursor.getDate() + 1);
+    slots = slots.filter((slot) => {
+      const key = DateTime.fromJSDate(slot.start, { zone }).toISODate();
+      return (bookedByDay.get(key) || 0) < config.dailyCapacity;
+    });
   }
 
-  return results;
+  slots = slots.filter((slot) => {
+    if (slot.start < now) return false;
+    if (
+      existing.some((ev) =>
+        overlaps(slot.start, slot.end, new Date(ev.startDateTime), new Date(ev.endDateTime))
+      )
+    ) {
+      return false;
+    }
+    return !slotOverlapsBusyIntervals(slot.start, slot.end, externalBusy);
+  });
+
+  return slots.map((slot) => ({
+    start: slot.start.toISOString(),
+    end: slot.end.toISOString(),
+    timezone
+  }));
 }
 
 /**
- * Single-day slots for public API.
+ * Metadata for a single booking day (holidays, closed weekdays).
+ */
+async function getDayAvailabilityMeta(config, dateStr, ownerId, organizationId) {
+  const resolved = await resolveScheduleForBookingConfig(config, organizationId, ownerId);
+  const meta = describeDayAvailability(resolved.schedule, dateStr);
+  return {
+    ...meta,
+    scheduleSource: resolved.source,
+    timezone: meta.timezone || getDisplayTimezone(config, resolved)
+  };
+}
+
+/**
+ * Single-day slots for public API (date interpreted in schedule timezone).
  */
 async function getSlotsForDate(config, dateStr, ownerId, organizationId) {
-  const day = new Date(`${dateStr}T00:00:00.000Z`);
-  if (Number.isNaN(day.getTime())) {
+  const resolved = await resolveScheduleForBookingConfig(config, organizationId, ownerId);
+  const timezone = getDisplayTimezone(config, resolved);
+  const dayStart = DateTime.fromISO(dateStr, { zone: timezone }).startOf('day');
+  if (!dayStart.isValid) {
     throw new Error('Invalid date');
   }
-  const rangeStart = new Date(day);
-  const rangeEnd = new Date(day.getTime() + DAY_MS);
-  return getAvailableSlots(config, rangeStart, rangeEnd, ownerId, organizationId);
+
+  const rangeStart = dayStart.toJSDate();
+  const rangeEnd = dayStart.plus({ days: 1 }).toJSDate();
+  const slots = await getAvailableSlots(config, rangeStart, rangeEnd, ownerId, organizationId);
+  const dayMeta = describeDayAvailability(resolved.schedule, dateStr);
+
+  return { slots, dayMeta, timezone, scheduleSource: resolved.source };
+}
+
+/** @deprecated Use generateBookingSlots via resolveScheduleForBookingConfig */
+function generateDaySlots(config, dayStart) {
+  const { legacyConfigToSchedule } = require('./appointmentBusinessHoursService');
+  const schedule = legacyConfigToSchedule(config);
+  const rangeEnd = new Date(dayStart.getTime() + DAY_MS);
+  return generateBookingSlots(schedule, {
+    rangeStart: dayStart,
+    rangeEnd,
+    slotDurationMinutes: config.slotDurationMinutes || 30,
+    bufferMinutes: config.bufferMinutes || 0
+  });
 }
 
 module.exports = {
   getAvailableSlots,
   getSlotsForDate,
+  getDayAvailabilityMeta,
   generateDaySlots,
   overlaps
 };

@@ -3,6 +3,7 @@ const AssignmentRuleSet = require('../models/AssignmentRuleSet');
 const AssignmentExecutionLog = require('../models/AssignmentExecutionLog');
 const Group = require('../models/Group');
 const { simulateAssignment } = require('./assignmentRulesEngine');
+const { enqueueOffHoursDeferredAssignment } = require('./assignmentAvailabilityService');
 const { emitSalesRecordOwnerAssignedNotify } = require('./assignmentSalesOwnerNotify');
 
 function toIdString(value) {
@@ -279,6 +280,34 @@ async function registerManualOwnerOverride({ caseRecord, actorId, previousOwnerI
   return { processed: true, lockApplied: hasLockOnManualOverride };
 }
 
+async function maybeEnqueueOffHoursAssignment({
+  organizationId,
+  appKey,
+  moduleKey,
+  recordId,
+  ruleSet,
+  simulation,
+  actorId
+}) {
+  const state = simulation?.outcome?.state || 'skipped';
+  if (state !== 'queued' || simulation?.outcome?.reason !== 'off_hours_deferred') {
+    return { deferred: false };
+  }
+  const matchedRule = (ruleSet?.rules || []).find((rule) => rule.ruleId === simulation.ruleId);
+  if (!matchedRule) return { deferred: false };
+
+  const enqueueResult = await enqueueOffHoursDeferredAssignment({
+    organizationId,
+    appKey,
+    moduleKey,
+    recordId,
+    rule: matchedRule,
+    ruleSetVersion: ruleSet.version,
+    actorId
+  });
+  return { deferred: true, enqueueResult };
+}
+
 async function createExecutionLog({
   organizationId,
   appKey,
@@ -551,6 +580,34 @@ async function runImmediateAssignmentForSalesRecord({
         err?.message || err
       );
     });
+  } else {
+    const offHoursDefer = await maybeEnqueueOffHoursAssignment({
+      organizationId,
+      appKey,
+      moduleKey: key,
+      recordId,
+      ruleSet,
+      simulation,
+      actorId
+    });
+    if (offHoursDefer.deferred && offHoursDefer.enqueueResult?.queued) {
+      const logLine = {
+        user: 'Assignment Engine',
+        userId: actorId || null,
+        action: 'assignment_deferred',
+        message: 'Assignment deferred until business hours',
+        details: {
+          ruleId: simulation.ruleId,
+          runAt: offHoursDefer.enqueueResult.runAt,
+          reason: 'off_hours_deferred'
+        },
+        timestamp: new Date()
+      };
+      if (Array.isArray(record.activityLogs)) {
+        record.activityLogs.push(logLine);
+        await record.save();
+      }
+    }
   }
 
   await createExecutionLog({
@@ -564,7 +621,11 @@ async function runImmediateAssignmentForSalesRecord({
     newOwnerId: canAssign ? nextOwnerId : previousOwnerId,
     assignedGroupId,
     status:
-      state === 'assigned' && ownerChanged ? 'assigned' : state === 'queued' ? 'queued' : 'skipped',
+      state === 'assigned' && ownerChanged
+        ? 'assigned'
+        : state === 'queued'
+          ? 'queued'
+          : 'skipped',
     idempotencyKey,
     details: {
       ruleSetVersion: ruleSet.version,
@@ -689,6 +750,42 @@ async function runImmediateAssignmentForCase({
         ruleId: simulation.ruleId,
         assignedGroupId,
         strategy: simulation?.outcome?.reason || 'queue_claim'
+      },
+      actorId: actorId || null,
+      actorName: 'Assignment Engine',
+      createdAt: new Date()
+    });
+    await caseRecord.save();
+  } else if (
+    simulation.matched &&
+    state === 'queued' &&
+    simulation?.outcome?.reason === 'off_hours_deferred' &&
+    matchedRule
+  ) {
+    const offHoursDefer = await maybeEnqueueOffHoursAssignment({
+      organizationId,
+      appKey,
+      moduleKey,
+      recordId,
+      ruleSet,
+      simulation,
+      actorId
+    });
+    caseRecord.activities = Array.isArray(caseRecord.activities) ? caseRecord.activities : [];
+    const runAtLabel = offHoursDefer.enqueueResult?.runAt
+      ? new Date(offHoursDefer.enqueueResult.runAt).toISOString()
+      : null;
+    caseRecord.activities.push({
+      activityType: 'assignment_deferred',
+      message: runAtLabel
+        ? `Assignment deferred — no agents available outside business hours. Retrying ${runAtLabel}.`
+        : 'Assignment deferred until business hours (no agents currently available).',
+      internal: true,
+      metadata: {
+        ruleId: simulation.ruleId,
+        reason: 'off_hours_deferred',
+        runAt: runAtLabel,
+        queued: Boolean(offHoursDefer.enqueueResult?.queued)
       },
       actorId: actorId || null,
       actorName: 'Assignment Engine',

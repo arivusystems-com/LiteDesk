@@ -31,6 +31,7 @@ const {
   createReopenedSlaState
 } = require('../services/caseLifecycleService');
 const { applySlaTargetsToCycle } = require('../services/helpdeskSlaService');
+const { getSlaScheduleContext } = require('../services/helpdeskBusinessHoursService');
 const caseExecutionService = require('../services/caseExecutionService');
 
 function getActorDisplayName(user) {
@@ -419,13 +420,24 @@ exports.getCaseById = async (req, res) => {
     const flat = flattenCustomFieldsForResponse(shaped, shaped.customFields);
     patchCaseFlattenedAliases(flat);
 
+    let slaContext = null;
+    try {
+      slaContext = await getSlaScheduleContext(req.user.organizationId);
+    } catch (slaCtxErr) {
+      console.warn('[caseController] slaContext:', slaCtxErr.message);
+    }
+
     return res.json({
       success: true,
-      data: flat,
+      data: {
+        ...flat,
+        slaContext
+      },
       meta: {
         totalActivities: allActivities.length,
         returnedActivities: trimmedActivities.length,
-        activityLimit
+        activityLimit,
+        slaContext
       }
     });
   } catch (error) {

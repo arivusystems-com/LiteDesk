@@ -257,6 +257,7 @@ app.use('/api/organizations', organizationSurfaceRoutes);
 app.use('/api/modules', moduleRecordRoutes);
 app.use('/api/modules', moduleRoutes);
 app.use('/api/groups', groupRoutes);
+app.use('/api/business-hours', require('./routes/businessHoursRoutes'));
 app.use('/api/public/forms', formRoutes); // Public form routes
 app.use('/api/public/book', require('./routes/publicBookingRoutes'));
 app.use('/api/public/appointments/manage', require('./routes/publicAppointmentManageRoutes'));

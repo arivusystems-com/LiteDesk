@@ -6,6 +6,7 @@ const { normalizeCustomFields } = require('../utils/appointmentCustomFields');
 function sanitizeConfigBody(body) {
   const allowed = [
     'displayName', 'slug', 'enabled', 'availableDays', 'workingHours',
+    'scheduleSource', 'businessHourSetId',
     'slotDurationMinutes', 'bufferMinutes', 'dailyCapacity', 'meetingType',
     'appointmentTypes', 'customFields', 'branding'
   ];

@@ -109,50 +109,15 @@
 
           <AppointmentEmbedSnippet v-if="form.slug" :slug="form.slug" />
 
-          <section class="rounded-2xl border border-gray-200/80 bg-white p-6 shadow-sm dark:border-gray-700/80 dark:bg-gray-900/80">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Availability</h2>
-            <div class="mt-4">
-              <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Available days</p>
-              <div class="mt-2 flex flex-wrap gap-2">
-                <button
-                  v-for="(label, idx) in DAY_LABELS"
-                  :key="idx"
-                  type="button"
-                  class="rounded-full px-3.5 py-1.5 text-sm font-medium transition-all duration-200 active:scale-95"
-                  :class="form.availableDays.includes(idx)
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400'"
-                  @click="toggleDay(idx)"
-                >
-                  {{ label }}
-                </button>
-              </div>
-            </div>
-            <div class="mt-5 grid gap-4 sm:grid-cols-2">
-              <div>
-                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">From</label>
-                <input v-model="form.workingHours.start" type="time" class="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
-              </div>
-              <div>
-                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">To</label>
-                <input v-model="form.workingHours.end" type="time" class="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
-              </div>
-            </div>
-            <div class="mt-5 grid gap-4 sm:grid-cols-2">
-              <div>
-                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Slot length</label>
-                <select v-model.number="form.slotDurationMinutes" class="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 dark:border-gray-600 dark:bg-gray-800 dark:text-white">
-                  <option v-for="o in SLOT_DURATION_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
-                </select>
-              </div>
-              <div>
-                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Buffer between meetings</label>
-                <select v-model.number="form.bufferMinutes" class="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 dark:border-gray-600 dark:bg-gray-800 dark:text-white">
-                  <option v-for="o in BUFFER_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
-                </select>
-              </div>
-            </div>
-          </section>
+          <AppointmentBookingScheduleSection
+            v-model:schedule-source="form.scheduleSource"
+            v-model:business-hour-set-id="form.businessHourSetId"
+            v-model:available-days="form.availableDays"
+            v-model:working-hours="form.workingHours"
+            v-model:slot-duration-minutes="form.slotDurationMinutes"
+            v-model:buffer-minutes="form.bufferMinutes"
+            :inherit-user-id="inheritUserIdForSchedule"
+          />
 
           <section class="rounded-2xl border border-gray-200/80 bg-white p-6 shadow-sm dark:border-gray-700/80 dark:bg-gray-900/80">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Meeting format</h2>
@@ -355,16 +320,11 @@ import { useAuthStore } from '@/stores/authRegistry';
 import { useTabs } from '@/composables/useTabs';
 import { LinkIcon, VideoCameraIcon, MapPinIcon } from '@heroicons/vue/24/outline';
 import { useAppointmentConfig } from '@/composables/useAppointmentConfig';
-import {
-  DAY_LABELS,
-  SLOT_DURATION_OPTIONS,
-  BUFFER_OPTIONS,
-  MEETING_TYPE_OPTIONS,
-  slugifyClient
-} from '@/utils/appointmentFormatters';
+import { MEETING_TYPE_OPTIONS, slugifyClient } from '@/utils/appointmentFormatters';
 import { useNotifications } from '@/composables/useNotifications';
 import AppointmentCustomFieldsEditor from '@/components/appointments/AppointmentCustomFieldsEditor.vue';
 import AppointmentEmbedSnippet from '@/components/appointments/AppointmentEmbedSnippet.vue';
+import AppointmentBookingScheduleSection from '@/components/appointments/AppointmentBookingScheduleSection.vue';
 
 const {
   config,
@@ -389,6 +349,10 @@ const editUserId = computed(() => route.params.userId || null);
 const isAdminEdit = computed(
   () => editUserId.value && String(editUserId.value) !== String(authStore.user?._id)
 );
+const inheritUserIdForSchedule = computed(() => {
+  if (isAdminEdit.value) return editUserId.value;
+  return authStore.user?._id ? String(authStore.user._id) : null;
+});
 const editUserLabel = ref('User booking page');
 const calendarStatus = ref({
   connected: false,
@@ -408,6 +372,8 @@ const form = reactive({
   displayName: '',
   slug: '',
   enabled: true,
+  scheduleSource: 'legacy',
+  businessHourSetId: null,
   availableDays: [1, 2, 3, 4, 5],
   workingHours: { start: '09:00', end: '18:00', timezone: 'UTC' },
   slotDurationMinutes: 30,
@@ -432,20 +398,15 @@ function maybeAutoSlug() {
   }
 }
 
-function toggleDay(idx) {
-  const i = form.availableDays.indexOf(idx);
-  if (i >= 0) form.availableDays.splice(i, 1);
-  else form.availableDays.push(idx);
-  form.availableDays.sort((a, b) => a - b);
-}
-
 function previewSlot(i) {
   const h = 9 + i;
   return `${h}:00 ${h < 12 ? 'AM' : 'PM'}`;
 }
 
 async function handleSave() {
-  form.workingHours.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || form.workingHours.timezone;
+  if (form.scheduleSource === 'legacy') {
+    form.workingHours.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || form.workingHours.timezone;
+  }
   if (isAdminEdit.value) {
     await saveUserConfig(editUserId.value, { ...form });
   } else {
@@ -583,6 +544,8 @@ watch(config, (c) => {
     displayName: c.displayName || '',
     slug: c.slug || '',
     enabled: c.enabled !== false,
+    scheduleSource: c.scheduleSource || 'legacy',
+    businessHourSetId: c.businessHourSetId ? String(c.businessHourSetId) : null,
     availableDays: [...(c.availableDays || [1, 2, 3, 4, 5])],
     workingHours: { ...form.workingHours, ...(c.workingHours || {}) },
     slotDurationMinutes: c.slotDurationMinutes ?? 30,

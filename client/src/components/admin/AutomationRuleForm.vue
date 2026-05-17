@@ -114,6 +114,18 @@
                               />
                               <span class="text-sm text-gray-700 dark:text-gray-300">Enabled</span>
                             </label>
+                            <label class="flex items-start gap-2 mt-3">
+                              <HeadlessCheckbox
+                                v-model="form.respectBusinessHours"
+                                checkbox-class="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                              />
+                              <span class="text-sm text-gray-700 dark:text-gray-300">
+                                Respect business hours
+                                <span class="block text-xs text-gray-500 dark:text-gray-400 font-normal">
+                                  Run this action at the next open window when triggered outside working hours.
+                                </span>
+                              </span>
+                            </label>
                           </div>
                         </div>
                       </section>
@@ -455,6 +467,7 @@ const form = ref({
   appKey: 'SALES',
   entityType: '',
   enabled: true,
+  respectBusinessHours: false,
   trigger: {
     eventType: '',
     condition: null
@@ -643,6 +656,7 @@ function initializeForm() {
       appKey: props.rule.appKey || 'SALES',
       entityType: props.rule.entityType || '',
       enabled: props.rule.enabled !== false,
+      respectBusinessHours: Boolean(props.rule.respectBusinessHours),
       trigger: {
         eventType: props.rule.trigger?.eventType || '',
         condition: props.rule.trigger?.condition || null

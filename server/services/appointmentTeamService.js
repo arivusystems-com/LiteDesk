@@ -1,6 +1,8 @@
+const { DateTime } = require('luxon');
 const Event = require('../models/Event');
 const User = require('../models/User');
-const { generateDaySlots } = require('./appointmentAvailabilityService');
+const { generateBookingSlots } = require('./businessHoursEngine');
+const { resolveScheduleForBookingConfig, getDisplayTimezone } = require('./appointmentBusinessHoursService');
 const { getMemberExternalBusy, slotOverlapsBusyIntervals } = require('./appointmentExternalCalendarService');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -89,23 +91,31 @@ async function getAvailableMembersForSlot(teamConfig, start, end, dayExternalBus
  * Union of slots where at least one team member is available.
  */
 async function getTeamSlotsForDate(teamConfig, dateStr) {
-  const day = new Date(`${dateStr}T00:00:00.000Z`);
-  if (Number.isNaN(day.getTime())) {
-    throw new Error('Invalid date');
-  }
-
   const members = (teamConfig.memberUserIds || []).map((id) => String(id));
   if (!members.length) return [];
 
-  const now = new Date();
-  const availableDays = new Set(teamConfig.availableDays || [1, 2, 3, 4, 5]);
-  const dayOfWeek = day.getDay();
-  if (!availableDays.has(dayOfWeek)) return [];
+  const resolved = await resolveScheduleForBookingConfig(
+    teamConfig,
+    teamConfig.organizationId,
+    teamConfig.ownerId
+  );
+  const timezone = getDisplayTimezone(teamConfig, resolved);
+  const dayStart = DateTime.fromISO(dateStr, { zone: timezone }).startOf('day');
+  if (!dayStart.isValid) {
+    throw new Error('Invalid date');
+  }
 
-  const dayStart = new Date(day);
-  const dayEnd = new Date(day.getTime() + DAY_MS);
-  const rawSlots = generateDaySlots(teamConfig, dayStart);
+  const now = new Date();
+  const rangeStart = dayStart.toJSDate();
+  const rangeEnd = dayStart.plus({ days: 1 }).toJSDate();
+  const rawSlots = generateBookingSlots(resolved.schedule, {
+    rangeStart,
+    rangeEnd,
+    slotDurationMinutes: teamConfig.slotDurationMinutes || 30,
+    bufferMinutes: teamConfig.bufferMinutes || 0
+  });
   const results = [];
+  const dayEnd = rangeEnd;
 
   memberExternalBusyCache.clear();
   const dayExternalBusyByMember = new Map();
@@ -114,7 +124,7 @@ async function getTeamSlotsForDate(teamConfig, dateStr) {
       const busy = await getMemberExternalBusyForRange(
         teamConfig.organizationId,
         memberId,
-        dayStart,
+        rangeStart,
         dayEnd,
         teamConfig.meetingType
       );
@@ -134,7 +144,7 @@ async function getTeamSlotsForDate(teamConfig, dateStr) {
       results.push({
         start: slot.start.toISOString(),
         end: slot.end.toISOString(),
-        timezone: teamConfig.workingHours?.timezone || 'UTC',
+        timezone,
         availableMemberCount: freeMembers.length
       });
     }

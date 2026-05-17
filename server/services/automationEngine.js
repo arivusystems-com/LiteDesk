@@ -17,6 +17,10 @@ const { execute: executeAction } = require('./automationActionHandlers');
 const AutomationExecution = require('../models/AutomationExecution');
 const { createLogger } = require('./automationLogger');
 const { isTrashed } = require('../utils/trashGuard');
+const {
+  evaluateAutomationDeferral,
+  enqueueDeferredAutomationAction
+} = require('./automationBusinessHoursService');
 
 const log = createLogger('automationEngine');
 
@@ -138,6 +142,7 @@ async function processEvent(event) {
           eventId,
           eventType,
           rulesMatched: 0,
+          deferred: 0,
           plan: [],
           executed: 0,
           skipped: 0,
@@ -151,16 +156,45 @@ async function processEvent(event) {
   }
 
   const matched = await resolveRules(event);
-  const plan = matched.map((m, idx) => ({
-    actionIndex: idx,
-    ruleId: m.rule._id?.toString(),
-    ruleName: m.rule.name,
-    actionType: m.action?.type,
-    actionParams: m.action?.params ?? null,
-    entityType,
-    entityId,
-    appKey: m.rule.appKey || appKey
-  }));
+  const plan = [];
+  let deferred = 0;
+
+  for (let idx = 0; idx < matched.length; idx += 1) {
+    const m = matched[idx];
+    const deferral = await evaluateAutomationDeferral(event, m.rule);
+    if (deferral.shouldDefer) {
+      const enqueueResult = await enqueueDeferredAutomationAction({
+        event,
+        rule: m.rule,
+        actionIndex: idx,
+        actionType: m.action?.type,
+        actionParams: m.action?.params ?? null,
+        executeAt: deferral.executeAt,
+        pauseReason: deferral.pauseReason
+      });
+      if (enqueueResult.queued) {
+        deferred += 1;
+        log.info('automation_action_deferred', {
+          eventId,
+          ruleId: m.rule._id?.toString(),
+          actionIndex: idx,
+          executeAt: enqueueResult.executeAt,
+          pauseReason: deferral.pauseReason
+        });
+      }
+      continue;
+    }
+    plan.push({
+      actionIndex: idx,
+      ruleId: m.rule._id?.toString(),
+      ruleName: m.rule.name,
+      actionType: m.action?.type,
+      actionParams: m.action?.params ?? null,
+      entityType,
+      entityId,
+      appKey: m.rule.appKey || appKey
+    });
+  }
 
   log.info('automation_actions_planned', {
     eventId,
@@ -169,6 +203,7 @@ async function processEvent(event) {
     entityId,
     appKey,
     rulesMatched: matched.length,
+    deferred,
     plan: plan.map((p) => ({ ruleId: p.ruleId, actionType: p.actionType, actionIndex: p.actionIndex }))
   });
 
@@ -339,6 +374,7 @@ async function processEvent(event) {
     eventId,
     eventType,
     rulesMatched: matched.length,
+    deferred,
     plan,
     executed,
     skipped,

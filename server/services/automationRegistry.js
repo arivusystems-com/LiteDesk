@@ -88,7 +88,13 @@ async function resolveRules(event) {
   for (const rule of rules) {
     if (!matchesCondition(rule.trigger?.condition, event)) continue;
     matched.push({
-      rule: { _id: rule._id, name: rule.name, appKey: rule.appKey, entityType: rule.entityType },
+      rule: {
+        _id: rule._id,
+        name: rule.name,
+        appKey: rule.appKey,
+        entityType: rule.entityType,
+        respectBusinessHours: Boolean(rule.respectBusinessHours)
+      },
       action: rule.action || { type: 'unknown', params: null }
     });
   }

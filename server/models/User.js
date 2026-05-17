@@ -52,6 +52,13 @@ const UserSchema = new mongoose.Schema({
     lastName: String,
     phoneNumber: String,
     avatar: String,
+
+    /** Optional personal business hours override (BusinessHourSet) */
+    businessHourSetId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'BusinessHourSet',
+        default: null
+    },
     
     // Role & Permissions (RBAC)
     // NEW: Dynamic Role System

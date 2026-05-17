@@ -282,6 +282,11 @@
               :can-edit="canEditRecord"
               @save="handleTitleSave"
             />
+            <CaseSlaContextBanner
+              v-if="moduleKeyLower === 'cases' && record?.slaContext"
+              :sla-context="record.slaContext"
+              :cycle-status="record.currentSlaCycle?.status"
+            />
             <!-- People: participation badges under name (Sales, Lead) -->
             <div
               v-if="isPeopleModule && peopleHeaderBadges.length"
@@ -940,6 +945,7 @@ import RecordPageTitleRow from '@/components/record-page/RecordPageTitleRow.vue'
 import { useStickyTitleRow } from '@/components/record-page/composables/useStickyTitleRow';
 import SectionStack from '@/components/record-page/sections/SectionStack.vue';
 import AppointmentDetailCard from '@/components/appointments/AppointmentDetailCard.vue';
+import CaseSlaContextBanner from '@/components/helpdesk/CaseSlaContextBanner.vue';
 import RelatedSection from '@/components/record-page/sections/RelatedSection.vue';
 import DetailsSection from '@/components/record-page/sections/DetailsSection.vue';
 import RecordRightPane from '@/components/record-page/RecordRightPane.vue';
