@@ -1,6 +1,7 @@
 'use strict';
 
 const { resolveUserFromToken } = require('../utils/resolveUserFromToken');
+const { applySseCors } = require('../utils/sseCors');
 const inboxSSEHub = require('../services/inboxSSEHub');
 
 async function validateTokenFromQuery(req) {
@@ -17,17 +18,21 @@ async function validateTokenFromQuery(req) {
  * SSE for workspace inbox list refresh (R3).
  */
 exports.streamInbox = async (req, res) => {
+  applySseCors(req, res);
+
   const user = await validateTokenFromQuery(req);
   if (!user?._id || !user.organizationId) {
-    res.writeHead(401, { 'Content-Type': 'text/plain' });
-    res.end('Unauthorized');
-    return;
+    return res.status(401).send('Unauthorized');
   }
 
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
+
+  if (typeof res.flushHeaders === 'function') {
+    res.flushHeaders();
+  }
 
   res.write(`event: connected\ndata: ${JSON.stringify({ timestamp: Date.now() })}\n\n`);
 

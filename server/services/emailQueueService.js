@@ -30,10 +30,8 @@ function getLegacyRedisUrl() {
 }
 
 function isRedisConfigured() {
-  return !!(
-    process.env.REDIS_URL ||
-    process.env.REDIS_HOST ||
-    process.env.REDIS_PORT
+  return Boolean(
+    String(process.env.REDIS_URL || '').trim() || String(process.env.REDIS_HOST || '').trim()
   );
 }
 

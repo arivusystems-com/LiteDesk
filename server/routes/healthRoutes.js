@@ -35,7 +35,11 @@ router.get('/ready', async (req, res) => {
         ? { configured: false }
         : { configured: true, ok: redisResult.ok, error: redisResult.error };
 
-    const redisBlocks = !redisResult.skipped && !redisResult.ok;
+    // Only fail readiness when Redis is explicitly required (avoid 503 if REDIS_URL is set but unreachable).
+    const redisBlocksReady =
+        process.env.REDIS_HEALTH_BLOCKS_READY === 'true'
+        || process.env.ENABLE_REDIS_REQUIRED === 'true';
+    const redisBlocks = redisBlocksReady && !redisResult.skipped && !redisResult.ok;
     const ok = mongoOk && !redisBlocks;
     res.status(ok ? 200 : 503).json({ ...payload, status: ok ? 'ready' : 'not_ready' });
 });
