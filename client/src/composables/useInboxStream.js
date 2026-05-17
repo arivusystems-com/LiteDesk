@@ -65,7 +65,8 @@ export function createInboxStream(options = {}) {
     );
 
     try {
-      eventSource = new EventSource(url, { withCredentials: true });
+      // Auth is via ?token= JWT; omit withCredentials to simplify cross-origin CORS.
+      eventSource = new EventSource(url);
 
       eventSource.addEventListener('connected', () => {
         attemptCount = 0;

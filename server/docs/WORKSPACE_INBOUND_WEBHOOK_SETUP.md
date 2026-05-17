@@ -243,14 +243,33 @@ Get `<token>` from a CRM email you sent (Reply-To header) or from `email_threads
 
 - [ ] API on HTTPS; firewall allows relay egress to `/api/webhooks/email/inbound`
 - [ ] `EMAIL_INBOUND_WEBHOOK_SECRET` matches relay Bearer token
-- [ ] Redis running; `queueAvailable: true` in health
+- [ ] Redis optional — sync inbound works with `queueAvailable: false`
 - [ ] Apps Script trigger active; test email labeled `arivu-processed`
 - [ ] `EMAIL_INBOUND_REQUIRE_REPLY_TOKEN=true`
 - [ ] Monitor dead letters / server logs for `InboundDispatchError`
 
 ---
 
-## 6. Troubleshooting
+## 6. Redis (optional for inbound)
+
+Inbound **does not require Redis**. Without `REDIS_URL`, the webhook processes mail **inline** (HTTP **200** with `communicationId`).
+
+| `queueAvailable` | Behaviour |
+|------------------|-----------|
+| `false` | Sync processing on webhook — **fine for production** |
+| `true` | Async via Bull — requires Redis + worker |
+
+**If enabling Redis breaks the app:** an unreachable `REDIS_URL` used to make `/health/ready` return **503** and the load balancer stopped traffic. Deploy the latest API (Redis health no longer blocks readiness by default) or remove `REDIS_URL` until Redis is running.
+
+Production options:
+
+1. **No Redis** — leave `REDIS_URL` unset; rely on sync inbound (simplest).
+2. **Managed Redis** — set `REDIS_URL=rediss://...` (Upstash/Railway/OCI) and verify `curl …/health/ready` shows `redis.ok: true`.
+3. **Dedicated worker** — `npm run worker` with same `REDIS_URL`; set `ENABLE_BULL_IN_WEB=false` on API.
+
+---
+
+## 7. Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
@@ -259,6 +278,7 @@ Get `<token>` from a CRM email you sent (Reply-To header) or from `email_threads
 | `400` No valid Reply-To token | Email has no `reply+` / `replies+` in To/Cc/Bcc/**Delivered-To**; reply to a CRM-sent Reply-To, not mail sent directly to `inbox@reply…` |
 | `400` (old mail in inbox) | Label or archive non-token mail; only customer **replies to CRM Reply-To** should be ingested |
 | Mail in Google, not Arivu | Trigger not running; wrong URL; script not authorized |
+| Apps Script **200** but empty Inbox | Sidebar mailbox filter hides threads without `mailboxId` — select **All mailboxes** or deploy latest inbound (uses mailbox from reply token) |
 | `queued: true` but no UI update | Redis worker not running; check inbound queue consumer |
 
 ---

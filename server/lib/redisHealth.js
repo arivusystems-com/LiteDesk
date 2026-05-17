@@ -5,9 +5,9 @@ const { createClient } = require('redis');
  */
 function isRedisRequiredForHealth() {
   return Boolean(
-    process.env.REDIS_URL ||
-    process.env.REDIS_HOST ||
-    process.env.ENABLE_REDIS_REQUIRED === 'true',
+    String(process.env.REDIS_URL || '').trim()
+    || String(process.env.REDIS_HOST || '').trim()
+    || process.env.ENABLE_REDIS_REQUIRED === 'true',
   );
 }
 

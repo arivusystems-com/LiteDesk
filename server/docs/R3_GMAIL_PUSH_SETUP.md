@@ -33,6 +33,26 @@ GMAIL_PUBSUB_VERIFY_TOKEN=
 GMAIL_WATCH_RENEW_CRON=15 4 * * *
 ```
 
+## Inbox SSE (`/api/communications/inbox/stream`)
+
+Cross-origin from `https://app.arivusystems.com` → `https://api.arivusystems.com` requires CORS on every SSE response (including 401).
+
+If the browser shows **504 Gateway Timeout** on the stream URL, increase the reverse-proxy idle timeout (long-lived connection):
+
+```nginx
+location /api/communications/inbox/stream {
+  proxy_pass http://your_api;
+  proxy_http_version 1.1;
+  proxy_set_header Connection '';
+  proxy_buffering off;
+  proxy_cache off;
+  proxy_read_timeout 3600s;
+  proxy_send_timeout 3600s;
+}
+```
+
+Without this, the inbox still works — use manual refresh or the 5-minute Gmail poll.
+
 ## Behaviour
 
 - On **Gmail OAuth connect**, the server calls `users.watch` when `GMAIL_PUBSUB_TOPIC` is set.

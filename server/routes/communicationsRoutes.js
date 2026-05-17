@@ -5,8 +5,10 @@ const { organizationIsolation } = require('../middleware/organizationMiddleware'
 const { uploadSingle } = require('../middleware/uploadMiddleware');
 const controller = require('../controllers/communicationsController');
 const { streamInbox } = require('../controllers/inboxStreamController');
+const { handleSseCorsPreflight } = require('../utils/sseCors');
 
 // SSE — auth via query token (EventSource cannot send Authorization header)
+router.options('/inbox/stream', handleSseCorsPreflight);
 router.get('/inbox/stream', streamInbox);
 
 router.use(protect);

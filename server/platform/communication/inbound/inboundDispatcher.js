@@ -369,6 +369,13 @@ async function processRawInbound({
       organizationId: orgId,
       parsedMessage
     });
+  if (
+    !mailboxIdInbound
+    && mailboxIdFromToken
+    && mongoose.Types.ObjectId.isValid(String(mailboxIdFromToken))
+  ) {
+    mailboxIdInbound = new mongoose.Types.ObjectId(String(mailboxIdFromToken));
+  }
   if (!mailboxIdInbound && threadResolution.parent?.mailboxId) {
     mailboxIdInbound = threadResolution.parent.mailboxId;
   }
