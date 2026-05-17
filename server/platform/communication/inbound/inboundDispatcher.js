@@ -28,27 +28,33 @@ const { appendCommunicationEvent } = require('../../../services/communicationEve
 const { resolveMailboxIdForInbound } = require('../../../services/mailboxRoutingService');
 const { runWithOrganizationTenantContext } = require('../../../utils/runWithOrganizationTenant');
 
-const { parseRawMime } = require('./inboundParser');
+const {
+  parseRawMime,
+  scanCrmThreadTokenFromRawMime,
+  scanRoutingAddressesFromRawMimeRelaxed
+} = require('./inboundParser');
+const { decodeBase64OrBase64Url } = require('../../../utils/decodeInboundRawMime');
 const { resolveThread } = require('./threadResolver');
 const { normalizeReplyBody } = require('./replyContentNormalizer');
 
 class InboundDispatchError extends Error {
-  constructor(message, { stage = 'unknown', cause = null } = {}) {
+  constructor(message, { stage = 'unknown', cause = null, routeMeta = null } = {}) {
     super(message);
     this.name = 'InboundDispatchError';
     this.stage = stage;
     if (cause) this.cause = cause;
+    if (routeMeta) this.routeMeta = routeMeta;
   }
 }
 
 function ensureBuffer(rawMimeInput) {
   if (Buffer.isBuffer(rawMimeInput)) return rawMimeInput;
   if (typeof rawMimeInput === 'string') {
-    try {
-      return Buffer.from(rawMimeInput, 'base64');
-    } catch (err) {
-      throw new InboundDispatchError(`base64_decode_failed: ${err.message}`, { stage: 'parse', cause: err });
+    const buf = decodeBase64OrBase64Url(rawMimeInput);
+    if (!buf || buf.length === 0) {
+      throw new InboundDispatchError('base64_decode_failed: empty buffer', { stage: 'parse' });
     }
+    return buf;
   }
   throw new InboundDispatchError('missing_raw_mime', { stage: 'parse' });
 }
@@ -80,15 +86,37 @@ async function autoCreatePersonForSender({ organizationId, parsedMessage }) {
   await People.create(personPayload);
 }
 
-async function resolveTenantContext({ parsedMessage, headerOrganizationId }) {
-  const extracted = replyToTokenService.extractFromAddresses(parsedMessage.allRecipients);
+async function resolveTenantContext({ parsedMessage, headerOrganizationId, rawBuffer = null }) {
+  let extracted = replyToTokenService.extractFromAddresses(parsedMessage.allRecipients);
+  if (!extracted && rawBuffer) {
+    const relaxed = replyToTokenService.extractFromAddresses(
+      scanRoutingAddressesFromRawMimeRelaxed(rawBuffer)
+    );
+    if (relaxed) extracted = relaxed;
+  }
+  if (!extracted && rawBuffer) {
+    const token = scanCrmThreadTokenFromRawMime(rawBuffer);
+    if (token) {
+      extracted = { crmThreadToken: token, tokenType: 'short' };
+    }
+  }
+
   const requireToken =
     String(process.env.EMAIL_INBOUND_REQUIRE_REPLY_TOKEN || '').trim().toLowerCase() === 'true';
 
   if (requireToken && !extracted) {
     throw new InboundDispatchError(
       'Inbound email must include a valid reply+ or replies+ routing token (central catch-all mode)',
-      { stage: 'route' }
+      {
+        stage: 'route',
+        routeMeta: {
+          recipientCount: parsedMessage.allRecipients?.length || 0,
+          recipientsSample: (parsedMessage.allRecipients || []).slice(0, 8),
+          subject: parsedMessage.subject || null,
+          hint:
+            'Ensure the relay posts the customer reply (To/Delivered-To contains reply+token@) and MIME is base64url-decoded (use Utilities.base64DecodeWebSafe in Apps Script).'
+        }
+      }
     );
   }
 
@@ -294,7 +322,8 @@ async function processRawInbound({
   } else {
     const tenantCtx = await resolveTenantContext({
       parsedMessage,
-      headerOrganizationId
+      headerOrganizationId,
+      rawBuffer
     });
     orgId = tenantCtx.orgId;
     conversationIdFromToken = tenantCtx.conversationIdFromToken || null;

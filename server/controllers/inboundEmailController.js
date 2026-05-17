@@ -19,6 +19,7 @@
  */
 
 const crypto = require('crypto');
+const { decodeInboundRawMime } = require('../utils/decodeInboundRawMime');
 const replyToTokenService = require('../services/replyToTokenService');
 const inboundEmailQueueService = require('../services/inboundEmailQueueService');
 const inboundProcessingQueue = require('../platform/communication/queues/inboundProcessingQueue');
@@ -58,13 +59,10 @@ function inboundWebhookSecretMatches(req) {
 
 function extractRawMimeBuffer(req) {
   if (Buffer.isBuffer(req.body)) {
-    return req.body;
+    return req.body.length > 0 ? req.body : null;
   }
   if (req.body?.rawMime) {
-    return Buffer.from(
-      req.body.rawMime,
-      typeof req.body.rawMime === 'string' ? 'base64' : undefined
-    );
+    return decodeInboundRawMime(req.body);
   }
   return null;
 }
@@ -211,7 +209,8 @@ exports.handleInbound = async (req, res) => {
       success: false,
       message: 'Failed to process inbound email',
       stage: err instanceof InboundDispatchError ? err.stage : 'unknown',
-      error: err.message
+      error: err.message,
+      ...(err instanceof InboundDispatchError && err.routeMeta && { routeMeta: err.routeMeta })
     });
   }
 };
