@@ -4,7 +4,7 @@ export function normalizeTimeHHMM(value: string | null | undefined): string {
   if (!value) return '';
   const raw = String(value).trim();
   const match = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
-  if (!match) return raw;
+  if (!match?.[1] || match[2] === undefined) return raw;
   const hour = Math.min(23, Math.max(0, parseInt(match[1], 10)));
   const minute = Math.min(59, Math.max(0, parseInt(match[2], 10)));
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
